@@ -1,0 +1,163 @@
+diff --git a/acceptance-tests/package-lock.json b/acceptance-tests/package-lock.json
+index 472104c..f3e4b3d 100644
+--- a/acceptance-tests/package-lock.json
++++ b/acceptance-tests/package-lock.json
+@@ -9,6 +9,7 @@
+       "version": "0.1.0",
+       "devDependencies": {
+         "@cucumber/cucumber": "^12.2.0",
++        "@cucumber/gherkin": "38.0.0",
+         "@playwright/test": "1.59.1",
+         "playwright": "1.59.1"
+       }
+diff --git a/acceptance-tests/package.json b/acceptance-tests/package.json
+index 967debd..2f7b43a 100644
+--- a/acceptance-tests/package.json
++++ b/acceptance-tests/package.json
+@@ -10,6 +10,7 @@
+   },
+   "devDependencies": {
+     "@cucumber/cucumber": "^12.2.0",
++    "@cucumber/gherkin": "38.0.0",
+     "@playwright/test": "1.59.1",
+     "playwright": "1.59.1"
+   }
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 6381982..a1cd66b 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -2,6 +2,11 @@ const assert = require("node:assert/strict");
+ const fs = require("node:fs");
+ const path = require("node:path");
+ const test = require("node:test");
++const {
++  AstBuilder,
++  GherkinClassicTokenMatcher,
++  Parser
++} = require("@cucumber/gherkin");
+ 
+ const cucumberConfig = require("../cucumber");
+ 
+@@ -49,6 +54,27 @@ test("shared feature suite uses only runner-intent and runner-debt tags", () =>
+   assert.deepEqual(unsupportedTags, []);
+ });
+ 
++test("scenario inventory inherits feature, rule, and scenario tags within their scopes", () => {
++  const scenarios = featureScenarios(
++    browserFeaturePathNamed("club_message_replies.feature")
++  );
++
++  assert.deepEqual(
++    scenarios.get("The sender and repliers automatically follow the conversation").tags,
++    ["@iteration-039", "@iteration-040"]
++  );
++  assert.deepEqual(
++    scenarios.get(
++      "Email to the club address without reply headers starts a new club-wide message"
++    ).tags,
++    ["@iteration-039", "@iteration-041", "@iteration-042"]
++  );
++  assert.deepEqual(
++    scenarios.get("A member of another club cannot reply").tags,
++    ["@iteration-039"]
++  );
++});
++
+ test("iteration 031 scenarios are no longer blocked from the browser runner", () => {
+   const iterationScenarios = browserFeatures().flatMap((feature) =>
+     feature.scenarios
+@@ -230,57 +256,57 @@ function listFeatureFiles(directory) {
+ }
+ 
+ function featureTags(filePath) {
+-  const tags = [];
++  return tagNames(parseFeature(filePath).tags);
++}
+ 
+-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
+-    const trimmed = line.trim();
++function featureScenarios(filePath) {
++  const feature = parseFeature(filePath);
++  const scenarios = new Map();
++  const featureLevelTags = tagNames(feature.tags);
+ 
+-    if (trimmed === "") {
++  for (const child of feature.children) {
++    if (child.scenario) {
++      addScenario(scenarios, child.scenario, featureLevelTags);
+       continue;
+     }
+ 
+-    if (trimmed.startsWith("@")) {
+-      tags.push(...trimmed.split(/\s+/));
+-      continue;
+-    }
++    if (child.rule) {
++      const ruleLevelTags = [
++        ...featureLevelTags,
++        ...tagNames(child.rule.tags)
++      ];
+ 
+-    if (trimmed.startsWith("Feature:")) {
+-      break;
++      for (const ruleChild of child.rule.children) {
++        if (ruleChild.scenario) {
++          addScenario(scenarios, ruleChild.scenario, ruleLevelTags);
++        }
++      }
+     }
+   }
+ 
+-  return tags;
++  return scenarios;
+ }
+ 
+-function featureScenarios(filePath) {
+-  const scenarios = new Map();
+-  const featureLevelTags = featureTags(filePath);
+-  let pendingTags = [];
+-
+-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
+-    const trimmed = line.trim();
+-    const scenarioMatch = trimmed.match(/^Scenario(?: Outline)?:\s*(.+)$/);
+-
+-    if (trimmed === "") {
+-      continue;
+-    }
+-
+-    if (trimmed.startsWith("@")) {
+-      pendingTags.push(...trimmed.split(/\s+/));
+-      continue;
+-    }
++function parseFeature(filePath) {
++  let nextId = 0;
++  const newId = () => String(nextId++);
++  const parser = new Parser(
++    new AstBuilder(newId),
++    new GherkinClassicTokenMatcher()
++  );
+ 
+-    if (scenarioMatch) {
+-      const name = scenarioMatch[1];
+-      scenarios.set(name, { name, tags: [...featureLevelTags, ...pendingTags] });
+-      pendingTags = [];
+-      continue;
+-    }
++  return parser.parse(fs.readFileSync(filePath, "utf8")).feature;
++}
+ 
+-    pendingTags = [];
+-  }
++function addScenario(scenarios, scenario, inheritedTags) {
++  scenarios.set(scenario.name, {
++    name: scenario.name,
++    tags: [...inheritedTags, ...tagNames(scenario.tags)]
++  });
++}
+ 
+-  return scenarios;
++function tagNames(tags) {
++  return tags.map(({ name }) => name);
+ }
+ 
+ function supportedFeatureTag(tag) {
