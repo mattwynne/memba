@@ -1,0 +1,512 @@
+diff --git a/docs/iterations/061-discover-club-groups/todo.md b/docs/iterations/061-discover-club-groups/todo.md
+index 4563dc5..818dffc 100644
+--- a/docs/iterations/061-discover-club-groups/todo.md
++++ b/docs/iterations/061-discover-club-groups/todo.md
+@@ -8,6 +8,6 @@
+ - [x] 006 Extend the existing stateless tabs/frame/list composition in `page_html/club.html.heex` and `member_dashboard_group_tabs.ex`.
+ - [x] 007 Keep one contextual action slot, correct tab/panel ARIA and keyboard behaviour.
+ - [x] 008 Preserve selected-group routing and remembered selection through `MemberDashboardLive` and its existing browser hook.
+-- [ ] 009 Refresh discovery/access state on relevant read-model changes; reject direct actions after access loss.
++- [x] 009 Refresh discovery/access state on relevant read-model changes; reject direct actions after access loss.
+ - [ ] 010 Keep conversation access in public Membership/Messaging APIs, not projection joins in the web layer.
+ - [ ] 011 Implement the tagged domain/browser examples and focused presentation, component and routed LiveView regressions. Verify no disclosure on guessed URLs, cross-club IDs or stale browser state; run `dev check` on the exact delivered state.
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 1068a6d..ecf2081 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -12,6 +12,14 @@ defmodule MembaWeb.MemberDashboardLive do
+   alias MembaWeb.IdentityAuth
+   alias MembaWeb.MemberDashboardPresentation
+ 
++  @dashboard_state_projectors [
++    Memba.Membership.Projectors.Group,
++    Memba.Membership.Projectors.GroupMembership,
++    Memba.Membership.Projectors.Membership,
++    Memba.Membership.Projectors.Role,
++    Memba.Messaging.Projectors.ConversationGroupAccess
++  ]
++
+   @impl Phoenix.LiveView
+   def mount(params, session, socket) do
+     club_id = Map.get(session, "club_id")
+@@ -52,11 +60,7 @@ defmodule MembaWeb.MemberDashboardLive do
+     selected_group_id = Map.get(params, "group_id")
+ 
+     socket =
+-      if socket.assigns.selected_group_route_id == selected_group_id do
+-        socket
+-      else
+-        refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
+-      end
++      refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
+ 
+     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
+   end
+@@ -94,6 +98,13 @@ defmodule MembaWeb.MemberDashboardLive do
+   end
+ 
+   def handle_event("restore_remembered_group", _params, socket) do
++    socket =
++      refresh_dashboard(
++        socket,
++        socket.assigns.selected_club.club_id,
++        socket.assigns.selected_group_route_id
++      )
++
+     reply_with_selected_group(socket)
+   end
+ 
+@@ -106,6 +117,14 @@ defmodule MembaWeb.MemberDashboardLive do
+      refresh_dashboard(socket, selected_club.club_id, socket.assigns.selected_group_route_id)}
+   end
+ 
++  def handle_info(
++        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
++        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
++      )
++      when projector in @dashboard_state_projectors do
++    {:noreply, refresh_dashboard(socket, club_id, socket.assigns.selected_group_route_id)}
++  end
++
+   def handle_info(_message, socket), do: {:noreply, socket}
+ 
+   @impl Phoenix.LiveView
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index ccc378b..d0fee9d 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -363,16 +363,28 @@ defmodule MembaWeb.MemberMessageLive.New do
+         "body" => Map.get(message_params, "body", "")
+       }
+ 
+-      case Messaging.send_club_message(attrs, consistency: [MessageProjector]) do
+-        :ok -> {:ok, message_id}
+-        {:ok, _result} -> {:ok, message_id}
+-        {:error, reason} -> {:error, reason}
++      with :ok <- authorize_current_audience(club_id, sender_id, audience_group_id) do
++        case Messaging.send_club_message(attrs, consistency: [MessageProjector]) do
++          :ok -> {:ok, message_id}
++          {:ok, _result} -> {:ok, message_id}
++          {:error, reason} -> {:error, reason}
++        end
+       end
+     else
+       _missing_compose_context -> {:error, :forbidden}
+     end
+   end
+ 
++  defp authorize_current_audience(club_id, sender_id, audience_group_id) do
++    club_id
++    |> Membership.list_active_groups_for_member(sender_id)
++    |> Enum.any?(&(&1.group_id == audience_group_id))
++    |> case do
++      true -> :ok
++      false -> {:error, :forbidden}
++    end
++  end
++
+   defp log_send_failure(socket, reason) do
+     inspected_reason = inspect(reason)
+ 
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 19a7369..9abad2f 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -1,6 +1,7 @@
+ defmodule MembaWeb.MemberDashboardLiveTest do
+   use MembaWeb.ConnCase, async: true
+ 
++  import Ecto.Query
+   import Phoenix.LiveViewTest
+ 
+   alias Memba.Membership.Projections.Club
+@@ -15,6 +16,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
++  alias Memba.Messaging.Projections.ConversationGroupAccess
+   alias Memba.Repo
+   alias MembaWeb.MemberDashboardPresentation
+   alias MembaWeb.ClubSite
+@@ -393,6 +395,298 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#member-group-name", "Hut Planning")
+   end
+ 
++  test "a committed group change refreshes discovery in an already-open dashboard", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/conversations")
++
++    new_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "new_planning",
++        name: "New Planning"
++      )
++
++    refute has_element?(view, "#member-group-link-#{new_group.group_id}")
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Group,
++      %Memba.Membership.Events.GroupCreated{
++        club_id: alice.club_id,
++        group_id: new_group.group_id,
++        group_key: new_group.group_key,
++        name: new_group.name
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-group-rail-other #member-group-link-#{new_group.group_id}",
++             "New Planning"
++           )
++  end
++
++  test "a committed group-membership change removes private rows from an open dashboard", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, alice)
++    add_group_member(private_group, bob)
++
++    secret_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        subject: "Private planning details",
++        audience_group_id: private_group.group_id
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{private_group.group_id}")
++
++    assert has_element?(view, "#member-message-#{secret_conversation.message_id}")
++    assert has_element?(view, "#club-member-#{bob.person_id}")
++
++    Repo.update_all(
++      from(group_membership in GroupMembership,
++        where:
++          group_membership.group_id == ^private_group.group_id and
++            group_membership.membership_id == ^alice.membership_id
++      ),
++      set: [active: false]
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.GroupMembership,
++      %Memba.Membership.Events.GroupMemberRemoved{
++        club_id: alice.club_id,
++        group_id: private_group.group_id,
++        membership_id: alice.membership_id,
++        person_id: alice.person_id
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-group-access-title",
++             "Private Planning is a private group"
++           )
++
++    refute has_element?(view, "#member-section-tabs")
++    refute has_element?(view, "#member-message-#{secret_conversation.message_id}")
++    refute has_element?(view, "#club-member-#{bob.person_id}")
++  end
++
++  test "a direct section patch rechecks selected-group access before its notification arrives", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, alice)
++    add_group_member(private_group, bob)
++
++    secret_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        subject: "Private planning details",
++        audience_group_id: private_group.group_id
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{private_group.group_id}")
++
++    Repo.update_all(
++      from(group_membership in GroupMembership,
++        where:
++          group_membership.group_id == ^private_group.group_id and
++            group_membership.membership_id == ^alice.membership_id
++      ),
++      set: [active: false]
++    )
++
++    view
++    |> element("#member-section-tab-members")
++    |> render_click()
++
++    assert_patch(view, ~p"/groups/#{private_group.group_id}/members")
++    assert has_element?(view, "#member-group-access-title")
++    refute has_element?(view, "#member-section-tabs")
++    refute has_element?(view, "#member-message-#{secret_conversation.message_id}")
++    refute has_element?(view, "#club-member-#{bob.person_id}")
++  end
++
++  test "a committed role change removes the outside-admin member surface", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Admin",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, bob)
++    grant_manage_members!(alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{private_group.group_id}/members")
++
++    assert has_element?(view, "#club-member-#{bob.person_id}")
++
++    Repo.delete_all(
++      from(member_permission in MemberPermission,
++        where:
++          member_permission.club_id == ^alice.club_id and
++            member_permission.person_id == ^alice.person_id and
++            member_permission.permission == ^Permissions.club_manage_members()
++      )
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Role,
++      %Memba.Membership.Events.ClubRoleRemovedFromMember{
++        club_id: alice.club_id,
++        membership_id: alice.membership_id,
++        person_id: alice.person_id,
++        role_id: Memba.ID.generate(:role)
++      }
++    )
++
++    assert has_element?(view, "#member-group-access-title")
++    refute has_element?(view, "#member-section-tabs")
++    refute has_element?(view, "#club-member-#{bob.person_id}")
++  end
++
++  test "a committed conversation-access change removes the conversation from an open dashboard",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, alice)
++
++    conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Private planning details",
++        audience_group_id: private_group.group_id
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{private_group.group_id}")
++
++    assert has_element?(view, "#member-message-#{conversation.message_id}")
++
++    Repo.delete_all(
++      from(access in ConversationGroupAccess,
++        where:
++          access.conversation_id == ^conversation.message_id and
++            access.group_id == ^private_group.group_id
++      )
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Messaging.Projectors.ConversationGroupAccess,
++      %Memba.Messaging.Events.ConversationAccessRevokedFromGroup{
++        conversation_id: conversation.message_id,
++        club_id: alice.club_id,
++        group_id: private_group.group_id,
++        access_level: "write"
++      }
++    )
++
++    refute has_element?(view, "#member-message-#{conversation.message_id}")
++    assert has_element?(view, "#member-message-list-empty")
++  end
++
+   test "canonical group route scopes the Conversations section by opaque group ID", %{conn: conn} do
+     alice =
+       create_active_member(
+@@ -2455,6 +2749,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     })
+   end
+ 
++  defp notify_read_model_change(view, projector, source_event) do
++    send(
++      view.pid,
++      {:read_model_changed,
++       %{
++         projector: projector,
++         source_event: source_event,
++         metadata: %{},
++         changes: %{}
++       }}
++    )
++  end
++
+   defp group_address(club_id, email_slug) do
+     club_id
+     |> Memba.Membership.get_club()
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index 2b3a0e0..1c41742 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -1,6 +1,7 @@
+ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+   use MembaWeb.FeatureCase, async: false
+ 
++  import Ecto.Query
+   import Phoenix.LiveViewTest
+ 
+   alias Memba.Membership
+@@ -222,6 +223,50 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+            )
+   end
+ 
++  test "submit rechecks selected-group participation after an open compose screen loses access",
++       %{conn: conn} do
++    club_id = Memba.ID.generate(:club)
++    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
++    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
++
++    private_group =
++      create_group(
++        club_id: club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, alice)
++    add_group_member(private_group, bob)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
++      |> live(~p"/messages/new?#{[group_id: private_group.group_id]}")
++
++    Repo.update_all(
++      from(group_membership in GroupMembership,
++        where:
++          group_membership.group_id == ^private_group.group_id and
++            group_membership.membership_id == ^alice.membership_id
++      ),
++      set: [active: false]
++    )
++
++    view
++    |> element("#member-message-compose-form")
++    |> render_submit(%{
++      "message" => %{
++        "subject" => "Private planning details",
++        "body" => "This must not be sent."
++      }
++    })
++
++    assert has_element?(view, "#member-message-compose[data-compose-state='send_failed']")
++    assert Messaging.list_messages_for_club(club_id) == []
++    assert Fake.deliveries() == []
++  end
++
+   test "selected group survives compose validation, send failure, and retry", %{conn: conn} do
+     club_id = Memba.ID.generate(:club)
+     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
