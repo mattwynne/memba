@@ -96,9 +96,7 @@ defmodule MembaWeb.PageHTML do
   defp outside_group_admin?(:outside_admin), do: true
   defp outside_group_admin?(_selected_group_access), do: false
 
-  defp custom_group?(%{group_key: group_key}) do
-    group_key not in [SystemGroups.everyone_key(), SystemGroups.admin_key()]
-  end
+  defp custom_group?(group), do: SystemGroups.custom_group?(group)
 
   defp member_group_rail_item_class(group, selected_group) do
     ["group-rail__item", selected_group?(group, selected_group) && "is-active"]

@@ -1333,6 +1333,45 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute html_has_selector?(html, "#member-section-tab-members[phx-click]")
   end
 
+  test "group privacy metadata uses structural system-group identity, not display metadata" do
+    club_id = Memba.ID.generate(:club)
+
+    custom_group = %{
+      club_id: club_id,
+      group_id: Memba.ID.generate(:group),
+      group_key: SystemGroups.everyone_key(),
+      name: SystemGroups.everyone_name(),
+      email_slug: "everyone-2",
+      email_address: "everyone-2@alpine-club.clubs.memba.io",
+      active_member_count: 1
+    }
+
+    custom_html =
+      dashboard_html(%{
+        groups: [custom_group],
+        selected_group: custom_group
+      })
+
+    assert html_has_selector?(custom_html, "#member-group-metadata", "Private group")
+    assert html_has_selector?(custom_html, "#member-group-metadata", "You're a member")
+
+    renamed_system_group = %{
+      custom_group
+      | group_id: SystemGroups.everyone_group_id(club_id),
+        group_key: nil,
+        name: "Club-wide discussion"
+    }
+
+    system_html =
+      dashboard_html(%{
+        groups: [renamed_system_group],
+        selected_group: renamed_system_group
+      })
+
+    refute html_has_selector?(system_html, "#member-group-metadata", "Private group")
+    refute html_has_selector?(system_html, "#member-group-metadata", "You're a member")
+  end
+
   test "club template renders named member rows with current marker and a single members action" do
     alice_id = Memba.ID.generate(:person)
     bob_id = Memba.ID.generate(:person)

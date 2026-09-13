@@ -49,4 +49,29 @@ defmodule Memba.Membership.SystemGroupsTest do
     assert SystemGroups.admin_group_id(club_id) ==
              ID.deterministic(:group, ["system-group", club_id, "admin"])
   end
+
+  test "classifies custom groups by club-scoped identity rather than display metadata" do
+    club_id = ID.generate(:club)
+
+    refute SystemGroups.custom_group?(%{
+             club_id: club_id,
+             group_id: SystemGroups.everyone_group_id(club_id),
+             group_key: "renamed-key",
+             name: "Board"
+           })
+
+    refute SystemGroups.custom_group?(%{
+             club_id: club_id,
+             group_id: SystemGroups.admin_group_id(club_id),
+             group_key: nil,
+             name: "Committee"
+           })
+
+    assert SystemGroups.custom_group?(%{
+             club_id: club_id,
+             group_id: ID.generate(:group),
+             group_key: SystemGroups.everyone_key(),
+             name: SystemGroups.everyone_name()
+           })
+  end
 end
