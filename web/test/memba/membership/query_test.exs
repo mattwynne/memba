@@ -360,6 +360,34 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
+  describe "list_discoverable_groups_for_member/2" do
+    test "returns safe summaries for groups the active club member has not joined" do
+      club = create_club("Kootenay Mountaineering Club")
+      alice = create_person(name: "Alice", email: "alice@example.com")
+      _alice_membership_id = add_member(club.club_id, alice.person_id)
+
+      board_group_id =
+        create_group(club.club_id,
+          group_key: "board",
+          email_slug: "board",
+          name: "Board"
+        )
+
+      board_group =
+        Enum.find(
+          Membership.list_discoverable_groups_for_member(club.club_id, alice.person_id),
+          &(&1.group_id == board_group_id)
+        )
+
+      assert board_group == %{
+               club_id: club.club_id,
+               group_id: board_group_id,
+               group_key: "board",
+               name: "Board"
+             }
+    end
+  end
+
   describe "list_active_groups_for_member/2" do
     test "returns ordered presentation summaries with active counts and optional addresses" do
       club = create_club("Kootenay Mountaineering Club", slug: "kmc")

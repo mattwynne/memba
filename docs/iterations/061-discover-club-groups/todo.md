@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Separate discovery from participation in the Membership public query API.
+- [x] 001 Separate discovery from participation in the Membership public query API.
 - [ ] 002 Add a club-scoped discovery summary for an authenticated active club member.
 - [ ] 003 Preserve `list_active_groups_for_member/2` as the actual-membership API: Messaging uses it for access, so broadening it would expose conversations.
 - [ ] 004 Update `MemberDashboardPresentation` to resolve group identity within the authorised club, then load only the permitted surface.
