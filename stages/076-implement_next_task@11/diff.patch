@@ -1,0 +1,304 @@
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index daf34c7..66cb73f 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -33,6 +33,7 @@ defmodule Memba.Application do
+       Memba.Membership.Projectors.Role,
+       Memba.Membership.Projectors.Person,
+       Memba.Membership.Policies.SystemGroupMembership,
++      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
+       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
+       # Start a worker by calling: Memba.Worker.start_link(arg)
+       # {Memba.Worker, arg},
+diff --git a/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex b/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex
+new file mode 100644
+index 0000000..17f1224
+--- /dev/null
++++ b/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex
+@@ -0,0 +1,54 @@
++defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
++  @moduledoc """
++  Clears Messaging follows when a custom-group membership ends.
++
++  The handler subscribes to Membership facts and coordinates the cross-context
++  consequence through Messaging's public query and command APIs. Starting from
++  origin makes a first deployment repair earlier removals, while the existing
++  idempotent unfollow command makes repeated delivery and replay safe.
++  """
++
++  use Commanded.Event.Handler,
++    application: Memba.Membership.App,
++    name: "Memba.Membership.Policies.ClearRemovedGroupMemberFollows",
++    consistency: :strong,
++    start_from: :origin
++
++  alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.SystemGroups
++  alias Memba.Messaging
++  alias Memba.Messaging.Projectors.ConversationFollow
++
++  @impl Commanded.Event.Handler
++  def handle(%GroupMemberRemoved{} = event, _metadata) do
++    if SystemGroups.custom_group?(event) do
++      clear_conversation_follows(event)
++    else
++      :ok
++    end
++  end
++
++  def handle(_event, _metadata), do: :ok
++
++  defp clear_conversation_follows(event) do
++    event.group_id
++    |> Messaging.list_conversations_for_group()
++    |> Enum.reduce_while(:ok, fn conversation, :ok ->
++      case unfollow(event, conversation.conversation_id) do
++        :ok -> {:cont, :ok}
++        {:error, _reason} = error -> {:halt, error}
++      end
++    end)
++  end
++
++  defp unfollow(event, conversation_id) do
++    Messaging.unfollow_conversation(
++      %{
++        club_id: event.club_id,
++        conversation_id: conversation_id,
++        member_id: event.person_id
++      },
++      consistency: [ConversationFollow]
++    )
++  end
++end
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index 3a898ba..669bd97 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -29,7 +29,8 @@ defmodule MembaWeb.DevTestSupportController do
+     Memba.Messaging.Projectors.InboundEmailSource
+   ]
+   @event_sourced_event_handlers [
+-    Memba.Membership.Policies.SystemGroupMembership
++    Memba.Membership.Policies.SystemGroupMembership,
++    Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+   ]
+   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
+   @public_reset_tables [:auth_email_requests, :auth_sign_in_tokens, :onboarding_requests]
+diff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+new file mode 100644
+index 0000000..ebaa3ae
+--- /dev/null
++++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+@@ -0,0 +1,198 @@
++defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.EventStore
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AddClubMember
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AssignClubRoleToMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
++  alias Memba.Membership.Commands.RemoveClubMember
++  alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
++  alias Memba.Membership.Roles
++  alias Memba.Messaging
++  alias Memba.Messaging.App, as: MessagingApp
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.ConversationUnfollowed
++  alias Memba.Messaging.Recipient
++
++  test "is a strongly consistent Membership event handler that replays from origin" do
++    assert %{
++             id: {ClearRemovedGroupMemberFollows, opts},
++             restart: :permanent,
++             start: {ClearRemovedGroupMemberFollows, :start_link, [opts]},
++             type: :worker
++           } = ClearRemovedGroupMemberFollows.child_spec([])
++
++    assert Keyword.fetch!(opts, :application) == MembershipApp
++
++    assert Keyword.fetch!(opts, :name) ==
++             "Memba.Membership.Policies.ClearRemovedGroupMemberFollows"
++
++    assert Keyword.fetch!(opts, :consistency) == :strong
++    assert Keyword.fetch!(opts, :start_from) == :origin
++    refute Keyword.has_key?(opts, :state)
++  end
++
++  test "club departure clears follows for conversations in the departed custom group" do
++    club_id = Memba.ID.generate(:club)
++    departing_membership_id = Memba.ID.generate(:membership)
++    departing_person_id = Memba.ID.generate(:person)
++    replacement_membership_id = Memba.ID.generate(:membership)
++    replacement_person_id = Memba.ID.generate(:person)
++    custom_group_id = Memba.ID.generate(:group)
++    conversation_id = Memba.ID.generate(:message)
++
++    create_club(club_id)
++    add_member(club_id, departing_membership_id, departing_person_id)
++    add_member(club_id, replacement_membership_id, replacement_person_id)
++    assign_admin(club_id, replacement_membership_id, replacement_person_id)
++    create_custom_group(club_id, custom_group_id)
++    add_group_member(club_id, custom_group_id, departing_membership_id, departing_person_id)
++    create_followed_conversation(club_id, custom_group_id, conversation_id, departing_person_id)
++
++    assert Messaging.following_conversation?(conversation_id, departing_person_id)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveClubMember{
++                 club_id: club_id,
++                 membership_id: departing_membership_id,
++                 person_id: departing_person_id
++               },
++               consistency: :strong
++             )
++
++    refute Messaging.following_conversation?(conversation_id, departing_person_id)
++    assert count_unfollow_events(conversation_id, departing_person_id) == 1
++  end
++
++  test "handling the same custom-group removal repeatedly is idempotent" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++    conversation_id = Memba.ID.generate(:message)
++
++    create_followed_conversation(club_id, group_id, conversation_id, person_id)
++
++    event = %GroupMemberRemoved{
++      club_id: club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id
++    }
++
++    assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
++    assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
++
++    refute Messaging.following_conversation?(conversation_id, person_id)
++    assert count_unfollow_events(conversation_id, person_id) == 1
++  end
++
++  defp create_club(club_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: membership_club_slug("Kootenay Mountaineering Club", club_id)
++               },
++               consistency: :strong
++             )
++  end
++
++  defp add_member(club_id, membership_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddClubMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp assign_admin(club_id, membership_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AssignClubRoleToMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: Roles.membership_administrator_role_id(club_id)
++               },
++               consistency: :strong
++             )
++  end
++
++  defp create_custom_group(club_id, group_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreateGroup{
++                 club_id: club_id,
++                 group_id: group_id,
++                 email_slug: "board",
++                 name: "Board"
++               },
++               consistency: :strong
++             )
++  end
++
++  defp add_group_member(club_id, group_id, membership_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp create_followed_conversation(club_id, group_id, conversation_id, person_id) do
++    assert :ok =
++             MessagingApp.dispatch(
++               %SendMessage{
++                 message_id: conversation_id,
++                 club_id: club_id,
++                 sender_id: person_id,
++                 audience_group_id: group_id,
++                 subject: "Board plans",
++                 body: "Private plans for the board.",
++                 recipients: [
++                   %Recipient{
++                     delivery_id: Memba.ID.generate(:delivery),
++                     person_id: person_id,
++                     name: "Departing Member",
++                     email: "departing@example.com"
++                   }
++                 ]
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Messaging.follow_conversation(
++               %{
++                 club_id: club_id,
++                 conversation_id: conversation_id,
++                 member_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp count_unfollow_events(conversation_id, person_id) do
++    conversation_id
++    |> then(&EventStore.stream_forward(MessagingApp, &1))
++    |> Enum.count(fn recorded_event ->
++      match?(%ConversationUnfollowed{member_id: ^person_id}, recorded_event.data)
++    end)
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 9dfc87b..d1b8dc5 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -27,7 +27,8 @@ defmodule Memba.EventSourcedCase do
+     Memba.Messaging.Projectors.InboundEmailSource
+   ]
+   @event_handlers [
+-    Memba.Membership.Policies.SystemGroupMembership
++    Memba.Membership.Policies.SystemGroupMembership,
++    Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+   ]
+   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
+ 
