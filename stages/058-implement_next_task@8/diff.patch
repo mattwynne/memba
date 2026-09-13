@@ -1,0 +1,163 @@
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 1d3314c..3403ead 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -426,7 +426,9 @@ defmodule Memba.Membership do
+   The caller supplies `:membership_id` or `"membership_id"`. It may also supply
+   the matching club and person identities; otherwise the application service
+   resolves those routing fields from the membership projection before the Club
+-  aggregate validates them and decides the Admin and member floors.
++  aggregate validates them and decides the Admin and member floors. A successful
++  decision also ends every active custom-group membership held by that club
++  membership.
+   """
+   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- remove_member_command(attrs) do
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 530f1fb..9a2e5f4 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -163,11 +163,16 @@ defmodule Memba.Membership.Club do
+              club,
+              command.membership_id
+            ) do
+-      %ClubMemberRemoved{
++      club_member_removed = %ClubMemberRemoved{
+         club_id: command.club_id,
+         membership_id: command.membership_id,
+         person_id: command.person_id
+       }
++
++      case active_custom_group_membership_removals(club, command.membership_id) do
++        [] -> club_member_removed
++        group_membership_removals -> [club_member_removed | group_membership_removals]
++      end
+     end
+   end
+ 
+@@ -724,6 +729,34 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp active_custom_group_membership_removals(
++         %__MODULE__{} = club,
++         departing_membership_id
++       ) do
++    club.group_memberships
++    |> Enum.flat_map(fn
++      {{group_id, ^departing_membership_id}, %{active: true, person_id: person_id}} ->
++        group = %{club_id: club.club_id, group_id: group_id}
++
++        if SystemGroups.custom_group?(group) do
++          [
++            %GroupMemberRemoved{
++              club_id: club.club_id,
++              group_id: group_id,
++              membership_id: departing_membership_id,
++              person_id: person_id
++            }
++          ]
++        else
++          []
++        end
++
++      {_group_membership_key, _group_membership} ->
++        []
++    end)
++    |> Enum.sort_by(& &1.group_id)
++  end
++
+   defp create_group_decision(
+          %__MODULE__{} = club,
+          %CreateGroup{} = command,
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index f286dd2..ae6b096 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -337,6 +337,86 @@ defmodule Memba.Membership.ClubTest do
+              )
+     end
+ 
++    test "ends every active custom-group membership in the club-member removal decision" do
++      club_id = Memba.ID.generate(:club)
++      departing_membership_id = Memba.ID.generate(:membership)
++      departing_person_id = Memba.ID.generate(:person)
++      remaining_membership_id = Memba.ID.generate(:membership)
++      remaining_person_id = Memba.ID.generate(:person)
++
++      [first_custom_group_id, second_custom_group_id, inactive_custom_group_id] =
++        Enum.sort([
++          Memba.ID.generate(:group),
++          Memba.ID.generate(:group),
++          Memba.ID.generate(:group)
++        ])
++
++      everyone_group_id = SystemGroups.everyone_group_id(club_id)
++      admin_group_id = SystemGroups.admin_group_id(club_id)
++
++      club =
++        club_id
++        |> created_club()
++        |> activate_member(departing_membership_id, departing_person_id)
++        |> activate_member(remaining_membership_id, remaining_person_id)
++        |> create_group(everyone_group_id, SystemGroups.everyone_key(), "Everyone")
++        |> create_group(admin_group_id, SystemGroups.admin_key(), "Admin")
++        |> create_group(first_custom_group_id, "board", "Board")
++        |> create_group(second_custom_group_id, "trips", "Trips")
++        |> create_group(inactive_custom_group_id, "events", "Events")
++        |> add_group_member(
++          everyone_group_id,
++          departing_membership_id,
++          departing_person_id
++        )
++        |> add_group_member(admin_group_id, departing_membership_id, departing_person_id)
++        |> add_group_member(
++          first_custom_group_id,
++          departing_membership_id,
++          departing_person_id
++        )
++        |> add_group_member(
++          second_custom_group_id,
++          departing_membership_id,
++          departing_person_id
++        )
++        |> add_group_member(
++          inactive_custom_group_id,
++          departing_membership_id,
++          departing_person_id
++        )
++        |> remove_group_member(
++          inactive_custom_group_id,
++          departing_membership_id,
++          departing_person_id
++        )
++
++      assert [
++               %ClubMemberRemoved{
++                 club_id: ^club_id,
++                 membership_id: ^departing_membership_id,
++                 person_id: ^departing_person_id
++               },
++               %GroupMemberRemoved{
++                 club_id: ^club_id,
++                 group_id: ^first_custom_group_id,
++                 membership_id: ^departing_membership_id,
++                 person_id: ^departing_person_id
++               },
++               %GroupMemberRemoved{
++                 club_id: ^club_id,
++                 group_id: ^second_custom_group_id,
++                 membership_id: ^departing_membership_id,
++                 person_id: ^departing_person_id
++               }
++             ] =
++               Club.execute(club, %RemoveClubMember{
++                 club_id: club_id,
++                 membership_id: departing_membership_id,
++                 person_id: departing_person_id
++               })
++    end
++
+     test "treats an exact active membership identity as an idempotent activation" do
+       club_id = Memba.ID.generate(:club)
+       membership_id = Memba.ID.generate(:membership)
