@@ -1255,7 +1255,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-13T19:27:13.813910163Z",
-  "last_event_at": "2026-09-13T20:55:21.435677778Z",
+  "last_event_at": "2026-09-13T20:55:28.159382325Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -9499,9 +9499,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2549,
       "checkpoint": {
-        "timestamp": "2026-09-13T20:55:21.440187606Z",
+        "timestamp": "2026-09-13T20:55:25.281826267Z",
         "current_node": "final_artifact_gate",
         "completed_nodes": [
           "start",
@@ -9536,10 +9536,441 @@
         ],
         "node_retries": {},
         "context_values": {
+          "failure_class": "",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 061 Review — Final Assessment\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## Basis for review\n\nAll three parallel review branches (`claude_review`, `cod",
+                "last_stage": "claude_review",
+                "response.claude_review": "# Iteration 061 Review — Final Assessment\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## Basis for review\n\nAll three parallel review branches (`claude_review`, `codex_review`, `gemini_review`) independently reached ACCEPT with Medium confidence. The single concrete, evidenced defect surfaced in the first review pass — the Cucumber scenario-inventory tag-scope gap (`fix-cucumber-inventory-tag-scope`) — has already been repaired, committed, and verified: `cucumber_config.test.js` now uses the official `@cucumber/gherkin` AST parser with feature/rule/scenario tag inheritance, `@cucumber/gherkin` is a proper direct devDependency, and a full `dev ci` re-run on the exact repaired diff passed cleanly (1,292 ExUnit tests; 145/145 acceptance scenarios; 1,052/1,052 steps). No branch identified a second concrete defect.\n\nThe one open `review_blockers` entry (`fix-review-repair-portable-comparison`) concerns the iteration-review *workflow's* verification script (`verify_review_repair.sh` failing to find `cmp`), not iteration 061's product code. `apply_review_fixes` correctly treated it as out of scope for this iteration and reverted an earlier attempt to patch it here. This is the right call: fixing the review tooling inside an iteration-review run for iteration 061 would itself be an out-of-scope, unrelated change per the plan's own risk note (\"No problem-note status updates, app-wide error redesign or unrelated refactor belongs here\"). That workflow defect should be tracked and fixed separately, not folded into this iteration's commit history.\n\nNo branch produced file-and-line evidence of an ADR violation in the Membership discovery/access split, `MemberDashboardPresentation`, or the LiveView/component layer. The plan's own explicitly named top risk — discovery query collapsing into a conversation-access grant — remains unconfirmed by direct code inspection in this transcript (evidence is truncated), but all three reviewers treat this as an evidence-visibility limitation rather than a demonstrated defect, consistent with green ADR-relevant acceptance coverage (permission/visibility scenarios all passing).\n\n## ADR violations\n\nNone identified with concrete evidence. No branch cited a specific ADR number/file in conflict with the implementation. The plan explicitly scopes this iteration away from new architecture (\"No new aggregate or generic permission framework is needed,\" \"Keep read-model changes and privacy decisions server-authoritative\"), and nothing in the available evidence contradicts that.\n\n## Blocking issues\n\nNone. The only issue with concrete, verifiable evidence (the Cucumber tag-scope gap) has already been fixed and verified via a green `dev ci` run on the repaired commit.\n\n## Bounded-safe fixes\n\nNone outstanding for iteration 061. The sole bounded-safe fix identified across all branches has already been implemented and validated.\n\n(Note: `verify_review_repair.sh`'s reliance on an unavailable `cmp` is a bounded-safe fix candidate, but it belongs to the iteration-review workflow tooling, not to this iteration's commit scope — correctly deferred rather than fixed here.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** Membership context module(s) implementing the discovery-summary API vs. `list_active_groups_for_member/2`; `MemberDashboardPresentation`.\n   **Smell:** Discovery/access query-separation risk. The plan names \"reusing the new discovery list as a conversation access grant\" as the highest risk in the iteration. No review branch had direct sight of this code to confirm the two query paths are structurally independent rather than differently-named wrappers that a future edit could silently collapse.\n   **Why it needs human judgement:** A permission leak here wouldn't necessarily be caught by scenario coverage if a later feature reuses the \"wrong\" query path. Worth a deliberate follow-up code read by a maintainer with full source access.\n\n2. **File:** `acceptance-tests/test/cucumber_config.test.js` (post-repair).\n   **Smell:** Scenario Outline inventory still represents an outline once and doesn't account for tags on individual `Examples:` blocks; also, `@cucumber/gherkin` was promoted from transitive to direct devDependency.\n   **Why it needs human judgement:** No current tagged `Examples:` blocks exist, so this doesn't affect present behaviour, but maintainers should decide inventory granularity if such tags are introduced later, and should sanity-check the dependency promotion against the pinned Cucumber runner version.\n\n3. **General (carried from plan's own risk note):** Eve's email-only placeholder and the outside-admin Members-only surface are explicitly interim designs pending iterations 063–065.\n   **Why it needs human judgement:** Nothing in the evidence suggests leakage into permanent-looking code, but this is a natural seam for coupling in later iterations and worth flagging for whoever picks up 065.\n\n4. **File:** `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh`.\n   **Smell:** Verification stage invoked `cmp`, which is unavailable in this sandbox, yet the stage still reported success rather than failing fast.\n   **Why it needs human judgement:** This is workflow-tooling debt outside iteration 061's scope (already tracked as `fix-review-repair-portable-comparison`). It weakens independent before/after diff verification for *future* review-repair runs but did not invalidate this iteration's `dev ci` results, which were confirmed by other means (full test suite re-run, explicit file-list diff).\n\n## Suggested fixes\n\nNone required for merge. Recommended non-blocking follow-ups:\n- A maintainer should do a targeted read of the Membership context to explicitly confirm the discovery/access query separation (finding 1).\n- Fix `verify_review_repair.sh` to use a portable Git-based diff comparison instead of `cmp`, tracked as its own workflow-infrastructure change — not as part of this or any product iteration.\n\n## Validation notes\n\n- `dev ci` passed on the pre-repair committed state: 145 acceptance scenarios / 1,052 steps, 0 failures.\n- The one evidenced defect (Cucumber tag-scope gap) was fixed; `dev ci` was re-run on the exact repaired diff and passed again: 145/145 scenarios, 1,052/1,052 steps, 1,292 ExUnit tests, 0 failures.\n- `verify_review_repair` confirms the repaired diff touched only `acceptance-tests/package-lock.json`, `acceptance-tests/package.json`, and `acceptance-tests/test/cucumber_config.test.js` — no acceptance feature files were edited.\n- The subsequent `apply_review_fixes` pass made no further code changes, correctly declining to expand scope into workflow-tooling repair; this was re-verified as a no-op diff.\n- Preflight sandbox build succeeded cleanly.\n- The remaining open item (query-separation confirmation) is recorded as a judgement-worthy follow-up rather than a blocker, since no branch produced concrete evidence of a violation — only an evidence-visibility gap in this review's transcript.\n- The `fix-review-repair-portable-comparison` blocker remains open but is correctly scoped to iteration-review workflow infrastructure, not to iteration 061's implementation; it should not gate this iteration's acceptance."
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None identified.** The implementation evidence is consistent with the proje",
+                "last_stage": "codex_review",
+                "response.codex_review": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None identified.** The implementation evidence is consistent with the project’s CQRS, read-model, and responsibility-boundary guidance:\n   - Group discovery remains distinct from effective membership and conversation authorization.\n   - Authorization decisions remain server-authoritative rather than being inferred from browser state.\n   - The web presentation layer uses public Membership/Messaging APIs rather than introducing projection joins as authorization shortcuts.\n   - No replacement aggregate, generic permission framework, or alternative event-sourcing infrastructure was introduced.\n\n## Blocking issues\n\n1. **None.**\n\n   The open `fix-review-repair-portable-comparison` item is a defect in the iteration-review workflow, not in iteration 061’s product implementation. The missing `cmp` executable should not keep the implementation rejected, particularly because no review-repair product changes remained and the subsequent full `dev ci` run succeeded.\n\n## Bounded-safe fixes\n\n1. **None required for this iteration.**\n\n   The review did not identify a concrete, low-risk product refactor that would improve the implementation enough to justify another code-change cycle.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** Membership context/read-model modules implementing group discovery and `list_active_groups_for_member/2`; `MemberDashboardPresentation`  \n   **Smell:** The discoverability-versus-participation distinction is a security-sensitive architectural seam. The APIs address closely related data and could be incorrectly consolidated by a future cleanup.  \n   **Why it may need human judgement:** Discovery must never become an implicit Messaging authorization grant, and non-member presentation must not load private rows and merely hide them. The current implementation and tests conform, but maintainers should preserve the distinction explicitly during future membership work in iterations 063–065.\n\n2. **File:** `acceptance-tests/test/cucumber_config.test.js`  \n   **Smell:** The scenario inventory remains principally scenario-oriented; handling of tags attached to individual `Examples:` blocks may require additional semantics if such tags are introduced.  \n   **Why it may need human judgement:** No current scenarios depend on tagged `Examples:` blocks, so this is not a present coverage gap. Before introducing them, maintainers should decide whether inventory is intended to represent an outline once or each expanded example independently.\n\n3. **File:** `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh`  \n   **Smell:** The script invoked an unavailable `cmp` executable while its workflow stage still reported success.  \n   **Why it may need human judgement:** This weakens the workflow’s independent before/after verification, but it is unrelated to club-group discovery and outside the iteration’s product scope. Workflow owners should decide whether to require `cmp` in the sandbox or use a portable Git-based comparison that fails explicitly when verification cannot run.\n\n## Suggested fixes\n\nNo merge-required changes.\n\nRecommended follow-ups:\n\n- Preserve clear naming and focused tests around discovery summaries versus effective group membership and conversation access.\n- Add `Examples:`-tag inventory coverage before the acceptance suite begins using that feature.\n- Track the repair-verification portability issue separately; for example, replace `cmp` with a repository-supported comparison mechanism and ensure a failed comparison command cannot be reported as a successful verification stage.\n\n## Validation notes\n\n- Sandbox compilation/runtime preflight passed.\n- Full `dev ci` completed successfully:\n  - **1,292 ExUnit tests passed**\n  - **145 browser acceptance scenarios passed**\n  - **1,052 acceptance steps passed**\n- Permission-sensitive acceptance coverage remained green, including direct routing and access-boundary behaviour.\n- No acceptance feature files were changed during the review-repair pass.\n- The review repair retained no tracked product changes.\n- `verify_review_repair.sh` did **not** complete its intended portable comparison because `cmp` was unavailable, despite the stage being marked successful. This is recorded as a workflow-health issue, not an iteration-061 blocker.\n- The supplied transcript does not independently demonstrate the plan’s desktop/mobile manual visual review. That limits confidence to Medium but does not reveal a behavioural or architectural defect."
+              }
+            },
+            {
+              "id": "gemini_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation respects the plan's architectural constrain",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation respects the plan's architectural constraints (no new aggregate, server-authoritative read models) and does not conflict with existing project ADRs regarding CQRS, DDD, or event sourcing boundaries.\n\n## Blocking issues\n\n1. None. \n\n*Note on `fix-review-repair-portable-comparison`:* This open issue relates to the automation workflow script (`verify_review_repair.sh` missing the `cmp` utility) rather than the product implementation of Iteration 061. It does not block the acceptance of the iteration code itself and was correctly reverted by the repair agent as out-of-scope for product code. It should be addressed as a separate workflow-maintenance task.\n\n## Bounded-safe fixes\n\n1. None.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba/membership.ex` (or equivalent context module) and `MemberDashboardPresentation`\n   - **Smell:** Query overlap/coupling risk between discovery and participation.\n   - **Why it may need human judgement:** The iteration plan explicitly calls out \"reusing the new discovery list as a conversation access grant\" as the highest risk. Maintainers should remain vigilant in future iterations (especially 063-065) to ensure `list_active_groups_for_member/2` (participation) and the new discovery queries remain structurally independent, so future refactoring does not accidentally merge them and leak private group conversations.\n\n2. **File:** `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh`\n   - **Smell:** Dependency on `cmp` which is not guaranteed to be present in the sandbox environment.\n   - **Why it may need human judgement:** This caused a minor workflow artifact warning. The script should ideally use standard `git diff` tools or ensure `cmp` is installed in the runner environment to ensure portable verification.\n\n## Suggested fixes\n\nNo fixes required for merge. The iteration code is accepted.\n\n## Validation notes\n\n- Initial `dev check` passed cleanly (145 browser acceptance scenarios and 1052 steps).\n- The preflight sandbox compiled the entire application without cyclical dependency issues.\n- The post-repair `dev check` confirmed all tests remained green on the final committed state (1,292 ExUnit tests, 145 browser acceptance scenarios).\n- The implementation strictly avoided altering acceptance `.feature` files, preserving them as the behavioral source of truth."
+              }
+            }
+          ],
+          "internal.retry_count.review_merge": 0,
+          "current_node": "final_artifact_gate",
+          "graph.rankdir": "LR",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.dev_check": 0,
+          "implementation_accepted": true,
+          "graph.max_node_visits": "160",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.thread_id": "record_code_health",
+          "internal.retry_count.apply_review_fixes": 0,
+          "last_stage": "record_code_health",
+          "parallel.branch_count": 3,
+          "response.apply_review_fixes": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-comparison` | Out of scope: this concerns the iteration-review workflow, not iteration 061. The attempted `.fabro/workflows` repair was fully reverted per your correction. | None |\n| Iteration-061 product/acceptance implementation | Reviewers identified no concrete ADR violation, authorization defect, or bounded code-health fix. Existing concerns were future-maintenance observations rather than demonstrated defects. | None |\n\nFiles changed:\n\n- No tracked changes remain.\n- No acceptance feature files were edited.\n- Existing untracked `.fabro/tmp/` run artifacts remain untouched.\n\nValidation:\n\n- Confirmed the scoped implementation is exactly the single commit from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f` to `54a6ef70945fea7b29a188d18856dcb73ac4952a`.\n- Confirmed there are no retained tracked or staged changes under `.fabro/workflows`, `docs/kaizen`, or elsewhere.\n- The supplied completed validation remains green: 1,292 ExUnit tests, 145 browser acceptance scenarios, and 1,052 acceptance steps passed.\n- No additional `dev check` was run because this pass leaves no code, configuration, test, or behavior changes.\n\nThe portable comparison concern remains separate workflow-fix work and is not an iteration-061 blocker.",
+          "response.record_code_health": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE_HEALTH_RECORDED: Updated docs/code-health.md for iteration 061 with three supported findings omitted by the routing-only synthesis. The focused diff contains the new entry, git diff --check passed, and no acceptance feature or product-behaviour files changed.\"}",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.record_code_health": 0,
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+          "review_blockers": [
+            {
+              "id": "fix-review-repair-portable-comparison",
+              "title": "Make review-repair verification independent of unavailable cmp utility",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "internal.retry_count.verify_review_repair": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.verify_review_repair.current_node": "dev_check",
+          "failure_signature": "",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "code_health_recording_ok": true,
+          "internal.retry_count.read_plan": 0,
+          "thread.review_gate.current_node": "record_code_health",
+          "internal.retry_count.review_gate": 0,
+          "thread.review_fork.current_node": "review_merge",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "review_fixes_available": false,
+          "thread.review_merge.current_node": "synthesize_review",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "thread.synthesize_review.current_node": "review_gate",
+          "internal.retry_count.final_artifact_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "command.output": "blob://sha256/12156a6d4c99c6dcbd8af98511abd8dba64e962dcd1149464347f5c39334dfe1",
+          "thread.record_code_health.current_node": "final_artifact_gate",
+          "thread.start.current_node": "read_plan",
+          "internal.run_id": "01M2E3QX28DBGYFZ7HP61EDJB2",
+          "last_response": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE",
+          "internal.retry_count.review_fork": 0,
+          "graph.default_fidelity": "summary:high",
+          "outcome": "succeeded",
+          "preferred_label": "Final Artifact Gate"
+        },
+        "node_outcomes": {
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b40742d68380f588b4c7002a507211a39f199f421104176885960535bc57d101"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 796727,
+              "active_time_ms": 796727
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8ae4660a256314ce721660eb50a55cfb3410fc3f1d1aea02ff7ede884e6d45e3"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 137902,
+              "active_time_ms": 137902
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9aab872b568b37db5dddc3ab2a50aba0cb05fc5fb1e88bc6ed540d21d2e61b98"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/061-discover-club-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 181,
+              "active_time_ms": 181
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/484555c922ac8c26ec414441b6af69923b08b9a0ea7ca76a938cba16704c3382"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "claude_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 061 Review — Final Assessment\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## Basis for review\n\nAll three parallel review branches (`claude_review`, `cod",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "# Iteration 061 Review — Final Assessment\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## Basis for review\n\nAll three parallel review branches (`claude_review`, `codex_review`, `gemini_review`) independently reached ACCEPT with Medium confidence. The single concrete, evidenced defect surfaced in the first review pass — the Cucumber scenario-inventory tag-scope gap (`fix-cucumber-inventory-tag-scope`) — has already been repaired, committed, and verified: `cucumber_config.test.js` now uses the official `@cucumber/gherkin` AST parser with feature/rule/scenario tag inheritance, `@cucumber/gherkin` is a proper direct devDependency, and a full `dev ci` re-run on the exact repaired diff passed cleanly (1,292 ExUnit tests; 145/145 acceptance scenarios; 1,052/1,052 steps). No branch identified a second concrete defect.\n\nThe one open `review_blockers` entry (`fix-review-repair-portable-comparison`) concerns the iteration-review *workflow's* verification script (`verify_review_repair.sh` failing to find `cmp`), not iteration 061's product code. `apply_review_fixes` correctly treated it as out of scope for this iteration and reverted an earlier attempt to patch it here. This is the right call: fixing the review tooling inside an iteration-review run for iteration 061 would itself be an out-of-scope, unrelated change per the plan's own risk note (\"No problem-note status updates, app-wide error redesign or unrelated refactor belongs here\"). That workflow defect should be tracked and fixed separately, not folded into this iteration's commit history.\n\nNo branch produced file-and-line evidence of an ADR violation in the Membership discovery/access split, `MemberDashboardPresentation`, or the LiveView/component layer. The plan's own explicitly named top risk — discovery query collapsing into a conversation-access grant — remains unconfirmed by direct code inspection in this transcript (evidence is truncated), but all three reviewers treat this as an evidence-visibility limitation rather than a demonstrated defect, consistent with green ADR-relevant acceptance coverage (permission/visibility scenarios all passing).\n\n## ADR violations\n\nNone identified with concrete evidence. No branch cited a specific ADR number/file in conflict with the implementation. The plan explicitly scopes this iteration away from new architecture (\"No new aggregate or generic permission framework is needed,\" \"Keep read-model changes and privacy decisions server-authoritative\"), and nothing in the available evidence contradicts that.\n\n## Blocking issues\n\nNone. The only issue with concrete, verifiable evidence (the Cucumber tag-scope gap) has already been fixed and verified via a green `dev ci` run on the repaired commit.\n\n## Bounded-safe fixes\n\nNone outstanding for iteration 061. The sole bounded-safe fix identified across all branches has already been implemented and validated.\n\n(Note: `verify_review_repair.sh`'s reliance on an unavailable `cmp` is a bounded-safe fix candidate, but it belongs to the iteration-review workflow tooling, not to this iteration's commit scope — correctly deferred rather than fixed here.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** Membership context module(s) implementing the discovery-summary API vs. `list_active_groups_for_member/2`; `MemberDashboardPresentation`.\n   **Smell:** Discovery/access query-separation risk. The plan names \"reusing the new discovery list as a conversation access grant\" as the highest risk in the iteration. No review branch had direct sight of this code to confirm the two query paths are structurally independent rather than differently-named wrappers that a future edit could silently collapse.\n   **Why it needs human judgement:** A permission leak here wouldn't necessarily be caught by scenario coverage if a later feature reuses the \"wrong\" query path. Worth a deliberate follow-up code read by a maintainer with full source access.\n\n2. **File:** `acceptance-tests/test/cucumber_config.test.js` (post-repair).\n   **Smell:** Scenario Outline inventory still represents an outline once and doesn't account for tags on individual `Examples:` blocks; also, `@cucumber/gherkin` was promoted from transitive to direct devDependency.\n   **Why it needs human judgement:** No current tagged `Examples:` blocks exist, so this doesn't affect present behaviour, but maintainers should decide inventory granularity if such tags are introduced later, and should sanity-check the dependency promotion against the pinned Cucumber runner version.\n\n3. **General (carried from plan's own risk note):** Eve's email-only placeholder and the outside-admin Members-only surface are explicitly interim designs pending iterations 063–065.\n   **Why it needs human judgement:** Nothing in the evidence suggests leakage into permanent-looking code, but this is a natural seam for coupling in later iterations and worth flagging for whoever picks up 065.\n\n4. **File:** `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh`.\n   **Smell:** Verification stage invoked `cmp`, which is unavailable in this sandbox, yet the stage still reported success rather than failing fast.\n   **Why it needs human judgement:** This is workflow-tooling debt outside iteration 061's scope (already tracked as `fix-review-repair-portable-comparison`). It weakens independent before/after diff verification for *future* review-repair runs but did not invalidate this iteration's `dev ci` results, which were confirmed by other means (full test suite re-run, explicit file-list diff).\n\n## Suggested fixes\n\nNone required for merge. Recommended non-blocking follow-ups:\n- A maintainer should do a targeted read of the Membership context to explicitly confirm the discovery/access query separation (finding 1).\n- Fix `verify_review_repair.sh` to use a portable Git-based diff comparison instead of `cmp`, tracked as its own workflow-infrastructure change — not as part of this or any product iteration.\n\n## Validation notes\n\n- `dev ci` passed on the pre-repair committed state: 145 acceptance scenarios / 1,052 steps, 0 failures.\n- The one evidenced defect (Cucumber tag-scope gap) was fixed; `dev ci` was re-run on the exact repaired diff and passed again: 145/145 scenarios, 1,052/1,052 steps, 1,292 ExUnit tests, 0 failures.\n- `verify_review_repair` confirms the repaired diff touched only `acceptance-tests/package-lock.json`, `acceptance-tests/package.json`, and `acceptance-tests/test/cucumber_config.test.js` — no acceptance feature files were edited.\n- The subsequent `apply_review_fixes` pass made no further code changes, correctly declining to expand scope into workflow-tooling repair; this was re-verified as a no-op diff.\n- Preflight sandbox build succeeded cleanly.\n- The remaining open item (query-separation confirmation) is recorded as a judgement-worthy follow-up rather than a blocker, since no branch produced concrete evidence of a violation — only an evidence-visibility gap in this review's transcript.\n- The `fix-review-repair-portable-comparison` blocker remains open but is correctly scoped to iteration-review workflow infrastructure, not to iteration 061's implementation; it should not gate this iteration's acceptance."
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None identified.** The implementation evidence is consistent with the proje",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None identified.** The implementation evidence is consistent with the project’s CQRS, read-model, and responsibility-boundary guidance:\n   - Group discovery remains distinct from effective membership and conversation authorization.\n   - Authorization decisions remain server-authoritative rather than being inferred from browser state.\n   - The web presentation layer uses public Membership/Messaging APIs rather than introducing projection joins as authorization shortcuts.\n   - No replacement aggregate, generic permission framework, or alternative event-sourcing infrastructure was introduced.\n\n## Blocking issues\n\n1. **None.**\n\n   The open `fix-review-repair-portable-comparison` item is a defect in the iteration-review workflow, not in iteration 061’s product implementation. The missing `cmp` executable should not keep the implementation rejected, particularly because no review-repair product changes remained and the subsequent full `dev ci` run succeeded.\n\n## Bounded-safe fixes\n\n1. **None required for this iteration.**\n\n   The review did not identify a concrete, low-risk product refactor that would improve the implementation enough to justify another code-change cycle.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** Membership context/read-model modules implementing group discovery and `list_active_groups_for_member/2`; `MemberDashboardPresentation`  \n   **Smell:** The discoverability-versus-participation distinction is a security-sensitive architectural seam. The APIs address closely related data and could be incorrectly consolidated by a future cleanup.  \n   **Why it may need human judgement:** Discovery must never become an implicit Messaging authorization grant, and non-member presentation must not load private rows and merely hide them. The current implementation and tests conform, but maintainers should preserve the distinction explicitly during future membership work in iterations 063–065.\n\n2. **File:** `acceptance-tests/test/cucumber_config.test.js`  \n   **Smell:** The scenario inventory remains principally scenario-oriented; handling of tags attached to individual `Examples:` blocks may require additional semantics if such tags are introduced.  \n   **Why it may need human judgement:** No current scenarios depend on tagged `Examples:` blocks, so this is not a present coverage gap. Before introducing them, maintainers should decide whether inventory is intended to represent an outline once or each expanded example independently.\n\n3. **File:** `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh`  \n   **Smell:** The script invoked an unavailable `cmp` executable while its workflow stage still reported success.  \n   **Why it may need human judgement:** This weakens the workflow’s independent before/after verification, but it is unrelated to club-group discovery and outside the iteration’s product scope. Workflow owners should decide whether to require `cmp` in the sandbox or use a portable Git-based comparison that fails explicitly when verification cannot run.\n\n## Suggested fixes\n\nNo merge-required changes.\n\nRecommended follow-ups:\n\n- Preserve clear naming and focused tests around discovery summaries versus effective group membership and conversation access.\n- Add `Examples:`-tag inventory coverage before the acceptance suite begins using that feature.\n- Track the repair-verification portability issue separately; for example, replace `cmp` with a repository-supported comparison mechanism and ensure a failed comparison command cannot be reported as a successful verification stage.\n\n## Validation notes\n\n- Sandbox compilation/runtime preflight passed.\n- Full `dev ci` completed successfully:\n  - **1,292 ExUnit tests passed**\n  - **145 browser acceptance scenarios passed**\n  - **1,052 acceptance steps passed**\n- Permission-sensitive acceptance coverage remained green, including direct routing and access-boundary behaviour.\n- No acceptance feature files were changed during the review-repair pass.\n- The review repair retained no tracked product changes.\n- `verify_review_repair.sh` did **not** complete its intended portable comparison because `cmp` was unavailable, despite the stage being marked successful. This is recorded as a workflow-health issue, not an iteration-061 blocker.\n- The supplied transcript does not independently demonstrate the plan’s desktop/mobile manual visual review. That limits confidence to Medium but does not reveal a behavioural or architectural defect."
+                  }
+                },
+                {
+                  "id": "gemini_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation respects the plan's architectural constrain",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "# Iteration 061 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation respects the plan's architectural constraints (no new aggregate, server-authoritative read models) and does not conflict with existing project ADRs regarding CQRS, DDD, or event sourcing boundaries.\n\n## Blocking issues\n\n1. None. \n\n*Note on `fix-review-repair-portable-comparison`:* This open issue relates to the automation workflow script (`verify_review_repair.sh` missing the `cmp` utility) rather than the product implementation of Iteration 061. It does not block the acceptance of the iteration code itself and was correctly reverted by the repair agent as out-of-scope for product code. It should be addressed as a separate workflow-maintenance task.\n\n## Bounded-safe fixes\n\n1. None.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba/membership.ex` (or equivalent context module) and `MemberDashboardPresentation`\n   - **Smell:** Query overlap/coupling risk between discovery and participation.\n   - **Why it may need human judgement:** The iteration plan explicitly calls out \"reusing the new discovery list as a conversation access grant\" as the highest risk. Maintainers should remain vigilant in future iterations (especially 063-065) to ensure `list_active_groups_for_member/2` (participation) and the new discovery queries remain structurally independent, so future refactoring does not accidentally merge them and leak private group conversations.\n\n2. **File:** `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh`\n   - **Smell:** Dependency on `cmp` which is not guaranteed to be present in the sandbox environment.\n   - **Why it may need human judgement:** This caused a minor workflow artifact warning. The script should ideally use standard `git diff` tools or ensure `cmp` is installed in the runner environment to ensure portable verification.\n\n## Suggested fixes\n\nNo fixes required for merge. The iteration code is accepted.\n\n## Validation notes\n\n- Initial `dev check` passed cleanly (145 browser acceptance scenarios and 1052 steps).\n- The preflight sandbox compiled the entire application without cyclical dependency issues.\n- The post-repair `dev check` confirmed all tests remained green on the final committed state (1,292 ExUnit tests, 145 browser acceptance scenarios).\n- The implementation strictly avoided altering acceptance `.feature` files, preserving them as the behavioral source of truth."
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-co",
+              "last_stage": "apply_review_fixes",
+              "response.apply_review_fixes": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-comparison` | Out of scope: this concerns the iteration-review workflow, not iteration 061. The attempted `.fabro/workflows` repair was fully reverted per your correction. | None |\n| Iteration-061 product/acceptance implementation | Reviewers identified no concrete ADR violation, authorization defect, or bounded code-health fix. Existing concerns were future-maintenance observations rather than demonstrated defects. | None |\n\nFiles changed:\n\n- No tracked changes remain.\n- No acceptance feature files were edited.\n- Existing untracked `.fabro/tmp/` run artifacts remain untouched.\n\nValidation:\n\n- Confirmed the scoped implementation is exactly the single commit from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f` to `54a6ef70945fea7b29a188d18856dcb73ac4952a`.\n- Confirmed there are no retained tracked or staged changes under `.fabro/workflows`, `docs/kaizen`, or elsewhere.\n- The supplied completed validation remains green: 1,292 ExUnit tests, 145 browser acceptance scenarios, and 1,052 acceptance steps passed.\n- No additional `dev check` was run because this pass leaves no code, configuration, test, or behavior changes.\n\nThe portable comparison concern remains separate workflow-fix work and is not an iteration-061 blocker."
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 514526,
+                    "output_tokens": 4899,
+                    "reasoning_tokens": 3584,
+                    "cache_read_tokens": 120448,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2887344
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 204588,
+              "tool_time_ms": 12377,
+              "active_time_ms": 216965
+            }
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "final_artifact_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/12156a6d4c99c6dcbd8af98511abd8dba64e962dcd1149464347f5c39334dfe1"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/061-discover-club-groups/plan.md' 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 255,
+              "active_time_ms": 255
+            }
+          },
+          "record_code_health": {
+            "status": "succeeded",
+            "preferred_label": "Final Artifact Gate",
+            "suggested_next_ids": [
+              "final_artifact_gate"
+            ],
+            "context_updates": {
+              "response.record_code_health": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE_HEALTH_RECORDED: Updated docs/code-health.md for iteration 061 with three supported findings omitted by the routing-only synthesis. The focused diff contains the new entry, git diff --check passed, and no acceptance feature or product-behaviour files changed.\"}",
+              "last_response": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE",
+              "last_stage": "record_code_health",
+              "code_health_recording_ok": true
+            },
+            "notes": "Stage completed: record_code_health",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1473670,
+                    "output_tokens": 7898,
+                    "reasoning_tokens": 2834,
+                    "cache_read_tokens": 545280,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 7962950
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 270674,
+              "tool_time_ms": 396492,
+              "active_time_ms": 667166
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "review_fixes_available": false,
+              "last_stage": "synthesize_review",
+              "implementation_accepted": true
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 13718,
+                    "output_tokens": 26,
+                    "reasoning_tokens": 661,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 89200
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 23042,
+              "tool_time_ms": 0,
+              "active_time_ms": 23042
+            }
+          },
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/975209c7f2f961cfa020562c8dd3dd1f316bad61b44e088024694eeb9541191e"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c1f5bbed5c9c2da9bd63eabf9a382fc8a85421e2f2e8366fc78fb1d1c9c95aa5"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 257,
+              "active_time_ms": 257
+            }
+          }
+        },
+        "next_node_id": "publish_polish_to_main",
+        "git_commit_sha": "0dca8498af22bc07082c37b12459937f17826c5c",
+        "node_visits": {
+          "apply_review_fixes": 2,
+          "verify_review_repair": 2,
+          "read_plan": 1,
+          "collect_implementation_evidence": 3,
+          "dev_check": 3,
+          "record_code_health": 1,
+          "review_gate": 3,
+          "start": 1,
+          "preflight_sandbox": 1,
+          "review_merge": 3,
+          "snapshot_before_review_repair": 2,
+          "final_artifact_gate": 1,
+          "review_fork": 3,
+          "synthesize_review": 3
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 4,
+          "additions": 86,
+          "deletions": 37
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-13T20:55:28.164295593Z",
+        "current_node": "publish_polish_to_main",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "record_code_health",
+          "final_artifact_gate",
+          "publish_polish_to_main"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.verify_review_repair": 0,
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "current_node": "final_artifact_gate",
-          "command.output": "blob://sha256/12156a6d4c99c6dcbd8af98511abd8dba64e962dcd1149464347f5c39334dfe1",
+          "current_node": "publish_polish_to_main",
+          "command.output": "blob://sha256/8ac7ecc8ea8f3459520c1a138406aaee720c43a7b89e14fd2fe2fa7cf9317d7f",
+          "internal.retry_count.publish_polish_to_main": 0,
           "internal.run_id": "01M2E3QX28DBGYFZ7HP61EDJB2",
           "internal.retry_count.collect_implementation_evidence": 0,
           "internal.work_dir": "/workspace/memba",
@@ -9563,7 +9994,7 @@
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "failure_class": "",
           "thread.review_fork.current_node": "review_merge",
-          "internal.thread_id": "record_code_health",
+          "internal.thread_id": "final_artifact_gate",
           "parallel.results": [
             {
               "id": "claude_review",
@@ -9619,6 +10050,7 @@
           "internal.retry_count.review_fork": 0,
           "thread.verify_review_repair.current_node": "dev_check",
           "internal.retry_count.review_merge": 0,
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
           "thread.preflight_sandbox.current_node": "dev_check",
           "thread.collect_implementation_evidence.current_node": "review_fork",
           "thread.review_merge.current_node": "synthesize_review",
@@ -9765,6 +10197,20 @@
               "active_time_ms": 257
             }
           },
+          "publish_polish_to_main": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8ac7ecc8ea8f3459520c1a138406aaee720c43a7b89e14fd2fe2fa7cf9317d7f"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/061-discover-club-groups/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2859,
+              "active_time_ms": 2859
+            }
+          },
           "apply_review_fixes": {
             "status": "succeeded",
             "context_updates": {
@@ -9900,12 +10346,9 @@
             "usage": null
           }
         },
-        "next_node_id": "publish_polish_to_main",
+        "next_node_id": "finalize_iteration_status",
         "node_visits": {
-          "synthesize_review": 3,
-          "apply_review_fixes": 2,
-          "verify_review_repair": 2,
-          "final_artifact_gate": 1,
+          "publish_polish_to_main": 1,
           "review_fork": 3,
           "read_plan": 1,
           "dev_check": 3,
@@ -9913,9 +10356,13 @@
           "snapshot_before_review_repair": 2,
           "preflight_sandbox": 1,
           "record_code_health": 1,
+          "verify_review_repair": 2,
           "review_merge": 3,
           "collect_implementation_evidence": 3,
-          "start": 1
+          "apply_review_fixes": 2,
+          "start": 1,
+          "synthesize_review": 3,
+          "final_artifact_gate": 1
         }
       },
       "diff": {}
@@ -10464,7 +10911,12 @@
       "first_event_seq": 2542,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/061-discover-club-groups/plan.md' 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
+        "failure_reason": null,
+        "timestamp": "2026-09-13T20:55:21.438254271Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -10488,6 +10940,12 @@
       "started_at": "2026-09-13T20:55:21.172635794Z",
       "handler": "command",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 263,
+        "inference_time_ms": 0,
+        "tool_time_ms": 255,
+        "active_time_ms": 255
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -10497,7 +10955,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "snapshot_before_review_repair@1": {
       "first_event_seq": 113,
@@ -10649,6 +11107,46 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "publish_polish_to_main@1": {
+      "first_event_seq": 2552,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/061-discover-club-groups/plan.md'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/061-discover-club-groups/plan.md'",
+        "language": "shell",
+        "timeout_ms": 300000
+      },
+      "script_timing": {
+        "output": "blob://sha256/8ac7ecc8ea8f3459520c1a138406aaee720c43a7b89e14fd2fe2fa7cf9317d7f",
+        "exit_code": 0,
+        "duration_ms": 2859,
+        "termination": "exited",
+        "output_bytes": 202,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 202,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-13T20:55:25.294742378Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "claude_review@1": {
       "first_event_seq": 67,
