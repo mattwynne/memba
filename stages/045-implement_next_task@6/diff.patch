@@ -1,0 +1,645 @@
+diff --git a/docs/iterations/061-discover-club-groups/todo.md b/docs/iterations/061-discover-club-groups/todo.md
+index dc51e25..6a15f9e 100644
+--- a/docs/iterations/061-discover-club-groups/todo.md
++++ b/docs/iterations/061-discover-club-groups/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Preserve `list_active_groups_for_member/2` as the actual-membership API: Messaging uses it for access, so broadening it would expose conversations.
+ - [x] 004 Update `MemberDashboardPresentation` to resolve group identity within the authorised club, then load only the permitted surface.
+ - [x] 005 Explicitly distinguish ordinary non-member, outside admin and participating member.
+-- [ ] 006 Extend the existing stateless tabs/frame/list composition in `page_html/club.html.heex` and `member_dashboard_group_tabs.ex`.
++- [x] 006 Extend the existing stateless tabs/frame/list composition in `page_html/club.html.heex` and `member_dashboard_group_tabs.ex`.
+ - [ ] 007 Keep one contextual action slot, correct tab/panel ARIA and keyboard behaviour.
+ - [ ] 008 Preserve selected-group routing and remembered selection through `MemberDashboardLive` and its existing browser hook.
+ - [ ] 009 Refresh discovery/access state on relevant read-model changes; reject direct actions after access loss.
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index fc57a16..90e6055 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -117,6 +117,135 @@
+ /* Make LiveView wrapper divs transparent for layout */
+ [data-phx-session], [data-phx-teleported-src] { display: contents }
+ 
++/* Club-group discovery additions from the reviewed member-app templates. */
++.visually-hidden {
++  position: absolute;
++  width: 1px;
++  height: 1px;
++  overflow: hidden;
++  clip: rect(0 0 0 0);
++  white-space: nowrap;
++}
++
++.group-rail {
++  position: relative;
++}
++
++.group-rail__section + .group-rail__section {
++  margin-top: 16px;
++}
++
++.group-rail__lock {
++  width: 14px;
++  height: 14px;
++  flex: none;
++  margin-left: auto;
++  color: var(--color-ink-3);
++  opacity: 0.8;
++}
++
++.group-head__you {
++  display: inline-flex;
++  align-items: center;
++  gap: 5px;
++  color: var(--color-sage-700);
++  font-weight: 600;
++}
++
++.section-panel {
++  padding: 18px 20px 24px;
++}
++
++.access {
++  max-width: 520px;
++  margin: 28px auto 36px;
++  padding: 28px 26px;
++  border: 1px solid var(--color-line);
++  border-radius: 16px;
++  background: var(--color-paper);
++  box-shadow: 0 1px 2px rgb(21 32 28 / 0.05);
++  text-align: center;
++}
++
++.access__icon {
++  width: 44px;
++  height: 44px;
++  margin: 0 auto 14px;
++  border-radius: 12px;
++  background: var(--color-base-200);
++  color: var(--color-ink-2);
++  display: grid;
++  place-items: center;
++  box-shadow: inset 0 0 0 1px var(--color-line);
++}
++
++.access__title {
++  margin: 0;
++  color: var(--color-ink);
++  font-size: 18px;
++  font-weight: 700;
++  letter-spacing: -0.01em;
++}
++
++.access__copy {
++  max-width: 44ch;
++  margin: 8px auto 0;
++  color: var(--color-ink-2);
++  font-size: 14px;
++  line-height: 1.55;
++}
++
++.access__admin {
++  max-width: 44ch;
++  margin: 16px auto 0;
++  color: var(--color-ink-3);
++  font-size: 12.5px;
++  line-height: 1.55;
++}
++
++.access__admin a {
++  color: var(--color-sage-700);
++  font-family: var(--font-mono);
++  font-size: 12px;
++  overflow-wrap: anywhere;
++}
++
++.outside {
++  display: flex;
++  align-items: flex-start;
++  gap: 14px;
++  margin: 0 0 14px;
++  padding: 14px 16px;
++  border: 1px solid var(--color-sage-200);
++  border-radius: 14px;
++  background: var(--color-sage-50);
++}
++
++.outside > span {
++  flex: none;
++  margin-top: 2px;
++  color: var(--color-sage-700);
++}
++
++.outside__body {
++  min-width: 0;
++  flex: 1 1 auto;
++}
++
++.outside__title {
++  margin: 0;
++  color: var(--color-ink);
++  font-size: 14px;
++  font-weight: 700;
++}
++
++.outside__copy {
++  margin: 4px 0 0;
++  color: var(--color-ink-2);
++  font-size: 13px;
++  line-height: 1.5;
++}
++
+ /* ============================================================
+    Base — cream canvas, Figtree body, tightened display tracking.
+    The <body> carries no bg class, so daisyUI would default it to
+@@ -1179,6 +1308,15 @@ h1, h2, h3, h4 {
+    for section tabs yet (see .design-sync/NOTES.md, iteration 052), so
+    this fallback stays app-only until that lands. */
+ @media (max-width: 640px) {
++  .section-panel {
++    padding: 16px 14px 24px;
++  }
++
++  .access {
++    margin: 18px 14px 24px;
++    padding: 22px 18px;
++  }
++
+   .section-tabs {
+     align-items: stretch;
+     flex-direction: column;
+diff --git a/web/lib/memba_web/components/member_dashboard_group_tabs.ex b/web/lib/memba_web/components/member_dashboard_group_tabs.ex
+index 79d82ea..b2eec4b 100644
+--- a/web/lib/memba_web/components/member_dashboard_group_tabs.ex
++++ b/web/lib/memba_web/components/member_dashboard_group_tabs.ex
+@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberDashboardGroupTabs do
+   attr :active_tab, :string, required: true, values: ~w(conversations members)
+   attr :conversations_path, :string, required: true
+   attr :members_path, :string, required: true
++  attr :show_conversations, :boolean, default: true
+ 
+   slot :conversations_action, doc: "action rendered only when the conversations tab is active"
+   slot :members_action, doc: "action rendered only when the members tab is active"
+@@ -29,6 +30,7 @@ defmodule MembaWeb.MemberDashboardGroupTabs do
+         phx-hook=".SectionTabs"
+       >
+         <.link
++          :if={@show_conversations}
+           id="member-section-tab-conversations"
+           patch={@conversations_path}
+           class={tab_class(@active_tab, "conversations")}
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 3494798..77eaa49 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -8,6 +8,7 @@ defmodule MembaWeb.PageHTML do
+ 
+   import MembaWeb.MemberComponents, only: [conversation_list: 1, member_list: 1]
+ 
++  alias Memba.Membership.SystemGroups
+   alias MembaWeb.ClubSite
+   alias MembaWeb.MemberDashboardGroupTabs
+ 
+@@ -77,6 +78,28 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp active_member_section?(active_section, section), do: active_section == section
+ 
++  defp split_member_group_rail(groups) do
++    Enum.split_with(groups, &Map.get(&1, :participating?, true))
++  end
++
++  defp selected_group_active_section(:outside_admin, _requested_section), do: "members"
++
++  defp selected_group_active_section(_selected_group_access, requested_section),
++    do: requested_section
++
++  defp participating_group?(:participating_member), do: true
++  defp participating_group?(_selected_group_access), do: false
++
++  defp ordinary_group_non_member?(:ordinary_non_member), do: true
++  defp ordinary_group_non_member?(_selected_group_access), do: false
++
++  defp outside_group_admin?(:outside_admin), do: true
++  defp outside_group_admin?(_selected_group_access), do: false
++
++  defp custom_group?(%{group_key: group_key}) do
++    group_key not in [SystemGroups.everyone_key(), SystemGroups.admin_key()]
++  end
++
+   defp member_group_rail_item_class(group, selected_group) do
+     ["group-rail__item", selected_group?(group, selected_group) && "is-active"]
+   end
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 0424c64..33668c3 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -1,6 +1,12 @@
+ <% club_id_source = assigns[:club_id_source] || "host" %>
+-<% active_section = assigns[:active_section] || "conversations" %>
++<% requested_section = assigns[:active_section] || "conversations" %>
++<% selected_group_access = assigns[:selected_group_access] || :participating_member %>
++<% active_section = selected_group_active_section(selected_group_access, requested_section) %>
+ <% selected_group_route_id = assigns[:selected_group_route_id] %>
++<% {your_groups, other_groups} = split_member_group_rail(@groups) %>
++<% participating_group? = participating_group?(selected_group_access) %>
++<% ordinary_non_member? = ordinary_group_non_member?(selected_group_access) %>
++<% outside_admin? = outside_group_admin?(selected_group_access) %>
+ 
+ <Layouts.club_site
+   flash={@flash}
+@@ -20,25 +26,52 @@
+   >
+     <div class="app-split">
+       <nav id="member-group-rail" class="group-rail" aria-label="Groups">
+-        <div class="group-rail__label">Your groups</div>
+-        <.link
+-          :for={group <- @groups}
+-          id={"member-group-link-#{group.group_id}"}
+-          patch={
+-            member_section_path(
+-              "conversations",
+-              @selected_club,
+-              club_id_source,
+-              group.group_id
+-            )
+-          }
+-          class={member_group_rail_item_class(group, @selected_group)}
+-          data-testid="member-group-link"
+-          data-group-id={group.group_id}
+-          aria-current={member_group_aria_current(group, @selected_group)}
+-        >
+-          <span class="group-rail__name">{group.name}</span>
+-        </.link>
++        <div id="member-group-rail-your" class="group-rail__section">
++          <div class="group-rail__label">Your groups</div>
++          <.link
++            :for={group <- your_groups}
++            id={"member-group-link-#{group.group_id}"}
++            patch={
++              member_section_path(
++                "conversations",
++                @selected_club,
++                club_id_source,
++                group.group_id
++              )
++            }
++            class={member_group_rail_item_class(group, @selected_group)}
++            data-testid="member-group-link"
++            data-group-id={group.group_id}
++            aria-current={member_group_aria_current(group, @selected_group)}
++          >
++            <span class="group-rail__name">{group.name}</span>
++          </.link>
++        </div>
++
++        <div :if={other_groups != []} id="member-group-rail-other" class="group-rail__section">
++          <div class="group-rail__label">Other groups</div>
++          <.link
++            :for={group <- other_groups}
++            id={"member-group-link-#{group.group_id}"}
++            patch={
++              member_section_path(
++                "conversations",
++                @selected_club,
++                club_id_source,
++                group.group_id
++              )
++            }
++            class={member_group_rail_item_class(group, @selected_group)}
++            data-testid="member-group-link"
++            data-group-id={group.group_id}
++            aria-current={member_group_aria_current(group, @selected_group)}
++            title="You're not in this group"
++          >
++            <span class="group-rail__name">{group.name}</span>
++            <.icon name="hero-lock-closed" class="group-rail__lock" aria-hidden="true" />
++            <span class="visually-hidden">(not a member)</span>
++          </.link>
++        </div>
+       </nav>
+ 
+       <div
+@@ -62,9 +95,20 @@
+                 class="group-head__meta"
+                 aria-label="Group details"
+               >
+-                <span id="member-group-member-count">
++                <span :if={custom_group?(@selected_group)}>Private group</span>
++                <span
++                  :if={not is_nil(@selected_group.active_member_count)}
++                  id="member-group-member-count"
++                >
+                   {group_member_count_label(@selected_group.active_member_count)}
+                 </span>
++                <span :if={not participating_group?}>You're not a member</span>
++                <span
++                  :if={participating_group? && custom_group?(@selected_group)}
++                  class="group-head__you"
++                >
++                  <.icon name="hero-check" class="size-3" aria-hidden="true" /> You're a member
++                </span>
+                 <.link
+                   :if={@selected_group.email_address}
+                   id="member-group-email-address"
+@@ -79,7 +123,9 @@
+         </header>
+ 
+         <MemberDashboardGroupTabs.group_tabs
++          :if={not ordinary_non_member?}
+           active_tab={active_section}
++          show_conversations={participating_group?}
+           conversations_path={
+             member_section_path(
+               "conversations",
+@@ -114,7 +160,7 @@
+               New message
+             </.button>
+           </:conversations_action>
+-          <:members_action :if={@current_member_can_manage_members?}>
++          <:members_action :if={participating_group? && @current_member_can_manage_members?}>
+             <.button
+               id="member-section-action-invite-member"
+               href={
+@@ -133,7 +179,38 @@
+           </:members_action>
+         </MemberDashboardGroupTabs.group_tabs>
+ 
++        <section
++          :if={ordinary_non_member?}
++          id="member-group-access-guidance"
++          class="access"
++          aria-labelledby="member-group-access-title"
++        >
++          <div class="access__icon">
++            <.icon name="hero-lock-closed" class="size-6" aria-hidden="true" />
++          </div>
++          <h2 id="member-group-access-title" class="access__title">
++            {@selected_group.name} is a private group
++          </h2>
++          <p class="access__copy">
++            Only people in {@selected_group.name} can read its conversations, get its emails,
++            or see who's in it. You're a member of {@selected_club.name}, but not of {@selected_group.name}.
++          </p>
++          <p class="access__copy">
++            Think you should be? Ask the club admins.
++          </p>
++          <p class="access__admin">
++            Email the admins:
++            <.link
++              id="member-group-admin-email"
++              href={"mailto:#{@club_admin_email_address}"}
++            >
++              {@club_admin_email_address}
++            </.link>
++          </p>
++        </section>
++
+         <div
++          :if={participating_group?}
+           id="member-section-panel-conversations"
+           class="section-panel"
+           data-panel="conversations"
+@@ -171,6 +248,7 @@
+         </div>
+ 
+         <div
++          :if={not ordinary_non_member?}
+           id="member-section-panel-members"
+           class="section-panel"
+           data-panel="members"
+@@ -180,6 +258,24 @@
+           hidden={not active_member_section?(active_section, "members")}
+         >
+           <section id="club-members">
++            <div
++              :if={outside_admin?}
++              id="member-group-outside-admin-notice"
++              class="outside"
++              role="region"
++              aria-label="You're managing a group you're not in"
++            >
++              <.icon name="hero-user" class="size-5" aria-hidden="true" />
++              <div class="outside__body">
++                <h2 class="outside__title">
++                  You're a club admin, but you're not in {@selected_group.name}
++                </h2>
++                <p class="outside__copy">
++                  You can inspect who's in it. You can't read its conversations or get its emails
++                  unless you're a member—being a club admin doesn't grant that on its own.
++                </p>
++              </div>
++            </div>
+             <.member_list
+               rows={@members}
+               active_member_count={@active_member_count}
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index 7dce063..5e13953 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -88,6 +88,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+         |> Membership.list_active_groups_for_member(current_member.id)
+         |> Map.new(&{&1.group_id, &1})
+ 
++      groups = mark_group_participation(groups, participating_groups_by_id)
+       current_member_can_manage_members? = can_manage_members?(club_id, current_member)
+ 
+       load_selected_group(
+@@ -103,6 +104,12 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     end
+   end
+ 
++  defp mark_group_participation(groups, participating_groups_by_id) do
++    Enum.map(groups, fn group ->
++      Map.put(group, :participating?, Map.has_key?(participating_groups_by_id, group.group_id))
++    end)
++  end
++
+   defp load_selected_group(
+          selected_club,
+          current_member,
+diff --git a/web/test/memba_web/components/member_dashboard_group_tabs_test.exs b/web/test/memba_web/components/member_dashboard_group_tabs_test.exs
+index 737865d..46bb2b6 100644
+--- a/web/test/memba_web/components/member_dashboard_group_tabs_test.exs
++++ b/web/test/memba_web/components/member_dashboard_group_tabs_test.exs
+@@ -143,6 +143,27 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
+     refute_selector(html, "#member-section-action-invite-member")
+   end
+ 
++  test "renders the Members-only tab composition when conversations are unavailable" do
++    assigns = %{}
++
++    html =
++      rendered_to_string(~H"""
++      <MemberDashboardGroupTabs.group_tabs
++        active_tab="members"
++        conversations_path="/groups/grp_123"
++        members_path="/groups/grp_123/members"
++        show_conversations={false}
++      />
++      """)
++
++    assert_selector(
++      html,
++      "#member-section-tabs-list #member-section-tab-members[href='/groups/grp_123/members']"
++    )
++
++    refute_selector(html, "#member-section-tab-conversations")
++  end
++
+   defp assert_selector(html, selector) do
+     assert html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.any?(),
+            "Expected rendered component to include selector #{inspect(selector)}"
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index c84c3bb..ff1f97d 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -188,9 +188,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#member-section-panel-members[hidden]")
+   end
+ 
+-  test "a remembered non-participating group falls back while its identity remains discoverable", %{
+-    conn: conn
+-  } do
++  test "a remembered non-participating group falls back while its identity remains discoverable",
++       %{
++         conn: conn
++       } do
+     alice =
+       create_active_member(
+         email: "alice@example.com",
+@@ -694,6 +695,49 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       |> live(~p"/groups/#{private_group.group_id}")
+ 
+     assert has_element?(view, "#member-group-name", private_group.name)
++
++    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
++
++    assert has_element?(
++             view,
++             "#member-group-rail-your #member-group-link-#{everyone_group_id}",
++             "Everyone"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-rail-other #member-group-link-#{private_group.group_id} " <>
++               ".group-rail__lock"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-rail-other #member-group-link-#{private_group.group_id} " <>
++               ".visually-hidden",
++             "not a member"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-access-guidance[aria-labelledby='member-group-access-title']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-access-title",
++             "#{private_group.name} is a private group"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-admin-email[href='mailto:#{group_address(alice.club_id, SystemGroups.admin_email_slug())}']"
++           )
++
++    refute has_element?(view, "#member-group-member-count")
++    refute has_element?(view, "#member-group-email-address")
++    refute has_element?(view, "#member-section-tabs")
++    refute has_element?(view, "#member-section-panel-conversations")
++    refute has_element?(view, "#member-section-panel-members")
+     refute has_element?(view, "[data-message-id='#{secret_conversation.message_id}']")
+     refute has_element?(view, "#club-member-#{bob.person_id}")
+ 
+@@ -707,6 +751,73 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute malformed_response =~ private_group.name
+   end
+ 
++  test "an outside admin receives the selected group's Members-only composition", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Admin",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        email_slug: "private-planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, bob)
++    grant_manage_members!(alice)
++
++    secret_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        subject: "Private admin route details",
++        audience_group_id: private_group.group_id
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{private_group.group_id}")
++
++    assert has_element?(
++             view,
++             "#member-group-outside-admin-notice",
++             "You're a club admin, but you're not in Private Planning"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-metadata #member-group-member-count",
++             "1 member"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-email-address[href='mailto:#{group_address(alice.club_id, private_group.email_slug)}']"
++           )
++
++    assert has_element?(view, "#member-section-tabs #member-section-tab-members")
++    refute has_element?(view, "#member-section-tab-conversations")
++    assert has_element?(view, "#member-section-panel-members:not([hidden])")
++    assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
++
++    refute has_element?(view, "#member-section-panel-conversations")
++    refute has_element?(view, "#member-section-action-new-message")
++    refute has_element?(view, "[data-message-id='#{secret_conversation.message_id}']")
++  end
++
+   test "routed dashboard member sections render only the compact member app footer" do
+     alice =
+       create_active_member(
+@@ -2265,6 +2376,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     })
+   end
+ 
++  defp group_address(club_id, email_slug) do
++    club_id
++    |> Memba.Membership.get_club()
++    |> Memba.ClubInboundEmailAddress.address(email_slug)
++  end
++
+   defp grant_manage_members!(member) do
+     Repo.insert!(%MemberPermission{
+       club_id: member.club_id,
