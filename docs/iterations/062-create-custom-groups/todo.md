@@ -9,7 +9,7 @@
 - [x] 007 Make new user-facing operations distinguish custom groups structurally, not by arbitrary display-name checks.
 - [x] 008 Close the custom-membership departure gap now.
 - [x] 009 Native `RemoveClubMember` currently emits only `ClubMemberRemoved`, and `SystemGroupMembership` removes only Everyone/Admin.
-- [ ] 010 Extend the Club-owned lifecycle to emit custom removals for the departing membership and keep legacy/replay handling safe.
+- [x] 010 Extend the Club-owned lifecycle to emit custom removals for the departing membership and keep legacy/replay handling safe.
 - [ ] 011 Arrange an idempotent Membership-to-Messaging policy for clearing affected follows, using public APIs and existing unfollow commands; do not put cross-context side effects in projectors.
 - [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.
 - [ ] 013 Existing last-member/last-Admin invariants stay intact.
