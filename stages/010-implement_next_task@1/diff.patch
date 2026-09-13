@@ -1,0 +1,115 @@
+diff --git a/docs/iterations/061-discover-club-groups/todo.md b/docs/iterations/061-discover-club-groups/todo.md
+index 5bcef78..917492b 100644
+--- a/docs/iterations/061-discover-club-groups/todo.md
++++ b/docs/iterations/061-discover-club-groups/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Separate discovery from participation in the Membership public query API.
++- [x] 001 Separate discovery from participation in the Membership public query API.
+ - [ ] 002 Add a club-scoped discovery summary for an authenticated active club member.
+ - [ ] 003 Preserve `list_active_groups_for_member/2` as the actual-membership API: Messaging uses it for access, so broadening it would expose conversations.
+ - [ ] 004 Update `MemberDashboardPresentation` to resolve group identity within the authorised club, then load only the permitted surface.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 7e8b2b5..35b435d 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -960,6 +960,39 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  List the groups an active club member may discover in the given club.
++
++  Discovery is deliberately separate from group participation. The safe
++  summaries contain group identity and display metadata only; they do not
++  include member counts, email addresses, or any indication that the person
++  belongs to a group. Invalid IDs and people without an active membership in
++  the selected club return an empty list.
++  """
++  def list_discoverable_groups_for_member(club_id, person_id) do
++    with {:ok, club_id} <- ID.cast(:club, club_id),
++         {:ok, person_id} <- ID.cast(:person, person_id) do
++      GroupProjection
++      |> join(:inner, [group], membership in MembershipProjection,
++        on: membership.club_id == group.club_id
++      )
++      |> where([group, _membership], group.club_id == ^club_id)
++      |> where([_group, membership], membership.person_id == ^person_id)
++      |> where([_group, membership], membership.active == true)
++      |> distinct(true)
++      |> order_by([group, _membership], asc: group.name, asc: group.group_id)
++      |> select([group, _membership], %{
++        club_id: group.club_id,
++        group_id: group.group_id,
++        group_key: group.group_key,
++        name: group.name
++      })
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
+   @doc """
+   List the conversation groups an active member belongs to in a given club.
+ 
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index ae86513..5db939f 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -23,6 +23,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert source =~ "def list_active_club_memberships_for_person("
+     assert source =~ "def list_active_members_of_club("
+     assert source =~ "def list_active_members_of_group("
++    assert source =~ "def list_discoverable_groups_for_member("
+     assert source =~ "def list_active_groups_for_member("
+     assert source =~ "def list_system_group_definition_backfill_page("
+     assert source =~ "def list_everyone_group_membership_backfill_page("
+@@ -47,6 +48,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+              "list_active_club_memberships_for_person",
+              "list_active_members_of_club",
+              "list_active_members_of_group",
++             "list_discoverable_groups_for_member",
+              "list_active_groups_for_member",
+              "list_system_group_definition_backfill_page",
+              "list_everyone_group_membership_backfill_page",
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 7b66c6a..93a67b1 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -360,6 +360,34 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  describe "list_discoverable_groups_for_member/2" do
++    test "returns safe summaries for groups the active club member has not joined" do
++      club = create_club("Kootenay Mountaineering Club")
++      alice = create_person(name: "Alice", email: "alice@example.com")
++      _alice_membership_id = add_member(club.club_id, alice.person_id)
++
++      board_group_id =
++        create_group(club.club_id,
++          group_key: "board",
++          email_slug: "board",
++          name: "Board"
++        )
++
++      board_group =
++        Enum.find(
++          Membership.list_discoverable_groups_for_member(club.club_id, alice.person_id),
++          &(&1.group_id == board_group_id)
++        )
++
++      assert board_group == %{
++               club_id: club.club_id,
++               group_id: board_group_id,
++               group_key: "board",
++               name: "Board"
++             }
++    end
++  end
++
+   describe "list_active_groups_for_member/2" do
+     test "returns ordered presentation summaries with active counts and optional addresses" do
+       club = create_club("Kootenay Mountaineering Club", slug: "kmc")
