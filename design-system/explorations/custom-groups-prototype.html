@@ -1,0 +1,674 @@
+<!-- @dsCard group="Explorations" viewport="1180x900" subtitle="Click-through prototype: switch between Alice / Bob / Carol / Dan / Eve, create a group, add / remove / leave, request access — all mocked in-page" name="Custom groups — interactive prototype" -->
+<!--
+  Custom club groups — INTERACTIVE PROTOTYPE (2026-09-12, discovery design).
+
+  Single self-contained file. Everything is mocked in page memory: no network, no backend, no
+  real email. Reload to reset. It exists so the agreed behaviour can be *felt* end to end;
+  the per-surface specs are the templates in ../templates/club-group-*.html and the welcome
+  email in ../emails/group-welcome.html — those are the hand-off documents, this is not.
+
+  Entry: open this file, or ./index.html for the map of everything.
+  Try:  1. as Alice → New group → "Board 2" (or a blank / duplicate name)
+        2. Board → Members → Add member → Priya   (see Outbox: welcome email)
+        3. switch to Eve → Board → Request access  (switch to Alice → Admin: the request)
+        4. switch to Dan → Board → Members-only view → Add yourself
+        5. as Bob → Board → Members → Remove Alice / Leave Board (last member case on Huts)
+
+  Client-side state and JS here are prototype-only. In the app these are LiveView pages with
+  URL-addressable state (ADR 0015 / 0023); do not copy this script.
+-->
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Custom groups — prototype · Memba</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../styles.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
+<style>
+:root{color-scheme:light;--color-base-100:#fffef9;--color-base-200:#f6f5ea;--color-base-300:#e8e6d4;--color-base-content:#25291d;--color-primary:#5a7050;--color-primary-content:#f6f5ea;--color-secondary:#555a47;--color-secondary-content:#f6f5ea;--color-accent:#d2925a;--color-accent-content:#25291d;--color-neutral:#25291d;--color-neutral-content:#f6f5ea;--color-info:#4f6b78;--color-info-content:#f6f5ea;--color-success:#5f7a4f;--color-success-content:#f6f5ea;--color-warning:#a8772e;--color-warning-content:#f6f5ea;--color-error:#a8503a;--color-error-content:#f6f5ea;--radius-selector:0.375rem;--radius-field:0.375rem;--radius-box:0.75rem;--size-selector:0.25rem;--size-field:0.25rem;--border:1px;--depth:0;--noise:0}
+
+/* Preview-only fallback for the app list/message vocabulary (layered so the real design
+   system's unlayered rules win when present). */
+@layer preview-fallback {
+  .conversation-list{display:flex;flex-direction:column;gap:9px}
+  .conversation{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:start;gap:12px;padding:14px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:inherit;text-decoration:none;box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .conversation:hover{border-color:var(--color-sage-200);box-shadow:0 2px 8px rgb(21 32 28/.08)}
+  .conversation:focus-visible,.member-row:focus-visible{outline:2px solid var(--color-sage-300);outline-offset:2px}
+  .conversation__avatar,.member-row__avatar,.message__avatar{width:38px;height:38px;border-radius:999px;background:var(--color-sage-200);color:var(--color-sage-800);display:grid;place-items:center;flex:none;font-size:12px;font-weight:700;letter-spacing:.02em}
+  .conversation__body{min-width:0}
+  .conversation__head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .conversation__subject{min-width:0;color:var(--color-ink);display:block;flex:1 1 auto;font-size:15px;font-weight:700;letter-spacing:-.018em;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conversation__date{flex:none;color:var(--color-ink-3);font-size:12px;font-weight:600;white-space:nowrap}
+  .conversation__preview{display:-webkit-box;margin-top:6px;color:var(--color-ink-2);font-size:13px;font-weight:500;line-height:1.45;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:1;line-clamp:1}
+  .conversation__participants{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:10px}
+  .conversation__body>.conversation__replies{display:block;margin-top:8px}
+  .avatar-stack{display:inline-flex;align-items:center;flex:none}
+  .avatar-stack>span{width:24px;height:24px;margin-left:-6px;border-radius:999px;background:var(--color-sage-100);color:var(--color-sage-800);display:grid;place-items:center;font-size:10px;font-weight:700;box-shadow:0 0 0 2px var(--color-paper)}
+  .avatar-stack>span:first-child{margin-left:0}
+  .avatar-stack>.is-more{background:var(--color-base-200);color:var(--color-ink-2);font-family:var(--font-mono)}
+  .conversation__replies{color:var(--color-ink-2);font-size:12.5px;font-weight:500}
+  .conversation__replies strong{color:var(--color-ink);font-weight:700}
+  .member-list{display:flex;flex-direction:column;gap:9px}
+  .member-row{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:inherit;box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .member-row__body{min-width:0;flex:1 1 auto}
+  .member-row__name{color:var(--color-ink);font-size:14px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .member-row__meta{color:var(--color-ink-3);font-size:12.5px;font-weight:500;margin-top:2px}
+  .page-title{color:var(--color-ink);font-size:26px;font-weight:700;letter-spacing:-.024em;line-height:1.12;margin:4px 0 0}
+  .message{display:flex;align-items:flex-start;gap:13px;padding:16px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:var(--color-ink);box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .message+.message{margin-top:9px}
+  .message--original{border-color:var(--color-sage-200);background:var(--color-sage-50)}
+  .message__body{min-width:0;flex:1 1 auto}
+  .message__head{min-height:30px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .message__name{color:var(--color-ink);font-size:14px;font-weight:700}
+  .message__time{color:var(--color-ink-3);font-size:12.5px;font-weight:500;white-space:nowrap}
+  .message__text{margin:5px 0 0;color:var(--color-ink-2);font-size:15px;font-weight:500;line-height:1.6;white-space:pre-wrap}
+  .composer{margin:18px 0 0;padding:16px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .composer__head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;margin-bottom:12px}
+  .composer__title{color:var(--color-ink);font-size:15px;font-weight:700}
+  .composer__as{color:var(--color-ink-3);font-size:13px;font-weight:500}
+  .composer__as strong{color:var(--color-ink-2);font-weight:600}
+  .composer textarea,.composer .input{width:100%}
+  .composer textarea{resize:vertical}
+  .composer__actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+  .composer__note{margin:0 0 10px;color:var(--color-ink-2);font-size:13px;font-weight:600;line-height:1.4}
+  .composer__error{margin:6px 0 0;color:var(--color-error);font-size:13px;font-weight:600}
+}
+
+#app{width:100%;min-width:0} /* span the .app-frame flex column instead of max-content */
+/* ---- prototype chrome (deliberately not product UI) ---- */
+.proto{align-self:stretch;margin:0 -24px;padding:10px 24px;background:#fff7e8;border-bottom:2px dashed var(--color-accent);color:var(--color-ink);font-size:12.5px}
+.proto__inner{width:min(100%,1040px);margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.proto__tag{font-family:var(--font-mono);font-size:11px;font-weight:600;color:#925f2e;letter-spacing:.06em;text-transform:uppercase}
+.proto__who{display:flex;flex-wrap:wrap;gap:4px}
+.proto__who button{border:1px solid #e6cfae;background:#fff;border-radius:999px;padding:4px 10px;font:inherit;font-size:12px;font-weight:600;color:var(--color-ink-2);cursor:pointer}
+.proto__who button[aria-pressed="true"]{background:var(--color-ink);color:#fff;border-color:var(--color-ink)}
+.proto__who button:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+.proto__opts{margin-left:auto;display:flex;align-items:center;gap:12px}
+.proto__opts label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.proto__opts a{color:#925f2e;font-weight:600}
+@media (max-width:640px){.proto{margin:0 -12px;padding:10px 12px}.proto__opts{margin-left:0}}
+
+/* ---- page-local product UI (same rules as the templates) ---- */
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.group-rail__lock{width:14px;height:14px;flex:none;margin-left:auto;color:var(--color-ink-3);opacity:.8}
+.group-rail__divider{height:1px;margin:14px 6px 12px;background:var(--color-line)}
+.group-rail__add{color:var(--color-sage-700)}
+.group-rail__add svg{width:15px;height:15px;flex:none}
+.group-rail__label+.group-rail__label,.group-rail__item+.group-rail__label{margin-top:16px}
+.group-head__you{display:inline-flex;align-items:center;gap:5px;color:var(--color-sage-700);font-weight:600}
+.group-head__you svg{width:13px;height:13px}
+.section-panel{padding:18px 20px 24px}
+.flash{margin:18px 20px -6px}
+.members-note{margin:0 0 12px;color:var(--color-ink-3);font-size:12.5px;font-weight:500;line-height:1.5}
+.members-note strong{color:var(--color-ink-2);font-weight:600}
+.member-row.is-you{background:var(--color-sage-50);border-color:var(--color-sage-100)}
+.member-row.is-new{border-color:var(--color-sage-300)}
+.member-row.is-confirming{border-radius:14px 14px 0 0;border-color:var(--color-sage-200)}
+.member-row__actions{flex:none;margin-left:auto;display:flex;align-items:center;gap:6px}
+.member-row__actions .badge{margin-right:4px}
+.member-confirm{margin-top:-9px;padding:14px 16px 14px 64px;border:1px solid var(--color-sage-200);border-top:0;border-radius:0 0 14px 14px;background:var(--color-sage-50)}
+.member-confirm p{margin:0 0 10px;color:var(--color-ink);font-size:13.5px;line-height:1.5}
+.member-confirm p+p{margin-top:-4px;color:var(--color-ink-2);font-size:13px}
+.member-confirm__actions{display:flex;gap:8px;flex-wrap:wrap}
+.picker{margin:0 0 14px;padding:16px;border:1px solid var(--color-sage-200);border-radius:14px;background:var(--color-paper);box-shadow:0 2px 8px rgb(21 32 28/.06)}
+.picker__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.picker__title{margin:0;color:var(--color-ink);font-size:15px;font-weight:700}
+.picker__hint{margin:4px 0 0;color:var(--color-ink-3);font-size:12.5px;line-height:1.5}
+.picker .input{width:100%;margin-top:12px}
+.pick-list{margin-top:10px;display:flex;flex-direction:column}
+.pick-row{display:flex;align-items:center;gap:12px;padding:9px 4px;border-top:1px solid var(--color-line)}
+.pick-row:first-child{border-top:0}
+.pick-row__avatar{width:30px;height:30px;border-radius:999px;background:var(--color-sage-100);color:var(--color-sage-800);display:grid;place-items:center;flex:none;font-size:11px;font-weight:700}
+.pick-row__name{flex:1 1 auto;min-width:0;color:var(--color-ink);font-size:13.5px;font-weight:600}
+.pick-row__name small{display:block;color:var(--color-ink-3);font-size:12px;font-weight:500}
+.pick-empty,.empty-members,.empty-convos{margin:10px 0 0;padding:16px;border:1px dashed var(--color-line-strong);border-radius:12px;color:var(--color-ink-2);font-size:13.5px;line-height:1.5;text-align:center}
+.empty-members strong,.empty-convos strong{color:var(--color-ink)}
+.access{margin:28px auto 36px;max-width:520px;padding:28px 26px;border:1px solid var(--color-line);border-radius:16px;background:var(--color-paper);box-shadow:0 1px 2px rgb(21 32 28/.05);text-align:center}
+.access__icon{width:44px;height:44px;margin:0 auto 14px;border-radius:12px;background:var(--color-base-200);color:var(--color-ink-2);display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--color-line)}
+.access__icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.access__title{margin:0;color:var(--color-ink);font-size:18px;font-weight:700}
+.access__copy{margin:8px auto 0;max-width:44ch;color:var(--color-ink-2);font-size:14px;line-height:1.55}
+.access__admin{margin:16px auto 0;max-width:44ch;color:var(--color-ink-3);font-size:12.5px;line-height:1.55}
+.access__admin a{font-family:var(--font-mono);font-size:12px;color:var(--color-sage-700);overflow-wrap:anywhere}
+.access__actions{margin-top:18px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.access__status{margin:0;max-width:44ch;font-size:13.5px;line-height:1.5;color:var(--color-ink-3)}
+.access__status--sent{color:var(--color-success);font-weight:600}
+.access__status--sent small{display:block;margin-top:4px;color:var(--color-ink-2);font-weight:500}
+.outside{margin:0 0 14px;padding:14px 16px;border:1px solid var(--color-sage-200);border-radius:14px;background:var(--color-sage-50);display:flex;gap:14px;align-items:flex-start}
+.outside svg{width:20px;height:20px;flex:none;margin-top:2px;color:var(--color-sage-700);fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.outside__body{min-width:0;flex:1 1 auto}
+.outside__title{margin:0;color:var(--color-ink);font-size:14px;font-weight:700}
+.outside__copy{margin:4px 0 0;color:var(--color-ink-2);font-size:13px;line-height:1.5}
+.outside__actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.outside__actions small{color:var(--color-ink-3);font-size:12px}
+.wrap{padding:24px}
+.app-back{display:inline-flex;align-items:center;gap:4px;color:var(--color-ink-3);font-size:13px;font-weight:600;text-decoration:none;margin-bottom:14px;background:none;border:0;padding:0;cursor:pointer;font-family:inherit}
+.app-back svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.app-back:hover{color:var(--color-sage-700)}
+.page-intro{margin:8px 0 0;color:var(--color-ink-2);font-size:14px;line-height:1.55;max-width:56ch}
+.in-group{margin:0 0 4px;color:var(--color-ink-3);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.form-card{margin-top:20px;padding:18px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);box-shadow:0 1px 2px rgb(21 32 28/.05)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field__label{color:var(--color-ink);font-size:13.5px;font-weight:700}
+.field .input{width:100%}
+.field__hint{margin:0;color:var(--color-ink-3);font-size:12.5px;line-height:1.5}
+.field__error{margin:0;color:var(--color-error);font-size:13px;font-weight:600}
+.addr-preview{margin-top:16px;padding:12px 14px;border:1px solid var(--color-line);border-radius:11px;background:var(--color-base-200);display:flex;flex-direction:column;gap:4px}
+.addr-preview__label{color:var(--color-ink-3);font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.addr-preview output{display:block;min-height:1.5em;font-family:var(--font-mono);font-size:13px;line-height:1.5;color:var(--color-sage-700);overflow-wrap:anywhere}
+.addr-preview output.is-empty::before{content:"appears here as you type the name";font-family:var(--font-sans, inherit);font-style:italic;color:var(--color-ink-3)}
+.addr-preview__note{margin:0;color:var(--color-ink-3);font-size:12.5px;line-height:1.5}
+.audience{margin-top:16px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--color-sage-200);border-radius:11px;background:var(--color-sage-50);color:var(--color-ink);font-size:13.5px;line-height:1.55}
+.audience p{margin:0}
+.audience svg{width:18px;height:18px;flex:none;margin-top:2px;color:var(--color-sage-700);fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.audience--email{margin-top:10px;border-color:var(--color-line);background:var(--color-base-200);color:var(--color-ink-2)}
+.audience a{color:var(--color-sage-700);font-weight:600;overflow-wrap:anywhere}
+.sent{margin:12px auto 24px;max-width:560px;text-align:center}
+.sent__icon{width:56px;height:56px;margin:0 auto 14px;border-radius:999px;background:var(--color-sage-50);color:var(--color-success);display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--color-sage-200)}
+.sent__icon svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.sent__actions{margin-top:22px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.message__tag{margin-left:auto}
+.message__text a{color:var(--color-sage-700);font-weight:600;overflow-wrap:anywhere}
+.outbox{padding:24px}
+.mail{margin-top:12px;padding:14px 16px;border:1px solid var(--color-line);border-radius:12px;background:var(--color-paper)}
+.mail__meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--color-ink-3);font-size:12px;font-family:var(--font-mono)}
+.mail__subject{margin:6px 0 4px;color:var(--color-ink);font-size:14px;font-weight:700}
+.mail__body{margin:0;color:var(--color-ink-2);font-size:13px;line-height:1.5;white-space:pre-wrap}
+.mail__link{margin-top:6px;font-size:12.5px}
+/* Footer list (scoped copy of the shared .footer-details rules; production styles.css is not edited here). */
+.app-foot{max-width:100%} /* integration styles.css rule missing from this worktree copy */
+.group-rail{position:relative} /* contain absolutely-positioned .visually-hidden labels inside the scrolling rail */
+.footer-details{min-width:0;max-width:100%;overflow-x:auto}
+.footer-details ul{display:flex;align-items:center;gap:14px;width:max-content;list-style:none;padding:2px;margin:0 auto}
+.footer-details li{display:flex;align-items:center;gap:6px;white-space:nowrap;line-height:24px}
+.footer-details li>a{display:inline-flex;align-items:center;gap:6px}
+.footer-details svg{flex:none;display:block;fill:currentColor}
+.footer-details a:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:2px}
+/* Native disclosure identity menu (d95dbe095): details/summary, no focus-only dropdown. */
+details.global-bar__id>summary{list-style:none;cursor:pointer}
+details.global-bar__id>summary::-webkit-details-marker{display:none}
+@media (max-width:700px){
+  .section-panel{padding:16px 14px 20px}
+  .flash{margin:16px 14px -6px}
+  .member-row{flex-wrap:wrap}
+  .member-row__actions{width:100%;margin-left:50px;justify-content:flex-start}
+  .member-confirm{padding-left:16px}
+  .access{margin:18px 14px 24px;padding:22px 18px}
+  .wrap{padding:18px 14px}
+  .form-actions{flex-direction:column}.form-actions .btn{width:100%}
+}
+</style>
+</head>
+<body class="app-frame">
+
+<div class="proto" role="region" aria-label="Prototype controls">
+  <div class="proto__inner">
+    <span class="proto__tag">Prototype · mocked data</span>
+    <span>Viewing as</span>
+    <div class="proto__who" id="who" role="group" aria-label="Switch signed-in person"></div>
+    <div class="proto__opts">
+      <a href="#/outbox">Outbox (<span id="outboxCount">0</span>)</a>
+      <a href="./index.html">Map</a>
+    </div>
+  </div>
+</div>
+
+<div id="app"></div>
+
+<!-- Shared club footer (Layouts.footer_details, e68019eae): one single-line list. -->
+<footer id="club-site-footer" class="app-foot" aria-label="About Memba">
+  <div id="club-site-footer-details" class="footer-details">
+    <ul role="list">
+      <li><span>Powered by <a id="club-site-footer-memba-home-link" href="../templates/marketing-homepage.html" aria-label="Visit Memba home">Memba</a>.</span></li>
+      <li><svg width="15" height="15" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><path d="M383.8 351.7c2.5-2.5 105.2-92.4 105.2-92.4l-17.5-7.5c-10-4.9-7.4-11.5-5-17.4 2.4-7.6 20.1-67.3 20.1-67.3s-47.7 10-57.7 12.5c-7.5 2.4-10-2.5-12.5-7.5s-15-32.4-15-32.4-52.6 59.9-55.1 62.3c-10 7.5-20.1 0-17.6-10 0-10 27.6-129.6 27.6-129.6s-30.1 17.4-40.1 22.4c-7.5 5-12.6 5-17.6-5C293.5 72.3 255.9 0 255.9 0s-37.5 72.3-42.5 79.8c-5 10-10 10-17.6 5-10-5-40.1-22.4-40.1-22.4S183.3 182 183.3 192c2.5 10-7.5 17.5-17.6 10-2.5-2.5-55.1-62.3-55.1-62.3S98.1 167 95.6 172s-5 9.9-12.5 7.5C73 177 25.4 167 25.4 167s17.6 59.7 20.1 67.3c2.4 6 5 12.5-5 17.4L23 259.3s102.6 89.9 105.2 92.4c5.1 5 10 7.5 5.1 22.5-5.1 15-10.1 35.1-10.1 35.1s95.2-20.1 105.3-22.6c8.7-.9 18.3 2.5 18.3 12.5S241 512 241 512h30s-5.8-102.7-5.8-112.8 9.5-13.4 18.4-12.5c10 2.5 105.2 22.6 105.2 22.6s-5-20.1-10-35.1 0-17.5 5-22.5z"/></svg><span>Proudly hosted in Canada.</span></li>
+      <li><a id="club-site-footer-source-link" href="https://github.com/mattwynne/memba"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.22 3.27.94.1-.73.4-1.22.72-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.63 0c2.15-1.46 3.1-1.16 3.1-1.16.61 1.55.23 2.7.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.04.76 2.09v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg> Open source</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- mock data ----------
+  var CLUB = { name: 'Kootenay Alpine Club', slug: 'kootenay-alpine', host: 'https://kootenay-alpine.clubs.memba.io' };
+  var PEOPLE = {
+    // No member-since / joined dates: the shared member_row contract (93df96ec0) shows
+    // initials, name, a You marker and role badges only.
+    alice: { id: 'alice', name: 'Alice Ahmed', initials: 'AA', email: 'alice@example.com', admin: true,  tint: 'var(--color-sage-300)' },
+    bob:   { id: 'bob',   name: 'Bob Brennan', initials: 'BB', email: 'bob@example.com',   admin: false, tint: 'var(--color-sage-200)' },
+    carol: { id: 'carol', name: 'Carol Chen',  initials: 'CC', email: 'carol@example.com', admin: false, tint: 'var(--color-sage-100)' },
+    dan:   { id: 'dan',   name: 'Dan Delgado', initials: 'DD', email: 'dan@example.com',   admin: true,  tint: 'var(--color-sage-200)' },
+    eve:   { id: 'eve',   name: 'Eve Ekwueme', initials: 'EE', email: 'eve@example.com',   admin: false, tint: 'var(--color-sage-100)' },
+    priya: { id: 'priya', name: 'Priya Deol',  initials: 'PD', email: 'priya@example.com', admin: false, tint: 'var(--color-sage-200)' },
+    theo:  { id: 'theo',  name: 'Theo Dubois', initials: 'TD', email: 'theo@example.com',  admin: false, tint: 'var(--color-sage-100)' }
+  };
+  var PERSONAS = ['alice', 'bob', 'carol', 'dan', 'eve'];
+  var ALL = Object.keys(PEOPLE);
+
+  var S = {
+    persona: 'alice',
+    groups: [
+      { id: 'everyone', name: 'Everyone', slug: 'everyone', system: true,  members: ALL.slice() },
+      { id: 'admin',    name: 'Admin',    slug: 'admin',    system: true,  members: ['alice', 'dan'] },
+      { id: 'board',    name: 'Board',    slug: 'board',    system: false, members: ['alice', 'bob', 'carol'] },
+      { id: 'trips',    name: 'Trips committee', slug: 'trips-committee', system: false, members: ['eve', 'priya', 'theo'] },
+      { id: 'huts',     name: 'Huts & maintenance', slug: 'huts-maintenance', system: false, members: ['bob'] }
+    ],
+    convos: [
+      { id: 'c1', group: 'everyone', subject: 'Goodsir traverse — approach road washed out', body: 'Route update — the forestry service closed the approach road after last week’s storm, so the original plan is off.', from: 'bob', date: '20 May', replies: [{ from: 'eve', text: 'Happy to move it a week.', time: '20 May, 3:10pm' }] },
+      { id: 'c2', group: 'board', subject: 'AGM agenda — final call for motions before we send it out', body: 'Two motions in so far: the hut levy and the instructor reimbursement rate. Anything else needs to be with me by Friday to make the printed agenda.', from: 'alice', date: '28 Aug', replies: [{ from: 'bob', text: 'Add the winter hut booking policy — I’ll write it up tonight.', time: '28 Aug, 9:14am' }, { from: 'carol', text: 'Nothing more from me.', time: '28 Aug, 10:02am' }] },
+      { id: 'c3', group: 'board', subject: 'Insurance renewal quote came in 14% higher', body: 'Broker’s suggesting we raise the deductible to hold the premium flat. Worth a look before the AGM.', from: 'bob', date: '21 Aug', replies: [] },
+      { id: 'c4', group: 'admin', subject: 'Renewal reminders — who’s chasing the lapsed ones?', body: 'Eleven memberships lapse at the end of the month. I’ll take A–M if someone takes the rest.', from: 'dan', date: '4 Sep', replies: [{ from: 'alice', text: 'I’ll take N–Z.', time: '4 Sep, 6:40pm' }] },
+      { id: 'c5', group: 'trips', subject: 'Kokanee Glacier weekend — carpool list', body: 'Three cars so far. Reply with your seat count.', from: 'priya', date: '30 Aug', replies: [] }
+    ],
+    outbox: [],
+    ui: { tab: 'conversations', picker: false, pickQuery: '', confirm: null, busy: null, flash: null, request: {}, formError: null, formName: '', formTouched: false, newConvoError: null }
+  };
+
+  var nextId = 100;
+  function uid(p) { return p + (nextId++); }
+  function me() { return PEOPLE[S.persona]; }
+  function group(id) { for (var i = 0; i < S.groups.length; i++) if (S.groups[i].id === id) return S.groups[i]; return null; }
+  function isMember(g, pid) { return g.members.indexOf(pid) !== -1; }
+  function address(g) { return g.slug + '@' + CLUB.slug + '.clubs.memba.io'; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function slugify(name) { return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, ''); }
+  function uniqueSlug(base) { var s = base, n = 2; while (S.groups.some(function (g) { return g.slug === s; })) { s = base + '-' + n; n++; } return s; }
+  function normName(n) { return n.trim().toLowerCase(); }
+  // One rule for live feedback AND submit: blank / duplicate (case + outer-space insensitive) are
+  // name errors; a distinct name whose slug collides is valid and gets the same suffix the
+  // creation step stores. The slug is generated once at creation and stored separately.
+  function checkName(name) {
+    var trimmed = name.trim(), r = { trimmed: trimmed, error: null, base: null, slug: null, address: null, takenBy: null };
+    if (!trimmed) { r.error = 'Give the group a name.'; return r; }
+    var ex = null; S.groups.forEach(function (g) { if (!ex && normName(g.name) === normName(trimmed)) ex = g; });
+    if (ex) { r.error = 'There’s already a group called “' + esc(ex.name) + '” in ' + CLUB.name + '. Pick a different name.'; return r; }
+    r.base = slugify(trimmed) || 'group'; r.slug = uniqueSlug(r.base); r.address = r.slug + '@' + CLUB.slug + '.clubs.memba.io';
+    if (r.slug !== r.base) S.groups.forEach(function (g) { if (!r.takenBy && g.slug === r.base) r.takenBy = g; });
+    return r;
+  }
+  // Patches the New group form in place (no re-render, so focus and caret survive typing).
+  function patchNewForm() {
+    var inp = document.getElementById('gname'); if (!inp) return;
+    var c = checkName(S.ui.formName), showErr = !!(S.ui.formTouched && c.error);
+    var msg = document.getElementById('gname-msg'), out = document.getElementById('gname-addr'), note = document.getElementById('gname-addr-note'), btn = document.getElementById('gcreate');
+    inp.classList.toggle('input-error', showErr);
+    if (showErr) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid');
+    msg.className = showErr ? 'field__error' : 'field__hint';
+    msg.innerHTML = showErr ? c.error : 'Must be different from the club’s other groups (' + esc(S.groups.map(function (g) { return g.name; }).join(', ')) + ').';
+    out.textContent = c.address || ''; out.classList.toggle('is-empty', !c.address);
+    note.hidden = !c.takenBy; note.innerHTML = c.takenBy ? '“' + c.base + '” is already used by ' + esc(c.takenBy.name) + ', so this address gets a number.' : '';
+    if (btn && S.ui.busy !== 'create') btn.disabled = showErr;
+  }
+  function now() { return 'just now'; }
+
+  // simulated server round-trip: ~600ms. Infrastructure/system failures are deliberately not
+  // modelled here: the app's existing generic error handling covers them (scope decision, Matt).
+  function simulate(fn) {
+    setTimeout(function () { fn(); render(); }, 600);
+  }
+
+  // ---------- routing ----------
+  function route() {
+    var h = location.hash.replace(/^#\/?/, '');
+    var p = h.split('/');
+    if (p[0] === 'new') return { view: 'new' };
+    if (p[0] === 'outbox') return { view: 'outbox' };
+    if (p[0] === 'g' && p[1]) {
+      if (p[2] === 'members') return { view: 'group', gid: p[1], tab: 'members' };
+      if (p[2] === 'c' && p[3]) return { view: 'convo', gid: p[1], cid: p[3] };
+      if (p[2] === 'compose') return { view: 'compose', gid: p[1] };
+      return { view: 'group', gid: p[1], tab: 'conversations' };
+    }
+    return { view: 'group', gid: 'everyone', tab: 'conversations' };
+  }
+  function go(h) { if (location.hash === '#' + h) render(); else location.hash = h; }
+  window.addEventListener('hashchange', function () { S.ui.picker = false; S.ui.confirm = null; S.ui.formError = null; S.ui.formTouched = false; S.ui.justAdded = null; S.ui.sent = null; S.ui.newConvoError = null; render(); });
+
+  // ---------- rendering ----------
+  function globalBar() {
+    var m = me();
+    return '<div class="global-bar"><div class="global-bar__inner global-bar__inner--wide"><div class="global-bar__brand">' +
+      '<svg class="global-bar__mark" viewBox="0 0 64 64" role="img" aria-label="Memba"><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="var(--color-cream)" stroke-width="4.8" stroke-linecap="round"/><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="var(--color-cream)"/><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="var(--color-cream)"/><circle cx="32" cy="15" r="3.7" fill="var(--color-accent, #d2925a)"/></svg><span class="global-bar__word">Memba</span></div>' +
+      '<details class="dropdown dropdown-end global-bar__id"><summary id="club-site-identity-menu-button" class="global-bar__me" aria-controls="club-site-identity-menu" aria-label="Member identity menu"><span class="global-bar__avatar">' + m.initials + '</span></summary>' +
+      '<div id="club-site-identity-menu" class="dropdown-content app-menu app-menu--id"><div class="app-menu__who"><div class="app-menu__who-name">' + esc(m.name) + '</div><div class="app-menu__who-email">' + esc(m.email) + '</div></div><div class="app-menu__divider" aria-hidden="true"></div><a class="app-menu__item" href="#" onclick="return false">Account settings</a><button class="app-menu__signout" type="button">Sign out</button></div></details></div></div>';
+  }
+  var LOCK = '<svg class="group-rail__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="visually-hidden">(not a member)</span>';
+
+  function rail(activeId) {
+    var m = me(), mine = [], other = [];
+    S.groups.forEach(function (g) { (isMember(g, m.id) ? mine : other).push(g); });
+    function item(g, locked) {
+      var on = g.id === activeId;
+      return '<a class="group-rail__item' + (on ? ' is-active' : '') + '" href="#/g/' + g.id + '"' + (on ? ' aria-current="page"' : '') + (locked ? ' title="You’re not in this group"' : '') + '><span class="group-rail__name">' + esc(g.name) + '</span>' + (locked ? LOCK : '') + '</a>';
+    }
+    var h = '<nav class="group-rail" aria-label="Groups"><div class="group-rail__label">Your groups</div>' + mine.map(function (g) { return item(g, false); }).join('');
+    if (other.length) h += '<div class="group-rail__label">Other groups</div>' + other.map(function (g) { return item(g, true); }).join('');
+    if (m.admin) h += '<div class="group-rail__divider"></div><a class="group-rail__item group-rail__add" href="#/new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="group-rail__name">New group</span></a>';
+    return h + '</nav>';
+  }
+
+  function shell(inner, wide) {
+    return globalBar() + '<div class="app-card' + (wide ? ' app-card--wide' : '') + '"><div class="app-bar"><div class="app-bar__brand"><span class="app-bar__club">' + CLUB.name + '</span></div></div>' + inner + '</div>';
+  }
+  // A flash stays up while the same route re-renders (picker toggles, confirmations) and
+  // clears on the next navigation. go() renders synchronously AND fires hashchange, so a
+  // consume-on-render flash would vanish before anyone saw it.
+  function flash() {
+    var f = S.ui.flash; if (!f) return '';
+    if (f.hash && f.hash !== location.hash) { S.ui.flash = null; return ''; }
+    f.hash = location.hash;
+    return '<div class="alert alert-' + f.kind + ' flash" role="' + (f.kind === 'error' ? 'alert' : 'status') + '"><span>' + f.text + '</span></div>';
+  }
+  function count(n) { return n === 1 ? '1 member' : n + ' members'; }
+
+  function groupPage(r) {
+    var g = group(r.gid); if (!g) { go('g/everyone'); return ''; }
+    var m = me(), member = isMember(g, m.id);
+    var head, body;
+
+    if (!member && !m.admin) {
+      // A. regular member outside a custom or system group: placeholder, no tabs
+      head = '<header class="group-head"><div class="group-head__top"><div style="min-width:0"><h1 class="group-head__name">' + esc(g.name) + '</h1><div class="group-head__meta"><span>' + (g.system ? 'System group' : 'Private group') + ' · you’re not a member</span></div></div></div></header>';
+      body = accessCard(g);
+      return shell('<div class="club-groups"><div class="app-split">' + rail(g.id) + '<div class="group-content">' + flash() + head + body + '</div></div></div>', true);
+    }
+
+    var tab = r.tab;
+    if (!member && m.admin && !g.system) tab = 'members'; // B. admin outside: Members only
+    var meta = (g.system ? '' : 'Private group · ') + count(g.members.length) + (member ? '' : ' · you’re not a member');
+    head = '<header class="group-head"><div class="group-head__top"><div style="min-width:0"><h1 class="group-head__name">' + esc(g.name) + '</h1><div class="group-head__meta" aria-label="Group details"><span>' + meta + '</span>' +
+      (member && !g.system ? '<span class="group-head__you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>You’re a member</span>' : '') +
+      '<a class="group-head__addr" href="mailto:' + address(g) + '">' + address(g) + '</a></div></div></div></header>';
+    // Header owns metadata only (e6d3c38de). The active tab's single action lives in
+    // section-tabs__action, mirroring MemberDashboardGroupTabs.group_tabs slots.
+
+    function tabLink(id, label, href) {
+      var on = tab === id;
+      return '<a id="member-section-tab-' + id + '" class="section-tab' + (on ? ' is-active' : '') + '" role="tab" data-tab="' + id + '" aria-selected="' + on + '" aria-controls="member-section-panel-' + id + '" tabindex="' + (on ? '0' : '-1') + '" href="' + href + '">' + label + '</a>';
+    }
+    var action = '';
+    if (tab === 'conversations') action = '<a class="btn btn-primary btn-sm" href="#/g/' + g.id + '/compose">New message</a>';
+    else if (!g.system) action = '<button class="btn btn-primary btn-sm" type="button" data-act="picker" aria-expanded="' + S.ui.picker + '" aria-controls="member-picker">Add member</button>';
+    else if (g.id === 'everyone' && m.admin) action = '<button class="btn btn-primary btn-sm" type="button" disabled title="Club invitations: existing flow, out of scope here">Invite member</button>';
+    var tabs = '<div id="member-section-tabs" class="section-tabs"><div id="member-section-tabs-list" class="section-tabs__list" role="tablist" aria-label="Group sections" aria-orientation="horizontal">' +
+      (member ? tabLink('conversations', 'Conversations', '#/g/' + g.id) : '') +
+      tabLink('members', 'Members', '#/g/' + g.id + '/members') + '</div>' +
+      '<div id="member-section-tabs-action" class="section-tabs__action">' + action + '</div></div>';
+
+    body = '<div id="member-section-panel-' + tab + '" role="tabpanel" aria-labelledby="member-section-tab-' + tab + '">' + (tab === 'members' ? membersPanel(g) : convosPanel(g)) + '</div>';
+    return shell('<div class="club-groups"><div class="app-split">' + rail(g.id) + '<div class="group-content">' + flash() + head + tabs + body + '</div></div></div>', true);
+  }
+
+  function accessCard(g) {
+    var st = S.ui.request[g.id + ':' + S.persona] || 'idle';
+    var actions;
+    if (st === 'sending') actions = '<button class="btn btn-primary" type="button" disabled><span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Sending your request…</button>';
+    else if (st === 'sent') actions = '<p class="access__status access__status--sent" role="status">Your request went to the club admins.<small>Nothing has changed yet. If they add you to ' + esc(g.name) + ', you’ll get a welcome email with a link and this page will show its conversations.</small></p><button class="btn btn-ghost btn-sm" type="button" data-act="request" data-gid="' + g.id + '">Send another request</button>';
+    else actions = '<button class="btn btn-primary" type="button" data-act="request" data-gid="' + g.id + '">Request access</button><p class="access__status">Sends a short note to the club admins saying you’d like to join ' + esc(g.name) + '.</p>';
+    var who = g.system ? 'Only club admins are in Admin.' : 'You’re a member of ' + CLUB.name + ', but not of ' + esc(g.name) + '.';
+    return '<section class="access" aria-labelledby="access-title"><div class="access__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h2 id="access-title" class="access__title">' + esc(g.name) + ' is a private group</h2>' +
+      '<p class="access__copy">Only people in ' + esc(g.name) + ' can read its conversations, get its emails, or see who’s in it. ' + who + '</p>' +
+      (g.system ? '' : '<p class="access__copy">Think you should be? Ask the club admins — any ' + esc(g.name) + ' member or club admin can add you.</p><div class="access__actions">' + actions + '</div>') +
+      '<p class="access__admin">' + (g.system ? 'Email the admins: ' : 'Or email them yourself: ') + '<a href="mailto:admin@' + CLUB.slug + '.clubs.memba.io">admin@' + CLUB.slug + '.clubs.memba.io</a></p></section>';
+  }
+
+  function convosPanel(g) {
+    var list = S.convos.filter(function (c) { return c.group === g.id; });
+    if (!list.length) return '<div class="section-panel"><p class="empty-convos"><strong>No ' + esc(g.name) + ' conversations yet.</strong> Start one with New message, or email ' + address(g) + '.</p></div>';
+    return '<div class="section-panel"><div class="conversation-list">' + list.map(function (c) {
+      // Mirrors conversation_row + participant_avatar_stack (93df96ec0): subject, date,
+      // preview, Started by, participant avatars (+overflow), reply activity.
+      var p = PEOPLE[c.from], last = c.replies.length ? PEOPLE[c.replies[c.replies.length - 1].from].name : null;
+      var parts = [c.from]; c.replies.forEach(function (rp) { if (parts.indexOf(rp.from) === -1) parts.push(rp.from); });
+      var shown = parts.slice(0, 3), more = parts.length - shown.length;
+      var stack = '<div class="avatar-stack" aria-label="Conversation participants">' + shown.map(function (pid) { return '<span title="' + esc(PEOPLE[pid].name) + '">' + PEOPLE[pid].initials + '</span>'; }).join('') + (more > 0 ? '<span class="is-more" aria-label="' + more + ' more participants">+' + more + '</span>' : '') + '</div>';
+      return '<article data-message-id="' + c.id + '"><a class="conversation" href="#/g/' + g.id + '/c/' + c.id + '"><div class="conversation__avatar" style="background:' + p.tint + '">' + p.initials + '</div><div class="conversation__body"><div class="conversation__head"><span class="conversation__subject">' + esc(c.subject) + '</span><span class="conversation__date">' + c.date + '</span></div><div class="conversation__preview">' + esc(c.body) + '</div><span class="conversation__replies">Started by ' + esc(p.name) + (c.auto ? ' · sent automatically' : '') + '</span><div class="conversation__participants">' + stack + '<span class="conversation__replies">' + (c.replies.length ? '<strong>' + c.replies.length + (c.replies.length === 1 ? ' reply' : ' replies') + '</strong> · latest from ' + esc(last) : 'No replies yet') + '</span></div></div></a></article>';
+    }).join('') + '</div></div>';
+  }
+
+  function membersPanel(g) {
+    var m = me(), member = isMember(g, m.id), h = '<div class="section-panel">';
+    if (g.system) {
+      h += '<p class="members-note">' + (g.id === 'everyone' ? 'Everyone in ' + CLUB.name + ' is in this group automatically.' : 'Admin membership follows the club admin role — it isn’t managed here.') + '</p><div class="member-list">' + g.members.map(function (pid) { return row(g, pid, false); }).join('') + '</div></div>';
+      return h;
+    }
+    if (!member) {
+      var busy = S.ui.busy === 'self:' + g.id;
+      h += '<div class="outside" role="region" aria-label="You’re managing a group you’re not in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><div class="outside__body"><h2 class="outside__title">You’re a club admin, but you’re not in ' + esc(g.name) + '</h2><p class="outside__copy">You can manage who’s in it. You can’t read its conversations or get its emails unless you’re a member — being a club admin doesn’t grant that on its own.</p><div class="outside__actions">' +
+        (busy ? '<button class="btn btn-primary btn-sm" type="button" disabled><span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Adding you…</button>' : '<button class="btn btn-primary btn-sm" type="button" data-act="addself" data-gid="' + g.id + '">Add yourself to ' + esc(g.name) + '</button>') +
+        '<small>You’ll get ' + esc(g.name) + '’s emails from now on and can read its whole history. Anyone in ' + esc(g.name) + ' can remove you again; that won’t change your admin role.</small></div></div></div>';
+    }
+    if (S.ui.picker) h += picker(g);
+    h += '<p class="members-note">' + esc(g.name) + ' members can read every ' + esc(g.name) + ' conversation and get its emails. Anyone in ' + esc(g.name) + ' can add other <strong>' + CLUB.name + '</strong> members or remove people from ' + esc(g.name) + (m.admin && !member ? ' — as a club admin, so can you' : '') + '. That never changes anyone’s club membership.</p>';
+    if (!g.members.length) h += '<p class="empty-members"><strong>' + esc(g.name) + ' has no members.</strong> Its conversations and emails are kept; whoever is added next will see them all.</p>';
+    else h += '<div class="member-list">' + g.members.map(function (pid) { return row(g, pid, true); }).join('') + '</div>';
+    return h + '</div>';
+  }
+
+  function row(g, pid, manageable) {
+    var p = PEOPLE[pid], m = me(), you = pid === m.id, conf = S.ui.confirm && S.ui.confirm.gid === g.id && S.ui.confirm.pid === pid;
+    var busy = S.ui.busy === 'rm:' + g.id + ':' + pid;
+    var isNew = S.ui.justAdded && S.ui.justAdded.gid === g.id && S.ui.justAdded.pid === pid;
+    // Mirrors member_row: avatar, name, You marker, role badges. No membership dates.
+    var h = '<div class="member-row' + (you ? ' is-you' : '') + (conf ? ' is-confirming' : '') + (isNew ? ' is-new' : '') + '" data-member-id="' + pid + '" data-current-member="' + you + '"><div class="member-row__avatar" style="background:' + p.tint + '" aria-hidden="true">' + p.initials + '</div><div class="member-row__body"><div class="member-row__name">' + esc(p.name) + '</div><div class="member-row__meta">' + (you ? '<span>You</span>' : '') + '</div></div><div class="member-row__actions">' + (p.admin ? '<span class="member-row__role badge badge-primary badge-soft">Admin</span>' : '') +
+      (manageable && !conf ? '<button class="btn btn-ghost btn-xs" type="button" data-act="confirm" data-gid="' + g.id + '" data-pid="' + pid + '">' + (you ? 'Leave ' : 'Remove from ') + esc(g.name) + '</button>' : '') + '</div></div>';
+    if (conf) {
+      var last = g.members.length === 1;
+      h += '<div class="member-confirm" role="group" aria-label="Confirm">' + (you
+        ? '<p>Leave <strong>' + esc(g.name) + '</strong>?' + (last ? ' You’re its last member.' : '') + '</p><p>' + (last ? esc(g.name) + ' stays listed for the club with nobody in it, and a club admin can add people to it later. You’ll still be a member of ' + CLUB.name + '.' : 'You’ll lose access to ' + esc(g.name) + '’s conversations and stop getting its emails straight away. You’ll still be a member of ' + CLUB.name + ', and anyone in ' + esc(g.name) + ' — or a club admin — can add you back.') + '</p>'
+        : '<p>Remove ' + esc(p.name) + ' from <strong>' + esc(g.name) + '</strong>?</p><p>They’ll lose access to ' + esc(g.name) + '’s conversations and stop getting its emails straight away — emails already delivered stay in their inbox. They stay a member of ' + CLUB.name + ', and anyone in ' + esc(g.name) + ' can add them back.' + (p.admin ? ' They remain a club admin and can still manage ' + esc(g.name) + '’s members.' : '') + '</p>') +
+        '<div class="member-confirm__actions">' + (busy ? '<button class="btn btn-error btn-sm" type="button" disabled><span class="loading loading-spinner loading-xs" aria-hidden="true"></span> ' + (you ? 'Leaving…' : 'Removing…') + '</button>' : '<button class="btn btn-error btn-sm" type="button" data-act="remove" data-gid="' + g.id + '" data-pid="' + pid + '">' + (you ? 'Leave ' : 'Remove from ') + esc(g.name) + '</button>') + '<button class="btn btn-ghost btn-sm" type="button" data-act="cancel">Cancel</button></div></div>';
+    }
+    return h;
+  }
+
+  function picker(g) {
+    var q = S.ui.pickQuery.toLowerCase();
+    var cands = ALL.filter(function (pid) { return !isMember(g, pid) && (!q || PEOPLE[pid].name.toLowerCase().indexOf(q) !== -1); });
+    var h = '<section id="member-picker" class="picker" aria-labelledby="picker-title"><div class="picker__head"><div><h2 id="picker-title" class="picker__title">Add to ' + esc(g.name) + '</h2><p class="picker__hint">Only people who are already members of ' + CLUB.name + ' can be added. They’ll get a welcome email and can read everything in ' + esc(g.name) + '. To bring someone new into the club, use Invite member on Everyone.</p></div><button class="btn btn-ghost btn-sm" type="button" data-act="picker">Close</button></div>' +
+      '<label class="visually-hidden" for="pick-search">Search club members</label><input id="pick-search" class="input" type="search" placeholder="Search club members…" value="' + esc(S.ui.pickQuery) + '" autocomplete="off" data-act="pickq">';
+    if (!cands.length) h += '<p class="pick-empty">' + (q ? 'No club member matches “' + esc(S.ui.pickQuery) + '”.' : 'Everyone in ' + CLUB.name + ' is already in ' + esc(g.name) + '.') + ' To bring someone new into the club, use <strong>Invite member</strong> on Everyone.</p>';
+    else h += '<div class="pick-list" role="list">' + cands.map(function (pid) {
+      var p = PEOPLE[pid], busy = S.ui.busy === 'add:' + g.id + ':' + pid;
+      return '<div class="pick-row" role="listitem"><div class="pick-row__avatar">' + p.initials + '</div><div class="pick-row__name">' + esc(p.name) + (pid === me().id ? ' (you)' : '') + (p.admin ? ' <small>Club admin</small>' : '') + '</div>' + (busy ? '<button class="btn btn-sm btn-outline btn-primary" type="button" disabled><span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Adding…</button>' : '<button class="btn btn-sm btn-outline btn-primary" type="button" data-act="add" data-gid="' + g.id + '" data-pid="' + pid + '">Add</button>') + '</div>';
+    }).join('') + '</div>';
+    return h + '</section>';
+  }
+
+  function newGroupPage() {
+    var m = me();
+    if (!m.admin) { S.ui.flash = { kind: 'info', text: 'Only club admins can create groups.' }; go('g/everyone'); return ''; }
+    var busy = S.ui.busy === 'create';
+    return shell('<div class="wrap"><a class="app-back" href="#/g/everyone"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> Back to groups</a><h1 class="page-title">New group</h1><p class="page-intro">A private group inside ' + CLUB.name + '. Everyone in the club will see its name; only the people you add can read its conversations or get its emails. You’ll be its first member.</p>' +
+      '<form class="form-card" id="newForm"' + (busy ? ' aria-busy="true"' : '') + '>' +
+      // Skeleton only; patchNewForm() fills message, preview and button state from S after render and on every input.
+      '<div class="field"><label class="field__label" for="gname">Group name</label><input id="gname" class="input" type="text" name="name" autocomplete="off" placeholder="e.g. Board, Trips committee, Newsletter" value="' + esc(S.ui.formName) + '" aria-describedby="gname-msg"' + (busy ? ' readonly' : '') + '>' +
+      '<p id="gname-msg" class="field__hint" aria-live="polite"></p></div>' +
+      '<div class="addr-preview"><span class="addr-preview__label" id="gname-addr-label">Group email</span><output id="gname-addr" class="is-empty" for="gname" aria-labelledby="gname-addr-label" aria-live="polite"></output><p id="gname-addr-note" class="addr-preview__note" hidden></p></div>' +
+      '<div class="form-actions"><a class="btn btn-ghost" href="#/g/everyone">Cancel</a>' + (busy ? '<button class="btn btn-primary" type="submit" disabled><span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Creating…</button>' : '<button id="gcreate" class="btn btn-primary" type="submit">Create group</button>') + '</div></form></div>', false);
+  }
+
+  function composePage(r) {
+    var g = group(r.gid), m = me();
+    if (!g || !isMember(g, m.id)) { go('g/' + r.gid); return ''; }
+    var busy = S.ui.busy === 'compose', err = S.ui.newConvoError;
+    // One selected-group audience drives heading, count, address, submit, success and
+    // navigation (member_message_live/new.ex, 6ed1dede3 + dd1b80cb6). Recipient count is
+    // the group's email-addressable members; every mocked person has an email here.
+    var n = count(g.members.length), back = '<a class="app-back" href="#/g/' + g.id + '"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> ' + esc(g.name) + '</a>';
+    var sent = S.ui.sent && S.ui.sent.gid === g.id ? S.ui.sent : null;
+    if (sent) return shell('<div class="wrap"><section class="sent" aria-labelledby="sent-title"><div class="sent__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg></div><p class="in-group">Group message</p><h1 id="sent-title" class="page-title">Your message is being sent.</h1><p class="page-intro" style="margin:10px auto 0">Memba is sending your message to <strong>' + n + '</strong> of <strong>' + esc(g.name) + '</strong>. You can check delivery on the message page.</p>' +
+      '<div class="sent__actions"><a class="btn btn-primary" href="#/g/' + g.id + '/c/' + sent.cid + '">Check delivery</a><button class="btn btn-outline btn-primary" type="button" data-act="sendanother">Send another message</button><a class="btn btn-ghost" href="#/g/' + g.id + '">Back to ' + esc(g.name) + '</a></div></section></div>', false);
+    return shell('<div class="wrap">' + back + '<p class="in-group">New message</p><h1 class="page-title">New message to ' + esc(g.name) + '</h1><p class="in-group" style="margin-top:10px;color:var(--color-sage-700)">In ' + CLUB.name + '</p>' +
+      '<div class="audience" id="compose-recipient-summary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><p>Before you send: this message will be emailed to <strong>' + n + '</strong> of <strong>' + esc(g.name) + '</strong>.</p></div>' +
+      '<div class="audience audience--email" id="compose-inbound-email"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><p>Prefer email? Send a message to <strong>' + esc(g.name) + '</strong> at <a href="mailto:' + address(g) + '">' + address(g) + '</a>.</p></div>' +
+      '<form class="composer" id="composeForm"' + (busy ? ' aria-busy="true"' : '') + '><div class="composer__head"><span class="composer__title">From</span><span class="composer__as">Sending as <strong>' + esc(m.name) + '</strong></span></div>' +
+      (err ? '<div class="alert alert-error" role="alert" style="margin-bottom:12px"><span>' + err + '</span></div>' : '') +
+      '<div class="field"><label class="field__label" for="csub">Subject</label><input id="csub" class="input" type="text" name="subject" autocomplete="off" placeholder="Example: Saturday trail day"' + (err ? ' aria-invalid="true" aria-describedby="compose-err"' : '') + '></div><div class="field" style="margin-top:12px"><label class="field__label" for="cbody">Message</label><textarea id="cbody" class="textarea" rows="5" name="body" placeholder="Write the message members should receive."' + (err ? ' aria-invalid="true" aria-describedby="compose-err"' : '') + '></textarea></div>' + (err ? '<p id="compose-err" class="visually-hidden">' + err + '</p>' : '') +
+      '<div class="composer__actions"><a class="btn btn-ghost" href="#/g/' + g.id + '">Cancel</a>' + (busy ? '<button class="btn btn-primary" disabled type="submit"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Sending…</button>' : '<button class="btn btn-primary" type="submit">Send message</button>') + '</div></form></div>', false);
+  }
+
+  function convoPage(r) {
+    var g = group(r.gid), m = me();
+    if (!g) { go('g/everyone'); return ''; }
+    if (!isMember(g, m.id)) { S.ui.flash = { kind: 'info', text: 'That conversation is in ' + esc(g.name) + ', which you’re not in.' }; go('g/' + g.id); return ''; }
+    var c = null; S.convos.forEach(function (x) { if (x.id === r.cid) c = x; });
+    if (!c) { go('g/' + g.id); return ''; }
+    var p = PEOPLE[c.from];
+    var msgs = '<div class="message message--original" style="margin-top:16px"><div class="message__avatar" style="background:' + p.tint + '">' + p.initials + '</div><div class="message__body"><div class="message__head"><span class="message__name">' + esc(p.name) + '</span><span class="message__time">' + c.date + '</span>' + (c.auto ? '<span class="message__tag badge badge-soft">Sent automatically</span>' : '') + '</div><div class="message__text">' + (c.auto ? c.html : esc(c.body)) + '</div>' + (c.auto ? '<div style="margin-top:12px"><a class="btn btn-primary btn-sm" href="#/g/' + c.auto + '/members">Manage ' + esc(group(c.auto).name) + ' members</a></div>' : '') + '</div></div>';
+    msgs += c.replies.map(function (rp) { var q = PEOPLE[rp.from]; return '<div class="message"><div class="message__avatar" style="background:' + q.tint + '">' + q.initials + '</div><div class="message__body"><div class="message__head"><span class="message__name">' + esc(q.name) + '</span><span class="message__time">' + rp.time + '</span></div><div class="message__text">' + esc(rp.text) + '</div></div></div>'; }).join('');
+    var note = c.auto ? '<p class="composer__note">Replies go to ' + esc(g.name) + ' members only — ' + esc(p.name) + ' won’t see them. To let them into ' + esc(group(c.auto).name) + ', add them from its Members tab.</p>' : '';
+    return shell('<div class="wrap"><a class="app-back" href="#/g/' + g.id + '"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> ' + esc(g.name) + ' conversations</a><p class="in-group">In ' + esc(g.name) + '</p><h1 class="page-title">' + esc(c.subject) + '</h1>' + msgs +
+      '<form class="composer" id="replyForm" data-cid="' + c.id + '"><div class="composer__head"><span class="composer__title">Reply</span><span class="composer__as">Replying as <strong>' + esc(m.name) + '</strong></span></div>' + note + '<textarea class="textarea" rows="3" name="text" placeholder="Write a reply…"></textarea>' + (S.ui.newConvoError ? '<p class="composer__error" role="alert">' + S.ui.newConvoError + '</p>' : '') + '<div class="composer__actions"><button class="btn btn-primary" type="submit">Post reply</button></div></form></div>', false);
+  }
+
+  function outboxPage() {
+    var h = '<div class="outbox"><a class="app-back" href="#/g/everyone"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> Back</a><h1 class="page-title">Mock outbox</h1><p class="page-intro">Every email this prototype <em>would</em> have sent. Nothing here left the page. Welcome emails are the design in ../emails/group-welcome.html; access requests reach admins as ordinary group-message emails.</p>';
+    if (!S.outbox.length) h += '<p class="empty-convos">Nothing sent yet. Add someone to a group, or request access as Eve.</p>';
+    else h += S.outbox.slice().reverse().map(function (e) { return '<div class="mail"><div class="mail__meta"><span>to: ' + esc(e.to) + '</span><span>from: ' + esc(e.from) + '</span><span>' + esc(e.kind) + '</span></div><div class="mail__subject">' + esc(e.subject) + '</div><p class="mail__body">' + esc(e.body) + '</p>' + (e.link ? '<div class="mail__link"><a href="' + e.link + '">' + esc(e.linkText) + '</a></div>' : '') + '</div>'; }).join('');
+    return shell(h + '</div>', false);
+  }
+
+  function render() {
+    var r = route(), html;
+    if (r.view === 'new') html = newGroupPage();
+    else if (r.view === 'compose') html = composePage(r);
+    else if (r.view === 'convo') html = convoPage(r);
+    else if (r.view === 'outbox') html = outboxPage();
+    else html = groupPage(r);
+    if (html === '') return; // a redirect happened
+    var app = document.getElementById('app');
+    app.innerHTML = html;
+    document.getElementById('who').innerHTML = PERSONAS.map(function (pid) { var p = PEOPLE[pid]; return '<button type="button" data-persona="' + pid + '" aria-pressed="' + (pid === S.persona) + '">' + p.name.split(' ')[0] + (p.admin ? ' (admin)' : '') + '</button>'; }).join('');
+    document.getElementById('outboxCount').textContent = S.outbox.length;
+    patchNewForm();
+    if (S.ui.focusTab) { var ft = document.getElementById('member-section-tab-' + S.ui.focusTab); if (ft) ft.focus(); S.ui.focusTab = null; }
+    var q = document.getElementById('pick-search'); if (q && S.ui.pickerFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); S.ui.pickerFocus = false; }
+    var f = app.querySelector('.field__error, .alert-error'); if (f && S.ui.focusError) { var inp = app.querySelector('.input-error') || f; inp.focus && inp.focus(); S.ui.focusError = false; }
+  }
+
+  // ---------- actions ----------
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-persona]');
+    if (b) { S.persona = b.dataset.persona; S.ui.picker = false; S.ui.confirm = null; S.ui.formError = null; S.ui.flash = null; S.ui.newConvoError = null; render(); return; }
+    var t = e.target.closest('[data-act]'); if (!t || t.tagName === 'INPUT') return;
+    var act = t.dataset.act, gid = t.dataset.gid, pid = t.dataset.pid, g = gid ? group(gid) : null;
+    if (act === 'sendanother') { S.ui.sent = null; S.ui.newConvoError = null; render(); }
+    else if (act === 'picker') { S.ui.picker = !S.ui.picker; S.ui.pickQuery = ''; S.ui.confirm = null; S.ui.pickerFocus = S.ui.picker; render(); }
+    else if (act === 'confirm') { S.ui.confirm = { gid: gid, pid: pid }; S.ui.picker = false; render(); }
+    else if (act === 'cancel') { S.ui.confirm = null; render(); }
+    else if (act === 'add') {
+      S.ui.busy = 'add:' + gid + ':' + pid; render();
+      simulate(function () {
+        join(g, pid, me());
+        S.ui.busy = null; S.ui.pickerFocus = true;
+        S.ui.flash = { kind: 'success', text: esc(PEOPLE[pid].name) + ' is now in ' + esc(g.name) + '. We’ve emailed them a link to it.' };
+      });
+    }
+    else if (act === 'addself') {
+      S.ui.busy = 'self:' + gid; render();
+      simulate(function () {
+        S.ui.busy = null;
+        join(g, me().id, me());
+        S.ui.flash = { kind: 'success', text: 'You’re in ' + esc(g.name) + ' now. You’ll get its emails from here on, and you can read everything already in it — we’ve emailed you a link.' };
+      });
+    }
+    else if (act === 'remove') {
+      S.ui.busy = 'rm:' + gid + ':' + pid; render();
+      simulate(function () {
+        S.ui.busy = null; var you = pid === me().id, name = PEOPLE[pid].name;
+        g.members = g.members.filter(function (x) { return x !== pid; });
+        S.ui.confirm = null;
+        S.ui.flash = { kind: 'info', text: you ? 'You’re no longer in ' + esc(g.name) + '. You still belong to ' + CLUB.name + '.' : esc(name) + ' is no longer in ' + esc(g.name) + '. They still belong to ' + CLUB.name + '.' };
+        if (you && !me().admin) go('g/' + g.id);
+      });
+    }
+    else if (act === 'request') {
+      var key = gid + ':' + S.persona; S.ui.request[key] = 'sending'; render();
+      simulate(function () {
+        S.ui.request[key] = 'sent';
+        var m = me(), link = '#/g/' + g.id + '/members', url = CLUB.host + '/groups/' + g.id + '/members';
+        var text = m.name + ' would like to join ' + g.name + '.\n\n' + m.name.split(' ')[0] + ' is an active member of ' + CLUB.name + ' and asked from ' + g.name + '’s page. Any ' + g.name + ' member or club admin can add them — open ' + g.name + '’s members and choose Add member:\n' + url + '\n\nMemba sent this when ' + m.name.split(' ')[0] + ' pressed Request access. ' + m.name.split(' ')[0] + ' isn’t in Admin, so they can’t see this conversation or any replies to it.';
+        S.convos.unshift({ id: uid('req'), group: 'admin', subject: 'Access request: ' + g.name, body: text.split('\n')[0] + ' ' + text.split('\n')[2], from: m.id, date: 'just now', replies: [], auto: g.id, html: esc(text).replace(esc(url), '<a href="' + link + '">' + esc(url) + '</a>') });
+        S.outbox.push({ kind: 'group message (existing member-message email)', to: 'Admin members (Alice, Dan)', from: CLUB.name + ' via Memba', subject: '[' + CLUB.slug + '] Access request: ' + g.name, body: text, link: '#/g/admin', linkText: 'Open in Admin' });
+      });
+    }
+  });
+
+  function join(g, pid, by) {
+    if (isMember(g, pid)) return;
+    g.members.push(pid); S.ui.justAdded = { gid: g.id, pid: pid };
+    var p = PEOPLE[pid], self = pid === by.id;
+    S.outbox.push({ kind: 'welcome email (emails/group-welcome.html)', to: p.email, from: CLUB.name + ' via Memba', subject: '[' + CLUB.slug + '] You’ve been added to ' + g.name, body: 'Hi ' + p.name.split(' ')[0] + ',\n' + (self ? 'You added yourself to ' : by.name + ' added you to ') + g.name + ', a private group inside ' + CLUB.name + '. As a ' + g.name + ' member you can read everything already in it and you’ll get its emails from now on.\nEarlier ' + g.name + ' emails aren’t resent — the full history is on the website.\nOpen ' + g.name + ': ' + CLUB.host + '/groups/' + g.id, link: '#/g/' + g.id, linkText: 'Open ' + g.name });
+  }
+
+  document.addEventListener('input', function (e) {
+    if (e.target.dataset.act === 'pickq') { S.ui.pickQuery = e.target.value; S.ui.pickerFocus = true; render(); }
+    if (e.target.id === 'gname') { S.ui.formName = e.target.value; S.ui.formTouched = true; patchNewForm(); }
+  });
+
+  document.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (e.target.id === 'newForm') {
+      // Live feedback is advisory; submit re-checks with the same rule (the server is authoritative).
+      S.ui.formTouched = true; S.ui.formError = checkName(S.ui.formName).error;
+      if (S.ui.formError) { S.ui.focusError = true; render(); return; }
+      S.ui.busy = 'create'; render();
+      simulate(function () {
+        var c = checkName(S.ui.formName); // server-side revalidation (name may have been taken meanwhile)
+        if (c.error) { S.ui.busy = null; S.ui.formError = c.error; S.ui.focusError = true; return; }
+        var g = { id: uid('g'), name: c.trimmed, slug: c.slug, system: false, members: [me().id] };
+        S.groups.push(g); S.ui.busy = null; S.ui.formName = ''; S.ui.formTouched = false;
+        S.ui.flash = { kind: 'success', text: esc(g.name) + ' created. You’re its first member — add people below, or email <strong>' + address(g) + '</strong> to start a conversation.' + (c.slug !== c.base ? ' “' + c.base + '” was already taken, so its address uses <strong>' + c.slug + '</strong>.' : '') };
+        go('g/' + g.id + '/members');
+      });
+    }
+    if (e.target.id === 'composeForm') {
+      var gid = route().gid, g = group(gid), sub = e.target.subject.value.trim(), body = e.target.body.value.trim();
+      S.ui.newConvoError = (!sub || !body) ? 'Give the message a subject and some text.' : null;
+      if (S.ui.newConvoError) { render(); return; }
+      S.ui.busy = 'compose'; render();
+      simulate(function () {
+        S.ui.busy = null;
+        var cid = uid('c');
+        S.convos.unshift({ id: cid, group: gid, subject: sub, body: body, from: me().id, date: 'just now', replies: [] });
+        S.outbox.push({ kind: 'group message (existing member-message email)', to: g.name + ' members (' + g.members.map(function (p) { return PEOPLE[p].name.split(' ')[0]; }).join(', ') + ')', from: CLUB.name + ' via Memba', subject: '[' + CLUB.slug + '] ' + sub, body: body });
+        S.ui.sent = { gid: gid, cid: cid }; // "being sent", not proof of delivery
+      });
+    }
+    if (e.target.id === 'replyForm') {
+      var cid = e.target.dataset.cid, text = e.target.text.value.trim(), c = null; S.convos.forEach(function (x) { if (x.id === cid) c = x; });
+      S.ui.newConvoError = text ? null : 'Your reply can’t be blank.';
+      if (S.ui.newConvoError) { render(); return; }
+      c.replies.push({ from: me().id, text: text, time: 'just now' }); S.ui.newConvoError = null;
+      S.outbox.push({ kind: 'reply notification (existing reply email)', to: 'followers in ' + group(c.group).name, from: CLUB.name + ' via Memba', subject: '[' + CLUB.slug + '] Re: ' + c.subject, body: text });
+      render();
+    }
+  });
+
+  // Roving-tabindex keyboard navigation, as in the .SectionTabs colocated hook (e6d3c38de).
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var list = e.target.closest && e.target.closest('[role="tablist"]'); if (!list) return;
+    var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]')), i = tabs.indexOf(e.target); if (i === -1) return;
+    var n;
+    if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = tabs.length - 1;
+    else return;
+    e.preventDefault(); S.ui.focusTab = tabs[n].dataset.tab; tabs[n].click();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && (S.ui.picker || S.ui.confirm)) { S.ui.picker = false; S.ui.confirm = null; render(); var b = document.querySelector('[data-act="picker"]'); if (b) b.focus(); } });
+
+  if (!location.hash) location.replace('#/g/board');
+  render();
+})();
+</script>
+</body>
+</html>

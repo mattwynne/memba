@@ -1,5 +1,19 @@
-<!-- @dsCard group="Member App" viewport="1100x900" subtitle="Group rail — each group is a space with its own conversations and address" name="Club groups" -->
-<!-- @template name="Club groups" description="Member club home for a multi-group club — group rail, group header, scoped conversations" -->
+<!-- @dsCard group="Member App" viewport="1100x900" subtitle="Group rail (yours / other), custom-group header, Conversations + Members with membership management" name="Club groups" -->
+<!-- @template name="Club groups" description="Member club home for a multi-group club — group rail, custom-group header, scoped conversations and member management" -->
+<!--
+  2026-09-12 (custom club groups, discovery design): reconciled to the agreed behaviour in
+  .design-sync/custom-group-design-report.md. Supersedes the earlier "hidden private groups /
+  open to join" rail:
+    - every active club member sees every group's name; the rail splits "Your groups" from
+      "Other groups" instead of hiding anything;
+    - there is no open-to-join section and no settings button (rename / slug / archive are deferred);
+    - the address follows the checked-in convention <slug>@<club-slug>.clubs.memba.io;
+    - custom-group Members panel gains Add member / Remove / Leave (every group member may
+      manage membership; club admins may manage any group, even from outside it).
+  Signed in here: Alice Ahmed — club admin AND a Board member. Regular-member and
+  outside-admin views live in club-group-non-member.html; the full Members management
+  states live in club-group-members.html; creation in club-group-new.html.
+-->
 <!doctype html>
 <html lang="en" data-theme="light">
 <head>
@@ -12,126 +26,255 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
 <style>
 :root{color-scheme:light;--color-base-100:#fffef9;--color-base-200:#f6f5ea;--color-base-300:#e8e6d4;--color-base-content:#25291d;--color-primary:#5a7050;--color-primary-content:#f6f5ea;--color-secondary:#555a47;--color-secondary-content:#f6f5ea;--color-accent:#d2925a;--color-accent-content:#25291d;--color-neutral:#25291d;--color-neutral-content:#f6f5ea;--color-info:#4f6b78;--color-info-content:#f6f5ea;--color-success:#5f7a4f;--color-success-content:#f6f5ea;--color-warning:#a8772e;--color-warning-content:#f6f5ea;--color-error:#a8503a;--color-error-content:#f6f5ea;--radius-selector:0.375rem;--radius-field:0.375rem;--radius-box:0.75rem;--size-selector:0.25rem;--size-field:0.25rem;--border:1px;--depth:0;--noise:0}
+
+/* Preview-only fallback for the member-app list vocabulary (conversation / member-row /
+   avatar-stack). These classes are defined by the app's web/assets/css/app.css and the cloud
+   memba.css, but not by the local styles.css mirror. They sit in a cascade layer so any
+   unlayered definition from the real design system wins; this block only fills the gap when
+   the file is opened straight from the repo. Not production CSS. */
+@layer preview-fallback {
+  .conversation-list{display:flex;flex-direction:column;gap:9px}
+  .conversation{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:start;gap:12px;padding:14px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:inherit;text-decoration:none;box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .conversation:hover{border-color:var(--color-sage-200);box-shadow:0 2px 8px rgb(21 32 28/.08)}
+  .conversation:focus-visible{outline:2px solid var(--color-sage-300);outline-offset:2px}
+  .conversation__avatar,.member-row__avatar{width:38px;height:38px;border-radius:999px;background:var(--color-sage-200);color:var(--color-sage-800);display:grid;place-items:center;flex:none;font-size:12px;font-weight:700;letter-spacing:.02em;box-shadow:inset 0 0 0 1px rgb(255 255 255/.42)}
+  .conversation__body{min-width:0}
+  .conversation__head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .conversation__subject{min-width:0;color:var(--color-ink);display:block;flex:1 1 auto;font-size:15px;font-weight:700;letter-spacing:-.018em;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conversation__date{flex:none;color:var(--color-ink-3);font-size:12px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .conversation__preview{display:-webkit-box;margin-top:6px;color:var(--color-ink-2);font-size:13px;font-weight:500;line-height:1.45;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:1;line-clamp:1}
+  .conversation__participants{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:10px}
+  .conversation__replies{color:var(--color-ink-2);font-size:12.5px;font-weight:500}
+  .conversation__replies strong{color:var(--color-ink);font-weight:700}
+  .avatar-stack{display:inline-flex;align-items:center;flex:none}
+  .avatar-stack>span{width:24px;height:24px;margin-left:-6px;border-radius:999px;background:var(--color-sage-100);color:var(--color-sage-800);display:grid;place-items:center;font-size:10px;font-weight:700;box-shadow:0 0 0 2px var(--color-paper)}
+  .avatar-stack>span:first-child{margin-left:0}
+  .avatar-stack>.is-more{background:var(--color-base-200);color:var(--color-ink-2);font-family:var(--font-mono)}
+  .member-list{display:flex;flex-direction:column;gap:9px}
+  .member-row{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:inherit;text-decoration:none;box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .member-row__body{min-width:0;flex:1 1 auto}
+  .member-row__name{color:var(--color-ink);font-size:14px;font-weight:600;letter-spacing:-.01em;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .member-row__meta{color:var(--color-ink-3);font-size:12.5px;font-weight:500;line-height:1.35;margin-top:2px}
+  .member-row__role{flex:none;margin-left:auto;white-space:nowrap}
+}
+
+/* ---- Page-local: custom-group additions to the group rail / header / panels ---- */
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Scoped copies of shared footer-details / details-summary rules; production styles.css untouched. */
+.app-foot{max-width:100%} /* integration styles.css rule missing from this worktree copy */
+.group-rail{position:relative} /* contain absolutely-positioned .visually-hidden labels inside the scrolling rail */
+.footer-details{min-width:0;max-width:100%;overflow-x:auto}
+.footer-details ul{display:flex;align-items:center;gap:14px;width:max-content;list-style:none;padding:2px;margin:0 auto}
+.footer-details li{display:flex;align-items:center;gap:6px;white-space:nowrap;line-height:24px}
+.footer-details li>a{display:inline-flex;align-items:center;gap:6px}
+.footer-details svg{flex:none;display:block;fill:currentColor}
+.footer-details a:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:2px}
+details.global-bar__id>summary{list-style:none;cursor:pointer}
+details.global-bar__id>summary::-webkit-details-marker{display:none}
+.group-rail__lock{width:14px;height:14px;flex:none;margin-left:auto;color:var(--color-ink-3);opacity:.8}
+.group-rail__divider{height:1px;margin:14px 6px 12px;background:var(--color-line)}
+.group-rail__add{color:var(--color-sage-700)}
+.group-rail__add svg{width:15px;height:15px;flex:none}
+.group-head__you{display:inline-flex;align-items:center;gap:5px;color:var(--color-sage-700);font-weight:600}
+.group-head__you svg{width:13px;height:13px}
+.section-panel{padding:18px 20px 0}
+.member-row.is-you{background:var(--color-sage-50);border-color:var(--color-sage-100)}
+.member-row__actions{flex:none;margin-left:auto;display:flex;align-items:center;gap:6px}
+.member-row__actions .badge{margin-right:4px}
+.members-note{margin:0 0 12px;color:var(--color-ink-3);font-size:12.5px;font-weight:500;line-height:1.5}
+.members-note strong{color:var(--color-ink-2);font-weight:600}
+@media (max-width:700px){
+  .section-panel{padding:16px 14px 0}
+  .member-row{flex-wrap:wrap}
+  .member-row__actions{width:100%;margin-left:50px;justify-content:flex-start}
+}
 </style>
 </head>
 <body class="app-frame">
 <div class="global-bar">
-  <div class="global-bar__inner" style="max-width:1040px">
+  <div class="global-bar__inner global-bar__inner--wide">
     <div class="global-bar__brand">
       <svg class="global-bar__mark" viewBox="0 0 64 64" role="img" aria-label="Memba"><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="var(--color-cream)" stroke-width="4.8" stroke-linecap="round"/><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="var(--color-cream)"/><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="var(--color-cream)"/><circle cx="32" cy="15" r="3.7" fill="var(--color-accent, #d2925a)"/></svg>
       <span class="global-bar__word">Memba</span>
     </div>
-    <div class="global-bar__id dropdown dropdown-end">
-      <button tabindex="0" role="button" class="global-bar__me"><div class="global-bar__avatar">LT</div></button>
-      <div tabindex="0" class="dropdown-content app-menu app-menu--id">
-        <div class="app-menu__who"><div class="app-menu__who-name">Lou Thirgood</div><div class="app-menu__who-email">lou@example.com</div></div>
-        <div class="app-menu__divider"></div>
-        <button class="app-menu__item" onclick="location.href='../account-settings/account-settings.html'">Account settings</button>
-        <button class="app-menu__signout">Sign out</button>
+    <!-- Native details/summary disclosure (d95dbe095), as rendered by Layouts.club_site. -->
+    <details class="dropdown dropdown-end global-bar__id">
+      <summary id="club-site-identity-menu-button" class="global-bar__me" aria-controls="club-site-identity-menu" aria-label="Member identity menu"><span class="global-bar__avatar">AA</span></summary>
+      <div id="club-site-identity-menu" class="dropdown-content app-menu app-menu--id">
+        <div class="app-menu__who"><div class="app-menu__who-name">Alice Ahmed</div><div class="app-menu__who-email">alice@example.com</div></div>
+        <div class="app-menu__divider" aria-hidden="true"></div>
+        <a class="app-menu__item" href="./account-settings.html">Account settings</a>
+        <button class="app-menu__signout" type="button">Sign out</button>
       </div>
-    </div>
+    </details>
   </div>
 </div>
 
 <div class="app-card app-card--wide">
   <div class="app-bar"><div class="app-bar__brand"><span class="app-bar__club">Kootenay Alpine Club</span></div></div>
 
+  <div class="club-groups">
   <div class="app-split">
-    <!-- Group rail — the switcher. A member lands on the group they last visited.
-         Groups they belong to sit above the divider; open groups they could join sit
-         below it. Private groups they aren't in never appear. Admins-only "New group". -->
+    <!-- Group rail. Every active club member sees every group's name. Groups the signed-in
+         person belongs to sit under "Your groups"; the rest under "Other groups" with a lock
+         glyph — listed, not hidden. Everyone and Admin are system groups and keep their
+         existing behaviour. "New group" is admins-only (Alice is a club admin). -->
     <nav class="group-rail" aria-label="Groups">
       <div class="group-rail__label">Your groups</div>
-      <a class="group-rail__item" href="#" data-group="everyone"><span class="group-rail__name">Everyone</span><span class="group-rail__count">4</span></a>
-      <a class="group-rail__item is-active" href="#" data-group="board" aria-current="page"><span class="group-rail__name">Board</span><span class="group-rail__count">2</span></a>
-      <a class="group-rail__item" href="#" data-group="finance"><span class="group-rail__name">Finance committee</span></a>
-      <a class="group-rail__item" href="#" data-group="trips"><span class="group-rail__name">Trips committee</span><span class="group-rail__count">7</span></a>
-      <a class="group-rail__item" href="#" data-group="huts"><span class="group-rail__name">Huts &amp; maintenance</span></a>
-      <a class="group-rail__item" href="#" data-group="admins"><span class="group-rail__name">Admins</span></a>
+      <a class="group-rail__item" href="#" data-group="everyone"><span class="group-rail__name">Everyone</span></a>
+      <a class="group-rail__item" href="#" data-group="admin"><span class="group-rail__name">Admin</span></a>
+      <a class="group-rail__item is-active" href="#" data-group="board" aria-current="page"><span class="group-rail__name">Board</span></a>
+      <div class="group-rail__label" style="margin-top:16px">Other groups</div>
+      <a class="group-rail__item" href="#" data-group="trips" title="You're not in this group"><span class="group-rail__name">Trips committee</span><svg class="group-rail__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="visually-hidden">(not a member)</span></a>
+      <a class="group-rail__item" href="#" data-group="huts" title="You're not in this group"><span class="group-rail__name">Huts &amp; maintenance</span><svg class="group-rail__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="visually-hidden">(not a member)</span></a>
       <div class="group-rail__divider"></div>
-      <div class="group-rail__label">Open to join</div>
-      <a class="group-rail__item" href="#" data-group="social"><span class="group-rail__name">Social</span></a>
-      <a class="group-rail__item" href="#" data-group="youth"><span class="group-rail__name">Youth program</span></a>
-      <a class="group-rail__item" href="#" data-group="instructors"><span class="group-rail__name">Instructors</span></a>
-      <div class="group-rail__divider"></div>
-      <!-- Admins only. -->
-      <a class="group-rail__item group-rail__add" href="#"><svg class="group-rail__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span class="group-rail__name">New group</span></a>
+      <!-- Club admins only. -->
+      <a class="group-rail__item group-rail__add" href="./club-group-new.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="group-rail__name">New group</span></a>
     </nav>
 
-    <div>
-      <!-- Group header. The address is the group: replying to it posts here. -->
-      <div class="group-head">
+    <div class="group-content">
+      <!-- Group header. Custom groups read "Private group"; the address is the real inbound
+           convention. No settings button: rename / slug editing / archive are deferred. -->
+      <header class="group-head" aria-labelledby="group-name">
         <div class="group-head__top">
-          <div>
-            <h1 class="group-head__name">Board <svg class="group-rail__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></h1>
-            <div class="group-head__meta"><span>Private · 9 members</span><span class="group-head__addr">board@kac.memba.club</span></div>
+          <div style="min-width:0">
+            <h1 id="group-name" class="group-head__name">Board</h1>
+            <div class="group-head__meta" aria-label="Group details">
+              <span>Private group · 3 members</span>
+              <span class="group-head__you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>You're a member</span>
+              <a class="group-head__addr" href="mailto:board@kootenay-alpine.clubs.memba.io">board@kootenay-alpine.clubs.memba.io</a>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;flex:none">
-            <button class="btn btn-ghost btn-sm">Group settings</button>
-            <button class="btn btn-primary btn-sm" onclick="location.href='../new-message/index.html'">New message</button>
-          </div>
+          <!-- Header owns metadata only (e6d3c38de). The active tab's action lives in
+               .section-tabs__action below, mirroring MemberDashboardGroupTabs.group_tabs. -->
         </div>
-        <p class="group-head__desc">Elected committee. Motions, agendas and anything before an AGM vote. Only members of this group can read or reply.</p>
-      </div>
+      </header>
 
       <div class="section-tabs">
-        <div class="section-tabs__list" role="tablist">
-          <button class="section-tab is-active" role="tab">Conversations</button>
-          <button class="section-tab" role="tab">Members</button>
+        <div class="section-tabs__list" role="tablist" aria-label="Group sections">
+          <button id="member-section-tab-conversations" class="section-tab is-active" data-tab="conversations" role="tab" aria-selected="true" aria-controls="panel-conversations" tabindex="0">Conversations</button>
+          <button id="member-section-tab-members" class="section-tab" data-tab="members" role="tab" aria-selected="false" aria-controls="panel-members" tabindex="-1">Members</button>
+        </div>
+        <div class="section-tabs__action">
+          <!-- One verb per section. On a custom group the Members verb is "Add member" (adds an
+               existing active club member). Club invitations stay on Everyone. -->
+          <!-- Local flattened checkout: sibling files. Cloud paths: ../new-message/index.html,
+               ../club-group-members/club-group-members.html -->
+          <a class="btn btn-primary btn-sm" data-action="conversations" href="./new-message.html">New message</a>
+          <button class="btn btn-primary btn-sm" data-action="members" hidden onclick="location.href='./club-group-members.html'">Add member</button>
         </div>
       </div>
 
-      <div class="conversation-list">
-        <a class="conversation" href="../member-conversation/member-conversation.html">
-          <div class="conversation__avatar" style="background:var(--color-sage-300)">ES</div>
-          <div class="conversation__body">
-            <div class="conversation__head"><span class="conversation__subject">AGM agenda — final call for motions before we send it out</span><span class="conversation__date">28 Aug</span></div>
-            <div class="conversation__preview">Two motions in so far: the hut levy and the instructor reimbursement rate. Anything else needs to be with me by Friday to make the printed agenda.</div>
-            <div class="conversation__participants">
-              <div class="avatar-stack"><span>PD</span><span>KW</span><span>MW</span><span class="is-more">+4</span></div>
-              <span class="conversation__replies"><strong>9 replies</strong> · last 40m ago</span>
+      <div id="panel-conversations" class="section-panel" data-panel="conversations" role="tabpanel" aria-labelledby="member-section-tab-conversations">
+        <div class="conversation-list">
+          <a class="conversation" href="./member-conversation.html">
+            <div class="conversation__avatar" style="background:var(--color-sage-300)">AA</div>
+            <div class="conversation__body">
+              <div class="conversation__head"><span class="conversation__subject">AGM agenda — final call for motions before we send it out</span><span class="conversation__date">28 Aug</span></div>
+              <div class="conversation__preview">Two motions in so far: the hut levy and the instructor reimbursement rate. Anything else needs to be with me by Friday to make the printed agenda.</div>
+              <div class="conversation__participants">
+                <div class="avatar-stack"><span>BB</span><span>CC</span></div>
+                <span class="conversation__replies"><strong>9 replies</strong> · latest from Bob Brennan</span>
+              </div>
             </div>
-          </div>
-        </a>
-        <a class="conversation" href="../member-conversation/member-conversation.html">
-          <div class="conversation__avatar" style="background:var(--color-sage-200)">KW</div>
-          <div class="conversation__body">
-            <div class="conversation__head"><span class="conversation__subject">Insurance renewal quote came in 14% higher</span><span class="conversation__date">21 Aug</span></div>
-            <div class="conversation__preview">Broker's suggesting we raise the deductible to hold the premium flat. I've asked Finance to look at what that does to the reserve.</div>
-            <div class="conversation__participants">
-              <div class="avatar-stack"><span>PD</span><span>ES</span></div>
-              <span class="conversation__replies"><strong>4 replies</strong> · last 3d ago</span>
-              <!-- Cross-posted: sent to Board and Finance committee at once. -->
-              <span class="group-tags"><span class="group-tag">Also in Finance committee</span></span>
+          </a>
+          <a class="conversation" href="./member-conversation.html">
+            <div class="conversation__avatar" style="background:var(--color-sage-200)">BB</div>
+            <div class="conversation__body">
+              <div class="conversation__head"><span class="conversation__subject">Insurance renewal quote came in 14% higher</span><span class="conversation__date">21 Aug</span></div>
+              <div class="conversation__preview">Broker's suggesting we raise the deductible to hold the premium flat. Worth a look before the AGM.</div>
+              <div class="conversation__participants">
+                <div class="avatar-stack"><span>AA</span><span>CC</span></div>
+                <span class="conversation__replies"><strong>4 replies</strong> · latest from Carol Chen</span>
+              </div>
             </div>
-          </div>
-        </a>
-        <a class="conversation" href="../member-conversation/member-conversation.html">
-          <div class="conversation__avatar" style="background:var(--color-sage-100)">PD</div>
-          <div class="conversation__body">
-            <div class="conversation__head"><span class="conversation__subject">Kokanee hut roof — two quotes attached</span><span class="conversation__date">9 Aug</span></div>
-            <div class="conversation__preview">Both come in under the maintenance budget. Recommending the Nelson crew; they did the Silver Spray deck.</div>
-            <div class="conversation__participants">
-              <div class="avatar-stack"><span>MW</span><span>JL</span><span>KW</span></div>
-              <span class="conversation__replies"><strong>6 replies</strong> · last 1w ago</span>
-              <span class="group-tags"><span class="group-tag">Also in Huts &amp; maintenance</span></span>
+          </a>
+          <a class="conversation" href="./member-conversation.html">
+            <div class="conversation__avatar" style="background:var(--color-sage-100)">CC</div>
+            <div class="conversation__body">
+              <div class="conversation__head"><span class="conversation__subject">Kokanee hut roof — two quotes attached</span><span class="conversation__date">9 Aug</span></div>
+              <div class="conversation__preview">Both come in under the maintenance budget. Recommending the Nelson crew; they did the Silver Spray deck.</div>
+              <div class="conversation__participants">
+                <div class="avatar-stack"><span>AA</span></div>
+                <span class="conversation__replies"><strong>1 reply</strong> · latest from Alice Ahmed</span>
+              </div>
             </div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Members panel for a custom group, as a group member sees it. Every group member can
+           add existing active club members and remove others; you can only leave yourself.
+           The signed-in row is tinted and labelled "You". Full states (picker, confirmations,
+           empty group) are in club-group-members.html. -->
+      <div id="panel-members" class="section-panel" data-panel="members" role="tabpanel" aria-labelledby="member-section-tab-members" hidden>
+        <p class="members-note">Board members can read every Board conversation and get its emails. Anyone in Board can add other <strong>Kootenay Alpine Club</strong> members or remove people from Board — that never changes their club membership.</p>
+        <div class="member-list">
+          <div class="member-row is-you">
+            <div class="member-row__avatar" style="background:var(--color-sage-300)" aria-hidden="true">AA</div>
+            <div class="member-row__body"><div class="member-row__name">Alice Ahmed</div><div class="member-row__meta"><span>You</span></div></div>
+            <div class="member-row__actions"><span class="badge badge-primary badge-soft">Admin</span><button class="btn btn-ghost btn-xs">Leave Board</button></div>
           </div>
-        </a>
+          <div class="member-row">
+            <div class="member-row__avatar" style="background:var(--color-sage-200)" aria-hidden="true">BB</div>
+            <div class="member-row__body"><div class="member-row__name">Bob Brennan</div><div class="member-row__meta"></div></div>
+            <div class="member-row__actions"><button class="btn btn-ghost btn-xs">Remove from Board</button></div>
+          </div>
+          <div class="member-row">
+            <div class="member-row__avatar" style="background:var(--color-sage-100)" aria-hidden="true">CC</div>
+            <div class="member-row__body"><div class="member-row__name">Carol Chen</div><div class="member-row__meta"></div></div>
+            <div class="member-row__actions"><button class="btn btn-ghost btn-xs">Remove from Board</button></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+  </div>
 </div>
 
+<!-- Shared club footer (Layouts.footer_details, e68019eae). Cloud path for Memba link: ../marketing-homepage/index.html -->
+<footer id="club-site-footer" class="app-foot" aria-label="About Memba">
+  <div id="club-site-footer-details" class="footer-details">
+    <ul role="list">
+      <li><span>Powered by <a id="club-site-footer-memba-home-link" href="./marketing-homepage.html" aria-label="Visit Memba home">Memba</a>.</span></li>
+      <li><svg width="15" height="15" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><path d="M383.8 351.7c2.5-2.5 105.2-92.4 105.2-92.4l-17.5-7.5c-10-4.9-7.4-11.5-5-17.4 2.4-7.6 20.1-67.3 20.1-67.3s-47.7 10-57.7 12.5c-7.5 2.4-10-2.5-12.5-7.5s-15-32.4-15-32.4-52.6 59.9-55.1 62.3c-10 7.5-20.1 0-17.6-10 0-10 27.6-129.6 27.6-129.6s-30.1 17.4-40.1 22.4c-7.5 5-12.6 5-17.6-5C293.5 72.3 255.9 0 255.9 0s-37.5 72.3-42.5 79.8c-5 10-10 10-17.6 5-10-5-40.1-22.4-40.1-22.4S183.3 182 183.3 192c2.5 10-7.5 17.5-17.6 10-2.5-2.5-55.1-62.3-55.1-62.3S98.1 167 95.6 172s-5 9.9-12.5 7.5C73 177 25.4 167 25.4 167s17.6 59.7 20.1 67.3c2.4 6 5 12.5-5 17.4L23 259.3s102.6 89.9 105.2 92.4c5.1 5 10 7.5 5.1 22.5-5.1 15-10.1 35.1-10.1 35.1s95.2-20.1 105.3-22.6c8.7-.9 18.3 2.5 18.3 12.5S241 512 241 512h30s-5.8-102.7-5.8-112.8 9.5-13.4 18.4-12.5c10 2.5 105.2 22.6 105.2 22.6s-5-20.1-10-35.1 0-17.5 5-22.5z"/></svg><span>Proudly hosted in Canada.</span></li>
+      <li><a id="club-site-footer-source-link" href="https://github.com/mattwynne/memba"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.22 3.27.94.1-.73.4-1.22.72-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.63 0c2.15-1.46 3.1-1.16 3.1-1.16.61 1.55.23 2.7.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.04.76 2.09v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg> Open source</a></li>
+    </ul>
+  </div>
+</footer>
+
 <script>
-document.querySelectorAll('.group-rail__item[data-group]').forEach(function(el){
-  el.addEventListener('click', function(e){
-    e.preventDefault();
-    document.querySelectorAll('.group-rail__item').forEach(function(i){ i.classList.remove('is-active'); });
-    el.classList.add('is-active');
-    try { localStorage.setItem('memba:lastGroup', el.dataset.group); } catch (err) {}
+// Static preview only. In the app, tab state is URL-addressable (/groups/:id vs
+// /groups/:id/members) via handle_params + <.link patch>, per ADR 0023 — do not copy this.
+(function () {
+  var card = document.querySelector('.app-card');
+  card.querySelectorAll('.section-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var name = tab.dataset.tab;
+      card.querySelectorAll('.section-tab').forEach(function (t) {
+        var on = t === tab; t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1;
+      });
+      card.querySelectorAll('.section-panel').forEach(function (p) { p.hidden = p.dataset.panel !== name; });
+      card.querySelectorAll('[data-action]').forEach(function (a) { a.hidden = a.dataset.action !== name; });
+    });
   });
-});
+  // ArrowLeft/Right/Home/End roving focus, as in the .SectionTabs colocated hook (e6d3c38de).
+  card.querySelector('[role="tablist"]').addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var tabs = Array.prototype.slice.call(card.querySelectorAll('[role="tab"]')), i = tabs.indexOf(e.target), n;
+    if (i === -1) return;
+    if (e.key === 'ArrowRight') n = (i + 1) % tabs.length; else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') n = 0; else if (e.key === 'End') n = tabs.length - 1; else return;
+    e.preventDefault(); tabs[n].click(); tabs[n].focus();
+  });
+  document.querySelectorAll('.group-rail__item[data-group]').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      document.querySelectorAll('.group-rail__item').forEach(function (i) { i.classList.remove('is-active'); i.removeAttribute('aria-current'); });
+      el.classList.add('is-active'); el.setAttribute('aria-current', 'page');
+    });
+  });
+})();
 </script>
 </body>
 </html>

@@ -25,6 +25,32 @@ defmodule MembaWeb.Layouts do
   defp public_footer_suppressed?(_conn), do: false
 
   @doc """
+  Renders the shared hosting and source details with a surface-specific introduction.
+  """
+  attr :id, :string, required: true
+  attr :variant, :string, default: "club", values: ~w(club public)
+  slot :inner_block, required: true
+
+  def footer_details(assigns) do
+    ~H"""
+    <div id={@id} class={["footer-details", @variant == "public" && "footer-details--public"]}>
+      <ul role="list">
+        <li>{render_slot(@inner_block)}</li>
+        <li>
+          <.icon name="brand-canadian-maple-leaf" class="size-[15px] shrink-0" aria-hidden="true" />
+          <span>Proudly hosted in Canada.</span>
+        </li>
+        <li>
+          <a id={"#{@id}-source-link"} href="https://github.com/mattwynne/memba">
+            <.icon name="brand-github" class="size-[15px] shrink-0" aria-hidden="true" /> Open source
+          </a>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  @doc """
   Renders the shared public/visitor header.
 
   Matches the marketing nav from the design system: the wordmark and link
@@ -343,7 +369,6 @@ defmodule MembaWeb.Layouts do
 
             <div
               id="club-site-identity-menu"
-              role="menu"
               class="dropdown-content app-menu app-menu--id"
             >
               <div class="app-menu__who">
@@ -352,11 +377,10 @@ defmodule MembaWeb.Layouts do
                 </div>
                 <div class="app-menu__who-email">{club_identity_email(@current_identity)}</div>
               </div>
-              <div class="app-menu__divider" role="separator" aria-orientation="horizontal" />
+              <div class="app-menu__divider" aria-hidden="true" />
               <.link
                 navigate={~p"/my/settings"}
                 id="club-site-account-settings-link"
-                role="menuitem"
                 class="app-menu__item"
               >
                 Account settings
@@ -364,14 +388,12 @@ defmodule MembaWeb.Layouts do
               <div
                 id="club-site-identity-menu-divider"
                 class="app-menu__divider"
-                role="separator"
-                aria-orientation="horizontal"
+                aria-hidden="true"
               />
               <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
                 <.button
                   id="club-site-sign-out-button"
                   type="submit"
-                  role="menuitem"
                   variant="ghost"
                   class="app-menu__signout"
                 >
@@ -401,14 +423,15 @@ defmodule MembaWeb.Layouts do
         id="club-site-footer"
         class="app-foot"
       >
-        Powered by
-        <a
-          id="club-site-footer-memba-home-link"
-          href={ClubSite.root_url()}
-          aria-label="Visit Memba home"
-        >
-          Memba
-        </a>
+        <.footer_details id="club-site-footer-details">
+          <span>
+            Powered by <a
+              id="club-site-footer-memba-home-link"
+              href={ClubSite.root_url()}
+              aria-label="Visit Memba home"
+            >Memba</a>.
+          </span>
+        </.footer_details>
       </footer>
     </div>
 
@@ -480,29 +503,59 @@ defmodule MembaWeb.Layouts do
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
-      <.flash
+      <.connection_status
         id="client-error"
-        kind={:error}
-        title={gettext("We can't find the internet")}
-        phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
+        message={gettext("Connection paused — reconnecting…")}
+        phx-disconnected={
+          show(".phx-client-error #client-error")
+          |> JS.remove_attribute("hidden", to: ".phx-client-error #client-error")
+        }
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
-      >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+      />
 
-      <.flash
+      <.connection_status
         id="server-error"
-        kind={:error}
-        title={gettext("Something went wrong!")}
-        phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
+        message={gettext("Memba is temporarily unavailable — retrying…")}
+        phx-disconnected={
+          show(".phx-server-error #server-error")
+          |> JS.remove_attribute("hidden", to: ".phx-server-error #server-error")
+        }
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
+      />
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :message, :string, required: true
+  attr :rest, :global
+
+  defp connection_status(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "connection-status inline-flex max-w-[calc(100vw-2rem)] items-center gap-2",
+        "rounded-full border border-sage-300 bg-paper/95 py-2.5 pr-3.5 pl-3",
+        "text-[13px] font-semibold leading-[1.2] text-ink-2",
+        "shadow-lg shadow-ink/10 backdrop-blur-sm"
+      ]}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      {@rest}
+    >
+      <span
+        class={[
+          "connection-status__spinner size-3.5 shrink-0 rounded-full",
+          "border-2 border-sage-100 border-t-sage-500"
+        ]}
+        aria-hidden="true"
       >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+      </span>
+      <span>{@message}</span>
     </div>
     """
   end

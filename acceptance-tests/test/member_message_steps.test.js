@@ -25,6 +25,7 @@ const {
   createClub,
   createPeople,
   clubSlugFor,
+  currentLiveViewRootIsReady,
   cssString,
   deliveryForRecipient,
   emailFor,
@@ -265,7 +266,7 @@ class FakePage {
       this.rows.clubMessages.push(messageRow);
     }
 
-    if (role === "button" && name === "Send to all current members") {
+    if (role === "button" && name === "Send message") {
       const subject = this.fields["Subject"];
       const messageId = idFor("message", subject, this.rows.messages.length + 1);
 
@@ -465,6 +466,71 @@ function worldWithPage(page = new FakePage()) {
     page
   };
 }
+
+function liveViewRoot(classes, { isConnected = true } = {}) {
+  const classNames = new Set(classes.split(/\s+/).filter(Boolean));
+
+  return {
+    isConnected,
+    classList: {
+      contains(className) {
+        return classNames.has(className);
+      }
+    }
+  };
+}
+
+function withLiveViewBrowserState({ transportConnected = true, roots = [] }, assertion) {
+  const previousWindow = global.window;
+  const previousDocument = global.document;
+
+  global.window = {
+    liveSocket: {
+      isConnected: () => transportConnected
+    }
+  };
+  global.document = {
+    querySelectorAll(selector) {
+      assert.equal(selector, "[data-phx-main]");
+      return roots;
+    }
+  };
+
+  try {
+    return assertion();
+  } finally {
+    global.window = previousWindow;
+    global.document = previousDocument;
+  }
+}
+
+test("LiveView readiness rejects a transport-connected but still-loading root", () => {
+  withLiveViewBrowserState(
+    { roots: [liveViewRoot("phx-loading")] },
+    () => assert.equal(currentLiveViewRootIsReady(), false)
+  );
+});
+
+test("LiveView readiness accepts the current joined root", () => {
+  withLiveViewBrowserState(
+    { roots: [liveViewRoot("phx-connected")] },
+    () => assert.equal(currentLiveViewRootIsReady(), true)
+  );
+});
+
+test("LiveView readiness does not reuse a stale connected root during navigation", () => {
+  withLiveViewBrowserState(
+    { roots: [liveViewRoot("phx-connected"), liveViewRoot("phx-loading")] },
+    () => assert.equal(currentLiveViewRootIsReady(), false)
+  );
+});
+
+test("LiveView readiness still requires the transport connection", () => {
+  withLiveViewBrowserState(
+    { transportConnected: false, roots: [liveViewRoot("phx-connected")] },
+    () => assert.equal(currentLiveViewRootIsReady(), false)
+  );
+});
 
 test("member-message route URL and generated emails match the browser app surface", () => {
   assert.equal(appUrl("http://127.0.0.1:4444", "/admin/clubs"), "http://127.0.0.1:4444/admin/clubs");
@@ -713,7 +779,7 @@ test("member send flow opens compose from club home and stores the new message",
     ["waitForLiveViewConnected"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
-    ["click", "button", { name: "Send to all current members" }],
+    ["click", "button", { name: "Send message" }],
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"]
   ]);
   assert.equal(
@@ -759,7 +825,7 @@ test("member failed-send flow stays on compose failure state with support guidan
     ["waitForLiveViewConnected"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
-    ["click", "button", { name: "Send to all current members" }]
+    ["click", "button", { name: "Send message" }]
   ]);
   assert.ok(
     expectations.some(

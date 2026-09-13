@@ -67,18 +67,32 @@ green than before.
 | 057 | 2026-09-03 | merged | Admin group email conversations | [plan](057-admin-group-email-conversations/plan.md) — `member_message_deliverability.feature`, `club_message_replies.feature` |
 | 058 | 2026-09-06 | merged | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
 | 059 | 2026-09-08 | merged | Populated clubs always have an Admin | [plan](059-populated-clubs-always-have-an-admin/plan.md) — `club_membership_administration.feature` |
-| 060 | 2026-09-12 | implementing | Calm LiveView reconnection feedback | [plan](060-calm-liveview-reconnection-feedback/plan.md) — no acceptance feature changes |
-| 066 | 2026-08-13 | validated | Members change their own name | [plan](066-member-name-editing/plan.md) |
-| 067 | 2026-08-13 | validated | Members set their own profile photo | [plan](067-member-profile-photo/plan.md) |
+| 060 | 2026-09-12 | merged | Calm LiveView reconnection feedback | [plan](060-calm-liveview-reconnection-feedback/plan.md) — no acceptance feature changes |
+| 061 | 2026-09-13 | implementing | Discover club groups without joining them | [plan](061-discover-club-groups/plan.md) — `group_conversations.feature` |
+| 062 | 2026-09-13 | validated | Admins create usable custom groups | [plan](062-create-custom-groups/plan.md) — `custom_group_creation.feature`, `custom_group_conversations.feature`, `custom_group_lifecycle.feature` |
+| 063 | 2026-09-13 | validated | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+| 064 | 2026-09-13 | validated | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+| 065 | 2026-09-13 | validated | Request custom-group access through an Admin message | [plan](065-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
+| 066 | 2026-08-13 | validated | Members change their own name | [plan](066-member-name-editing/plan.md) — `member_profile.feature` |
+| 067 | 2026-08-13 | validated | Members set their own profile photo | [plan](067-member-profile-photo/plan.md) — `member_profile.feature` |
+
+Matt reviewed the group rules and HTML prototype during planning; Fabro plan validation is pending. These five slices take priority over later profile-editing work. The 061–064 placeholder intentionally provides the Admin email address before 065 adds Request access.
 
 Status notes:
 
+- `deferred` means deliberately parked, even if previously validated; not selected for current delivery.
 - `draft` means a captured plan still needs human review before validation or implementation.
 - `ready` means a human-approved plan is waiting for validation or implementation.
 - `validated` means plan validation has passed; it may wait while another iteration is active.
 - `implementing`, `ready-for-review`, `in-review`, `reviewing`, and `finalizing` occupy the single implementation WIP slot.
 
 Shared acceptance feature files used across these iterations:
+
+- [`custom_group_creation.feature`](../../acceptance-tests/features/custom_group_creation.feature) — `@iteration-062`; future domain/browser scenarios carry `@todo-domain @todo-ui`; live name/preview examples are `@not-domain @todo-ui`.
+- [`custom_group_conversations.feature`](../../acceptance-tests/features/custom_group_conversations.feature) — `@iteration-062 @todo-domain @todo-ui`, preserving group-aware web/email conversation policy for custom groups.
+- [`custom_group_membership.feature`](../../acceptance-tests/features/custom_group_membership.feature) — 063 additions and 064 removals/system guards, with per-rule iteration and runner-debt tags.
+- [`custom_group_lifecycle.feature`](../../acceptance-tests/features/custom_group_lifecycle.feature) — 062 club-departure safety, 063 history/welcome, 064 removal/follow-reset/empty-group behaviour; per-rule iteration and runner-debt tags.
+- [`custom_group_access_requests.feature`](../../acceptance-tests/features/custom_group_access_requests.feature) — `@iteration-065 @todo-domain @todo-ui`; requests are ordinary Admin messages, not an approval workflow.
 
 - [`authentication.feature`](../../acceptance-tests/features/authentication.feature) (iteration 032 adds `@iteration-032 @todo-domain @todo-ui` planning scenarios for privacy-preserving auth email delivery progress)
 - [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@todo-domain`/`@todo-ui` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@todo-domain`/`@todo-ui` scenarios for slugged email subjects and blank-body compose validation; iteration 042 changes the inbound address convention to `everyone@<club>.clubs.memba.io`)
@@ -95,4 +109,4 @@ Shared acceptance feature files used across these iterations:
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
 - [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (new in iteration 066; self-service profile editing from `/my/settings`. Iteration 066 adds `@iteration-066 @todo-domain @todo-ui` scenarios for changing your own name; iteration 067 adds `@iteration-067 @todo-domain @todo-ui` scenarios for adding, replacing, and removing a profile photo, including upload rejection, upload failure, and signed-in-only photo visibility. Both sets stay excluded from the domain and browser runners until their iteration implements the steps)
-- [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (new in iteration 058; `@iteration-058 @todo-domain @todo-ui` planning scenarios cover generic group discovery, selected group scope, group-aware web composition, non-member no-disclosure, and remembered selection until delivery supplies the domain and browser support)
+- [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (058 preserves selected-group scope, composition and remembered selection; 061 replaces hidden-group/not-found expectations with visible names and restricted surfaces; 065 adds the request affordance. New/changed scenarios retain `@iteration-058`, add their 061/065 tags and carry `@todo-domain @todo-ui` or browser-only `@not-domain @todo-ui` while unimplemented)

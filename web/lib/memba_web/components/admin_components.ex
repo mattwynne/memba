@@ -7,6 +7,7 @@ defmodule MembaWeb.AdminComponents do
 
   import MembaWeb.CoreComponents
 
+  attr :id, :string, default: nil
   attr :eyebrow, :string, default: nil
   attr :title, :string, required: true
   attr :description, :string, default: nil
@@ -15,7 +16,7 @@ defmodule MembaWeb.AdminComponents do
 
   def admin_page_header(assigns) do
     ~H"""
-    <header class="-mx-6 -mt-6 border-b border-[#e6e3dc] bg-white px-6 py-6 sm:px-8">
+    <header id={@id} class="-mx-6 -mt-6 border-b border-[#e6e3dc] bg-white px-6 py-6 sm:px-8">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div class="min-w-0 space-y-1.5">
           <div

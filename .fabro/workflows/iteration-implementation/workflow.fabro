@@ -114,33 +114,35 @@ digraph IterationImplementation {
         max_visits=30
     ]
 
-    pre_validate_snapshot [
-        label="Snapshot Pre-Validation State",
-        shape=parallelogram,
-        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        timeout="120s"
-    ]
-
     validate_task [
-        label="Validate Completed Task",
-        output_schema="routing",
+        label="Review Candidate Task",
+        output_schema="@schemas/task-verdict.json",
         prompt="@prompts/validate_task.md",
         max_visits=30
     ]
 
-    task_gate [shape=diamond, label="Task valid?"]
-
-    reset_task_attempt [
-        label="Reset Failed Task Attempt",
+    apply_task_verdict [
+        label="Apply Task Verdict",
         shape=parallelogram,
-        max_visits=3,
-        script="set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful checkpoint: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short"
+        stdin_source="output.validate_task",
+        output_schema="routing",
+        script="python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py '{{ inputs.plan_path }}'",
+        timeout="120s"
     ]
 
-    task_not_ready [
-        label="Fail: Task Needs Human Input",
+    task_stopped [
+        label="Stop: Task Processing Failed",
         shape=parallelogram,
-        script="echo 'Iteration implementation failed: task validation requires human input or exceeded retry budget.' >&2\nexit 1"
+        script="echo 'Task processing stopped. Inspect the preceding failed stage and latest review verdict for the cause; unaccepted candidate work remains pending.' >&2\nexit 1"
+    ]
+
+    // Iteration-wide guard, not per task. Fabro 0.316 stops BEFORE visit 3,
+    // allowing two executed revisions (the same guard as the former reset node).
+    revise_task [
+        label="Revise Candidate Task",
+        prompt="@prompts/implement_next_task.md",
+        timeout="2400s",
+        max_visits=3
     ]
 
     dev_check [
@@ -266,23 +268,24 @@ digraph IterationImplementation {
     resume_gate -> resume_failed
     resume_failed -> exit
 
-    sync_task_list -> todo_readable
+    sync_task_list -> todo_readable [condition="outcome=succeeded"]
+    sync_task_list -> task_stopped
     todo_readable -> all_tasks_done [condition="outcome=succeeded"]
-    todo_readable -> task_not_ready [label="Todo missing, empty, or unreadable"]
+    todo_readable -> task_stopped
     all_tasks_done -> implement_next_task [label="Tasks remain", condition="outcome=succeeded"]
     all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=failed"]
-    all_tasks_done -> task_not_ready [label="Unexpected task-list check outcome"]
-    implement_next_task -> pre_validate_snapshot [condition="outcome=succeeded"]
-    implement_next_task -> task_not_ready [label="Implementation/provider failure"]
-    pre_validate_snapshot -> validate_task [condition="outcome=succeeded"]
-    pre_validate_snapshot -> task_not_ready [label="Pre-validation snapshot failed"]
-    validate_task -> task_gate [condition="outcome=succeeded"]
-    validate_task -> task_not_ready [label="Validation/provider failure"]
-    task_gate -> sync_task_list [label="Valid", condition="context.task_valid=true"]
-    task_gate -> reset_task_attempt [label="Retry from last good checkpoint", condition="context.task_retry_available=true"]
-    task_gate -> task_not_ready [label="Needs human input or retry budget exhausted"]
-    reset_task_attempt -> implement_next_task
-    task_not_ready -> exit
+    all_tasks_done -> task_stopped
+    implement_next_task -> validate_task [condition="outcome=succeeded"]
+    implement_next_task -> task_stopped
+    validate_task -> apply_task_verdict [condition="outcome=succeeded"]
+    validate_task -> task_stopped
+    apply_task_verdict -> sync_task_list [condition="outcome=succeeded && preferred_label=accept"]
+    apply_task_verdict -> revise_task [condition="outcome=succeeded && preferred_label=revise"]
+    apply_task_verdict -> task_stopped
+    revise_task -> validate_task [condition="outcome=succeeded"]
+    revise_task -> task_stopped
+    // Fabro requires fallback edges. task_stopped fails without reaching normal exit,
+    // avoiding an unrelated unsatisfied publish goal gate as the terminal error.
 
     dev_check -> collect_implementation_evidence [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]

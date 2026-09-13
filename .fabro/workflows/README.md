@@ -52,7 +52,21 @@ The implementation and review workflows rely on Fabro's managed clone and automa
 
 Prepare steps should reference files through `/workspace/memba/...` or run from the inferred repository checkout. If preflight reports `Git: unknown` or `No clone source present`, repository detection has been broken; remove any explicit `working_dir` override before running implementation or review work.
 
+## Task acceptance and revision
+
+A Fabro checkpoint saves candidate work; it does not approve it. The implementor leaves the selected task unchecked. The independent reviewer returns one structured verdict: `accept`, `revise`, or `blocked`, identifying the exact pending todo line and its evidence or remaining gaps. Only `apply_task_verdict` checks off accepted work; replaying acceptance cannot check off the next task.
+
+Revision keeps useful candidate code and returns the same unchecked task to the implementor, then reviews it again. There is no automatic reset or discarded-attempt archive. `revise_task` retains the former reset node's native `max_visits=3` guard across the entire iteration. Fabro 0.316 stops before executing visit three, allowing two revision passes in total—not a fresh allowance per task. Exhausting it stops the run with work preserved. A new run starts a new budget; inspect repeated failures before restarting rather than using restarts to evade the bound.
+
+Fabro 0.316 supports the custom verdict schema and passes its parsed output to the verdict command through `stdin_source`. The command performs the check-off and emits routing JSON; the reviewer cannot set the workflow outcome through its verdict. Missing or invalid output and execution failures stop the task loop without advancing the todo. The shared `task_stopped` fallback has no outgoing edge: it fails without reaching normal exit and the unrelated publish goal-gate check. The original failure and review feedback remain in the preceding stage output and Fabro metadata.
+
+To exercise this boundary, run `bash .fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh`. With Fabro installed, also run `python3 .fabro/workflows/iteration-implementation/scripts/test_task_workflow_runtime.py`: it uses an isolated local server and temporary repositories, replacing agents and publication with scripted fixtures. It tests native schema validation, routing, restart and visit limits without contacting the production server or making model calls.
+
 ## Delivery contract
+
+Per-task implementation and independent validation use focused evidence, including targeted browser scenarios or a browser harness for browser-facing changes. A UI, routing, or acceptance-support change is not a reason to run the full suite inside an ordinary task node. The deterministic `dev_check` node still runs full `dev ci` after the task loop and again after gate repairs; publication requires that gate to pass.
+
+An existing plan may also explicitly require a final full-validation task. That requirement remains binding: do not check it off without a successful full command exit or silently remove it to avoid duplication. Moving those tasks to workflow-owned completion needs a separate, explicit handoff contract. Fabro's documented agent-shell ceiling is 600 seconds; the implementation prompt node has a 2,400-second total budget. If a required gate cannot fit, preserve the unchecked task and report a recovery blocker rather than launching detached retries or claiming success from a passing test summary alone.
 
 Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses `.feature` changes unless the plan explicitly permits them in a `## Allowed acceptance feature changes` section, marks the plan and iteration index `merged`, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`. Publish/finalization scripts use the scoped Fabro git identity helper in `.fabro/workflows/scripts/git_identity.sh`; do not persistently change repo-local `user.name` or `user.email` inside a Fabro sandbox. If the final rebase conflicts, the script preserves the attempted commit on a `fabro/rescue/...-publish-conflict` branch and the workflow may route to an agent-assisted conflict-resolution node. Any resolved conflict is treated as a new candidate artifact and goes back through `dev ci`, plan conformance, final artifact checks, and publish before it can reach `main`.
 
@@ -86,4 +100,6 @@ The new Fabro run uses the checked-out branch as its source branch, so it sees d
 
 Before rerunning, ensure the worktree is clean. The resume gate prints the current HEAD, todo checked/unchecked counts, and `git status --short`; it fails fast if uncommitted changes remain. Commit, stash, or reset/clean leftovers from the failed attempt before resuming.
 
-`sync_task_list` creates `todo.md` only when it is absent. Once present, `todo.md` is execution state: existing check-offs, splits, additions, and ordering are preserved across reruns.
+`sync_task_list` creates `todo.md` only when it is absent. Once present, `todo.md` is execution state: existing check-offs, splits, additions, and ordering are preserved across reruns. New runs leave unaccepted candidates unchecked, so restart continues that work rather than skipping it.
+
+For runs created before acceptance-owned check-off, inspect the last review first. The old implementor checked off tasks before review; reopen any rejected or unreviewed task before starting this workflow from that checkpoint. Do not assume that an old checked box proves acceptance.

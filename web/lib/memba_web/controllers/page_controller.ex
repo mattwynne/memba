@@ -27,17 +27,17 @@ defmodule MembaWeb.PageController do
     end
   end
 
-  defp home_for_params(conn, _params) do
-    page_title =
-      if conn.assigns.current_identity do
-        "Your clubs"
-      else
-        "A simpler way to keep your group members informed"
-      end
-
+  defp home_for_params(%{assigns: %{current_identity: current_identity}} = conn, _params)
+       when not is_nil(current_identity) do
     conn
-    |> assign(:page_title, page_title)
-    |> render(:home)
+    |> assign(:page_title, "Your clubs")
+    |> render(:signed_in_home)
+  end
+
+  defp home_for_params(conn, _params) do
+    conn
+    |> assign(:page_title, "A simpler way to keep your group members informed")
+    |> render(:public_home)
   end
 
   defp home_for_public_club_slug(conn, slug) do

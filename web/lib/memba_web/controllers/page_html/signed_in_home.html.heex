@@ -1,0 +1,97 @@
+<div id="signed-in-home" class="min-h-screen bg-cream text-ink">
+  <%= if @current_identity_staff? do %>
+    <div id="homepage-staff-bar" class="bg-sage-700 text-cream">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-3.5 px-6 py-2.5 lg:px-8">
+        <span class="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em]">
+          Memba staff
+        </span>
+        <span class="hidden text-sm text-cream/80 sm:inline">
+          You have operator access across every group on Memba.
+        </span>
+        <a
+          id="staff-console-link"
+          href={~p"/admin/clubs"}
+          class="ml-auto inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-1.5 text-sm font-semibold transition hover:border-white/40 hover:bg-white/15"
+        >
+          <span>Open the staff console</span>
+          <.icon name="hero-arrow-top-right-on-square-mini" class="size-3.5 shrink-0 bg-cream" />
+        </a>
+      </div>
+    </div>
+  <% end %>
+
+  <header class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-6 lg:px-8">
+    <a href={~p"/"} class="transition duration-200 hover:opacity-80" aria-label="Memba home">
+      <.logo />
+    </a>
+
+    <nav class="flex items-center gap-3 text-sm font-medium" aria-label="Signed-in navigation">
+      <span class="hidden text-ink-2 sm:inline">Signed in as {@current_identity_email}</span>
+      <.form for={%{}} action={~p"/auth"} method="delete" id="home-sign-out-form">
+        <.button id="home-sign-out-button" type="submit" variant="secondary">
+          Sign out
+        </.button>
+      </.form>
+    </nav>
+  </header>
+
+  <main class="px-6 pb-20 pt-10 lg:px-8">
+    <section class="mx-auto max-w-7xl">
+      <% club_count = length(@current_identity_clubs) %>
+      <% club_noun = if club_count == 1, do: "club", else: "clubs" %>
+
+      <div class="max-w-3xl">
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sage-600">
+          Your memberships
+        </p>
+        <h1 class="mt-3 text-5xl font-semibold tracking-tight text-ink sm:text-6xl">
+          Your clubs
+        </h1>
+        <p class="mt-5 text-lg leading-8 text-ink-2">
+          You’re a member of {club_count} {club_noun}. Choose a club below to open its member website.
+        </p>
+      </div>
+
+      <%= if @current_identity_clubs == [] do %>
+        <div
+          id="my-clubs-empty"
+          class="mt-10 rounded-3xl border border-line bg-paper p-8 shadow-sm"
+        >
+          <h2 class="text-xl font-semibold text-ink">No clubs found for this email</h2>
+          <p class="mt-3 leading-7 text-ink-2">
+            We can’t find any current club memberships for this email address. If you expected to see a group here, try the email address your group uses for you, or ask an organizer to check your membership.
+          </p>
+        </div>
+      <% else %>
+        <div id="my-clubs" class="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <a
+            :for={club <- @current_identity_clubs}
+            id={"my-club-link-#{club.club_id}"}
+            data-testid="my-club-link"
+            aria-label={"Visit #{club.name}"}
+            href={MembaWeb.ClubSite.url(club)}
+            class="group block rounded-3xl border border-line bg-paper p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-sage-200"
+          >
+            <article id={"my-club-#{club.club_id}"}>
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sage-600">
+                    Current member
+                  </p>
+                  <h2 class="mt-3 text-2xl font-semibold text-ink">{club.name}</h2>
+                </div>
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sage-100 text-sage-700 transition duration-200 group-hover:bg-sage-200">
+                  <.sprig class="h-6 w-6" />
+                </div>
+              </div>
+
+              <span class="mt-6 inline-flex items-center justify-center rounded-full bg-sage-600 px-5 py-3 text-sm font-semibold text-cream shadow-sm transition duration-200 group-hover:-translate-y-0.5 group-hover:bg-sage-700 group-hover:shadow-md">
+                Open club website
+              </span>
+            </article>
+          </a>
+        </div>
+      <% end %>
+    </section>
+  </main>
+</div>

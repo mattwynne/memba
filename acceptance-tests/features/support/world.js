@@ -12,6 +12,7 @@ const {
 const { chromium } = require("playwright");
 const { configureBrowserEnvironment } = require("./browser_environment");
 const { createBrowserAcceptanceLifecycle } = require("./lifecycle");
+const { installDelayedLiveViewJoinOnBrowserIfConfigured } = require("./delayed_liveview_join");
 const { restoreClubMessageSending } = require("./member_message");
 const { closeHarnesses } = require("./member_harness");
 
@@ -94,6 +95,7 @@ BeforeAll({ name: "Start Phoenix browser acceptance lifecycle", timeout: 360000 
   acceptanceLog("BeforeAll: Phoenix browser acceptance lifecycle ready");
   acceptanceLog("BeforeAll: launching shared browser");
   sharedBrowser = await chromium.launch({ headless: process.env.HEADLESS !== "false" });
+  await installDelayedLiveViewJoinOnBrowserIfConfigured(sharedBrowser);
   acceptanceLog("BeforeAll: shared browser ready");
 });
 

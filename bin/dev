@@ -3,8 +3,40 @@
 
 set -euo pipefail
 
-repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 default_postgres_port_value=15432
+
+devenv_context_unset_args=(
+  -u DEVENV_DOTFILE
+  -u DEVENV_PROFILE
+  -u DEVENV_ROOT
+  -u DEVENV_STATE
+  -u DEVENV_TASKS
+  -u DEVENV_TASK_FILE
+  -u PGDATA
+  -u PGHOST
+  -u PGPORT
+)
+
+canonical_directory() {
+  local path="$1"
+
+  if [ -n "$path" ] && [ -d "$path" ]; then
+    (cd "$path" && pwd -P)
+  else
+    printf '%s\n' "$path"
+  fi
+}
+
+devenv_shell_matches_repo() {
+  [ "${MEMBA_DEVENV_SHELL:-}" = "1" ] || return 1
+  [ -n "${DEVENV_ROOT:-}" ] || return 1
+  [ "$(canonical_directory "$DEVENV_ROOT")" = "$repo_root" ]
+}
+
+repo_sha() {
+  git -C "$repo_root" rev-parse --short HEAD 2>/dev/null || printf 'unknown'
+}
 
 default_postgres_port() {
   printf '%s\n' "${MEMBA_POSTGRES_PORT:-$default_postgres_port_value}"
@@ -15,9 +47,9 @@ devenv_with_postgres_port() {
     cd "$repo_root"
 
     if [ -n "${MEMBA_POSTGRES_PORT:-}" ] && [ "$MEMBA_POSTGRES_PORT" != "$default_postgres_port_value" ]; then
-      devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" "$@"
+      env "${devenv_context_unset_args[@]}" devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" "$@"
     else
-      devenv "$@"
+      env "${devenv_context_unset_args[@]}" devenv "$@"
     fi
   )
 }
@@ -374,26 +406,44 @@ case "${1:-}" in
     ;;
 esac
 
-if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
+if ! devenv_shell_matches_repo; then
+  if [ "${MEMBA_DEVENV_REENTERED:-0}" = "1" ]; then
+    {
+      echo "Unsafe Memba devenv context after re-entry."
+      echo "Expected DEVENV_ROOT=$repo_root"
+      echo "Actual DEVENV_ROOT=${DEVENV_ROOT:-<unset>}"
+      echo "Refusing to run dev command with another checkout's service or database environment."
+    } >&2
+    exit 1
+  fi
+
   devenv_shell_args=(shell)
   if [ "$memba_postgres_port" != "$default_postgres_port_value" ]; then
     devenv_shell_args+=(-O services.postgres.port:int "$memba_postgres_port")
   fi
 
+  {
+    echo "Entering Memba devenv for root=$repo_root sha=$(repo_sha)."
+    if [ "${MEMBA_DEVENV_SHELL:-}" = "1" ]; then
+      echo "Discarding inherited DEVENV_ROOT=${DEVENV_ROOT:-<unset>} and PGHOST=${PGHOST:-<unset>}."
+    fi
+  } >&2
+
+  cd "$repo_root"
   exec env \
-    -u DEVENV_DOTFILE \
-    -u DEVENV_PROFILE \
-    -u DEVENV_ROOT \
-    -u DEVENV_STATE \
-    -u DEVENV_TASKS \
-    -u DEVENV_TASK_FILE \
-    -u PGDATA \
-    -u PGHOST \
-    -u PGPORT \
+    "${devenv_context_unset_args[@]}" \
+    MEMBA_DEVENV_REENTERED=1 \
     MEMBA_DEVENV_SHELL=1 \
     MEMBA_POSTGRES_PORT="$memba_postgres_port" \
-    devenv "${devenv_shell_args[@]}" -- "$0" "$@"
+    PATH="$repo_root/bin:${PATH:-}" \
+    devenv "${devenv_shell_args[@]}" -- "$repo_root/bin/dev" "$@"
 fi
+
+export PATH="$repo_root/bin:${PATH:-}"
+
+mix() {
+  "$repo_root/bin/mix" "$@"
+}
 
 if ! command -v argc >/dev/null 2>&1; then
   echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2

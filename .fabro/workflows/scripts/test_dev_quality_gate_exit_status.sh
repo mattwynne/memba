@@ -5,6 +5,10 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 dev_script="$repo_root/bin/dev"
 
 # Load the real helper functions without executing argc's command dispatch.
+# Process substitution makes bin/dev resolve repo_root as /dev while sourced; mark
+# that synthetic checkout as the active devenv so startup guards do not re-enter.
+export MEMBA_DEVENV_SHELL=1
+export DEVENV_ROOT=/dev
 # shellcheck disable=SC1090
 source <(awk '
   /^case "\$\{1:-\}" in$/ {

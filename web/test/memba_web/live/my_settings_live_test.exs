@@ -95,7 +95,9 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(view, "#my-settings-panel-emails[hidden]")
   end
 
-  test "avatar menu contains Account settings, a separator, and Sign out", %{conn: conn} do
+  test "avatar disclosure contains Account settings, a visual divider, and Sign out", %{
+    conn: conn
+  } do
     club = insert_membership_club!(name: "Avatar Settings Club", slug: "avatar-settings")
     member = create_active_member(club, email: "avatar.settings@example.com", name: "Avatar Menu")
 
@@ -107,15 +109,14 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(
              view,
              "#club-site-identity-menu " <>
-               "a#club-site-account-settings-link.app-menu__item[href='/my/settings'][role='menuitem']",
+               "a#club-site-account-settings-link.app-menu__item[href='/my/settings']",
              "Account settings"
            )
 
     assert has_element?(
              view,
              "#club-site-account-settings-link + " <>
-               "#club-site-identity-menu-divider.app-menu__divider[role='separator']" <>
-               "[aria-orientation='horizontal'] + " <>
+               "#club-site-identity-menu-divider.app-menu__divider[aria-hidden='true'] + " <>
                "form#club-site-sign-out-form"
            )
 
@@ -124,7 +125,9 @@ defmodule MembaWeb.MySettingsLiveTest do
              "#club-site-sign-out-form[action='/auth'] input[name='_method'][value='delete']"
            )
 
-    assert has_element?(view, "#club-site-sign-out-button[role='menuitem']", "Sign out")
+    assert has_element?(view, "#club-site-sign-out-button[type='submit']", "Sign out")
+    refute has_element?(view, "#club-site-identity-menu[role='menu']")
+    refute has_element?(view, "#club-site-identity-menu [role='menuitem']")
   end
 
   test "renders club chips and grouped email-address rows from the selected design", %{conn: conn} do
@@ -216,6 +219,69 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(view, "#my-settings-add-email-form")
     assert has_element?(view, "#settings-add-email-input[type='email']")
     assert has_element?(view, "#my-settings-add-email-button", "Add email address")
+  end
+
+  test "renders primary selection independently from verification state", %{conn: conn} do
+    club = insert_membership_club!(name: "Independent Email State Club", slug: "email-state")
+
+    member =
+      create_active_member(club,
+        email: "primary.pending@example.com",
+        name: "Independent State"
+      )
+
+    assert %PersonEmailAddress{is_primary: true, verified_at: nil} =
+             Repo.get_by(PersonEmailAddress,
+               person_id: member.person_id,
+               normalized_email: "primary.pending@example.com"
+             )
+
+    insert_membership_person_email_address!(
+      person_id: member.person_id,
+      email: "verified.alternate@example.com",
+      is_primary: false
+    )
+
+    mark_email_verified!(
+      member.person_id,
+      "verified.alternate@example.com",
+      ~U[2026-07-04 12:00:00Z]
+    )
+
+    insert_membership_person_email_address!(
+      person_id: member.person_id,
+      email: "pending.alternate@example.com",
+      is_primary: false
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings/emails")
+
+    primary_row = "#my-settings-email-row-primary-pending-example-com"
+
+    assert has_element?(view, "#{primary_row}[data-state='primary'] .my-settings-primary-badge")
+    assert has_element?(view, "#{primary_row} .my-settings-pending-badge", "Pending verification")
+    refute has_element?(view, "#{primary_row} .my-settings-verified-badge")
+    refute has_element?(view, "#{primary_row} button")
+
+    verified_alternate_row = "#my-settings-email-row-verified-alternate-example-com"
+
+    assert has_element?(view, "#{verified_alternate_row}[data-state='verified']")
+    assert has_element?(view, "#{verified_alternate_row} .my-settings-verified-badge", "Verified")
+    refute has_element?(view, "#{verified_alternate_row} .my-settings-pending-badge")
+    assert has_element?(view, "#my-settings-make-primary-verified-alternate-example-com")
+    assert has_element?(view, "#my-settings-remove-email-verified-alternate-example-com")
+
+    pending_alternate_row = "#my-settings-email-row-pending-alternate-example-com"
+
+    assert has_element?(view, "#{pending_alternate_row}[data-state='pending']")
+    assert has_element?(view, "#{pending_alternate_row} .my-settings-pending-badge")
+    refute has_element?(view, "#{pending_alternate_row} .my-settings-verified-badge")
+    assert has_element?(view, "#my-settings-resend-verification-pending-alternate-example-com")
+    assert has_element?(view, "#my-settings-remove-email-pending-alternate-example-com")
+    refute has_element?(view, "#my-settings-make-primary-pending-alternate-example-com")
   end
 
   test "add email flow creates a pending row, leaves it non-primary, and sends verification",

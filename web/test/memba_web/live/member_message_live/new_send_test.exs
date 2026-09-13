@@ -53,7 +53,9 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert has_element?(
              view,
-             "#member-message-compose[data-audience-group-id='#{everyone_group_id}']"
+             "#member-message-compose" <>
+               "[data-audience-group-id='#{everyone_group_id}']" <>
+               "[data-audience-group-name='Everyone']"
            )
 
     refute has_element?(view, "#member-message-compose-form [name='message[audience_group_id]']")
@@ -106,7 +108,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert has_element?(
              view,
              "#member-compose-success-summary[data-active-member-count='2']",
-             "all 2 current members"
+             "2 members of Everyone"
            )
 
     assert has_element?(
@@ -155,6 +157,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              view,
              "#member-message-compose" <>
                "[data-audience-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-audience-group-name='Trip Planning']" <>
                "[data-active-member-count='2']"
            )
 
@@ -191,7 +194,14 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              view,
              "#member-message-compose" <>
                "[data-compose-state='sent']" <>
-               "[data-audience-group-id='#{trip_planning_group.group_id}']"
+               "[data-audience-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-audience-group-name='Trip Planning']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-success-summary[data-active-member-count='2']",
+             "2 members of Trip Planning"
            )
 
     assert has_element?(

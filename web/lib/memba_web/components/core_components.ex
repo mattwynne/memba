@@ -124,7 +124,9 @@ defmodule MembaWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download name value type disabled)
+  attr :rest, :global,
+    include: ~w(href navigate patch method download form name value type disabled)
+
   attr :class, :any, default: nil
   attr :variant, :string, default: "primary", values: ~w(primary secondary ghost danger)
   attr :size, :string, default: nil, values: [nil, "sm", "lg"]
@@ -158,18 +160,29 @@ defmodule MembaWeb.CoreComponents do
 
     rest = assigns.rest
 
-    if rest[:href] || rest[:navigate] || rest[:patch] do
-      ~H"""
-      <.link class={@button_class} {@rest}>
-        {render_slot(@inner_block)}
-      </.link>
-      """
-    else
-      ~H"""
-      <button class={@button_class} disabled={@disabled} {@rest}>
-        {render_slot(@inner_block)}
-      </button>
-      """
+    cond do
+      link_action?(rest) and assigns.disabled ->
+        assigns = assign(assigns, :rest, disabled_link_action_rest(rest))
+
+        ~H"""
+        <span class={@button_class} aria-disabled="true" {@rest}>
+          {render_slot(@inner_block)}
+        </span>
+        """
+
+      link_action?(rest) ->
+        ~H"""
+        <.link class={@button_class} {@rest}>
+          {render_slot(@inner_block)}
+        </.link>
+        """
+
+      true ->
+        ~H"""
+        <button class={@button_class} disabled={@disabled} {@rest}>
+          {render_slot(@inner_block)}
+        </button>
+        """
     end
   end
 
@@ -187,24 +200,37 @@ defmodule MembaWeb.CoreComponents do
       |> assign(:content_id, assigns.content_id || "#{assigns.id}-content")
 
     ~H"""
-    <div id={@id} class="context-menu dropdown dropdown-end" {@rest}>
-      <button
+    <details id={@id} class="context-menu dropdown dropdown-end" {@rest}>
+      <summary
         id={@button_id}
-        type="button"
-        tabindex="0"
-        role="button"
-        aria-haspopup="menu"
         aria-controls={@content_id}
         aria-label={@label}
         class="context-menu__button"
       >
         <.icon name="hero-ellipsis-vertical" />
-      </button>
-      <div id={@content_id} tabindex="0" role="menu" class="dropdown-content context-menu__content">
+      </summary>
+      <div id={@content_id} class="dropdown-content context-menu__content">
         {render_slot(@inner_block)}
       </div>
-    </div>
+    </details>
     """
+  end
+
+  defp link_action?(rest) do
+    Enum.any?(~w(href navigate patch), fn name -> not is_nil(rest_attribute(rest, name)) end)
+  end
+
+  defp disabled_link_action_rest(rest) do
+    rest
+    |> Enum.reject(fn {key, _value} -> disabled_link_action_attribute?(key) end)
+    |> Map.new()
+  end
+
+  defp disabled_link_action_attribute?(key) do
+    key = to_string(key)
+
+    key in ~w(href navigate patch method download form type name value disabled role tabindex target rel aria-disabled data-method data-to data-csrf) or
+      String.starts_with?(key, "phx-")
   end
 
   defp size_w(:sm), do: "w-7"
@@ -309,9 +335,11 @@ defmodule MembaWeb.CoreComponents do
 
   def input(%{type: "checkbox"} = assigns) do
     assigns =
-      assign_new(assigns, :checked, fn ->
+      assigns
+      |> assign_new(:checked, fn ->
         Phoenix.HTML.Form.normalize_value("checkbox", assigns[:value])
       end)
+      |> assign_input_accessibility()
 
     ~H"""
     <div class="fieldset mb-2">
@@ -331,16 +359,20 @@ defmodule MembaWeb.CoreComponents do
             value="true"
             checked={@checked}
             class={@class || "checkbox checkbox-sm"}
+            aria-describedby={@aria_describedby}
+            aria-invalid={@aria_invalid}
             {@rest}
           />{@label}
         </span>
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
   def input(%{type: "select"} = assigns) do
+    assigns = assign_input_accessibility(assigns)
+
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
@@ -350,18 +382,22 @@ defmodule MembaWeb.CoreComponents do
           name={@name}
           class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
           multiple={@multiple}
+          aria-describedby={@aria_describedby}
+          aria-invalid={@aria_invalid}
           {@rest}
         >
           <option :if={@prompt} value="">{@prompt}</option>
           {Phoenix.HTML.Form.options_for_select(@options, @value)}
         </select>
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
   def input(%{type: "textarea"} = assigns) do
+    assigns = assign_input_accessibility(assigns)
+
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
@@ -373,16 +409,20 @@ defmodule MembaWeb.CoreComponents do
             @class || "w-full textarea",
             @errors != [] && (@error_class || "textarea-error")
           ]}
+          aria-describedby={@aria_describedby}
+          aria-invalid={@aria_invalid}
           {@rest}
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
+    assigns = assign_input_accessibility(assigns)
+
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
@@ -396,18 +436,86 @@ defmodule MembaWeb.CoreComponents do
             @class || "w-full input",
             @errors != [] && (@error_class || "input-error")
           ]}
+          aria-describedby={@aria_describedby}
+          aria-invalid={@aria_invalid}
           {@rest}
         />
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
+  defp assign_input_accessibility(assigns) do
+    rest = assigns[:rest] || %{}
+    errors = assigns[:errors] || []
+    supplied_describedby = rest_attribute(rest, "aria-describedby")
+    supplied_aria_invalid = rest_attribute(rest, "aria-invalid")
+
+    errors_with_ids =
+      errors
+      |> Enum.with_index(1)
+      |> Enum.map(fn {msg, index} -> {msg, input_error_id(assigns[:id], index)} end)
+
+    error_ids =
+      errors_with_ids
+      |> Enum.map(fn {_msg, id} -> id end)
+      |> Enum.reject(&is_nil/1)
+
+    assigns
+    |> assign_new(:value, fn -> nil end)
+    |> assign(:rest, drop_rest_attributes(rest, ["aria-describedby", "aria-invalid"]))
+    |> assign(:errors, errors)
+    |> assign(:errors_with_ids, errors_with_ids)
+    |> assign(:aria_describedby, aria_describedby(supplied_describedby, error_ids))
+    |> assign(:aria_invalid, aria_invalid(supplied_aria_invalid, errors))
+  end
+
+  defp input_error_id(nil, _index), do: nil
+  defp input_error_id("", _index), do: nil
+  defp input_error_id(id, index), do: "#{id}-error-#{index}"
+
+  defp rest_attribute(rest, name) do
+    rest
+    |> Enum.find_value(fn {key, value} -> if to_string(key) == name, do: value end)
+  end
+
+  defp drop_rest_attributes(rest, names) do
+    Map.reject(rest, fn {key, _value} -> to_string(key) in names end)
+  end
+
+  defp aria_describedby(supplied_describedby, error_ids) do
+    supplied_describedby
+    |> describedby_tokens()
+    |> Kernel.++(error_ids)
+    |> Enum.uniq()
+    |> Enum.join(" ")
+    |> blank_to_nil()
+  end
+
+  defp describedby_tokens(nil), do: []
+
+  defp describedby_tokens(tokens) when is_binary(tokens) do
+    tokens
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp describedby_tokens(tokens), do: describedby_tokens(to_string(tokens))
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
+  defp aria_invalid(_supplied_aria_invalid, [_error | _errors]), do: "true"
+  defp aria_invalid(supplied_aria_invalid, _errors), do: supplied_aria_invalid
+
   # Helper used by inputs to generate form errors
+  attr :id, :string, default: nil
+  slot :inner_block, required: true
+
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
+    <p id={@id} class="mt-1.5 flex gap-2 items-center text-sm text-error">
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
@@ -528,7 +636,10 @@ defmodule MembaWeb.CoreComponents do
   end
 
   @doc """
-  Renders a [Heroicon](https://heroicons.com).
+  Renders a [Heroicon](https://heroicons.com) or a bundled monochrome brand icon.
+
+  Brand icons (`brand-canadian-maple-leaf` and `brand-github`) use `currentColor`
+  and inline SVG so they need no third-party runtime requests.
 
   Heroicons come in three styles – outline, solid, and mini.
   By default, the outline style is used, but solid and mini may
@@ -552,6 +663,22 @@ defmodule MembaWeb.CoreComponents do
   def icon(%{name: "hero-" <> _} = assigns) do
     ~H"""
     <span class={[@name, @class]} {@rest} />
+    """
+  end
+
+  def icon(%{name: "brand-canadian-maple-leaf"} = assigns) do
+    ~H"""
+    <svg viewBox="0 0 512 512" fill="currentColor" class={@class} focusable="false" {@rest}>
+      <path d="M383.8 351.7c2.5-2.5 105.2-92.4 105.2-92.4l-17.5-7.5c-10-4.9-7.4-11.5-5-17.4 2.4-7.6 20.1-67.3 20.1-67.3s-47.7 10-57.7 12.5c-7.5 2.4-10-2.5-12.5-7.5s-15-32.4-15-32.4-52.6 59.9-55.1 62.3c-10 7.5-20.1 0-17.6-10 0-10 27.6-129.6 27.6-129.6s-30.1 17.4-40.1 22.4c-7.5 5-12.6 5-17.6-5C293.5 72.3 255.9 0 255.9 0s-37.5 72.3-42.5 79.8c-5 10-10 10-17.6 5-10-5-40.1-22.4-40.1-22.4S183.3 182 183.3 192c2.5 10-7.5 17.5-17.6 10-2.5-2.5-55.1-62.3-55.1-62.3S98.1 167 95.6 172s-5 9.9-12.5 7.5C73 177 25.4 167 25.4 167s17.6 59.7 20.1 67.3c2.4 6 5 12.5-5 17.4L23 259.3s102.6 89.9 105.2 92.4c5.1 5 10 7.5 5.1 22.5-5.1 15-10.1 35.1-10.1 35.1s95.2-20.1 105.3-22.6c8.7-.9 18.3 2.5 18.3 12.5S241 512 241 512h30s-5.8-102.7-5.8-112.8 9.5-13.4 18.4-12.5c10 2.5 105.2 22.6 105.2 22.6s-5-20.1-10-35.1 0-17.5 5-22.5z" />
+    </svg>
+    """
+  end
+
+  def icon(%{name: "brand-github"} = assigns) do
+    ~H"""
+    <svg viewBox="0 0 24 24" fill="currentColor" class={@class} focusable="false" {@rest}>
+      <path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.22 3.27.94.1-.73.4-1.22.72-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.63 0c2.15-1.46 3.1-1.16 3.1-1.16.61 1.55.23 2.7.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.04.76 2.09v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z" />
+    </svg>
     """
   end
 

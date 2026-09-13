@@ -1,0 +1,236 @@
+<!-- @dsCard group="Member App" viewport="1100x1500" subtitle="Auto-composed access request as it lands in the Admin group — ordinary conversation list card + detail with a Members-management link" name="Access request (Admin group)" -->
+<!-- @template name="Access request (Admin group)" description="What club admins see after a member presses Request access on a private group: a standard conversation in Admin, no moderation workflow" -->
+<!--
+  2026-09-12 custom club groups (discovery design). Nothing new is invented here on purpose:
+  the request is an ordinary conversation in the club's Admin system group, started on Eve's
+  behalf when she pressed "Request access" on Board (club-group-non-member.html). Agreed:
+    - it identifies the requester and the requested group and links to Board's Members view;
+    - Eve is not in Admin: she can't read this conversation or any replies to it;
+    - admins act with ordinary membership management (Add member on Board). No approve/deny,
+      no pending-request record, no duplicate suppression — a second press is a second message.
+  Email delivery to Admin members reuses the existing member-message email unchanged
+  (group header "Admin", subject "[kootenay-alpine] Access request: Board").
+  Signed in: Alice Ahmed, club admin (in Admin, also in Board).
+-->
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Access request: Board · Admin · Kootenay Alpine Club · Memba</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="../../brand/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../styles.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
+<style>
+:root{color-scheme:light;--color-base-100:#fffef9;--color-base-200:#f6f5ea;--color-base-300:#e8e6d4;--color-base-content:#25291d;--color-primary:#5a7050;--color-primary-content:#f6f5ea;--color-secondary:#555a47;--color-secondary-content:#f6f5ea;--color-accent:#d2925a;--color-accent-content:#25291d;--color-neutral:#25291d;--color-neutral-content:#f6f5ea;--color-info:#4f6b78;--color-info-content:#f6f5ea;--color-success:#5f7a4f;--color-success-content:#f6f5ea;--color-warning:#a8772e;--color-warning-content:#f6f5ea;--color-error:#a8503a;--color-error-content:#f6f5ea;--radius-selector:0.375rem;--radius-field:0.375rem;--radius-box:0.75rem;--size-selector:0.25rem;--size-field:0.25rem;--border:1px;--depth:0;--noise:0}
+
+/* Preview-only fallback for conversation / message / composer vocabulary (see club-groups.html). */
+@layer preview-fallback {
+  .conversation-list{display:flex;flex-direction:column;gap:9px}
+  .conversation{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:start;gap:12px;padding:14px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:inherit;text-decoration:none;box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .conversation:hover{border-color:var(--color-sage-200)}
+  .conversation__avatar,.message__avatar{width:38px;height:38px;border-radius:999px;background:var(--color-sage-200);color:var(--color-sage-800);display:grid;place-items:center;flex:none;font-size:12px;font-weight:700}
+  .conversation__body{min-width:0}
+  .conversation__head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .conversation__subject{min-width:0;color:var(--color-ink);display:block;flex:1 1 auto;font-size:15px;font-weight:700;letter-spacing:-.018em;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conversation__date{flex:none;color:var(--color-ink-3);font-size:12px;font-weight:600;white-space:nowrap}
+  .conversation__preview{display:-webkit-box;margin-top:6px;color:var(--color-ink-2);font-size:13px;font-weight:500;line-height:1.45;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:1;line-clamp:1}
+  .conversation__participants{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:10px}
+  .conversation__replies{color:var(--color-ink-2);font-size:12.5px;font-weight:500}
+  .conversation__replies strong{color:var(--color-ink);font-weight:700}
+  .avatar-stack{display:inline-flex;align-items:center}
+  .avatar-stack>span{width:24px;height:24px;margin-left:-6px;border-radius:999px;background:var(--color-sage-100);color:var(--color-sage-800);display:grid;place-items:center;font-size:10px;font-weight:700;box-shadow:0 0 0 2px var(--color-paper)}
+  .avatar-stack>span:first-child{margin-left:0}
+  .page-title{color:var(--color-ink);font-size:28px;font-weight:700;letter-spacing:-.024em;line-height:1.12;margin:4px 0 0}
+  .detail-head{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px}
+  .detail-head__main{min-width:min(100%,28rem);flex:1 1 0}
+  .follow-toggle{flex:none;display:inline-flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--color-line);border-radius:999px;background:var(--color-paper)}
+  .follow-toggle__text{display:flex;flex-direction:column;gap:1px;line-height:1.1}
+  .follow-toggle__text strong{font-size:13px;font-weight:700}
+  .follow-toggle__text span{color:var(--color-ink-3);font-size:11.5px;font-weight:500;white-space:nowrap}
+  .message{display:flex;align-items:flex-start;gap:13px;padding:16px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:var(--color-ink);box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .message--original{border-color:var(--color-sage-200);background:var(--color-sage-50)}
+  .message__body{min-width:0;flex:1 1 auto}
+  .message__head{min-height:30px;display:flex;align-items:center;gap:8px}
+  .message__name{min-width:0;color:var(--color-ink);font-size:14px;font-weight:700;line-height:1.25}
+  .message__time{flex:none;color:var(--color-ink-3);font-size:12.5px;font-weight:500;white-space:nowrap}
+  .message__text{margin:5px 0 0;color:var(--color-ink-2);font-size:15px;font-weight:500;line-height:1.6;white-space:pre-wrap}
+  .composer{margin:18px 0 0;padding:16px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .composer__head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;margin-bottom:12px}
+  .composer__title{color:var(--color-ink);font-size:15px;font-weight:700}
+  .composer__as{color:var(--color-ink-3);font-size:13px;font-weight:500}
+  .composer__as strong{color:var(--color-ink-2);font-weight:600}
+  .composer textarea{width:100%;resize:vertical}
+  .composer__actions{display:flex;justify-content:flex-end;margin-top:12px}
+  .composer__note{margin:0 0 10px;color:var(--color-ink-2);font-size:13px;font-weight:600;line-height:1.4}
+}
+
+/* ---- Page-local ---- */
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Scoped copies of shared footer-details / details-summary rules; production styles.css untouched. */
+.app-foot{max-width:100%} /* integration styles.css rule missing from this worktree copy */
+.group-rail{position:relative} /* contain absolutely-positioned .visually-hidden labels inside the scrolling rail */
+.footer-details{min-width:0;max-width:100%;overflow-x:auto}
+.footer-details ul{display:flex;align-items:center;gap:14px;width:max-content;list-style:none;padding:2px;margin:0 auto}
+.footer-details li{display:flex;align-items:center;gap:6px;white-space:nowrap;line-height:24px}
+.footer-details li>a{display:inline-flex;align-items:center;gap:6px}
+.footer-details svg{flex:none;display:block;fill:currentColor}
+.footer-details a:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:2px}
+details.global-bar__id>summary{list-style:none;cursor:pointer}
+details.global-bar__id>summary::-webkit-details-marker{display:none}
+.group-rail__lock{width:14px;height:14px;flex:none;margin-left:auto;color:var(--color-ink-3);opacity:.8}
+.group-rail__divider{height:1px;margin:14px 6px 12px;background:var(--color-line)}
+.group-rail__add{color:var(--color-sage-700)}
+.group-rail__add svg{width:15px;height:15px;flex:none}
+.section-panel{padding:18px 20px 0}
+.wrap{padding:24px}
+.app-back{display:inline-flex;align-items:center;gap:4px;color:var(--color-ink-3);font-size:13px;font-weight:600;text-decoration:none;margin-bottom:14px}
+.app-back svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.in-group{margin:0 0 4px;color:var(--color-ink-3);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.message__tag{flex:none;margin-left:auto}
+.message__text a{color:var(--color-sage-700);font-weight:600;overflow-wrap:anywhere}
+.message__cta{margin-top:12px}
+.aside-note{margin:14px 0 0;padding:12px 14px;border:1px solid var(--color-line);border-radius:11px;background:var(--color-base-200);color:var(--color-ink-2);font-size:13px;line-height:1.5}
+.aside-note strong{color:var(--color-ink)}
+.split-label{padding:20px 24px 0;color:var(--color-ink-3);font-family:var(--font-mono);font-size:11px}
+@media (max-width:700px){.section-panel{padding:16px 14px 0}.wrap{padding:18px 14px}}
+</style>
+</head>
+<body class="app-frame">
+<div class="global-bar">
+  <div class="global-bar__inner global-bar__inner--wide">
+    <div class="global-bar__brand">
+      <svg class="global-bar__mark" viewBox="0 0 64 64" role="img" aria-label="Memba"><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="var(--color-cream)" stroke-width="4.8" stroke-linecap="round"/><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="var(--color-cream)"/><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="var(--color-cream)"/><circle cx="32" cy="15" r="3.7" fill="var(--color-accent, #d2925a)"/></svg>
+      <span class="global-bar__word">Memba</span>
+    </div>
+    <!-- Native details/summary disclosure (d95dbe095), as rendered by Layouts.club_site. -->
+    <details class="dropdown dropdown-end global-bar__id">
+      <summary id="club-site-identity-menu-button" class="global-bar__me" aria-controls="club-site-identity-menu" aria-label="Member identity menu"><span class="global-bar__avatar">AA</span></summary>
+      <div id="club-site-identity-menu" class="dropdown-content app-menu app-menu--id">
+        <div class="app-menu__who"><div class="app-menu__who-name">Alice Ahmed</div><div class="app-menu__who-email">alice@example.com</div></div>
+        <div class="app-menu__divider" aria-hidden="true"></div>
+        <a class="app-menu__item" href="./account-settings.html">Account settings</a>
+        <button class="app-menu__signout" type="button">Sign out</button>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ===== 1. Admin group, Conversations tab — the request is just the newest conversation ===== -->
+<div class="app-card app-card--wide" data-state="admin-list">
+  <div class="app-bar"><div class="app-bar__brand"><span class="app-bar__club">Kootenay Alpine Club</span></div></div>
+  <div class="club-groups">
+  <div class="app-split">
+    <nav class="group-rail" aria-label="Groups">
+      <div class="group-rail__label">Your groups</div>
+      <a class="group-rail__item" href="#"><span class="group-rail__name">Everyone</span></a>
+      <a class="group-rail__item is-active" href="#" aria-current="page"><span class="group-rail__name">Admin</span></a>
+      <a class="group-rail__item" href="./club-groups.html"><span class="group-rail__name">Board</span></a>
+      <div class="group-rail__label" style="margin-top:16px">Other groups</div>
+      <a class="group-rail__item" href="#"><span class="group-rail__name">Trips committee</span><svg class="group-rail__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="visually-hidden">(not a member)</span></a>
+      <a class="group-rail__item" href="#"><span class="group-rail__name">Huts &amp; maintenance</span><svg class="group-rail__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="visually-hidden">(not a member)</span></a>
+      <div class="group-rail__divider"></div>
+      <a class="group-rail__item group-rail__add" href="./club-group-new.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="group-rail__name">New group</span></a>
+    </nav>
+
+    <div class="group-content">
+      <header class="group-head" aria-labelledby="group-name">
+        <div class="group-head__top">
+          <div style="min-width:0">
+            <h1 id="group-name" class="group-head__name">Admin</h1>
+            <div class="group-head__meta" aria-label="Group details"><span>2 members</span><a class="group-head__addr" href="mailto:admin@kootenay-alpine.clubs.memba.io">admin@kootenay-alpine.clubs.memba.io</a></div>
+          </div>
+          <!-- Header owns metadata only (e6d3c38de); the active tab's action sits beside the tabs. -->
+        </div>
+      </header>
+      <div class="section-tabs">
+        <div class="section-tabs__list" role="tablist" aria-label="Group sections" aria-orientation="horizontal"><a id="member-section-tab-conversations" class="section-tab is-active" role="tab" aria-selected="true" aria-controls="member-section-panel-conversations" tabindex="0" href="#" onclick="return false">Conversations</a><a id="member-section-tab-members" class="section-tab" role="tab" aria-selected="false" aria-controls="member-section-panel-conversations" tabindex="-1" href="#" onclick="return false">Members</a></div>
+        <!-- Conversations tab active: New message is the tab action. Cloud path: ../new-message/index.html -->
+        <div class="section-tabs__action"><a class="btn btn-primary btn-sm" href="./new-message.html">New message</a></div>
+      </div>
+      <div id="member-section-panel-conversations" class="section-panel" role="tabpanel" aria-labelledby="member-section-tab-conversations">
+        <div class="conversation-list">
+          <a class="conversation" href="#detail">
+            <div class="conversation__avatar" style="background:var(--color-sage-100)">EE</div>
+            <div class="conversation__body">
+              <div class="conversation__head"><span class="conversation__subject">Access request: Board</span><span class="conversation__date">12 Sep</span></div>
+              <div class="conversation__preview">Eve Ekwueme would like to join Board. Eve is an active member of Kootenay Alpine Club and asked from Board's page.</div>
+              <div class="conversation__participants"><span class="conversation__replies">Started by Eve Ekwueme</span><span class="conversation__replies">No replies yet</span></div>
+            </div>
+          </a>
+          <a class="conversation" href="#">
+            <div class="conversation__avatar" style="background:var(--color-sage-300)">DD</div>
+            <div class="conversation__body">
+              <div class="conversation__head"><span class="conversation__subject">Renewal reminders — who's chasing the lapsed ones?</span><span class="conversation__date">4 Sep</span></div>
+              <div class="conversation__preview">Eleven memberships lapse at the end of the month. I'll take A–M if someone takes the rest.</div>
+              <div class="conversation__participants"><div class="avatar-stack"><span>AA</span></div><span class="conversation__replies"><strong>2 replies</strong> · latest from Alice Ahmed</span></div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ===== 2. The conversation itself ===== -->
+<div class="app-card" id="detail" data-state="admin-detail">
+  <div class="app-bar"><div class="app-bar__brand"><span class="app-bar__club">Kootenay Alpine Club</span></div></div>
+  <div class="wrap">
+    <a class="app-back" href="#"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> Admin conversations</a>
+    <div class="detail-head">
+      <div class="detail-head__main">
+        <p class="in-group">In Admin</p>
+        <h1 class="page-title">Access request: Board</h1>
+      </div>
+      <label class="follow-toggle"><input type="checkbox" class="toggle toggle-primary toggle-sm" checked aria-label="Follow this conversation"><span class="follow-toggle__text"><strong>Following</strong><span>Emailed on new replies</span></span></label>
+    </div>
+
+    <!-- The auto-composed message. Sender is the requester (matches the existing rule that any
+         active club member can start a conversation in a group by email without belonging,
+         and gains no read/reply access by doing so). -->
+    <div class="message message--original" style="margin-top:16px">
+      <div class="message__avatar" style="background:var(--color-sage-100)">EE</div>
+      <div class="message__body">
+        <div class="message__head">
+          <span class="message__name">Eve Ekwueme</span>
+          <span class="message__time">12 Sep, 4:12pm</span>
+          <span class="message__tag badge badge-soft">Sent automatically</span>
+        </div>
+        <div class="message__text">Eve Ekwueme would like to join Board.
+
+Eve is an active member of Kootenay Alpine Club and asked from Board's page. Any Board member or club admin can add her — open Board's members and choose Add member:
+<a href="./club-group-members.html">https://kootenay-alpine.clubs.memba.io/groups/01J8R3Q6B4Z7/members</a>
+
+Memba sent this when Eve pressed Request access. Eve isn't in Admin, so she can't see this conversation or any replies to it.</div>
+        <div class="message__cta"><a class="btn btn-primary btn-sm" href="./club-group-members.html">Manage Board members</a></div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer__head">
+        <span class="composer__title">Reply</span>
+        <span class="composer__as">Replying as <strong>Alice Ahmed</strong></span>
+      </div>
+      <p class="composer__note">Replies go to Admin members only — Eve won't see them. To let her into Board, add her from Board's Members tab.</p>
+      <textarea class="textarea" rows="3" placeholder="Write a reply…"></textarea>
+      <div class="composer__actions"><button class="btn btn-primary">Post reply</button></div>
+    </div>
+
+    <p class="aside-note"><strong>What this deliberately isn't:</strong> there's no Approve / Deny, nothing is pending, and a second press by Eve simply creates a second conversation. Admins act with ordinary membership management.</p>
+  </div>
+</div>
+
+<!-- Shared club footer (Layouts.footer_details, e68019eae). Cloud path for Memba link: ../marketing-homepage/index.html -->
+<footer id="club-site-footer" class="app-foot" aria-label="About Memba">
+  <div id="club-site-footer-details" class="footer-details">
+    <ul role="list">
+      <li><span>Powered by <a id="club-site-footer-memba-home-link" href="./marketing-homepage.html" aria-label="Visit Memba home">Memba</a>.</span></li>
+      <li><svg width="15" height="15" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><path d="M383.8 351.7c2.5-2.5 105.2-92.4 105.2-92.4l-17.5-7.5c-10-4.9-7.4-11.5-5-17.4 2.4-7.6 20.1-67.3 20.1-67.3s-47.7 10-57.7 12.5c-7.5 2.4-10-2.5-12.5-7.5s-15-32.4-15-32.4-52.6 59.9-55.1 62.3c-10 7.5-20.1 0-17.6-10 0-10 27.6-129.6 27.6-129.6s-30.1 17.4-40.1 22.4c-7.5 5-12.6 5-17.6-5C293.5 72.3 255.9 0 255.9 0s-37.5 72.3-42.5 79.8c-5 10-10 10-17.6 5-10-5-40.1-22.4-40.1-22.4S183.3 182 183.3 192c2.5 10-7.5 17.5-17.6 10-2.5-2.5-55.1-62.3-55.1-62.3S98.1 167 95.6 172s-5 9.9-12.5 7.5C73 177 25.4 167 25.4 167s17.6 59.7 20.1 67.3c2.4 6 5 12.5-5 17.4L23 259.3s102.6 89.9 105.2 92.4c5.1 5 10 7.5 5.1 22.5-5.1 15-10.1 35.1-10.1 35.1s95.2-20.1 105.3-22.6c8.7-.9 18.3 2.5 18.3 12.5S241 512 241 512h30s-5.8-102.7-5.8-112.8 9.5-13.4 18.4-12.5c10 2.5 105.2 22.6 105.2 22.6s-5-20.1-10-35.1 0-17.5 5-22.5z"/></svg><span>Proudly hosted in Canada.</span></li>
+      <li><a id="club-site-footer-source-link" href="https://github.com/mattwynne/memba"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.22 3.27.94.1-.73.4-1.22.72-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.63 0c2.15-1.46 3.1-1.16 3.1-1.16.61 1.55.23 2.7.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.04.76 2.09v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg> Open source</a></li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>

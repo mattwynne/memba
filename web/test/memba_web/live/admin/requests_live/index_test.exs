@@ -296,6 +296,62 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert_no_email_sent()
   end
 
+  test "staff can cancel the selected rejection panel", %{conn: conn} do
+    request = request_fixture("Reject Later Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    view
+    |> element("#reject-request-#{request.request_id}")
+    |> render_click()
+
+    assert has_element?(view, "#reject-request-panel-#{request.request_id}")
+
+    view
+    |> element("#cancel-reject-request-#{request.request_id}")
+    |> render_click()
+
+    refute has_element?(view, "[data-testid='reject-request-panel']")
+    assert has_element?(view, "#request-row-#{request.request_id}")
+    assert Repo.get!(Request, request.request_id).status == "active"
+  end
+
+  test "rejecting a concurrently triaged request refreshes the inbox", %{conn: conn} do
+    request = request_fixture("Stale Reject Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    view
+    |> element("#reject-request-#{request.request_id}")
+    |> render_click()
+
+    assert has_element?(view, "#reject-request-panel-#{request.request_id}")
+
+    assert {:ok, %Request{status: "converted"}} =
+             Onboarding.convert_request(request.request_id, %{
+               converted_club_id: Memba.ID.generate(:club),
+               converted_person_id: Memba.ID.generate(:person),
+               converted_membership_id: Memba.ID.generate(:membership)
+             })
+
+    view
+    |> form("#reject-request-form-#{request.request_id}",
+      rejection: %{internal_rejection_notes: " Not a fit. "}
+    )
+    |> render_submit()
+
+    refute has_element?(view, "#reject-request-panel-#{request.request_id}")
+    refute has_element?(view, "#request-row-#{request.request_id}")
+    assert has_element?(view, "#admin-requests-active-count", "0")
+    assert has_element?(view, "#flash-error", "That request is no longer active.")
+  end
+
   test "staff can open an active request conversion URL directly", %{conn: conn} do
     request = request_fixture("West Coast Paddlers", requester_name: "Robin Requester")
 
@@ -312,6 +368,64 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
              "#convert-request-panel-#{request.request_id}",
              "West Coast Paddlers"
            )
+  end
+
+  test "staff selects exactly one triage panel when switching between reject and convert", %{
+    conn: conn
+  } do
+    first_request = request_fixture("First Paddlers", requester_name: "Robin Requester")
+    second_request = request_fixture("Second Paddlers", requester_name: "Sam Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    view
+    |> element("#reject-request-#{first_request.request_id}")
+    |> render_click()
+
+    assert has_element?(view, "#reject-request-panel-#{first_request.request_id}")
+    refute has_element?(view, "[data-testid='convert-request-panel']")
+
+    view
+    |> element("#convert-request-#{second_request.request_id}")
+    |> render_click()
+
+    assert_patch(view, ~p"/admin/requests/#{second_request.request_id}")
+    refute has_element?(view, "[data-testid='reject-request-panel']")
+    assert has_element?(view, "#convert-request-panel-#{second_request.request_id}")
+
+    view
+    |> element("#reject-request-#{first_request.request_id}")
+    |> render_click()
+
+    refute has_element?(view, "[data-testid='convert-request-panel']")
+    assert has_element?(view, "#reject-request-panel-#{first_request.request_id}")
+  end
+
+  test "staff can cancel the selected conversion panel after a route change", %{conn: conn} do
+    request = request_fixture("West Coast Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    view
+    |> element("#convert-request-#{request.request_id}")
+    |> render_click()
+
+    assert_patch(view, ~p"/admin/requests/#{request.request_id}")
+    assert has_element?(view, "#convert-request-panel-#{request.request_id}")
+
+    view
+    |> element("#cancel-convert-request-#{request.request_id}")
+    |> render_click()
+
+    assert_patch(view, ~p"/admin/requests")
+    refute has_element?(view, "[data-testid='convert-request-panel']")
+    refute has_element?(view, "[data-testid='reject-request-panel']")
   end
 
   test "staff can prepare conversion with a generated editable slug using shared club rules", %{
@@ -577,6 +691,41 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     refute has_element?(view, "#request-row-#{request.request_id}")
     assert has_element?(view, "#admin-requests-active-count", "0")
     assert has_element?(view, "#flash-error", "That request is no longer active.")
+  end
+
+  test "converting a concurrently triaged request refreshes the inbox without creating a club", %{
+    conn: conn
+  } do
+    request = request_fixture("Stale Convert Paddlers", requester_name: "Robin Requester")
+    club_count = Repo.aggregate(ClubProjection, :count)
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    view
+    |> element("#convert-request-#{request.request_id}")
+    |> render_click()
+
+    assert has_element?(view, "#convert-request-panel-#{request.request_id}")
+
+    assert {:ok, %Request{status: "rejected"}} =
+             Onboarding.reject_request(request.request_id, %{
+               internal_rejection_notes: "Handled elsewhere."
+             })
+
+    view
+    |> form("#convert-request-form-#{request.request_id}",
+      club: %{name: "Stale Convert Paddlers", slug: "stale-convert-paddlers"}
+    )
+    |> render_submit()
+
+    refute has_element?(view, "#convert-request-panel-#{request.request_id}")
+    refute has_element?(view, "#request-row-#{request.request_id}")
+    assert has_element?(view, "#admin-requests-active-count", "0")
+    assert has_element?(view, "#flash-error", "That request is no longer active.")
+    assert Repo.aggregate(ClubProjection, :count) == club_count
   end
 
   defp request_fixture(club_name, opts \\ []) do

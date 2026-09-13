@@ -5,7 +5,8 @@ const {
   clubSiteUrl,
   ensureState,
   kootenayClubName,
-  openMemberClubHome
+  openMemberClubHome,
+  waitForLiveViewConnected
 } = require("../support/member_message");
 const { withMemberHarness } = require("../support/member_harness");
 const serverCommands = require("../support/server_commands");
@@ -132,10 +133,11 @@ When(
       const compose = member.page.locator("#member-message-compose");
       await expect(compose).toHaveAttribute("data-audience-group-id", groupId);
       await expect(compose).toHaveAttribute("data-compose-state", "composing");
+      await waitForLiveViewConnected(member);
 
       await member.page.getByLabel("Subject").fill(subject);
       await member.page.getByLabel("Message").fill(body);
-      await member.page.getByRole("button", { name: "Send to all current members" }).click();
+      await member.page.getByRole("button", { name: "Send message" }).click();
 
       await expect(compose).toHaveAttribute("data-compose-state", "sent");
       const messageId = await compose.getAttribute("data-sent-message-id");

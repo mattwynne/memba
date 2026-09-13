@@ -191,6 +191,14 @@ Use semantic HTML and ARIA relationships for interactive structures:
 
 Tests should target these stable IDs and semantic selectors rather than fragile text or raw HTML structure.
 
+## Component vs screen testing
+
+Keep component-level styling and ARIA checks close to the component that owns the markup. For example, CoreComponents button disabled states and input error associations belong in `web/test/memba_web/components/core_components_test.exs`, and member dashboard row classes belong with the dashboard/component tests that render those rows directly. Do not delete those meaningful local checks when extracting HEEx.
+
+Use routed LiveView or controller tests for UI meaning that depends on more than one screen or context boundary. Those tests should assert behaviour and relationships through stable IDs, labels, route paths, and data attributes rather than class bundles or wrapper structure. For example, `web/test/memba_web/live/member_ui_contract_test.exs` protects that a selected group on the member dashboard is preserved when following its compose action, that tab changes expose the correct section action for the member's permissions, and that a one-member group still renders its member row without promotional empty-state copy.
+
+Before adding a screen contract test, ask whether the risk is wiring between screens or just presentation inside one component. If it is just presentation, keep it local. If it crosses screens, routes, permissions, or selected context, use the public route/LiveView boundary and avoid private component APIs.
+
 ## Lists and streams
 
 For collections that LiveView updates incrementally, use LiveView streams and follow `liveview.md` stream rules.

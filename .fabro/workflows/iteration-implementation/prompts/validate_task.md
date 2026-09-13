@@ -1,53 +1,29 @@
-Validate the just-completed iteration task for `{{ inputs.plan_path }}`.
+Independently review the candidate task for `{{ inputs.plan_path }}`. Do not edit files.
 
-You have tool access. Use it. Decide from live repository state, not from summarized context alone. Read `/tmp/fabro-pre-validate-snapshot.md`, run `git status --short`, inspect `git diff`, inspect recent commits with `git log --oneline -5`, and read changed files as needed.
+Decide from live repository state, not from summarized context alone. Read the plan and its `todo.md`, inspect `git status --short`, working-tree/staged diffs, recent Fabro checkpoint commits and the relevant changed files. The candidate is the first unchecked task, identified in the preceding implementation or revision summary. It must remain unchecked until accepted. If the task identity or state is ambiguous, return `blocked` rather than approving a different task.
 
-Important workflow contract: Fabro checkpoints after every node. Therefore, at validation time the just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD. A clean working tree is not, by itself, a failure.
+Fabro checkpoints candidate work after every node. A clean working tree means work may already be saved, not that it is accepted or absent. Review the full candidate, including earlier attempts and the latest revision; do not restrict review to the last checkpoint's diff. On revision, check the previous review's gaps as well as regressions introduced by the correction.
 
-Validate the task evidence, not a single storage mechanism. Prefer live working-tree diff/status when present; when the working tree is clean, corroborate the task using recent checkpoint commits and their diffs. Do not infer infrastructure faults unless live repository evidence proves the expected files or diffs are genuinely absent.
+## Acceptance criteria
 
-Do not rely on a selected-task temp file. Instead inspect the plan, `todo.md`, relevant ADRs, current repository diff/status, recent checkpoint diffs, test evidence, and the preceding implementation summary. Identify the completed task by the `todo.md` diff from the working tree or latest/recent checkpoint: exactly one ordinary task line should have changed from unchecked (`- [ ]`) to checked (`- [x]`) unless there is a clear plan-preserving split/reorder rationale.
+Accept only if all are true:
 
-## Validate
+- The first pending task has concrete code/config/test/documentation evidence appropriate to its scope; a todo-only change is not implementation.
+- The work satisfies the approved plan and relevant accepted ADRs.
+- Any todo splits/additions/reordering preserve required scope, and the candidate is the first resulting pending slice. No required work was deleted, weakened, checked off prematurely or silently deferred.
+- Relevant automated tests were added/updated and focused validation passed. A reported blocker is evidence for revision or escalation, not acceptance.
+- Ordinary browser-facing tasks have focused browser/component/JS/CSS evidence appropriate to the change; do not require a duplicate full `dev check` solely because the task changes UI, routing, or acceptance support. The deterministic final gate still must pass before publication. If this task explicitly requires a full final-validation run, require its successful exit evidence before accepting the task; passing scenario counts without a final exit status do not prove the gate passed.
+- Acceptance feature files (`*.feature`, including under `acceptance-tests/`) were not edited unless the plan's `## Allowed acceptance feature changes` section names the exact file and allowed kind of change. Any permitted edit stays within that permission and preserves the promised coverage.
+- The task is a small, independently useful slice with a checkpoint evidence trail.
 
-Accept the task only if all are true:
+## Verdict
 
-- The checked-off task is the first unchecked task that existed when the implementor started, or a clearly justified first slice after a plan-preserving split.
-- The same task that was implemented has been checked off in `todo.md`.
-- The task has concrete code/config/test/documentation evidence as appropriate; a todo-only change is invalid.
-- The work stays within the approved plan and preserves plan-required scope.
-- Any todo changes split/add/reorder only to satisfy the plan; no plan-required work was deleted, weakened, or silently deferred.
-- Relevant automated tests were added/updated and focused tests were run, or a justified blocker was reported.
-- Accepted ADR constraints relevant to this task are respected.
-- Acceptance feature files (`*.feature`, including under `acceptance-tests/`) were not edited unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change; any permitted edit stays within that explicit permission and preserves/validates the coverage promised by the plan.
-- The task is small enough to stand independently with a useful Fabro checkpoint evidence trail.
+Return one JSON object matching the supplied schema, with exactly these fields:
 
-If validation fails but the task is still clear and safe to attempt again, request a clean retry from the last successful checkpoint. Do not ask for in-place repair. Only request human input when the task, plan, or repository state is ambiguous, unsafe, repeatedly failing for the same non-transient reason, or blocked by a decision/tooling issue that another clean attempt is unlikely to solve.
+- `decision`: `accept`, `revise`, or `blocked`.
+- `task`: the exact selected unchecked todo line, including its `- [ ]` prefix and task text.
+- `reason`: concise evidence from files, tests and plan/ADR constraints. For `revise`, include the specific remaining gaps and actionable corrections. For `blocked`, state the actual blocker or question.
 
-## Output format
+Choose `revise` when the candidate has gaps but the task remains clear and safe to correct. Revision preserves the candidate and returns it to the implementor; it is not a validator execution failure. Choose `blocked` for ambiguity, unsafe work, a required decision/tooling fix, or repeated non-transient lack of progress. The workflow separately enforces an iteration-wide revision limit; do not invent a per-task retry allowance.
 
-Return concise Markdown with:
-
-### Decision
-One of: **VALID**, **RETRY**, or **HUMAN_INPUT**
-
-### Evidence
-- Completed todo/check-off evidence found.
-- Implementation artifacts found.
-- Tests run/results found.
-- ADR/plan conformance notes.
-
-### Retry brief
-Only if RETRY: exact reason the attempt was rejected from live repository evidence, plus concise guidance for the next clean attempt. The workflow will snapshot the failed working tree before resetting and trying again.
-
-### Human input
-Only if HUMAN_INPUT: exact blocker/question.
-
-End your response with exactly one JSON object for Fabro routing, not in a code fence:
-
-- Valid:
-  {"context_updates":{"task_valid":true,"task_retry_available":false}}
-- Clean retry needed:
-  {"context_updates":{"task_valid":false,"task_retry_available":true}}
-- Human input required:
-  {"context_updates":{"task_valid":false,"task_retry_available":false}}
+Do not emit Markdown around the JSON, routing fields, node IDs or an `outcome`. The workflow applies the verdict and checks off only an accepted task. Provider errors, timeouts and invalid output are execution failures handled by Fabro, not task verdicts.

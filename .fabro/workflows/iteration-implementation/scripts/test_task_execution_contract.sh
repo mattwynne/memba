@@ -20,12 +20,29 @@ checks = [
     ("reuse checkpoint evidence", "Read existing implementation notes, reviews, and recovery handoffs" in implementation),
     ("no duplicate review", "Do not commission an extra independent review" in implementation),
     ("focused validation still required", "Run focused validation appropriate to the selected task" in implementation),
-    ("no premature task check-off", "When the implementation and focused validation are complete" in implementation),
+    ("acceptance owns task check-off", "Only the workflow's `apply_task_verdict` command checks it off after independent acceptance." in implementation),
+    ("revision preserves candidate", "Preserve useful candidate work and earlier accepted tasks" in implementation),
+    ("browser tasks use focused checks", "For browser-facing tasks, run targeted browser scenarios or a focused browser harness" in implementation),
+    ("ordinary tasks do not run full gates", "Do not run full `dev check` or `dev ci` in ordinary implementation tasks" in implementation),
+    ("explicit final-validation work preserved", "If the selected task explicitly requires the full final validation, preserve that requirement" in implementation),
+    ("timeouts do not trigger detached reruns", "Do not launch a detached/background full-suite retry to evade a tool timeout" in implementation),
+    ("browser exception removed", "Run full `PATH=\"$PWD/bin:$PATH\" dev check` during a task only when that task changes browser-facing behaviour" not in implementation),
     ("preserve task scope when splitting", "You may not delete, weaken, or silently defer plan-required work." in implementation),
     ("unfinished checkpoint recovery", "A committed failed checkpoint is candidate work, not a completed task" in implementation),
     ("validator remains independent", "Decide from live repository state" in validation),
-    ("independent validation retained", 'pre_validate_snapshot -> validate_task [condition="outcome=succeeded"]' in graph),
+    ("validator does not reintroduce browser full gate", "do not require a duplicate full `dev check` solely because the task changes UI" in validation),
+    ("explicit gate requires successful exit evidence", "require its successful exit evidence before accepting the task" in validation),
+    ("independent validation retained", 'implement_next_task -> validate_task [condition="outcome=succeeded"]' in graph),
+    ("revision independently revalidated", 'revise_task -> validate_task [condition="outcome=succeeded"]' in graph),
+    ("typed task verdict", 'output_schema="@schemas/task-verdict.json"' in graph),
+    ("native structured handoff", 'stdin_source="output.validate_task"' in graph),
+    ("no reset or snapshot machinery", "reset_task_attempt" not in graph and "pre_validate_snapshot" not in graph),
+    ("no contradictory routing protocol", "context_updates" not in validation and "task_retry_available" not in graph),
+    ("failure does not reach normal exit", "task_stopped ->" not in graph),
     ("full quality gate retained", 'script="PATH=\\\"$PWD/bin:$PATH\\\" dev ci"' in graph),
+    ("task loop still enters final gate", 'all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=failed"]' in graph),
+    ("final gate failure still requires repair", 'dev_check -> fix_dev_check [label="Fix failures"]' in graph),
+    ("repaired gate runs again", 'fix_dev_check -> dev_check' in graph),
     ("conformance retained", "collect_implementation_evidence -> plan_conformance_gate" in graph),
     ("publish gate retained", "goal_gate=true" in graph),
 ]
@@ -34,3 +51,5 @@ if failed:
     raise SystemExit("Missing task execution contract: " + ", ".join(failed))
 print(f"task execution contract: {len(checks)} checks passed")
 PY
+
+python3 -B "$workflow_dir/scripts/test_apply_task_verdict.py"

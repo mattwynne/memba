@@ -115,6 +115,48 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-layout")
   end
 
+  test "public, member, and Staff layouts each render one shared connection-state group" do
+    assigns = %{flash: %{}}
+
+    public_html =
+      rendered_to_string(~H"""
+      <Layouts.app flash={@flash}>
+        <section id="public-connection-status-layout-slot">Public page content</section>
+      </Layouts.app>
+      """)
+
+    member_html =
+      rendered_to_string(~H"""
+      <Layouts.club_site flash={@flash}>
+        <section id="member-connection-status-layout-slot">Member page content</section>
+      </Layouts.club_site>
+      """)
+
+    staff_html =
+      rendered_to_string(~H"""
+      <Layouts.admin flash={@flash}>
+        <section id="staff-connection-status-layout-slot">Staff page content</section>
+      </Layouts.admin>
+      """)
+
+    for {html, slot_selector} <- [
+          {public_html, "#public-connection-status-layout-slot"},
+          {member_html, "#member-connection-status-layout-slot"},
+          {staff_html, "#staff-connection-status-layout-slot"}
+        ] do
+      assert_selector_count(html, slot_selector, 1)
+      assert_selector_count(html, "#flash-group", 1)
+      assert_selector_count(html, "#flash-group > #client-error.connection-status", 1)
+      assert_selector_count(html, "#flash-group > #server-error.connection-status", 1)
+
+      assert_selector_count(
+        html,
+        "#client-error.connection-status, #server-error.connection-status",
+        2
+      )
+    end
+  end
+
   test "club-site layout uses canonical Memba theme without white-label custom properties" do
     assigns = %{
       flash: %{},
@@ -170,7 +212,8 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-identity-menu-button .app-bar__who")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
     assert_selector(html, "#club-site-footer.app-foot")
-    assert_text(html, "#club-site-footer", "Powered by Memba")
+    assert_text(html, "#club-site-footer", "Powered by Memba.")
+    assert_footer_details(html, "#club-site-footer-details")
 
     assert_selector(
       html,
@@ -179,8 +222,10 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id[role='menu']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id"
     )
+
+    refute_selector(html, "#club-site-identity-menu[role='menu']")
 
     assert_text(
       html,
@@ -197,15 +242,17 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(
       html,
       "#club-site-identity-menu .app-menu__who + " <>
-        "div.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
+        "div.app-menu__divider[aria-hidden='true'] + " <>
         "a#club-site-account-settings-link"
     )
 
     assert_selector(
       html,
       "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id " <>
-        "a#club-site-account-settings-link.app-menu__item[href='/my/settings'][role='menuitem']"
+        "a#club-site-account-settings-link.app-menu__item[href='/my/settings']"
     )
+
+    refute_selector(html, "#club-site-account-settings-link[role='menuitem']")
 
     assert_text(html, "#club-site-account-settings-link", "Account settings")
 
@@ -213,7 +260,7 @@ defmodule MembaWeb.LayoutsTest do
       html,
       "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id " <>
         "a#club-site-account-settings-link + " <>
-        "div#club-site-identity-menu-divider.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
+        "div#club-site-identity-menu-divider.app-menu__divider[aria-hidden='true'] + " <>
         "form#club-site-sign-out-form"
     )
 
@@ -238,8 +285,10 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit'][role='menuitem']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit']"
     )
+
+    refute_selector(html, "#club-site-sign-out-button[role='menuitem']")
 
     assert_text(html, "#club-site-sign-out-button", "Sign out")
 
@@ -288,6 +337,153 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "#flash-group[aria-live='polite']")
     assert_selector(html, "#flash-info[role='alert']")
     assert_text(html, "#flash-info", "Club settings saved")
+  end
+
+  describe "flash_group/1 connection statuses" do
+    test "preserves ordinary error flash treatment and dismissal" do
+      html =
+        render_component(&Layouts.flash_group/1, %{
+          flash: %{"error" => "Something needs attention"}
+        })
+
+      assert_selector(html, "#flash-error.toast.toast-top.toast-end[role='alert']")
+      assert_selector(html, "#flash-error .alert.alert-error")
+      assert_selector(html, "#flash-error button[type='button'][aria-label='close']")
+      assert_text(html, "#flash-error", "Something needs attention")
+    end
+
+    test "renders stable client and server IDs hidden initially" do
+      html = render_flash_group()
+
+      assert_selector_count(html, "#client-error[hidden]", 1)
+      assert_selector_count(html, "#server-error[hidden]", 1)
+    end
+
+    test "renders the exact client interruption copy" do
+      html = render_flash_group()
+
+      assert_exact_text(html, "#client-error", "Connection paused — reconnecting…")
+    end
+
+    test "renders the exact server interruption copy" do
+      html = render_flash_group()
+
+      assert_exact_text(
+        html,
+        "#server-error",
+        "Memba is temporarily unavailable — retrying…"
+      )
+    end
+
+    test "uses polite status semantics for both interruption states" do
+      html = render_flash_group()
+
+      assert_selector_count(
+        html,
+        "[role='status'][aria-live='polite']#client-error, " <>
+          "[role='status'][aria-live='polite']#server-error",
+        2
+      )
+    end
+
+    test "does not render close controls for either interruption state" do
+      html = render_flash_group()
+
+      assert_selector_count(html, "#client-error button, #server-error button", 0)
+    end
+
+    test "targets each interruption status from its distinct LiveView error state" do
+      html = render_flash_group()
+
+      assert [
+               ["show", %{"to" => ".phx-client-error #client-error"}],
+               [
+                 "remove_attr",
+                 %{"attr" => "hidden", "to" => ".phx-client-error #client-error"}
+               ]
+             ] = js_commands(html, "#client-error", "phx-disconnected")
+
+      assert [
+               ["show", %{"to" => ".phx-server-error #server-error"}],
+               [
+                 "remove_attr",
+                 %{"attr" => "hidden", "to" => ".phx-server-error #server-error"}
+               ]
+             ] = js_commands(html, "#server-error", "phx-disconnected")
+    end
+
+    test "dismisses and restores hidden state when LiveView reconnects" do
+      html = render_flash_group()
+
+      assert [
+               ["hide", %{"to" => "#client-error"}],
+               ["set_attr", %{"attr" => ["hidden", ""]}]
+             ] = js_commands(html, "#client-error", "phx-connected")
+
+      assert [
+               ["hide", %{"to" => "#server-error"}],
+               ["set_attr", %{"attr" => ["hidden", ""]}]
+             ] = js_commands(html, "#server-error", "phx-connected")
+    end
+
+    test "uses the shared connection-status presentation" do
+      html = render_flash_group()
+
+      assert_selector_count(html, "#client-error.connection-status", 1)
+      assert_selector_count(html, "#server-error.connection-status", 1)
+    end
+
+    test "uses the approved compact responsive pill treatment for both states" do
+      html = render_flash_group()
+
+      expected_status_classes = ~w"""
+        connection-status
+        inline-flex
+        max-w-[calc(100vw-2rem)]
+        items-center
+        gap-2
+        rounded-full
+        border
+        border-sage-300
+        bg-paper/95
+        py-2.5
+        pr-3.5
+        pl-3
+        text-[13px]
+        font-semibold
+        leading-[1.2]
+        text-ink-2
+        shadow-lg
+        shadow-ink/10
+        backdrop-blur-sm
+      """
+
+      expected_spinner_classes = ~w"""
+        connection-status__spinner
+        size-3.5
+        shrink-0
+        rounded-full
+        border-2
+        border-sage-100
+        border-t-sage-500
+      """
+
+      for id <- ~w(client-error server-error) do
+        assert classes(html, "##{id}") == expected_status_classes
+        assert classes(html, "##{id} .connection-status__spinner") == expected_spinner_classes
+      end
+    end
+
+    test "renders a decorative connection-status spinner for each state" do
+      html = render_flash_group()
+
+      assert_selector_count(
+        html,
+        "#client-error .connection-status__spinner[aria-hidden='true'], " <>
+          "#server-error .connection-status__spinner[aria-hidden='true']",
+        2
+      )
+    end
   end
 
   test "club-site layout gates the member identity dropdown when signed out" do
@@ -422,7 +618,12 @@ defmodule MembaWeb.LayoutsTest do
   test "root layout keeps the public footer for public pages by default", %{conn: conn} do
     html = rendered_to_string(Layouts.root(%{conn: conn, inner_content: "Public page content"}))
 
-    assert_text(html, "footer", "Matt Wynne")
+    assert_text(html, "footer", "© #{Date.utc_today().year} Matt Wynne")
+    assert_footer_details(html, "#public-footer-details")
+    assert_text(html, "#public-footer-details li:first-child", "Built with")
+    assert_text(html, "#public-footer-details li:first-child", "in Nelson, BC.")
+    assert_selector(html, "#public-footer-details [role='img'][aria-label='love']")
+    refute_text(html, "#public-footer-details", "Powered by")
     assert_selector(html, "footer a[href='https://mattwynne.net']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/about']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/terms']")
@@ -448,6 +649,27 @@ defmodule MembaWeb.LayoutsTest do
     )
 
     assert_text(html, "footer a", "abcdef0")
+  end
+
+  defp render_flash_group do
+    render_component(&Layouts.flash_group/1, %{flash: %{}})
+  end
+
+  defp assert_footer_details(html, selector) do
+    assert_selector_count(html, "#{selector} > ul[role='list'] > li", 3)
+    assert_text(html, "#{selector} li:nth-child(2)", "Proudly hosted in Canada.")
+
+    assert_selector(
+      html,
+      "#{selector} li:nth-child(2) svg[aria-hidden='true'][fill='currentColor']"
+    )
+
+    assert_text(html, "#{selector} li:nth-child(3) a", "Open source")
+
+    assert_selector(
+      html,
+      "#{selector} li:nth-child(3) a[href='https://github.com/mattwynne/memba'] svg[aria-hidden='true'][fill='currentColor']"
+    )
   end
 
   defp assert_selector(html, selector) do
@@ -477,6 +699,13 @@ defmodule MembaWeb.LayoutsTest do
     assert text =~ expected_text
   end
 
+  defp assert_exact_text(html, selector, expected_text) do
+    text = html |> selected_text(selector) |> normalize_whitespace()
+
+    assert text == expected_text,
+           "Expected #{inspect(selector)} to contain exactly #{inspect(expected_text)}, got: #{inspect(text)}"
+  end
+
   defp refute_text(html, selector, text) do
     refute selected_text(html, selector) =~ text
   end
@@ -500,11 +729,24 @@ defmodule MembaWeb.LayoutsTest do
     value
   end
 
+  defp js_commands(html, selector, attribute) do
+    html
+    |> only_attribute(selector, attribute)
+    |> Jason.decode!()
+  end
+
   defp attributes(html, selector, attribute) do
     html
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> LazyHTML.attribute(attribute)
+  end
+
+  defp classes(html, selector) do
+    html
+    |> attributes(selector, "class")
+    |> List.first("")
+    |> String.split()
   end
 
   defp restore_system_env(key, nil), do: System.delete_env(key)
