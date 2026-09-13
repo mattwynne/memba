@@ -6,7 +6,9 @@ defmodule Memba.Membership.Commands.CreateCustomGroup do
   authority and club-scoped creation rules are decided from authoritative
   aggregate state. `group_id` is generated once per creation request and reused
   for retries so the aggregate can distinguish an exact retry from another
-  creation.
+  creation. A successful first execution emits the group-created,
+  email-slug-assigned, and creator-added facts together as one aggregate
+  decision.
   """
 
   @enforce_keys [:club_id, :group_id, :actor_person_id, :name]

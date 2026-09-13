@@ -5,6 +5,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Commanded.EventStore
+  alias Commanded.EventStore.RecordedEvent
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Club
@@ -25,6 +26,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
 
     create_club!(club_id)
     create_member!(club_id, actor_membership_id, actor_person_id)
+    assert :ok = EventStore.subscribe(App, club_id)
 
     assert %CreateCustomGroup{
              club_id: ^club_id,
@@ -72,6 +74,22 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                returning: :execution_result,
                consistency: :strong
              )
+
+    assert_receive {:events,
+                    [
+                      %RecordedEvent{
+                        data: %GroupCreated{group_id: ^group_id}
+                      },
+                      %RecordedEvent{
+                        data: %GroupEmailSlugAssigned{group_id: ^group_id}
+                      },
+                      %RecordedEvent{
+                        data: %GroupMemberAdded{
+                          group_id: ^group_id,
+                          membership_id: ^actor_membership_id
+                        }
+                      }
+                    ]}
 
     assert %{name: "Board", email_slug: "board"} =
              App.aggregate_state(Club, club_id).groups[group_id]
