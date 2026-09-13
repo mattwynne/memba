@@ -1,7 +1,9 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: validated
+Status: deferred
+
+Previously validated; deferred by Matt while prioritising iterations 061–065 for custom club groups. Retain this plan and its number for later delivery.
 
 ## Goal
 

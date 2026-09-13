@@ -17,6 +17,7 @@ confusion (fixed 2026-07-12; see `.design-sync/NOTES.md`).
 | `templates/` | Templates (High Fidelity) | Full, polished, page-level reference screens — one per real route. See `templates/README.md`. |
 | `wireframes/` | Wireframes (low fidelity) | Rough, phone-form-factor sketches only. See `wireframes/README.md` — it's smaller than you'd expect. |
 | `components/` | Components | Isolated reusable UI pieces (badges, buttons, avatars, cards, forms), shown out of page context. |
+| `explorations/` | Explorations (historical category; current cloud listing unverified) | Mocked click-through prototypes and design maps. See `explorations/README.md`. |
 | `guidelines/` | Guidelines | Design tokens and standards (color, type, spacing, motion, brand voice) — not screens. |
 | `emails/` | Emails | Email templates. |
 

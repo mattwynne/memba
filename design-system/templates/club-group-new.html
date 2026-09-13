@@ -1,0 +1,307 @@
+<!-- @dsCard group="Member App" viewport="880x1500" subtitle="Admin creates a custom group — name only with live email preview; blank / duplicate / collision / submitting / created states" name="New group (custom group)" -->
+<!-- @template name="New group (custom group)" description="Club-admin creation flow for a custom private group — one field, generated address previewed live, creator joins immediately" -->
+<!--
+  2026-09-12 custom club groups (discovery design). Proposed route: /groups/new, reachable only
+  from the admins-only "New group" rail entry. Agreed rules this screen carries:
+    - the admin supplies a NAME only; names are unique per club ignoring case and surrounding
+      spaces (system groups Everyone / Admin count — see report open question Q1);
+    - the email slug is generated ONCE from the name at creation, stored separately, and
+      disambiguated with a numeric suffix on collision (board-2). While typing, the form shows a
+      live PREVIEW of the address the same rule would produce (including the suffix). The preview
+      is pre-creation only: it never couples a persisted name to its slug, and there is no slug
+      editor (explicit editing later is deferred, not forbidden);
+    - name validation (blank; duplicate ignoring case + outer spaces) also runs live while typing
+      and disables Create while invalid. Live feedback is advisory — the server re-validates on
+      submit and owns uniqueness, so a race between two admins still surfaces the duplicate error
+      on submit. A distinct name whose slug collides is valid and gets the suffixed preview;
+    - the creator joins the new group immediately.
+  Everything below the first card is a states appendix (same scaffold as
+  member-conversation.html); each variant carries data-state for render checks.
+-->
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>New group · Kootenay Alpine Club · Memba</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="../../brand/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../styles.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
+<style>
+:root{color-scheme:light;--color-base-100:#fffef9;--color-base-200:#f6f5ea;--color-base-300:#e8e6d4;--color-base-content:#25291d;--color-primary:#5a7050;--color-primary-content:#f6f5ea;--color-secondary:#555a47;--color-secondary-content:#f6f5ea;--color-accent:#d2925a;--color-accent-content:#25291d;--color-neutral:#25291d;--color-neutral-content:#f6f5ea;--color-info:#4f6b78;--color-info-content:#f6f5ea;--color-success:#5f7a4f;--color-success-content:#f6f5ea;--color-warning:#a8772e;--color-warning-content:#f6f5ea;--color-error:#a8503a;--color-error-content:#f6f5ea;--radius-selector:0.375rem;--radius-field:0.375rem;--radius-box:0.75rem;--size-selector:0.25rem;--size-field:0.25rem;--border:1px;--depth:0;--noise:0}
+
+/* Preview-only fallback for member-row (see club-groups.html for why this is layered). */
+@layer preview-fallback {
+  .member-list{display:flex;flex-direction:column;gap:9px}
+  .member-row{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);color:inherit;box-shadow:0 1px 2px rgb(21 32 28/.05)}
+  .member-row__avatar{width:38px;height:38px;border-radius:999px;background:var(--color-sage-200);color:var(--color-sage-800);display:grid;place-items:center;flex:none;font-size:12px;font-weight:700}
+  .member-row__body{min-width:0;flex:1 1 auto}
+  .member-row__name{color:var(--color-ink);font-size:14px;font-weight:600;line-height:1.25}
+  .member-row__meta{color:var(--color-ink-3);font-size:12.5px;font-weight:500;margin-top:2px}
+}
+
+/* ---- Page-local ---- */
+.wrap{padding:24px}
+.app-back{display:inline-flex;align-items:center;gap:4px;color:var(--color-ink-3);font-size:13px;font-weight:600;text-decoration:none;margin-bottom:14px}
+.app-back svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.app-back:hover{color:var(--color-sage-700)}
+.page-title{color:var(--color-ink);font-size:28px;font-weight:700;letter-spacing:-.024em;line-height:1.12;margin:4px 0 0}
+.page-intro{margin:8px 0 0;color:var(--color-ink-2);font-size:14px;line-height:1.55;max-width:56ch}
+.form-card{margin-top:20px;padding:18px;border:1px solid var(--color-line);border-radius:14px;background:var(--color-paper);box-shadow:0 1px 2px rgb(21 32 28/.05)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field__label{color:var(--color-ink);font-size:13.5px;font-weight:700}
+.field .input{width:100%}
+.field__hint{margin:0;color:var(--color-ink-3);font-size:12.5px;line-height:1.5}
+.field__error{margin:0;color:var(--color-error);font-size:13px;font-weight:600;line-height:1.4}
+.addr-preview{margin-top:16px;padding:12px 14px;border:1px solid var(--color-line);border-radius:11px;background:var(--color-base-200);display:flex;flex-direction:column;gap:4px}
+.addr-preview__label{color:var(--color-ink-3);font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.addr-preview output{display:block;min-height:1.5em;font-family:var(--font-mono);font-size:13px;line-height:1.5;color:var(--color-sage-700);overflow-wrap:anywhere}
+.addr-preview output.is-empty::before{content:"appears here as you type the name";font-family:var(--font-sans, inherit);font-style:italic;color:var(--color-ink-3)}
+.addr-preview__note{margin:0;color:var(--color-ink-3);font-size:12.5px;line-height:1.5}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.form-actions .alert{margin-right:auto}
+.alert{margin-bottom:12px}
+.states{padding:22px 24px 26px}
+.states__head{font-size:15px;font-weight:700;color:var(--color-ink);margin:0 0 4px}
+.states__intro{margin:0 0 10px;color:var(--color-ink-3);font-size:13px;line-height:1.5}
+.state-card{border:1px solid var(--color-line);border-radius:16px;overflow:hidden;background:var(--color-base-100);margin-top:14px}
+.state-card__label{background:var(--color-base-200);border-bottom:1px solid var(--color-line);color:var(--color-ink-2);font-family:var(--font-mono);font-size:11px;padding:8px 14px}
+.state-card__body{padding:14px}
+.state-card .form-card{margin-top:0}
+/* success state: a slice of the group page */
+.group-rail--mini{padding:14px 10px;border-right:1px solid var(--color-line);background:color-mix(in srgb,var(--color-cream) 72%,var(--color-paper))}
+.mini-split{display:grid;grid-template-columns:170px minmax(0,1fr);border:1px solid var(--color-line);border-radius:14px;overflow:hidden;background:var(--color-paper)}
+.mini-content{padding:16px 18px 18px}
+.group-head--mini{padding:0}
+.section-tabs--mini{padding:0;margin-top:6px}
+.section-tabs--mini .section-tab{padding-top:14px}
+.flash{display:flex;align-items:flex-start;gap:10px;margin:14px 0 4px}
+.empty-members{margin:16px 0 0;padding:16px;border:1px dashed var(--color-line-strong);border-radius:14px;color:var(--color-ink-2);font-size:13.5px;line-height:1.5;text-align:center}
+.empty-members strong{color:var(--color-ink)}
+@media (max-width:640px){
+  .wrap{padding:18px 14px}
+  .mini-split{display:block}
+  .group-rail--mini{border-right:0;border-bottom:1px solid var(--color-line);display:flex;gap:4px;overflow-x:auto}
+  .group-rail--mini .group-rail__label{flex:none;padding:0 8px 0 2px}
+  .group-rail--mini .group-rail__item{flex:none;white-space:nowrap;margin-top:0}
+  .form-actions{flex-direction:column}
+  .form-actions .btn{width:100%}
+  .form-actions .alert{margin-right:0}
+}
+/* Scoped copies of shared footer-details / details-summary rules; production styles.css untouched. */
+.app-foot{max-width:100%} /* integration styles.css rule missing from this worktree copy */
+.group-rail{position:relative} /* contain absolutely-positioned .visually-hidden labels inside the scrolling rail */
+.footer-details{min-width:0;max-width:100%;overflow-x:auto}
+.footer-details ul{display:flex;align-items:center;gap:14px;width:max-content;list-style:none;padding:2px;margin:0 auto}
+.footer-details li{display:flex;align-items:center;gap:6px;white-space:nowrap;line-height:24px}
+.footer-details li>a{display:inline-flex;align-items:center;gap:6px}
+.footer-details svg{flex:none;display:block;fill:currentColor}
+.footer-details a:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:2px}
+details.global-bar__id>summary{list-style:none;cursor:pointer}
+details.global-bar__id>summary::-webkit-details-marker{display:none}
+</style>
+</head>
+<body class="app-frame">
+<div class="global-bar">
+  <div class="global-bar__inner">
+    <div class="global-bar__brand">
+      <svg class="global-bar__mark" viewBox="0 0 64 64" role="img" aria-label="Memba"><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="var(--color-cream)" stroke-width="4.8" stroke-linecap="round"/><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="var(--color-cream)"/><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="var(--color-cream)"/><circle cx="32" cy="15" r="3.7" fill="var(--color-accent, #d2925a)"/></svg>
+      <span class="global-bar__word">Memba</span>
+    </div>
+    <!-- Native details/summary disclosure (d95dbe095), as rendered by Layouts.club_site. -->
+    <details class="dropdown dropdown-end global-bar__id">
+      <summary id="club-site-identity-menu-button" class="global-bar__me" aria-controls="club-site-identity-menu" aria-label="Member identity menu"><span class="global-bar__avatar">AA</span></summary>
+      <div id="club-site-identity-menu" class="dropdown-content app-menu app-menu--id">
+        <div class="app-menu__who"><div class="app-menu__who-name">Alice Ahmed</div><div class="app-menu__who-email">alice@example.com</div></div>
+        <div class="app-menu__divider" aria-hidden="true"></div>
+        <a class="app-menu__item" href="./account-settings.html">Account settings</a>
+        <button class="app-menu__signout" type="button">Sign out</button>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ===== The page: idle ===== -->
+<div class="app-card" data-state="idle">
+  <div class="app-bar"><div class="app-bar__brand"><span class="app-bar__club">Kootenay Alpine Club</span></div></div>
+  <div class="wrap">
+    <a class="app-back" href="./club-groups.html"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> Back to groups</a>
+    <h1 class="page-title">New group</h1>
+    <p class="page-intro">A private group inside Kootenay Alpine Club. Everyone in the club will see its name; only the people you add can read its conversations or get its emails. You'll be its first member.</p>
+
+    <form class="form-card" onsubmit="return false">
+      <div class="field">
+        <label class="field__label" for="group-name">Group name</label>
+        <input id="group-name" class="input" type="text" name="name" autocomplete="off" placeholder="e.g. Board, Trips committee, Newsletter" aria-describedby="group-name-hint">
+        <p id="group-name-hint" class="field__hint" aria-live="polite">Must be different from the club's other groups (Everyone, Admin, Trips committee, Huts &amp; maintenance).</p>
+      </div>
+      <!-- Untouched: neutral preview, no premature error. -->
+      <div class="addr-preview">
+        <span class="addr-preview__label" id="group-name-addr-label">Group email</span>
+        <output id="group-name-addr" class="is-empty" for="group-name" aria-labelledby="group-name-addr-label" aria-live="polite"></output>
+      </div>
+      <div class="form-actions">
+        <a class="btn btn-ghost" href="./club-groups.html">Cancel</a>
+        <button class="btn btn-primary" type="submit">Create group</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== States appendix ===== -->
+<div class="app-card">
+<div class="states">
+  <h2 class="states__head">New group — states</h2>
+  <p class="states__intro">Name validation and the email preview update live on every keystroke without re-rendering the form (focus and caret stay put); Create is disabled while the name is invalid. Live feedback is advisory — submit re-validates with the same rule and the server owns uniqueness. An untouched blank field is neutral; once edited, blank shows the blank error. The field keeps what was typed after every error.</p>
+
+  <div class="state-card" data-state="typing">
+    <div class="state-card__label">state: typing a valid, distinct name — preview shows the address the creation rule would generate; Create enabled</div>
+    <div class="state-card__body">
+      <form class="form-card" onsubmit="return false">
+        <div class="field">
+          <label class="field__label" for="group-name-typing">Group name</label>
+          <input id="group-name-typing" class="input" type="text" value="Newsletter" aria-describedby="group-name-typing-hint">
+          <p id="group-name-typing-hint" class="field__hint" aria-live="polite">Must be different from the club's other groups (Everyone, Admin, Trips committee, Huts &amp; maintenance).</p>
+        </div>
+        <div class="addr-preview">
+          <span class="addr-preview__label" id="group-name-typing-addr-label">Group email</span>
+          <output id="group-name-typing-addr" for="group-name-typing" aria-labelledby="group-name-typing-addr-label" aria-live="polite">newsletter@kootenay-alpine.clubs.memba.io</output>
+        </div>
+        <div class="form-actions"><a class="btn btn-ghost" href="#">Cancel</a><button class="btn btn-primary" type="submit">Create group</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="state-card" data-state="typing-collision">
+    <div class="state-card__label">state: typing a distinct name whose slug collides — "Huts maintenance" is not a duplicate of "Huts &amp; maintenance", so it is valid, but the preview already shows the suffixed address the creation rule would store</div>
+    <div class="state-card__body">
+      <form class="form-card" onsubmit="return false">
+        <div class="field">
+          <label class="field__label" for="group-name-coll">Group name</label>
+          <input id="group-name-coll" class="input" type="text" value="Huts maintenance" aria-describedby="group-name-coll-hint">
+          <p id="group-name-coll-hint" class="field__hint" aria-live="polite">Must be different from the club's other groups (Everyone, Admin, Trips committee, Huts &amp; maintenance).</p>
+        </div>
+        <div class="addr-preview">
+          <span class="addr-preview__label" id="group-name-coll-addr-label">Group email</span>
+          <output id="group-name-coll-addr" for="group-name-coll" aria-labelledby="group-name-coll-addr-label" aria-live="polite">huts-maintenance-2@kootenay-alpine.clubs.memba.io</output>
+          <p class="addr-preview__note">“huts-maintenance” is already used by Huts &amp; maintenance, so this address gets a number.</p>
+        </div>
+        <div class="form-actions"><a class="btn btn-ghost" href="#">Cancel</a><button class="btn btn-primary" type="submit">Create group</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="state-card" data-state="blank">
+    <div class="state-card__label">state: validation error — blank name (also whitespace-only), shown live once the field has been edited or cleared, and on submit; preview empties; Create disabled</div>
+    <div class="state-card__body">
+      <form class="form-card" onsubmit="return false">
+        <div class="field">
+          <label class="field__label" for="group-name-blank">Group name</label>
+          <input id="group-name-blank" class="input input-error" type="text" value="" aria-invalid="true" aria-describedby="group-name-blank-error">
+          <p id="group-name-blank-error" class="field__error" aria-live="polite">Give the group a name.</p>
+        </div>
+        <div class="addr-preview">
+          <span class="addr-preview__label" id="group-name-blank-addr-label">Group email</span>
+          <output id="group-name-blank-addr" class="is-empty" for="group-name-blank" aria-labelledby="group-name-blank-addr-label" aria-live="polite"></output>
+        </div>
+        <div class="form-actions"><a class="btn btn-ghost" href="#">Cancel</a><button class="btn btn-primary" type="submit" disabled>Create group</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="state-card" data-state="duplicate">
+    <div class="state-card__label">state: validation error — duplicate name, live while typing and on submit (case and surrounding spaces ignored: " board " = "Board"); preview withheld; Create disabled. Clears the moment the name becomes distinct.</div>
+    <div class="state-card__body">
+      <form class="form-card" onsubmit="return false">
+        <div class="field">
+          <label class="field__label" for="group-name-dup">Group name</label>
+          <input id="group-name-dup" class="input input-error" type="text" value=" board " aria-invalid="true" aria-describedby="group-name-dup-error">
+          <p id="group-name-dup-error" class="field__error" aria-live="polite">There's already a group called “Board” in Kootenay Alpine Club. Pick a different name.</p>
+        </div>
+        <div class="addr-preview">
+          <span class="addr-preview__label" id="group-name-dup-addr-label">Group email</span>
+          <output id="group-name-dup-addr" class="is-empty" for="group-name-dup" aria-labelledby="group-name-dup-addr-label" aria-live="polite"></output>
+        </div>
+        <div class="form-actions"><a class="btn btn-ghost" href="#">Cancel</a><button class="btn btn-primary" type="submit" disabled>Create group</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="state-card" data-state="submitting">
+    <div class="state-card__label">state: submitting — button disabled, no second submit</div>
+    <div class="state-card__body">
+      <form class="form-card" onsubmit="return false" aria-busy="true">
+        <div class="field">
+          <label class="field__label" for="group-name-sub">Group name</label>
+          <input id="group-name-sub" class="input" type="text" value="Board" readonly>
+        </div>
+        <div class="addr-preview">
+          <span class="addr-preview__label" id="group-name-sub-addr-label">Group email</span>
+          <output id="group-name-sub-addr" for="group-name-sub" aria-labelledby="group-name-sub-addr-label">board@kootenay-alpine.clubs.memba.io</output>
+        </div>
+        <div class="form-actions"><a class="btn btn-ghost btn-disabled" aria-disabled="true">Cancel</a><button class="btn btn-primary" type="submit" disabled><span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Creating…</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="state-card" data-state="created">
+    <div class="state-card__label">state: created — redirected into the new group's Members tab; Board now sits under "Your groups"</div>
+    <div class="state-card__body">
+      <div class="mini-split">
+        <nav class="group-rail group-rail--mini" aria-label="Groups">
+          <div class="group-rail__label">Your groups</div>
+          <a class="group-rail__item" href="#"><span class="group-rail__name">Everyone</span></a>
+          <a class="group-rail__item" href="#"><span class="group-rail__name">Admin</span></a>
+          <a class="group-rail__item is-active" href="#" aria-current="page"><span class="group-rail__name">Board</span></a>
+          <div class="group-rail__label" style="margin-top:14px">Other groups</div>
+          <a class="group-rail__item" href="#"><span class="group-rail__name">Trips committee</span></a>
+          <a class="group-rail__item" href="#"><span class="group-rail__name">Huts &amp; maintenance</span></a>
+        </nav>
+        <div class="mini-content">
+          <div class="alert alert-success flash" role="status">
+            <span>Board created. You're its first member — add people below, or email <strong>board@kootenay-alpine.clubs.memba.io</strong> to start a conversation.</span>
+          </div>
+          <header class="group-head group-head--mini">
+            <h1 class="group-head__name" style="font-size:24px">Board</h1>
+            <div class="group-head__meta"><span>Private group · 1 member</span><a class="group-head__addr" href="mailto:board@kootenay-alpine.clubs.memba.io">board@kootenay-alpine.clubs.memba.io</a></div>
+          </header>
+          <div class="section-tabs section-tabs--mini">
+            <div class="section-tabs__list" role="tablist"><button class="section-tab" role="tab">Conversations</button><button class="section-tab is-active" role="tab" aria-selected="true">Members</button></div>
+            <div class="section-tabs__action"><button class="btn btn-primary btn-sm">Add member</button></div>
+          </div>
+          <div class="member-list" style="margin-top:14px">
+            <div class="member-row" style="background:var(--color-sage-50);border-color:var(--color-sage-100)">
+              <div class="member-row__avatar" style="background:var(--color-sage-300)" aria-hidden="true">AA</div>
+              <div class="member-row__body"><div class="member-row__name">Alice Ahmed</div><div class="member-row__meta"><span>You</span></div></div>
+            </div>
+          </div>
+          <p class="empty-members">No one else is in <strong>Board</strong> yet. Use <strong>Add member</strong> to bring in people who are already members of Kootenay Alpine Club.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-card" data-state="created-suffixed">
+    <div class="state-card__label">state: created, slug suffixed — "Huts maintenance" is a distinct name from "Huts &amp; maintenance" but both normalise to huts-maintenance, so the stored slug is huts-maintenance-2 (matches what the live preview showed before submit)</div>
+    <div class="state-card__body">
+      <div class="alert alert-success" role="status">
+        <span>Huts maintenance created. You're its first member. Its address is <strong>huts-maintenance-2@kootenay-alpine.clubs.memba.io</strong> — “huts-maintenance” was already taken by Huts &amp; maintenance.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Shared club footer (Layouts.footer_details, e68019eae). Cloud path for Memba link: ../marketing-homepage/index.html -->
+<footer id="club-site-footer" class="app-foot" aria-label="About Memba">
+  <div id="club-site-footer-details" class="footer-details">
+    <ul role="list">
+      <li><span>Powered by <a id="club-site-footer-memba-home-link" href="./marketing-homepage.html" aria-label="Visit Memba home">Memba</a>.</span></li>
+      <li><svg width="15" height="15" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><path d="M383.8 351.7c2.5-2.5 105.2-92.4 105.2-92.4l-17.5-7.5c-10-4.9-7.4-11.5-5-17.4 2.4-7.6 20.1-67.3 20.1-67.3s-47.7 10-57.7 12.5c-7.5 2.4-10-2.5-12.5-7.5s-15-32.4-15-32.4-52.6 59.9-55.1 62.3c-10 7.5-20.1 0-17.6-10 0-10 27.6-129.6 27.6-129.6s-30.1 17.4-40.1 22.4c-7.5 5-12.6 5-17.6-5C293.5 72.3 255.9 0 255.9 0s-37.5 72.3-42.5 79.8c-5 10-10 10-17.6 5-10-5-40.1-22.4-40.1-22.4S183.3 182 183.3 192c2.5 10-7.5 17.5-17.6 10-2.5-2.5-55.1-62.3-55.1-62.3S98.1 167 95.6 172s-5 9.9-12.5 7.5C73 177 25.4 167 25.4 167s17.6 59.7 20.1 67.3c2.4 6 5 12.5-5 17.4L23 259.3s102.6 89.9 105.2 92.4c5.1 5 10 7.5 5.1 22.5-5.1 15-10.1 35.1-10.1 35.1s95.2-20.1 105.3-22.6c8.7-.9 18.3 2.5 18.3 12.5S241 512 241 512h30s-5.8-102.7-5.8-112.8 9.5-13.4 18.4-12.5c10 2.5 105.2 22.6 105.2 22.6s-5-20.1-10-35.1 0-17.5 5-22.5z"/></svg><span>Proudly hosted in Canada.</span></li>
+      <li><a id="club-site-footer-source-link" href="https://github.com/mattwynne/memba"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.22 3.27.94.1-.73.4-1.22.72-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.63 0c2.15-1.46 3.1-1.16 3.1-1.16.61 1.55.23 2.7.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.04.76 2.09v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg> Open source</a></li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>

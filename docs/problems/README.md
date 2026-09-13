@@ -4,6 +4,8 @@ Captured product problems and their current resolution status.
 
 | Observed | Problem | Status | Matched iteration / evidence |
 | --- | --- | --- | --- |
+| 2026-09-12 | [Custom groups need renaming](2026-09-12-custom-groups-cannot-be-renamed.md) | Deferred | Captured during 061–065 planning; no delivery iteration assigned. |
+| 2026-09-12 | [Retired custom groups need archiving](2026-09-12-retired-custom-groups-need-archiving.md) | Deferred | Prefer archive over deletion; 061–065 deliberately leave empty groups unchanged. |
 | 2026-06-01 | [Replies are not tracked as thread conversations](2026-06-01-cant-reply-to-email-message.md) | Unresolved | [Iteration 019](../iterations/019-inbound-club-messages-by-email/plan.md) added new inbound club messages by email, but not replies/threading. [Iteration 024](../iterations/024-email-template-designs/plan.md) clarifies replies go to the sender. 2026-06-17 observation adds that people cannot opt in to receive replies to a thread. |
 | 2026-06-01 | [Club email arrives without surrounding context or useful links](2026-06-01-club-email-lacks-context-links.md) | Partially addressed | [Iteration 024](../iterations/024-email-template-designs/plan.md) added group-led email context, reply guidance, and the Memba-as-carrier footer. Explicit club/message links and optional slugged subjects remain incomplete. |
 | 2026-06-01 | [Delivery status does not update live as webhooks come in](2026-06-01-delivery-status-not-live.md) | Resolved in code | Read-model change PubSub refresh on member message detail, member dashboard/message list, staff message diagnostics, and staff deliveries. No dedicated iteration found. |
