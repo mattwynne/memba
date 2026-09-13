@@ -583,7 +583,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-13T07:42:40.696553824Z",
-  "last_event_at": "2026-09-13T07:44:57.675184263Z",
+  "last_event_at": "2026-09-13T07:44:59.389339733Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -627,17 +627,20 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-09-13T07:44:57.679771717Z",
-        "current_node": "review_fork",
+        "timestamp": "2026-09-13T07:45:01.625195474Z",
+        "current_node": "review_merge",
         "completed_nodes": [
           "start",
-          "review_fork"
+          "review_fork",
+          "review_merge"
         ],
         "node_retries": {},
         "context_values": {
           "internal.node_visit_count": 1,
-          "internal.thread_id": "start",
+          "internal.retry_count.review_merge": 0,
+          "internal.thread_id": "review_fork",
           "internal.retry_count.review_fork": 0,
+          "thread.review_fork.current_node": "review_merge",
           "internal.retry_count.start": 0,
           "parallel.branch_count": 3,
           "internal.work_dir": "/workspace/memba",
@@ -694,7 +697,7 @@
           ],
           "graph.rankdir": "LR",
           "graph.default_fidelity": "summary:high",
-          "current_node": "review_fork",
+          "current_node": "review_merge",
           "internal.run_id": "01M2CVFM2V4BHCWARZD85P6NRM",
           "failure_class": "",
           "failure_signature": "",
@@ -703,6 +706,11 @@
         "node_outcomes": {
           "start": {
             "status": "succeeded",
+            "usage": null
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
             "usage": null
           },
           "review_fork": {
@@ -762,8 +770,9 @@
             "usage": null
           }
         },
-        "next_node_id": "review_merge",
+        "next_node_id": "synthesize",
         "node_visits": {
+          "review_merge": 1,
           "start": 1,
           "review_fork": 1
         }
@@ -801,16 +810,73 @@
       "first_event_seq": 21,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+        "failure_reason": null,
+        "timestamp": "2026-09-13T07:44:57.679573970Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
-      "parallel_results": null,
+      "parallel_results": [
+        {
+          "id": "gemini_review",
+          "index": 0,
+          "status": "succeeded",
+          "context_updates": {
+            "gemini_review_blocking_gap_count": 0,
+            "gemini_review_blocking_gaps": "None",
+            "gemini_review_confidence": "High",
+            "gemini_review_decision": "READY",
+            "gemini_review_required_edits": "None",
+            "last_response": "# Iteration Plan Review\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:**\n  1. None.\n- **Non-blocking improvements:**\n  1. Consider briefly detailing the mechanism for updating open v",
+            "last_stage": "gemini_review",
+            "response.gemini_review": "# Iteration Plan Review\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:**\n  1. None.\n- **Non-blocking improvements:**\n  1. Consider briefly detailing the mechanism for updating open views (e.g., specifying the Phoenix PubSub topics that will broadcast the revocation events from the read-model projection) to ensure `MemberDashboardLive` and conversation views correctly drop state.\n- **Smallest viable iteration:** The current iteration is already well-sliced. Removing other members and leaving a group share the same underlying event (`GroupMemberRemoved`) and follow-cleanup mechanics. Separating them would create artificial boundaries without significant technical savings.\n- **Required plan edits:** None.\n- **Validation plan:** \n  - Execute acceptance test scenarios tagged `@iteration-064` in `acceptance-tests/features/custom_group_membership.feature` and `custom_group_lifecycle.feature`.\n  - Manually test authorization permutations (admin removing admin, non-admin attempting removal, self-leave).\n  - Assert that open LiveViews immediately kick out or hide restricted surfaces upon removal.\n  - Race queued deliveries against removal to prove deliveries are aborted.\n  - Ensure re-adding restores access but strictly requires a new, explicit follow to resume notifications.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
+          }
+        },
+        {
+          "id": "claude_review",
+          "index": 1,
+          "status": "succeeded",
+          "context_updates": {
+            "claude_review_blocking_gap_count": 0,
+            "claude_review_blocking_gaps": "None",
+            "claude_review_confidence": "High",
+            "claude_review_decision": "READY",
+            "claude_review_required_edits": "None",
+            "last_response": "Both the `GroupMemberRemoved` event and `UnfollowConversation` command already exist from the 062 work, confirming the plan's implementation strategy builds on real existing infrastructure rather than",
+            "last_stage": "claude_review",
+            "response.claude_review": "Both the `GroupMemberRemoved` event and `UnfollowConversation` command already exist from the 062 work, confirming the plan's implementation strategy builds on real existing infrastructure rather than speculative naming.\n\n## Report\n\n**Decision: READY**\n**Confidence: High**\n\n### Verification performed\n- Read the full plan file directly (`docs/iterations/064-leave-and-remove-group-members/plan.md`), all 107 lines.\n- Confirmed both dependency iterations (062, 063) are `Status: validated`.\n- Confirmed the two referenced feature files (`custom_group_membership.feature`, `custom_group_lifecycle.feature`) exist and already contain the `@iteration-064 @todo-domain @todo-ui` tagged scenarios the plan names — five rules/scenario groups covering removal-by-member/outside-admin, system-group guards, immediate access/email revocation with an open view, delivered-copy non-recall, re-add without follow restoration, follow-again restoration, and last-member departure/repopulation. Scenario content matches every Acceptance Criteria bullet in the plan.\n- Confirmed the three referenced design files exist (`club-group-members.html`, `club-group-non-member.html`, `custom-groups-prototype.html`).\n- Confirmed the domain building blocks the implementation plan relies on already exist in code: `Memba.Membership.Events.GroupMemberRemoved` (club.ex, projector) and `Memba.Messaging.Commands.UnfollowConversation` (router, conversation_followers.ex) — so the plan's reuse strategy is grounded, not speculative.\n\n### Assessment against the five readiness questions\n\n1. **Goal clarity** — Clear. States the actors (group members, club admins, leaving members), the outcome (ending access/email/follow immediately while preserving club role and group history), and explicitly separates \"leaving a group\" from \"leaving the club.\"\n\n2. **Scope focus** — Tight and coherent. In/out-of-scope lists are explicit; three related problems (archiving, renaming, CQRS drift) are explicitly deferred with rationale rather than left ambiguous. The scope could not obviously be split smaller — the leave/remove/follow-cleanup/re-add-without-follow set is one coherent behavioral rule with tightly coupled edge cases (open views, queued email, last member).\n\n3. **Acceptance criteria / BDD** — Concrete, testable, and already expressed as Gherkin scenarios that exist in the repo (not just promised). Covers happy path, permissions (outside admin, non-member, self-removal), edge cases (last member, admin-as-target, already-delivered email, race between removal/re-add/follow), and system-group protections. Iteration correctly classified as behaviour-facing with required BDD. No unresolved business decisions — \"Open Business Decisions: None known\" is substantiated by specific prior decisions (empty-but-existing groups, no archive-on-empty, full history on re-add, fresh follows after re-add).\n\n4. **Implementation plan** — Specific and ordered: reuses `GroupMemberRemoved`, extends the 062 follow-cleanup policy with named ordering/idempotency concerns, names the read-model refresh points (`MemberDashboardLive`, conversation views, membership panels), specifies UI reuse of existing member-row/tab-action patterns, and lists the test types (aggregate, follower-policy, queued-delivery, race, LiveView) plus `dev check` as the final gate. Open Technical Decisions section correctly scopes remaining design freedom (ordering mechanism) without leaving core architecture unresolved.\n\n5. **Expected capability and validation** — New Capability statement is a clear before/after. Validation Plan gives concrete manual/automated proof steps (follow → remove → send → verify no delivery; re-add → verify no follow restore; replay/race testing; run both acceptance runners and `dev check`) with a clear stop condition (existing system-group/last-member tests preserved, both runners and `dev check` green).\n\nNo blocking gaps found.\n\n### Non-blocking improvements\n1. The plan says \"cloud sync is pending\" for the reviewed local design — worth doing before/alongside implementation but not a blocker for starting.\n2. Could explicitly name the aggregate/module file paths (e.g., which module hosts the new removal command) rather than only class-level (\"actor-bearing custom-group removal use case/command\"), though this is a minor implementation-time detail, not a planning gap, since it clearly builds on the existing 063 pattern.\n\n### Smallest viable iteration\nThe plan as scoped is already close to minimal for a coherent slice: it could theoretically be split into (a) removal by member/admin + immediate access revocation, and (b) follow-cleanup + re-add/re-follow semantics as a follow-on iteration — but doing so would leave a half-finished security-relevant behavior (revocation without follow-cleanup is not safe to ship), so the current scope is the right minimal unit.\n\n### Required plan edits\nNone required for readiness.\n\n### Validation plan (to prove the iteration succeeded)\n- Run the acceptance runner(s) against `custom_group_membership.feature` and `custom_group_lifecycle.feature`, confirming all `@iteration-064` scenarios pass and prior `@iteration-062`/`@iteration-063` scenarios still pass unmodified.\n- Run `dev check` on the final committed/staged state.\n- Manually exercise: remove a club-admin from a custom group (verify role/authority retained, group access lost); remove the last member (verify group persists, unarchived); attempt access via a stale link/open LiveView/direct reply after removal (verify denied); re-add and confirm history restored but follow not restored; follow again and confirm new-reply delivery resumes.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
+          }
+        },
+        {
+          "id": "codex_review",
+          "index": 2,
+          "status": "succeeded",
+          "context_updates": {
+            "codex_review_blocking_gap_count": 0,
+            "codex_review_blocking_gaps": "None",
+            "codex_review_confidence": "High",
+            "codex_review_decision": "READY",
+            "codex_review_required_edits": "None",
+            "last_response": "{\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"report_markdown\":\"## Decision\\n\\nREADY\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. Once iteration 062 est",
+            "last_stage": "codex_review",
+            "response.codex_review": "{\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"report_markdown\":\"## Decision\\n\\nREADY\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. Once iteration 062 establishes the follow-cleanup boundary, replace the implementation plan’s choice between ordered cleanup and generation/version identity with the exact mechanism being reused. The required invariant and race tests are already clear, so this is bounded implementation detail rather than a readiness blocker.\\n2. Explicitly state whether a stale or repeated user removal request is an idempotent success or a domain error, and what the UI shows after a concurrent removal. Replay/idempotency testing is named, but command-level duplicate semantics are not stated.\\n3. Add the exact conversation LiveView and queued-delivery modules to the implementation plan after confirming them against the implemented 062 foundation. The existing plan names the affected interfaces and boundaries sufficiently for implementation, but additional module names would make task breakdown faster.\\n\\n## Smallest viable iteration\\n\\nThe current privacy-complete vertical slice is the smallest useful release: authenticated removal and self-leave for custom groups; immediate read, write, follow, and future-email revocation; confirmation and post-removal UI; last-member departure without deleting the group; and safe re-add without restoring old follows. Access and follow cleanup should not be split from removal because doing so would expose a misleading or unsafe partial capability.\\n\\n## Required plan edits\\n\\nNone. The goal and beneficiaries are clear; scope and non-goals are explicit; business decisions are resolved; the behaviour-facing classification and shared Cucumber files are present; acceptance criteria cover permissions, system-group protections, state changes, stale/open views, delivery boundaries, empty groups, re-addition, replay, and races; and the ordered implementation and validation steps provide a clear stop condition.\\n\\n## Validation plan\\n\\n1. Implement and run the iteration-064 scenarios in `custom_group_membership.feature` and `custom_group_lifecycle.feature` through both acceptance runners.\\n2. Prove actor/target authorization, same-club and custom-group identity checks, self-removal, outside-admin removal, ordinary-outsider denial, last-member removal, and Everyone/Admin safeguards in focused aggregate/use-case tests.\\n3. Prove immediate server-side revocation through direct links, already-open LiveViews, replies, follow actions, conversation queries, and email provider handoff.\\n4. Prove that all group-related follows—including automatic follows—are cleared while unrelated-group follows remain intact.\\n5. Exercise replay, duplicate handling, queued delivery, and rapid remove/re-add/follow races so stale cleanup cannot erase a newly established follow.\\n6. Verify re-add restores history and sends the ordinary welcome without restoring old follows, then verify an explicit new follow restores future reply delivery.\\n7. Verify confirmation controls, restricted former-member surfaces, outside-admin management, empty-group persistence, and normal repopulation in LiveView/browser tests.\\n8. Preserve system-group, club-membership, role, last-Admin, and delivered-copy regressions, then run `dev check` on the exact final delivery state. Success is reached when all named scenarios, focused tests, regressions, and `dev check` pass with no deferred iteration-064 runner-debt tags.\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}"
+          }
+        }
+      ],
       "output": null,
       "started_at": "2026-09-13T07:42:42.789384121Z",
       "handler": "parallel",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 134887,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -820,7 +886,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "claude_review@1": {
       "first_event_seq": 25,
@@ -1043,7 +1109,12 @@
       "first_event_seq": 28,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-13T07:44:57.675872111Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -1059,6 +1130,12 @@
       "started_at": "2026-09-13T07:42:42.871539544Z",
       "handler": "agent",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 134804,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "live_inference_ms": 131394,
       "live_tool_ms": 2602,
       "usage": {
@@ -1189,7 +1266,7 @@
         "warnings": []
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "start@1": {
       "first_event_seq": 17,
