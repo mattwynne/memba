@@ -1,9 +1,12 @@
 defmodule MembaWeb.MemberDashboardPresentationTest do
   use Memba.DataCase, async: true
 
+  alias Memba.ClubInboundEmailAddress
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Role
   alias Memba.Membership.Projections.RoleAssignment
@@ -234,6 +237,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     add_group_member(trip_planning_group, alice)
     add_group_member(trip_planning_group, bob)
+    grant_manage_members!(alice)
 
     chair_role =
       create_role(
@@ -343,6 +347,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.active_member_count == 2
     assert assigns.current_member.id == alice.person_id
     assert assigns.current_member.roles == []
+    assert assigns.current_member_can_manage_members?
+    assert assigns.selected_group_access == :participating_member
     assert assigns.selected_group_participating?
 
     assert Enum.map(assigns.messages, & &1.message_id) == [
@@ -393,6 +399,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
       create_group(
         club_id: alice.club_id,
         group_key: "private",
+        email_slug: "private",
         name: "Private"
       )
 
@@ -420,7 +427,14 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.selected_group.name == "Private"
     assert assigns.selected_group.active_member_count == nil
     assert assigns.selected_group.email_address == nil
+    assert assigns.selected_group_access == :ordinary_non_member
     refute assigns.selected_group_participating?
+
+    assert assigns.club_admin_email_address ==
+             ClubInboundEmailAddress.address(
+               alice.club.slug,
+               SystemGroups.admin_email_slug()
+             )
 
     assert MapSet.new(assigns.groups, & &1.group_id) ==
              MapSet.new([
@@ -432,6 +446,85 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.members == []
     assert assigns.active_member_count == 0
     assert assigns.member_names_by_id == %{}
+    assert assigns.messages == []
+    assert assigns.message_rows == []
+    refute Enum.any?(assigns.messages, &(&1.message_id == secret_conversation.message_id))
+  end
+
+  test "loads only membership metadata for a club admin outside a selected group" do
+    admin =
+      create_active_member(
+        email: "admin@example.com",
+        name: "Admin Adams",
+        club_name: "Alpine Club"
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: admin.club_id
+      )
+
+    dana =
+      create_active_member(
+        email: "dana@example.com",
+        name: "Dana Diaz",
+        club_name: "Alpine Club",
+        club_id: admin.club_id
+      )
+
+    grant_manage_members!(admin)
+
+    board =
+      create_group(
+        club_id: admin.club_id,
+        group_key: "board",
+        email_slug: "board",
+        name: "Board"
+      )
+
+    add_group_member(board, carol)
+    add_group_member(board, dana)
+
+    secret_conversation =
+      create_message(
+        club_id: admin.club_id,
+        sender_id: carol.person_id,
+        subject: "September agenda",
+        audience_group_id: board.group_id
+      )
+
+    assert {:ok, assigns} =
+             MemberDashboardPresentation.load(
+               admin.club_id,
+               %{email: "admin@example.com"},
+               [admin.club],
+               board.group_id
+             )
+
+    assert assigns.selected_group_access == :outside_admin
+    refute assigns.selected_group_participating?
+    assert assigns.current_member_can_manage_members?
+
+    assert assigns.selected_group.active_member_count == 2
+
+    assert assigns.selected_group.email_address ==
+             ClubInboundEmailAddress.address(admin.club.slug, "board")
+
+    assert Enum.map(assigns.members, &{&1.id, &1.name}) == [
+             {carol.person_id, "Carol Canoe"},
+             {dana.person_id, "Dana Diaz"}
+           ]
+
+    assert assigns.active_member_count == 2
+
+    assert assigns.member_names_by_id == %{
+             carol.person_id => "Carol Canoe",
+             dana.person_id => "Dana Diaz"
+           }
+
     assert assigns.messages == []
     assert assigns.message_rows == []
     refute Enum.any?(assigns.messages, &(&1.message_id == secret_conversation.message_id))
@@ -755,6 +848,16 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
       membership_id: member.membership_id,
       person_id: member.person_id,
       active: true
+    })
+  end
+
+  defp grant_manage_members!(member) do
+    Repo.insert!(%MemberPermission{
+      club_id: member.club_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
     })
   end
 
