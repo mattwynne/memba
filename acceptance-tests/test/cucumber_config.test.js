@@ -2,6 +2,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const {
+  AstBuilder,
+  GherkinClassicTokenMatcher,
+  Parser
+} = require("@cucumber/gherkin");
 
 const cucumberConfig = require("../cucumber");
 
@@ -47,6 +52,27 @@ test("shared feature suite uses only runner-intent and runner-debt tags", () => 
   );
 
   assert.deepEqual(unsupportedTags, []);
+});
+
+test("scenario inventory inherits feature, rule, and scenario tags within their scopes", () => {
+  const scenarios = featureScenarios(
+    browserFeaturePathNamed("club_message_replies.feature")
+  );
+
+  assert.deepEqual(
+    scenarios.get("The sender and repliers automatically follow the conversation").tags,
+    ["@iteration-039", "@iteration-040"]
+  );
+  assert.deepEqual(
+    scenarios.get(
+      "Email to the club address without reply headers starts a new club-wide message"
+    ).tags,
+    ["@iteration-039", "@iteration-041", "@iteration-042"]
+  );
+  assert.deepEqual(
+    scenarios.get("A member of another club cannot reply").tags,
+    ["@iteration-039"]
+  );
 });
 
 test("iteration 031 scenarios are no longer blocked from the browser runner", () => {
@@ -230,57 +256,57 @@ function listFeatureFiles(directory) {
 }
 
 function featureTags(filePath) {
-  const tags = [];
-
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-    const trimmed = line.trim();
-
-    if (trimmed === "") {
-      continue;
-    }
-
-    if (trimmed.startsWith("@")) {
-      tags.push(...trimmed.split(/\s+/));
-      continue;
-    }
-
-    if (trimmed.startsWith("Feature:")) {
-      break;
-    }
-  }
-
-  return tags;
+  return tagNames(parseFeature(filePath).tags);
 }
 
 function featureScenarios(filePath) {
+  const feature = parseFeature(filePath);
   const scenarios = new Map();
-  const featureLevelTags = featureTags(filePath);
-  let pendingTags = [];
+  const featureLevelTags = tagNames(feature.tags);
 
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-    const trimmed = line.trim();
-    const scenarioMatch = trimmed.match(/^Scenario(?: Outline)?:\s*(.+)$/);
-
-    if (trimmed === "") {
+  for (const child of feature.children) {
+    if (child.scenario) {
+      addScenario(scenarios, child.scenario, featureLevelTags);
       continue;
     }
 
-    if (trimmed.startsWith("@")) {
-      pendingTags.push(...trimmed.split(/\s+/));
-      continue;
-    }
+    if (child.rule) {
+      const ruleLevelTags = [
+        ...featureLevelTags,
+        ...tagNames(child.rule.tags)
+      ];
 
-    if (scenarioMatch) {
-      const name = scenarioMatch[1];
-      scenarios.set(name, { name, tags: [...featureLevelTags, ...pendingTags] });
-      pendingTags = [];
-      continue;
+      for (const ruleChild of child.rule.children) {
+        if (ruleChild.scenario) {
+          addScenario(scenarios, ruleChild.scenario, ruleLevelTags);
+        }
+      }
     }
-
-    pendingTags = [];
   }
 
   return scenarios;
+}
+
+function parseFeature(filePath) {
+  let nextId = 0;
+  const newId = () => String(nextId++);
+  const parser = new Parser(
+    new AstBuilder(newId),
+    new GherkinClassicTokenMatcher()
+  );
+
+  return parser.parse(fs.readFileSync(filePath, "utf8")).feature;
+}
+
+function addScenario(scenarios, scenario, inheritedTags) {
+  scenarios.set(scenario.name, {
+    name: scenario.name,
+    tags: [...inheritedTags, ...tagNames(scenario.tags)]
+  });
+}
+
+function tagNames(tags) {
+  return tags.map(({ name }) => name);
 }
 
 function supportedFeatureTag(tag) {
