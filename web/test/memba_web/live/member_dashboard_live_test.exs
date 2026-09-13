@@ -188,7 +188,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-panel-members[hidden]")
   end
 
-  test "a stale unauthorised remembered group falls back to Everyone without disclosure", %{
+  test "a remembered non-participating group falls back while its identity remains discoverable", %{
     conn: conn
   } do
     alice =
@@ -234,7 +234,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(view, "#member-group-name", "Everyone")
     refute has_element?(view, "#member-group-name", "Private Planning")
-    refute has_element?(view, "#member-group-link-#{private_group.group_id}")
+
+    assert has_element?(
+             view,
+             "#member-group-link-#{private_group.group_id}",
+             "Private Planning"
+           )
   end
 
   @tag :capture_log
@@ -648,7 +653,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-action-invite-member")
   end
 
-  test "canonical group routes return the ordinary not-found response to non-members", %{
+  test "canonical group routes resolve same-club group identity without private rows", %{
     conn: conn
   } do
     alice =
@@ -683,15 +688,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         audience_group_id: private_group.group_id
       )
 
-    response =
+    {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> get(~p"/groups/#{private_group.group_id}")
-      |> html_response(404)
+      |> live(~p"/groups/#{private_group.group_id}")
 
-    assert response =~ "Not Found"
-    refute response =~ secret_conversation.subject
-    refute response =~ private_group.name
+    assert has_element?(view, "#member-group-name", private_group.name)
+    refute has_element?(view, "[data-message-id='#{secret_conversation.message_id}']")
+    refute has_element?(view, "#club-member-#{bob.person_id}")
 
     malformed_response =
       build_conn()

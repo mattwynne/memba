@@ -49,10 +49,11 @@ defmodule MembaWeb.MemberDashboardPresentation do
   @doc """
   Load dashboard assigns scoped to an explicitly selected conversation group.
 
-  The group is authorized by finding it in Membership's active-group summaries
-  for the signed-in active club member. Group members and conversations are
-  loaded only after that authorization succeeds. Missing, invalid,
-  foreign-club, and unauthorized group selections all return
+  The group identity is resolved from Membership's safe discovery summaries
+  after the signed-in identity has been resolved to an active member of the
+  selected club. Private member and conversation rows are loaded only when the
+  selected group also appears in that member's participation summaries.
+  Missing, invalid, and foreign-club group selections return
   `{:error, :not_found}` without disclosing which condition applied. Club and
   identity authorization failures continue to return `{:error, :forbidden}`.
   """
@@ -78,13 +79,19 @@ defmodule MembaWeb.MemberDashboardPresentation do
     with {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
          club_members <- load_club_members(club_id),
          {:ok, current_member} <- fetch_current_member(club_members, current_identity) do
-      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
+      groups = Membership.list_discoverable_groups_for_member(club_id, current_member.id)
+
+      participating_groups_by_id =
+        club_id
+        |> Membership.list_active_groups_for_member(current_member.id)
+        |> Map.new(&{&1.group_id, &1})
 
       load_selected_group(
         club_id,
         selected_club,
         current_member,
         groups,
+        participating_groups_by_id,
         selected_group_id
       )
     else
@@ -97,31 +104,62 @@ defmodule MembaWeb.MemberDashboardPresentation do
          selected_club,
          current_member,
          groups,
+         participating_groups_by_id,
          selected_group_id
        ) do
     with {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
-      members = load_group_members(selected_group.group_id)
-      messages = load_messages(selected_group.group_id)
-      member_names_by_id = Map.new(members, &{&1.id, &1.name})
-      message_rows = present_message_rows(messages, member_names_by_id)
-
-      {:ok,
-       %{
-         page_title: selected_club.name,
-         selected_club: selected_club,
-         groups: groups,
-         selected_group: selected_group,
-         members: members,
-         active_member_count: Enum.count(members),
-         current_member: current_member,
-         current_member_can_manage_members?: can_manage_members?(club_id, current_member),
-         member_names_by_id: member_names_by_id,
-         messages: messages,
-         message_rows: message_rows
-       }}
+      selected_group
+      |> load_permitted_surface(Map.get(participating_groups_by_id, selected_group_id))
+      |> then(fn {selected_group, surface_assigns} ->
+        {:ok,
+         Map.merge(
+           %{
+             page_title: selected_club.name,
+             selected_club: selected_club,
+             groups: groups,
+             selected_group: selected_group,
+             current_member: current_member,
+             current_member_can_manage_members?: can_manage_members?(club_id, current_member)
+           },
+           surface_assigns
+         )}
+      end)
     else
       _missing_or_unauthorized -> {:error, :not_found}
     end
+  end
+
+  defp load_permitted_surface(selected_group, nil) do
+    selected_group =
+      selected_group
+      |> Map.put(:active_member_count, nil)
+      |> Map.put(:email_address, nil)
+
+    {selected_group,
+     %{
+       selected_group_participating?: false,
+       members: [],
+       active_member_count: 0,
+       member_names_by_id: %{},
+       messages: [],
+       message_rows: []
+     }}
+  end
+
+  defp load_permitted_surface(_discovered_group, participating_group) do
+    members = load_group_members(participating_group.group_id)
+    messages = load_messages(participating_group.group_id)
+    member_names_by_id = Map.new(members, &{&1.id, &1.name})
+
+    {participating_group,
+     %{
+       selected_group_participating?: true,
+       members: members,
+       active_member_count: Enum.count(members),
+       member_names_by_id: member_names_by_id,
+       messages: messages,
+       message_rows: present_message_rows(messages, member_names_by_id)
+     }}
   end
 
   defp cast_selected_club_id(club_id) do

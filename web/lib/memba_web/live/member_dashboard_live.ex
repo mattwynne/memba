@@ -74,6 +74,9 @@ defmodule MembaWeb.MemberDashboardLive do
            socket.assigns.current_identity_clubs,
            remembered_group_id
          ) do
+      {:ok, %{selected_group_participating?: false}} ->
+        reply_with_selected_group(socket)
+
       {:ok, dashboard_assigns} ->
         selected_group_id = dashboard_assigns.selected_group.group_id
 

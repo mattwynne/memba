@@ -343,6 +343,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.active_member_count == 2
     assert assigns.current_member.id == alice.person_id
     assert assigns.current_member.roles == []
+    assert assigns.selected_group_participating?
 
     assert Enum.map(assigns.messages, & &1.message_id) == [
              trip_planning_conversation.message_id
@@ -378,7 +379,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     refute Enum.any?(assigns.members, &("Treasurer" in &1.roles))
   end
 
-  test "returns the same not-found result for missing, foreign-club, and non-member groups" do
+  test "resolves a discoverable same-club group without loading non-member private rows" do
     alice = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
 
     bob =
@@ -397,6 +398,48 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     add_group_member(private_group, bob)
 
+    secret_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Private planning details",
+        audience_group_id: private_group.group_id
+      )
+
+    assert {:ok, assigns} =
+             MemberDashboardPresentation.load(
+               alice.club_id,
+               %{email: "alice@example.com"},
+               [alice.club],
+               private_group.group_id
+             )
+
+    assert assigns.selected_group.club_id == alice.club_id
+    assert assigns.selected_group.group_id == private_group.group_id
+    assert assigns.selected_group.group_key == "private"
+    assert assigns.selected_group.name == "Private"
+    assert assigns.selected_group.active_member_count == nil
+    assert assigns.selected_group.email_address == nil
+    refute assigns.selected_group_participating?
+
+    assert MapSet.new(assigns.groups, & &1.group_id) ==
+             MapSet.new([
+               SystemGroups.everyone_group_id(alice.club_id),
+               private_group.group_id
+             ])
+
+    assert assigns.current_member.id == alice.person_id
+    assert assigns.members == []
+    assert assigns.active_member_count == 0
+    assert assigns.member_names_by_id == %{}
+    assert assigns.messages == []
+    assert assigns.message_rows == []
+    refute Enum.any?(assigns.messages, &(&1.message_id == secret_conversation.message_id))
+  end
+
+  test "returns the same not-found result for missing and foreign-club groups" do
+    alice = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+
     other_club_member =
       create_active_member(email: "pat@example.com", club_name: "Paddling Club")
 
@@ -411,8 +454,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     selected_group_ids = [
       Memba.ID.generate(:group),
-      foreign_group.group_id,
-      private_group.group_id
+      foreign_group.group_id
     ]
 
     for selected_group_id <- selected_group_ids do

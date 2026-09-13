@@ -91,6 +91,8 @@ defmodule MembaWeb.PageHTML do
 
   defp group_member_count_label(1), do: "1 member"
 
+  defp group_member_count_label(nil), do: nil
+
   defp group_member_count_label(member_count) when is_integer(member_count) do
     "#{member_count} members"
   end
