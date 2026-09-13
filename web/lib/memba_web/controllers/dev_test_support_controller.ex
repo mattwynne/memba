@@ -29,7 +29,8 @@ defmodule MembaWeb.DevTestSupportController do
     Memba.Messaging.Projectors.InboundEmailSource
   ]
   @event_sourced_event_handlers [
-    Memba.Membership.Policies.SystemGroupMembership
+    Memba.Membership.Policies.SystemGroupMembership,
+    Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   ]
   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
   @public_reset_tables [:auth_email_requests, :auth_sign_in_tokens, :onboarding_requests]
