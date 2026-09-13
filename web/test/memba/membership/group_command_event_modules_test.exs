@@ -48,6 +48,8 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
                name: "Everyone"
              })
 
+    refute Map.has_key?(CreateGroup.__struct__(), :actor_person_id)
+
     assert %AssignGroupEmailSlug{
              club_id: ids.club_id,
              group_id: ids.group_id,
@@ -66,12 +68,16 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
              person_id: ids.person_id
            } == struct!(AddGroupMember, ids)
 
+    refute Map.has_key?(AddGroupMember.__struct__(), :actor_person_id)
+
     assert %RemoveGroupMember{
              club_id: ids.club_id,
              group_id: ids.group_id,
              membership_id: ids.membership_id,
              person_id: ids.person_id
            } == struct!(RemoveGroupMember, ids)
+
+    refute Map.has_key?(RemoveGroupMember.__struct__(), :actor_person_id)
   end
 
   test "group events carry the same identities and are JSON encodable" do
@@ -85,6 +91,7 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
     })
 
     refute Map.has_key?(GroupCreated.__struct__(), :email_slug)
+    refute Map.has_key?(GroupCreated.__struct__(), :membership_id)
 
     assert_json_encodable(%GroupEmailSlugAssigned{
       club_id: ids.club_id,
@@ -94,6 +101,15 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
 
     assert_json_encodable(struct!(GroupMemberAdded, ids))
     assert_json_encodable(struct!(GroupMemberRemoved, ids))
+
+    for event_module <- [
+          GroupCreated,
+          GroupEmailSlugAssigned,
+          GroupMemberAdded,
+          GroupMemberRemoved
+        ] do
+      refute Map.has_key?(event_module.__struct__(), :actor_person_id)
+    end
   end
 
   defp group_membership_ids do
