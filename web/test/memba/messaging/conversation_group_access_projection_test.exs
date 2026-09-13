@@ -303,13 +303,26 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
            )
   end
 
-  test "member access and in-app follow actions reject a club member outside the access group" do
+  test "discovering a group does not confer member access or permit in-app follow actions" do
     club = insert_membership_club!(name: "Alpine Club")
     alice = insert_membership_person!(name: "Alice Adams", email: "alice@example.com")
     bob = insert_membership_person!(name: "Bob Builder", email: "bob@example.com")
     group = insert_group!(club.club_id, "Trip planners")
     insert_active_club_member!(club.club_id, alice.person_id)
     insert_active_club_member!(club.club_id, bob.person_id)
+
+    assert Enum.any?(
+             Memba.Membership.list_discoverable_groups_for_member(
+               club.club_id,
+               bob.person_id
+             ),
+             &(&1.group_id == group.group_id)
+           )
+
+    refute Enum.any?(
+             Memba.Membership.list_active_groups_for_member(club.club_id, bob.person_id),
+             &(&1.group_id == group.group_id)
+           )
 
     root =
       insert_message!(

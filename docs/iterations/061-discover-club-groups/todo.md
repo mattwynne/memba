@@ -2,7 +2,7 @@
 
 - [x] 001 Separate discovery from participation in the Membership public query API.
 - [x] 002 Add a club-scoped discovery summary for an authenticated active club member.
-- [ ] 003 Preserve `list_active_groups_for_member/2` as the actual-membership API: Messaging uses it for access, so broadening it would expose conversations.
+- [x] 003 Preserve `list_active_groups_for_member/2` as the actual-membership API: Messaging uses it for access, so broadening it would expose conversations.
 - [ ] 004 Update `MemberDashboardPresentation` to resolve group identity within the authorised club, then load only the permitted surface.
 - [ ] 005 Explicitly distinguish ordinary non-member, outside admin and participating member.
 - [ ] 006 Extend the existing stateless tabs/frame/list composition in `page_html/club.html.heex` and `member_dashboard_group_tabs.ex`.
