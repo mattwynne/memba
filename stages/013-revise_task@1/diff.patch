@@ -1,0 +1,385 @@
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 6eaba4f..3df30c3 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -18,6 +18,7 @@ defmodule Memba.Membership.Club do
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+   alias Memba.Membership.Commands.UpdateClub
++  alias Memba.Membership.CustomGroupSlug
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+@@ -112,8 +113,22 @@ defmodule Memba.Membership.Club do
+     with :ok <- validate_existing_club_id(club, command.club_id),
+          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
+-         {:ok, name} <- normalize_name(command.name) do
+-      create_custom_group_decision(club, command, name)
++         {:ok, name} <- normalize_name(command.name),
++         {:ok, creator_membership_id} <-
++           active_admin_membership_id(club, command.actor_person_id) do
++      email_slug =
++        CustomGroupSlug.allocate(
++          name,
++          occupied_custom_group_slugs(club, command.group_id)
++        )
++
++      create_custom_group_decision(
++        club,
++        command,
++        creator_membership_id,
++        name,
++        email_slug
++      )
+     end
+   end
+ 
+@@ -733,25 +748,62 @@ defmodule Memba.Membership.Club do
+   defp create_custom_group_decision(
+          %__MODULE__{} = club,
+          %CreateCustomGroup{} = command,
+-         name
++         creator_membership_id,
++         name,
++         email_slug
+        ) do
+     case Map.fetch(club.groups, command.group_id) do
+-      {:ok, %{group_key: nil, name: ^name}} ->
++      {:ok, %{email_slug: ^email_slug, group_key: nil, name: ^name}} ->
+         []
+ 
+       {:ok, %{}} ->
+         {:error, :group_already_defined}
+ 
+       :error ->
+-        %GroupCreated{
+-          club_id: command.club_id,
+-          group_id: command.group_id,
+-          group_key: nil,
+-          name: name
+-        }
++        [
++          %GroupCreated{
++            club_id: command.club_id,
++            group_id: command.group_id,
++            group_key: nil,
++            name: name
++          },
++          %GroupEmailSlugAssigned{
++            club_id: command.club_id,
++            group_id: command.group_id,
++            email_slug: email_slug
++          },
++          %GroupMemberAdded{
++            club_id: command.club_id,
++            group_id: command.group_id,
++            membership_id: creator_membership_id,
++            person_id: command.actor_person_id
++          }
++        ]
+     end
+   end
+ 
++  defp active_admin_membership_id(%__MODULE__{} = club, actor_person_id) do
++    case Enum.find(club.active_admin_membership_ids, fn membership_id ->
++           Map.get(club.active_memberships, membership_id) == actor_person_id
++         end) do
++      nil -> {:error, :unauthorized}
++      membership_id -> {:ok, membership_id}
++    end
++  end
++
++  defp occupied_custom_group_slugs(%__MODULE__{} = club, group_id) do
++    current_group_email_slug =
++      case Map.get(club.groups, group_id) do
++        %{email_slug: email_slug} -> email_slug
++        nil -> nil
++      end
++
++    club.group_email_slugs
++    |> Map.delete(current_group_email_slug)
++    |> Map.keys()
++    |> MapSet.new()
++  end
++
+   defp normalize_optional_group_email_slug(nil), do: {:ok, nil}
+   defp normalize_optional_group_email_slug(email_slug), do: Slug.normalize_for_lookup(email_slug)
+ 
+diff --git a/web/lib/memba/membership/custom_group_slug.ex b/web/lib/memba/membership/custom_group_slug.ex
+new file mode 100644
+index 0000000..79ffac5
+--- /dev/null
++++ b/web/lib/memba/membership/custom_group_slug.ex
+@@ -0,0 +1,46 @@
++defmodule Memba.Membership.CustomGroupSlug do
++  @moduledoc """
++  Allocates stable, address-safe email slugs for custom groups.
++
++  Allocation is deterministic from the initial display name and the slugs
++  already owned by the Club aggregate. The same function can therefore support
++  non-authoritative previews without making those previews reservations.
++  """
++
++  alias Memba.Membership.Slug
++
++  @fallback_stem "group"
++
++  @spec allocate(term(), MapSet.t(String.t())) :: String.t()
++  def allocate(name, occupied_slugs) when is_struct(occupied_slugs, MapSet) do
++    stem =
++      case Slug.default_from_name(name) do
++        "" -> @fallback_stem
++        generated_stem -> generated_stem
++      end
++
++    if MapSet.member?(occupied_slugs, stem) do
++      first_available_suffixed_slug(stem, occupied_slugs)
++    else
++      stem
++    end
++  end
++
++  defp first_available_suffixed_slug(stem, occupied_slugs) do
++    Stream.iterate(2, &(&1 + 1))
++    |> Stream.map(&with_suffix(stem, &1))
++    |> Enum.find(&(not MapSet.member?(occupied_slugs, &1)))
++  end
++
++  defp with_suffix(stem, number) do
++    suffix = "-#{number}"
++    max_stem_length = Slug.max_length() - String.length(suffix)
++
++    shortened_stem =
++      stem
++      |> String.slice(0, max_stem_length)
++      |> String.trim("-")
++
++    shortened_stem <> suffix
++  end
++end
+diff --git a/web/test/memba/membership/create_custom_group_dispatch_test.exs b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+index 95bda20..c3bd0ff 100644
+--- a/web/test/memba/membership/create_custom_group_dispatch_test.exs
++++ b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+@@ -2,18 +2,27 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+   use Memba.EventSourcedCase, async: false
+ 
+   alias Commanded.Commands.ExecutionResult
++  alias Commanded.EventStore
+   alias Memba.Membership
+   alias Memba.Membership.App
+   alias Memba.Membership.Club
++  alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.CreateCustomGroup
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Projections.Group, as: GroupProjection
++  alias Memba.Membership.Projections.GroupMembership
++  alias Memba.Membership.Roles
+ 
+-  test "create_custom_group/2 carries the authenticated actor into a command routed to Club" do
++  test "create_custom_group/2 atomically creates an addressable group with its Admin creator" do
+     club_id = Memba.ID.generate(:club)
+     group_id = Memba.ID.generate(:group)
+     actor_person_id = Memba.ID.generate(:person)
++    actor_membership_id = Memba.ID.generate(:membership)
+ 
+     create_club!(club_id)
++    create_member!(club_id, actor_membership_id, actor_person_id)
+ 
+     assert %CreateCustomGroup{
+              club_id: ^club_id,
+@@ -37,6 +46,17 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+                   group_id: ^group_id,
+                   group_key: nil,
+                   name: "Board"
++                },
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  email_slug: "board"
++                },
++                %GroupMemberAdded{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  membership_id: ^actor_membership_id,
++                  person_id: ^actor_person_id
+                 }
+               ]
+             }} =
+@@ -51,7 +71,28 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+                consistency: :strong
+              )
+ 
+-    assert %{name: "Board"} = App.aggregate_state(Club, club_id).groups[group_id]
++    assert %{name: "Board", email_slug: "board"} =
++             App.aggregate_state(Club, club_id).groups[group_id]
++
++    assert %GroupProjection{
++             club_id: ^club_id,
++             group_id: ^group_id,
++             email_slug: "board",
++             group_key: nil,
++             name: "Board"
++           } = Repo.get(GroupProjection, group_id)
++
++    assert %GroupMembership{
++             club_id: ^club_id,
++             group_id: ^group_id,
++             membership_id: ^actor_membership_id,
++             person_id: ^actor_person_id,
++             active: true
++           } =
++             Repo.get_by(GroupMembership,
++               group_id: group_id,
++               membership_id: actor_membership_id
++             )
+   end
+ 
+   test "create_custom_group/2 requires an authenticated actor identity" do
+@@ -75,11 +116,142 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+              })
+   end
+ 
++  test "create_custom_group/2 rejects a nonexistent actor without appending or projecting a group" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++
++    create_club_with_admin!(club_id)
++
++    assert {:error, :unauthorized} =
++             create_custom_group(club_id, group_id, Memba.ID.generate(:person))
++
++    refute_partial_group(club_id, group_id)
++  end
++
++  test "create_custom_group/2 rejects an inactive former Admin without appending or projecting a group" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    actor_person_id = Memba.ID.generate(:person)
++    actor_membership_id = Memba.ID.generate(:membership)
++
++    create_club_with_admin!(club_id)
++    create_member!(club_id, actor_membership_id, actor_person_id)
++    assign_admin!(club_id, actor_membership_id, actor_person_id)
++
++    assert :ok =
++             Membership.remove_member(
++               %{
++                 club_id: club_id,
++                 membership_id: actor_membership_id,
++                 person_id: actor_person_id
++               },
++               consistency: :strong
++             )
++
++    assert {:error, :unauthorized} = create_custom_group(club_id, group_id, actor_person_id)
++    refute_partial_group(club_id, group_id)
++  end
++
++  test "create_custom_group/2 rejects an ordinary active member without appending or projecting a group" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    actor_person_id = Memba.ID.generate(:person)
++
++    create_club_with_admin!(club_id)
++    create_member!(club_id, Memba.ID.generate(:membership), actor_person_id)
++
++    assert {:error, :unauthorized} = create_custom_group(club_id, group_id, actor_person_id)
++    refute_partial_group(club_id, group_id)
++  end
++
++  test "create_custom_group/2 rejects an Admin from another club without appending or projecting a group" do
++    destination_club_id = Memba.ID.generate(:club)
++    foreign_club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    actor_person_id = Memba.ID.generate(:person)
++
++    create_club_with_admin!(destination_club_id)
++    create_club!(foreign_club_id)
++    create_member!(foreign_club_id, Memba.ID.generate(:membership), actor_person_id)
++
++    assert {:error, :unauthorized} =
++             create_custom_group(destination_club_id, group_id, actor_person_id)
++
++    refute_partial_group(destination_club_id, group_id)
++  end
++
+   defp create_club!(club_id) do
+     assert :ok =
+              Membership.create_club(
+-               %{club_id: club_id, name: "Kootenay Mountaineering Club"},
++               membership_club_attrs(
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club"
++               ),
++               consistency: :strong
++             )
++  end
++
++  defp create_club_with_admin!(club_id) do
++    create_club!(club_id)
++
++    create_member!(
++      club_id,
++      Memba.ID.generate(:membership),
++      Memba.ID.generate(:person)
++    )
++  end
++
++  defp create_member!(club_id, membership_id, person_id) do
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: "Test Member",
++                 email: "#{person_id}@example.com"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_member(
++               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
+                consistency: :strong
+              )
+   end
++
++  defp assign_admin!(club_id, membership_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AssignClubRoleToMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: Roles.membership_administrator_role_id(club_id)
++               },
++               consistency: :strong
++             )
++  end
++
++  defp create_custom_group(club_id, group_id, actor_person_id) do
++    Membership.create_custom_group(
++      %{
++        club_id: club_id,
++        group_id: group_id,
++        actor_person_id: actor_person_id,
++        name: "Board"
++      },
++      consistency: :strong
++    )
++  end
++
++  defp refute_partial_group(club_id, group_id) do
++    refute Map.has_key?(App.aggregate_state(Club, club_id).groups, group_id)
++    refute Repo.get(GroupProjection, group_id)
++    refute Repo.get_by(GroupMembership, group_id: group_id)
++
++    refute Enum.any?(EventStore.stream_forward(App, club_id), fn
++             %{data: %{group_id: ^group_id}} -> true
++             _event -> false
++           end)
++  end
+ end
