@@ -1,6 +1,8 @@
 defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  import Ecto.Query
+
   alias Commanded.Commands.ExecutionResult
   alias Commanded.EventStore
   alias Memba.Membership
@@ -93,6 +95,85 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                group_id: group_id,
                membership_id: actor_membership_id
              )
+  end
+
+  test "reusing the caller-generated group ID is a successful no-op retry with a stable address" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    collision_group_id = Memba.ID.generate(:group)
+    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+
+    attrs = %{
+      club_id: club_id,
+      group_id: group_id,
+      actor_person_id: actor_person_id,
+      name: "Board"
+    }
+
+    assert :ok = Membership.create_custom_group(attrs, consistency: :strong)
+
+    assert :ok =
+             create_custom_group(
+               club_id,
+               collision_group_id,
+               actor_person_id,
+               "Board!"
+             )
+
+    assert %{email_slug: "board-2"} =
+             App.aggregate_state(Club, club_id).groups[collision_group_id]
+
+    events_before_retry = group_events(club_id, group_id)
+
+    assert {:ok, %ExecutionResult{events: [], aggregate_state: %Club{} = retried_club}} =
+             Membership.create_custom_group(
+               attrs,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %{email_slug: "board", name: "Board"} = retried_club.groups[group_id]
+    assert group_events(club_id, group_id) == events_before_retry
+    assert length(events_before_retry) == 3
+
+    assert %GroupProjection{email_slug: "board", name: "Board"} =
+             Repo.get(GroupProjection, group_id)
+
+    assert [_creator_membership] =
+             Repo.all(
+               from group_membership in GroupMembership,
+                 where: group_membership.group_id == ^group_id
+             )
+  end
+
+  test "a stable group ID cannot be reused as another creator's apparent retry" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    {creator_membership_id, creator_person_id} = create_club_with_admin!(club_id)
+    other_membership_id = Memba.ID.generate(:membership)
+    other_person_id = Memba.ID.generate(:person)
+
+    create_member!(club_id, other_membership_id, other_person_id)
+    assign_admin!(club_id, other_membership_id, other_person_id)
+
+    assert :ok = create_custom_group(club_id, group_id, creator_person_id)
+    events_before_reuse = group_events(club_id, group_id)
+
+    assert {:error, :group_already_defined} =
+             create_custom_group(club_id, group_id, other_person_id)
+
+    assert group_events(club_id, group_id) == events_before_reuse
+
+    assert %GroupMembership{
+             membership_id: ^creator_membership_id,
+             person_id: ^creator_person_id,
+             active: true
+           } = Repo.get_by(GroupMembership, group_id: group_id)
+
+    refute Repo.get_by(GroupMembership,
+             group_id: group_id,
+             membership_id: other_membership_id
+           )
   end
 
   test "create_custom_group/2 requires an authenticated actor identity" do
@@ -350,6 +431,15 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
       },
       consistency: :strong
     )
+  end
+
+  defp group_events(club_id, group_id) do
+    club_id
+    |> then(&EventStore.stream_forward(App, &1))
+    |> Enum.filter(fn
+      %{data: %{group_id: ^group_id}} -> true
+      _event -> false
+    end)
   end
 
   defp refute_partial_group(club_id, group_id) do

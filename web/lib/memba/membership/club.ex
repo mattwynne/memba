@@ -755,7 +755,11 @@ defmodule Memba.Membership.Club do
        ) do
     case Map.fetch(club.groups, command.group_id) do
       {:ok, %{email_slug: ^email_slug, group_key: nil, name: ^name}} ->
-        []
+        if exact_custom_group_creation_retry?(club, command, creator_membership_id) do
+          []
+        else
+          {:error, :group_already_defined}
+        end
 
       {:ok, %{}} ->
         {:error, :group_already_defined}
@@ -780,6 +784,23 @@ defmodule Memba.Membership.Club do
             person_id: command.actor_person_id
           }
         ]
+    end
+  end
+
+  defp exact_custom_group_creation_retry?(
+         %__MODULE__{} = club,
+         %CreateCustomGroup{} = command,
+         creator_membership_id
+       ) do
+    case Map.get(
+           club.group_memberships,
+           group_membership_key(command.group_id, creator_membership_id)
+         ) do
+      %{active: true, person_id: actor_person_id} ->
+        actor_person_id == command.actor_person_id
+
+      _group_membership ->
+        false
     end
   end
 

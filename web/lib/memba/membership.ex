@@ -62,9 +62,11 @@ defmodule Memba.Membership do
   Create a custom conversation group as an authenticated club member.
 
   The caller supplies the Club aggregate identity, a caller-generated group
-  identity, and the authenticated actor's person identity. This application
-  service only translates the use case into an actor-bearing command; the Club
-  aggregate owns the authoritative creation decision.
+  identity, and the authenticated actor's person identity. The group identity
+  is the creation request's retry key: allocate it once and reuse it when the
+  outcome of a dispatch is uncertain. This application service only translates
+  the use case into an actor-bearing command; the Club aggregate owns the
+  authoritative creation decision.
   """
   def create_custom_group(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
