@@ -1,0 +1,241 @@
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 86aa048..530f1fb 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -35,6 +35,7 @@ defmodule Memba.Membership.Club do
+   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
+   alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
++  alias Memba.Membership.GroupName
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
+@@ -51,6 +52,7 @@ defmodule Memba.Membership.Club do
+     groups: %{},
+     group_email_slugs: %{},
+     group_keys: %{},
++    group_name_keys: %{},
+     group_memberships: %{},
+     native_membership_ids: MapSet.new(),
+     roles: %{},
+@@ -116,7 +118,7 @@ defmodule Memba.Membership.Club do
+          {:ok, name} <- normalize_name(command.name),
+          {:ok, creator_membership_id} <-
+            active_admin_membership_id(club, command.actor_person_id),
+-         :ok <- ensure_custom_group_name_available(club, command.group_id, name) do
++         :ok <- ensure_group_name_available(club, command.group_id, name) do
+       email_slug =
+         CustomGroupSlug.allocate(
+           name,
+@@ -370,7 +372,13 @@ defmodule Memba.Membership.Club do
+     %__MODULE__{
+       club
+       | groups: Map.put(club.groups, event.group_id, group),
+-        group_keys: put_group_key(club.group_keys, event.group_key, event.group_id)
++        group_keys: put_group_key(club.group_keys, event.group_key, event.group_id),
++        group_name_keys:
++          Map.put(
++            club.group_name_keys,
++            GroupName.uniqueness_key(event.name),
++            event.group_id
++          )
+     }
+   end
+ 
+@@ -731,7 +739,9 @@ defmodule Memba.Membership.Club do
+         {:error, :group_already_defined}
+ 
+       :error ->
++        # Keep the established structural-key error ahead of display-name collisions.
+         with :ok <- ensure_group_key_available(club, group_key),
++             :ok <- ensure_group_name_available(club, command.group_id, name),
+              :ok <- require_new_group_email_slug(email_slug),
+              :ok <- ensure_optional_group_email_slug_available(club, email_slug) do
+           group_created_event = %GroupCreated{
+@@ -813,31 +823,14 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
+-  defp ensure_custom_group_name_available(%__MODULE__{} = club, group_id, name) do
+-    uniqueness_key = custom_group_name_uniqueness_key(name)
+-
+-    name_already_defined? =
+-      Enum.any?(club.groups, fn
+-        {^group_id, _group} ->
+-          false
+-
+-        {_other_group_id, %{name: existing_name}} ->
+-          custom_group_name_uniqueness_key(existing_name) == uniqueness_key
+-      end)
+-
+-    if name_already_defined? do
+-      {:error, :group_name_already_defined}
+-    else
+-      :ok
++  defp ensure_group_name_available(%__MODULE__{} = club, group_id, name) do
++    case Map.fetch(club.group_name_keys, GroupName.uniqueness_key(name)) do
++      :error -> :ok
++      {:ok, ^group_id} -> :ok
++      {:ok, _other_group_id} -> {:error, :group_name_already_defined}
+     end
+   end
+ 
+-  defp custom_group_name_uniqueness_key(name) do
+-    name
+-    |> String.trim()
+-    |> String.downcase()
+-  end
+-
+   defp occupied_group_email_slugs(%__MODULE__{} = club, group_id) do
+     current_group_email_slug =
+       case Map.get(club.groups, group_id) do
+diff --git a/web/lib/memba/membership/group_name.ex b/web/lib/memba/membership/group_name.ex
+new file mode 100644
+index 0000000..b6fe316
+--- /dev/null
++++ b/web/lib/memba/membership/group_name.ex
+@@ -0,0 +1,15 @@
++defmodule Memba.Membership.GroupName do
++  @moduledoc """
++  Defines the club-local comparison key for conversation-group display names.
++
++  Group names retain their original Unicode display value. The derived key is
++  only for case-insensitive uniqueness checks and read-model lookup constraints.
++  """
++
++  @spec uniqueness_key(String.t()) :: String.t()
++  def uniqueness_key(name) when is_binary(name) do
++    name
++    |> String.trim()
++    |> String.downcase()
++  end
++end
+diff --git a/web/priv/repo/migrations/20260913221054_add_normalized_group_name_uniqueness.exs b/web/priv/repo/migrations/20260913221054_add_normalized_group_name_uniqueness.exs
+new file mode 100644
+index 0000000..a688925
+--- /dev/null
++++ b/web/priv/repo/migrations/20260913221054_add_normalized_group_name_uniqueness.exs
+@@ -0,0 +1,15 @@
++defmodule Memba.Repo.Migrations.AddNormalizedGroupNameUniqueness do
++  use Ecto.Migration
++
++  def up do
++    create unique_index(:membership_groups, [:club_id, "(lower(btrim(name)))"],
++             name: :membership_groups_club_normalized_name_index
++           )
++  end
++
++  def down do
++    drop_if_exists index(:membership_groups, [:club_id, "(lower(btrim(name)))"],
++                     name: :membership_groups_club_normalized_name_index
++                   )
++  end
++end
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index da262a1..9116ec3 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -843,6 +843,24 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "rejects a normalized duplicate name from trusted group creation" do
++      club_id = Memba.ID.generate(:club)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(Memba.ID.generate(:group), "trip_planners", "Trip Planners")
++
++      assert {:error, :group_name_already_defined} =
++               Club.execute(club, %CreateGroup{
++                 club_id: club_id,
++                 group_id: Memba.ID.generate(:group),
++                 email_slug: "other-trip-planners",
++                 group_key: "other_trip_planners",
++                 name: " TRIP PLANNERS "
++               })
++    end
++
+     test "rejects a new group before creation when its email slug is already defined" do
+       club_id = Memba.ID.generate(:club)
+       first_group_id = Memba.ID.generate(:group)
+diff --git a/web/test/memba/membership/create_custom_group_dispatch_test.exs b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+index fe314a0..e2fbcc2 100644
+--- a/web/test/memba/membership/create_custom_group_dispatch_test.exs
++++ b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+@@ -91,8 +91,10 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+                       }
+                     ]}
+ 
+-    assert %{name: "Board", email_slug: "board"} =
+-             App.aggregate_state(Club, club_id).groups[group_id]
++    club = App.aggregate_state(Club, club_id)
++
++    assert %{name: "Board", email_slug: "board"} = club.groups[group_id]
++    assert club.group_name_keys["board"] == group_id
+ 
+     assert %GroupProjection{
+              club_id: ^club_id,
+@@ -309,6 +311,25 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+            } = Repo.get_by(GroupMembership, group_id: original_group_id)
+   end
+ 
++  test "aggregate name uniqueness remains authoritative when its projection is missing" do
++    club_id = Memba.ID.generate(:club)
++    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
++    original_group_id = Memba.ID.generate(:group)
++    duplicate_group_id = Memba.ID.generate(:group)
++
++    assert :ok = create_custom_group(club_id, original_group_id, actor_person_id, "Board")
++
++    assert {1, nil} =
++             Repo.delete_all(
++               from group in GroupProjection, where: group.group_id == ^original_group_id
++             )
++
++    assert {:error, :group_name_already_defined} =
++             create_custom_group(club_id, duplicate_group_id, actor_person_id, " BOARD ")
++
++    refute_partial_group(club_id, duplicate_group_id)
++  end
++
+   test "create_custom_group/2 protects Everyone and Admin names case-insensitively" do
+     club_id = Memba.ID.generate(:club)
+     {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+diff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs
+index fd9826f..eddf63e 100644
+--- a/web/test/memba/membership/group_projection_test.exs
++++ b/web/test/memba/membership/group_projection_test.exs
+@@ -129,6 +129,31 @@ defmodule Memba.Membership.GroupProjectionTest do
+     end
+   end
+ 
++  test "the read model permits a normalized name in different clubs but enforces club uniqueness" do
++    first_club_id = Memba.ID.generate(:club)
++    second_club_id = Memba.ID.generate(:club)
++
++    Repo.insert!(%GroupProjection{
++      club_id: first_club_id,
++      group_id: Memba.ID.generate(:group),
++      name: "Board"
++    })
++
++    Repo.insert!(%GroupProjection{
++      club_id: second_club_id,
++      group_id: Memba.ID.generate(:group),
++      name: " BOARD "
++    })
++
++    assert_raise Ecto.ConstraintError, fn ->
++      Repo.insert!(%GroupProjection{
++        club_id: first_club_id,
++        group_id: Memba.ID.generate(:group),
++        name: " bOaRd "
++      })
++    end
++  end
++
+   test "AddGroupMember projects an active group membership row" do
+     club_id = Memba.ID.generate(:club)
+     group_id = SystemGroups.everyone_group_id(club_id)
