@@ -14,6 +14,12 @@ defmodule MembaWeb.MemberMessageLive.Show do
   alias Memba.ReadModelChanges
   alias MembaWeb.MemberMessageDetail
 
+  @access_projectors [
+    Memba.Membership.Projectors.GroupMembership,
+    Memba.Membership.Projectors.Membership,
+    Memba.Messaging.Projectors.ConversationGroupAccess
+  ]
+
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
     params = put_session_club_id(params, session) |> put_club_id_source(session)
@@ -86,6 +92,18 @@ defmodule MembaWeb.MemberMessageLive.Show do
       ) do
     if event_conversation_id(event) == message.conversation_id do
       {:noreply, refresh_message_detail(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id} = event}},
+        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
+      )
+      when projector in @access_projectors do
+    if access_change_relevant?(projector, event, socket) do
+      {:noreply, refresh_access_or_leave(socket)}
     else
       {:noreply, socket}
     end
@@ -195,6 +213,32 @@ defmodule MembaWeb.MemberMessageLive.Show do
       {:error, :not_found} ->
         not_found!(socket)
     end
+  end
+
+  defp refresh_access_or_leave(socket) do
+    case MemberMessageDetail.load(
+           socket.assigns.route_params,
+           socket.assigns.current_identity_clubs,
+           socket.assigns.current_identity
+         ) do
+      {:ok, detail_assigns} ->
+        assign(socket, detail_assigns)
+
+      {:error, _reason} ->
+        push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
+    end
+  end
+
+  defp access_change_relevant?(
+         Memba.Messaging.Projectors.ConversationGroupAccess,
+         event,
+         socket
+       ) do
+    event_conversation_id(event) == socket.assigns.message.conversation_id
+  end
+
+  defp access_change_relevant?(_membership_projector, event, socket) do
+    Map.get(event, :person_id) == socket.assigns.current_member.id
   end
 
   defp update_current_member_follow(socket, action) do
@@ -334,6 +378,12 @@ defmodule MembaWeb.MemberMessageLive.Show do
 
   defp current_member_id(nil), do: nil
   defp current_member_id(current_member), do: current_member.id
+
+  defp access_lost_path(%{"group_id" => group_id})
+       when is_binary(group_id) and group_id != "",
+       do: ~p"/groups/#{group_id}"
+
+  defp access_lost_path(_route_params), do: ~p"/conversations"
 
   defp ensure_identity_assigns(socket) do
     socket

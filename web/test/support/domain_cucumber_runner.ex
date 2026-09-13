@@ -164,13 +164,17 @@ defmodule Memba.DomainCucumberRunner do
 
   defp feature_scenarios(feature) do
     top_level_scenarios =
-      Enum.map(feature.scenarios, fn scenario -> %{feature: feature, scenario: scenario} end)
+      feature.scenarios
+      |> Cucumber.Compiler.expand_all_scenarios()
+      |> Enum.map(fn scenario -> %{feature: feature, scenario: scenario} end)
 
     rule_scenarios =
       feature
       |> Map.get(:rules, [])
       |> Enum.flat_map(fn rule ->
-        Enum.map(rule.scenarios, fn scenario ->
+        rule.scenarios
+        |> Cucumber.Compiler.expand_all_scenarios()
+        |> Enum.map(fn scenario ->
           %{feature: feature, rule: rule, scenario: scenario}
         end)
       end)

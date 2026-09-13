@@ -12,6 +12,14 @@ defmodule MembaWeb.MemberDashboardLive do
   alias MembaWeb.IdentityAuth
   alias MembaWeb.MemberDashboardPresentation
 
+  @dashboard_state_projectors [
+    Memba.Membership.Projectors.Group,
+    Memba.Membership.Projectors.GroupMembership,
+    Memba.Membership.Projectors.Membership,
+    Memba.Membership.Projectors.Role,
+    Memba.Messaging.Projectors.ConversationGroupAccess
+  ]
+
   @impl Phoenix.LiveView
   def mount(params, session, socket) do
     club_id = Map.get(session, "club_id")
@@ -52,11 +60,7 @@ defmodule MembaWeb.MemberDashboardLive do
     selected_group_id = Map.get(params, "group_id")
 
     socket =
-      if socket.assigns.selected_group_route_id == selected_group_id do
-        socket
-      else
-        refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
-      end
+      refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
 
     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
   end
@@ -94,6 +98,13 @@ defmodule MembaWeb.MemberDashboardLive do
   end
 
   def handle_event("restore_remembered_group", _params, socket) do
+    socket =
+      refresh_dashboard(
+        socket,
+        socket.assigns.selected_club.club_id,
+        socket.assigns.selected_group_route_id
+      )
+
     reply_with_selected_group(socket)
   end
 
@@ -104,6 +115,14 @@ defmodule MembaWeb.MemberDashboardLive do
       ) do
     {:noreply,
      refresh_dashboard(socket, selected_club.club_id, socket.assigns.selected_group_route_id)}
+  end
+
+  def handle_info(
+        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
+        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
+      )
+      when projector in @dashboard_state_projectors do
+    {:noreply, refresh_dashboard(socket, club_id, socket.assigns.selected_group_route_id)}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}

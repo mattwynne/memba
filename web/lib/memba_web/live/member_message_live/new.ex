@@ -15,7 +15,14 @@ defmodule MembaWeb.MemberMessageLive.New do
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.Projectors.Message, as: MessageProjector
+  alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
+
+  @compose_context_projectors [
+    Memba.Membership.Projectors.Group,
+    Memba.Membership.Projectors.GroupMembership,
+    Memba.Membership.Projectors.Membership
+  ]
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
@@ -35,6 +42,7 @@ defmodule MembaWeb.MemberMessageLive.New do
              socket
              |> assign(:route_params, params)
              |> assign(compose_assigns)
+             |> subscribe_to_read_model_changes()
              |> assign_initial_send_state()
              |> assign(:message_form, message_form())}
 
@@ -62,36 +70,27 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   @impl Phoenix.LiveView
+  def handle_info(
+        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
+        %{assigns: %{route_params: %{"club_id" => club_id}}} = socket
+      )
+      when projector in @compose_context_projectors do
+    case reload_compose_context(socket) do
+      {:ok, socket} -> {:noreply, socket}
+      {:error, socket} -> {:noreply, leave_private_surface(socket)}
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  @impl Phoenix.LiveView
   def handle_event("send_message", %{"message" => message_params}, socket) do
-    if blank_body?(message_params) do
-      {:noreply,
-       socket
-       |> assign(:compose_state, :composing)
-       |> assign(:sent_message_id, nil)
-       |> assign(:send_error, nil)
-       |> assign(:body_error, "Message body can’t be blank.")
-       |> assign(:message_form, message_form(message_params))}
-    else
-      case send_current_member_message(socket, message_params) do
-        {:ok, message_id} ->
-          {:noreply,
-           socket
-           |> assign(:compose_state, :sent)
-           |> assign(:sent_message_id, message_id)
-           |> assign(:send_error, nil)
-           |> assign(:body_error, nil)}
+    case reload_compose_context(socket) do
+      {:ok, socket} ->
+        send_message(socket, message_params)
 
-        {:error, reason} ->
-          log_send_failure(socket, reason)
-
-          {:noreply,
-           socket
-           |> assign(:compose_state, :send_failed)
-           |> assign(:sent_message_id, nil)
-           |> assign(:send_error, reason)
-           |> assign(:body_error, nil)
-           |> assign(:message_form, message_form(message_params))}
-      end
+      {:error, socket} ->
+        {:noreply, leave_private_surface(socket)}
     end
   end
 
@@ -346,6 +345,69 @@ defmodule MembaWeb.MemberMessageLive.New do
     |> assign_new(:current_identity_clubs, fn -> [] end)
   end
 
+  defp subscribe_to_read_model_changes(socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+    end
+
+    socket
+  end
+
+  defp reload_compose_context(socket) do
+    route_params = socket.assigns.route_params
+
+    case compose_context(
+           Map.get(route_params, "club_id"),
+           Map.get(route_params, "group_id"),
+           socket.assigns.current_identity,
+           socket.assigns.current_identity_clubs
+         ) do
+      {:ok, compose_assigns} -> {:ok, assign(socket, compose_assigns)}
+      {:error, _reason} -> {:error, socket}
+    end
+  end
+
+  defp leave_private_surface(socket) do
+    route_params = socket.assigns.route_params
+
+    socket
+    |> assign_empty_compose_context()
+    |> push_navigate(to: access_lost_path(route_params))
+  end
+
+  defp send_message(socket, message_params) do
+    if blank_body?(message_params) do
+      {:noreply,
+       socket
+       |> assign(:compose_state, :composing)
+       |> assign(:sent_message_id, nil)
+       |> assign(:send_error, nil)
+       |> assign(:body_error, "Message body can’t be blank.")
+       |> assign(:message_form, message_form(message_params))}
+    else
+      case send_current_member_message(socket, message_params) do
+        {:ok, message_id} ->
+          {:noreply,
+           socket
+           |> assign(:compose_state, :sent)
+           |> assign(:sent_message_id, message_id)
+           |> assign(:send_error, nil)
+           |> assign(:body_error, nil)}
+
+        {:error, reason} ->
+          log_send_failure(socket, reason)
+
+          {:noreply,
+           socket
+           |> assign(:compose_state, :send_failed)
+           |> assign(:sent_message_id, nil)
+           |> assign(:send_error, reason)
+           |> assign(:body_error, nil)
+           |> assign(:message_form, message_form(message_params))}
+      end
+    end
+  end
+
   defp send_current_member_message(socket, message_params) do
     with %{
            selected_club: %{club_id: club_id},
@@ -363,13 +425,25 @@ defmodule MembaWeb.MemberMessageLive.New do
         "body" => Map.get(message_params, "body", "")
       }
 
-      case Messaging.send_club_message(attrs, consistency: [MessageProjector]) do
-        :ok -> {:ok, message_id}
-        {:ok, _result} -> {:ok, message_id}
-        {:error, reason} -> {:error, reason}
+      with :ok <- authorize_current_audience(club_id, sender_id, audience_group_id) do
+        case Messaging.send_club_message(attrs, consistency: [MessageProjector]) do
+          :ok -> {:ok, message_id}
+          {:ok, _result} -> {:ok, message_id}
+          {:error, reason} -> {:error, reason}
+        end
       end
     else
       _missing_compose_context -> {:error, :forbidden}
+    end
+  end
+
+  defp authorize_current_audience(club_id, sender_id, audience_group_id) do
+    club_id
+    |> Membership.list_active_groups_for_member(sender_id)
+    |> Enum.any?(&(&1.group_id == audience_group_id))
+    |> case do
+      true -> :ok
+      false -> {:error, :forbidden}
     end
   end
 
@@ -509,6 +583,12 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   defp audience_group_id(nil), do: nil
   defp audience_group_id(audience_group), do: audience_group.group_id
+
+  defp access_lost_path(%{"group_id" => group_id})
+       when is_binary(group_id) and group_id != "",
+       do: ~p"/groups/#{group_id}"
+
+  defp access_lost_path(_route_params), do: ~p"/conversations"
 
   defp club_home_path(_selected_club, %{
          "club_id_source" => "host",

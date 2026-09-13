@@ -2,6 +2,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const {
+  AstBuilder,
+  GherkinClassicTokenMatcher,
+  Parser
+} = require("@cucumber/gherkin");
 
 const cucumberConfig = require("../cucumber");
 
@@ -49,6 +54,27 @@ test("shared feature suite uses only runner-intent and runner-debt tags", () => 
   assert.deepEqual(unsupportedTags, []);
 });
 
+test("scenario inventory inherits feature, rule, and scenario tags within their scopes", () => {
+  const scenarios = featureScenarios(
+    browserFeaturePathNamed("club_message_replies.feature")
+  );
+
+  assert.deepEqual(
+    scenarios.get("The sender and repliers automatically follow the conversation").tags,
+    ["@iteration-039", "@iteration-040"]
+  );
+  assert.deepEqual(
+    scenarios.get(
+      "Email to the club address without reply headers starts a new club-wide message"
+    ).tags,
+    ["@iteration-039", "@iteration-041", "@iteration-042"]
+  );
+  assert.deepEqual(
+    scenarios.get("A member of another club cannot reply").tags,
+    ["@iteration-039"]
+  );
+});
+
 test("iteration 031 scenarios are no longer blocked from the browser runner", () => {
   const iterationScenarios = browserFeatures().flatMap((feature) =>
     feature.scenarios
@@ -79,17 +105,68 @@ test("iteration 057 scenarios are no longer blocked from either acceptance runne
   );
 });
 
-test("iteration 058 scenarios are no longer blocked from either acceptance runner", () => {
-  const iterationScenarios = browserFeatures().flatMap((feature) =>
-    feature.scenarios
-      .filter((scenario) => scenario.tags.includes("@iteration-058"))
-      .map((scenario) => `${feature.name}: ${scenario.name}: ${scenario.tags.join(" ")}`)
+test("group-conversation scenarios retain iteration 058 provenance as later slices evolve them", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "group_conversations.feature"
   );
+  const inheritedIterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-058")
+  );
+  const unchangedIteration058ScenarioNames = inheritedIterationScenarios
+    .filter(
+      (scenario) =>
+        !scenario.tags.some((tag) => /^@iteration-(061|065)$/.test(tag))
+    )
+    .map((scenario) => scenario.name);
 
-  assert.equal(iterationScenarios.length, 8);
+  assert.equal(inheritedIterationScenarios.length, 15);
+  assert.deepEqual(unchangedIteration058ScenarioNames, [
+    "Bob sees Everyone and Admin",
+    "A future named group is presented without a bespoke screen",
+    "An Admin member views Admin conversations and members",
+    "Bob starts an Admin conversation in the web app",
+    "Bob returns to Admin",
+    "Alice has no remembered group"
+  ]);
+
+  assert.deepEqual(
+    inheritedIterationScenarios
+      .filter((scenario) => unchangedIteration058ScenarioNames.includes(scenario.name))
+      .filter(
+        (scenario) =>
+          scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
+      ),
+    []
+  );
+});
+
+test("iteration 061 scenarios run in each intended acceptance layer", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "group_conversations.feature"
+  );
+  const iterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-061")
+  );
+  const domainScenarioNames = iterationScenarios
+    .filter((scenario) => !scenario.tags.includes("@not-domain"))
+    .map((scenario) => scenario.name);
+  const browserScenarioNames = iterationScenarios
+    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+    .map((scenario) => scenario.name);
+
+  assert.deepEqual(domainScenarioNames, [
+    "Alice sees Admin without belonging to it",
+    "Alice follows an Admin group link",
+    "Alice can find Board but cannot read its discussions",
+    "Bob inspects Board's members without joining",
+    "Neither ordinary membership nor club administration grants Board access",
+    "Another club's member cannot discover KMC groups"
+  ]);
+  assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
   assert.deepEqual(
     iterationScenarios.filter(
-      (scenario) => scenario.includes("@todo-domain") || scenario.includes("@todo-ui")
+      (scenario) =>
+        scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
     ),
     []
   );
@@ -179,57 +256,57 @@ function listFeatureFiles(directory) {
 }
 
 function featureTags(filePath) {
-  const tags = [];
-
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-    const trimmed = line.trim();
-
-    if (trimmed === "") {
-      continue;
-    }
-
-    if (trimmed.startsWith("@")) {
-      tags.push(...trimmed.split(/\s+/));
-      continue;
-    }
-
-    if (trimmed.startsWith("Feature:")) {
-      break;
-    }
-  }
-
-  return tags;
+  return tagNames(parseFeature(filePath).tags);
 }
 
 function featureScenarios(filePath) {
+  const feature = parseFeature(filePath);
   const scenarios = new Map();
-  const featureLevelTags = featureTags(filePath);
-  let pendingTags = [];
+  const featureLevelTags = tagNames(feature.tags);
 
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-    const trimmed = line.trim();
-    const scenarioMatch = trimmed.match(/^Scenario(?: Outline)?:\s*(.+)$/);
-
-    if (trimmed === "") {
+  for (const child of feature.children) {
+    if (child.scenario) {
+      addScenario(scenarios, child.scenario, featureLevelTags);
       continue;
     }
 
-    if (trimmed.startsWith("@")) {
-      pendingTags.push(...trimmed.split(/\s+/));
-      continue;
-    }
+    if (child.rule) {
+      const ruleLevelTags = [
+        ...featureLevelTags,
+        ...tagNames(child.rule.tags)
+      ];
 
-    if (scenarioMatch) {
-      const name = scenarioMatch[1];
-      scenarios.set(name, { name, tags: [...featureLevelTags, ...pendingTags] });
-      pendingTags = [];
-      continue;
+      for (const ruleChild of child.rule.children) {
+        if (ruleChild.scenario) {
+          addScenario(scenarios, ruleChild.scenario, ruleLevelTags);
+        }
+      }
     }
-
-    pendingTags = [];
   }
 
   return scenarios;
+}
+
+function parseFeature(filePath) {
+  let nextId = 0;
+  const newId = () => String(nextId++);
+  const parser = new Parser(
+    new AstBuilder(newId),
+    new GherkinClassicTokenMatcher()
+  );
+
+  return parser.parse(fs.readFileSync(filePath, "utf8")).feature;
+}
+
+function addScenario(scenarios, scenario, inheritedTags) {
+  scenarios.set(scenario.name, {
+    name: scenario.name,
+    tags: [...inheritedTags, ...tagNames(scenario.tags)]
+  });
+}
+
+function tagNames(tags) {
+  return tags.map(({ name }) => name);
 }
 
 function supportedFeatureTag(tag) {

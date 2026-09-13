@@ -46,7 +46,8 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
 
     assert_selector(
       html,
-      "#member-section-tabs-list[role='tablist'][aria-orientation='horizontal']" <>
+      "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
+        "[aria-orientation='horizontal']" <>
         "[phx-hook='MembaWeb.MemberDashboardGroupTabs.SectionTabs']"
     )
 
@@ -141,6 +142,32 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
     assert_selector(html, "#member-section-tabs-action.section-tabs__action")
     refute_selector(html, "#member-section-action-new-message")
     refute_selector(html, "#member-section-action-invite-member")
+  end
+
+  test "renders the Members-only tab composition when conversations are unavailable" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <MemberDashboardGroupTabs.group_tabs
+        active_tab="members"
+        conversations_path="/groups/grp_123"
+        members_path="/groups/grp_123/members"
+        show_conversations={false}
+      />
+      """)
+
+    assert_selector(
+      html,
+      "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
+        "[aria-orientation='horizontal'] " <>
+        "#member-section-tab-members[href='/groups/grp_123/members']" <>
+        "[role='tab'][aria-selected='true']" <>
+        "[aria-controls='member-section-panel-members'][tabindex='0']"
+    )
+
+    refute_selector(html, "#member-section-tab-conversations")
+    assert_selector(html, "#member-section-tabs-action.section-tabs__action")
   end
 
   defp assert_selector(html, selector) do
