@@ -583,7 +583,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-13T06:51:08.359611403Z",
-  "last_event_at": "2026-09-13T06:52:32.404416230Z",
+  "last_event_at": "2026-09-13T06:52:48.826320622Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -627,19 +627,21 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-09-13T06:52:47.161092595Z",
-        "current_node": "review_fork",
+        "timestamp": "2026-09-13T06:52:50.774451049Z",
+        "current_node": "review_merge",
         "completed_nodes": [
           "start",
-          "review_fork"
+          "review_fork",
+          "review_merge"
         ],
         "node_retries": {},
         "context_values": {
+          "thread.review_fork.current_node": "review_merge",
           "internal.retry_count.start": 0,
-          "outcome": "partially_succeeded",
+          "outcome": "succeeded",
           "failure_signature": "",
           "graph.default_fidelity": "summary:high",
-          "internal.thread_id": "start",
+          "internal.thread_id": "review_fork",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #terra_recheck { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "internal.work_dir": "/workspace/memba",
           "internal.fidelity": "summary:high",
@@ -674,15 +676,25 @@
               }
             }
           ],
+          "internal.retry_count.review_merge": 0,
           "internal.run_id": "01M2CRH90MWVQ08YF38XYDNVC9",
           "failure_class": "",
           "thread.start.current_node": "review_fork",
-          "current_node": "review_fork",
+          "current_node": "review_merge",
           "internal.retry_count.review_fork": 0,
           "internal.node_visit_count": 1,
           "graph.rankdir": "LR"
         },
         "node_outcomes": {
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
           "review_fork": {
             "status": "partially_succeeded",
             "context_updates": {
@@ -720,14 +732,11 @@
             "jump_to_node": "review_merge",
             "notes": "Parallel node dispatched 3 branches (1 succeeded, 2 failed)",
             "usage": null
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
           }
         },
-        "next_node_id": "review_merge",
+        "next_node_id": "synthesize",
         "node_visits": {
+          "review_merge": 1,
           "start": 1,
           "review_fork": 1
         }
@@ -765,16 +774,55 @@
       "first_event_seq": 21,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "partially_succeeded",
+        "notes": "Parallel node dispatched 3 branches (1 succeeded, 2 failed)",
+        "failure_reason": null,
+        "timestamp": "2026-09-13T06:52:47.160979332Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
-      "parallel_results": null,
+      "parallel_results": [
+        {
+          "id": "gemini_review",
+          "index": 0,
+          "status": "failed",
+          "context_updates": {}
+        },
+        {
+          "id": "claude_review",
+          "index": 1,
+          "status": "failed",
+          "context_updates": {}
+        },
+        {
+          "id": "codex_review",
+          "index": 2,
+          "status": "succeeded",
+          "context_updates": {
+            "codex_review_blocking_gap_count": 0,
+            "codex_review_blocking_gaps": "None",
+            "codex_review_confidence": "High",
+            "codex_review_decision": "READY",
+            "codex_review_required_edits": "None",
+            "last_response": "{\n  \"preferred_next_label\": \"implementation\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"review_report\": \"## Decision: READY\\n\\n## Confidence: High\\n\\nThe complet",
+            "last_stage": "codex_review",
+            "response.codex_review": "{\n  \"preferred_next_label\": \"implementation\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"review_report\": \"## Decision: READY\\n\\n## Confidence: High\\n\\nThe complete 104-line iteration plan was reviewed directly. It defines a clear user outcome for active club members, keeps discovery separate from participation, establishes role-specific privacy boundaries, identifies the shared acceptance feature, closes business and technical decisions, and provides an ordered implementation and validation strategy.\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. Add an explicit acceptance scenario for an already-open LiveView when membership or administrator status changes. The scope, implementation plan, and validation plan require reactive permission updates, but a named example would make the expected transition and resulting selected surface easier to trace.\\n2. State the group-rail ordering rule explicitly, even if the decision is simply to preserve the existing system-group and custom-group ordering.\\n3. For stronger traceability, list the exact new scenario titles from `group_conversations.feature` in the Acceptance Scenarios section instead of describing them only by category.\\n\\n## Smallest viable iteration\\n\\nKeep the proposed slice intact: active club members can discover every same-club group name; participating members retain their existing conversation and membership capabilities; ordinary non-members receive only access guidance and the Admin contact; outside club administrators receive read-only membership inspection without conversation or email access; direct and stale actions remain server-authorized. The remembered-selection and live-permission-refresh work belongs in this slice because otherwise the new discoverable links could expose stale content or behave inconsistently with existing navigation.\\n\\nAfter this iteration, members will be able to find groups they have not joined and learn how to seek access, while club administrators will be able to inspect custom-group membership without joining or receiving conversations.\\n\\n## Required plan edits\\n\\n1. None before implementation.\\n\\n## Validation plan\\n\\n1. Parse the shared Gherkin and verify the `@iteration-061`, runner-debt, and inherited `@iteration-058` scenario inventory.\\n2. Test the Membership APIs independently: active members discover every same-club group, foreign-club and signed-out actors discover nothing, and `list_active_groups_for_member/2` continues to return actual memberships only.\\n3. Run the new domain and browser scenarios covering ordinary non-members, outside administrators, direct action refusal, club isolation, and remembered non-member selection.\\n4. Add focused presentation and routed LiveView tests for participating-member, ordinary-placeholder, and administrator-members-only surfaces. Assert that unauthorized conversations and member rows are neither loaded nor emitted in initial HTML or LiveView diffs.\\n5. Exercise guessed URLs and direct read, compose, reply, follow, and delivery-detail actions, including stale actions after access loss, and prove that no message, reply, follow, membership, or email subscription is created.\\n6. Verify already-open LiveViews recompute discovery and access after relevant read-model changes without requiring refresh or sign-out.\\n7. Verify same-club remembered selections reopen their currently permitted surface, while missing and foreign selections fall back to Everyone without granting access from browser state.\\n8. Manually review the ordinary access-guidance and outside-admin members-only surfaces on desktop and mobile against the approved local designs.\\n9. Run `dev check` against the exact delivered state. The stop condition is that all iteration-061 scenarios and focused regressions pass, existing iteration-058 and system-group behavior remains green, privacy checks show no unauthorized disclosure or mutation, the manual design review passes, and `dev check` succeeds.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}"
+          }
+        }
+      ],
       "output": null,
       "started_at": "2026-09-13T06:51:10.475984427Z",
       "handler": "parallel",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 96684,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -784,7 +832,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "partially_succeeded"
     },
     "gemini_review@1": {
       "first_event_seq": 23,
@@ -1125,7 +1173,12 @@
       "first_event_seq": 28,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-13T06:52:47.160115968Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -1141,16 +1194,22 @@
       "started_at": "2026-09-13T06:51:10.510980638Z",
       "handler": "agent",
       "graph_visit": 1,
-      "live_inference_ms": 78694,
+      "timing": {
+        "wall_time_ms": 96649,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "live_inference_ms": 95705,
       "live_tool_ms": 474,
       "usage": {
-        "input_tokens": 16354,
-        "output_tokens": 1252,
-        "total_tokens": 25130,
-        "reasoning_tokens": 2788,
-        "cache_read_tokens": 4736,
+        "input_tokens": 22209,
+        "output_tokens": 2079,
+        "total_tokens": 38648,
+        "reasoning_tokens": 2840,
+        "cache_read_tokens": 11520,
         "cache_write_tokens": 0,
-        "total_usd_micros": 205338
+        "total_usd_micros": 264375
       },
       "model": {
         "provider": "openai",
@@ -1235,54 +1294,43 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 9227,
-        "usage_percent": 3.3922794117647057,
+        "input_tokens": 12639,
+        "usage_percent": 4.646691176470588,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-13T06:52:30.146530138Z",
-        "event_seq": 84,
+        "generated_at": "2026-09-13T06:52:47.158994297Z",
+        "event_seq": 88,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2474,
-            "usage_percent": 0.9095588235294118
+            "tokens": 2020,
+            "usage_percent": 0.7426470588235294
           },
           {
             "category": "tools",
-            "tokens": 766,
-            "usage_percent": 0.28161764705882353
+            "tokens": 626,
+            "usage_percent": 0.2301470588235294
           },
           {
             "category": "memory",
-            "tokens": 346,
-            "usage_percent": 0.12720588235294117
+            "tokens": 283,
+            "usage_percent": 0.10404411764705883
           },
           {
             "category": "conversation",
-            "tokens": 5635,
-            "usage_percent": 2.0716911764705883
+            "tokens": 9706,
+            "usage_percent": 3.5683823529411764
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 4,
+            "usage_percent": 0.0014705882352941176
           }
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "d3adbb10-68f0-4a56-a950-f83aa1d7bf42",
-        "started_at": "2026-09-13T06:52:30.148098915Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-13T06:52:32.404416230Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "start@1": {
       "first_event_seq": 17,
