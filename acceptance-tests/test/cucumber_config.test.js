@@ -79,17 +79,68 @@ test("iteration 057 scenarios are no longer blocked from either acceptance runne
   );
 });
 
-test("iteration 058 scenarios are no longer blocked from either acceptance runner", () => {
-  const iterationScenarios = browserFeatures().flatMap((feature) =>
-    feature.scenarios
-      .filter((scenario) => scenario.tags.includes("@iteration-058"))
-      .map((scenario) => `${feature.name}: ${scenario.name}: ${scenario.tags.join(" ")}`)
+test("group-conversation scenarios retain iteration 058 provenance as later slices evolve them", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "group_conversations.feature"
   );
+  const inheritedIterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-058")
+  );
+  const unchangedIteration058ScenarioNames = inheritedIterationScenarios
+    .filter(
+      (scenario) =>
+        !scenario.tags.some((tag) => /^@iteration-(061|065)$/.test(tag))
+    )
+    .map((scenario) => scenario.name);
 
-  assert.equal(iterationScenarios.length, 8);
+  assert.equal(inheritedIterationScenarios.length, 15);
+  assert.deepEqual(unchangedIteration058ScenarioNames, [
+    "Bob sees Everyone and Admin",
+    "A future named group is presented without a bespoke screen",
+    "An Admin member views Admin conversations and members",
+    "Bob starts an Admin conversation in the web app",
+    "Bob returns to Admin",
+    "Alice has no remembered group"
+  ]);
+
+  assert.deepEqual(
+    inheritedIterationScenarios
+      .filter((scenario) => unchangedIteration058ScenarioNames.includes(scenario.name))
+      .filter(
+        (scenario) =>
+          scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
+      ),
+    []
+  );
+});
+
+test("iteration 061 scenarios run in each intended acceptance layer", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "group_conversations.feature"
+  );
+  const iterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-061")
+  );
+  const domainScenarioNames = iterationScenarios
+    .filter((scenario) => !scenario.tags.includes("@not-domain"))
+    .map((scenario) => scenario.name);
+  const browserScenarioNames = iterationScenarios
+    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+    .map((scenario) => scenario.name);
+
+  assert.deepEqual(domainScenarioNames, [
+    "Alice sees Admin without belonging to it",
+    "Alice follows an Admin group link",
+    "Alice can find Board but cannot read its discussions",
+    "Bob inspects Board's members without joining",
+    "Neither ordinary membership nor club administration grants Board access",
+    "Another club's member cannot discover KMC groups"
+  ]);
+  assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
   assert.deepEqual(
     iterationScenarios.filter(
-      (scenario) => scenario.includes("@todo-domain") || scenario.includes("@todo-ui")
+      (scenario) =>
+        scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
     ),
     []
   );
