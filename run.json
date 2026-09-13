@@ -1255,7 +1255,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-13T19:27:13.813910163Z",
-  "last_event_at": "2026-09-13T20:55:37.205680249Z",
+  "last_event_at": "2026-09-13T20:56:16.596405836Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -10840,9 +10840,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2579,
       "checkpoint": {
-        "timestamp": "2026-09-13T20:56:12.559463866Z",
+        "timestamp": "2026-09-13T20:56:16.596208242Z",
         "current_node": "final_summary",
         "completed_nodes": [
           "start",
@@ -10880,38 +10880,72 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.retry_count.verify_review_repair": 0,
-          "thread.dev_check.current_node": "collect_implementation_evidence",
-          "current_node": "final_summary",
-          "response.final_summary": "# Final review summary\n\n- **Result:** `REVIEW_ACCEPTED`\n- **Plan:** `docs/iterations/061-discover-club-groups/plan.md`\n- **Base SHA:** `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f`\n- **Reviewed implementation range:** `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f..54a6ef70945fea7b29a188d18856dcb73ac4952a`\n- **Published review-polish SHA:** `fb3611da0eaa75f4b9e1fafec8268ddd359cd836`\n\n## Review outcome\n\nAll three independent reviewers accepted the iteration:\n\n- Claude: **ACCEPT**, medium confidence\n- Codex: **ACCEPT**, medium confidence\n- Gemini: **ACCEPT**, high confidence\n\nThe synthesized decision was also acceptance, with no additional product fixes required.\n\n### ADR conformance\n\n**PASS.** No concrete ADR violation was identified. Reviewers found the implementation consistent with the project’s CQRS, event-sourcing, read-model, and responsibility boundaries:\n\n- Discovery remains distinct from effective membership and conversation authorization.\n- Authorization stays server-authoritative rather than relying on browser storage.\n- The web layer uses public Membership and Messaging APIs rather than projection joins as authorization shortcuts.\n- No unnecessary aggregate or generic permission framework was introduced.\n\n## Final artifact confirmation\n\nThe final artifact gate explicitly reported:\n\n> `Final artifact evidence confirmed.`  \n> `Final artifact gate passed.`\n\nIt confirmed a reviewed implementation diff of:\n\n> `35 files changed, 3146 insertions(+), 229 deletions(-)`\n\nIt also confirmed that the acceptance feature change to `acceptance-tests/features/group_conversations.feature` was permitted by the iteration plan.\n\n## Finding disposition\n\n| Finding | Disposition |\n|---|---|\n| Cucumber inventory failed to account correctly for inherited Rule-level tags | **Fixed during review.** The final code-health note explicitly excludes it because it was repaired during this run. |\n| Security-sensitive overlap between discovery and participation query contracts | **Recorded** in `docs/code-health.md`. Current implementation conforms; the concern is future accidental consolidation or use of discovery as a Messaging authorization grant. |\n| Cucumber scenario inventory does not model tags on individual `Examples:` blocks | **Recorded** in `docs/code-health.md`. No current tagged `Examples:` blocks exist, so this is not a present defect. |\n| `verify_review_repair.sh` depends on unavailable `cmp` and did not fail closed | **Recorded** in `docs/code-health.md` and **dismissed as an iteration-061 product blocker** because it belongs to review-workflow infrastructure. It remains an unresolved, non-blocking workflow follow-up. |\n| Interim access placeholder and future request-access/membership work | **Dismissed as a defect.** The final code-health note identifies it as planned work for iterations 063–065, not a code-health failure in iteration 061. |\n| No further bounded product or acceptance fixes found | **Dismissed with reason:** independent reviewers found no additional concrete authorization defect, ADR violation, or safe polish change warranted by the evidence. |\n\nNo substantive reviewer finding was silently dropped: the applicable unresolved findings were recorded in `docs/code-health.md`, while repaired or intentionally deferred observations were explicitly classified.\n\n## Repairs applied during review\n\nThe Cucumber scenario-inventory tag-scope defect was repaired and subsequently validated. The relevant file named by final artifact evidence is:\n\n- `acceptance-tests/test/cucumber_config.test.js`\n\nNo additional product repair was retained during the later repair pass. The attempted workflow-level portable-comparison change was reverted as out of scope.\n\n## Code-health note\n\n`docs/code-health.md` was updated and included in the final artifact gate. The exact recorded finding headings and dispositions were:\n\n1. **Discovery and participation are separate, security-sensitive query contracts with overlapping group data.**\n   - Preserve distinct API names and return shapes, retain focused authorization tests, and reconsider a more explicit access descriptor if iterations 063–065 add further consumers or access states.\n\n2. **The Cucumber scenario inventory does not model tags on individual `Examples:` blocks.**\n   - Before tagged `Examples:` blocks are introduced, decide whether inventory represents an outline once or each expanded example and add a focused regression for that policy.\n\n3. **Review-repair verification depends on an unavailable `cmp` executable and did not fail closed.**\n   - Replace `cmp` with a repository-supported comparison or add it to the review image, and ensure verification failures cannot be reported as successful.\n\nThe final artifact gate states that the Rule-tag parser bug was excluded from these findings because it was fixed during the review. It also excludes the interim access-placeholder observation because that is planned future work rather than a defect.\n\n## Key files evidenced as reviewed or repaired\n\nFiles explicitly present in the final artifact evidence include:\n\n- `docs/code-health.md`\n- `acceptance-tests/features/group_conversations.feature`\n- `acceptance-tests/test/cucumber_config.test.js`\n- `web/lib/memba/membership.ex`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/support/domain_cucumber_runner.ex`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- Member message delivery, compose, and message-show LiveView test files shown in the artifact stat\n- `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh` as the subject of the recorded workflow-health finding\n\n## Tests and validation\n\nValidation completed successfully:\n\n- Sandbox compilation/runtime preflight passed.\n- Full `dev ci` passed.\n- **1,292 ExUnit tests passed.**\n- **145 of 145 browser acceptance scenarios passed.**\n- **1,052 of 1,052 acceptance steps passed.**\n- `git diff --check` passed for the code-health update.\n- The final artifact gate passed.\n\nThe review-repair comparison script emitted:\n\n> `cmp: command not found`\n\ndespite its stage being reported as successful. This does not invalidate the independently confirmed product diff or full test results, but it is correctly recorded as workflow debt.\n\n## Publish outcome\n\nReview polish **was pushed to `main`**:\n\n> `54a6ef7..fb3611d ... -> main`  \n> `Published review polish to main: fb3611da0eaa75f4b9e1fafec8268ddd359cd836`\n\nThe iteration plan and index were already marked merged, so finalization required no additional status commit.\n\n## Manual checks still recommended\n\nThe supplied evidence does not independently demonstrate completion of the plan’s manual desktop/mobile visual review. A final human check remains advisable for:\n\n- Eve’s regular non-member email-only access-guidance placeholder\n- Dan’s outside-admin Members-only surface\n- Desktop and mobile layouts\n- Absence of conversation previews, activity, member names, compose controls, and other private rows on unauthorized surfaces\n\nThis is a confidence limitation, not a merge blocker given the passing automated authorization coverage.\n\n## Non-blocking follow-ups\n\n1. Preserve the discovery-versus-participation API boundary during iterations 063–065; discovery metadata must never become a Messaging authorization grant.\n2. Add explicit inventory semantics and tests before using tags on individual Gherkin `Examples:` blocks.\n3. Fix `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh` separately so comparison is portable and fails closed when verification cannot execute.",
-          "command.output": "blob://sha256/40536ae798934170f510af9d532bbdaae6b1bf69a4656dad631aecdf65cd841b",
-          "internal.retry_count.publish_polish_to_main": 0,
-          "internal.run_id": "01M2E3QX28DBGYFZ7HP61EDJB2",
+          "outcome": "succeeded",
           "internal.retry_count.collect_implementation_evidence": 0,
-          "internal.work_dir": "/workspace/memba",
-          "thread.synthesize_review.current_node": "review_gate",
-          "thread.review_gate.current_node": "record_code_health",
-          "internal.fidelity": "summary:high",
-          "internal.retry_count.final_summary": 0,
-          "internal.retry_count.snapshot_before_review_repair": 0,
-          "graph.rankdir": "LR",
-          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
-          "graph.max_node_visits": "160",
-          "internal.retry_count.review_gate": 0,
-          "response.record_code_health": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE_HEALTH_RECORDED: Updated docs/code-health.md for iteration 061 with three supported findings omitted by the routing-only synthesis. The focused diff contains the new entry, git diff --check passed, and no acceptance feature or product-behaviour files changed.\"}",
-          "internal.retry_count.apply_review_fixes": 0,
-          "internal.retry_count.record_code_health": 0,
+          "internal.retry_count.publish_polish_to_main": 0,
           "failure_signature": "",
-          "thread.start.current_node": "read_plan",
-          "internal.retry_count.dev_check": 0,
-          "internal.retry_count.final_artifact_gate": 0,
-          "last_response": "# Final review summary\n\n- **Result:** `REVIEW_ACCEPTED`\n- **Plan:** `docs/iterations/061-discover-club-groups/plan.md`\n- **Base SHA:** `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f`\n- **Reviewed implement",
           "internal.node_visit_count": 1,
-          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "failure_class": "",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.work_dir": "/workspace/memba",
+          "thread.review_merge.current_node": "synthesize_review",
+          "internal.retry_count.review_merge": 0,
+          "internal.retry_count.verify_review_repair": 0,
+          "review_fixes_available": false,
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "internal.retry_count.start": 0,
+          "response.final_summary": "# Final review summary\n\n- **Result:** `REVIEW_ACCEPTED`\n- **Plan:** `docs/iterations/061-discover-club-groups/plan.md`\n- **Base SHA:** `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f`\n- **Reviewed implementation range:** `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f..54a6ef70945fea7b29a188d18856dcb73ac4952a`\n- **Published review-polish SHA:** `fb3611da0eaa75f4b9e1fafec8268ddd359cd836`\n\n## Review outcome\n\nAll three independent reviewers accepted the iteration:\n\n- Claude: **ACCEPT**, medium confidence\n- Codex: **ACCEPT**, medium confidence\n- Gemini: **ACCEPT**, high confidence\n\nThe synthesized decision was also acceptance, with no additional product fixes required.\n\n### ADR conformance\n\n**PASS.** No concrete ADR violation was identified. Reviewers found the implementation consistent with the project’s CQRS, event-sourcing, read-model, and responsibility boundaries:\n\n- Discovery remains distinct from effective membership and conversation authorization.\n- Authorization stays server-authoritative rather than relying on browser storage.\n- The web layer uses public Membership and Messaging APIs rather than projection joins as authorization shortcuts.\n- No unnecessary aggregate or generic permission framework was introduced.\n\n## Final artifact confirmation\n\nThe final artifact gate explicitly reported:\n\n> `Final artifact evidence confirmed.`  \n> `Final artifact gate passed.`\n\nIt confirmed a reviewed implementation diff of:\n\n> `35 files changed, 3146 insertions(+), 229 deletions(-)`\n\nIt also confirmed that the acceptance feature change to `acceptance-tests/features/group_conversations.feature` was permitted by the iteration plan.\n\n## Finding disposition\n\n| Finding | Disposition |\n|---|---|\n| Cucumber inventory failed to account correctly for inherited Rule-level tags | **Fixed during review.** The final code-health note explicitly excludes it because it was repaired during this run. |\n| Security-sensitive overlap between discovery and participation query contracts | **Recorded** in `docs/code-health.md`. Current implementation conforms; the concern is future accidental consolidation or use of discovery as a Messaging authorization grant. |\n| Cucumber scenario inventory does not model tags on individual `Examples:` blocks | **Recorded** in `docs/code-health.md`. No current tagged `Examples:` blocks exist, so this is not a present defect. |\n| `verify_review_repair.sh` depends on unavailable `cmp` and did not fail closed | **Recorded** in `docs/code-health.md` and **dismissed as an iteration-061 product blocker** because it belongs to review-workflow infrastructure. It remains an unresolved, non-blocking workflow follow-up. |\n| Interim access placeholder and future request-access/membership work | **Dismissed as a defect.** The final code-health note identifies it as planned work for iterations 063–065, not a code-health failure in iteration 061. |\n| No further bounded product or acceptance fixes found | **Dismissed with reason:** independent reviewers found no additional concrete authorization defect, ADR violation, or safe polish change warranted by the evidence. |\n\nNo substantive reviewer finding was silently dropped: the applicable unresolved findings were recorded in `docs/code-health.md`, while repaired or intentionally deferred observations were explicitly classified.\n\n## Repairs applied during review\n\nThe Cucumber scenario-inventory tag-scope defect was repaired and subsequently validated. The relevant file named by final artifact evidence is:\n\n- `acceptance-tests/test/cucumber_config.test.js`\n\nNo additional product repair was retained during the later repair pass. The attempted workflow-level portable-comparison change was reverted as out of scope.\n\n## Code-health note\n\n`docs/code-health.md` was updated and included in the final artifact gate. The exact recorded finding headings and dispositions were:\n\n1. **Discovery and participation are separate, security-sensitive query contracts with overlapping group data.**\n   - Preserve distinct API names and return shapes, retain focused authorization tests, and reconsider a more explicit access descriptor if iterations 063–065 add further consumers or access states.\n\n2. **The Cucumber scenario inventory does not model tags on individual `Examples:` blocks.**\n   - Before tagged `Examples:` blocks are introduced, decide whether inventory represents an outline once or each expanded example and add a focused regression for that policy.\n\n3. **Review-repair verification depends on an unavailable `cmp` executable and did not fail closed.**\n   - Replace `cmp` with a repository-supported comparison or add it to the review image, and ensure verification failures cannot be reported as successful.\n\nThe final artifact gate states that the Rule-tag parser bug was excluded from these findings because it was fixed during the review. It also excludes the interim access-placeholder observation because that is planned future work rather than a defect.\n\n## Key files evidenced as reviewed or repaired\n\nFiles explicitly present in the final artifact evidence include:\n\n- `docs/code-health.md`\n- `acceptance-tests/features/group_conversations.feature`\n- `acceptance-tests/test/cucumber_config.test.js`\n- `web/lib/memba/membership.ex`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/support/domain_cucumber_runner.ex`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- Member message delivery, compose, and message-show LiveView test files shown in the artifact stat\n- `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh` as the subject of the recorded workflow-health finding\n\n## Tests and validation\n\nValidation completed successfully:\n\n- Sandbox compilation/runtime preflight passed.\n- Full `dev ci` passed.\n- **1,292 ExUnit tests passed.**\n- **145 of 145 browser acceptance scenarios passed.**\n- **1,052 of 1,052 acceptance steps passed.**\n- `git diff --check` passed for the code-health update.\n- The final artifact gate passed.\n\nThe review-repair comparison script emitted:\n\n> `cmp: command not found`\n\ndespite its stage being reported as successful. This does not invalidate the independently confirmed product diff or full test results, but it is correctly recorded as workflow debt.\n\n## Publish outcome\n\nReview polish **was pushed to `main`**:\n\n> `54a6ef7..fb3611d ... -> main`  \n> `Published review polish to main: fb3611da0eaa75f4b9e1fafec8268ddd359cd836`\n\nThe iteration plan and index were already marked merged, so finalization required no additional status commit.\n\n## Manual checks still recommended\n\nThe supplied evidence does not independently demonstrate completion of the plan’s manual desktop/mobile visual review. A final human check remains advisable for:\n\n- Eve’s regular non-member email-only access-guidance placeholder\n- Dan’s outside-admin Members-only surface\n- Desktop and mobile layouts\n- Absence of conversation previews, activity, member names, compose controls, and other private rows on unauthorized surfaces\n\nThis is a confidence limitation, not a merge blocker given the passing automated authorization coverage.\n\n## Non-blocking follow-ups\n\n1. Preserve the discovery-versus-participation API boundary during iterations 063–065; discovery metadata must never become a Messaging authorization grant.\n2. Add explicit inventory semantics and tests before using tags on individual Gherkin `Examples:` blocks.\n3. Fix `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh` separately so comparison is portable and fails closed when verification cannot execute.",
+          "thread.record_code_health.current_node": "final_artifact_gate",
           "thread.review_fork.current_node": "review_merge",
+          "internal.retry_count.synthesize_review": 0,
+          "preferred_label": "Final Artifact Gate",
+          "response.record_code_health": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE_HEALTH_RECORDED: Updated docs/code-health.md for iteration 061 with three supported findings omitted by the routing-only synthesis. The focused diff contains the new entry, git diff --check passed, and no acceptance feature or product-behaviour files changed.\"}",
+          "failure_class": "",
+          "implementation_accepted": true,
+          "internal.retry_count.final_artifact_gate": 0,
+          "internal.retry_count.finalize_iteration_status": 0,
+          "response.apply_review_fixes": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-comparison` | Out of scope: this concerns the iteration-review workflow, not iteration 061. The attempted `.fabro/workflows` repair was fully reverted per your correction. | None |\n| Iteration-061 product/acceptance implementation | Reviewers identified no concrete ADR violation, authorization defect, or bounded code-health fix. Existing concerns were future-maintenance observations rather than demonstrated defects. | None |\n\nFiles changed:\n\n- No tracked changes remain.\n- No acceptance feature files were edited.\n- Existing untracked `.fabro/tmp/` run artifacts remain untouched.\n\nValidation:\n\n- Confirmed the scoped implementation is exactly the single commit from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f` to `54a6ef70945fea7b29a188d18856dcb73ac4952a`.\n- Confirmed there are no retained tracked or staged changes under `.fabro/workflows`, `docs/kaizen`, or elsewhere.\n- The supplied completed validation remains green: 1,292 ExUnit tests, 145 browser acceptance scenarios, and 1,052 acceptance steps passed.\n- No additional `dev check` was run because this pass leaves no code, configuration, test, or behavior changes.\n\nThe portable comparison concern remains separate workflow-fix work and is not an iteration-061 blocker.",
+          "internal.retry_count.review_fork": 0,
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
           "thread.finalize_iteration_status.current_node": "final_summary",
+          "graph.default_fidelity": "summary:high",
+          "graph.max_node_visits": "160",
+          "internal.retry_count.dev_check": 0,
+          "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
+          "internal.retry_count.final_summary": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.synthesize_review.current_node": "review_gate",
           "internal.thread_id": "finalize_iteration_status",
+          "thread.verify_review_repair.current_node": "dev_check",
+          "internal.retry_count.apply_review_fixes": 0,
+          "parallel.branch_count": 3,
+          "last_response": "# Final review summary\n\n- **Result:** `REVIEW_ACCEPTED`\n- **Plan:** `docs/iterations/061-discover-club-groups/plan.md`\n- **Base SHA:** `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f`\n- **Reviewed implement",
+          "current_node": "final_summary",
+          "thread.start.current_node": "read_plan",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "internal.retry_count.review_gate": 0,
+          "review_blockers": [
+            {
+              "id": "fix-review-repair-portable-comparison",
+              "title": "Make review-repair verification independent of unavailable cmp utility",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
+          "code_health_recording_ok": true,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.run_id": "01M2E3QX28DBGYFZ7HP61EDJB2",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "internal.retry_count.record_code_health": 0,
+          "last_stage": "final_summary",
+          "graph.rankdir": "LR",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.review_gate.current_node": "record_code_health",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
           "parallel.results": [
             {
               "id": "claude_review",
@@ -10944,44 +10978,24 @@
               }
             }
           ],
-          "internal.retry_count.finalize_iteration_status": 0,
-          "internal.retry_count.start": 0,
-          "thread.apply_review_fixes.current_node": "verify_review_repair",
-          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
-          "outcome": "succeeded",
-          "graph.default_fidelity": "summary:high",
-          "last_stage": "final_summary",
-          "internal.retry_count.synthesize_review": 0,
-          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
-          "thread.read_plan.current_node": "preflight_sandbox",
-          "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
-          "review_blockers": [
-            {
-              "id": "fix-review-repair-portable-comparison",
-              "title": "Make review-repair verification independent of unavailable cmp utility",
-              "source": "review_synthesis",
-              "first_seen_stage": "synthesize_review",
-              "status": "open"
-            }
-          ],
-          "preferred_label": "Final Artifact Gate",
-          "review_fixes_available": false,
-          "internal.retry_count.review_fork": 0,
-          "thread.verify_review_repair.current_node": "dev_check",
-          "internal.retry_count.review_merge": 0,
-          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
-          "thread.preflight_sandbox.current_node": "dev_check",
-          "thread.collect_implementation_evidence.current_node": "review_fork",
-          "thread.review_merge.current_node": "synthesize_review",
-          "parallel.branch_count": 3,
-          "implementation_accepted": true,
-          "internal.retry_count.preflight_sandbox": 0,
-          "internal.retry_count.read_plan": 0,
-          "thread.record_code_health.current_node": "final_artifact_gate",
-          "response.apply_review_fixes": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-comparison` | Out of scope: this concerns the iteration-review workflow, not iteration 061. The attempted `.fabro/workflows` repair was fully reverted per your correction. | None |\n| Iteration-061 product/acceptance implementation | Reviewers identified no concrete ADR violation, authorization defect, or bounded code-health fix. Existing concerns were future-maintenance observations rather than demonstrated defects. | None |\n\nFiles changed:\n\n- No tracked changes remain.\n- No acceptance feature files were edited.\n- Existing untracked `.fabro/tmp/` run artifacts remain untouched.\n\nValidation:\n\n- Confirmed the scoped implementation is exactly the single commit from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f` to `54a6ef70945fea7b29a188d18856dcb73ac4952a`.\n- Confirmed there are no retained tracked or staged changes under `.fabro/workflows`, `docs/kaizen`, or elsewhere.\n- The supplied completed validation remains green: 1,292 ExUnit tests, 145 browser acceptance scenarios, and 1,052 acceptance steps passed.\n- No additional `dev check` was run because this pass leaves no code, configuration, test, or behavior changes.\n\nThe portable comparison concern remains separate workflow-fix work and is not an iteration-061 blocker.",
-          "code_health_recording_ok": true
+          "command.output": "blob://sha256/40536ae798934170f510af9d532bbdaae6b1bf69a4656dad631aecdf65cd841b",
+          "internal.fidelity": "summary:high"
         },
         "node_outcomes": {
+          "finalize_iteration_status": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/40536ae798934170f510af9d532bbdaae6b1bf69a4656dad631aecdf65cd841b"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/061-discover-club-groups/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1295,
+              "active_time_ms": 1295
+            }
+          },
           "final_summary": {
             "status": "succeeded",
             "context_updates": {
@@ -11018,22 +11032,110 @@
               "active_time_ms": 35319
             }
           },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
-          "preflight_sandbox": {
+          "read_plan": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/8ae4660a256314ce721660eb50a55cfb3410fc3f1d1aea02ff7ede884e6d45e3"
+              "command.output": "blob://sha256/9aab872b568b37db5dddc3ab2a50aba0cb05fc5fb1e88bc6ed540d21d2e61b98"
             },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+            "notes": "Script completed: PLAN_PATH='docs/iterations/061-discover-club-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 137902,
-              "active_time_ms": 137902
+              "tool_time_ms": 181,
+              "active_time_ms": 181
+            }
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/975209c7f2f961cfa020562c8dd3dd1f316bad61b44e088024694eeb9541191e"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-co",
+              "last_stage": "apply_review_fixes",
+              "response.apply_review_fixes": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-comparison` | Out of scope: this concerns the iteration-review workflow, not iteration 061. The attempted `.fabro/workflows` repair was fully reverted per your correction. | None |\n| Iteration-061 product/acceptance implementation | Reviewers identified no concrete ADR violation, authorization defect, or bounded code-health fix. Existing concerns were future-maintenance observations rather than demonstrated defects. | None |\n\nFiles changed:\n\n- No tracked changes remain.\n- No acceptance feature files were edited.\n- Existing untracked `.fabro/tmp/` run artifacts remain untouched.\n\nValidation:\n\n- Confirmed the scoped implementation is exactly the single commit from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f` to `54a6ef70945fea7b29a188d18856dcb73ac4952a`.\n- Confirmed there are no retained tracked or staged changes under `.fabro/workflows`, `docs/kaizen`, or elsewhere.\n- The supplied completed validation remains green: 1,292 ExUnit tests, 145 browser acceptance scenarios, and 1,052 acceptance steps passed.\n- No additional `dev check` was run because this pass leaves no code, configuration, test, or behavior changes.\n\nThe portable comparison concern remains separate workflow-fix work and is not an iteration-061 blocker."
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 514526,
+                    "output_tokens": 4899,
+                    "reasoning_tokens": 3584,
+                    "cache_read_tokens": 120448,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2887344
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 204588,
+              "tool_time_ms": 12377,
+              "active_time_ms": 216965
+            }
+          },
+          "final_artifact_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/12156a6d4c99c6dcbd8af98511abd8dba64e962dcd1149464347f5c39334dfe1"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/061-discover-club-groups/plan.md' 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 255,
+              "active_time_ms": 255
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/484555c922ac8c26ec414441b6af69923b08b9a0ea7ca76a938cba16704c3382"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
             }
           },
           "dev_check": {
@@ -11050,52 +11152,47 @@
               "active_time_ms": 796727
             }
           },
-          "verify_review_repair": {
+          "preflight_sandbox": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/975209c7f2f961cfa020562c8dd3dd1f316bad61b44e088024694eeb9541191e"
+              "command.output": "blob://sha256/8ae4660a256314ce721660eb50a55cfb3410fc3f1d1aea02ff7ede884e6d45e3"
             },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh",
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 159,
-              "active_time_ms": 159
+              "tool_time_ms": 137902,
+              "active_time_ms": 137902
             }
           },
-          "snapshot_before_review_repair": {
+          "publish_polish_to_main": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/484555c922ac8c26ec414441b6af69923b08b9a0ea7ca76a938cba16704c3382"
+              "command.output": "blob://sha256/8ac7ecc8ea8f3459520c1a138406aaee720c43a7b89e14fd2fe2fa7cf9317d7f"
             },
-            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/061-discover-club-groups/plan.md'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 157,
-              "active_time_ms": 157
+              "tool_time_ms": 2859,
+              "active_time_ms": 2859
             }
           },
-          "read_plan": {
+          "collect_implementation_evidence": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/9aab872b568b37db5dddc3ab2a50aba0cb05fc5fb1e88bc6ed540d21d2e61b98"
+              "command.output": "blob://sha256/c1f5bbed5c9c2da9bd63eabf9a382fc8a85421e2f2e8366fc78fb1d1c9c95aa5"
             },
-            "notes": "Script completed: PLAN_PATH='docs/iterations/061-discover-club-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 181,
-              "active_time_ms": 181
+              "tool_time_ms": 257,
+              "active_time_ms": 257
             }
-          },
-          "review_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: review_gate",
-            "usage": null
           },
           "record_code_health": {
             "status": "succeeded",
@@ -11138,42 +11235,16 @@
               "active_time_ms": 667166
             }
           },
-          "collect_implementation_evidence": {
+          "synthesize_review": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/c1f5bbed5c9c2da9bd63eabf9a382fc8a85421e2f2e8366fc78fb1d1c9c95aa5"
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "review_fixes_available": false,
+              "last_stage": "synthesize_review",
+              "implementation_accepted": true
             },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 257,
-              "active_time_ms": 257
-            }
-          },
-          "publish_polish_to_main": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/8ac7ecc8ea8f3459520c1a138406aaee720c43a7b89e14fd2fe2fa7cf9317d7f"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/061-discover-club-groups/plan.md'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 2859,
-              "active_time_ms": 2859
-            }
-          },
-          "apply_review_fixes": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_response": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-co",
-              "last_stage": "apply_review_fixes",
-              "response.apply_review_fixes": "Iteration 061 is accepted. No additional product or acceptance changes were warranted.\n\nIssue-to-fix mapping:\n\n| Review issue | Resolution | Files kept |\n|---|---|---|\n| `fix-review-repair-portable-comparison` | Out of scope: this concerns the iteration-review workflow, not iteration 061. The attempted `.fabro/workflows` repair was fully reverted per your correction. | None |\n| Iteration-061 product/acceptance implementation | Reviewers identified no concrete ADR violation, authorization defect, or bounded code-health fix. Existing concerns were future-maintenance observations rather than demonstrated defects. | None |\n\nFiles changed:\n\n- No tracked changes remain.\n- No acceptance feature files were edited.\n- Existing untracked `.fabro/tmp/` run artifacts remain untouched.\n\nValidation:\n\n- Confirmed the scoped implementation is exactly the single commit from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f` to `54a6ef70945fea7b29a188d18856dcb73ac4952a`.\n- Confirmed there are no retained tracked or staged changes under `.fabro/workflows`, `docs/kaizen`, or elsewhere.\n- The supplied completed validation remains green: 1,292 ExUnit tests, 145 browser acceptance scenarios, and 1,052 acceptance steps passed.\n- No additional `dev check` was run because this pass leaves no code, configuration, test, or behavior changes.\n\nThe portable comparison concern remains separate workflow-fix work and is not an iteration-061 blocker."
-            },
-            "notes": "Stage completed: apply_review_fixes",
+            "notes": "Stage completed: synthesize_review",
             "usage": {
               "input": {
                 "usage": {
@@ -11182,10 +11253,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 514526,
-                    "output_tokens": 4899,
-                    "reasoning_tokens": 3584,
-                    "cache_read_tokens": 120448,
+                    "input_tokens": 13718,
+                    "output_tokens": 26,
+                    "reasoning_tokens": 661,
+                    "cache_read_tokens": 0,
                     "cache_write_tokens": 0
                   }
                 },
@@ -11193,41 +11264,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 2887344
+              "total_usd_micros": 89200
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 204588,
-              "tool_time_ms": 12377,
-              "active_time_ms": 216965
-            }
-          },
-          "finalize_iteration_status": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/40536ae798934170f510af9d532bbdaae6b1bf69a4656dad631aecdf65cd841b"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/061-discover-club-groups/plan.md'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 1295,
-              "active_time_ms": 1295
-            }
-          },
-          "final_artifact_gate": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/12156a6d4c99c6dcbd8af98511abd8dba64e962dcd1149464347f5c39334dfe1"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/061-discover-club-groups/plan.md' 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 255,
-              "active_time_ms": 255
+              "inference_time_ms": 23042,
+              "tool_time_ms": 0,
+              "active_time_ms": 23042
             }
           },
           "review_fork": {
@@ -11270,76 +11313,261 @@
             "jump_to_node": "review_merge",
             "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
             "usage": null
-          },
-          "synthesize_review": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
-              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
-              "review_fixes_available": false,
-              "last_stage": "synthesize_review",
-              "implementation_accepted": true
-            },
-            "notes": "Stage completed: synthesize_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.6-sol"
-                  },
-                  "tokens": {
-                    "input_tokens": 13718,
-                    "output_tokens": 26,
-                    "reasoning_tokens": 661,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 89200
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 23042,
-              "tool_time_ms": 0,
-              "active_time_ms": 23042
-            }
-          },
-          "review_merge": {
-            "status": "succeeded",
-            "notes": "Joined 3 parallel branches",
-            "usage": null
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "13d656781c9a06e212f39545439bc48a154cb229",
         "node_visits": {
-          "publish_polish_to_main": 1,
-          "review_fork": 3,
-          "read_plan": 1,
-          "dev_check": 3,
-          "review_gate": 3,
-          "snapshot_before_review_repair": 2,
-          "preflight_sandbox": 1,
-          "record_code_health": 1,
-          "verify_review_repair": 2,
           "review_merge": 3,
           "collect_implementation_evidence": 3,
-          "apply_review_fixes": 2,
-          "start": 1,
           "finalize_iteration_status": 1,
+          "preflight_sandbox": 1,
+          "dev_check": 3,
+          "start": 1,
           "final_summary": 1,
+          "read_plan": 1,
+          "review_gate": 3,
+          "record_code_health": 1,
           "synthesize_review": 3,
-          "final_artifact_gate": 1
+          "verify_review_repair": 2,
+          "publish_polish_to_main": 1,
+          "review_fork": 3,
+          "snapshot_before_review_repair": 2,
+          "final_artifact_gate": 1,
+          "apply_review_fixes": 2
         }
       },
-      "diff": {}
+      "diff": {
+        "summary": {
+          "files_changed": 4,
+          "additions": 86,
+          "deletions": 37
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-09-13T20:56:17.097447881Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 5342788,
+      "inference_time_ms": 1038914,
+      "tool_time_ms": 3989348,
+      "active_time_ms": 5028262
+    },
+    "final_git_commit_sha": "13d656781c9a06e212f39545439bc48a154cb229",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan",
+        "stage_label": "read_plan",
+        "timing": {
+          "wall_time_ms": 184,
+          "inference_time_ms": 0,
+          "tool_time_ms": 181,
+          "active_time_ms": 181
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "preflight_sandbox",
+        "stage_label": "preflight_sandbox",
+        "timing": {
+          "wall_time_ms": 137906,
+          "inference_time_ms": 0,
+          "tool_time_ms": 137902,
+          "active_time_ms": 137902
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "dev_check",
+        "stage_label": "dev_check",
+        "timing": {
+          "wall_time_ms": 2412401,
+          "inference_time_ms": 0,
+          "tool_time_ms": 2412370,
+          "active_time_ms": 2412370
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "collect_implementation_evidence",
+        "stage_label": "collect_implementation_evidence",
+        "timing": {
+          "wall_time_ms": 803,
+          "inference_time_ms": 0,
+          "tool_time_ms": 767,
+          "active_time_ms": 767
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "review_fork",
+        "stage_label": "review_fork",
+        "timing": {
+          "wall_time_ms": 195453,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "review_merge",
+        "stage_label": "review_merge",
+        "timing": {
+          "wall_time_ms": 7,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize_review",
+        "stage_label": "synthesize_review",
+        "timing": {
+          "wall_time_ms": 77192,
+          "inference_time_ms": 77073,
+          "tool_time_ms": 0,
+          "active_time_ms": 77073
+        },
+        "billing_usd_micros": 262335,
+        "retries": 0
+      },
+      {
+        "stage_id": "review_gate",
+        "stage_label": "review_gate",
+        "timing": {
+          "wall_time_ms": 5,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "snapshot_before_review_repair",
+        "stage_label": "snapshot_before_review_repair",
+        "timing": {
+          "wall_time_ms": 315,
+          "inference_time_ms": 0,
+          "tool_time_ms": 305,
+          "active_time_ms": 305
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "apply_review_fixes",
+        "stage_label": "apply_review_fixes",
+        "timing": {
+          "wall_time_ms": 1693247,
+          "inference_time_ms": 655848,
+          "tool_time_ms": 1036608,
+          "active_time_ms": 1692456
+        },
+        "billing_usd_micros": 10186668,
+        "retries": 0
+      },
+      {
+        "stage_id": "verify_review_repair",
+        "stage_label": "verify_review_repair",
+        "timing": {
+          "wall_time_ms": 320,
+          "inference_time_ms": 0,
+          "tool_time_ms": 314,
+          "active_time_ms": 314
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "record_code_health",
+        "stage_label": "record_code_health",
+        "timing": {
+          "wall_time_ms": 667595,
+          "inference_time_ms": 270674,
+          "tool_time_ms": 396492,
+          "active_time_ms": 667166
+        },
+        "billing_usd_micros": 7962950,
+        "retries": 0
+      },
+      {
+        "stage_id": "final_artifact_gate",
+        "stage_label": "final_artifact_gate",
+        "timing": {
+          "wall_time_ms": 263,
+          "inference_time_ms": 0,
+          "tool_time_ms": 255,
+          "active_time_ms": 255
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_polish_to_main",
+        "stage_label": "publish_polish_to_main",
+        "timing": {
+          "wall_time_ms": 2864,
+          "inference_time_ms": 0,
+          "tool_time_ms": 2859,
+          "active_time_ms": 2859
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "finalize_iteration_status",
+        "stage_label": "finalize_iteration_status",
+        "timing": {
+          "wall_time_ms": 1299,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1295,
+          "active_time_ms": 1295
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "final_summary",
+        "stage_label": "final_summary",
+        "timing": {
+          "wall_time_ms": 35358,
+          "inference_time_ms": 35319,
+          "tool_time_ms": 0,
+          "active_time_ms": 35319
+        },
+        "billing_usd_micros": 128920,
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 3365308,
+      "output_tokens": 35165,
+      "total_tokens": 5430476,
+      "reasoning_tokens": 29873,
+      "cache_read_tokens": 1996416,
+      "cache_write_tokens": 3714,
+      "total_usd_micros": 19259743
+    },
+    "total_retries": 0,
+    "diff": {
+      "patch": "diff --git a/acceptance-tests/package-lock.json b/acceptance-tests/package-lock.json\nindex 472104c..f3e4b3d 100644\n--- a/acceptance-tests/package-lock.json\n+++ b/acceptance-tests/package-lock.json\n@@ -9,6 +9,7 @@\n       \"version\": \"0.1.0\",\n       \"devDependencies\": {\n         \"@cucumber/cucumber\": \"^12.2.0\",\n+        \"@cucumber/gherkin\": \"38.0.0\",\n         \"@playwright/test\": \"1.59.1\",\n         \"playwright\": \"1.59.1\"\n       }\ndiff --git a/acceptance-tests/package.json b/acceptance-tests/package.json\nindex 967debd..2f7b43a 100644\n--- a/acceptance-tests/package.json\n+++ b/acceptance-tests/package.json\n@@ -10,6 +10,7 @@\n   },\n   \"devDependencies\": {\n     \"@cucumber/cucumber\": \"^12.2.0\",\n+    \"@cucumber/gherkin\": \"38.0.0\",\n     \"@playwright/test\": \"1.59.1\",\n     \"playwright\": \"1.59.1\"\n   }\ndiff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js\nindex 6381982..a1cd66b 100644\n--- a/acceptance-tests/test/cucumber_config.test.js\n+++ b/acceptance-tests/test/cucumber_config.test.js\n@@ -2,6 +2,11 @@ const assert = require(\"node:assert/strict\");\n const fs = require(\"node:fs\");\n const path = require(\"node:path\");\n const test = require(\"node:test\");\n+const {\n+  AstBuilder,\n+  GherkinClassicTokenMatcher,\n+  Parser\n+} = require(\"@cucumber/gherkin\");\n \n const cucumberConfig = require(\"../cucumber\");\n \n@@ -49,6 +54,27 @@ test(\"shared feature suite uses only runner-intent and runner-debt tags\", () =>\n   assert.deepEqual(unsupportedTags, []);\n });\n \n+test(\"scenario inventory inherits feature, rule, and scenario tags within their scopes\", () => {\n+  const scenarios = featureScenarios(\n+    browserFeaturePathNamed(\"club_message_replies.feature\")\n+  );\n+\n+  assert.deepEqual(\n+    scenarios.get(\"The sender and repliers automatically follow the conversation\").tags,\n+    [\"@iteration-039\", \"@iteration-040\"]\n+  );\n+  assert.deepEqual(\n+    scenarios.get(\n+      \"Email to the club address without reply headers starts a new club-wide message\"\n+    ).tags,\n+    [\"@iteration-039\", \"@iteration-041\", \"@iteration-042\"]\n+  );\n+  assert.deepEqual(\n+    scenarios.get(\"A member of another club cannot reply\").tags,\n+    [\"@iteration-039\"]\n+  );\n+});\n+\n test(\"iteration 031 scenarios are no longer blocked from the browser runner\", () => {\n   const iterationScenarios = browserFeatures().flatMap((feature) =>\n     feature.scenarios\n@@ -230,57 +256,57 @@ function listFeatureFiles(directory) {\n }\n \n function featureTags(filePath) {\n-  const tags = [];\n+  return tagNames(parseFeature(filePath).tags);\n+}\n \n-  for (const line of fs.readFileSync(filePath, \"utf8\").split(/\\r?\\n/)) {\n-    const trimmed = line.trim();\n+function featureScenarios(filePath) {\n+  const feature = parseFeature(filePath);\n+  const scenarios = new Map();\n+  const featureLevelTags = tagNames(feature.tags);\n \n-    if (trimmed === \"\") {\n+  for (const child of feature.children) {\n+    if (child.scenario) {\n+      addScenario(scenarios, child.scenario, featureLevelTags);\n       continue;\n     }\n \n-    if (trimmed.startsWith(\"@\")) {\n-      tags.push(...trimmed.split(/\\s+/));\n-      continue;\n-    }\n+    if (child.rule) {\n+      const ruleLevelTags = [\n+        ...featureLevelTags,\n+        ...tagNames(child.rule.tags)\n+      ];\n \n-    if (trimmed.startsWith(\"Feature:\")) {\n-      break;\n+      for (const ruleChild of child.rule.children) {\n+        if (ruleChild.scenario) {\n+          addScenario(scenarios, ruleChild.scenario, ruleLevelTags);\n+        }\n+      }\n     }\n   }\n \n-  return tags;\n+  return scenarios;\n }\n \n-function featureScenarios(filePath) {\n-  const scenarios = new Map();\n-  const featureLevelTags = featureTags(filePath);\n-  let pendingTags = [];\n-\n-  for (const line of fs.readFileSync(filePath, \"utf8\").split(/\\r?\\n/)) {\n-    const trimmed = line.trim();\n-    const scenarioMatch = trimmed.match(/^Scenario(?: Outline)?:\\s*(.+)$/);\n-\n-    if (trimmed === \"\") {\n-      continue;\n-    }\n-\n-    if (trimmed.startsWith(\"@\")) {\n-      pendingTags.push(...trimmed.split(/\\s+/));\n-      continue;\n-    }\n+function parseFeature(filePath) {\n+  let nextId = 0;\n+  const newId = () => String(nextId++);\n+  const parser = new Parser(\n+    new AstBuilder(newId),\n+    new GherkinClassicTokenMatcher()\n+  );\n \n-    if (scenarioMatch) {\n-      const name = scenarioMatch[1];\n-      scenarios.set(name, { name, tags: [...featureLevelTags, ...pendingTags] });\n-      pendingTags = [];\n-      continue;\n-    }\n+  return parser.parse(fs.readFileSync(filePath, \"utf8\")).feature;\n+}\n \n-    pendingTags = [];\n-  }\n+function addScenario(scenarios, scenario, inheritedTags) {\n+  scenarios.set(scenario.name, {\n+    name: scenario.name,\n+    tags: [...inheritedTags, ...tagNames(scenario.tags)]\n+  });\n+}\n \n-  return scenarios;\n+function tagNames(tags) {\n+  return tags.map(({ name }) => name);\n }\n \n function supportedFeatureTag(tag) {\ndiff --git a/docs/code-health.md b/docs/code-health.md\nindex cec63f5..64a3bd9 100644\n--- a/docs/code-health.md\n+++ b/docs/code-health.md\n@@ -190,3 +190,24 @@ documentation issues fixed during this review run.\n    - Evidence: `web/lib/memba/membership/commands/create_group.ex` describes `email_slug` as optional and does not enforce it, while `web/lib/memba/membership/club.ex` rejects every genuinely new group without a slug. For an existing matching group, the same `CreateGroup` command can emit only `GroupEmailSlugAssigned`; `web/lib/memba/membership/system_groups/backfill.ex` relies on that dual behavior despite the dedicated `AssignGroupEmailSlug` command. The source query in `web/lib/memba/membership.ex` groups missing rows, unassigned slugs, and conflicting non-null slugs under one inequality check.\n    - Risk: the command name and shape do not communicate all of its behavior, and future authorization, telemetry, custom-group, or idempotency changes must preserve the non-obvious fact that a creation command may instead repair an existing aggregate.\n    - Suggested next action: classify backfill entries as missing group, unassigned slug, or conflicting immutable slug; dispatch `CreateGroup` only for missing groups and `AssignGroupEmailSlug` only for existing groups without the fact, while failing explicitly on conflicts. Then make `email_slug` required by `CreateGroup`. If convergence is intentionally one operation, model it as an explicitly named private command such as `EnsureSystemGroupDefinition`.\n+\n+## 2026-09-13 — Iteration 061: Discover club groups without joining them\n+\n+Plan: `docs/iterations/061-discover-club-groups/plan.md`\n+\n+Note: the final review synthesis omitted the independent reviewers' code-health findings by returning only routing JSON. The findings below consolidate the supported findings from the final Sol, Claude and Gemini reports. They exclude the hand-written Gherkin parser's Rule-tag bug, which was fixed during this review run, and the interim access-placeholder observation, which restated planned work for iterations 063–065 rather than identifying a code-health defect.\n+\n+1. **Discovery and participation are separate, security-sensitive query contracts with overlapping group data.**\n+   - Evidence: `web/lib/memba/membership.ex` exposes metadata-only `list_discoverable_groups_for_member/2` separately from participation-authorizing `list_active_groups_for_member/2`. `web/lib/memba_web/member_dashboard_presentation.ex` deliberately calls both to classify the selected surface, while `web/lib/memba/messaging.ex` and the compose LiveView use only the participation query. Source-scanning and behavioural regressions currently enforce that split.\n+   - Risk: a future cleanup could consolidate the similarly shaped queries or reuse discovery summaries for Messaging authorization, turning name visibility into access to private conversations or member data. This seam will be touched again by the group-membership and request-access iterations.\n+   - Suggested next action: preserve the distinct names and return shapes, keep focused tests proving that Messaging and compose use effective participation rather than discovery, and reassess whether a more explicit access descriptor is warranted if iterations 063–065 add more consumers or access states.\n+\n+2. **The Cucumber scenario inventory does not model tags on individual `Examples:` blocks.**\n+   - Evidence: `acceptance-tests/test/cucumber_config.test.js` now parses Gherkin correctly and combines feature, rule and scenario tags, but `featureScenarios(filePath)` records each Scenario Outline once from its scenario node and does not inspect or expand `scenario.examples`. The suite has Scenario Outlines but currently has no tagged `Examples:` blocks.\n+   - Risk: if debt or runner-intent tags are later attached to separate Examples blocks, inventory checks may classify the whole outline incorrectly and disagree with Cucumber's per-example selection semantics.\n+   - Suggested next action: before introducing tagged Examples blocks, decide whether inventory should represent an outline once or represent each expanded example, then add a focused parser/inventory regression for that policy.\n+\n+3. **Review-repair verification depends on an unavailable `cmp` executable and did not fail closed.**\n+   - Evidence: `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh` compares snapshots with `cmp -s`, but the review sandbox did not provide `cmp`; the corresponding workflow stage still reported success. The review's product diff was independently checked and the full test suite passed, so this did not invalidate iteration 061's product result.\n+   - Risk: a future review repair can appear independently verified even when the before/after comparison command never ran, weakening confidence that a requested repair produced a repository change.\n+   - Suggested next action: replace `cmp` with a repository-supported Git comparison or add the utility to the review image, and add a workflow-script test proving a missing comparison tool or failed comparison cannot be reported as successful verification.\n",
+      "summary": {
+        "files_changed": 4,
+        "additions": 86,
+        "deletions": 37
+      }
+    }
+  },
   "sandbox": {
     "kind": "ready",
     "plan": {
@@ -11866,6 +12094,42 @@
         "inference_time_ms": 0,
         "tool_time_ms": 159,
         "active_time_ms": 159
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 2582,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-13T20:56:16.596405836Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-13T20:56:16.596371949Z",
+      "handler": "exit",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
       },
       "usage": {
         "input_tokens": 0,
@@ -13236,7 +13500,12 @@
       "first_event_seq": 2572,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: final_summary",
+        "failure_reason": null,
+        "timestamp": "2026-09-13T20:56:12.558134113Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -13251,16 +13520,27 @@
       "started_at": "2026-09-13T20:55:37.199131860Z",
       "handler": "prompt",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 35358,
+        "inference_time_ms": 35319,
+        "tool_time_ms": 0,
+        "active_time_ms": 35319
+      },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
+        "input_tokens": 14612,
+        "output_tokens": 1570,
+        "total_tokens": 16474,
+        "reasoning_tokens": 292,
         "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 128920
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "start@1": {
       "first_event_seq": 21,
