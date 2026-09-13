@@ -976,12 +976,15 @@ defmodule Memba.Membership do
       |> join(:inner, [group], membership in MembershipProjection,
         on: membership.club_id == group.club_id
       )
-      |> where([group, _membership], group.club_id == ^club_id)
-      |> where([_group, membership], membership.person_id == ^person_id)
-      |> where([_group, membership], membership.active == true)
+      |> join(:inner, [_group, membership], person in Person,
+        on: person.person_id == membership.person_id
+      )
+      |> where([group, _membership, _person], group.club_id == ^club_id)
+      |> where([_group, membership, _person], membership.person_id == ^person_id)
+      |> where([_group, membership, _person], membership.active == true)
       |> distinct(true)
-      |> order_by([group, _membership], asc: group.name, asc: group.group_id)
-      |> select([group, _membership], %{
+      |> order_by([group, _membership, _person], asc: group.name, asc: group.group_id)
+      |> select([group, _membership, _person], %{
         club_id: group.club_id,
         group_id: group.group_id,
         group_key: group.group_key,
