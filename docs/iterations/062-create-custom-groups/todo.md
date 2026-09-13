@@ -4,7 +4,7 @@
 - [x] 002 Validate current active admin authority, same-club identity, group-name uniqueness and slug allocation inside that serialized boundary.
 - [x] 003 Preserve trusted system/backfill command behaviour and historical events.
 - [x] 004 Use a retry-stable group ID so retry does not silently become a second creation or change its address.
-- [ ] 005 Emit the existing group-created, slug-assigned and creator-added facts as one successful decision.
+- [x] 005 Emit the existing group-created, slug-assigned and creator-added facts as one successful decision.
 - [ ] 006 Extend aggregate state/projection constraints only as necessary for normalized name uniqueness; keep projections as projections.
 - [ ] 007 Make new user-facing operations distinguish custom groups structurally, not by arbitrary display-name checks.
 - [ ] 008 Close the custom-membership departure gap now.
