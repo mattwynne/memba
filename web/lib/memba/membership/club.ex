@@ -115,11 +115,12 @@ defmodule Memba.Membership.Club do
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
          {:ok, name} <- normalize_name(command.name),
          {:ok, creator_membership_id} <-
-           active_admin_membership_id(club, command.actor_person_id) do
+           active_admin_membership_id(club, command.actor_person_id),
+         :ok <- ensure_custom_group_name_available(club, command.group_id, name) do
       email_slug =
         CustomGroupSlug.allocate(
           name,
-          occupied_custom_group_slugs(club, command.group_id)
+          occupied_group_email_slugs(club, command.group_id)
         )
 
       create_custom_group_decision(
@@ -791,7 +792,32 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp occupied_custom_group_slugs(%__MODULE__{} = club, group_id) do
+  defp ensure_custom_group_name_available(%__MODULE__{} = club, group_id, name) do
+    uniqueness_key = custom_group_name_uniqueness_key(name)
+
+    name_already_defined? =
+      Enum.any?(club.groups, fn
+        {^group_id, _group} ->
+          false
+
+        {_other_group_id, %{name: existing_name}} ->
+          custom_group_name_uniqueness_key(existing_name) == uniqueness_key
+      end)
+
+    if name_already_defined? do
+      {:error, :group_name_already_defined}
+    else
+      :ok
+    end
+  end
+
+  defp custom_group_name_uniqueness_key(name) do
+    name
+    |> String.trim()
+    |> String.downcase()
+  end
+
+  defp occupied_group_email_slugs(%__MODULE__{} = club, group_id) do
     current_group_email_slug =
       case Map.get(club.groups, group_id) do
         %{email_slug: email_slug} -> email_slug

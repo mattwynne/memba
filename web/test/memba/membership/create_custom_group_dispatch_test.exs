@@ -169,15 +169,118 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
     foreign_club_id = Memba.ID.generate(:club)
     group_id = Memba.ID.generate(:group)
     actor_person_id = Memba.ID.generate(:person)
+    destination_membership_id = Memba.ID.generate(:membership)
 
     create_club_with_admin!(destination_club_id)
     create_club!(foreign_club_id)
-    create_member!(foreign_club_id, Memba.ID.generate(:membership), actor_person_id)
+    create_member!(destination_club_id, destination_membership_id, actor_person_id)
+    add_member!(foreign_club_id, Memba.ID.generate(:membership), actor_person_id)
 
     assert {:error, :unauthorized} =
              create_custom_group(destination_club_id, group_id, actor_person_id)
 
     refute_partial_group(destination_club_id, group_id)
+  end
+
+  test "create_custom_group/2 rejects case and outer-space variants of an existing group name" do
+    club_id = Memba.ID.generate(:club)
+    {actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+    original_group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             create_custom_group(club_id, original_group_id, actor_person_id, "Board")
+
+    for duplicate_name <- ["Board", "bOaRd", " Board "] do
+      duplicate_group_id = Memba.ID.generate(:group)
+
+      assert {:error, :group_name_already_defined} =
+               create_custom_group(
+                 club_id,
+                 duplicate_group_id,
+                 actor_person_id,
+                 duplicate_name
+               )
+
+      refute_partial_group(club_id, duplicate_group_id)
+    end
+
+    assert %GroupMembership{
+             membership_id: ^actor_membership_id,
+             person_id: ^actor_person_id
+           } = Repo.get_by(GroupMembership, group_id: original_group_id)
+  end
+
+  test "create_custom_group/2 protects Everyone and Admin names case-insensitively" do
+    club_id = Memba.ID.generate(:club)
+    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+
+    for protected_name <- [" everyone ", "aDmIn"] do
+      group_id = Memba.ID.generate(:group)
+
+      assert {:error, :group_name_already_defined} =
+               create_custom_group(club_id, group_id, actor_person_id, protected_name)
+
+      refute_partial_group(club_id, group_id)
+    end
+  end
+
+  test "custom group names and allocated email slugs are scoped to one Club stream" do
+    first_club_id = Memba.ID.generate(:club)
+    second_club_id = Memba.ID.generate(:club)
+    first_group_id = Memba.ID.generate(:group)
+    second_group_id = Memba.ID.generate(:group)
+    {_first_membership_id, first_actor_person_id} = create_club_with_admin!(first_club_id)
+    {_second_membership_id, second_actor_person_id} = create_club_with_admin!(second_club_id)
+
+    assert :ok =
+             create_custom_group(first_club_id, first_group_id, first_actor_person_id, "Board")
+
+    assert :ok =
+             create_custom_group(second_club_id, second_group_id, second_actor_person_id, "Board")
+
+    assert %{name: "Board", email_slug: "board"} =
+             App.aggregate_state(Club, first_club_id).groups[first_group_id]
+
+    assert %{name: "Board", email_slug: "board"} =
+             App.aggregate_state(Club, second_club_id).groups[second_group_id]
+  end
+
+  test "create_custom_group/2 allocates the first available club-local slug including system slugs" do
+    club_id = Memba.ID.generate(:club)
+    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+
+    groups = [
+      {Memba.ID.generate(:group), "Huts & maintenance", "huts-maintenance"},
+      {Memba.ID.generate(:group), "Huts maintenance", "huts-maintenance-2"},
+      {Memba.ID.generate(:group), "Huts--maintenance", "huts-maintenance-3"},
+      {Memba.ID.generate(:group), "Admin!", "admin-2"}
+    ]
+
+    for {group_id, name, expected_slug} <- groups do
+      assert :ok = create_custom_group(club_id, group_id, actor_person_id, name)
+
+      assert %{name: ^name, email_slug: ^expected_slug} =
+               App.aggregate_state(Club, club_id).groups[group_id]
+    end
+  end
+
+  test "create_custom_group/2 retains non-ASCII display names and uses the fallback slug" do
+    club_id = Memba.ID.generate(:club)
+    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+    first_group_id = Memba.ID.generate(:group)
+    second_group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             create_custom_group(club_id, first_group_id, actor_person_id, " 董事会 ")
+
+    assert :ok =
+             create_custom_group(club_id, second_group_id, actor_person_id, "Совет")
+
+    assert %{name: "董事会", email_slug: "group"} =
+             App.aggregate_state(Club, club_id).groups[first_group_id]
+
+    assert %{name: "Совет", email_slug: "group-2"} =
+             App.aggregate_state(Club, club_id).groups[second_group_id]
   end
 
   defp create_club!(club_id) do
@@ -192,13 +295,14 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   end
 
   defp create_club_with_admin!(club_id) do
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+
     create_club!(club_id)
 
-    create_member!(
-      club_id,
-      Memba.ID.generate(:membership),
-      Memba.ID.generate(:person)
-    )
+    create_member!(club_id, membership_id, person_id)
+
+    {membership_id, person_id}
   end
 
   defp create_member!(club_id, membership_id, person_id) do
@@ -212,6 +316,10 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                consistency: :strong
              )
 
+    add_member!(club_id, membership_id, person_id)
+  end
+
+  defp add_member!(club_id, membership_id, person_id) do
     assert :ok =
              Membership.add_member(
                %{club_id: club_id, membership_id: membership_id, person_id: person_id},
@@ -232,13 +340,13 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
              )
   end
 
-  defp create_custom_group(club_id, group_id, actor_person_id) do
+  defp create_custom_group(club_id, group_id, actor_person_id, name \\ "Board") do
     Membership.create_custom_group(
       %{
         club_id: club_id,
         group_id: group_id,
         actor_person_id: actor_person_id,
-        name: "Board"
+        name: name
       },
       consistency: :strong
     )
