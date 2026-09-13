@@ -18,6 +18,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.UpdateClub
+  alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
@@ -112,8 +113,22 @@ defmodule Memba.Membership.Club do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
-         {:ok, name} <- normalize_name(command.name) do
-      create_custom_group_decision(club, command, name)
+         {:ok, name} <- normalize_name(command.name),
+         {:ok, creator_membership_id} <-
+           active_admin_membership_id(club, command.actor_person_id) do
+      email_slug =
+        CustomGroupSlug.allocate(
+          name,
+          occupied_custom_group_slugs(club, command.group_id)
+        )
+
+      create_custom_group_decision(
+        club,
+        command,
+        creator_membership_id,
+        name,
+        email_slug
+      )
     end
   end
 
@@ -733,23 +748,60 @@ defmodule Memba.Membership.Club do
   defp create_custom_group_decision(
          %__MODULE__{} = club,
          %CreateCustomGroup{} = command,
-         name
+         creator_membership_id,
+         name,
+         email_slug
        ) do
     case Map.fetch(club.groups, command.group_id) do
-      {:ok, %{group_key: nil, name: ^name}} ->
+      {:ok, %{email_slug: ^email_slug, group_key: nil, name: ^name}} ->
         []
 
       {:ok, %{}} ->
         {:error, :group_already_defined}
 
       :error ->
-        %GroupCreated{
-          club_id: command.club_id,
-          group_id: command.group_id,
-          group_key: nil,
-          name: name
-        }
+        [
+          %GroupCreated{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            group_key: nil,
+            name: name
+          },
+          %GroupEmailSlugAssigned{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            email_slug: email_slug
+          },
+          %GroupMemberAdded{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            membership_id: creator_membership_id,
+            person_id: command.actor_person_id
+          }
+        ]
     end
+  end
+
+  defp active_admin_membership_id(%__MODULE__{} = club, actor_person_id) do
+    case Enum.find(club.active_admin_membership_ids, fn membership_id ->
+           Map.get(club.active_memberships, membership_id) == actor_person_id
+         end) do
+      nil -> {:error, :unauthorized}
+      membership_id -> {:ok, membership_id}
+    end
+  end
+
+  defp occupied_custom_group_slugs(%__MODULE__{} = club, group_id) do
+    current_group_email_slug =
+      case Map.get(club.groups, group_id) do
+        %{email_slug: email_slug} -> email_slug
+        nil -> nil
+      end
+
+    club.group_email_slugs
+    |> Map.delete(current_group_email_slug)
+    |> Map.keys()
+    |> MapSet.new()
   end
 
   defp normalize_optional_group_email_slug(nil), do: {:ok, nil}
