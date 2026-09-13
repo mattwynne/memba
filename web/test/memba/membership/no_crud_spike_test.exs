@@ -7,6 +7,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     source = read_source!("lib/memba/membership.ex")
 
     assert source =~ "def create_club("
+    assert source =~ "def create_custom_group("
     assert source =~ "def update_club("
     assert source =~ "def create_person("
     assert source =~ "def add_member("
@@ -61,7 +62,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
       |> Regex.scan(source, capture: :all_but_first)
       |> List.flatten()
 
-    assert create_functions == ["create_club", "create_person"]
+    assert create_functions == ["create_club", "create_custom_group", "create_person"]
 
     update_functions =
       ~r/\bdef\s+(update_[a-zA-Z0-9_]+)\b/

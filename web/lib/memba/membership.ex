@@ -14,6 +14,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
@@ -53,6 +54,21 @@ defmodule Memba.Membership do
   def create_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- create_club_command(attrs),
          :ok <- prevent_duplicate_club_slug(command) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Create a custom conversation group as an authenticated club member.
+
+  The caller supplies the Club aggregate identity, a caller-generated group
+  identity, and the authenticated actor's person identity. This application
+  service only translates the use case into an actor-bearing command; the Club
+  aggregate owns the authoritative creation decision.
+  """
+  def create_custom_group(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- create_custom_group_command(attrs) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -1540,6 +1556,21 @@ defmodule Memba.Membership do
          {:ok, name} <- fetch_required(attrs, :name),
          {:ok, slug} <- club_slug(attrs, name) do
       {:ok, %CreateClub{club_id: club_id, name: name, slug: slug}}
+    end
+  end
+
+  defp create_custom_group_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+         {:ok, name} <- fetch_required(attrs, :name) do
+      {:ok,
+       %CreateCustomGroup{
+         club_id: club_id,
+         group_id: group_id,
+         actor_person_id: actor_person_id,
+         name: name
+       }}
     end
   end
 

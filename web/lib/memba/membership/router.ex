@@ -18,6 +18,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
@@ -44,6 +45,7 @@ defmodule Memba.Membership.Router do
   dispatch(AssignGroupEmailSlug, to: Club)
   dispatch(AssignClubRoleToMember, to: Club)
   dispatch(CreateClub, to: Club)
+  dispatch(CreateCustomGroup, to: Club)
   dispatch(CreateGroup, to: Club)
   dispatch(CreatePerson, to: Person)
   dispatch(DefineClubRole, to: Club)

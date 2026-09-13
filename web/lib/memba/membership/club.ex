@@ -10,6 +10,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
@@ -104,6 +105,17 @@ defmodule Memba.Membership.Club do
   end
 
   def execute(%__MODULE__{}, %CreateClub{}), do: {:error, :already_created}
+
+  def execute(%__MODULE__{club_id: nil}, %CreateCustomGroup{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %CreateCustomGroup{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
+         {:ok, name} <- normalize_name(command.name) do
+      create_custom_group_decision(club, command, name)
+    end
+  end
 
   def execute(%__MODULE__{club_id: nil}, %AddClubMember{}), do: {:error, :not_created}
 
@@ -715,6 +727,28 @@ defmodule Memba.Membership.Club do
 
           group_creation_events(group_created_event, command, email_slug)
         end
+    end
+  end
+
+  defp create_custom_group_decision(
+         %__MODULE__{} = club,
+         %CreateCustomGroup{} = command,
+         name
+       ) do
+    case Map.fetch(club.groups, command.group_id) do
+      {:ok, %{group_key: nil, name: ^name}} ->
+        []
+
+      {:ok, %{}} ->
+        {:error, :group_already_defined}
+
+      :error ->
+        %GroupCreated{
+          club_id: command.club_id,
+          group_id: command.group_id,
+          group_key: nil,
+          name: name
+        }
     end
   end
 
