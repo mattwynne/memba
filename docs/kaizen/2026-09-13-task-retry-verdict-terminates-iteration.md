@@ -73,3 +73,40 @@ Independent validation should guide further work toward the iteration goal. If i
 - Distinguish a completed validation verdict from validator execution failure at the routing boundary; test a recoverable negative verdict end to end.
 - Make retry state include the rejected task and checkpoint, so continuation cannot silently skip it.
 - Report the original verdict and actual stop reason while retaining bounded retries and all publication gates.
+
+## Resolution
+
+Date: 2026-09-13
+
+Root cause: The reviewer used Fabro's permissive routing schema, which allowed both a repair request and a failed node outcome. The graph routed that failure around the task gate. Separately, the implementor checked off work before review, and the reset script assumed HEAD was the last accepted task even though Fabro had already checkpointed the rejected candidate. Existing routing tests covered publication and early failures, not this task-rejection path.
+
+Decision: Matt approved bounded in-place revision instead of clean retries. This preserves useful work but can carry first-attempt mistakes into revisions; independent review and the final quality/publication gates remain. The native `max_visits=3` guard remains iteration-wide, not per task. Runtime testing confirmed that Fabro 0.316 stops before executing visit three: this preserves the old guard's two executed revision passes, rather than increasing the budget. No new retry ledger, rollback protocol or child workflow was introduced.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/workflow.fabro` and its two task prompts: implement candidates without checking them off; review the whole candidate; revise the same pending task on actionable feedback. Removed the pre-validation snapshot and reset/discard machinery.
+- `schemas/task-verdict.json` and `scripts/apply_task_verdict.py` under that workflow: use one strict verdict (`accept`, `revise`, `blocked`). Native `stdin_source` passes the validated object to the command, which checks off only accepted work and emits deterministic routing. Acceptance replay cannot complete the next task.
+- `scripts/test_apply_task_verdict.py` and `scripts/test_task_execution_contract.sh`: cover saved rejected candidates, acceptance, replay, blocked/invalid verdicts, wrong task identity and retained quality gates.
+- `scripts/test_task_workflow_runtime.py`: runs the real task node definitions, schema, stdin handoff and edges through an isolated Fabro server, with scripted agents and inert final gates. It also retains the publication goal gate in failure fixtures, so the terminal-error test is meaningful.
+- `.fabro/workflows/README.md`: documents the new completion rule, revision budget and migration precaution for old checkpoints whose rejected tasks were already checked off.
+
+Fabro compatibility: These primitives are present in installed version `0.316.0-nightly.0`. Custom output schemas disable model routing interpretation, but edge conditions cannot inspect their nested fields; the verdict/check-off command handles that boundary. Native validation also requires fallback edges, so one always-failing `task_stopped` command remains. It has no outgoing edge and does not reach normal exit, avoiding the unrelated unsatisfied publication-gate error. The preceding stage retains the actual failure or blocked-task reason.
+
+Validation:
+
+- Before implementation, the new checkpoint/revision tests failed because the verdict command did not exist.
+- All seven implementation shell regression suites pass, including the new eleven-case verdict suite.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.fabro` passes; the existing publication goal-gate warning remains intentional (publication is required, not automatically retried).
+- `python3 .fabro/workflows/iteration-implementation/scripts/test_task_workflow_runtime.py` passes all seven native Fabro cases: revision/acceptance, restart from a saved candidate, failed review after prior acceptance, invalid schema, explicit blocker, exhausted visit budget and failure termination with a publication goal gate present. Agent/model work and final delivery commands are inert fixtures; no live delivery was launched.
+- The first `dev check` attempt passed 1,259 unit tests but hit the calling tool's 1,200-second deadline while browser scenarios were still progressing, with no recorded browser failure. That incomplete run is not a passing gate. The leftover worktree test server was stopped before retrying with a longer command deadline; no project gate was weakened.
+- The next full gate completed with 1,259 unit tests passing and 131/132 browser scenarios passing. `Replies are shown in the order they were posted` timed out waiting for Bob's reply. That unchanged scenario passed in the earlier interrupted run and in a focused `dev acceptance --name 'Replies are shown in the order they were posted'` rerun (1 scenario, 10 steps). No app or acceptance-test files were changed; the intermittent timing failure is not claimed fixed here.
+- Final quality gate: `dev check` on the staged change before commit; its result is recorded in the resolution commit message.
+
+Expected result: A repairable rejection leaves the same task pending, preserves earlier accepted work and candidate code, and returns to independent review after revision. Invalid output, execution failure, explicit blockers and exhausted revision budget must not advance that task or reach publication.
+
+Observed in fixtures: These transitions and completion boundaries held in the actual Fabro runtime, including a new run continuing saved candidate work. The strengthened budget assertion exposed Fabro's pre-execution visit-limit check; the documented allowance now matches the observed two revisions. This validates the mechanism, not real-agent adherence.
+
+Remaining follow-up:
+
+- After rollout, inspect the first real run that requests revision: confirm the same task is corrected and accepted without operator recovery. Scripted fixtures can establish routing and state behaviour, not prove agent adherence or recurrence prevention.
+- Do not apply the new completion assumption blindly to old run branches: reopen rejected or unreviewed checked-off tasks before restarting them.
