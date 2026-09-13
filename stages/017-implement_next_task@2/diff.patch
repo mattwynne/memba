@@ -1,0 +1,145 @@
+diff --git a/docs/iterations/061-discover-club-groups/todo.md b/docs/iterations/061-discover-club-groups/todo.md
+index 917492b..1fe3bb7 100644
+--- a/docs/iterations/061-discover-club-groups/todo.md
++++ b/docs/iterations/061-discover-club-groups/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Separate discovery from participation in the Membership public query API.
+-- [ ] 002 Add a club-scoped discovery summary for an authenticated active club member.
++- [x] 002 Add a club-scoped discovery summary for an authenticated active club member.
+ - [ ] 003 Preserve `list_active_groups_for_member/2` as the actual-membership API: Messaging uses it for access, so broadening it would expose conversations.
+ - [ ] 004 Update `MemberDashboardPresentation` to resolve group identity within the authorised club, then load only the permitted surface.
+ - [ ] 005 Explicitly distinguish ordinary non-member, outside admin and participating member.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 35b435d..f6b4ebd 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -976,12 +976,15 @@ defmodule Memba.Membership do
+       |> join(:inner, [group], membership in MembershipProjection,
+         on: membership.club_id == group.club_id
+       )
+-      |> where([group, _membership], group.club_id == ^club_id)
+-      |> where([_group, membership], membership.person_id == ^person_id)
+-      |> where([_group, membership], membership.active == true)
++      |> join(:inner, [_group, membership], person in Person,
++        on: person.person_id == membership.person_id
++      )
++      |> where([group, _membership, _person], group.club_id == ^club_id)
++      |> where([_group, membership, _person], membership.person_id == ^person_id)
++      |> where([_group, membership, _person], membership.active == true)
+       |> distinct(true)
+-      |> order_by([group, _membership], asc: group.name, asc: group.group_id)
+-      |> select([group, _membership], %{
++      |> order_by([group, _membership, _person], asc: group.name, asc: group.group_id)
++      |> select([group, _membership, _person], %{
+         club_id: group.club_id,
+         group_id: group.group_id,
+         group_key: group.group_key,
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 93a67b1..7f3d798 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -361,8 +361,9 @@ defmodule Memba.Membership.QueryTest do
+   end
+ 
+   describe "list_discoverable_groups_for_member/2" do
+-    test "returns safe summaries for groups the active club member has not joined" do
++    test "returns ordered safe summaries for every current-club group" do
+       club = create_club("Kootenay Mountaineering Club")
++      other_club = create_club("Nelson Cycling Club")
+       alice = create_person(name: "Alice", email: "alice@example.com")
+       _alice_membership_id = add_member(club.club_id, alice.person_id)
+ 
+@@ -373,18 +374,81 @@ defmodule Memba.Membership.QueryTest do
+           name: "Board"
+         )
+ 
+-      board_group =
+-        Enum.find(
+-          Membership.list_discoverable_groups_for_member(club.club_id, alice.person_id),
+-          &(&1.group_id == board_group_id)
++      _other_group_id =
++        create_group(other_club.club_id,
++          group_key: "alpine",
++          email_slug: "alpine",
++          name: "Alpine"
+         )
+ 
+-      assert board_group == %{
+-               club_id: club.club_id,
+-               group_id: board_group_id,
+-               group_key: "board",
+-               name: "Board"
+-             }
++      club_id = club.club_id
++      admin_group_id = SystemGroups.admin_group_id(club_id)
++      everyone_group_id = SystemGroups.everyone_group_id(club_id)
++
++      assert [
++               %{
++                 club_id: ^club_id,
++                 group_id: ^admin_group_id,
++                 group_key: "admin",
++                 name: "Admin"
++               },
++               %{
++                 club_id: ^club_id,
++                 group_id: ^board_group_id,
++                 group_key: "board",
++                 name: "Board"
++               },
++               %{
++                 club_id: ^club_id,
++                 group_id: ^everyone_group_id,
++                 group_key: "everyone",
++                 name: "Everyone"
++               }
++             ] = Membership.list_discoverable_groups_for_member(club.club_id, alice.person_id)
++    end
++
++    test "requires a resolvable active member of the selected club" do
++      club = create_club("Kootenay Mountaineering Club")
++      other_club = create_club("Nelson Cycling Club")
++      alice = create_person(name: "Alice", email: "alice@example.com")
++      pat = create_person(name: "Pat", email: "pat@example.com")
++      former_member = create_person(name: "Former", email: "former@example.com")
++      outsider = create_person(name: "Outsider", email: "outsider@example.com")
++
++      _alice_membership_id = add_member(club.club_id, alice.person_id)
++      _pat_membership_id = add_member(other_club.club_id, pat.person_id)
++      former_membership_id = add_member(club.club_id, former_member.person_id)
++      remove_member(former_membership_id)
++
++      orphan_person_id = Memba.ID.generate(:person)
++
++      Repo.insert!(%MembershipProjection{
++        membership_id: Memba.ID.generate(:membership),
++        club_id: club.club_id,
++        person_id: orphan_person_id,
++        active: true
++      })
++
++      assert Membership.list_discoverable_groups_for_member(club.club_id, pat.person_id) == []
++
++      assert Membership.list_discoverable_groups_for_member(
++               club.club_id,
++               former_member.person_id
++             ) == []
++
++      assert Membership.list_discoverable_groups_for_member(club.club_id, outsider.person_id) ==
++               []
++
++      assert Membership.list_discoverable_groups_for_member(club.club_id, orphan_person_id) == []
++
++      assert Membership.list_discoverable_groups_for_member(
++               Memba.ID.generate(:club),
++               alice.person_id
++             ) == []
++
++      assert Membership.list_discoverable_groups_for_member("not-a-uuid", alice.person_id) == []
++      assert Membership.list_discoverable_groups_for_member(club.club_id, "not-a-uuid") == []
++      assert Membership.list_discoverable_groups_for_member(nil, nil) == []
+     end
+   end
+ 
