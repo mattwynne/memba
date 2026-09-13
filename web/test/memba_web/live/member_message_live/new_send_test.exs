@@ -527,7 +527,9 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
       club_id: Keyword.fetch!(attrs, :club_id),
       group_id: Memba.ID.generate(:group),
       group_key: Keyword.fetch!(attrs, :group_key),
-      name: Keyword.fetch!(attrs, :name)
+      name: Keyword.fetch!(attrs, :name),
+      name_uniqueness_key:
+        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
     })
   end
 

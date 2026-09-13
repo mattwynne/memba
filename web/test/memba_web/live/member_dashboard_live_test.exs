@@ -914,7 +914,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         club_id: robin.club_id,
         group_id: admin_group_id,
         group_key: SystemGroups.admin_key(),
-        name: SystemGroups.admin_name()
+        name: SystemGroups.admin_name(),
+        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
       })
 
     add_group_member(admin_group, robin)
@@ -2095,7 +2096,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         group_id: SystemGroups.admin_group_id(robin.club_id),
         group_key: SystemGroups.admin_key(),
         email_slug: SystemGroups.admin_email_slug(),
-        name: SystemGroups.admin_name()
+        name: SystemGroups.admin_name(),
+        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
       })
 
     add_group_member(admin_group, robin)
@@ -2715,7 +2717,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         club_id: club_id,
         group_id: group_id,
         group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name()
+        name: SystemGroups.everyone_name(),
+        name_uniqueness_key:
+          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
       },
       on_conflict: :nothing
     )
@@ -2735,7 +2739,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       group_id: Memba.ID.generate(:group),
       group_key: Keyword.fetch!(attrs, :group_key),
       email_slug: Keyword.get(attrs, :email_slug),
-      name: Keyword.fetch!(attrs, :name)
+      name: Keyword.fetch!(attrs, :name),
+      name_uniqueness_key:
+        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
     })
   end
 

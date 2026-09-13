@@ -406,7 +406,8 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
       group_id: Memba.ID.generate(:group),
       club_id: club_id,
       email_slug: name |> String.downcase() |> String.replace(" ", "-"),
-      name: name
+      name: name,
+      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
     })
   end
 

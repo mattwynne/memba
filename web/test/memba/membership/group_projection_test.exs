@@ -13,6 +13,7 @@ defmodule Memba.Membership.GroupProjectionTest do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.GroupName
   alias Memba.Membership.Projectors.Group
   alias Memba.Membership.Projectors.GroupMembership
   alias Memba.Membership.Projections.Group, as: GroupProjection
@@ -49,7 +50,8 @@ defmodule Memba.Membership.GroupProjectionTest do
              club_id: ^club_id,
              email_slug: "everyone",
              group_key: "everyone",
-             name: "Everyone"
+             name: "Everyone",
+             name_uniqueness_key: "everyone"
            } = Repo.get(GroupProjection, everyone_group_id)
 
     assert %GroupProjection{
@@ -57,7 +59,8 @@ defmodule Memba.Membership.GroupProjectionTest do
              club_id: ^club_id,
              email_slug: "admin",
              group_key: "admin",
-             name: "Admin"
+             name: "Admin",
+             name_uniqueness_key: "admin"
            } = Repo.get(GroupProjection, admin_group_id)
   end
 
@@ -109,14 +112,16 @@ defmodule Memba.Membership.GroupProjectionTest do
       club_id: first_club_id,
       group_id: Memba.ID.generate(:group),
       email_slug: email_slug,
-      name: "First Trip Planners"
+      name: "First Trip Planners",
+      name_uniqueness_key: GroupName.uniqueness_key("First Trip Planners")
     })
 
     Repo.insert!(%GroupProjection{
       club_id: second_club_id,
       group_id: Memba.ID.generate(:group),
       email_slug: email_slug,
-      name: "Second Trip Planners"
+      name: "Second Trip Planners",
+      name_uniqueness_key: GroupName.uniqueness_key("Second Trip Planners")
     })
 
     assert_raise Ecto.ConstraintError, fn ->
@@ -124,32 +129,39 @@ defmodule Memba.Membership.GroupProjectionTest do
         club_id: first_club_id,
         group_id: Memba.ID.generate(:group),
         email_slug: email_slug,
-        name: "Duplicate Trip Planners"
+        name: "Duplicate Trip Planners",
+        name_uniqueness_key: GroupName.uniqueness_key("Duplicate Trip Planners")
       })
     end
   end
 
-  test "the read model permits a normalized name in different clubs but enforces club uniqueness" do
+  test "the read model matches aggregate normalization for non-ASCII case variants" do
     first_club_id = Memba.ID.generate(:club)
     second_club_id = Memba.ID.generate(:club)
+    first_group_id = Memba.ID.generate(:group)
+    uppercase_key = GroupName.uniqueness_key(" Σ ")
+    lowercase_key = GroupName.uniqueness_key("σ")
 
-    Repo.insert!(%GroupProjection{
-      club_id: first_club_id,
-      group_id: Memba.ID.generate(:group),
-      name: "Board"
-    })
+    assert uppercase_key == lowercase_key
+
+    append_historic_group!(first_club_id, first_group_id, " Σ ")
+
+    assert %GroupProjection{name_uniqueness_key: ^uppercase_key} =
+             Repo.get(GroupProjection, first_group_id)
 
     Repo.insert!(%GroupProjection{
       club_id: second_club_id,
       group_id: Memba.ID.generate(:group),
-      name: " BOARD "
+      name: "σ",
+      name_uniqueness_key: lowercase_key
     })
 
     assert_raise Ecto.ConstraintError, fn ->
       Repo.insert!(%GroupProjection{
         club_id: first_club_id,
         group_id: Memba.ID.generate(:group),
-        name: " bOaRd "
+        name: "σ",
+        name_uniqueness_key: lowercase_key
       })
     end
   end
@@ -256,7 +268,7 @@ defmodule Memba.Membership.GroupProjectionTest do
              )
   end
 
-  defp append_historic_group!(club_id, group_id) do
+  defp append_historic_group!(club_id, group_id, name \\ "Trip Planners") do
     events =
       [
         %ClubCreated{
@@ -268,7 +280,7 @@ defmodule Memba.Membership.GroupProjectionTest do
           club_id: club_id,
           group_id: group_id,
           group_key: "trip_planners",
-          name: "Trip Planners"
+          name: name
         }
       ]
       |> Enum.map(&Mapper.map_to_event_data/1)

@@ -11,6 +11,7 @@ defmodule Memba.Membership.Projections.Group do
     field :email_slug, :string
     field :group_key, :string
     field :name, :string
+    field :name_uniqueness_key, :string
 
     timestamps(type: :utc_datetime_usec)
   end

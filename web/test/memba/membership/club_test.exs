@@ -843,21 +843,21 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
-    test "rejects a normalized duplicate name from trusted group creation" do
+    test "rejects a non-ASCII case variant from trusted group creation" do
       club_id = Memba.ID.generate(:club)
 
       club =
         club_id
         |> created_club()
-        |> create_group(Memba.ID.generate(:group), "trip_planners", "Trip Planners")
+        |> create_group(Memba.ID.generate(:group), "uppercase_sigma", "Σ")
 
       assert {:error, :group_name_already_defined} =
                Club.execute(club, %CreateGroup{
                  club_id: club_id,
                  group_id: Memba.ID.generate(:group),
-                 email_slug: "other-trip-planners",
-                 group_key: "other_trip_planners",
-                 name: " TRIP PLANNERS "
+                 email_slug: "lowercase-sigma",
+                 group_key: "lowercase_sigma",
+                 name: " σ "
                })
     end
 

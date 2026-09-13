@@ -11,10 +11,12 @@ defmodule Memba.Membership.Projectors.Group do
 
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
+  alias Memba.Membership.GroupName
   alias Memba.Membership.Projections.Group, as: GroupProjection
 
   project(%GroupCreated{} = event, fn multi ->
     now = DateTime.utc_now(:microsecond)
+    name_uniqueness_key = GroupName.uniqueness_key(event.name)
 
     Ecto.Multi.insert(
       multi,
@@ -24,6 +26,7 @@ defmodule Memba.Membership.Projectors.Group do
         group_id: event.group_id,
         group_key: event.group_key,
         name: event.name,
+        name_uniqueness_key: name_uniqueness_key,
         inserted_at: now,
         updated_at: now
       },
@@ -32,6 +35,7 @@ defmodule Memba.Membership.Projectors.Group do
           club_id: event.club_id,
           group_key: event.group_key,
           name: event.name,
+          name_uniqueness_key: name_uniqueness_key,
           updated_at: now
         ]
       ],

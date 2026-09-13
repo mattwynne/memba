@@ -1,6 +1,7 @@
 defmodule Memba.Messaging.InboundClubDestinationTest do
   use Memba.DataCase, async: false
 
+  alias Memba.Membership.GroupName
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
@@ -178,7 +179,8 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
       group_id: SystemGroups.everyone_group_id(club.club_id),
       email_slug: SystemGroups.everyone_email_slug(),
       group_key: SystemGroups.everyone_key(),
-      name: SystemGroups.everyone_name()
+      name: SystemGroups.everyone_name(),
+      name_uniqueness_key: GroupName.uniqueness_key(SystemGroups.everyone_name())
     })
   end
 
@@ -188,7 +190,8 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
       group_id: SystemGroups.admin_group_id(club.club_id),
       email_slug: SystemGroups.admin_email_slug(),
       group_key: SystemGroups.admin_key(),
-      name: SystemGroups.admin_name()
+      name: SystemGroups.admin_name(),
+      name_uniqueness_key: GroupName.uniqueness_key(SystemGroups.admin_name())
     })
   end
 
