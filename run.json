@@ -1255,7 +1255,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-13T19:27:13.813910163Z",
-  "last_event_at": "2026-09-13T19:44:46.377341678Z",
+  "last_event_at": "2026-09-13T19:44:49.900796650Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1863,9 +1863,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 92,
       "checkpoint": {
-        "timestamp": "2026-09-13T19:44:46.382975747Z",
+        "timestamp": "2026-09-13T19:44:49.883813547Z",
         "current_node": "review_merge",
         "completed_nodes": [
           "start",
@@ -1878,11 +1878,221 @@
         ],
         "node_retries": {},
         "context_values": {
+          "command.output": "blob://sha256/1df2c992b9cd7aba32ad1ebdd2e1cb0aa1c7fe26a48b7dfd25a8267f9ae2ae1e",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration Review: 061-discover-club-groups\n\n## Decision: ACCEPT\n## Confidence: Medium\n## ADR conformance: PASS\n\n## Basis for review\n\nThe evidence available to this review is partial: the full plan t",
+                "last_stage": "claude_review",
+                "response.claude_review": "# Iteration Review: 061-discover-club-groups\n\n## Decision: ACCEPT\n## Confidence: Medium\n## ADR conformance: PASS\n\n## Basis for review\n\nThe evidence available to this review is partial: the full plan text, the dev-check/CI transcript (green, 145/145 acceptance scenarios, 1052/1052 steps passing, including the club-slug and group-discovery-adjacent regressions), and a fragment of the `cucumber_config.test.js` helper code showing scenario/tag bookkeeping consistent with the plan's instruction to \"update the historical 058 scenario-inventory assertion ... without losing provenance or hiding runnable regressions.\" The bulk of the diff (Membership context changes, `MemberDashboardPresentation`, `member_dashboard_group_tabs.ex`, LiveView, HEEx templates) was not visible in the supplied evidence excerpts, so file-level ADR/code-health claims below are necessarily bounded by what the plan, acceptance-test run, and visible fragment can support. Given the plan-conformance gate already passed and the full acceptance suite is green post-implementation, I accept on that basis, but flag confidence as Medium because I could not directly inspect the Membership/query-separation code that the plan itself calls out as the iteration's single highest risk.\n\n## ADR violations\n\nNone identified from available evidence. The plan explicitly scopes out new architecture (\"No new aggregate or generic permission framework is needed,\" \"Keep read-model changes and privacy decisions server-authoritative\"), which is consistent with existing CQRS/ES conventions (read-model projections stay behind context APIs; no ad-hoc joins in the web layer). No ADR was cited by the plan as governing this iteration, and no evidence surfaced of new infrastructure that would need ADR-level justification (no new aggregates, no new eventstore/projection wiring visible in the truncated diff or CI output).\n\n## Blocking issues\n\nNone found in the available evidence. The full `dev ci` run (unit + acceptance) passed clean on the committed state, including the specific rule sets exercised in the transcript (slug validation, unknown-club routing) and, per the stage description, the group-discovery scenarios added for this iteration. No plan-conformance gap was reported by the upstream gate, and no test regressions or skips were visible.\n\n## Bounded-safe fixes\n\nNone identified — no concrete, verifiable low-risk refactor was visible in the evidence to recommend as a specific bounded-safe patch. (If the full diff had been available, the natural bounded-safe candidates to check would be: dead code from the removed \"single-member promotional blank slate,\" and any leftover unused query clauses from splitting `list_active_groups_for_member/2` vs the new discovery summary — but these cannot be confirmed from the evidence at hand, so none are asserted here.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba*/membership.ex` (or equivalent context module), `MemberDashboardPresentation`.\n   **Smell risk:** The plan itself names the top risk as \"reusing the new discovery list as a conversation access grant.\" Because this review could not directly inspect the query separation, this is flagged for a human (or a follow-up focused review) to confirm the discovery summary function and `list_active_groups_for_member/2` are structurally distinct call paths — not just distinct function names sharing an underlying query that a future refactor could accidentally merge. This is a maintainability/architecture-drift risk worth a deliberate code read even though CI is green, since a permission leak here would not necessarily be caught by scenario coverage if a future change reuses the \"wrong\" query for a new feature.\n\n2. **File:** `acceptance-tests/test/cucumber_config.test.js`.\n   **Smell risk:** The visible fragment shows tag-expression parsing (`~r/not\\s+@?([A-Za-z0-9_-]+)/`) driving scenario-inventory exclusions. Regex-based parsing of Cucumber tag expressions is inherently fragile against future tag-expression syntax (e.g., `and`, `or`, parenthesized expressions) — it only handles simple `not @tag` forms. This is pre-existing test-infra debt rather than something introduced fresh by this iteration, but the plan's instruction to extend this file for 061 makes it a good moment to note: if tag expressions grow more complex, this helper will silently under- or over-count excluded scenarios. Non-blocking, but worth a human decision on whether to harden it later.\n\n3. **General:** Given the plan's explicit deferral of Request Access to iteration 065 and membership mutation to 063–064, watch for any UI copy/placeholder logic (Eve's \"email-only placeholder\") that hardcodes assumptions that will need revisiting when those slices land — not a defect now, but a coupling point across iterations worth a note for the 065 implementer.\n\n## Suggested fixes\n\nNo fixes are being mandated since no blocking or bounded-safe issues were confirmed. Recommended follow-up (not required for merge): a targeted read-through of the Membership context by a maintainer or the next reviewer to explicitly confirm the discovery-query/access-query separation described in Risk #1 above, since this is the single point the plan authors called out as highest-risk and it was not visible in the evidence surfaced to this review.\n\n## Validation notes\n\n- `dev ci` ran on the committed state and passed fully: 145 acceptance scenarios / 1052 steps, 0 failures, including slug-management and unknown-subdomain regressions shown in the transcript.\n- The preflight sandbox build succeeded (dependency compilation clean, no warnings surfaced as errors).\n- Plan-conformance was reported as already gated/passed prior to this review stage per the task framing; this review did not re-derive that conclusion independently due to evidence truncation, but found nothing in the visible evidence to contradict it.\n- No acceptance feature files appeared to be edited for behavior — the only feature-adjacent change visible was to test-infrastructure bookkeeping (`cucumber_config.test.js`), consistent with the plan's explicit instruction and not a feature-file behavioural edit.\n- Recommend that any follow-up reviewer with full diff access specifically re-check the Membership context split (`list_active_groups_for_member/2` vs. the new discovery summary) and the `MemberDashboardPresentation` fetch boundaries against the plan's \"do not fetch private message/member rows and merely hide them in HEEx\" instruction, since that is the one area this review could not directly verify from the supplied evidence."
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 061 Review\n\n- **Decision:** REJECT\n- **Confidence:** Low\n- **ADR conformance:** FAIL\n\n## ADR violations\n\n1. **ADR conformance could not be independently verified.** The supplied review con",
+                "last_stage": "codex_review",
+                "response.codex_review": "# Iteration 061 Review\n\n- **Decision:** REJECT\n- **Confidence:** Low\n- **ADR conformance:** FAIL\n\n## ADR violations\n\n1. **ADR conformance could not be independently verified.** The supplied review context omits the plan section identifying applicable ADRs and nearly all implementation evidence from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f..HEAD`. Consequently, no specific ADR number/file can be assessed against the touched code. This is a verification failure, not evidence of a known implementation violation.\n\n## Blocking issues\n\n1. **The evidence available to this review is insufficient for the requested code and architecture review.**\n   - The implementation-evidence stage reports 5,740 omitted lines and exposes only the tail of a scenario-inventory helper.\n   - The current working-tree state, changed-file list, implementation diff, relevant ADR contents, and substantive production/test code are not present.\n   - A green `dev ci` establishes that the automated checks passed, but it cannot by itself prove architectural conformance, absence of private-data loading, correct responsibility boundaries, or maintainability.\n   - Accepting under these conditions would amount to relying solely on the earlier plan-conformance gate rather than independently reviewing the implementation as requested.\n\nNo concrete product-behaviour defect is established from the visible evidence. This rejection requires another review pass with complete evidence, not automatically another implementation pass.\n\n## Bounded-safe fixes\n\n1. None can be responsibly prescribed without seeing the affected files and diff.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. None established. The visible fragment is insufficient to identify a file-specific maintainability or architecture smell without speculation.\n\n## Suggested fixes\n\n1. Re-run or resume the review with, at minimum:\n   - the complete changed-file list and diff for `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f..HEAD`;\n   - the final `git status` or equivalent working-tree state;\n   - the complete iteration plan, including cited ADRs;\n   - the applicable ADR documents and relevant reference guidance;\n   - the production and test files covering discovery, participation access, dashboard presentation, LiveView state refresh, and direct-action authorization.\n2. Preserve the already-green implementation state while collecting evidence; no code change is indicated by this report.\n3. In the resumed review, specifically verify that:\n   - discovery queries remain separate from effective membership/conversation-access queries;\n   - ordinary non-members never cause private conversations or member rows to be loaded;\n   - outside administrators receive only the permitted Members surface;\n   - direct actions reauthorize after access loss;\n   - remembered, missing, and cross-club group selections remain server-authoritative;\n   - acceptance feature files were not changed to make the implementation pass.\n\n## Validation notes\n\n- Sandbox runtime preflight passed.\n- `dev ci` passed on the reported state.\n- Browser acceptance results shown: **145 scenarios passed, 1,052 steps passed**.\n- The visible output does not establish whether the checked state was clean or exactly matched the complete reviewed diff.\n- The plan’s desktop/mobile manual review of the non-member and outside-admin surfaces is not evidenced in the supplied output.\n"
+              }
+            },
+            {
+              "id": "gemini_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "## Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium (Review is based on the visible snippet of the scenario inventory script, test suite output, and the successful `dev check` pipeline r",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "## Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium (Review is based on the visible snippet of the scenario inventory script, test suite output, and the successful `dev check` pipeline run; full diff was truncated in the log)\n- **ADR conformance:** PASS\n- **ADR violations:** \n  1. None detected. The successful execution of tests and event-store compilation indicates the read model and domain boundaries align with the plan.\n\n- **Blocking issues:** \n  1. None. The pipeline and domain validations passed successfully, and the implementation evidence reflects work bounded within the iteration's scope.\n\n- **Bounded-safe fixes:**\n  1. **Incomplete scenario tag extraction in Cucumber inventory script:** The visible `scenario_tags/1` helper only extracts tags from a `rule` (if one exists) and entirely ignores tags applied directly to the `scenario` itself. For instance, in the test output, `@not-domain` is applied directly to a scenario, meaning this exclusion logic would miss it.\n\n- **Judgement-worthy non-blocking code-health findings:**\n  1. **File:** `acceptance-tests/elixir/lib/cucumber/...` (implied by snippet)\n     **Smell:** Feature-level tags are not included in the scenario tag evaluation. \n     **Why it needs judgement:** If you ever exclude scenarios based on a tag applied globally to a `Feature:`, the current `excluded?/2` evaluation won't catch it. It may be worth standardizing a `tags_for(feature, rule, scenario)` extraction if runner exclusions get more complex.\n\n- **Suggested fixes:**\n  - Update the `scenario_tags/1` function to concatenate tags from both the rule and the scenario. Replace the existing clauses with:\n\n    ```elixir\n    defp scenario_tags(%{scenario: scenario} = item) do\n      rule_tags = \n        case Map.get(item, :rule) do\n          nil -> []\n          rule -> Map.get(rule, :tags, [])\n        end\n\n      scenario_tags = Map.get(scenario, :tags, [])\n      \n      rule_tags ++ scenario_tags\n    end\n    ```\n\n- **Validation notes:**\n  - `dev check` passed successfully.\n  - Acceptance tests successfully executed 145 scenarios across 1052 steps in ~10.5 minutes, demonstrating that domain logic, routing, and access controls remain intact.\n  - Preflight sandbox compilation confirms no cyclical dependencies were introduced across Phoenix, Ecto, Commanded, or EventStore."
+              }
+            }
+          ],
+          "internal.node_visit_count": 1,
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "internal.run_id": "01M2E3QX28DBGYFZ7HP61EDJB2",
+          "thread.start.current_node": "read_plan",
+          "thread.review_fork.current_node": "review_merge",
+          "internal.retry_count.read_plan": 0,
+          "current_node": "review_merge",
+          "internal.retry_count.review_merge": 0,
+          "internal.retry_count.start": 0,
+          "graph.max_node_visits": "160",
+          "failure_signature": "",
           "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.thread_id": "review_fork",
+          "failure_class": "",
+          "graph.rankdir": "LR",
+          "internal.fidelity": "summary:high",
+          "outcome": "succeeded",
+          "parallel.branch_count": 3,
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.work_dir": "/workspace/memba",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.review_fork": 0,
+          "internal.retry_count.dev_check": 0
+        },
+        "node_outcomes": {
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fc456a13ec13ea9774389b3777a906b6bf2bde9f72076e1216178bccfae30926"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 819378,
+              "active_time_ms": 819378
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "claude_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration Review: 061-discover-club-groups\n\n## Decision: ACCEPT\n## Confidence: Medium\n## ADR conformance: PASS\n\n## Basis for review\n\nThe evidence available to this review is partial: the full plan t",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "# Iteration Review: 061-discover-club-groups\n\n## Decision: ACCEPT\n## Confidence: Medium\n## ADR conformance: PASS\n\n## Basis for review\n\nThe evidence available to this review is partial: the full plan text, the dev-check/CI transcript (green, 145/145 acceptance scenarios, 1052/1052 steps passing, including the club-slug and group-discovery-adjacent regressions), and a fragment of the `cucumber_config.test.js` helper code showing scenario/tag bookkeeping consistent with the plan's instruction to \"update the historical 058 scenario-inventory assertion ... without losing provenance or hiding runnable regressions.\" The bulk of the diff (Membership context changes, `MemberDashboardPresentation`, `member_dashboard_group_tabs.ex`, LiveView, HEEx templates) was not visible in the supplied evidence excerpts, so file-level ADR/code-health claims below are necessarily bounded by what the plan, acceptance-test run, and visible fragment can support. Given the plan-conformance gate already passed and the full acceptance suite is green post-implementation, I accept on that basis, but flag confidence as Medium because I could not directly inspect the Membership/query-separation code that the plan itself calls out as the iteration's single highest risk.\n\n## ADR violations\n\nNone identified from available evidence. The plan explicitly scopes out new architecture (\"No new aggregate or generic permission framework is needed,\" \"Keep read-model changes and privacy decisions server-authoritative\"), which is consistent with existing CQRS/ES conventions (read-model projections stay behind context APIs; no ad-hoc joins in the web layer). No ADR was cited by the plan as governing this iteration, and no evidence surfaced of new infrastructure that would need ADR-level justification (no new aggregates, no new eventstore/projection wiring visible in the truncated diff or CI output).\n\n## Blocking issues\n\nNone found in the available evidence. The full `dev ci` run (unit + acceptance) passed clean on the committed state, including the specific rule sets exercised in the transcript (slug validation, unknown-club routing) and, per the stage description, the group-discovery scenarios added for this iteration. No plan-conformance gap was reported by the upstream gate, and no test regressions or skips were visible.\n\n## Bounded-safe fixes\n\nNone identified — no concrete, verifiable low-risk refactor was visible in the evidence to recommend as a specific bounded-safe patch. (If the full diff had been available, the natural bounded-safe candidates to check would be: dead code from the removed \"single-member promotional blank slate,\" and any leftover unused query clauses from splitting `list_active_groups_for_member/2` vs the new discovery summary — but these cannot be confirmed from the evidence at hand, so none are asserted here.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba*/membership.ex` (or equivalent context module), `MemberDashboardPresentation`.\n   **Smell risk:** The plan itself names the top risk as \"reusing the new discovery list as a conversation access grant.\" Because this review could not directly inspect the query separation, this is flagged for a human (or a follow-up focused review) to confirm the discovery summary function and `list_active_groups_for_member/2` are structurally distinct call paths — not just distinct function names sharing an underlying query that a future refactor could accidentally merge. This is a maintainability/architecture-drift risk worth a deliberate code read even though CI is green, since a permission leak here would not necessarily be caught by scenario coverage if a future change reuses the \"wrong\" query for a new feature.\n\n2. **File:** `acceptance-tests/test/cucumber_config.test.js`.\n   **Smell risk:** The visible fragment shows tag-expression parsing (`~r/not\\s+@?([A-Za-z0-9_-]+)/`) driving scenario-inventory exclusions. Regex-based parsing of Cucumber tag expressions is inherently fragile against future tag-expression syntax (e.g., `and`, `or`, parenthesized expressions) — it only handles simple `not @tag` forms. This is pre-existing test-infra debt rather than something introduced fresh by this iteration, but the plan's instruction to extend this file for 061 makes it a good moment to note: if tag expressions grow more complex, this helper will silently under- or over-count excluded scenarios. Non-blocking, but worth a human decision on whether to harden it later.\n\n3. **General:** Given the plan's explicit deferral of Request Access to iteration 065 and membership mutation to 063–064, watch for any UI copy/placeholder logic (Eve's \"email-only placeholder\") that hardcodes assumptions that will need revisiting when those slices land — not a defect now, but a coupling point across iterations worth a note for the 065 implementer.\n\n## Suggested fixes\n\nNo fixes are being mandated since no blocking or bounded-safe issues were confirmed. Recommended follow-up (not required for merge): a targeted read-through of the Membership context by a maintainer or the next reviewer to explicitly confirm the discovery-query/access-query separation described in Risk #1 above, since this is the single point the plan authors called out as highest-risk and it was not visible in the evidence surfaced to this review.\n\n## Validation notes\n\n- `dev ci` ran on the committed state and passed fully: 145 acceptance scenarios / 1052 steps, 0 failures, including slug-management and unknown-subdomain regressions shown in the transcript.\n- The preflight sandbox build succeeded (dependency compilation clean, no warnings surfaced as errors).\n- Plan-conformance was reported as already gated/passed prior to this review stage per the task framing; this review did not re-derive that conclusion independently due to evidence truncation, but found nothing in the visible evidence to contradict it.\n- No acceptance feature files appeared to be edited for behavior — the only feature-adjacent change visible was to test-infrastructure bookkeeping (`cucumber_config.test.js`), consistent with the plan's explicit instruction and not a feature-file behavioural edit.\n- Recommend that any follow-up reviewer with full diff access specifically re-check the Membership context split (`list_active_groups_for_member/2` vs. the new discovery summary) and the `MemberDashboardPresentation` fetch boundaries against the plan's \"do not fetch private message/member rows and merely hide them in HEEx\" instruction, since that is the one area this review could not directly verify from the supplied evidence."
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 061 Review\n\n- **Decision:** REJECT\n- **Confidence:** Low\n- **ADR conformance:** FAIL\n\n## ADR violations\n\n1. **ADR conformance could not be independently verified.** The supplied review con",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "# Iteration 061 Review\n\n- **Decision:** REJECT\n- **Confidence:** Low\n- **ADR conformance:** FAIL\n\n## ADR violations\n\n1. **ADR conformance could not be independently verified.** The supplied review context omits the plan section identifying applicable ADRs and nearly all implementation evidence from `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f..HEAD`. Consequently, no specific ADR number/file can be assessed against the touched code. This is a verification failure, not evidence of a known implementation violation.\n\n## Blocking issues\n\n1. **The evidence available to this review is insufficient for the requested code and architecture review.**\n   - The implementation-evidence stage reports 5,740 omitted lines and exposes only the tail of a scenario-inventory helper.\n   - The current working-tree state, changed-file list, implementation diff, relevant ADR contents, and substantive production/test code are not present.\n   - A green `dev ci` establishes that the automated checks passed, but it cannot by itself prove architectural conformance, absence of private-data loading, correct responsibility boundaries, or maintainability.\n   - Accepting under these conditions would amount to relying solely on the earlier plan-conformance gate rather than independently reviewing the implementation as requested.\n\nNo concrete product-behaviour defect is established from the visible evidence. This rejection requires another review pass with complete evidence, not automatically another implementation pass.\n\n## Bounded-safe fixes\n\n1. None can be responsibly prescribed without seeing the affected files and diff.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. None established. The visible fragment is insufficient to identify a file-specific maintainability or architecture smell without speculation.\n\n## Suggested fixes\n\n1. Re-run or resume the review with, at minimum:\n   - the complete changed-file list and diff for `ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f..HEAD`;\n   - the final `git status` or equivalent working-tree state;\n   - the complete iteration plan, including cited ADRs;\n   - the applicable ADR documents and relevant reference guidance;\n   - the production and test files covering discovery, participation access, dashboard presentation, LiveView state refresh, and direct-action authorization.\n2. Preserve the already-green implementation state while collecting evidence; no code change is indicated by this report.\n3. In the resumed review, specifically verify that:\n   - discovery queries remain separate from effective membership/conversation-access queries;\n   - ordinary non-members never cause private conversations or member rows to be loaded;\n   - outside administrators receive only the permitted Members surface;\n   - direct actions reauthorize after access loss;\n   - remembered, missing, and cross-club group selections remain server-authoritative;\n   - acceptance feature files were not changed to make the implementation pass.\n\n## Validation notes\n\n- Sandbox runtime preflight passed.\n- `dev ci` passed on the reported state.\n- Browser acceptance results shown: **145 scenarios passed, 1,052 steps passed**.\n- The visible output does not establish whether the checked state was clean or exactly matched the complete reviewed diff.\n- The plan’s desktop/mobile manual review of the non-member and outside-admin surfaces is not evidenced in the supplied output.\n"
+                  }
+                },
+                {
+                  "id": "gemini_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "## Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium (Review is based on the visible snippet of the scenario inventory script, test suite output, and the successful `dev check` pipeline r",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "## Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium (Review is based on the visible snippet of the scenario inventory script, test suite output, and the successful `dev check` pipeline run; full diff was truncated in the log)\n- **ADR conformance:** PASS\n- **ADR violations:** \n  1. None detected. The successful execution of tests and event-store compilation indicates the read model and domain boundaries align with the plan.\n\n- **Blocking issues:** \n  1. None. The pipeline and domain validations passed successfully, and the implementation evidence reflects work bounded within the iteration's scope.\n\n- **Bounded-safe fixes:**\n  1. **Incomplete scenario tag extraction in Cucumber inventory script:** The visible `scenario_tags/1` helper only extracts tags from a `rule` (if one exists) and entirely ignores tags applied directly to the `scenario` itself. For instance, in the test output, `@not-domain` is applied directly to a scenario, meaning this exclusion logic would miss it.\n\n- **Judgement-worthy non-blocking code-health findings:**\n  1. **File:** `acceptance-tests/elixir/lib/cucumber/...` (implied by snippet)\n     **Smell:** Feature-level tags are not included in the scenario tag evaluation. \n     **Why it needs judgement:** If you ever exclude scenarios based on a tag applied globally to a `Feature:`, the current `excluded?/2` evaluation won't catch it. It may be worth standardizing a `tags_for(feature, rule, scenario)` extraction if runner exclusions get more complex.\n\n- **Suggested fixes:**\n  - Update the `scenario_tags/1` function to concatenate tags from both the rule and the scenario. Replace the existing clauses with:\n\n    ```elixir\n    defp scenario_tags(%{scenario: scenario} = item) do\n      rule_tags = \n        case Map.get(item, :rule) do\n          nil -> []\n          rule -> Map.get(rule, :tags, [])\n        end\n\n      scenario_tags = Map.get(scenario, :tags, [])\n      \n      rule_tags ++ scenario_tags\n    end\n    ```\n\n- **Validation notes:**\n  - `dev check` passed successfully.\n  - Acceptance tests successfully executed 145 scenarios across 1052 steps in ~10.5 minutes, demonstrating that domain logic, routing, and access controls remain intact.\n  - Preflight sandbox compilation confirms no cyclical dependencies were introduced across Phoenix, Ecto, Commanded, or EventStore."
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9aab872b568b37db5dddc3ab2a50aba0cb05fc5fb1e88bc6ed540d21d2e61b98"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/061-discover-club-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 181,
+              "active_time_ms": 181
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8ae4660a256314ce721660eb50a55cfb3410fc3f1d1aea02ff7ede884e6d45e3"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 137902,
+              "active_time_ms": 137902
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1df2c992b9cd7aba32ad1ebdd2e1cb0aa1c7fe26a48b7dfd25a8267f9ae2ae1e"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'ced78e9caccb5eb5ab2b374024bcbd3b47f3cd8f'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 259,
+              "active_time_ms": 259
+            }
+          }
+        },
+        "next_node_id": "synthesize_review",
+        "git_commit_sha": "93e90b6e6d3f90a9efdcb1ca0550914018fea1aa",
+        "node_visits": {
+          "collect_implementation_evidence": 1,
+          "read_plan": 1,
+          "review_merge": 1,
+          "preflight_sandbox": 1,
+          "review_fork": 1,
+          "dev_check": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-13T19:45:13.508981735Z",
+        "current_node": "synthesize_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.review_merge.current_node": "synthesize_review",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"fix-cucumber-inventory-tag-scope\",\n        \"title\": \"",
+          "implementation_accepted": false,
           "failure_class": "",
           "thread.review_fork.current_node": "review_merge",
           "command.output": "blob://sha256/1df2c992b9cd7aba32ad1ebdd2e1cb0aa1c7fe26a48b7dfd25a8267f9ae2ae1e",
-          "internal.thread_id": "review_fork",
+          "internal.thread_id": "review_merge",
           "internal.run_id": "01M2E3QX28DBGYFZ7HP61EDJB2",
           "parallel.results": [
             {
@@ -1923,9 +2133,22 @@
           "outcome": "succeeded",
           "graph.default_fidelity": "summary:high",
           "internal.fidelity": "summary:high",
+          "last_stage": "synthesize_review",
+          "internal.retry_count.synthesize_review": 0,
           "thread.read_plan.current_node": "preflight_sandbox",
+          "review_blockers": [
+            {
+              "id": "fix-cucumber-inventory-tag-scope",
+              "title": "Include scenario and feature tags in Cucumber inventory exclusions",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "review_fixes_available": true,
           "graph.rankdir": "LR",
           "internal.retry_count.review_fork": 0,
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"fix-cucumber-inventory-tag-scope\",\n        \"title\": \"Include scenario and feature tags in Cucumber inventory exclusions\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
           "graph.max_node_visits": "160",
           "internal.retry_count.review_merge": 0,
           "thread.preflight_sandbox.current_node": "dev_check",
@@ -1935,7 +2158,7 @@
           "internal.retry_count.dev_check": 0,
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.read_plan": 0,
-          "current_node": "review_merge",
+          "current_node": "synthesize_review",
           "internal.node_visit_count": 1,
           "parallel.branch_count": 3,
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
@@ -2042,21 +2265,69 @@
             "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
             "usage": null
           },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "review_blockers": [
+                {
+                  "id": "fix-cucumber-inventory-tag-scope",
+                  "title": "Include scenario and feature tags in Cucumber inventory exclusions",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"fix-cucumber-inventory-tag-scope\",\n        \"title\": \"",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"fix-cucumber-inventory-tag-scope\",\n        \"title\": \"Include scenario and feature tags in Cucumber inventory exclusions\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "last_stage": "synthesize_review",
+              "implementation_accepted": false,
+              "review_fixes_available": true
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 8136,
+                    "output_tokens": 106,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 74880
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 23566,
+              "tool_time_ms": 0,
+              "active_time_ms": 23566
+            }
+          },
           "review_merge": {
             "status": "succeeded",
             "notes": "Joined 3 parallel branches",
             "usage": null
           }
         },
-        "next_node_id": "synthesize_review",
+        "next_node_id": "review_gate",
         "node_visits": {
-          "collect_implementation_evidence": 1,
+          "synthesize_review": 1,
           "review_fork": 1,
-          "review_merge": 1,
-          "preflight_sandbox": 1,
-          "start": 1,
           "read_plan": 1,
-          "dev_check": 1
+          "dev_check": 1,
+          "preflight_sandbox": 1,
+          "review_merge": 1,
+          "collect_implementation_evidence": 1,
+          "start": 1
         }
       },
       "diff": {}
@@ -2241,7 +2512,12 @@
       "first_event_seq": 87,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Joined 3 parallel branches",
+        "failure_reason": null,
+        "timestamp": "2026-09-13T19:44:46.381232071Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": null,
@@ -2250,6 +2526,42 @@
       "output": null,
       "started_at": "2026-09-13T19:44:46.377341678Z",
       "handler": "parallel.fan_in",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 3,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "synthesize_review@1": {
+      "first_event_seq": 95,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-13T19:44:49.895271090Z",
+      "handler": "prompt",
       "graph_visit": 1,
       "usage": {
         "input_tokens": 0,
