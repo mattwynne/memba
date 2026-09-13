@@ -2,7 +2,7 @@
 
 - [x] 001 Add a thin authenticated Membership use case and actor-bearing custom-creation command, handled by the existing Club aggregate.
 - [x] 002 Validate current active admin authority, same-club identity, group-name uniqueness and slug allocation inside that serialized boundary.
-- [ ] 003 Preserve trusted system/backfill command behaviour and historical events.
+- [x] 003 Preserve trusted system/backfill command behaviour and historical events.
 - [ ] 004 Use a retry-stable group ID so retry does not silently become a second creation or change its address.
 - [ ] 005 Emit the existing group-created, slug-assigned and creator-added facts as one successful decision.
 - [ ] 006 Extend aggregate state/projection constraints only as necessary for normalized name uniqueness; keep projections as projections.
