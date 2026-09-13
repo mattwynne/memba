@@ -163,11 +163,16 @@ defmodule Memba.Membership.Club do
              club,
              command.membership_id
            ) do
-      %ClubMemberRemoved{
+      club_member_removed = %ClubMemberRemoved{
         club_id: command.club_id,
         membership_id: command.membership_id,
         person_id: command.person_id
       }
+
+      case active_custom_group_membership_removals(club, command.membership_id) do
+        [] -> club_member_removed
+        group_membership_removals -> [club_member_removed | group_membership_removals]
+      end
     end
   end
 
@@ -722,6 +727,34 @@ defmodule Memba.Membership.Club do
     else
       :ok
     end
+  end
+
+  defp active_custom_group_membership_removals(
+         %__MODULE__{} = club,
+         departing_membership_id
+       ) do
+    club.group_memberships
+    |> Enum.flat_map(fn
+      {{group_id, ^departing_membership_id}, %{active: true, person_id: person_id}} ->
+        group = %{club_id: club.club_id, group_id: group_id}
+
+        if SystemGroups.custom_group?(group) do
+          [
+            %GroupMemberRemoved{
+              club_id: club.club_id,
+              group_id: group_id,
+              membership_id: departing_membership_id,
+              person_id: person_id
+            }
+          ]
+        else
+          []
+        end
+
+      {_group_membership_key, _group_membership} ->
+        []
+    end)
+    |> Enum.sort_by(& &1.group_id)
   end
 
   defp create_group_decision(

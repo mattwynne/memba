@@ -426,7 +426,9 @@ defmodule Memba.Membership do
   The caller supplies `:membership_id` or `"membership_id"`. It may also supply
   the matching club and person identities; otherwise the application service
   resolves those routing fields from the membership projection before the Club
-  aggregate validates them and decides the Admin and member floors.
+  aggregate validates them and decides the Admin and member floors. A successful
+  decision also ends every active custom-group membership held by that club
+  membership.
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
