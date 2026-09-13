@@ -1,7 +1,7 @@
 # Request custom-group access through an Admin message
 
 Date: 2026-09-13
-Status: ready
+Status: validated
 
 Stakeholder review complete; Fabro plan validation pending.
 
