@@ -1,0 +1,548 @@
+diff --git a/web/lib/memba/membership/projections/group.ex b/web/lib/memba/membership/projections/group.ex
+index 57e2e04..d8f26eb 100644
+--- a/web/lib/memba/membership/projections/group.ex
++++ b/web/lib/memba/membership/projections/group.ex
+@@ -11,6 +11,7 @@ defmodule Memba.Membership.Projections.Group do
+     field :email_slug, :string
+     field :group_key, :string
+     field :name, :string
++    field :name_uniqueness_key, :string
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
+diff --git a/web/lib/memba/membership/projectors/group.ex b/web/lib/memba/membership/projectors/group.ex
+index 47f27a1..07e9c5f 100644
+--- a/web/lib/memba/membership/projectors/group.ex
++++ b/web/lib/memba/membership/projectors/group.ex
+@@ -11,10 +11,12 @@ defmodule Memba.Membership.Projectors.Group do
+ 
+   alias Memba.Membership.Events.GroupCreated
+   alias Memba.Membership.Events.GroupEmailSlugAssigned
++  alias Memba.Membership.GroupName
+   alias Memba.Membership.Projections.Group, as: GroupProjection
+ 
+   project(%GroupCreated{} = event, fn multi ->
+     now = DateTime.utc_now(:microsecond)
++    name_uniqueness_key = GroupName.uniqueness_key(event.name)
+ 
+     Ecto.Multi.insert(
+       multi,
+@@ -24,6 +26,7 @@ defmodule Memba.Membership.Projectors.Group do
+         group_id: event.group_id,
+         group_key: event.group_key,
+         name: event.name,
++        name_uniqueness_key: name_uniqueness_key,
+         inserted_at: now,
+         updated_at: now
+       },
+@@ -32,6 +35,7 @@ defmodule Memba.Membership.Projectors.Group do
+           club_id: event.club_id,
+           group_key: event.group_key,
+           name: event.name,
++          name_uniqueness_key: name_uniqueness_key,
+           updated_at: now
+         ]
+       ],
+diff --git a/web/priv/repo/migrations/20260913221054_add_normalized_group_name_uniqueness.exs b/web/priv/repo/migrations/20260913221054_add_normalized_group_name_uniqueness.exs
+index a688925..00703e6 100644
+--- a/web/priv/repo/migrations/20260913221054_add_normalized_group_name_uniqueness.exs
++++ b/web/priv/repo/migrations/20260913221054_add_normalized_group_name_uniqueness.exs
+@@ -2,14 +2,51 @@ defmodule Memba.Repo.Migrations.AddNormalizedGroupNameUniqueness do
+   use Ecto.Migration
+ 
+   def up do
+-    create unique_index(:membership_groups, [:club_id, "(lower(btrim(name)))"],
++    alter table(:membership_groups) do
++      add :name_uniqueness_key, :text
++    end
++
++    flush()
++
++    backfill_name_uniqueness_keys()
++
++    execute("ALTER TABLE membership_groups ALTER COLUMN name_uniqueness_key SET NOT NULL")
++
++    create unique_index(:membership_groups, [:club_id, :name_uniqueness_key],
+              name: :membership_groups_club_normalized_name_index
+            )
+   end
+ 
+   def down do
+-    drop_if_exists index(:membership_groups, [:club_id, "(lower(btrim(name)))"],
+-                     name: :membership_groups_club_normalized_name_index
+-                   )
++    drop index(:membership_groups, [:club_id, :name_uniqueness_key],
++           name: :membership_groups_club_normalized_name_index
++         )
++
++    alter table(:membership_groups) do
++      remove :name_uniqueness_key
++    end
++  end
++
++  defp backfill_name_uniqueness_keys do
++    result = repo().query!("SELECT group_id, name FROM membership_groups", [])
++
++    Enum.each(result.rows, fn [group_id, name] ->
++      repo().query!(
++        """
++        UPDATE membership_groups
++        SET name_uniqueness_key = $1
++        WHERE group_id = $2
++        """,
++        [name_uniqueness_key(name), group_id]
++      )
++    end)
++  end
++
++  # Keep this historical migration self-contained while matching
++  # Memba.Membership.GroupName.uniqueness_key/1 at the time the key is introduced.
++  defp name_uniqueness_key(name) do
++    name
++    |> String.trim()
++    |> String.downcase()
+   end
+ end
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 9116ec3..f286dd2 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -843,21 +843,21 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
+-    test "rejects a normalized duplicate name from trusted group creation" do
++    test "rejects a non-ASCII case variant from trusted group creation" do
+       club_id = Memba.ID.generate(:club)
+ 
+       club =
+         club_id
+         |> created_club()
+-        |> create_group(Memba.ID.generate(:group), "trip_planners", "Trip Planners")
++        |> create_group(Memba.ID.generate(:group), "uppercase_sigma", "Σ")
+ 
+       assert {:error, :group_name_already_defined} =
+                Club.execute(club, %CreateGroup{
+                  club_id: club_id,
+                  group_id: Memba.ID.generate(:group),
+-                 email_slug: "other-trip-planners",
+-                 group_key: "other_trip_planners",
+-                 name: " TRIP PLANNERS "
++                 email_slug: "lowercase-sigma",
++                 group_key: "lowercase_sigma",
++                 name: " σ "
+                })
+     end
+ 
+diff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs
+index eddf63e..3955da5 100644
+--- a/web/test/memba/membership/group_projection_test.exs
++++ b/web/test/memba/membership/group_projection_test.exs
+@@ -13,6 +13,7 @@ defmodule Memba.Membership.GroupProjectionTest do
+   alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.GroupName
+   alias Memba.Membership.Projectors.Group
+   alias Memba.Membership.Projectors.GroupMembership
+   alias Memba.Membership.Projections.Group, as: GroupProjection
+@@ -49,7 +50,8 @@ defmodule Memba.Membership.GroupProjectionTest do
+              club_id: ^club_id,
+              email_slug: "everyone",
+              group_key: "everyone",
+-             name: "Everyone"
++             name: "Everyone",
++             name_uniqueness_key: "everyone"
+            } = Repo.get(GroupProjection, everyone_group_id)
+ 
+     assert %GroupProjection{
+@@ -57,7 +59,8 @@ defmodule Memba.Membership.GroupProjectionTest do
+              club_id: ^club_id,
+              email_slug: "admin",
+              group_key: "admin",
+-             name: "Admin"
++             name: "Admin",
++             name_uniqueness_key: "admin"
+            } = Repo.get(GroupProjection, admin_group_id)
+   end
+ 
+@@ -109,14 +112,16 @@ defmodule Memba.Membership.GroupProjectionTest do
+       club_id: first_club_id,
+       group_id: Memba.ID.generate(:group),
+       email_slug: email_slug,
+-      name: "First Trip Planners"
++      name: "First Trip Planners",
++      name_uniqueness_key: GroupName.uniqueness_key("First Trip Planners")
+     })
+ 
+     Repo.insert!(%GroupProjection{
+       club_id: second_club_id,
+       group_id: Memba.ID.generate(:group),
+       email_slug: email_slug,
+-      name: "Second Trip Planners"
++      name: "Second Trip Planners",
++      name_uniqueness_key: GroupName.uniqueness_key("Second Trip Planners")
+     })
+ 
+     assert_raise Ecto.ConstraintError, fn ->
+@@ -124,32 +129,39 @@ defmodule Memba.Membership.GroupProjectionTest do
+         club_id: first_club_id,
+         group_id: Memba.ID.generate(:group),
+         email_slug: email_slug,
+-        name: "Duplicate Trip Planners"
++        name: "Duplicate Trip Planners",
++        name_uniqueness_key: GroupName.uniqueness_key("Duplicate Trip Planners")
+       })
+     end
+   end
+ 
+-  test "the read model permits a normalized name in different clubs but enforces club uniqueness" do
++  test "the read model matches aggregate normalization for non-ASCII case variants" do
+     first_club_id = Memba.ID.generate(:club)
+     second_club_id = Memba.ID.generate(:club)
++    first_group_id = Memba.ID.generate(:group)
++    uppercase_key = GroupName.uniqueness_key(" Σ ")
++    lowercase_key = GroupName.uniqueness_key("σ")
+ 
+-    Repo.insert!(%GroupProjection{
+-      club_id: first_club_id,
+-      group_id: Memba.ID.generate(:group),
+-      name: "Board"
+-    })
++    assert uppercase_key == lowercase_key
++
++    append_historic_group!(first_club_id, first_group_id, " Σ ")
++
++    assert %GroupProjection{name_uniqueness_key: ^uppercase_key} =
++             Repo.get(GroupProjection, first_group_id)
+ 
+     Repo.insert!(%GroupProjection{
+       club_id: second_club_id,
+       group_id: Memba.ID.generate(:group),
+-      name: " BOARD "
++      name: "σ",
++      name_uniqueness_key: lowercase_key
+     })
+ 
+     assert_raise Ecto.ConstraintError, fn ->
+       Repo.insert!(%GroupProjection{
+         club_id: first_club_id,
+         group_id: Memba.ID.generate(:group),
+-        name: " bOaRd "
++        name: "σ",
++        name_uniqueness_key: lowercase_key
+       })
+     end
+   end
+@@ -256,7 +268,7 @@ defmodule Memba.Membership.GroupProjectionTest do
+              )
+   end
+ 
+-  defp append_historic_group!(club_id, group_id) do
++  defp append_historic_group!(club_id, group_id, name \\ "Trip Planners") do
+     events =
+       [
+         %ClubCreated{
+@@ -268,7 +280,7 @@ defmodule Memba.Membership.GroupProjectionTest do
+           club_id: club_id,
+           group_id: group_id,
+           group_key: "trip_planners",
+-          name: "Trip Planners"
++          name: name
+         }
+       ]
+       |> Enum.map(&Mapper.map_to_event_data/1)
+diff --git a/web/test/memba/messaging/conversation_group_access_projection_test.exs b/web/test/memba/messaging/conversation_group_access_projection_test.exs
+index 60e56d4..37ba3e6 100644
+--- a/web/test/memba/messaging/conversation_group_access_projection_test.exs
++++ b/web/test/memba/messaging/conversation_group_access_projection_test.exs
+@@ -406,7 +406,8 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
+       group_id: Memba.ID.generate(:group),
+       club_id: club_id,
+       email_slug: name |> String.downcase() |> String.replace(" ", "-"),
+-      name: name
++      name: name,
++      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
+     })
+   end
+ 
+diff --git a/web/test/memba/messaging/inbound_club_destination_test.exs b/web/test/memba/messaging/inbound_club_destination_test.exs
+index e77c61b..bafb9e7 100644
+--- a/web/test/memba/messaging/inbound_club_destination_test.exs
++++ b/web/test/memba/messaging/inbound_club_destination_test.exs
+@@ -1,6 +1,7 @@
+ defmodule Memba.Messaging.InboundClubDestinationTest do
+   use Memba.DataCase, async: false
+ 
++  alias Memba.Membership.GroupName
+   alias Memba.Membership.Projections.Group, as: GroupProjection
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+@@ -178,7 +179,8 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
+       group_id: SystemGroups.everyone_group_id(club.club_id),
+       email_slug: SystemGroups.everyone_email_slug(),
+       group_key: SystemGroups.everyone_key(),
+-      name: SystemGroups.everyone_name()
++      name: SystemGroups.everyone_name(),
++      name_uniqueness_key: GroupName.uniqueness_key(SystemGroups.everyone_name())
+     })
+   end
+ 
+@@ -188,7 +190,8 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
+       group_id: SystemGroups.admin_group_id(club.club_id),
+       email_slug: SystemGroups.admin_email_slug(),
+       group_key: SystemGroups.admin_key(),
+-      name: SystemGroups.admin_name()
++      name: SystemGroups.admin_name(),
++      name_uniqueness_key: GroupName.uniqueness_key(SystemGroups.admin_name())
+     })
+   end
+ 
+diff --git a/web/test/memba_web/club_site_shell_surfaces_test.exs b/web/test/memba_web/club_site_shell_surfaces_test.exs
+index d521544..9cfec47 100644
+--- a/web/test/memba_web/club_site_shell_surfaces_test.exs
++++ b/web/test/memba_web/club_site_shell_surfaces_test.exs
+@@ -230,7 +230,9 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
+         club_id: club_id,
+         group_id: group_id,
+         group_key: SystemGroups.everyone_key(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       },
+       on_conflict: :nothing
+     )
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 8500f5e..7ee8240 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -326,7 +326,9 @@ defmodule MembaWeb.MemberMessageDetailTest do
+         club_id: club_id,
+         group_key: SystemGroups.everyone_key(),
+         email_slug: SystemGroups.everyone_email_slug(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       })
+ 
+     Repo.insert!(%GroupMembership{
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index f566303..aa4a718 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -1263,7 +1263,9 @@ defmodule MembaWeb.PageControllerTest do
+         club_id: club_id,
+         group_id: group_id,
+         group_key: SystemGroups.everyone_key(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       },
+       on_conflict: :nothing
+     )
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 9abad2f..59e7bea 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -914,7 +914,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+         club_id: robin.club_id,
+         group_id: admin_group_id,
+         group_key: SystemGroups.admin_key(),
+-        name: SystemGroups.admin_name()
++        name: SystemGroups.admin_name(),
++        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
+       })
+ 
+     add_group_member(admin_group, robin)
+@@ -2095,7 +2096,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+         group_id: SystemGroups.admin_group_id(robin.club_id),
+         group_key: SystemGroups.admin_key(),
+         email_slug: SystemGroups.admin_email_slug(),
+-        name: SystemGroups.admin_name()
++        name: SystemGroups.admin_name(),
++        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
+       })
+ 
+     add_group_member(admin_group, robin)
+@@ -2715,7 +2717,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+         club_id: club_id,
+         group_id: group_id,
+         group_key: SystemGroups.everyone_key(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       },
+       on_conflict: :nothing
+     )
+@@ -2735,7 +2739,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       group_id: Memba.ID.generate(:group),
+       group_key: Keyword.fetch!(attrs, :group_key),
+       email_slug: Keyword.get(attrs, :email_slug),
+-      name: Keyword.fetch!(attrs, :name)
++      name: Keyword.fetch!(attrs, :name),
++      name_uniqueness_key:
++        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
+     })
+   end
+ 
+diff --git a/web/test/memba_web/live/member_message_delivery_live/show_test.exs b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+index 85eeb6d..b0ca4b4 100644
+--- a/web/test/memba_web/live/member_message_delivery_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+@@ -606,7 +606,8 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+       club_id: club_id,
+       group_key: "private_planning",
+       email_slug: "private-planning",
+-      name: name
++      name: name,
++      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
+     })
+   end
+ 
+@@ -642,7 +643,9 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+         club_id: club_id,
+         group_key: SystemGroups.everyone_key(),
+         email_slug: SystemGroups.everyone_email_slug(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       })
+ 
+     Repo.insert!(%GroupMembership{
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index 63741bb..001f9b5 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -527,7 +527,9 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+       club_id: Keyword.fetch!(attrs, :club_id),
+       group_id: Memba.ID.generate(:group),
+       group_key: Keyword.fetch!(attrs, :group_key),
+-      name: Keyword.fetch!(attrs, :name)
++      name: Keyword.fetch!(attrs, :name),
++      name_uniqueness_key:
++        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
+     })
+   end
+ 
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 9cf6748..3e1f456 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -702,7 +702,9 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+         group_id: group_id,
+         group_key: SystemGroups.everyone_key(),
+         email_slug: SystemGroups.everyone_email_slug(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       },
+       on_conflict: :nothing
+     )
+@@ -722,7 +724,9 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+       group_id: Memba.ID.generate(:group),
+       email_slug: Keyword.get(attrs, :email_slug),
+       group_key: Keyword.fetch!(attrs, :group_key),
+-      name: Keyword.fetch!(attrs, :name)
++      name: Keyword.fetch!(attrs, :name),
++      name_uniqueness_key:
++        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
+     })
+   end
+ 
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 32852b4..1f8725e 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -1180,7 +1180,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       club_id: club_id,
+       group_key: "private_planning",
+       email_slug: "private-planning",
+-      name: name
++      name: name,
++      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
+     })
+   end
+ 
+@@ -1216,7 +1217,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+         club_id: club_id,
+         group_key: SystemGroups.everyone_key(),
+         email_slug: SystemGroups.everyone_email_slug(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       })
+ 
+     Repo.insert!(%GroupMembership{
+diff --git a/web/test/memba_web/live/member_ui_contract_test.exs b/web/test/memba_web/live/member_ui_contract_test.exs
+index bc276dc..3355886 100644
+--- a/web/test/memba_web/live/member_ui_contract_test.exs
++++ b/web/test/memba_web/live/member_ui_contract_test.exs
+@@ -248,7 +248,9 @@ defmodule MembaWeb.MemberUIContractTest do
+         club_id: club_id,
+         group_id: group_id,
+         group_key: SystemGroups.everyone_key(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       },
+       on_conflict: :nothing
+     )
+@@ -268,7 +270,9 @@ defmodule MembaWeb.MemberUIContractTest do
+       group_id: Memba.ID.generate(:group),
+       group_key: Keyword.fetch!(attrs, :group_key),
+       email_slug: Keyword.get(attrs, :email_slug),
+-      name: Keyword.fetch!(attrs, :name)
++      name: Keyword.fetch!(attrs, :name),
++      name_uniqueness_key:
++        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
+     })
+   end
+ 
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index a879d96..76fc61c 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -823,7 +823,9 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+         club_id: club_id,
+         group_id: group_id,
+         group_key: SystemGroups.everyone_key(),
+-        name: SystemGroups.everyone_name()
++        name: SystemGroups.everyone_name(),
++        name_uniqueness_key:
++          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
+       },
+       on_conflict: :nothing
+     )
+@@ -837,7 +839,9 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+       group_id: Memba.ID.generate(:group),
+       group_key: Keyword.fetch!(attrs, :group_key),
+       email_slug: Keyword.get(attrs, :email_slug),
+-      name: Keyword.fetch!(attrs, :name)
++      name: Keyword.fetch!(attrs, :name),
++      name_uniqueness_key:
++        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
+     })
+   end
+ 
+diff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs
+index 1cdbd55..c5d4658 100644
+--- a/web/test/memba_web/member_message_detail_loader_test.exs
++++ b/web/test/memba_web/member_message_detail_loader_test.exs
+@@ -304,7 +304,8 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+         club_id: member.club_id,
+         group_key: String.downcase(name),
+         email_slug: String.downcase(name),
+-        name: name
++        name: name,
++        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
+       })
+ 
+     Repo.insert!(%GroupMembership{
