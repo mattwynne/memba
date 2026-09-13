@@ -6,7 +6,7 @@
 - [x] 004 Update `MemberDashboardPresentation` to resolve group identity within the authorised club, then load only the permitted surface.
 - [x] 005 Explicitly distinguish ordinary non-member, outside admin and participating member.
 - [x] 006 Extend the existing stateless tabs/frame/list composition in `page_html/club.html.heex` and `member_dashboard_group_tabs.ex`.
-- [ ] 007 Keep one contextual action slot, correct tab/panel ARIA and keyboard behaviour.
+- [x] 007 Keep one contextual action slot, correct tab/panel ARIA and keyboard behaviour.
 - [ ] 008 Preserve selected-group routing and remembered selection through `MemberDashboardLive` and its existing browser hook.
 - [ ] 009 Refresh discovery/access state on relevant read-model changes; reject direct actions after access loss.
 - [ ] 010 Keep conversation access in public Membership/Messaging APIs, not projection joins in the web layer.

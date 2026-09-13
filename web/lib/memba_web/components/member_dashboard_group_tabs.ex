@@ -25,7 +25,7 @@ defmodule MembaWeb.MemberDashboardGroupTabs do
         id="member-section-tabs-list"
         class="section-tabs__list"
         role="tablist"
-        aria-label="Club home sections"
+        aria-label="Group sections"
         aria-orientation="horizontal"
         phx-hook=".SectionTabs"
       >

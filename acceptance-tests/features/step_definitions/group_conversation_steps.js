@@ -408,7 +408,42 @@ async function viewMembersAndAssertPresence(
   const personId = personIdFor(world, memberName);
 
   await withMemberHarness(world, viewerName, async (member) => {
-    await member.page.locator("#member-section-tab-members").click();
+    const conversationsTab = member.page.locator("#member-section-tab-conversations");
+    const membersTab = member.page.locator("#member-section-tab-members");
+    const action = member.page.locator("#member-section-tabs-action");
+
+    if ((await membersTab.getAttribute("aria-selected")) !== "true") {
+      await conversationsTab.focus();
+      await expect(conversationsTab).toBeFocused();
+
+      await conversationsTab.press("ArrowRight");
+      await expect(membersTab).toHaveAttribute("aria-selected", "true");
+      await expect(membersTab).toBeFocused();
+
+      await membersTab.press("ArrowLeft");
+      await expect(conversationsTab).toHaveAttribute("aria-selected", "true");
+      await expect(conversationsTab).toBeFocused();
+
+      await conversationsTab.press("End");
+      await expect(membersTab).toHaveAttribute("aria-selected", "true");
+      await expect(membersTab).toBeFocused();
+
+      await membersTab.press("Home");
+      await expect(conversationsTab).toHaveAttribute("aria-selected", "true");
+      await expect(conversationsTab).toBeFocused();
+
+      await conversationsTab.press("ArrowRight");
+      await expect(membersTab).toHaveAttribute("aria-selected", "true");
+      await expect(membersTab).toBeFocused();
+    }
+
+    assert.ok(
+      (await action.locator("a, button").count()) <= 1,
+      "Expected at most one contextual action for the active group section"
+    );
+    await expect(member.page.locator("#member-section-panel-members")).toBeVisible();
+    await expect(member.page.locator("#member-section-panel-conversations")).toBeHidden();
+
     const row = member.page.locator(
       `[data-testid="club-member-row"][data-member-id="${personId}"]`
     );

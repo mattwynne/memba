@@ -46,7 +46,8 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
 
     assert_selector(
       html,
-      "#member-section-tabs-list[role='tablist'][aria-orientation='horizontal']" <>
+      "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
+        "[aria-orientation='horizontal']" <>
         "[phx-hook='MembaWeb.MemberDashboardGroupTabs.SectionTabs']"
     )
 
@@ -158,10 +159,15 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
 
     assert_selector(
       html,
-      "#member-section-tabs-list #member-section-tab-members[href='/groups/grp_123/members']"
+      "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
+        "[aria-orientation='horizontal'] " <>
+        "#member-section-tab-members[href='/groups/grp_123/members']" <>
+        "[role='tab'][aria-selected='true']" <>
+        "[aria-controls='member-section-panel-members'][tabindex='0']"
     )
 
     refute_selector(html, "#member-section-tab-conversations")
+    assert_selector(html, "#member-section-tabs-action.section-tabs__action")
   end
 
   defp assert_selector(html, selector) do

@@ -808,9 +808,24 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-group-email-address[href='mailto:#{group_address(alice.club_id, private_group.email_slug)}']"
            )
 
-    assert has_element?(view, "#member-section-tabs #member-section-tab-members")
+    assert has_element?(
+             view,
+             "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
+               "[aria-orientation='horizontal'] " <>
+               "#member-section-tab-members[role='tab'][aria-selected='true']" <>
+               "[aria-controls='member-section-panel-members'][tabindex='0']"
+           )
+
     refute has_element?(view, "#member-section-tab-conversations")
-    assert has_element?(view, "#member-section-panel-members:not([hidden])")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members[role='tabpanel']" <>
+               "[aria-labelledby='member-section-tab-members'][tabindex='0']:not([hidden])"
+           )
+
+    assert has_element?(view, "#member-section-tabs-action.section-tabs__action")
+    refute has_element?(view, "#member-section-tabs-action :is(a, button)")
     assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
 
     refute has_element?(view, "#member-section-panel-conversations")
