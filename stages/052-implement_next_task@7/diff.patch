@@ -1,0 +1,124 @@
+diff --git a/web/lib/memba/membership/system_groups.ex b/web/lib/memba/membership/system_groups.ex
+index ce70812..3fb8514 100644
+--- a/web/lib/memba/membership/system_groups.ex
++++ b/web/lib/memba/membership/system_groups.ex
+@@ -41,6 +41,20 @@ defmodule Memba.Membership.SystemGroups do
+     group_id(club_id, @admin_key)
+   end
+ 
++  @doc """
++  Return whether a group summary identifies a custom conversation group.
++
++  Classification uses the club-scoped deterministic identities of the built-in
++  groups. Display names, email slugs, and caller-supplied group keys are not
++  group-type authority.
++  """
++  def custom_group?(%{club_id: club_id, group_id: group_id})
++      when is_binary(club_id) and is_binary(group_id) do
++    group_id not in [everyone_group_id(club_id), admin_group_id(club_id)]
++  end
++
++  def custom_group?(_group), do: false
++
+   defp group_id(club_id, group_key) do
+     ID.deterministic(:group, [@system_group_id_seed, club_id, group_key])
+   end
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 77eaa49..3c76d33 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -96,9 +96,7 @@ defmodule MembaWeb.PageHTML do
+   defp outside_group_admin?(:outside_admin), do: true
+   defp outside_group_admin?(_selected_group_access), do: false
+ 
+-  defp custom_group?(%{group_key: group_key}) do
+-    group_key not in [SystemGroups.everyone_key(), SystemGroups.admin_key()]
+-  end
++  defp custom_group?(group), do: SystemGroups.custom_group?(group)
+ 
+   defp member_group_rail_item_class(group, selected_group) do
+     ["group-rail__item", selected_group?(group, selected_group) && "is-active"]
+diff --git a/web/test/memba/membership/system_groups_test.exs b/web/test/memba/membership/system_groups_test.exs
+index 028a67f..46084fc 100644
+--- a/web/test/memba/membership/system_groups_test.exs
++++ b/web/test/memba/membership/system_groups_test.exs
+@@ -49,4 +49,29 @@ defmodule Memba.Membership.SystemGroupsTest do
+     assert SystemGroups.admin_group_id(club_id) ==
+              ID.deterministic(:group, ["system-group", club_id, "admin"])
+   end
++
++  test "classifies custom groups by club-scoped identity rather than display metadata" do
++    club_id = ID.generate(:club)
++
++    refute SystemGroups.custom_group?(%{
++             club_id: club_id,
++             group_id: SystemGroups.everyone_group_id(club_id),
++             group_key: "renamed-key",
++             name: "Board"
++           })
++
++    refute SystemGroups.custom_group?(%{
++             club_id: club_id,
++             group_id: SystemGroups.admin_group_id(club_id),
++             group_key: nil,
++             name: "Committee"
++           })
++
++    assert SystemGroups.custom_group?(%{
++             club_id: club_id,
++             group_id: ID.generate(:group),
++             group_key: SystemGroups.everyone_key(),
++             name: SystemGroups.everyone_name()
++           })
++  end
+ end
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 59e7bea..00bb11b 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -1333,6 +1333,45 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute html_has_selector?(html, "#member-section-tab-members[phx-click]")
+   end
+ 
++  test "group privacy metadata uses structural system-group identity, not display metadata" do
++    club_id = Memba.ID.generate(:club)
++
++    custom_group = %{
++      club_id: club_id,
++      group_id: Memba.ID.generate(:group),
++      group_key: SystemGroups.everyone_key(),
++      name: SystemGroups.everyone_name(),
++      email_slug: "everyone-2",
++      email_address: "everyone-2@alpine-club.clubs.memba.io",
++      active_member_count: 1
++    }
++
++    custom_html =
++      dashboard_html(%{
++        groups: [custom_group],
++        selected_group: custom_group
++      })
++
++    assert html_has_selector?(custom_html, "#member-group-metadata", "Private group")
++    assert html_has_selector?(custom_html, "#member-group-metadata", "You're a member")
++
++    renamed_system_group = %{
++      custom_group
++      | group_id: SystemGroups.everyone_group_id(club_id),
++        group_key: nil,
++        name: "Club-wide discussion"
++    }
++
++    system_html =
++      dashboard_html(%{
++        groups: [renamed_system_group],
++        selected_group: renamed_system_group
++      })
++
++    refute html_has_selector?(system_html, "#member-group-metadata", "Private group")
++    refute html_has_selector?(system_html, "#member-group-metadata", "You're a member")
++  end
++
+   test "club template renders named member rows with current marker and a single members action" do
+     alice_id = Memba.ID.generate(:person)
+     bob_id = Memba.ID.generate(:person)
