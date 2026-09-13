@@ -8,6 +8,7 @@ defmodule MembaWeb.PageHTML do
 
   import MembaWeb.MemberComponents, only: [conversation_list: 1, member_list: 1]
 
+  alias Memba.Membership.SystemGroups
   alias MembaWeb.ClubSite
   alias MembaWeb.MemberDashboardGroupTabs
 
@@ -77,6 +78,28 @@ defmodule MembaWeb.PageHTML do
 
   defp active_member_section?(active_section, section), do: active_section == section
 
+  defp split_member_group_rail(groups) do
+    Enum.split_with(groups, &Map.get(&1, :participating?, true))
+  end
+
+  defp selected_group_active_section(:outside_admin, _requested_section), do: "members"
+
+  defp selected_group_active_section(_selected_group_access, requested_section),
+    do: requested_section
+
+  defp participating_group?(:participating_member), do: true
+  defp participating_group?(_selected_group_access), do: false
+
+  defp ordinary_group_non_member?(:ordinary_non_member), do: true
+  defp ordinary_group_non_member?(_selected_group_access), do: false
+
+  defp outside_group_admin?(:outside_admin), do: true
+  defp outside_group_admin?(_selected_group_access), do: false
+
+  defp custom_group?(%{group_key: group_key}) do
+    group_key not in [SystemGroups.everyone_key(), SystemGroups.admin_key()]
+  end
+
   defp member_group_rail_item_class(group, selected_group) do
     ["group-rail__item", selected_group?(group, selected_group) && "is-active"]
   end
@@ -90,6 +113,8 @@ defmodule MembaWeb.PageHTML do
   end
 
   defp group_member_count_label(1), do: "1 member"
+
+  defp group_member_count_label(nil), do: nil
 
   defp group_member_count_label(member_count) when is_integer(member_count) do
     "#{member_count} members"

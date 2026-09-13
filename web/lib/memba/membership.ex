@@ -961,6 +961,42 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List the groups an active club member may discover in the given club.
+
+  Discovery is deliberately separate from group participation. The safe
+  summaries contain group identity and display metadata only; they do not
+  include member counts, email addresses, or any indication that the person
+  belongs to a group. Invalid IDs and people without an active membership in
+  the selected club return an empty list.
+  """
+  def list_discoverable_groups_for_member(club_id, person_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id) do
+      GroupProjection
+      |> join(:inner, [group], membership in MembershipProjection,
+        on: membership.club_id == group.club_id
+      )
+      |> join(:inner, [_group, membership], person in Person,
+        on: person.person_id == membership.person_id
+      )
+      |> where([group, _membership, _person], group.club_id == ^club_id)
+      |> where([_group, membership, _person], membership.person_id == ^person_id)
+      |> where([_group, membership, _person], membership.active == true)
+      |> distinct(true)
+      |> order_by([group, _membership, _person], asc: group.name, asc: group.group_id)
+      |> select([group, _membership, _person], %{
+        club_id: group.club_id,
+        group_id: group.group_id,
+        group_key: group.group_key,
+        name: group.name
+      })
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
   List the conversation groups an active member belongs to in a given club.
 
   Both the group-membership row and its matching underlying club membership

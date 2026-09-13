@@ -46,4 +46,29 @@ defmodule Memba.DomainCucumberRunnerTest do
     assert "Pat cannot remove the club's only member" in selected_names
     assert "Robin invites Dana to join West Coast Paddlers" in selected_names
   end
+
+  test "iteration 061 scenarios run at the domain layer except browser-only state examples" do
+    selected_names =
+      DomainCucumberRunner.selected_scenarios()
+      |> Enum.map(& &1.scenario.name)
+
+    assert "Alice sees Admin without belonging to it" in selected_names
+    assert "Alice follows an Admin group link" in selected_names
+    assert "Alice can find Board but cannot read its discussions" in selected_names
+    assert "Bob inspects Board's members without joining" in selected_names
+    assert "Another club's member cannot discover KMC groups" in selected_names
+
+    outline_names =
+      Enum.filter(
+        selected_names,
+        &String.starts_with?(
+          &1,
+          "Neither ordinary membership nor club administration grants Board access"
+        )
+      )
+
+    assert Enum.count(outline_names) == 6
+    refute "Bob has Members but no Conversations while outside Board" in selected_names
+    refute "Alice returns to a group she has not joined" in selected_names
+  end
 end

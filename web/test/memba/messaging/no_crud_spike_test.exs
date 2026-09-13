@@ -31,6 +31,8 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert source =~ "def get_inbound_email_source("
     assert source =~ "def resolve_inbound_club_email_destination("
     assert source =~ "def resolve_inbound_club_email_sender("
+    assert source =~ "Membership.list_active_groups_for_member(person_id)"
+    refute source =~ "Membership.list_discoverable_groups_for_member("
 
     list_functions =
       ~r/\bdef\s+(list_[a-zA-Z0-9_]+)\b/

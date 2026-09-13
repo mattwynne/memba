@@ -1,6 +1,7 @@
 defmodule MembaWeb.MemberMessageLive.NewTest do
   use MembaWeb.ConnCase, async: true
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
@@ -291,6 +292,76 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     refute render(view) =~ "club-wide"
     refute render(view) =~ "Send to all current members"
+  end
+
+  test "an open compose screen leaves private audience metadata after access is removed", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Kootenay Mountaineering Club",
+        club_id: alice.club_id,
+        slug: "kmc"
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning",
+        email_slug: "private-planning"
+      )
+
+    add_group_member(private_group, alice)
+    add_group_member(private_group, bob)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new?#{[group_id: private_group.group_id]}")
+
+    assert has_element?(
+             view,
+             "#member-compose-inbound-email-link",
+             "private-planning@kmc.clubs.memba.io"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='2']"
+           )
+
+    Repo.update_all(
+      from(group_membership in GroupMembership,
+        where:
+          group_membership.group_id == ^private_group.group_id and
+            group_membership.membership_id == ^alice.membership_id
+      ),
+      set: [active: false]
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.GroupMembership,
+      %Memba.Membership.Events.GroupMemberRemoved{
+        club_id: alice.club_id,
+        group_id: private_group.group_id,
+        membership_id: alice.membership_id,
+        person_id: alice.person_id
+      }
+    )
+
+    assert_redirect(view, ~p"/groups/#{private_group.group_id}")
   end
 
   test "recipient count follows members with primary email addresses", %{conn: conn} do
@@ -663,6 +734,19 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
       person_id: member.person_id,
       active: true
     })
+  end
+
+  defp notify_read_model_change(view, projector, source_event) do
+    send(
+      view.pid,
+      {:read_model_changed,
+       %{
+         projector: projector,
+         source_event: source_event,
+         metadata: %{},
+         changes: %{}
+       }}
+    )
   end
 
   defp club_attrs(attrs, club_id) do

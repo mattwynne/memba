@@ -1,0 +1,107 @@
+# Manual browser validation
+
+Date: 2026-09-13
+
+The two non-participant surfaces required by the iteration plan were rendered
+in Chromium from the delivered Phoenix application and reviewed against
+`design-system/templates/club-group-non-member.html` and
+`design-system/explorations/custom-groups-prototype.html`.
+
+The review used desktop (`1280 × 800`) and mobile (`390 × 844`) viewports on
+code HEAD `3e451c4c314fd058efa4495da5c371e6cf2e0695`. The only subsequent
+delivery change was this validation record; no executable code changed after
+the screenshots were captured.
+
+## Setup
+
+- Kootenay Mountaineering Club had a private Board group.
+- Carol and Dana were Board's only members.
+- Eve was an ordinary active club member outside Board.
+- Dan was a club admin outside Board.
+
+## Results
+
+| Persona and surface | Desktop | Mobile |
+| --- | --- | --- |
+| Eve — email-only access placeholder | Passed | Passed |
+| Dan — Members-only outside-admin view | Passed | Passed |
+
+Eve's view retained Board as the selected group and presented the centred
+private-group guidance with the club Admin email address. The email remained
+readable at mobile width. There was no member count, group email address,
+Conversations or Members tab, conversation row, member row, New message
+action, or Request access control.
+
+Dan's view retained Board as the selected group and presented its permitted
+membership metadata, the single active Members tab, the outside-admin
+explanation, and exactly the two named Board member rows. There was no
+Conversations tab or panel, conversation row, New message action, or implicit
+Board membership.
+
+The shared group rail, group header, access card, outside-admin notice, member
+rows, and Canada/open-source footer remained visually coherent with the
+reviewed designs at both widths. On mobile the member app root measured 364 px
+wide with 13 px side margins. On desktop it measured 1,038 px wide with 121 px
+side margins. Neither persona produced document-level horizontal overflow,
+content clipping, browser console/page errors, or failed requests.
+
+No product defect was found, so no code, configuration, migration, or product
+test repair was required.
+
+## Automated evidence used during the review
+
+The browser review reused the locked shared acceptance step definitions and
+ran four isolated examples: Eve/desktop, Eve/mobile, Dan/desktop, and
+Dan/mobile. All 4 scenarios and all 40 steps passed. In addition to capturing
+the rendered pages, the harness asserted viewport containment and the
+role-specific presence and absence of private surfaces.
+
+Existing permanent regressions cover the same server-authoritative
+composition:
+
+- `acceptance-tests/features/group_conversations.feature`: “Alice can find
+  Board but cannot read its discussions” and “Bob has Members but no
+  Conversations while outside Board”.
+- `web/test/memba_web/live/member_dashboard_live_test.exs`: “canonical group
+  routes resolve same-club group identity without private rows” and “an outside
+  admin receives the selected group's Members-only composition”.
+- `web/test/memba_web/components/member_dashboard_group_tabs_test.exs`:
+  “renders the Members-only tab composition when conversations are
+  unavailable”.
+
+No permanent automated test was added because the conformance finding was
+missing execution evidence for a manual visual check, not missing behavioural
+coverage. Changing the locked feature or duplicating the existing role/privacy
+regressions would not prove visual review. The four-width browser run supplies
+the automated structural guard around the manual screenshot review.
+
+## Captured artifacts
+
+The temporary browser harness captured full-page PNGs during the run:
+
+| Artifact | Dimensions | SHA-256 |
+| --- | --- | --- |
+| `eve-board-desktop.png` | 1280 × 800 | `902ca21503222f7403adefcaeafe94d858e7bb56568526e24b1b5fd65de1b605` |
+| `eve-board-mobile.png` | 390 × 844 | `8428c8c99bb468e1c97d366a9518faddd00a3c8abf6cd8266eff2b57b9531334` |
+| `dan-board-desktop.png` | 1280 × 800 | `c65a94240755f18f69ab3994464caea5afe43436c401ab39e19165d9e39108c2` |
+| `dan-board-mobile.png` | 390 × 844 | `e918d528852e80af246caa9471679f44263ab862ac92874e289d586eab355420` |
+
+They were generated under
+`.fabro/tmp/iteration-061-manual-review/`; this document is the durable review
+record.
+
+## Commands
+
+The final responsive browser matrix completed with:
+
+```console
+ACCEPTANCE_LOG_PROGRESS=0 devenv shell -- bash -lc \
+  'acceptance-tests/node_modules/.bin/cucumber-js \
+  .fabro/tmp/iteration-061-manual-review.feature \
+  --require "acceptance-tests/features/support/**/*.js" \
+  --require "acceptance-tests/features/step_definitions/**/*.js" \
+  --require .fabro/tmp/iteration-061-manual-review-hooks.js \
+  --format progress'
+```
+
+Result: `4 scenarios (4 passed)`, `40 steps (40 passed)`.

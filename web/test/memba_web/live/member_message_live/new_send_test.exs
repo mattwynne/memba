@@ -1,6 +1,7 @@
 defmodule MembaWeb.MemberMessageLive.NewSendTest do
   use MembaWeb.FeatureCase, async: false
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias Memba.Membership
@@ -220,6 +221,50 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              view,
              "#member-compose-back-home-link[href='/groups/#{trip_planning_group.group_id}']"
            )
+  end
+
+  test "submit rechecks selected-group participation after an open compose screen loses access",
+       %{conn: conn} do
+    club_id = Memba.ID.generate(:club)
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    private_group =
+      create_group(
+        club_id: club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, alice)
+    add_group_member(private_group, bob)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new?#{[group_id: private_group.group_id]}")
+
+    Repo.update_all(
+      from(group_membership in GroupMembership,
+        where:
+          group_membership.group_id == ^private_group.group_id and
+            group_membership.membership_id == ^alice.membership_id
+      ),
+      set: [active: false]
+    )
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Private planning details",
+        "body" => "This must not be sent."
+      }
+    })
+
+    assert_redirect(view, ~p"/groups/#{private_group.group_id}")
+    assert Messaging.list_messages_for_club(club_id) == []
+    assert Fake.deliveries() == []
   end
 
   test "selected group survives compose validation, send failure, and retry", %{conn: conn} do

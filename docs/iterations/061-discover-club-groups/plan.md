@@ -1,7 +1,7 @@
 # Discover club groups without joining them
 
 Date: 2026-09-13
-Status: implementing
+Status: merged
 
 Stakeholder review complete; Fabro plan validation pending.
 

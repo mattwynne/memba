@@ -9,7 +9,7 @@ Feature: Group-scoped club conversations
 
   Rule: Every active club member can discover the club's groups
 
-    @iteration-061 @todo-domain @todo-ui
+    @iteration-061
     Scenario: Alice sees Admin without belonging to it
       When Alice views the Kootenay Mountaineering Club home
       Then Alice should see the Everyone group
@@ -51,7 +51,7 @@ Feature: Group-scoped club conversations
 
   Rule: Group discovery does not grant conversation or membership-list access
 
-    @iteration-061 @todo-domain @todo-ui
+    @iteration-061
     Scenario: Alice follows an Admin group link
       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
       When Alice tries to view the Admin group
@@ -59,7 +59,7 @@ Feature: Group-scoped club conversations
       And Alice should see the club Admin email address
       But Alice should see neither Admin conversations nor its membership list
 
-    @iteration-061 @todo-domain @todo-ui
+    @iteration-061
     Scenario: Alice can find Board but cannot read its discussions
       Given Alice is not a club admin
       And Bob and Carol are members of the Kootenay Mountaineering Club Board group
@@ -69,7 +69,7 @@ Feature: Group-scoped club conversations
       But Alice should see neither Board conversations nor its membership list
       And Alice should not become a member of Board
 
-    @iteration-061 @todo-domain @todo-ui
+    @iteration-061
     Scenario: Bob inspects Board's members without joining
       Given Bob is a club admin
       And Carol and Dana are the only members of the Kootenay Mountaineering Club Board group
@@ -78,7 +78,7 @@ Feature: Group-scoped club conversations
       But Bob should not belong to Board
       And Bob should not have access to Board conversations
 
-    @iteration-061 @not-domain @todo-ui
+    @iteration-061 @not-domain
     Scenario: Bob has Members but no Conversations while outside Board
       Given Bob is a club admin
       And Carol is the only member of the Kootenay Mountaineering Club Board group
@@ -86,7 +86,7 @@ Feature: Group-scoped club conversations
       Then Bob should have Board's Members section available
       But Board's Conversations section and New message action should be absent
 
-    @iteration-061 @todo-domain @todo-ui
+    @iteration-061
     Scenario Outline: Neither ordinary membership nor club administration grants Board access
       Given Bob is a club admin
       And Alice is not a club admin
@@ -106,7 +106,7 @@ Feature: Group-scoped club conversations
         | Alice  | start a Board conversation on the website  |
         | Bob    | start a Board conversation on the website  |
 
-    @iteration-061 @todo-domain @todo-ui
+    @iteration-061
     Scenario: Another club's member cannot discover KMC groups
       Given Pat belongs to Nelson Paddling Club but not Kootenay Mountaineering Club
       And Carol is a member of the Kootenay Mountaineering Club Board group
@@ -123,7 +123,7 @@ Feature: Group-scoped club conversations
 
   Rule: The club home returns to the member's last selected group
 
-    @iteration-061 @not-domain @todo-ui
+    @iteration-061 @not-domain
     Scenario: Alice returns to a group she has not joined
       Given Alice is not a club admin
       And Carol is a member of the Kootenay Mountaineering Club Board group

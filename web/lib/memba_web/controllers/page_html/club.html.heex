@@ -1,6 +1,12 @@
 <% club_id_source = assigns[:club_id_source] || "host" %>
-<% active_section = assigns[:active_section] || "conversations" %>
+<% requested_section = assigns[:active_section] || "conversations" %>
+<% selected_group_access = assigns[:selected_group_access] || :participating_member %>
+<% active_section = selected_group_active_section(selected_group_access, requested_section) %>
 <% selected_group_route_id = assigns[:selected_group_route_id] %>
+<% {your_groups, other_groups} = split_member_group_rail(@groups) %>
+<% participating_group? = participating_group?(selected_group_access) %>
+<% ordinary_non_member? = ordinary_group_non_member?(selected_group_access) %>
+<% outside_admin? = outside_group_admin?(selected_group_access) %>
 
 <Layouts.club_site
   flash={@flash}
@@ -20,25 +26,52 @@
   >
     <div class="app-split">
       <nav id="member-group-rail" class="group-rail" aria-label="Groups">
-        <div class="group-rail__label">Your groups</div>
-        <.link
-          :for={group <- @groups}
-          id={"member-group-link-#{group.group_id}"}
-          patch={
-            member_section_path(
-              "conversations",
-              @selected_club,
-              club_id_source,
-              group.group_id
-            )
-          }
-          class={member_group_rail_item_class(group, @selected_group)}
-          data-testid="member-group-link"
-          data-group-id={group.group_id}
-          aria-current={member_group_aria_current(group, @selected_group)}
-        >
-          <span class="group-rail__name">{group.name}</span>
-        </.link>
+        <div id="member-group-rail-your" class="group-rail__section">
+          <div class="group-rail__label">Your groups</div>
+          <.link
+            :for={group <- your_groups}
+            id={"member-group-link-#{group.group_id}"}
+            patch={
+              member_section_path(
+                "conversations",
+                @selected_club,
+                club_id_source,
+                group.group_id
+              )
+            }
+            class={member_group_rail_item_class(group, @selected_group)}
+            data-testid="member-group-link"
+            data-group-id={group.group_id}
+            aria-current={member_group_aria_current(group, @selected_group)}
+          >
+            <span class="group-rail__name">{group.name}</span>
+          </.link>
+        </div>
+
+        <div :if={other_groups != []} id="member-group-rail-other" class="group-rail__section">
+          <div class="group-rail__label">Other groups</div>
+          <.link
+            :for={group <- other_groups}
+            id={"member-group-link-#{group.group_id}"}
+            patch={
+              member_section_path(
+                "conversations",
+                @selected_club,
+                club_id_source,
+                group.group_id
+              )
+            }
+            class={member_group_rail_item_class(group, @selected_group)}
+            data-testid="member-group-link"
+            data-group-id={group.group_id}
+            aria-current={member_group_aria_current(group, @selected_group)}
+            title="You're not in this group"
+          >
+            <span class="group-rail__name">{group.name}</span>
+            <.icon name="hero-lock-closed" class="group-rail__lock" aria-hidden="true" />
+            <span class="visually-hidden">(not a member)</span>
+          </.link>
+        </div>
       </nav>
 
       <div
@@ -62,8 +95,19 @@
                 class="group-head__meta"
                 aria-label="Group details"
               >
-                <span id="member-group-member-count">
+                <span :if={custom_group?(@selected_group)}>Private group</span>
+                <span
+                  :if={not is_nil(@selected_group.active_member_count)}
+                  id="member-group-member-count"
+                >
                   {group_member_count_label(@selected_group.active_member_count)}
+                </span>
+                <span :if={not participating_group?}>You're not a member</span>
+                <span
+                  :if={participating_group? && custom_group?(@selected_group)}
+                  class="group-head__you"
+                >
+                  <.icon name="hero-check" class="size-3" aria-hidden="true" /> You're a member
                 </span>
                 <.link
                   :if={@selected_group.email_address}
@@ -79,7 +123,9 @@
         </header>
 
         <MemberDashboardGroupTabs.group_tabs
+          :if={not ordinary_non_member?}
           active_tab={active_section}
+          show_conversations={participating_group?}
           conversations_path={
             member_section_path(
               "conversations",
@@ -114,7 +160,7 @@
               New message
             </.button>
           </:conversations_action>
-          <:members_action :if={@current_member_can_manage_members?}>
+          <:members_action :if={participating_group? && @current_member_can_manage_members?}>
             <.button
               id="member-section-action-invite-member"
               href={
@@ -133,7 +179,38 @@
           </:members_action>
         </MemberDashboardGroupTabs.group_tabs>
 
+        <section
+          :if={ordinary_non_member?}
+          id="member-group-access-guidance"
+          class="access"
+          aria-labelledby="member-group-access-title"
+        >
+          <div class="access__icon">
+            <.icon name="hero-lock-closed" class="size-6" aria-hidden="true" />
+          </div>
+          <h2 id="member-group-access-title" class="access__title">
+            {@selected_group.name} is a private group
+          </h2>
+          <p class="access__copy">
+            Only people in {@selected_group.name} can read its conversations, get its emails,
+            or see who's in it. You're a member of {@selected_club.name}, but not of {@selected_group.name}.
+          </p>
+          <p class="access__copy">
+            Think you should be? Ask the club admins.
+          </p>
+          <p class="access__admin">
+            Email the admins:
+            <.link
+              id="member-group-admin-email"
+              href={"mailto:#{@club_admin_email_address}"}
+            >
+              {@club_admin_email_address}
+            </.link>
+          </p>
+        </section>
+
         <div
+          :if={participating_group?}
           id="member-section-panel-conversations"
           class="section-panel"
           data-panel="conversations"
@@ -171,6 +248,7 @@
         </div>
 
         <div
+          :if={not ordinary_non_member?}
           id="member-section-panel-members"
           class="section-panel"
           data-panel="members"
@@ -180,6 +258,24 @@
           hidden={not active_member_section?(active_section, "members")}
         >
           <section id="club-members">
+            <div
+              :if={outside_admin?}
+              id="member-group-outside-admin-notice"
+              class="outside"
+              role="region"
+              aria-label="You're managing a group you're not in"
+            >
+              <.icon name="hero-user" class="size-5" aria-hidden="true" />
+              <div class="outside__body">
+                <h2 class="outside__title">
+                  You're a club admin, but you're not in {@selected_group.name}
+                </h2>
+                <p class="outside__copy">
+                  You can inspect who's in it. You can't read its conversations or get its emails
+                  unless you're a member—being a club admin doesn't grant that on its own.
+                </p>
+              </div>
+            </div>
             <.member_list
               rows={@members}
               active_member_count={@active_member_count}

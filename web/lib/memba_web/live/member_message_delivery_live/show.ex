@@ -8,8 +8,15 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
   """
   use MembaWeb, :live_view
 
+  alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
   alias MembaWeb.MemberMessageDetail
+
+  @access_projectors [
+    Memba.Membership.Projectors.GroupMembership,
+    Memba.Membership.Projectors.Membership,
+    Memba.Messaging.Projectors.ConversationGroupAccess
+  ]
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
@@ -24,6 +31,10 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
                socket.assigns.current_identity
              ) do
           {:ok, detail_assigns} ->
+            if connected?(socket) do
+              Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+            end
+
             {:ok,
              socket
              |> assign(:route_params, params)
@@ -44,6 +55,21 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
   def mount(_params, _session, socket) do
     {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, %{})}
   end
+
+  @impl Phoenix.LiveView
+  def handle_info(
+        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id} = event}},
+        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
+      )
+      when projector in @access_projectors do
+    if access_change_relevant?(projector, event, socket) do
+      {:noreply, refresh_access_or_leave(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def render(%{message: _message} = assigns) do
@@ -216,6 +242,32 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
     raise "MemberMessageDeliveryLive.Show requires a loaded message before rendering"
   end
 
+  defp refresh_access_or_leave(socket) do
+    case MemberMessageDetail.load(
+           socket.assigns.route_params,
+           socket.assigns.current_identity_clubs,
+           socket.assigns.current_identity
+         ) do
+      {:ok, detail_assigns} ->
+        assign(socket, detail_assigns)
+
+      {:error, _reason} ->
+        push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
+    end
+  end
+
+  defp access_change_relevant?(
+         Memba.Messaging.Projectors.ConversationGroupAccess,
+         event,
+         socket
+       ) do
+    Map.get(event, :conversation_id) == socket.assigns.message.conversation_id
+  end
+
+  defp access_change_relevant?(_membership_projector, event, socket) do
+    Map.get(event, :person_id) == socket.assigns.current_member.id
+  end
+
   defp put_session_club_id(params, session) do
     case {Map.get(params, "club_id"), Map.get(session, "club_id")} do
       {nil, club_id} when is_binary(club_id) -> Map.put(params, "club_id", club_id)
@@ -320,6 +372,12 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
 
   defp member_count_label(1), do: "1 member"
   defp member_count_label(count), do: "#{count} members"
+
+  defp access_lost_path(%{"group_id" => group_id})
+       when is_binary(group_id) and group_id != "",
+       do: ~p"/groups/#{group_id}"
+
+  defp access_lost_path(_route_params), do: ~p"/conversations"
 
   defp format_message_time(%DateTime{} = inserted_at) do
     Calendar.strftime(inserted_at, "%-d %b, %-I:%M%P")
