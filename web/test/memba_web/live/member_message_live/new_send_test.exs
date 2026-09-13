@@ -262,7 +262,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
       }
     })
 
-    assert has_element?(view, "#member-message-compose[data-compose-state='send_failed']")
+    assert_redirect(view, ~p"/groups/#{private_group.group_id}")
     assert Messaging.list_messages_for_club(club_id) == []
     assert Fake.deliveries() == []
   end

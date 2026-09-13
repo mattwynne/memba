@@ -8,7 +8,7 @@
 - [x] 006 Extend the existing stateless tabs/frame/list composition in `page_html/club.html.heex` and `member_dashboard_group_tabs.ex`.
 - [x] 007 Keep one contextual action slot, correct tab/panel ARIA and keyboard behaviour.
 - [x] 008 Preserve selected-group routing and remembered selection through `MemberDashboardLive` and its existing browser hook.
-- [ ] 009 Refresh discovery/access state on relevant read-model changes; reject direct actions after access loss.
+- [x] 009 Refresh discovery/access state on relevant read-model changes; reject direct actions after access loss.
   - Recovery note: previous validation found this partial. Cover already-open MemberMessageLive.Show and MemberMessageDeliveryLive.Show after group membership/conversation-access revocation, and clear private group metadata on open compose screens after access loss, not only dashboard refresh and submit rejection.
 - [ ] 010 Keep conversation access in public Membership/Messaging APIs, not projection joins in the web layer.
 - [ ] 011 Implement the tagged domain/browser examples and focused presentation, component and routed LiveView regressions. Verify no disclosure on guessed URLs, cross-club IDs or stale browser state; run `dev check` on the exact delivered state.

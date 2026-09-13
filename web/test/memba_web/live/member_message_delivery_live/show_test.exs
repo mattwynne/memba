@@ -1,6 +1,7 @@
 defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
   use MembaWeb.ConnCase, async: false
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
@@ -8,6 +9,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
@@ -386,6 +388,112 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
            )
   end
 
+  test "an open delivery detail leaves the conversation after group membership is removed", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    private_group = create_group(alice.club_id, "Private Planning")
+    add_group_member(private_group, alice)
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Private delivery details",
+        audience_group_id: private_group.group_id
+      )
+
+    create_member_email_delivery(
+      message_id: message.message_id,
+      recipient_id: alice.person_id,
+      recipient_name: "Alice Adams",
+      status: "delivered"
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}/delivery?#{[group_id: private_group.group_id]}")
+
+    assert has_element?(view, "#member-delivery-message-subject", "Private delivery details")
+
+    Repo.update_all(
+      from(group_membership in GroupMembership,
+        where:
+          group_membership.group_id == ^private_group.group_id and
+            group_membership.membership_id == ^alice.membership_id
+      ),
+      set: [active: false]
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.GroupMembership,
+      %Memba.Membership.Events.GroupMemberRemoved{
+        club_id: alice.club_id,
+        group_id: private_group.group_id,
+        membership_id: alice.membership_id,
+        person_id: alice.person_id
+      }
+    )
+
+    assert_redirect(view, ~p"/groups/#{private_group.group_id}")
+  end
+
+  test "an open delivery detail leaves the conversation after its group access is revoked", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    private_group = create_group(alice.club_id, "Private Planning")
+    add_group_member(private_group, alice)
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Private delivery details",
+        audience_group_id: private_group.group_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}/delivery?#{[group_id: private_group.group_id]}")
+
+    Repo.delete_all(
+      from(access in ConversationGroupAccess,
+        where:
+          access.conversation_id == ^message.message_id and
+            access.group_id == ^private_group.group_id
+      )
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.ConversationGroupAccess,
+      %Memba.Messaging.Events.ConversationAccessRevokedFromGroup{
+        conversation_id: message.message_id,
+        club_id: alice.club_id,
+        group_id: private_group.group_id,
+        access_level: "write"
+      }
+    )
+
+    assert_redirect(view, ~p"/groups/#{private_group.group_id}")
+  end
+
   test "routed delivery page shows an explicit zero-recipient state with safe bar widths", %{
     conn: conn
   } do
@@ -489,6 +597,40 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
     club
     |> Map.from_struct()
     |> Map.put(:person_id, person.person_id)
+    |> Map.put(:membership_id, membership.membership_id)
+  end
+
+  defp create_group(club_id, name) do
+    Repo.insert!(%Group{
+      group_id: Memba.ID.generate(:group),
+      club_id: club_id,
+      group_key: "private_planning",
+      email_slug: "private-planning",
+      name: name
+    })
+  end
+
+  defp add_group_member(group, member) do
+    Repo.insert!(%GroupMembership{
+      club_id: member.club_id,
+      group_id: group.group_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      active: true
+    })
+  end
+
+  defp notify_read_model_change(view, projector, source_event) do
+    send(
+      view.pid,
+      {:read_model_changed,
+       %{
+         projector: projector,
+         source_event: source_event,
+         metadata: %{},
+         changes: %{}
+       }}
+    )
   end
 
   defp ensure_everyone_group_membership!(club_id, membership, person_id) do
