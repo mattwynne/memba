@@ -69,10 +69,10 @@ green than before.
 | 059 | 2026-09-08 | merged | Populated clubs always have an Admin | [plan](059-populated-clubs-always-have-an-admin/plan.md) — `club_membership_administration.feature` |
 | 060 | 2026-09-12 | merged | Calm LiveView reconnection feedback | [plan](060-calm-liveview-reconnection-feedback/plan.md) — no acceptance feature changes |
 | 061 | 2026-09-13 | implementing | Discover club groups without joining them | [plan](061-discover-club-groups/plan.md) — `group_conversations.feature` |
-| 062 | 2026-09-13 | ready | Admins create usable custom groups | [plan](062-create-custom-groups/plan.md) — `custom_group_creation.feature`, `custom_group_conversations.feature`, `custom_group_lifecycle.feature` |
-| 063 | 2026-09-13 | ready | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
-| 064 | 2026-09-13 | ready | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
-| 065 | 2026-09-13 | ready | Request custom-group access through an Admin message | [plan](065-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
+| 062 | 2026-09-13 | validated | Admins create usable custom groups | [plan](062-create-custom-groups/plan.md) — `custom_group_creation.feature`, `custom_group_conversations.feature`, `custom_group_lifecycle.feature` |
+| 063 | 2026-09-13 | validated | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+| 064 | 2026-09-13 | validated | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+| 065 | 2026-09-13 | validated | Request custom-group access through an Admin message | [plan](065-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
 | 066 | 2026-08-13 | validated | Members change their own name | [plan](066-member-name-editing/plan.md) — `member_profile.feature` |
 | 067 | 2026-08-13 | validated | Members set their own profile photo | [plan](067-member-profile-photo/plan.md) — `member_profile.feature` |
 
