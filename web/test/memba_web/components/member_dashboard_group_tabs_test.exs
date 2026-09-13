@@ -143,6 +143,27 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
     refute_selector(html, "#member-section-action-invite-member")
   end
 
+  test "renders the Members-only tab composition when conversations are unavailable" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <MemberDashboardGroupTabs.group_tabs
+        active_tab="members"
+        conversations_path="/groups/grp_123"
+        members_path="/groups/grp_123/members"
+        show_conversations={false}
+      />
+      """)
+
+    assert_selector(
+      html,
+      "#member-section-tabs-list #member-section-tab-members[href='/groups/grp_123/members']"
+    )
+
+    refute_selector(html, "#member-section-tab-conversations")
+  end
+
   defp assert_selector(html, selector) do
     assert html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.any?(),
            "Expected rendered component to include selector #{inspect(selector)}"

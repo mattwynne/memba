@@ -188,9 +188,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-panel-members[hidden]")
   end
 
-  test "a remembered non-participating group falls back while its identity remains discoverable", %{
-    conn: conn
-  } do
+  test "a remembered non-participating group falls back while its identity remains discoverable",
+       %{
+         conn: conn
+       } do
     alice =
       create_active_member(
         email: "alice@example.com",
@@ -694,6 +695,49 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> live(~p"/groups/#{private_group.group_id}")
 
     assert has_element?(view, "#member-group-name", private_group.name)
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    assert has_element?(
+             view,
+             "#member-group-rail-your #member-group-link-#{everyone_group_id}",
+             "Everyone"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-rail-other #member-group-link-#{private_group.group_id} " <>
+               ".group-rail__lock"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-rail-other #member-group-link-#{private_group.group_id} " <>
+               ".visually-hidden",
+             "not a member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-access-guidance[aria-labelledby='member-group-access-title']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-access-title",
+             "#{private_group.name} is a private group"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-admin-email[href='mailto:#{group_address(alice.club_id, SystemGroups.admin_email_slug())}']"
+           )
+
+    refute has_element?(view, "#member-group-member-count")
+    refute has_element?(view, "#member-group-email-address")
+    refute has_element?(view, "#member-section-tabs")
+    refute has_element?(view, "#member-section-panel-conversations")
+    refute has_element?(view, "#member-section-panel-members")
     refute has_element?(view, "[data-message-id='#{secret_conversation.message_id}']")
     refute has_element?(view, "#club-member-#{bob.person_id}")
 
@@ -705,6 +749,73 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert malformed_response =~ "Not Found"
     refute malformed_response =~ private_group.name
+  end
+
+  test "an outside admin receives the selected group's Members-only composition", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Admin",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        email_slug: "private-planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, bob)
+    grant_manage_members!(alice)
+
+    secret_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Private admin route details",
+        audience_group_id: private_group.group_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{private_group.group_id}")
+
+    assert has_element?(
+             view,
+             "#member-group-outside-admin-notice",
+             "You're a club admin, but you're not in Private Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-metadata #member-group-member-count",
+             "1 member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-email-address[href='mailto:#{group_address(alice.club_id, private_group.email_slug)}']"
+           )
+
+    assert has_element?(view, "#member-section-tabs #member-section-tab-members")
+    refute has_element?(view, "#member-section-tab-conversations")
+    assert has_element?(view, "#member-section-panel-members:not([hidden])")
+    assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
+
+    refute has_element?(view, "#member-section-panel-conversations")
+    refute has_element?(view, "#member-section-action-new-message")
+    refute has_element?(view, "[data-message-id='#{secret_conversation.message_id}']")
   end
 
   test "routed dashboard member sections render only the compact member app footer" do
@@ -2263,6 +2374,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       person_id: member.person_id,
       active: true
     })
+  end
+
+  defp group_address(club_id, email_slug) do
+    club_id
+    |> Memba.Membership.get_club()
+    |> Memba.ClubInboundEmailAddress.address(email_slug)
   end
 
   defp grant_manage_members!(member) do

@@ -88,6 +88,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
         |> Membership.list_active_groups_for_member(current_member.id)
         |> Map.new(&{&1.group_id, &1})
 
+      groups = mark_group_participation(groups, participating_groups_by_id)
       current_member_can_manage_members? = can_manage_members?(club_id, current_member)
 
       load_selected_group(
@@ -101,6 +102,12 @@ defmodule MembaWeb.MemberDashboardPresentation do
     else
       _missing_or_unauthorized -> {:error, :forbidden}
     end
+  end
+
+  defp mark_group_participation(groups, participating_groups_by_id) do
+    Enum.map(groups, fn group ->
+      Map.put(group, :participating?, Map.has_key?(participating_groups_by_id, group.group_id))
+    end)
   end
 
   defp load_selected_group(

@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberDashboardGroupTabs do
   attr :active_tab, :string, required: true, values: ~w(conversations members)
   attr :conversations_path, :string, required: true
   attr :members_path, :string, required: true
+  attr :show_conversations, :boolean, default: true
 
   slot :conversations_action, doc: "action rendered only when the conversations tab is active"
   slot :members_action, doc: "action rendered only when the members tab is active"
@@ -29,6 +30,7 @@ defmodule MembaWeb.MemberDashboardGroupTabs do
         phx-hook=".SectionTabs"
       >
         <.link
+          :if={@show_conversations}
           id="member-section-tab-conversations"
           patch={@conversations_path}
           class={tab_class(@active_tab, "conversations")}
