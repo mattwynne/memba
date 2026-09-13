@@ -188,7 +188,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-panel-members[hidden]")
   end
 
-  test "a remembered non-participating group falls back while its identity remains discoverable",
+  test "a remembered same-club group opens its permitted non-member surface without granting access",
        %{
          conn: conn
        } do
@@ -216,7 +216,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     add_group_member(private_group, bob)
 
-    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+    secret_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Private planning details",
+        audience_group_id: private_group.group_id
+      )
 
     {:ok, view, _html} =
       conn
@@ -225,22 +231,70 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     render_hook(view, "restore_remembered_group", %{"group_id" => private_group.group_id})
 
-    assert_reply view, %{selected_group_id: ^everyone_group_id}
+    private_group_id = private_group.group_id
+
+    assert_reply view, %{selected_group_id: ^private_group_id}
+    assert_patch(view, ~p"/groups/#{private_group.group_id}")
 
     assert has_element?(
              view,
-             "#member-club-home[data-selected-group-id='#{everyone_group_id}']" <>
-               "[data-explicit-group-route='false']"
+             "#member-club-home[data-selected-group-id='#{private_group.group_id}']" <>
+               "[data-explicit-group-route='true']"
            )
+
+    assert has_element?(view, "#member-group-name", "Private Planning")
+    assert has_element?(view, "#member-group-access-title", "Private Planning is a private group")
+    refute has_element?(view, "#member-section-tabs")
+    refute has_element?(view, "[data-message-id='#{secret_conversation.message_id}']")
+    refute has_element?(view, "#club-member-#{bob.person_id}")
+  end
+
+  test "missing and foreign remembered groups fall back to Everyone", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    other_club_member =
+      create_active_member(
+        email: "other@example.com",
+        name: "Other Member",
+        club_name: "Other Club"
+      )
+
+    foreign_group =
+      create_group(
+        club_id: other_club_member.club_id,
+        group_key: "foreign_planning",
+        name: "Foreign Planning"
+      )
+
+    add_group_member(foreign_group, other_club_member)
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    for remembered_group_id <- [Memba.ID.generate(:group), foreign_group.group_id] do
+      render_hook(view, "restore_remembered_group", %{"group_id" => remembered_group_id})
+
+      assert_reply view, %{selected_group_id: ^everyone_group_id}
+
+      assert has_element?(
+               view,
+               "#member-club-home[data-selected-group-id='#{everyone_group_id}']" <>
+                 "[data-explicit-group-route='false']"
+             )
+    end
 
     assert has_element?(view, "#member-group-name", "Everyone")
-    refute has_element?(view, "#member-group-name", "Private Planning")
-
-    assert has_element?(
-             view,
-             "#member-group-link-#{private_group.group_id}",
-             "Private Planning"
-           )
+    refute has_element?(view, "#member-group-name", "Foreign Planning")
+    refute has_element?(view, "#member-group-link-#{foreign_group.group_id}")
   end
 
   @tag :capture_log
@@ -283,12 +337,20 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              )
   end
 
-  test "an explicit authorised group route wins over a remembered group event", %{conn: conn} do
+  test "an explicit non-member group route wins over a remembered group event", %{conn: conn} do
     alice =
       create_active_member(
         email: "alice@example.com",
         name: "Alice Adams",
         club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
       )
 
     trip_planning_group =
@@ -305,7 +367,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         name: "Hut Planning"
       )
 
-    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
     add_group_member(hut_group, alice)
 
     {:ok, view, _html} =
@@ -326,6 +388,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     assert has_element?(view, "#member-group-name", "Trip Planning")
+    assert has_element?(view, "#member-group-access-title", "Trip Planning is a private group")
+    refute has_element?(view, "#member-section-tabs")
     refute has_element?(view, "#member-group-name", "Hut Planning")
   end
 
