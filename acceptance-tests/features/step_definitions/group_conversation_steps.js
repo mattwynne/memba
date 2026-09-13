@@ -225,7 +225,7 @@ Given(
 );
 
 Given(
-  /^(\w+) most recently viewed (.+) in (.+)$/,
+  /^(\w+) most recently viewed (?!the .+ group in )(.+) in (.+)$/,
   async function (personName, groupName, clubName) {
     await rememberGroupSelection(this, personName, groupName, clubName);
   }

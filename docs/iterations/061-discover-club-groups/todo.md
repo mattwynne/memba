@@ -11,4 +11,5 @@
 - [x] 009 Refresh discovery/access state on relevant read-model changes; reject direct actions after access loss.
   - Recovery note: previous validation found this partial. Cover already-open MemberMessageLive.Show and MemberMessageDeliveryLive.Show after group membership/conversation-access revocation, and clear private group metadata on open compose screens after access loss, not only dashboard refresh and submit rejection.
 - [x] 010 Keep conversation access in public Membership/Messaging APIs, not projection joins in the web layer.
-- [ ] 011 Implement the tagged domain/browser examples and focused presentation, component and routed LiveView regressions. Verify no disclosure on guessed URLs, cross-club IDs or stale browser state; run `dev check` on the exact delivered state.
+- [x] 011 Implement the tagged domain/browser examples and focused presentation, component and routed LiveView regressions. Verify no disclosure on guessed URLs, cross-club IDs or stale browser state; run `dev check` on the exact delivered state.
+  - Recovery evidence: `env -u MEMBA_DEVENV_SHELL ./bin/dev check` passed on 2026-09-13 after narrowing the ambiguous remembered-selection Cucumber step; see `.fabro/tmp/overnight-061-067-20260913-000001/recovery-061-full-dev-check-after-step-fix.log`.
