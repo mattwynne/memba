@@ -1,0 +1,58 @@
+diff --git a/web/lib/memba/membership/commands/create_custom_group.ex b/web/lib/memba/membership/commands/create_custom_group.ex
+index 2e84ff8..11923b4 100644
+--- a/web/lib/memba/membership/commands/create_custom_group.ex
++++ b/web/lib/memba/membership/commands/create_custom_group.ex
+@@ -6,7 +6,9 @@ defmodule Memba.Membership.Commands.CreateCustomGroup do
+   authority and club-scoped creation rules are decided from authoritative
+   aggregate state. `group_id` is generated once per creation request and reused
+   for retries so the aggregate can distinguish an exact retry from another
+-  creation.
++  creation. A successful first execution emits the group-created,
++  email-slug-assigned, and creator-added facts together as one aggregate
++  decision.
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :actor_person_id, :name]
+diff --git a/web/test/memba/membership/create_custom_group_dispatch_test.exs b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+index 08f43f4..fe314a0 100644
+--- a/web/test/memba/membership/create_custom_group_dispatch_test.exs
++++ b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+ 
+   alias Commanded.Commands.ExecutionResult
+   alias Commanded.EventStore
++  alias Commanded.EventStore.RecordedEvent
+   alias Memba.Membership
+   alias Memba.Membership.App
+   alias Memba.Membership.Club
+@@ -25,6 +26,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+ 
+     create_club!(club_id)
+     create_member!(club_id, actor_membership_id, actor_person_id)
++    assert :ok = EventStore.subscribe(App, club_id)
+ 
+     assert %CreateCustomGroup{
+              club_id: ^club_id,
+@@ -73,6 +75,22 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+                consistency: :strong
+              )
+ 
++    assert_receive {:events,
++                    [
++                      %RecordedEvent{
++                        data: %GroupCreated{group_id: ^group_id}
++                      },
++                      %RecordedEvent{
++                        data: %GroupEmailSlugAssigned{group_id: ^group_id}
++                      },
++                      %RecordedEvent{
++                        data: %GroupMemberAdded{
++                          group_id: ^group_id,
++                          membership_id: ^actor_membership_id
++                        }
++                      }
++                    ]}
++
+     assert %{name: "Board", email_slug: "board"} =
+              App.aggregate_state(Club, club_id).groups[group_id]
+ 
