@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Add a thin authenticated Membership use case and actor-bearing custom-creation command, handled by the existing Club aggregate.
+- [x] 001 Add a thin authenticated Membership use case and actor-bearing custom-creation command, handled by the existing Club aggregate.
 - [ ] 002 Validate current active admin authority, same-club identity, group-name uniqueness and slug allocation inside that serialized boundary.
 - [ ] 003 Preserve trusted system/backfill command behaviour and historical events.
 - [ ] 004 Use a retry-stable group ID so retry does not silently become a second creation or change its address.
