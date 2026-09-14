@@ -112,4 +112,13 @@ defmodule Memba.DomainCucumberRunnerTest do
              )
            ) == 4
   end
+
+  test "iteration 062 custom-group lifecycle scenarios run at the domain layer" do
+    selected_names =
+      DomainCucumberRunner.selected_scenarios()
+      |> Enum.map(& &1.scenario.name)
+
+    assert "Carol's club departure ends Board and Trips membership" in selected_names
+    assert "Returning to KMC does not put Carol back into Board or Trips" in selected_names
+  end
 end

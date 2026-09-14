@@ -57,7 +57,7 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
     context
   end
 
-  step ~r/^(\w+) should belong to (.+)$/,
+  step ~r/^(\w+) should belong to (.+ Club)$/,
        %{args: [group_name, club_name]} = context do
     club_id = club_id!(context, club_name)
     assert %GroupProjection{club_id: ^club_id} = custom_group!(club_id, group_name)
