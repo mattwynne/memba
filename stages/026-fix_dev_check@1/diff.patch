@@ -1,0 +1,91 @@
+diff --git a/acceptance-tests/features/support/server_commands.js b/acceptance-tests/features/support/server_commands.js
+index a32ede0..c6a4e7d 100644
+--- a/acceptance-tests/features/support/server_commands.js
++++ b/acceptance-tests/features/support/server_commands.js
+@@ -3,6 +3,8 @@ const { spawnSync } = require("node:child_process");
+ 
+ const defaultServerNodeName = "memba_acceptance_server";
+ const defaultCookie = "memba_acceptance_cookie";
++const resultStartMarker = "__MEMBA_ACCEPTANCE_RESULT_START__";
++const resultEndMarker = "__MEMBA_ACCEPTANCE_RESULT_END__";
+ 
+ function ensureClub({ clubName, clubSlug }) {
+   return runCommand(
+@@ -587,7 +589,8 @@ payload = ${JSON.stringify(encodedPayload)} |> Base.decode64!() |> Jason.decode!
+ result = (fn payload ->
+ ${code}
+ end).(payload)
+-result |> Jason.encode!() |> IO.write()
++encoded_result = result |> Jason.encode!() |> Base.encode64()
++IO.write(${JSON.stringify(resultStartMarker)} <> encoded_result <> ${JSON.stringify(resultEndMarker)})
+ `;
+ 
+   const deadline = Date.now() + Number(process.env.ACCEPTANCE_SERVER_COMMAND_CONNECT_TIMEOUT_MS || 5000);
+@@ -615,10 +618,24 @@ result |> Jason.encode!() |> IO.write()
+     );
+   }
+ 
++  return parseCommandResult(result.stdout);
++}
++
++function parseCommandResult(stdout) {
++  const output = String(stdout || "");
++  const resultStart = output.lastIndexOf(resultStartMarker);
++  const encodedStart = resultStart + resultStartMarker.length;
++  const resultEnd = output.indexOf(resultEndMarker, encodedStart);
++
++  if (resultStart === -1 || resultEnd === -1) {
++    throw new Error(`Acceptance server command returned an unframed result: ${output}`);
++  }
++
+   try {
+-    return JSON.parse(result.stdout);
++    const encodedResult = output.slice(encodedStart, resultEnd);
++    return JSON.parse(Buffer.from(encodedResult, "base64").toString("utf8"));
+   } catch (error) {
+-    throw new Error(`Acceptance server command returned invalid JSON: ${result.stdout}`, { cause: error });
++    throw new Error(`Acceptance server command returned invalid JSON: ${output}`, { cause: error });
+   }
+ }
+ 
+@@ -657,6 +674,7 @@ module.exports = {
+   ensurePersonEmailAddresses,
+   ensureSmokeTestClub,
+   listLocalDeliveryFacts,
++  parseCommandResult,
+   recordAuthEmailProviderAccepted,
+   runCommand,
+   sendClubMessage,
+diff --git a/acceptance-tests/test/server_commands.test.js b/acceptance-tests/test/server_commands.test.js
+new file mode 100644
+index 0000000..53cc168
+--- /dev/null
++++ b/acceptance-tests/test/server_commands.test.js
+@@ -0,0 +1,27 @@
++const assert = require("node:assert/strict");
++const test = require("node:test");
++
++const { parseCommandResult } = require("../features/support/server_commands");
++
++function frame(value) {
++  const encoded = Buffer.from(JSON.stringify(value), "utf8").toString("base64");
++
++  return `__MEMBA_ACCEPTANCE_RESULT_START__${encoded}__MEMBA_ACCEPTANCE_RESULT_END__`;
++}
++
++test("server command results ignore logger output sharing RPC stdout", () => {
++  const output = [
++    "16:31:54.550 [warning] email_delivery_provider_error",
++    frame([{ deliveryId: "del-1", status: "failed" }]),
++    "16:31:54.551 [debug] asynchronous log after the result"
++  ].join("\n");
++
++  assert.deepEqual(parseCommandResult(output), [{ deliveryId: "del-1", status: "failed" }]);
++});
++
++test("server command results require an explicit frame", () => {
++  assert.throws(
++    () => parseCommandResult('{"status":"sent"}'),
++    /Acceptance server command returned an unframed result/
++  );
++});
