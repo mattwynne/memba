@@ -4,7 +4,7 @@ Incident: [Custom-group creation rejected for legacy clubs](2026-09-14-custom-gr
 
 Status: Awaiting support-release validation and deployment
 
-This runbook restores canonical Admin facts to legacy Club streams. It does not rewrite events or treat projections as authoritative. The operation is append-only, explicitly scoped, dry-run first, and designed to be safe to retry.
+This runbook restores canonical Admin facts to legacy Club streams. It does not rewrite events or treat projections as authoritative. The operation is append-only, explicitly scoped, dry-run first, and designed to be safe to retry. Each Club aggregate command is atomic, but a multi-candidate or multi-club run is not globally transactional; it appends one candidate at a time and can be resumed from the retained report.
 
 ## Safety rules
 
@@ -14,7 +14,8 @@ This runbook restores canonical Admin facts to legacy Club streams. It does not 
 - Do not run the apply command without Matt's explicit approval of its exact club allow-list and expected event count.
 - Never edit projection tables or EventStore rows directly.
 - Never delete or rewrite repair events after an application rollback.
-- Stop if a report contains `manual_review`, an unexpected club or membership, an unexpected grant count, a missing Git SHA, or any error.
+- Stop if a report contains `manual_review`, `post_apply_missing_candidate`, an unexpected club or membership, an unexpected grant count, a missing Git SHA, or any error.
+- The apply runner performs all preflight checks before any dispatch and stops on the first dispatch error; do not expect an all-or-nothing cross-stream transaction.
 - If an apply stops after one club, preserve its output and diagnose before retrying. A retry reconciles already-appended facts rather than duplicating them.
 
 ## Support release contents
@@ -99,7 +100,7 @@ Expected result:
 - 6 events were planned and 6 were appended;
 - both candidates finish as `already_reconciled`;
 - both current and expected grant counts remain 1; and
-- there are no errors or manual-review results.
+- there are no errors, manual-review results, or `post_apply_missing_candidate` results.
 
 Stop and preserve evidence if the observed report differs. Do not compensate by editing data.
 

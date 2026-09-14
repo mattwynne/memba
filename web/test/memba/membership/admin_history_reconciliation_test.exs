@@ -196,6 +196,35 @@ defmodule Memba.Membership.AdminHistoryReconciliationTest do
       assert length(recorded_events(candidate.club_id)) == after_first_apply
     end
 
+    test "post-apply verification reports initial target that disappears from post plan" do
+      candidate = legacy_admin_candidate!()
+
+      assert {:error,
+              %{
+                error: :post_apply_verification_failed,
+                report: report
+              }} =
+               apply_reconciliation(candidate.club_id,
+                 post_apply_plan: fn _opts -> %{clubs: []} end
+               )
+
+      assert report.mode == :apply
+      assert report.totals.candidates == 1
+      assert report.totals.post_apply_missing_candidate == 1
+      assert report.totals.events_planned == 3
+      assert report.totals.events_appended == 3
+
+      assert [missing] = candidates(report)
+      assert missing.club_id == candidate.club_id
+      assert missing.membership_id == candidate.membership_id
+      assert missing.person_id == candidate.person_id
+      assert missing.status == :post_apply_missing_candidate
+      assert missing.reason == :post_apply_missing_candidate
+      assert missing.events_planned == 3
+      assert missing.events_appended == 3
+      assert Jason.encode!(report)
+    end
+
     test "two admins in one club append one role definition, one permission, and two assignments" do
       first = legacy_admin_candidate!()
       _second = add_projected_admin_candidate!(first.club_id)

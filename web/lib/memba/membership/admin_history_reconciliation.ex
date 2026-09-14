@@ -4,6 +4,10 @@ defmodule Memba.Membership.AdminHistoryReconciliation do
 
   The runner only uses projected, normalized Admin evidence to choose candidates,
   then asks the Club aggregate command which canonical facts, if any, are missing.
+
+  Each Club aggregate command is atomic. A multi-candidate or multi-club apply run
+  is not globally transactional; it is append-only and resumable. Apply mode runs
+  all preflight checks before any dispatch and stops on the first dispatch error.
   """
 
   import Ecto.Query
@@ -98,7 +102,7 @@ defmodule Memba.Membership.AdminHistoryReconciliation do
          {:ok, appended_by_key} <- dispatch_repairable_candidates(repairable_candidates, opts) do
       ProjectionBarrier.await!(@plan_source_projectors, timeout: @projection_timeout)
 
-      post_plan = plan(opts)
+      post_plan = post_apply_plan(opts)
 
       final_report =
         apply_report(initial_plan, post_plan, checked_at, appended_by_key)
@@ -334,6 +338,13 @@ defmodule Memba.Membership.AdminHistoryReconciliation do
     end
   end
 
+  defp post_apply_plan(opts) do
+    case Keyword.get(opts, :post_apply_plan, &plan/1) do
+      plan_fun when is_function(plan_fun, 1) -> plan_fun.(opts)
+      plan_fun when is_function(plan_fun, 0) -> plan_fun.()
+    end
+  end
+
   defp candidate_rows(opts) do
     club_ids = normalize_club_ids(Keyword.get(opts, :club_ids, []))
     permission = Permissions.club_manage_members()
@@ -538,6 +549,7 @@ defmodule Memba.Membership.AdminHistoryReconciliation do
         repairable: count_status(candidates, :repairable),
         already_reconciled: count_status(candidates, :already_reconciled),
         manual_review: count_status(candidates, :manual_review),
+        post_apply_missing_candidate: count_status(candidates, :post_apply_missing_candidate),
         events_planned: Enum.sum(Enum.map(candidates, & &1.events_planned)),
         events_appended: Enum.sum(Enum.map(candidates, & &1.events_appended))
       },
@@ -546,21 +558,45 @@ defmodule Memba.Membership.AdminHistoryReconciliation do
   end
 
   defp apply_report(initial_plan, post_plan, checked_at, appended_by_key) do
-    initial_by_key = Map.new(all_candidates(initial_plan), &{candidate_key(&1), &1})
+    initial_candidates = all_candidates(initial_plan)
+    initial_by_key = Map.new(initial_candidates, &{candidate_key(&1), &1})
+
+    post_candidates =
+      post_plan
+      |> all_candidates()
+      |> Enum.map(fn candidate ->
+        key = candidate_key(candidate)
+        initial = Map.get(initial_by_key, key, candidate)
+
+        candidate
+        |> Map.put(:events_planned, initial.events_planned)
+        |> Map.put(:events_appended, Map.get(appended_by_key, key, 0))
+      end)
+
+    post_keys = MapSet.new(Enum.map(post_candidates, &candidate_key/1))
+
+    missing_initial_candidates =
+      initial_candidates
+      |> Enum.reject(&(candidate_key(&1) in post_keys))
+      |> Enum.map(fn candidate ->
+        key = candidate_key(candidate)
+
+        candidate
+        |> Map.put(:status, :post_apply_missing_candidate)
+        |> Map.put(:reason, :post_apply_missing_candidate)
+        |> Map.put(:missing_facts, [])
+        |> Map.put(:events_appended, Map.get(appended_by_key, key, 0))
+      end)
 
     clubs =
-      post_plan.clubs
-      |> Enum.map(fn club ->
-        candidates =
-          Enum.map(club.candidates, fn candidate ->
-            initial = Map.get(initial_by_key, candidate_key(candidate), candidate)
-
-            candidate
-            |> Map.put(:events_planned, initial.events_planned)
-            |> Map.put(:events_appended, Map.get(appended_by_key, candidate_key(candidate), 0))
-          end)
-
-        %{club | candidates: candidates}
+      (post_candidates ++ missing_initial_candidates)
+      |> Enum.group_by(& &1.club_id)
+      |> Enum.sort_by(fn {club_id, _candidates} -> club_id end)
+      |> Enum.map(fn {club_id, candidates} ->
+        %{
+          club_id: club_id,
+          candidates: Enum.sort_by(candidates, &{&1.membership_id, &1.person_id})
+        }
       end)
 
     report(:apply, checked_at, clubs, %{})

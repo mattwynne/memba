@@ -62,13 +62,14 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
           if bytea_columns?(columns) do
             %{
               "active_membership_source_facts" => check_result!(active_membership_source_sql()),
-              "populated_club_admin_source_backing" => check_result!(populated_club_admin_sql())
+              "populated_club_complete_admin_source_backing" =>
+                check_result!(populated_club_admin_sql())
             }
           else
             %{
               "active_membership_source_facts" =>
                 skipped_check("event_store_payload_columns_not_bytea"),
-              "populated_club_admin_source_backing" =>
+              "populated_club_complete_admin_source_backing" =>
                 skipped_check("event_store_payload_columns_not_bytea")
             }
           end
@@ -281,7 +282,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
           AS expected_admin_role_id
       FROM populated_club_hashes
     ),
-    club_admin_assignment_facts AS (
+    club_admin_source_facts AS (
       SELECT
         stream.stream_uuid AS club_id,
         stream_event.stream_version,
@@ -294,10 +295,109 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
         ON stream.stream_id = stream_event.stream_id
       WHERE stream.stream_uuid LIKE 'clb\_%' ESCAPE '\'
         AND event.event_type IN (
+          'Elixir.Memba.Membership.Events.ClubRoleDefined',
+          'Elixir.Memba.Membership.Events.ClubRolePermissionGranted',
           'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
           'Elixir.Memba.Membership.Events.ClubRoleRemovedFromMember',
           'Elixir.Memba.Membership.Events.MemberRoleAssigned',
           'Elixir.Memba.Membership.Events.MemberRoleRemoved'
+        )
+    ),
+    complete_admin_candidates AS (
+      SELECT
+        club.club_id,
+        club.active_member_count,
+        club.expected_admin_role_id,
+        membership.membership_id,
+        membership.person_id,
+        member_permission.grant_count AS flattened_grant_count,
+        (
+          SELECT count(DISTINCT exact_assignment.role_id)
+          FROM membership_role_assignments AS exact_assignment
+          JOIN membership_role_permissions AS exact_permission
+            ON exact_permission.club_id = exact_assignment.club_id
+            AND exact_permission.role_id = exact_assignment.role_id
+            AND exact_permission.permission = 'club.manage_members'
+          WHERE exact_assignment.club_id = membership.club_id
+            AND exact_assignment.membership_id = membership.membership_id
+            AND exact_assignment.person_id = membership.person_id
+            AND exact_assignment.active
+        ) AS exact_active_grant_count
+      FROM populated_clubs AS club
+      JOIN membership_memberships AS membership
+        ON membership.club_id = club.club_id
+        AND membership.active
+      JOIN membership_roles AS role
+        ON role.club_id = club.club_id
+        AND role.role_id = club.expected_admin_role_id
+        AND role.role_key = 'admin'
+        AND role.name = 'Admin'
+      JOIN membership_role_permissions AS role_permission
+        ON role_permission.club_id = club.club_id
+        AND role_permission.role_id = club.expected_admin_role_id
+        AND role_permission.permission = 'club.manage_members'
+      JOIN membership_role_assignments AS assignment
+        ON assignment.club_id = club.club_id
+        AND assignment.membership_id = membership.membership_id
+        AND assignment.person_id = membership.person_id
+        AND assignment.role_id = club.expected_admin_role_id
+        AND assignment.active
+      JOIN membership_member_permissions AS member_permission
+        ON member_permission.club_id = membership.club_id
+        AND member_permission.membership_id = membership.membership_id
+        AND member_permission.person_id = membership.person_id
+        AND member_permission.permission = 'club.manage_members'
+        AND member_permission.grant_count > 0
+    ),
+    source_backed_admin_candidates AS (
+      SELECT candidate.*
+      FROM complete_admin_candidates AS candidate
+      WHERE candidate.flattened_grant_count = candidate.exact_active_grant_count
+        AND candidate.exact_active_grant_count > 0
+        AND EXISTS (
+          SELECT 1
+          FROM club_admin_source_facts AS fact
+          WHERE fact.club_id = candidate.club_id
+            AND fact.event_type =
+              'Elixir.Memba.Membership.Events.ClubRoleDefined'
+            AND fact.event_data ->> 'club_id' = candidate.club_id
+            AND fact.event_data ->> 'role_id' = candidate.expected_admin_role_id
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM club_admin_source_facts AS fact
+          WHERE fact.club_id = candidate.club_id
+            AND fact.event_type =
+              'Elixir.Memba.Membership.Events.ClubRolePermissionGranted'
+            AND fact.event_data ->> 'club_id' = candidate.club_id
+            AND fact.event_data ->> 'role_id' = candidate.expected_admin_role_id
+            AND fact.event_data ->> 'permission' = 'club.manage_members'
+        )
+        AND COALESCE(
+          (
+            SELECT
+              (
+                fact.event_type IN (
+                  'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
+                  'Elixir.Memba.Membership.Events.MemberRoleAssigned'
+                )
+                AND fact.event_data ->> 'club_id' = candidate.club_id
+                AND fact.event_data ->> 'person_id' = candidate.person_id
+              ) IS TRUE
+            FROM club_admin_source_facts AS fact
+            WHERE fact.club_id = candidate.club_id
+              AND fact.event_type IN (
+                'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
+                'Elixir.Memba.Membership.Events.ClubRoleRemovedFromMember',
+                'Elixir.Memba.Membership.Events.MemberRoleAssigned',
+                'Elixir.Memba.Membership.Events.MemberRoleRemoved'
+              )
+              AND fact.event_data ->> 'membership_id' = candidate.membership_id
+              AND fact.event_data ->> 'role_id' = candidate.expected_admin_role_id
+            ORDER BY fact.stream_version DESC
+            LIMIT 1
+          ),
+          false
         )
     ),
     admin_invariant_violations AS (
@@ -308,38 +408,8 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
       FROM populated_clubs AS club
       WHERE NOT EXISTS (
         SELECT 1
-        FROM membership_role_assignments AS assignment
-        JOIN membership_memberships AS membership
-          ON membership.membership_id = assignment.membership_id
-          AND membership.club_id = assignment.club_id
-          AND membership.person_id = assignment.person_id
-          AND membership.active
-        WHERE assignment.club_id = club.club_id
-          AND assignment.role_id = club.expected_admin_role_id
-          AND assignment.active
-          AND COALESCE(
-            (
-              SELECT
-                (
-                  fact.event_type IN (
-                    'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
-                    'Elixir.Memba.Membership.Events.MemberRoleAssigned'
-                  )
-                  AND fact.event_data ->> 'club_id' = club.club_id
-                  AND fact.event_data ->> 'person_id' =
-                    assignment.person_id
-                ) IS TRUE
-              FROM club_admin_assignment_facts AS fact
-              WHERE fact.club_id = club.club_id
-                AND fact.event_data ->> 'membership_id' =
-                  assignment.membership_id
-                AND fact.event_data ->> 'role_id' =
-                  club.expected_admin_role_id
-              ORDER BY fact.stream_version DESC
-              LIMIT 1
-            ),
-            false
-          )
+        FROM source_backed_admin_candidates AS candidate
+        WHERE candidate.club_id = club.club_id
       )
     )
     SELECT
