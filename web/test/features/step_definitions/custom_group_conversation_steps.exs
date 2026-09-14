@@ -217,6 +217,15 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     attempt = Map.fetch!(context, :reply_attempt)
     messages = Messaging.list_conversation_messages(attempt.conversation_id)
 
+    case attempt.channel do
+      "on the website" ->
+        assert {:error, :not_current_member} = attempt.result
+
+      "by email" ->
+        assert {:ok, %{status: :rejected, rejection_reason: "not_current_member"}} =
+                 attempt.result
+    end
+
     assert length(messages) == attempt.message_count_before
     refute Enum.any?(messages, &(&1.body == body))
     context
@@ -239,7 +248,9 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     {result, context} =
       receive_inbound_email(context, person_name, "Re: #{subject}", @board_address,
         text_body: body,
-        in_reply_to_message_ids: [outbound_message_id!(message.message_id)]
+        in_reply_to_message_ids: [
+          outbound_message_id_for_recipient!(context, message.message_id, person_name)
+        ]
       )
 
     assert {:ok, %{message_id: reply_id, conversation_id: conversation_id}} = result
@@ -301,7 +312,7 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
 
   step ~r/^(\w+) has stopped following "([^"]+)"$/,
        %{args: [person_name, subject]} = context do
-    set_following(context, person_name, subject, false)
+    stop_following(context, person_name, subject)
   end
 
   step ~r/^(\w+) replies "([^"]+)" to "([^"]+)" on the website$/,
@@ -564,6 +575,22 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     end
   end
 
+  defp outbound_message_id_for_recipient!(context, message_id, person_name) do
+    recipient_id = person_id!(context, person_name)
+
+    message_id
+    |> Messaging.list_recipient_deliveries()
+    |> Enum.find(&(&1.recipient_id == recipient_id))
+    |> case do
+      %{outbound_message_id: outbound_message_id}
+      when is_binary(outbound_message_id) and outbound_message_id != "" ->
+        outbound_message_id
+
+      _missing ->
+        flunk("Expected an outbound Message-ID for #{person_name} and message #{message_id}")
+    end
+  end
+
   defp post_reply(context, person_name, subject, body) do
     Fake.reset()
     root = message!(context, subject)
@@ -620,6 +647,22 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
                )
     end
 
+    context
+  end
+
+  defp stop_following(context, person_name, subject) do
+    message = message!(context, subject)
+    person_id = person_id!(context, person_name)
+
+    refute Messaging.following_conversation?(message.message_id, person_id)
+
+    context = set_following(context, person_name, subject, true)
+
+    assert Messaging.following_conversation?(message.message_id, person_id)
+
+    context = set_following(context, person_name, subject, false)
+
+    refute Messaging.following_conversation?(message.message_id, person_id)
     context
   end
 
