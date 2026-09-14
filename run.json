@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T20:33:31.768938757Z",
-  "last_event_at": "2026-09-14T21:39:13.063688257Z",
+  "last_event_at": "2026-09-14T21:39:17.023562141Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -13552,9 +13552,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 3289,
       "checkpoint": {
-        "timestamp": "2026-09-14T21:39:13.220914025Z",
+        "timestamp": "2026-09-14T21:39:17.010993304Z",
         "current_node": "todo_readable",
         "completed_nodes": [
           "start",
@@ -13601,10 +13601,386 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.validate_task": 0,
+          "thread.start.current_node": "verify_source_head",
+          "internal.retry_count.apply_task_verdict": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.rankdir": "LR",
+          "current_node": "todo_readable",
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.implement_next_task.current_node": "validate_task",
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01M2GSY9BXZSK7X2GP9786P2J6",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.preflight_sandbox": 0,
+          "preferred_label": "accept",
+          "internal.retry_count.revise_task": 0,
+          "thread.apply_task_verdict.current_node": "sync_task_list",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.retry_count.resume_gate": 0,
+          "graph.default_fidelity": "summary:high",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.wip_gate": 0,
+          "internal.thread_id": "sync_task_list",
+          "failure_signature": "",
+          "internal.work_dir": "/workspace/memba",
+          "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3",
+          "internal.node_visit_count": 6,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Mem",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.todo_readable": 0,
+          "outcome": "succeeded",
+          "output.validate_task": {
+            "decision": "accept",
+            "task": "- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.",
+            "reason": "At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed."
+          },
+          "response.implement_next_task": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n2. Changes made\n\n   - Added [CustomGroupAdmission](/workspace/memba/web/lib/memba/membership/custom_group_admission.ex:1), an explicit use-case result containing the actor and target identities plus:\n     - `:member_added` for a committed new transition.\n     - `:already_member` for an idempotent retry.\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:88) so `add_custom_group_member/2` derives that result from Commanded’s execution result, without projection preflight or projection-only mutation.\n   - Preserved explicitly requested Commanded `:returning` modes for existing lower-level callers.\n   - Kept `GroupMemberAdded` actor-free and backward-compatible; the actor belongs to the admission result rather than the shared event used by trusted system-group operations.\n   - Added aggregate and dispatch coverage in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:1249) and [add_custom_group_member_dispatch_test.exs](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:96). The tests prove a duplicate emits no event and reports `:already_member`.\n   - No acceptance feature files were changed.\n\n3. Focused validation\n\n   - Initial TDD run failed as expected while the actor/new-transition contract was absent.\n   - Final focused run:\n\n     `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/group_projection_test.exs`\n\n     Result: 72 tests, 0 failures.\n\n   - `mix format --check-formatted ...` passed for all touched Elixir files.\n   - `git diff --check` passed.\n   - Full `dev check` was not run because it remains explicit task 016.\n\n4. Todo state\n\n   Still exactly unchecked and ready for independent review:\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: transition status is derived from the aggregate’s persisted event decision.\n   - ADR 0007: the result remains owned by Membership’s public application-service boundary.\n   - ADR 0009: no projection mutation or projection-based transition inference was introduced.\n   - ADR 0011: caller-generated typed identities are preserved in the result.\n   - ADR 0024: duplicate detection remains serialized inside `Membership.Club`; the application service only interprets its execution result.",
+          "internal.retry_count.sync_task_list": 0,
+          "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed.\"}",
+          "thread.revise_task.current_node": "validate_task",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.verify_source_head": 0,
+          "last_stage": "validate_task",
+          "internal.retry_count.read_plan": 0,
+          "failure_class": ""
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19059a8ddbbd7924d847396f332c0d8fafe9dc29f31ebfa20a6cba7481f98a7b"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93740,
+              "active_time_ms": 93740
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a1227baf2245062e6699ab37f0ab3d9dc7bb62d0fd08248e40963cd47b657473"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '428368266c49feca44a1f1756ded7ed8ac16d43a'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 217,
+              "active_time_ms": 217
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5ee0f0d12234c892042d0b23b37b750df2c7f7b139acb1e2fc0e4b9d0d768dae"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1719,
+              "active_time_ms": 1719
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the wel",
+              "response.implement_next_task": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n2. Changes made\n\n   - Added [CustomGroupAdmission](/workspace/memba/web/lib/memba/membership/custom_group_admission.ex:1), an explicit use-case result containing the actor and target identities plus:\n     - `:member_added` for a committed new transition.\n     - `:already_member` for an idempotent retry.\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:88) so `add_custom_group_member/2` derives that result from Commanded’s execution result, without projection preflight or projection-only mutation.\n   - Preserved explicitly requested Commanded `:returning` modes for existing lower-level callers.\n   - Kept `GroupMemberAdded` actor-free and backward-compatible; the actor belongs to the admission result rather than the shared event used by trusted system-group operations.\n   - Added aggregate and dispatch coverage in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:1249) and [add_custom_group_member_dispatch_test.exs](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:96). The tests prove a duplicate emits no event and reports `:already_member`.\n   - No acceptance feature files were changed.\n\n3. Focused validation\n\n   - Initial TDD run failed as expected while the actor/new-transition contract was absent.\n   - Final focused run:\n\n     `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/group_projection_test.exs`\n\n     Result: 72 tests, 0 failures.\n\n   - `mix format --check-formatted ...` passed for all touched Elixir files.\n   - `git diff --check` passed.\n   - Full `dev check` was not run because it remains explicit task 016.\n\n4. Todo state\n\n   Still exactly unchecked and ready for independent review:\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: transition status is derived from the aggregate’s persisted event decision.\n   - ADR 0007: the result remains owned by Membership’s public application-service boundary.\n   - ADR 0009: no projection mutation or projection-based transition inference was introduced.\n   - ADR 0011: caller-generated typed identities are preserved in the result.\n   - ADR 0024: duplicate detection remains serialized inside `Membership.Club`; the application service only interprets its execution result.",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 249143,
+                    "output_tokens": 8662,
+                    "reasoning_tokens": 7468,
+                    "cache_read_tokens": 2066816,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2763023
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 347096,
+              "tool_time_ms": 46066,
+              "active_time_ms": 393162
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a5e3da4fb595b78c08280e5a8d35f5f8d52d5f98e716c9ba0bf9fa278775aae4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fc8ae99a7b32d42ca67b9bff8ee094681e7130a131c4843242da17fffb9323a9"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/61222ca4c9d2dc99c6ea3c87f517614fa0426454551bdc0d31f6a193b566d604"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d37988a82916e5bd9e77ef699f995fc0829fb0bd2473ebb688024a0788ae4182"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Mem",
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed.\"}",
+              "output.validate_task": {
+                "decision": "accept",
+                "task": "- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.",
+                "reason": "At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed."
+              }
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 145736,
+                    "output_tokens": 3088,
+                    "reasoning_tokens": 1637,
+                    "cache_read_tokens": 481792,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1111326
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 118150,
+              "tool_time_ms": 221386,
+              "active_time_ms": 339536
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "accept",
+            "context_updates": {
+              "command.output": "blob://sha256/13c20903203a5327270d9779f6f07b4f16dc7128e8b6c49051a2f7747a3a8219"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "revise_task",
+              "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+              "last_response": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. "
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 453538,
+                    "output_tokens": 8583,
+                    "reasoning_tokens": 4914,
+                    "cache_read_tokens": 1726080,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3535640
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 312534,
+              "tool_time_ms": 262424,
+              "active_time_ms": 574958
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "all_tasks_done",
+        "git_commit_sha": "6fba1667ddb876f16a45e229f3ece8bdb036ffca",
+        "node_visits": {
+          "implement_next_task": 5,
+          "read_plan": 1,
+          "all_tasks_done": 5,
+          "revise_task": 1,
+          "start": 1,
+          "sync_task_list": 6,
+          "apply_task_verdict": 6,
+          "verify_source_head": 1,
+          "resume_gate": 1,
+          "todo_readable": 6,
+          "preflight_sandbox": 1,
+          "validate_task": 6,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 13,
+          "additions": 939,
+          "deletions": 9
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T21:39:17.182424538Z",
+        "current_node": "all_tasks_done",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.verify_source_head": 0,
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.all_tasks_done": 0,
-          "internal.thread_id": "sync_task_list",
+          "internal.thread_id": "todo_readable",
           "thread.revise_task.current_node": "validate_task",
           "internal.retry_count.wip_gate": 0,
           "internal.fidelity": "summary:high",
@@ -13631,14 +14007,14 @@
           "thread.start.current_node": "verify_source_head",
           "internal.retry_count.resume_gate": 0,
           "thread.verify_source_head.current_node": "read_plan",
-          "current_node": "todo_readable",
+          "current_node": "all_tasks_done",
           "thread.apply_task_verdict.current_node": "sync_task_list",
           "internal.node_visit_count": 6,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed.\"}",
           "graph.max_node_visits": "80",
-          "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3",
+          "command.output": "blob://sha256/83bb0f28486da85424f68e6f04d5d41004c392bcd717c353960f0efbdf8f8330",
           "thread.sync_task_list.current_node": "todo_readable",
           "internal.retry_count.implement_next_task": 0,
           "failure_signature": "",
@@ -13831,15 +14207,15 @@
           "all_tasks_done": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/d37988a82916e5bd9e77ef699f995fc0829fb0bd2473ebb688024a0788ae4182"
+              "command.output": "blob://sha256/83bb0f28486da85424f68e6f04d5d41004c392bcd717c353960f0efbdf8f8330"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 156,
-              "active_time_ms": 156
+              "tool_time_ms": 152,
+              "active_time_ms": 152
             }
           },
           "read_plan": {
@@ -13900,14 +14276,14 @@
             }
           }
         },
-        "next_node_id": "all_tasks_done",
+        "next_node_id": "implement_next_task",
         "node_visits": {
           "start": 1,
           "verify_source_head": 1,
           "todo_readable": 6,
           "implement_next_task": 5,
           "read_plan": 1,
-          "all_tasks_done": 5,
+          "all_tasks_done": 6,
           "wip_gate": 1,
           "preflight_sandbox": 1,
           "sync_task_list": 6,
@@ -16169,7 +16545,12 @@
       "first_event_seq": 3282,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T21:39:13.219652007Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -16178,10 +16559,56 @@
         "language": "shell",
         "timeout_ms": 120000
       },
+      "script_timing": {
+        "output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3",
+        "exit_code": 0,
+        "duration_ms": 152,
+        "termination": "exited",
+        "output_bytes": 88,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 88,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-14T21:39:13.063059709Z",
+      "handler": "command",
+      "graph_visit": 6,
+      "timing": {
+        "wall_time_ms": 155,
+        "inference_time_ms": 0,
+        "tool_time_ms": 152,
+        "active_time_ms": 152
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "all_tasks_done@6": {
+      "first_event_seq": 3292,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-09-14T21:39:13.063059709Z",
+      "started_at": "2026-09-14T21:39:17.022751371Z",
       "handler": "command",
       "graph_visit": 6,
       "usage": {
