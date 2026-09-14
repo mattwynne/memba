@@ -1,0 +1,265 @@
+diff --git a/web/lib/memba_web/components/member_components.ex b/web/lib/memba_web/components/member_components.ex
+index 4dbfc83..fff0b1e 100644
+--- a/web/lib/memba_web/components/member_components.ex
++++ b/web/lib/memba_web/components/member_components.ex
+@@ -234,6 +234,10 @@ defmodule MembaWeb.MemberComponents do
+   attr :query, :string, default: ""
+   attr :search_form, Phoenix.HTML.Form, required: true
+ 
++  slot :candidate_action,
++    required: true,
++    doc: "action rendered for each visible candidate, receiving the candidate as its slot value"
++
+   def custom_group_member_picker(assigns) do
+     assigns =
+       assign(assigns, :visible_candidates, filter_candidates(assigns.candidates, assigns.query))
+@@ -311,18 +315,7 @@ defmodule MembaWeb.MemberComponents do
+               Club admin
+             </small>
+           </div>
+-          <.button
+-            id={"custom-group-member-candidate-add-#{candidate.id}"}
+-            type="button"
+-            variant="primary"
+-            size="sm"
+-            class="btn-outline"
+-            data-custom-group-member-action="add"
+-            data-membership-id={candidate.membership_id}
+-            data-person-id={candidate.id}
+-          >
+-            Add
+-          </.button>
++          {render_slot(@candidate_action, candidate)}
+         </div>
+       </div>
+ 
+@@ -339,6 +332,10 @@ defmodule MembaWeb.MemberComponents do
+ 
+   attr :group_name, :string, required: true
+ 
++  slot :add_self_action,
++    required: true,
++    doc: "caller-owned action for admitting the viewing admin to the group"
++
+   def outside_group_admin_notice(assigns) do
+     ~H"""
+     <div
+@@ -357,14 +354,7 @@ defmodule MembaWeb.MemberComponents do
+           unless you're a member—being a club admin doesn't grant that on its own.
+         </p>
+         <div class="outside__actions">
+-          <.button
+-            id="member-group-add-self"
+-            type="button"
+-            size="sm"
+-            data-custom-group-member-action="add-self"
+-          >
+-            Add yourself to {@group_name}
+-          </.button>
++          {render_slot(@add_self_action)}
+           <small id="member-group-add-self-help">
+             You'll get {@group_name}'s emails from now on and can read its whole history.
+             That won't change your club admin role.
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index c682dcc..aa3b499 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -289,7 +289,18 @@
+             <.outside_group_admin_notice
+               :if={outside_admin? && @can_add_self_to_custom_group?}
+               group_name={@selected_group.name}
+-            />
++            >
++              <:add_self_action>
++                <.button
++                  id="member-group-add-self"
++                  type="button"
++                  size="sm"
++                  data-custom-group-member-action="add-self"
++                >
++                  Add yourself to {@selected_group.name}
++                </.button>
++              </:add_self_action>
++            </.outside_group_admin_notice>
+             <.custom_group_member_picker
+               :if={@can_add_custom_group_members? && @custom_group_member_picker_open?}
+               club_name={@selected_club.name}
+@@ -297,7 +308,22 @@
+               candidates={@custom_group_member_candidates}
+               query={@custom_group_member_picker_query}
+               search_form={@custom_group_member_picker_form}
+-            />
++            >
++              <:candidate_action :let={candidate}>
++                <.button
++                  id={"custom-group-member-candidate-add-#{candidate.id}"}
++                  type="button"
++                  variant="primary"
++                  size="sm"
++                  class="btn-outline"
++                  data-custom-group-member-action="add"
++                  data-membership-id={candidate.membership_id}
++                  data-person-id={candidate.id}
++                >
++                  Add
++                </.button>
++              </:candidate_action>
++            </.custom_group_member_picker>
+             <.custom_group_membership_guidance
+               :if={@can_add_custom_group_members?}
+               club_name={@selected_club.name}
+diff --git a/web/test/memba_web/components/member_components_test.exs b/web/test/memba_web/components/member_components_test.exs
+index 0525836..54cdc64 100644
+--- a/web/test/memba_web/components/member_components_test.exs
++++ b/web/test/memba_web/components/member_components_test.exs
+@@ -178,22 +178,46 @@ defmodule MembaWeb.MemberComponentsTest do
+       dana_membership_id = Memba.ID.generate(:membership)
+       dana_person_id = Memba.ID.generate(:person)
+ 
++      assigns = %{
++        club_name: "Alpine Club",
++        group_name: "Board",
++        candidates: [
++          %{
++            membership_id: dana_membership_id,
++            id: dana_person_id,
++            name: "Dana Diaz",
++            initials: "DD",
++            roles: ["Admin"]
++          }
++        ],
++        query: "dan",
++        search_form: to_form(%{"query" => "dan"}, as: :member_search)
++      }
++
+       html =
+-        render_component(&MemberComponents.custom_group_member_picker/1, %{
+-          club_name: "Alpine Club",
+-          group_name: "Board",
+-          candidates: [
+-            %{
+-              membership_id: dana_membership_id,
+-              id: dana_person_id,
+-              name: "Dana Diaz",
+-              initials: "DD",
+-              roles: ["Admin"]
+-            }
+-          ],
+-          query: "dan",
+-          search_form: to_form(%{"query" => "dan"}, as: :member_search)
+-        })
++        rendered_to_string(~H"""
++        <MemberComponents.custom_group_member_picker
++          club_name={@club_name}
++          group_name={@group_name}
++          candidates={@candidates}
++          query={@query}
++          search_form={@search_form}
++        >
++          <:candidate_action :let={candidate}>
++            <button
++              id={"custom-group-member-candidate-add-#{candidate.id}"}
++              type="button"
++              class="btn btn-primary btn-sm btn-outline"
++              data-component-slot="candidate-action"
++              data-custom-group-member-action="add"
++              data-membership-id={candidate.membership_id}
++              data-person-id={candidate.id}
++            >
++              Add
++            </button>
++          </:candidate_action>
++        </MemberComponents.custom_group_member_picker>
++        """)
+ 
+       assert_selector(
+         html,
+@@ -236,7 +260,8 @@ defmodule MembaWeb.MemberComponentsTest do
+       assert_selector(
+         html,
+         "#custom-group-member-candidate-add-#{dana_person_id}" <>
+-          ".btn-outline.btn-primary[data-custom-group-member-action='add']"
++          ".btn-outline.btn-primary[data-component-slot='candidate-action']" <>
++          "[data-custom-group-member-action='add']"
+       )
+ 
+       assert_selector(
+@@ -246,14 +271,28 @@ defmodule MembaWeb.MemberComponentsTest do
+     end
+ 
+     test "explains when no eligible club members remain" do
++      assigns = %{
++        club_name: "Alpine Club",
++        group_name: "Board",
++        candidates: [],
++        query: "",
++        search_form: to_form(%{"query" => ""}, as: :member_search)
++      }
++
+       html =
+-        render_component(&MemberComponents.custom_group_member_picker/1, %{
+-          club_name: "Alpine Club",
+-          group_name: "Board",
+-          candidates: [],
+-          query: "",
+-          search_form: to_form(%{"query" => ""}, as: :member_search)
+-        })
++        rendered_to_string(~H"""
++        <MemberComponents.custom_group_member_picker
++          club_name={@club_name}
++          group_name={@group_name}
++          candidates={@candidates}
++          query={@query}
++          search_form={@search_form}
++        >
++          <:candidate_action :let={candidate}>
++            <button id={"unused-candidate-action-#{candidate.id}"}>Add</button>
++          </:candidate_action>
++        </MemberComponents.custom_group_member_picker>
++        """)
+ 
+       assert_text(
+         html,
+@@ -265,6 +304,42 @@ defmodule MembaWeb.MemberComponentsTest do
+     end
+   end
+ 
++  describe "outside_group_admin_notice/1" do
++    test "renders its caller-supplied self-admission action" do
++      assigns = %{group_name: "Board"}
++
++      html =
++        rendered_to_string(~H"""
++        <MemberComponents.outside_group_admin_notice group_name={@group_name}>
++          <:add_self_action>
++            <button
++              id="member-group-add-self"
++              type="button"
++              data-component-slot="add-self-action"
++              data-custom-group-member-action="add-self"
++            >
++              Add yourself to {@group_name}
++            </button>
++          </:add_self_action>
++        </MemberComponents.outside_group_admin_notice>
++        """)
++
++      assert_selector(
++        html,
++        "#member-group-outside-admin-notice[aria-label=\"You're managing a group you're not in\"]"
++      )
++
++      assert_selector(
++        html,
++        "#member-group-add-self[data-component-slot='add-self-action']" <>
++          "[data-custom-group-member-action='add-self']"
++      )
++
++      assert_text(html, "#member-group-add-self", "Add yourself to Board")
++      assert_text(html, "#member-group-add-self-help", "read its whole history")
++    end
++  end
++
+   describe "conversation_row/1" do
+     test "renders the row link, subject, and sender information" do
+       message_id = Memba.ID.generate(:message)
