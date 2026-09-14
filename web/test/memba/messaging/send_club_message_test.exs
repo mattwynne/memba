@@ -13,6 +13,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -27,6 +29,9 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
+
+  alias Memba.Messaging.Projectors.ConversationFollow,
+    as: ConversationFollowProjector
 
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -612,6 +617,204 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert alice_id == alice.person_id
   end
 
+  test "does not create a new-message delivery for a departure hidden by recipient projection lag" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice Admin", email: "alice@example.com")
+    carol = create_person(name: "Carol Member", email: "carol@example.com")
+
+    alice_membership_id = add_member(club_id, alice.person_id)
+    carol_membership_id = add_member(club_id, carol.person_id)
+    board_group_id = create_group(club_id, "Board")
+
+    add_group_member(club_id, board_group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)
+
+    membership_projector_child_id = stop_projector!(MembershipProjector)
+    group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
+    system_group_policy_child_id = stop_projector!(SystemGroupMembership)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: carol_membership_id,
+                 person_id: carol.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+
+    message_id = Memba.ID.generate(:message)
+
+    assert {:ok, %ExecutionResult{events: events}} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Private Board topic after departure",
+                 body: "A stale recipient projection must not create Carol's delivery."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    recipient_ids =
+      for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
+
+    assert alice.person_id in recipient_ids
+    refute carol.person_id in recipient_ids
+
+    restart_projector!(membership_projector_child_id)
+    restart_projector!(group_membership_projector_child_id)
+    restart_projector!(system_group_policy_child_id)
+
+    await_restarted_subscribers!([
+      MembershipProjector,
+      GroupMembershipProjector,
+      SystemGroupMembership
+    ])
+  end
+
+  test "does not create a reply delivery after departure and rejoin only Everyone when projections lag" do
+    Application.put_env(:memba, :authorization_stability_timeout, 25)
+
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice Admin", email: "alice@example.com")
+    carol = create_person(name: "Carol Member", email: "carol@example.com")
+
+    alice_membership_id = add_member(club_id, alice.person_id)
+    carol_membership_id = add_member(club_id, carol.person_id)
+    board_group_id = create_group(club_id, "Board")
+
+    add_group_member(club_id, board_group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)
+
+    conversation_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: conversation_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Private Board topic",
+                 body: "Carol initially has access."
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: carol.person_id
+               },
+               consistency: :strong
+             )
+
+    membership_projector_child_id = stop_projector!(MembershipProjector)
+    group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
+    conversation_follow_projector_child_id = stop_projector!(ConversationFollowProjector)
+    system_group_policy_child_id = stop_projector!(SystemGroupMembership)
+    clear_follows_policy_child_id = stop_projector!(ClearRemovedGroupMemberFollows)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: carol_membership_id,
+                 person_id: carol.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert :ok =
+             Messaging.unfollow_conversation(
+               %{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: carol.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %AddClubMember{
+                 club_id: club_id,
+                 membership_id: Memba.ID.generate(:membership),
+                 person_id: carol.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    assert Messaging.following_conversation?(conversation_id, carol.person_id)
+
+    refute Memba.Membership.active_member_of_group_authoritatively?(
+             club_id,
+             board_group_id,
+             carol.person_id
+           )
+
+    reply_message_id = Memba.ID.generate(:message)
+
+    assert {:error, :authorization_stability_timeout} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: conversation_id,
+                 sender_id: alice.person_id,
+                 body: "Carol must not receive this after rejoining only Everyone."
+               },
+               consistency: :strong
+             )
+
+    refute Repo.get(MessageProjection, reply_message_id)
+
+    restart_projector!(membership_projector_child_id)
+    restart_projector!(group_membership_projector_child_id)
+    restart_projector!(conversation_follow_projector_child_id)
+    restart_projector!(system_group_policy_child_id)
+    restart_projector!(clear_follows_policy_child_id)
+
+    await_restarted_subscribers!([
+      MembershipProjector,
+      GroupMembershipProjector,
+      ConversationFollowProjector,
+      SystemGroupMembership,
+      ClearRemovedGroupMemberFollows
+    ])
+
+    Application.put_env(:memba, :authorization_stability_timeout, 5_000)
+
+    assert {:ok, %ExecutionResult{events: events}} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: conversation_id,
+                 sender_id: alice.person_id,
+                 body: "Carol must not receive this after rejoining only Everyone."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    recipient_ids =
+      for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
+
+    refute carol.person_id in recipient_ids
+  end
+
   test "rejects an unknown audience group before dispatching the message command" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
@@ -981,6 +1184,24 @@ defmodule Memba.Messaging.SendClubMessageTest do
       {:ok, _pid, _info} -> :ok
       {:error, :running} -> :ok
     end
+  end
+
+  defp await_restarted_subscribers!(subscribers) do
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+
+    Memba.ProjectionBarrier.await!(
+      subscribers,
+      checkpoint: checkpoint,
+      timeout: 5_000
+    )
+
+    final_checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+
+    Memba.ProjectionBarrier.await!(
+      subscribers,
+      checkpoint: final_checkpoint,
+      timeout: 5_000
+    )
   end
 
   defp create_club(club_id, name) do

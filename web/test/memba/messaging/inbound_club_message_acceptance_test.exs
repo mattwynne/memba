@@ -2032,6 +2032,104 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
   end
 
+  test "provider retry accepts the same message after MessageSent committed before the receipt outcome" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-message-sent-before-accepted",
+      from_address: "alice@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "Resume after message commit",
+      text_body: "A provider retry must reuse this message."
+    }
+
+    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
+
+    message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: kmc.club_id,
+                 sender_id: alice.person_id,
+                 subject: inbound_attrs.subject,
+                 body: inbound_attrs.text_body
+               },
+               consistency: :strong
+             )
+
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(MessageSent)
+    assert 1 == count_events(EmailDeliveryCreated)
+    assert 0 == count_events(InboundClubEmailAccepted)
+
+    assert {:ok,
+            %{
+              inbound_email_id: inbound_email_id,
+              message_id: ^message_id,
+              club_id: club_id,
+              sender_id: sender_id
+            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert inbound_email_id == receive_command.inbound_email_id
+    assert club_id == kmc.club_id
+    assert sender_id == alice.person_id
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(MessageSent)
+    assert 1 == count_events(EmailDeliveryCreated)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+  end
+
+  test "concurrent provider retries create and accept exactly one message" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-concurrent-provider-retries",
+      from_address: "alice@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "One message from concurrent retries",
+      text_body: "Both provider calls represent this one inbound email."
+    }
+
+    results =
+      1..2
+      |> Task.async_stream(
+        fn _attempt ->
+          Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+        end,
+        max_concurrency: 2,
+        timeout: 10_000
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.all?(
+             results,
+             &match?({:ok, %{message_id: message_id}} when is_binary(message_id), &1)
+           )
+
+    assert [message_id] =
+             results
+             |> Enum.map(fn {:ok, result} -> result.message_id end)
+             |> Enum.uniq()
+
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(MessageSent)
+    assert 1 == count_events(EmailDeliveryCreated)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+  end
+
   test "the Admin route rejects inactive and other-club senders before private delivery" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     npc = create_club!(name: "Nelson Paddling Club", slug: "npc")

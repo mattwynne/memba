@@ -40,6 +40,9 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
 
+  alias Memba.Messaging.Projectors.ConversationFollow,
+    as: ConversationFollowProjector
+
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
@@ -107,12 +110,15 @@ defmodule Memba.Messaging do
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <-
-           authorize_at_stable_checkpoint(fn ->
-             with {:ok, command} <- post_message_reply_command(attrs),
-                  :ok <- authorize_reply_sender(command) do
-               {:ok, command}
-             end
-           end),
+           authorize_at_stable_checkpoint(
+             fn ->
+               with {:ok, command} <- post_message_reply_command(attrs),
+                    :ok <- authorize_reply_sender(command) do
+                 {:ok, command}
+               end
+             end,
+             projections: [ConversationFollowProjector]
+           ),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -1436,7 +1442,7 @@ defmodule Memba.Messaging do
          conversation_id,
          dispatch_opts
        ) do
-    message_id = Memba.ID.generate(:message)
+    message_id = inbound_message_id(receive_command)
 
     case post_inbound_club_message_reply(
            conversation_id,
@@ -1487,7 +1493,7 @@ defmodule Memba.Messaging do
          body,
          dispatch_opts
        ) do
-    message_id = Memba.ID.generate(:message)
+    message_id = inbound_message_id(receive_command)
 
     case send_inbound_club_message(
            receive_command.inbound_email,
@@ -1592,7 +1598,7 @@ defmodule Memba.Messaging do
                {:ok, command}
              end
            end) do
-      dispatch_ok(command, dispatch_opts)
+      dispatch_inbound_message_once(command, dispatch_opts)
     end
   end
 
@@ -1603,17 +1609,77 @@ defmodule Memba.Messaging do
          body,
          dispatch_opts
        ) do
-    case post_message_reply(
-           %{
-             message_id: message_id,
-             conversation_id: conversation_id,
-             sender_id: sender.person_id,
-             body: body
-           },
-           dispatch_opts
-         ) do
+    attrs = %{
+      message_id: message_id,
+      conversation_id: conversation_id,
+      sender_id: sender.person_id,
+      body: body
+    }
+
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(
+             fn ->
+               with {:ok, command} <- post_message_reply_command(attrs),
+                    :ok <- authorize_reply_sender(command) do
+                 {:ok, command}
+               end
+             end,
+             projections: [ConversationFollowProjector]
+           ) do
+      dispatch_inbound_message_once(command, dispatch_opts)
+    end
+  end
+
+  defp inbound_message_id(%ReceiveInboundEmail{inbound_email_id: inbound_email_id}) do
+    ID.deterministic(:message, [inbound_email_id])
+  end
+
+  defp dispatch_inbound_message_once(command, dispatch_opts) do
+    case dispatch_ok(command, dispatch_opts) do
+      :ok -> :ok
+      {:error, :already_sent} -> confirm_matching_inbound_message(command)
       {:error, _reason} = error -> error
-      _reply_result -> :ok
+    end
+  end
+
+  defp confirm_matching_inbound_message(%SendMessage{} = command) do
+    case App.aggregate_state(Message, command.message_id) do
+      %Message{
+        message_id: message_id,
+        club_id: club_id,
+        sender_id: sender_id,
+        conversation_id: message_id,
+        group_access: group_access
+      }
+      when message_id == command.message_id and club_id == command.club_id and
+             sender_id == command.sender_id ->
+        if Map.get(group_access, command.audience_group_id) == "write" do
+          :ok
+        else
+          {:error, :already_sent}
+        end
+
+      _missing_or_different_message ->
+        {:error, :already_sent}
+    end
+  end
+
+  defp confirm_matching_inbound_message(%PostMessageReply{} = command) do
+    case App.aggregate_state(Message, command.message_id) do
+      %Message{
+        message_id: message_id,
+        club_id: club_id,
+        sender_id: sender_id,
+        conversation_id: conversation_id,
+        reply_to_message_id: reply_to_message_id
+      }
+      when message_id == command.message_id and club_id == command.club_id and
+             sender_id == command.sender_id and conversation_id == command.conversation_id and
+             reply_to_message_id == command.reply_to_message_id ->
+        :ok
+
+      _missing_or_different_message ->
+        {:error, :already_sent}
     end
   end
 
@@ -1744,7 +1810,7 @@ defmodule Memba.Messaging do
          audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_group_recipients(audience_group_id)
+         recipients: resolve_group_recipients(club_id, audience_group_id)
        }}
     end
   end
@@ -1941,25 +2007,46 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_at_stable_checkpoint(authorization) when is_function(authorization, 0) do
+    authorize_at_stable_checkpoint(authorization, [])
+  end
+
+  defp authorize_at_stable_checkpoint(authorization, opts)
+       when is_function(authorization, 0) and is_list(opts) do
     deadline =
       System.monotonic_time(:millisecond) + authorization_stability_timeout()
 
-    authorize_at_stable_checkpoint(authorization, deadline)
+    authorize_at_stable_checkpoint(
+      authorization,
+      Keyword.get(opts, :projections, []),
+      deadline
+    )
   end
 
-  defp authorize_at_stable_checkpoint(authorization, deadline) do
+  defp authorize_at_stable_checkpoint(authorization, projections, deadline) do
     if System.monotonic_time(:millisecond) >= deadline do
       {:error, :authorization_stability_timeout}
     else
       checkpoint = ProjectionBarrier.current_checkpoint()
 
-      with {:ok, authorized} <- authorization.() do
+      with :ok <- await_authorization_projections(projections, checkpoint, deadline),
+           {:ok, authorized} <- authorization.() do
         if ProjectionBarrier.current_checkpoint() == checkpoint do
           {:ok, authorized}
         else
-          authorize_at_stable_checkpoint(authorization, deadline)
+          authorize_at_stable_checkpoint(authorization, projections, deadline)
         end
       end
+    end
+  end
+
+  defp await_authorization_projections([], _checkpoint, _deadline), do: :ok
+
+  defp await_authorization_projections(projections, checkpoint, deadline) do
+    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    case ProjectionBarrier.await(projections, checkpoint: checkpoint, timeout: timeout) do
+      {:ok, _result} -> :ok
+      {:error, :timeout, _result} -> {:error, :authorization_stability_timeout}
     end
   end
 
@@ -2040,12 +2127,13 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp resolve_group_recipients(group_id, opts \\ []) do
+  defp resolve_group_recipients(club_id, group_id, opts \\ []) do
     except_person_id = Keyword.get(opts, :except_person_id)
 
     group_id
     |> Membership.list_active_members_of_group()
     |> Enum.reject(&(&1.id == except_person_id))
+    |> Enum.filter(&Membership.active_member_of_group_authoritatively?(club_id, group_id, &1.id))
     |> Enum.map(&resolved_recipient/1)
   end
 
@@ -2057,6 +2145,7 @@ defmodule Memba.Messaging do
     |> Membership.list_active_members_of_club()
     |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
     |> Enum.reject(&(&1.id == except_person_id))
+    |> Enum.filter(&Membership.active_member_of_club_authoritatively?(club_id, &1.id))
     |> Enum.map(&resolved_recipient/1)
   end
 
