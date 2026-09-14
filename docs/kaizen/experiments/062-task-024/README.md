@@ -63,6 +63,7 @@ This packet is a prepared working hypothesis, not proof that the task will finis
 
 - Inspected the shared scenario and specific existing domain fixture/action/access/delivery/runner code at the pinned source. The preparation did not rely on the failed 1,725-line candidate as a hidden solution.
 - Built a temporary tag-only specimen under `/tmp/memba-062-handoff-selection/`; scenario text was mechanically verified unchanged. The installed Cucumber source-selection API, using the domain and browser exclusion expressions, selected zero/zero instances before the proposed tag move and exactly the intended one/zero afterward. This checks shared tag semantics, not successful Elixir step execution. The actual domain runner's inherited-rule-tag handling was also inspected.
+- A bounded independent review read the packet and four relevant sources: runner, action, delivery observations and the pinned feature. It found no material missing decision, incorrect API assumption or weakened scope, and judged the packet ready for a bounded trial—not proven runtime success. It highlighted that recipient count plus inclusion is insufficient to prove everyone received one email; the packet now explicitly requires exact recipient-ID-list equality.
 - No application tests or `dev check`: repository edits are documentation only. No product code or executable test/config file changed.
 
 ## What this exercise establishes
