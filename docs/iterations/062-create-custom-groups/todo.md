@@ -13,7 +13,7 @@
 - [x] 011 Arrange an idempotent Membership-to-Messaging policy for clearing affected follows, using public APIs and existing unfollow commands; do not put cross-context side effects in projectors.
 - [x] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.
 - [x] 013 Existing last-member/last-Admin invariants stay intact.
-- [ ] 014 Add the new-group LiveView/form using shared inputs and route helpers.
+- [x] 014 Add the new-group LiveView/form using shared inputs and route helpers.
 - [ ] 015 Use server-side live validation/preview, rechecking at submit, with accessible field associations.
 - [ ] 016 Reuse normal pending/success and generic technical-error treatment.
 - [ ] 017 Extend group queries/routing only where the existing generic paths need it.
