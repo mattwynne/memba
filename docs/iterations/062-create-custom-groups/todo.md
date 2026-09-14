@@ -21,7 +21,7 @@
 - [x] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.
 - [x] 020 Preserve already-handed-off email semantics; do not add an error dashboard or email retry product.
 - [x] 021 Complete targeted Club concurrency, identity, replay, departure/rejoin, slug-length and LiveView validation test coverage.
-- [ ] 022 Implement the iteration-062 custom-group creation scenarios at the domain layer.
+- [x] 022 Implement the iteration-062 custom-group creation scenarios at the domain layer.
 - [ ] 023 Implement the iteration-062 custom-group creation scenarios at the browser layer, including typing/caret coverage.
 - [ ] 024 Implement the iteration-062 custom-group conversation scenarios at the domain and browser layers.
 - [ ] 025 Implement the iteration-062 custom-group lifecycle scenarios at the domain and browser layers, then run `dev check` on the exact delivery state.
