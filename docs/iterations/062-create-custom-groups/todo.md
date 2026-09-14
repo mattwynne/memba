@@ -24,4 +24,4 @@
 - [x] 022 Implement the iteration-062 custom-group creation scenarios at the domain layer.
 - [x] 023 Implement the iteration-062 custom-group creation scenarios at the browser layer, including typing/caret coverage.
 - [x] 024 Implement the iteration-062 custom-group conversation scenarios at the domain and browser layers.
-- [ ] 025 Implement the iteration-062 custom-group lifecycle scenarios at the domain and browser layers, then run `dev check` on the exact delivery state.
+- [x] 025 Implement the iteration-062 custom-group lifecycle scenarios at the domain and browser layers, then run `dev check` on the exact delivery state.
