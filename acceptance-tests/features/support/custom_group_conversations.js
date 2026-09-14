@@ -16,6 +16,7 @@ const {
   sendInboundClubEmailReply,
   testLocalDeliveryFacts,
   unfollowConversation,
+  waitForInboundEmailResult,
   waitForLiveViewConnected
 } = require("./member_message");
 const { withMemberHarness } = require("./member_harness");
@@ -255,6 +256,8 @@ async function tryReplyWithoutBoardAccess(world, personName, body, channel) {
   const subject = lastSubject(world);
   const message = await ensureMessage(world, subject);
   const countBefore = conversationMessageBodies(message.messageId).length;
+  let conversationIdsBefore;
+  let inboundResult;
 
   if (channel === "on the website") {
     await withMemberHarness(world, personName, async (member) => {
@@ -264,17 +267,26 @@ async function tryReplyWithoutBoardAccess(world, personName, body, channel) {
     });
   } else {
     assert.equal(channel, "by email");
+    conversationIdsBefore = groupConversationIds(boardId(world));
 
     await sendInboundClubEmailReply(world, personName, subject, body, {
       requireReply: false,
       toAddress: boardAddress
     });
+
+    inboundResult = await waitForInboundEmailResult(
+      world,
+      world.lastInboundEmail.providerMessageId
+    );
   }
 
   world.lastMessageSubject = subject;
   world.customGroupReplyAttempt = {
     body,
+    channel,
+    conversationIdsBefore,
     countBefore,
+    inboundResult,
     messageId: message.messageId,
     personName
   };
@@ -287,6 +299,32 @@ function assertReplyNotAdded(world, body) {
   const bodies = conversationMessageBodies(attempt.messageId);
   assert.equal(bodies.length, attempt.countBefore);
   assert.equal(bodies.includes(body), false);
+
+  if (attempt.channel === "by email") {
+    assertRejectedInboundReplyAttempt(
+      attempt,
+      groupConversationIds(boardId(world))
+    );
+  }
+}
+
+function assertRejectedInboundReplyAttempt(attempt, conversationIdsAfter) {
+  const result = attempt.inboundResult;
+
+  assert.ok(result && result.source, "Expected an authoritative inbound reply result");
+  assert.equal(
+    result.source.status,
+    "rejected",
+    `Expected the unauthorized inbound reply to be rejected; saw ${JSON.stringify(result)}`
+  );
+  assert.equal(result.source.rejectionReason, "not_current_member");
+  assert.equal(result.source.messageId, null);
+  assert.equal(result.message, null);
+  assert.deepEqual(
+    [...conversationIdsAfter].sort(),
+    [...attempt.conversationIdsBefore].sort(),
+    "Expected the Board conversation set to remain unchanged after the rejected reply"
+  );
 }
 
 function assertNoConversationAccess(world, personName) {
@@ -475,6 +513,20 @@ function groupConversationSubjects(groupId) {
   ).subjects;
 }
 
+function groupConversationIds(groupId) {
+  return serverCommands.runCommand(
+    `
+%{
+  messageIds:
+    Map.fetch!(payload, "groupId")
+    |> Memba.Messaging.list_conversations_for_group()
+    |> Enum.map(& &1.message_id)
+}
+`,
+    { groupId }
+  ).messageIds;
+}
+
 function boardConversationEntries(world, messageId) {
   return serverCommands.runCommand(
     `
@@ -643,6 +695,7 @@ module.exports = {
   assertNoBoardMembershipOrConversationAccess,
   assertNoConversationAccess,
   assertNoInitialEmailOrFollow,
+  assertRejectedInboundReplyAttempt,
   assertReplyDelivered,
   assertReplyNotAdded,
   assertReplyNotDelivered,

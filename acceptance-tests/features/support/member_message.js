@@ -4252,6 +4252,7 @@ module.exports = {
   updatePersonEmailAddresses,
   unfollowConversation,
   visitClubsIndex,
+  waitForInboundEmailResult,
   waitForLiveViewConnected,
   waitForLocalDeliveryFacts,
   waitForMailboxEmails
