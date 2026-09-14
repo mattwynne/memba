@@ -197,6 +197,143 @@ defmodule MembaWeb.MemberComponents do
     """
   end
 
+  attr :club_name, :string, required: true
+  attr :group_name, :string, required: true
+  attr :candidates, :list, required: true
+  attr :query, :string, default: ""
+
+  def custom_group_member_picker(assigns) do
+    assigns =
+      assign(assigns, :visible_candidates, filter_candidates(assigns.candidates, assigns.query))
+
+    ~H"""
+    <section
+      id="custom-group-member-picker"
+      class="picker"
+      aria-labelledby="custom-group-member-picker-title"
+    >
+      <div class="picker__head">
+        <div>
+          <h2 id="custom-group-member-picker-title" class="picker__title">
+            Add to {@group_name}
+          </h2>
+          <p class="picker__hint">
+            Only people who are already active members of {@club_name} can be added.
+            They'll get a welcome email and can read everything in {@group_name}. Inviting
+            someone new to the club stays a separate action on Everyone.
+          </p>
+        </div>
+        <.button
+          id="custom-group-member-picker-close"
+          type="button"
+          variant="ghost"
+          size="sm"
+          phx-click="close_custom_group_member_picker"
+        >
+          Close
+        </.button>
+      </div>
+
+      <.input
+        id="custom-group-member-search"
+        name="query"
+        type="search"
+        value={@query}
+        class="input mt-3 w-full"
+        placeholder="Search club members…"
+        autocomplete="off"
+        aria-label="Search club members"
+        phx-keyup="filter_custom_group_member_candidates"
+        phx-debounce="150"
+      />
+
+      <div
+        :if={@visible_candidates != []}
+        id="custom-group-member-candidates"
+        class="pick-list"
+        role="list"
+        aria-label={"Club members not yet in #{@group_name}"}
+      >
+        <div
+          :for={candidate <- @visible_candidates}
+          id={"custom-group-member-candidate-#{candidate.id}"}
+          class="pick-row"
+          role="listitem"
+          data-testid="custom-group-member-candidate"
+          data-membership-id={candidate.membership_id}
+          data-person-id={candidate.id}
+        >
+          <div class="pick-row__avatar" aria-hidden="true">
+            {candidate.initials}
+          </div>
+          <div class="pick-row__name">
+            {candidate.name}
+            <small :if={candidate_club_admin?(candidate)} class="pick-row__meta">
+              Club admin
+            </small>
+          </div>
+          <.button
+            id={"custom-group-member-candidate-add-#{candidate.id}"}
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-custom-group-member-action="add"
+            data-membership-id={candidate.membership_id}
+            data-person-id={candidate.id}
+          >
+            Add
+          </.button>
+        </div>
+      </div>
+
+      <p :if={@visible_candidates == []} id="custom-group-member-picker-empty" class="pick-empty">
+        <%= if empty_query?(@query) do %>
+          Everyone in {@club_name} is already in {@group_name}.
+        <% else %>
+          No active club members match your search.
+        <% end %>
+      </p>
+    </section>
+    """
+  end
+
+  attr :group_name, :string, required: true
+
+  def outside_group_admin_notice(assigns) do
+    ~H"""
+    <div
+      id="member-group-outside-admin-notice"
+      class="outside"
+      role="region"
+      aria-label="You're managing a group you're not in"
+    >
+      <.icon name="hero-user" class="size-5" aria-hidden="true" />
+      <div class="outside__body">
+        <h2 class="outside__title">
+          You're a club admin, but you're not in {@group_name}
+        </h2>
+        <p class="outside__copy">
+          You can manage who's in it. You can't read its conversations or get its emails
+          unless you're a member—being a club admin doesn't grant that on its own.
+        </p>
+        <div class="outside__actions">
+          <.button
+            id="member-group-add-self"
+            type="button"
+            size="sm"
+            data-custom-group-member-action="add-self"
+          >
+            Add yourself to {@group_name}
+          </.button>
+          <small id="member-group-add-self-help">
+            You'll get {@group_name}'s emails from now on and can read its whole history.
+          </small>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   defp active_members_state(active_member_count) when active_member_count <= 1 do
     "first-member"
   end
@@ -214,4 +351,22 @@ defmodule MembaWeb.MemberComponents do
   defp current_dashboard_member?(_member, _current_member), do: false
 
   defp member_roles(member), do: Map.get(member, :roles, [])
+
+  defp filter_candidates(candidates, query) do
+    normalized_query = query |> to_string() |> String.trim() |> String.downcase()
+
+    if normalized_query == "" do
+      candidates
+    else
+      Enum.filter(candidates, fn candidate ->
+        candidate.name
+        |> String.downcase()
+        |> String.contains?(normalized_query)
+      end)
+    end
+  end
+
+  defp candidate_club_admin?(candidate), do: "Admin" in member_roles(candidate)
+
+  defp empty_query?(query), do: String.trim(to_string(query)) == ""
 end

@@ -87,6 +87,89 @@ defmodule MembaWeb.MemberComponentsTest do
     end
   end
 
+  describe "custom_group_member_picker/1" do
+    test "renders searchable active-club candidates with stable admission identities" do
+      dana_membership_id = Memba.ID.generate(:membership)
+      dana_person_id = Memba.ID.generate(:person)
+
+      html =
+        render_component(&MemberComponents.custom_group_member_picker/1, %{
+          club_name: "Alpine Club",
+          group_name: "Board",
+          candidates: [
+            %{
+              membership_id: dana_membership_id,
+              id: dana_person_id,
+              name: "Dana Diaz",
+              initials: "DD",
+              roles: ["Admin"]
+            }
+          ],
+          query: "dan"
+        })
+
+      assert_selector(
+        html,
+        "#custom-group-member-picker.picker[aria-labelledby='custom-group-member-picker-title']"
+      )
+
+      assert_text(html, "#custom-group-member-picker-title", "Add to Board")
+
+      assert_selector(
+        html,
+        "#custom-group-member-search[type='search'][name='query'][value='dan']" <>
+          "[phx-keyup='filter_custom_group_member_candidates']"
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-candidate-#{dana_person_id}[role='listitem']" <>
+          "[data-membership-id='#{dana_membership_id}'][data-person-id='#{dana_person_id}']"
+      )
+
+      assert_text(
+        html,
+        "#custom-group-member-candidate-#{dana_person_id} .pick-row__name",
+        "Dana Diaz"
+      )
+
+      assert_text(
+        html,
+        "#custom-group-member-candidate-#{dana_person_id} .pick-row__meta",
+        "Club admin"
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-candidate-add-#{dana_person_id}" <>
+          "[data-custom-group-member-action='add']"
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-picker-close[phx-click='close_custom_group_member_picker']"
+      )
+    end
+
+    test "explains when no eligible club members remain" do
+      html =
+        render_component(&MemberComponents.custom_group_member_picker/1, %{
+          club_name: "Alpine Club",
+          group_name: "Board",
+          candidates: [],
+          query: ""
+        })
+
+      assert_text(
+        html,
+        "#custom-group-member-picker-empty",
+        "Everyone in Alpine Club is already in Board."
+      )
+
+      refute_selector(html, "[data-testid='custom-group-member-candidate']")
+    end
+  end
+
   describe "conversation_row/1" do
     test "renders the row link, subject, and sender information" do
       message_id = Memba.ID.generate(:message)

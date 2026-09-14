@@ -888,10 +888,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-tabs-action.section-tabs__action " <>
-               "#member-section-action-invite-member" <>
-               "[href='/members/invitations/new?group_id=#{trip_planning_group.group_id}']"
+               "#member-section-action-add-group-member" <>
+               "[data-section-action='members'][aria-controls='custom-group-member-picker']",
+             "Add member"
            )
 
+    refute has_element?(view, "#member-section-action-invite-member")
     refute has_element?(view, "#member-section-action-new-message")
   end
 
@@ -939,7 +941,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
-  test "selected group members tab has no contextual action for ordinary members", %{
+  test "selected custom-group members can open the add-member picker", %{
     conn: conn
   } do
     alice =
@@ -953,6 +955,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       create_active_member(
         email: "bob@example.com",
         name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
         club_name: "Alpine Club",
         club_id: alice.club_id
       )
@@ -989,8 +999,58 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "[aria-selected='true'][tabindex='0']"
            )
 
-    assert has_element?(view, "#member-section-tabs-action.section-tabs__action")
-    assert tab_action_link_count(render(view)) == 0
+    assert has_element?(
+             view,
+             "#member-section-tabs-action.section-tabs__action " <>
+               "#member-section-action-add-group-member[aria-expanded='false']" <>
+               "[aria-controls='custom-group-member-picker']",
+             "Add member"
+           )
+
+    view
+    |> element("#member-section-action-add-group-member")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#member-section-action-add-group-member[aria-expanded='true']"
+           )
+
+    refute has_element?(
+             view,
+             "#member-section-panel-members #custom-group-member-picker " <>
+               "#custom-group-member-candidate-#{bob.person_id}"
+           )
+
+    assert has_element?(
+             view,
+             "#custom-group-member-picker[aria-labelledby='custom-group-member-picker-title']"
+           )
+
+    assert has_element?(
+             view,
+             "#custom-group-member-candidate-#{carol.person_id}" <>
+               "[data-membership-id='#{carol.membership_id}'][data-person-id='#{carol.person_id}']",
+             "Carol Canoe"
+           )
+
+    view
+    |> element("#custom-group-member-search")
+    |> render_keyup(%{"value" => "nobody"})
+
+    assert has_element?(
+             view,
+             "#custom-group-member-picker-empty",
+             "No active club members match your search."
+           )
+
+    view
+    |> element("#custom-group-member-picker-close")
+    |> render_click()
+
+    refute has_element?(view, "#custom-group-member-picker")
+    assert has_element?(view, "#member-section-action-add-group-member[aria-expanded='false']")
+
     refute has_element?(view, "#member-section-action-invite-member")
     refute has_element?(view, "#member-section-action-new-message")
 
@@ -1184,7 +1244,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     assert has_element?(view, "#member-section-tabs-action.section-tabs__action")
-    refute has_element?(view, "#member-section-tabs-action :is(a, button)")
+
+    assert has_element?(
+             view,
+             "#member-section-tabs-action #member-section-action-add-group-member",
+             "Add member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-add-self[data-custom-group-member-action='add-self']",
+             "Add yourself to Private Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-add-self-help",
+             "You'll get Private Planning's emails from now on and can read its whole history."
+           )
+
     assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
 
     refute has_element?(view, "#member-section-panel-conversations")
@@ -2917,6 +2995,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       selected_group_route_id: nil,
       current_member: %{name: "Alice Adams"},
       current_member_can_manage_members?: false,
+      can_add_custom_group_members?: false,
+      can_add_self_to_custom_group?: false,
+      custom_group_member_candidates: [],
+      custom_group_member_picker_open?: false,
+      custom_group_member_picker_query: "",
       active_section: "conversations",
       club_id_source: "host",
       members: [],

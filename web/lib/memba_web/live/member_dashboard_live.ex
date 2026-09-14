@@ -45,6 +45,8 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
          |> assign(:selected_group_route_id, selected_group_id)
          |> assign(:active_section, "conversations")
+         |> assign(:custom_group_member_picker_open?, false)
+         |> assign(:custom_group_member_picker_query, "")
          |> assign(dashboard_assigns)}
 
       {:error, :forbidden} ->
@@ -60,10 +62,46 @@ defmodule MembaWeb.MemberDashboardLive do
     selected_group_id = Map.get(params, "group_id")
 
     socket =
-      refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
+      socket
+      |> assign(:custom_group_member_picker_open?, false)
+      |> assign(:custom_group_member_picker_query, "")
+      |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
 
     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
   end
+
+  @impl Phoenix.LiveView
+  def handle_event(
+        "open_custom_group_member_picker",
+        _params,
+        %{assigns: %{can_add_custom_group_members?: true}} = socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:custom_group_member_picker_open?, true)
+     |> assign(:custom_group_member_picker_query, "")}
+  end
+
+  def handle_event("open_custom_group_member_picker", _params, socket), do: {:noreply, socket}
+
+  def handle_event("close_custom_group_member_picker", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:custom_group_member_picker_open?, false)
+     |> assign(:custom_group_member_picker_query, "")}
+  end
+
+  def handle_event(
+        "filter_custom_group_member_candidates",
+        %{"value" => query},
+        %{assigns: %{custom_group_member_picker_open?: true}} = socket
+      )
+      when is_binary(query) do
+    {:noreply, assign(socket, :custom_group_member_picker_query, query)}
+  end
+
+  def handle_event("filter_custom_group_member_candidates", _params, socket),
+    do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def handle_event(

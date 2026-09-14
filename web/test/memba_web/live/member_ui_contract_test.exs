@@ -79,7 +79,7 @@ defmodule MembaWeb.MemberUIContractTest do
     refute has_element?(composer, "#member-compose-inbound-email", "club-wide")
   end
 
-  test "switching a manager to group members shows the invite action without the compose action",
+  test "switching a manager to custom-group members shows add member without compose or invite",
        %{
          conn: conn
        } do
@@ -107,12 +107,16 @@ defmodule MembaWeb.MemberUIContractTest do
 
     assert has_element?(
              view,
-             "#member-section-action-invite-member" <>
-               "[href='/members/invitations/new?group_id=#{trail_crew.group_id}']"
+             "#member-section-action-add-group-member" <>
+               "[data-section-action='members'][aria-controls='custom-group-member-picker']"
            )
+
+    refute has_element?(view, "#member-section-action-invite-member")
   end
 
-  test "switching an ordinary member to group members leaves member actions hidden", %{conn: conn} do
+  test "switching an ordinary member to custom-group members exposes the add-member action", %{
+    conn: conn
+  } do
     %{bob: bob, group: trail_crew} = club_with_trail_crew(group_member_count: 2)
 
     {:ok, view, _html} =
@@ -127,6 +131,11 @@ defmodule MembaWeb.MemberUIContractTest do
     assert_patch(view, ~p"/groups/#{trail_crew.group_id}/members")
     refute has_element?(view, "#member-section-action-new-message")
     refute has_element?(view, "#member-section-action-invite-member")
+
+    assert has_element?(
+             view,
+             "#member-section-action-add-group-member[data-section-action='members']"
+           )
   end
 
   test "a one-member group members screen keeps the member row without a promotional empty banner",
