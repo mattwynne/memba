@@ -592,3 +592,24 @@ Run evidence is retained in `/tmp/memba-kaizen-062-failed-run/` (`events.jsonl`,
 3. Add bounded timeout continuation for the same pending candidate, with independent acceptance and final gates retained. This could recover productive interrupted work, but can also repeat a stuck approach, spend more, or encounter surviving child/process state. It requires an explicit budget and cleanup policy, not an unconditional retry edge.
 
 Recommendation: retain the narrow selection fix; decide whether the next improvement should prevent forbidden delegation or make hard-timeout recovery explicit before changing execution policy. Review the next file-targeted Fabro invocation for the requested scenario inventory and absence of the path-merge warning. A later real timeout is the effectiveness check for whichever recovery policy is chosen. These follow-ups remain open; the kaizen note is not fully resolved.
+
+### Resolution interview: investigate lost instructions before enforcing delegation policy
+
+Date: 2026-09-14
+
+Matt asked why the implementor sought extra reviewers before agreeing to enforcement: a fence should not substitute for understanding the behaviour. No delegation or timeout-policy change was selected.
+
+The immediate purpose is visible in the child requests: after browser validation still reported five failures, the parent requested concrete browser-helper diagnosis and a separate domain correctness review. Both requests prohibited edits, but neither prohibited running tests. No explanatory message accompanied the spawn calls, so the model's reason for departing from the single-owner rule is not directly recorded.
+
+Source investigation found a concrete instruction-preservation weakness:
+
+- Event 3768 contains one user input of 85,959 UTF-8 bytes: 77,699 bytes of workflow preamble followed by 8,260 bytes of current node instructions, including the no-subagent and no-extra-review rules.
+- The run records server and client version `0.316.0-nightly.0`. Source was inspected at release commit `0abf2297c00a90013a93ae01c6c139b7b85b1b1f`; matching version supports correspondence, but the deployed server's exact commit/modification state is not proven.
+- At that revision, `lib/components/fabro-agent/src/history.rs`, `compact_from` and `extract_recent_user_messages`, reinsert whole discarded user messages only within an 80,000-byte budget. An oversized message causes the extraction loop to stop. It is excluded wholesale, not truncated from the end.
+- Event 4191 records 85 original turns and six preserved recent turns. Under that implementation, the oversized initial request cannot survive verbatim after compaction. The essential node instructions fit comfortably on their own; combining them with historical stage output puts the whole message above the preservation limit.
+- `lib/components/fabro-agent/src/compaction.rs` gives the summarizer the original user text without truncation and asks it to retain constraints. But the resulting summary is lossy; only file operations receive an explicit verbatim-copy requirement. The actual summary text is not present in the exported events/checkpoints, so omission or weakening of the no-delegation rules cannot be verified directly.
+- The workflow passes the node prompt as ordinary `Message::User` content, not persistent session `user_instructions`. Delegation tools and their encouragement to use independent work/context isolation remain available in subsequent requests. The native OpenAI static system template at this revision does not itself contain explicit pro-delegation guidance; do not attribute Anthropic's delegation instructions to this run.
+
+Updated causal hypothesis: after encountering unresolved failures, the implementor sought available diagnostic help, while compaction had removed its original workflow contract from verbatim history and left constraint preservation to a summary. This explains a mechanism for the departure, not proof of the unseen summary's contents or the model's internal reason.
+
+Updated recommendation: investigate keeping the current node's execution rules separate from bulky historical context and preserving them across compaction before choosing tool prohibition as the main countermeasure. Enforcement could still be a backstop. A regression should cover the actual oversized-preamble/short-node-instruction boundary; merely making this one message smaller or raising the budget would not establish durable instruction preservation. Exact postcompaction context capture would also make future violations diagnosable. Decision remains pending.
