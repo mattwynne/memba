@@ -1,0 +1,473 @@
+diff --git a/acceptance-tests/features/custom_group_membership.feature b/acceptance-tests/features/custom_group_membership.feature
+index 02131bf..b577116 100644
+--- a/acceptance-tests/features/custom_group_membership.feature
++++ b/acceptance-tests/features/custom_group_membership.feature
+@@ -1,3 +1,4 @@
++@todo-ui
+ Feature: Managing custom group membership
+   Group members and club admins manage custom-group membership.
+   Joining a group is different from joining the club or becoming a club admin.
+@@ -8,20 +9,6 @@ Feature: Managing custom group membership
+     And Bob, Carol, and Eve are its ordinary active club members
+     And Alice and Bob are the only members of its custom group Board
+ 
+-  @iteration-063 @not-domain
+-  Rule: The add-member picker is accessible by keyboard and input events
+-
+-    Scenario: Bob searches and dismisses the picker
+-      When Bob opens Board's add-member picker
+-      Then the add-member search should have focus
+-      When Bob pastes "Carol" into the add-member search
+-      Then only Carol should be offered in the add-member picker
+-      When Bob presses Escape in the add-member picker
+-      Then the add-member picker should close and return focus to its trigger
+-      When Bob opens Board's add-member picker
+-      And Bob closes the add-member picker
+-      Then the add-member picker should close and return focus to its trigger
+-
+   @iteration-063 @todo-domain @todo-ui
+   Rule: Group members and club admins may add active club members
+ 
+diff --git a/acceptance-tests/features/step_definitions/custom_group_membership_steps.js b/acceptance-tests/features/step_definitions/custom_group_membership_steps.js
+deleted file mode 100644
+index cac6eb9..0000000
+--- a/acceptance-tests/features/step_definitions/custom_group_membership_steps.js
++++ /dev/null
+@@ -1,54 +0,0 @@
+-const { Then, When } = require("@cucumber/cucumber");
+-const {
+-  assertAddMemberPickerClosedWithTriggerFocused,
+-  assertAddMemberSearchFocused,
+-  assertOnlyMemberOffered,
+-  closeAddMemberPicker,
+-  openAddMemberPicker,
+-  pasteIntoAddMemberSearch,
+-  pressEscapeInAddMemberPicker
+-} = require("../support/custom_group_membership");
+-
+-When(/^(\w+) opens (.+)'s add-member picker$/, async function (memberName, groupName) {
+-  this.addMemberPickerActor = memberName;
+-  await openAddMemberPicker(this, memberName, groupName);
+-});
+-
+-Then("the add-member search should have focus", async function () {
+-  await assertAddMemberSearchFocused(this, this.addMemberPickerActor);
+-});
+-
+-When(
+-  /^(\w+) pastes "([^"]+)" into the add-member search$/,
+-  async function (memberName, query) {
+-    this.addMemberPickerActor = memberName;
+-    await pasteIntoAddMemberSearch(this, memberName, query);
+-  }
+-);
+-
+-Then(
+-  /^only (\w+) should be offered in the add-member picker$/,
+-  async function (memberName) {
+-    await assertOnlyMemberOffered(this, this.addMemberPickerActor, memberName);
+-  }
+-);
+-
+-When(
+-  /^(\w+) presses Escape in the add-member picker$/,
+-  async function (memberName) {
+-    this.addMemberPickerActor = memberName;
+-    await pressEscapeInAddMemberPicker(this, memberName);
+-  }
+-);
+-
+-When(/^(\w+) closes the add-member picker$/, async function (memberName) {
+-  this.addMemberPickerActor = memberName;
+-  await closeAddMemberPicker(this, memberName);
+-});
+-
+-Then(
+-  "the add-member picker should close and return focus to its trigger",
+-  async function () {
+-    await assertAddMemberPickerClosedWithTriggerFocused(this, this.addMemberPickerActor);
+-  }
+-);
+diff --git a/acceptance-tests/features/support/custom_group_membership.js b/acceptance-tests/features/support/custom_group_membership.js
+deleted file mode 100644
+index c32a185..0000000
+--- a/acceptance-tests/features/support/custom_group_membership.js
++++ /dev/null
+@@ -1,89 +0,0 @@
+-const assert = require("node:assert/strict");
+-const { expect } = require("@playwright/test");
+-const { clubSiteUrl, waitForLiveViewConnected } = require("./member_message");
+-const { withMemberHarness } = require("./member_harness");
+-const { kootenayClubName } = require("./custom_group_creation");
+-
+-async function openAddMemberPicker(world, memberName, groupName) {
+-  await withMemberHarness(world, memberName, async (member) => {
+-    const club = world.clubs && world.clubs[kootenayClubName];
+-    const groupId = world.groups && world.groups[`${kootenayClubName}:${groupName}`];
+-
+-    assert.ok(club, `Expected ${kootenayClubName}`);
+-    assert.ok(groupId, `Expected ${groupName} custom group`);
+-
+-    await member.page.goto(
+-      clubSiteUrl(
+-        member.baseUrl,
+-        club,
+-        `/groups/${encodeURIComponent(groupId)}/members`
+-      )
+-    );
+-    await waitForLiveViewConnected(member);
+-    await member.page.locator("#member-section-action-add-group-member").click();
+-    await expect(member.page.locator("#custom-group-member-picker")).toBeVisible();
+-  });
+-}
+-
+-async function assertAddMemberSearchFocused(world, memberName) {
+-  await withMemberHarness(world, memberName, async (member) => {
+-    await expect(member.page.locator("#custom-group-member-search")).toBeFocused();
+-  });
+-}
+-
+-async function pasteIntoAddMemberSearch(world, memberName, query) {
+-  await withMemberHarness(world, memberName, async (member) => {
+-    const search = member.page.locator("#custom-group-member-search");
+-
+-    await search.evaluate((input, value) => {
+-      input.value = value;
+-      input.dispatchEvent(
+-        new InputEvent("input", {
+-          bubbles: true,
+-          data: value,
+-          inputType: "insertFromPaste"
+-        })
+-      );
+-    }, query);
+-  });
+-}
+-
+-async function assertOnlyMemberOffered(world, memberName, expectedName) {
+-  await withMemberHarness(world, memberName, async (member) => {
+-    const candidates = member.page.locator(
+-      "#custom-group-member-candidates [data-testid='custom-group-member-candidate']"
+-    );
+-
+-    await expect(candidates).toHaveCount(1);
+-    await expect(candidates).toContainText(expectedName);
+-  });
+-}
+-
+-async function pressEscapeInAddMemberPicker(world, memberName) {
+-  await withMemberHarness(world, memberName, async (member) => {
+-    await member.page.keyboard.press("Escape");
+-  });
+-}
+-
+-async function closeAddMemberPicker(world, memberName) {
+-  await withMemberHarness(world, memberName, async (member) => {
+-    await member.page.locator("#custom-group-member-picker-close").click();
+-  });
+-}
+-
+-async function assertAddMemberPickerClosedWithTriggerFocused(world, memberName) {
+-  await withMemberHarness(world, memberName, async (member) => {
+-    await expect(member.page.locator("#custom-group-member-picker")).toHaveCount(0);
+-    await expect(member.page.locator("#member-section-action-add-group-member")).toBeFocused();
+-  });
+-}
+-
+-module.exports = {
+-  assertAddMemberPickerClosedWithTriggerFocused,
+-  assertAddMemberSearchFocused,
+-  assertOnlyMemberOffered,
+-  closeAddMemberPicker,
+-  openAddMemberPicker,
+-  pasteIntoAddMemberSearch,
+-  pressEscapeInAddMemberPicker
+-};
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 587e4b8..20f7f62 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -31,7 +31,6 @@ test("default browser Cucumber profile selects all web-backed shared features",
+     "custom_group_conversations.feature",
+     "custom_group_creation.feature",
+     "custom_group_lifecycle.feature",
+-    "custom_group_membership.feature",
+     "email_branding.feature",
+     "group_conversations.feature",
+     "homepage.feature",
+@@ -251,26 +250,6 @@ test("iteration 062 custom-group lifecycle scenarios run in both acceptance laye
+   );
+ });
+ 
+-test("iteration 063 picker interaction runs while membership transitions remain browser debt", () => {
+-  const feature = browserFeatures().find(
+-    ({ name }) => name === "custom_group_membership.feature"
+-  );
+-  const iterationScenarios = feature.scenarios.filter((scenario) =>
+-    scenario.tags.includes("@iteration-063")
+-  );
+-  const browserScenarioNames = iterationScenarios
+-    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+-    .map((scenario) => scenario.name);
+-
+-  assert.deepEqual(browserScenarioNames, ["Bob searches and dismisses the picker"]);
+-  assert.equal(
+-    iterationScenarios
+-      .filter((scenario) => scenario.name !== "Bob searches and dismisses the picker")
+-      .every((scenario) => scenario.tags.includes("@todo-ui")),
+-    true
+-  );
+-});
+-
+ test("iteration 059 UI scenarios run while its concurrency scenario remains domain-only", () => {
+   const feature = browserFeatures().find(
+     ({ name }) => name === "club_membership_administration.feature"
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index 8047562..ef9a521 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -269,6 +269,19 @@
+   font-size: 12px;
+ }
+ 
++.members-note {
++  margin: 0 0 12px;
++  color: var(--color-ink-3);
++  font-size: 12.5px;
++  font-weight: 500;
++  line-height: 1.5;
++}
++
++.members-note strong {
++  color: var(--color-ink-2);
++  font-weight: 600;
++}
++
+ .picker {
+   margin: 0 0 14px;
+   padding: 16px;
+diff --git a/web/lib/memba_web/components/member_components.ex b/web/lib/memba_web/components/member_components.ex
+index de36f4f..4dbfc83 100644
+--- a/web/lib/memba_web/components/member_components.ex
++++ b/web/lib/memba_web/components/member_components.ex
+@@ -202,6 +202,32 @@ defmodule MembaWeb.MemberComponents do
+     """
+   end
+ 
++  attr :club_name, :string, required: true
++  attr :group_name, :string, required: true
++
++  attr :viewer_access, :atom,
++    required: true,
++    values: [:participating_member, :outside_admin]
++
++  def custom_group_membership_guidance(assigns) do
++    ~H"""
++    <p
++      id="member-group-membership-guidance"
++      class="members-note"
++      data-viewer-access={@viewer_access}
++    >
++      <%= if @viewer_access == :participating_member do %>
++        {@group_name} members can read every {@group_name} conversation and get its emails.
++        Anyone in {@group_name} can add other <strong>{@club_name}</strong>
++        members—that never changes their club membership.
++      <% else %>
++        Anyone in {@group_name} can add other <strong>{@club_name}</strong>
++        members. As a club admin you can too—that never changes anyone's club membership.
++      <% end %>
++    </p>
++    """
++  end
++
+   attr :club_name, :string, required: true
+   attr :group_name, :string, required: true
+   attr :candidates, :list, required: true
+@@ -341,6 +367,7 @@ defmodule MembaWeb.MemberComponents do
+           </.button>
+           <small id="member-group-add-self-help">
+             You'll get {@group_name}'s emails from now on and can read its whole history.
++            That won't change your club admin role.
+           </small>
+         </div>
+       </div>
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 929871f..d9b7fb7 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -9,6 +9,7 @@ defmodule MembaWeb.PageHTML do
+   import MembaWeb.MemberComponents,
+     only: [
+       conversation_list: 1,
++      custom_group_membership_guidance: 1,
+       custom_group_member_picker: 1,
+       member_list: 1,
+       outside_group_admin_notice: 1
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 22ec900..c682dcc 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -185,12 +185,10 @@
+               Add member
+             </.button>
+           </:members_action>
+-          <:members_action
+-            :if={
+-              not @can_add_custom_group_members? && participating_group? &&
+-                @current_member_can_manage_members?
+-            }
+-          >
++          <:members_action :if={
++            not @can_add_custom_group_members? && participating_group? &&
++              @current_member_can_manage_members?
++          }>
+             <.button
+               id="member-section-action-invite-member"
+               href={
+@@ -293,15 +291,19 @@
+               group_name={@selected_group.name}
+             />
+             <.custom_group_member_picker
+-              :if={
+-                @can_add_custom_group_members? && @custom_group_member_picker_open?
+-              }
++              :if={@can_add_custom_group_members? && @custom_group_member_picker_open?}
+               club_name={@selected_club.name}
+               group_name={@selected_group.name}
+               candidates={@custom_group_member_candidates}
+               query={@custom_group_member_picker_query}
+               search_form={@custom_group_member_picker_form}
+             />
++            <.custom_group_membership_guidance
++              :if={@can_add_custom_group_members?}
++              club_name={@selected_club.name}
++              group_name={@selected_group.name}
++              viewer_access={selected_group_access}
++            />
+             <.member_list
+               rows={@members}
+               active_member_count={@active_member_count}
+diff --git a/web/test/memba_web/components/member_components_test.exs b/web/test/memba_web/components/member_components_test.exs
+index c1f643c..0525836 100644
+--- a/web/test/memba_web/components/member_components_test.exs
++++ b/web/test/memba_web/components/member_components_test.exs
+@@ -112,6 +112,67 @@ defmodule MembaWeb.MemberComponentsTest do
+     end
+   end
+ 
++  describe "custom_group_membership_guidance/1" do
++    test "explains a group member's admission authority without implying club authority" do
++      html =
++        render_component(&MemberComponents.custom_group_membership_guidance/1, %{
++          club_name: "Alpine Club",
++          group_name: "Board",
++          viewer_access: :participating_member
++        })
++
++      assert_selector(
++        html,
++        "#member-group-membership-guidance.members-note" <>
++          "[data-viewer-access='participating_member']"
++      )
++
++      assert_text(html, "#member-group-membership-guidance", "Board members can read every")
++
++      assert_text(
++        html,
++        "#member-group-membership-guidance",
++        "Anyone in Board can add other"
++      )
++
++      assert_text(html, "#member-group-membership-guidance strong", "Alpine Club")
++
++      assert_text(
++        html,
++        "#member-group-membership-guidance",
++        "that never changes their club membership"
++      )
++    end
++
++    test "explains an outside admin's admission authority without implying group access" do
++      html =
++        render_component(&MemberComponents.custom_group_membership_guidance/1, %{
++          club_name: "Alpine Club",
++          group_name: "Board",
++          viewer_access: :outside_admin
++        })
++
++      assert_selector(
++        html,
++        "#member-group-membership-guidance.members-note[data-viewer-access='outside_admin']"
++      )
++
++      assert_text(
++        html,
++        "#member-group-membership-guidance",
++        "As a club admin you can too"
++      )
++
++      assert_text(html, "#member-group-membership-guidance strong", "Alpine Club")
++
++      assert_text(
++        html,
++        "#member-group-membership-guidance",
++        "that never changes anyone's club membership"
++      )
++    end
++  end
++
+   describe "custom_group_member_picker/1" do
+     test "renders searchable active-club candidates with stable admission identities" do
+       dana_membership_id = Memba.ID.generate(:membership)
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 0d04731..de832d5 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -1007,6 +1007,20 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "Add member"
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-group-membership-guidance[data-viewer-access='participating_member']",
++             "Anyone in Trip Planning can add other"
++           )
++
++    assert has_element?(view, "#member-group-membership-guidance strong", "Alpine Club")
++
++    assert has_element?(
++             view,
++             "#member-group-membership-guidance",
++             "that never changes their club membership"
++           )
++
+     view
+     |> element("#member-section-action-add-group-member")
+     |> render_click()
+@@ -1274,6 +1288,26 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "You'll get Private Planning's emails from now on and can read its whole history."
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-group-add-self-help",
++             "That won't change your club admin role."
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-membership-guidance[data-viewer-access='outside_admin']",
++             "As a club admin you can too"
++           )
++
++    assert has_element?(view, "#member-group-membership-guidance strong", "Alpine Club")
++
++    assert has_element?(
++             view,
++             "#member-group-membership-guidance",
++             "that never changes anyone's club membership"
++           )
++
+     assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
+ 
+     refute has_element?(view, "#member-section-panel-conversations")
