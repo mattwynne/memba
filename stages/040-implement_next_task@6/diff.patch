@@ -1,0 +1,1791 @@
+diff --git a/acceptance-tests/features/custom_group_conversations.feature b/acceptance-tests/features/custom_group_conversations.feature
+index 2cffad6..b4f3b2d 100644
+--- a/acceptance-tests/features/custom_group_conversations.feature
++++ b/acceptance-tests/features/custom_group_conversations.feature
+@@ -1,4 +1,4 @@
+-@iteration-062 @todo-domain @todo-ui
++@iteration-062
+ Feature: Conversations within custom groups
+   Group members use the existing conversation, reply, and follow behaviour.
+   Emailing a group to start a conversation is not the same as joining it.
+diff --git a/acceptance-tests/features/step_definitions/custom_group_conversation_steps.js b/acceptance-tests/features/step_definitions/custom_group_conversation_steps.js
+new file mode 100644
+index 0000000..5ad6750
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/custom_group_conversation_steps.js
+@@ -0,0 +1,203 @@
++const { Given, When, Then } = require("@cucumber/cucumber");
++const {
++  assertAbsentFromEveryone,
++  assertBoardAddress,
++  assertBoardConversation,
++  assertBoardReply,
++  assertCanReadWholeConversation,
++  assertFollowing,
++  assertFollowingLastConversation,
++  assertInitialEmailRecipients,
++  assertMembersCanReadLastConversation,
++  assertMembersCannotReadOrReceiveLastConversation,
++  assertMessageNotPostedRejection,
++  assertNoBoardConversation,
++  assertNoBoardMembershipOrConversationAccess,
++  assertNoConversationAccess,
++  assertNoInitialEmailOrFollow,
++  assertReplyDelivered,
++  assertReplyNotAdded,
++  assertReplyNotDelivered,
++  doNotFollowBoardConversation,
++  endKootenayMembership,
++  ensureBoardMembers,
++  ensureConversationBackground,
++  ensureOtherClubMember,
++  ensurePersonWithoutMembership,
++  followBoardConversation,
++  replyOnWebsite,
++  replyToBoardByEmail,
++  sendBoardConversationOnWebsite,
++  startBoardConversationFixture,
++  stopFollowingBoardConversation,
++  tryReplyWithoutBoardAccess
++} = require("../support/custom_group_conversations");
++
++Given("Bob, Carol, and Eve are its ordinary active club members", function () {
++  ensureConversationBackground(this);
++});
++
++Given("Alice, Bob, and Carol are the only members of its custom group Board", function () {
++  ensureBoardMembers(this);
++});
++
++Given("Board's email address is {string}", function (expectedAddress) {
++  assertBoardAddress(this, expectedAddress);
++});
++
++When(/^(\w+) sends "([^"]+)" to Board on the website$/, async function (personName, subject) {
++  await sendBoardConversationOnWebsite(this, personName, subject);
++});
++
++Then(/^"([^"]+)" should be a Board conversation$/, async function (subject) {
++  await assertBoardConversation(this, subject);
++});
++
++Then(/^(.+) should be able to read it$/, async function (personNamesText) {
++  await assertMembersCanReadLastConversation(this, parsePersonList(personNamesText));
++});
++
++Then(/^(.+) should each receive its initial email$/, async function (personNamesText) {
++  await assertInitialEmailRecipients(this, parsePersonList(personNamesText));
++});
++
++Then(
++  /^(.+) should neither be able to read it nor receive its email$/,
++  async function (personNamesText) {
++    await assertMembersCannotReadOrReceiveLastConversation(
++      this,
++      parsePersonList(personNamesText)
++    );
++  }
++);
++
++Then("it should not appear among Everyone's conversations", async function () {
++  await assertAbsentFromEveryone(this);
++});
++
++Then(/^Board should have the conversation "([^"]+)"$/, async function (subject) {
++  await assertBoardConversation(this, subject);
++});
++
++Then(
++  /^(\w+) should not receive its initial email or become its follower$/,
++  async function (personName) {
++    await assertNoInitialEmailOrFollow(this, personName);
++  }
++);
++
++Then(
++  /^(\w+) should neither belong to Board nor gain permission to read or reply to the conversation$/,
++  function (personName) {
++    assertNoBoardMembershipOrConversationAccess(this, personName);
++  }
++);
++
++Then(/^(\w+) should be following "([^"]+)"$/, function (personName, subject) {
++  assertFollowing(this, personName, subject);
++});
++
++Given("Pat belongs to Nelson Paddling Club but not KMC", function () {
++  ensureOtherClubMember(this, "Pat");
++});
++
++Given("Robin has no club membership", function () {
++  ensurePersonWithoutMembership(this, "Robin");
++});
++
++Given("Eve is no longer an active member of KMC", function () {
++  endKootenayMembership(this, "Eve");
++});
++
++Then(/^no Board conversation named "([^"]+)" should be created$/, function (subject) {
++  assertNoBoardConversation(this, subject);
++});
++
++Then(
++  /^(\w+) should receive the existing message-not-posted rejection email$/,
++  async function (personName) {
++    await assertMessageNotPostedRejection(this, personName);
++  }
++);
++
++When(
++  /^(\w+) tries to reply "([^"]+)" to that conversation (on the website|by email)$/,
++  async function (personName, body, channel) {
++    await tryReplyWithoutBoardAccess(this, personName, body, channel);
++  }
++);
++
++Then(/^"([^"]+)" should not be added to that conversation$/, function (body) {
++  assertReplyNotAdded(this, body);
++});
++
++Then(/^(\w+) should not gain access to that conversation$/, function (personName) {
++  assertNoConversationAccess(this, personName);
++});
++
++When(
++  /^(\w+) replies by email "([^"]+)" to "([^"]+)"$/,
++  async function (personName, body, subject) {
++    await replyToBoardByEmail(this, personName, body, subject);
++  }
++);
++
++Then(
++  /^"([^"]+)" should be a reply in Board's "([^"]+)" conversation$/,
++  async function (body, subject) {
++    await assertBoardReply(this, body, subject);
++  }
++);
++
++Then(/^(\w+) should be following that conversation$/, function (personName) {
++  assertFollowingLastConversation(this, personName);
++});
++
++Then(
++  /^(\w+) should receive (\w+)'s reply by email$/,
++  async function (recipientName, senderName) {
++    await assertReplyDelivered(this, recipientName, senderName);
++  }
++);
++
++Then(/^(.+) should not receive it$/, async function (personNamesText) {
++  await assertReplyNotDelivered(this, parsePersonList(personNamesText));
++});
++
++Given(
++  /^(\w+) started Board's conversation "([^"]+)"$/,
++  function (personName, subject) {
++    startBoardConversationFixture(this, personName, subject);
++  }
++);
++
++Given(/^(\w+) follows "([^"]+)"$/, async function (personName, subject) {
++  await followBoardConversation(this, personName, subject);
++});
++
++Given(/^(\w+) does not follow "([^"]+)"$/, async function (personName, subject) {
++  await doNotFollowBoardConversation(this, personName, subject);
++});
++
++Given(/^(\w+) has stopped following "([^"]+)"$/, async function (personName, subject) {
++  await stopFollowingBoardConversation(this, personName, subject);
++});
++
++When(
++  /^(\w+) replies "([^"]+)" to "([^"]+)" on the website$/,
++  async function (personName, body, subject) {
++    await replyOnWebsite(this, personName, body, subject);
++  }
++);
++
++Then(/^(\w+) should still be able to read the whole conversation$/, async function (personName) {
++  await assertCanReadWholeConversation(this, personName);
++});
++
++function parsePersonList(text) {
++  return text
++    .replace(/,?\s+and\s+/g, ", ")
++    .split(/\s*,\s*/)
++    .map((name) => name.trim())
++    .filter(Boolean);
++}
+diff --git a/acceptance-tests/features/support/custom_group_conversations.js b/acceptance-tests/features/support/custom_group_conversations.js
+new file mode 100644
+index 0000000..31375c0
+--- /dev/null
++++ b/acceptance-tests/features/support/custom_group_conversations.js
+@@ -0,0 +1,651 @@
++const assert = require("node:assert/strict");
++const { expect } = require("@playwright/test");
++const {
++  assertEachAddressedMemberReceivedEmailInTestMailbox,
++  assertInboundRejectionEmail,
++  assertReplyEmailDeliveredToMembers,
++  clubSiteUrl,
++  emailFor,
++  ensureState,
++  followConversation,
++  kootenayClubName,
++  openMemberMessage,
++  postMemberReply,
++  recordAcceptedInboundRootMessage,
++  removeMemberFromClub,
++  sendInboundClubEmailReply,
++  testLocalDeliveryFacts,
++  unfollowConversation,
++  waitForLiveViewConnected
++} = require("./member_message");
++const { withMemberHarness } = require("./member_harness");
++const {
++  ensureClubAdmins,
++  ensureClubWithSlug,
++  ensureCustomGroup,
++  ensureOrdinaryClubMembers,
++  kootenayClubName: customGroupKootenayClubName,
++  nelsonClubName
++} = require("./custom_group_creation");
++const serverCommands = require("./server_commands");
++
++const boardName = "Board";
++const boardAddress = "board@kmc.clubs.memba.io";
++
++assert.equal(customGroupKootenayClubName, kootenayClubName);
++
++function ensureConversationBackground(world) {
++  ensureState(world);
++  ensureClubWithSlug(world, kootenayClubName, "kmc");
++  ensureClubAdmins(world, ["Alice", "Dan"]);
++  ensureOrdinaryClubMembers(world, ["Bob", "Carol", "Eve"]);
++}
++
++function ensureBoardMembers(world) {
++  return ensureCustomGroup(
++    world,
++    kootenayClubName,
++    boardName,
++    "board",
++    ["Alice", "Bob", "Carol"]
++  );
++}
++
++function assertBoardAddress(world, expectedAddress) {
++  const result = serverCommands.runCommand(
++    `
++group = Memba.Membership.get_group(Map.fetch!(payload, "groupId"))
++club = Memba.Membership.get_club(Map.fetch!(payload, "clubId"))
++
++%{
++  address: Memba.ClubInboundEmailAddress.address(club, group.email_slug),
++  emailSlug: group.email_slug
++}
++`,
++    {
++      clubId: club(world).clubId,
++      groupId: boardId(world)
++    }
++  );
++
++  assert.equal(result.emailSlug, "board");
++  assert.equal(result.address, expectedAddress);
++}
++
++async function sendBoardConversationOnWebsite(world, senderName, subject) {
++  const groupId = boardId(world);
++  const clubState = club(world);
++  const body = `${subject} details.`;
++
++  await withMemberHarness(world, senderName, async (member) => {
++    member.localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(member);
++
++    await member.page.goto(
++      clubSiteUrl(member.baseUrl, clubState, `/groups/${encodeURIComponent(groupId)}`)
++    );
++    await expect(member.page.locator("#member-group-name")).toHaveText(boardName);
++    await waitForLiveViewConnected(member);
++
++    await member.page.locator("#member-section-action-new-message").click();
++
++    const compose = member.page.locator("#member-message-compose");
++    await expect(compose).toHaveAttribute("data-audience-group-id", groupId);
++    await expect(compose).toHaveAttribute("data-compose-state", "composing");
++    await waitForLiveViewConnected(member);
++
++    await member.page.getByLabel("Subject").fill(subject);
++    await member.page.getByLabel("Message").fill(body);
++    await member.page.getByRole("button", { name: "Send message" }).click();
++    await expect(compose).toHaveAttribute("data-compose-state", "sent");
++
++    const messageId = await compose.getAttribute("data-sent-message-id");
++    assert.ok(messageId, `Expected ${JSON.stringify(subject)} to expose a message id`);
++
++    member.messages[subject] = {
++      body,
++      clubId: clubState.clubId,
++      clubSlug: clubState.slug,
++      messageId,
++      senderName,
++      subject
++    };
++    member.lastMessageSubject = subject;
++  });
++}
++
++async function assertBoardConversation(world, subject) {
++  const message = await ensureMessage(world, subject);
++  const snapshot = conversationSnapshot(world, subject);
++
++  assert.equal(snapshot.groupId, boardId(world));
++  assert.equal(snapshot.messageId, message.messageId);
++
++  await withMemberHarness(world, "Alice", async (member) => {
++    await openBoard(member);
++    await expect(conversationRow(member, subject)).toBeVisible();
++  });
++}
++
++async function assertMembersCanReadLastConversation(world, personNames) {
++  const subject = lastSubject(world);
++  const message = await ensureMessage(world, subject);
++
++  for (const personName of personNames) {
++    assert.equal(memberHasAccess(world, personName, subject, "read"), true);
++
++    await withMemberHarness(world, personName, async (member) => {
++      const response = await member.page.goto(messageUrl(member, message));
++      assert.equal(response && response.status(), 200);
++      await expect(member.page.getByRole("heading", { name: subject })).toBeVisible();
++    });
++  }
++}
++
++async function assertInitialEmailRecipients(world, personNames) {
++  await ensureMessage(world, lastSubject(world));
++  world.addressedMemberNames = personNames;
++  await assertEachAddressedMemberReceivedEmailInTestMailbox(world);
++}
++
++async function assertMembersCannotReadOrReceiveLastConversation(world, personNames) {
++  const subject = lastSubject(world);
++  const message = await ensureMessage(world, subject);
++
++  for (const personName of personNames) {
++    assert.equal(memberHasAccess(world, personName, subject, "read"), false);
++    assert.equal(messageRecipientIds(world, subject).includes(person(world, personName).personId), false);
++
++    await withMemberHarness(world, personName, async (member) => {
++      const response = await member.page.goto(messageUrl(member, message));
++      assert.equal(response && response.status(), 404);
++      await expect(member.page.getByText(subject, { exact: true })).toHaveCount(0);
++    });
++  }
++
++  const facts = await testLocalDeliveryFacts(world);
++  const messageFacts = facts.filter((fact) => fact.message_id === message.messageId);
++
++  for (const personName of personNames) {
++    assert.equal(
++      messageFacts.some((fact) => fact.recipient_id === person(world, personName).personId),
++      false
++    );
++  }
++}
++
++async function assertAbsentFromEveryone(world) {
++  const subject = lastSubject(world);
++  const everyoneId = serverCommands.runCommand(
++    `
++%{groupId: Memba.Membership.SystemGroups.everyone_group_id(Map.fetch!(payload, "clubId"))}
++`,
++    { clubId: club(world).clubId }
++  ).groupId;
++
++  assert.equal(groupConversationSubjects(everyoneId).includes(subject), false);
++
++  await withMemberHarness(world, "Alice", async (member) => {
++    await member.page.goto(
++      clubSiteUrl(member.baseUrl, club(world), `/groups/${encodeURIComponent(everyoneId)}`)
++    );
++    await expect(conversationRow(member, subject)).toHaveCount(0);
++  });
++}
++
++async function assertNoInitialEmailOrFollow(world, personName) {
++  const subject = lastSubject(world);
++  const message = await ensureMessage(world, subject);
++  const personId = person(world, personName).personId;
++
++  assert.equal(messageRecipientIds(world, subject).includes(personId), false);
++  assert.equal(following(world, personName, subject), false);
++
++  const facts = await testLocalDeliveryFacts(world);
++  assert.equal(
++    facts.some(
++      (fact) => fact.message_id === message.messageId && fact.recipient_id === personId
++    ),
++    false
++  );
++}
++
++function assertNoBoardMembershipOrConversationAccess(world, personName) {
++  assert.equal(activeBoardMember(world, personName), false);
++  assert.equal(memberHasAccess(world, personName, lastSubject(world), "read"), false);
++  assert.equal(memberHasAccess(world, personName, lastSubject(world), "write"), false);
++}
++
++function assertFollowing(world, personName, subject) {
++  assert.equal(following(world, personName, subject), true);
++}
++
++function ensureOtherClubMember(world, personName) {
++  ensureClubWithSlug(world, nelsonClubName, "nelson");
++  ensureOrdinaryClubMembers(world, [personName], nelsonClubName);
++}
++
++function ensurePersonWithoutMembership(world, personName) {
++  ensureState(world);
++  const created = serverCommands.ensurePerson({
++    personName,
++    email: emailFor(personName)
++  });
++
++  world.people[personName] = {
++    email: emailFor(personName),
++    emailAddresses: [emailFor(personName)],
++    name: personName,
++    personId: created.personId
++  };
++}
++
++function endKootenayMembership(world, personName) {
++  removeMemberFromClub(world, personName, kootenayClubName);
++}
++
++function assertNoBoardConversation(world, subject) {
++  assert.equal(groupConversationSubjects(boardId(world)).includes(subject), false);
++}
++
++async function assertMessageNotPostedRejection(world, personName) {
++  await assertInboundRejectionEmail(world, personName, "wasn't posted");
++}
++
++async function tryReplyWithoutBoardAccess(world, personName, body, channel) {
++  const subject = lastSubject(world);
++  const message = await ensureMessage(world, subject);
++  const countBefore = conversationMessageBodies(message.messageId).length;
++
++  if (channel === "on the website") {
++    await withMemberHarness(world, personName, async (member) => {
++      const response = await member.page.goto(messageUrl(member, message));
++      assert.equal(response && response.status(), 404);
++      await expect(member.page.locator("#member-message-reply-form")).toHaveCount(0);
++    });
++  } else {
++    assert.equal(channel, "by email");
++
++    await sendInboundClubEmailReply(world, personName, subject, body, {
++      requireReply: false,
++      toAddress: boardAddress
++    });
++  }
++
++  world.lastMessageSubject = subject;
++  world.customGroupReplyAttempt = {
++    body,
++    countBefore,
++    messageId: message.messageId,
++    personName
++  };
++}
++
++function assertReplyNotAdded(world, body) {
++  const attempt = world.customGroupReplyAttempt;
++  assert.ok(attempt, "Expected an attempted Board reply");
++
++  const bodies = conversationMessageBodies(attempt.messageId);
++  assert.equal(bodies.length, attempt.countBefore);
++  assert.equal(bodies.includes(body), false);
++}
++
++function assertNoConversationAccess(world, personName) {
++  const subject = lastSubject(world);
++  assert.equal(memberHasAccess(world, personName, subject, "read"), false);
++  assert.equal(memberHasAccess(world, personName, subject, "write"), false);
++}
++
++async function replyToBoardByEmail(world, personName, body, subject) {
++  await sendInboundClubEmailReply(world, personName, subject, body, {
++    requireReply: true,
++    toAddress: boardAddress
++  });
++  world.lastMessageSubject = subject;
++}
++
++async function assertBoardReply(world, body, subject) {
++  const message = await ensureMessage(world, subject);
++  const replies = boardConversationEntries(world, message.messageId);
++  assert.equal(replies.some((entry) => entry.body === body && entry.replyToMessageId), true);
++
++  await withMemberHarness(world, "Carol", async (member) => {
++    await member.page.goto(messageUrl(member, message));
++    await expect(
++      member.page.locator(
++        '#member-conversation-replies [data-testid="member-conversation-entry"]',
++        { hasText: body }
++      )
++    ).toBeVisible();
++  });
++}
++
++function assertFollowingLastConversation(world, personName) {
++  assertFollowing(world, personName, lastSubject(world));
++}
++
++async function assertReplyDelivered(world, recipientName, senderName) {
++  await assertReplyEmailDeliveredToMembers(world, senderName, [recipientName], boardName);
++}
++
++async function assertReplyNotDelivered(world, personNames) {
++  const reply = world.lastReply;
++  assert.ok(reply, "Expected a reply before asserting excluded recipients");
++
++  serverCommands.dispatchPendingEmailDeliveries();
++  const facts = serverCommands
++    .listLocalDeliveryFacts()
++    .filter((fact) => fact.message_id === reply.messageId);
++
++  for (const personName of personNames) {
++    assert.equal(
++      facts.some((fact) => fact.recipient_id === person(world, personName).personId),
++      false
++    );
++  }
++}
++
++function startBoardConversationFixture(world, senderName, subject) {
++  const sender = person(world, senderName);
++  const result = serverCommands.sendClubMessage({
++    audienceGroupId: boardId(world),
++    body: `${subject} details.`,
++    clubId: club(world).clubId,
++    senderId: sender.personId,
++    senderName,
++    subject
++  });
++
++  world.messages[subject] = {
++    body: result.body,
++    clubId: result.clubId,
++    clubSlug: club(world).slug,
++    messageId: result.messageId,
++    senderName,
++    subject
++  };
++  world.lastMessageSubject = subject;
++  serverCommands.dispatchPendingEmailDeliveries();
++}
++
++async function followBoardConversation(world, personName, subject) {
++  await withMemberHarness(world, personName, (member) =>
++    followConversation(member, personName, subject)
++  );
++}
++
++async function doNotFollowBoardConversation(world, personName, subject) {
++  if (!following(world, personName, subject)) {
++    return;
++  }
++
++  await withMemberHarness(world, personName, (member) =>
++    unfollowConversation(member, personName, subject)
++  );
++}
++
++async function stopFollowingBoardConversation(world, personName, subject) {
++  await withMemberHarness(world, personName, (member) =>
++    unfollowConversation(member, personName, subject)
++  );
++}
++
++async function replyOnWebsite(world, personName, body, subject) {
++  await withMemberHarness(world, personName, (member) =>
++    postMemberReply(member, personName, subject, body)
++  );
++  world.lastMessageSubject = subject;
++}
++
++async function assertCanReadWholeConversation(world, personName) {
++  const subject = lastSubject(world);
++  const message = await ensureMessage(world, subject);
++  const entries = boardConversationEntries(world, message.messageId);
++
++  assert.equal(memberHasAccess(world, personName, subject, "read"), true);
++  assert.ok(entries.length >= 2, "Expected the root message and reply");
++
++  await withMemberHarness(world, personName, async (member) => {
++    await openMemberMessage(member, subject);
++
++    for (const entry of entries) {
++      await expect(member.page.getByText(entry.body, { exact: true })).toBeVisible();
++    }
++  });
++}
++
++async function ensureMessage(world, subject) {
++  if (!world.messages[subject]) {
++    await recordAcceptedInboundRootMessage(world, subject);
++  }
++
++  world.lastMessageSubject = subject;
++  return world.messages[subject];
++}
++
++async function openBoard(world) {
++  await world.page.goto(
++    clubSiteUrl(world.baseUrl, club(world), `/groups/${encodeURIComponent(boardId(world))}`)
++  );
++  await expect(world.page.locator("#member-group-name")).toHaveText(boardName);
++}
++
++function conversationSnapshot(world, subject) {
++  return serverCommands.runCommand(
++    `
++group_id = Map.fetch!(payload, "groupId")
++subject = Map.fetch!(payload, "subject")
++
++message =
++  group_id
++  |> Memba.Messaging.list_conversations_for_group()
++  |> Enum.find(&(&1.subject == subject))
++
++if message do
++  %{groupId: group_id, messageId: message.message_id, subject: message.subject}
++else
++  %{groupId: group_id, messageId: nil, subject: nil}
++end
++`,
++    { groupId: boardId(world), subject }
++  );
++}
++
++function groupConversationSubjects(groupId) {
++  return serverCommands.runCommand(
++    `
++%{
++  subjects:
++    Map.fetch!(payload, "groupId")
++    |> Memba.Messaging.list_conversations_for_group()
++    |> Enum.map(& &1.subject)
++}
++`,
++    { groupId }
++  ).subjects;
++}
++
++function boardConversationEntries(world, messageId) {
++  return serverCommands.runCommand(
++    `
++entries =
++  Memba.Messaging.list_conversation_messages_for_group(
++    Map.fetch!(payload, "messageId"),
++    Map.fetch!(payload, "groupId")
++  )
++
++%{
++  entries:
++    Enum.map(entries, fn entry ->
++      %{
++        body: entry.body,
++        messageId: entry.message_id,
++        replyToMessageId: entry.reply_to_message_id
++      }
++    end)
++}
++`,
++    { groupId: boardId(world), messageId }
++  ).entries;
++}
++
++function conversationMessageBodies(messageId) {
++  return serverCommands.runCommand(
++    `
++%{
++  bodies:
++    Map.fetch!(payload, "messageId")
++    |> Memba.Messaging.list_conversation_messages()
++    |> Enum.map(& &1.body)
++}
++`,
++    { messageId }
++  ).bodies;
++}
++
++function messageRecipientIds(world, subject) {
++  return serverCommands.runCommand(
++    `
++%{
++  recipientIds:
++    Map.fetch!(payload, "messageId")
++    |> Memba.Messaging.list_recipient_deliveries()
++    |> Enum.map(& &1.recipient_id)
++}
++`,
++    { messageId: world.messages[subject].messageId }
++  ).recipientIds;
++}
++
++function memberHasAccess(world, personName, subject, accessLevel) {
++  const message = world.messages[subject];
++
++  return serverCommands.runCommand(
++    `
++%{
++  allowed:
++    Memba.Messaging.member_has_conversation_access?(
++      Map.fetch!(payload, "messageId"),
++      Map.fetch!(payload, "clubId"),
++      Map.fetch!(payload, "personId"),
++      Map.fetch!(payload, "accessLevel")
++    )
++}
++`,
++    {
++      accessLevel,
++      clubId: message.clubId,
++      messageId: message.messageId,
++      personId: person(world, personName).personId
++    }
++  ).allowed;
++}
++
++function activeBoardMember(world, personName) {
++  return serverCommands.runCommand(
++    `
++%{
++  active:
++    Memba.Membership.active_member_of_group?(
++      Map.fetch!(payload, "groupId"),
++      Map.fetch!(payload, "personId")
++    )
++}
++`,
++    {
++      groupId: boardId(world),
++      personId: person(world, personName).personId
++    }
++  ).active;
++}
++
++function following(world, personName, subject) {
++  return serverCommands.runCommand(
++    `
++%{
++  following:
++    Memba.Messaging.following_conversation?(
++      Map.fetch!(payload, "conversationId"),
++      Map.fetch!(payload, "personId")
++    )
++}
++`,
++    {
++      conversationId: world.messages[subject].messageId,
++      personId: person(world, personName).personId
++    }
++  ).following;
++}
++
++function messageUrl(world, message) {
++  return clubSiteUrl(
++    world.baseUrl,
++    club(world),
++    `/messages/${encodeURIComponent(message.messageId)}?group_id=${encodeURIComponent(
++      boardId(world)
++    )}`
++  );
++}
++
++function conversationRow(world, subject) {
++  return world.page.locator(
++    `[data-testid="club-message-row"][data-message-subject="${subject}"]`
++  );
++}
++
++function boardId(world) {
++  const groupId = world.groups && world.groups[`${kootenayClubName}:${boardName}`];
++  assert.ok(groupId, "Expected the Board custom group");
++  return groupId;
++}
++
++function club(world) {
++  const clubState = world.clubs && world.clubs[kootenayClubName];
++  assert.ok(clubState, `Expected ${kootenayClubName}`);
++  return clubState;
++}
++
++function person(world, personName) {
++  const personState = world.people && world.people[personName];
++  assert.ok(personState, `Expected person ${personName}`);
++  return personState;
++}
++
++function lastSubject(world) {
++  const subject = world.lastMessageSubject;
++  assert.ok(subject, "Expected a current Board conversation");
++  return subject;
++}
++
++module.exports = {
++  assertAbsentFromEveryone,
++  assertBoardAddress,
++  assertBoardConversation,
++  assertBoardReply,
++  assertCanReadWholeConversation,
++  assertFollowing,
++  assertFollowingLastConversation,
++  assertInitialEmailRecipients,
++  assertMembersCanReadLastConversation,
++  assertMembersCannotReadOrReceiveLastConversation,
++  assertMessageNotPostedRejection,
++  assertNoBoardConversation,
++  assertNoBoardMembershipOrConversationAccess,
++  assertNoConversationAccess,
++  assertNoInitialEmailOrFollow,
++  assertReplyDelivered,
++  assertReplyNotAdded,
++  assertReplyNotDelivered,
++  doNotFollowBoardConversation,
++  endKootenayMembership,
++  ensureBoardMembers,
++  ensureConversationBackground,
++  ensureOtherClubMember,
++  ensurePersonWithoutMembership,
++  followBoardConversation,
++  replyOnWebsite,
++  replyToBoardByEmail,
++  sendBoardConversationOnWebsite,
++  startBoardConversationFixture,
++  stopFollowingBoardConversation,
++  tryReplyWithoutBoardAccess
++};
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 5a46b78..b3cb326 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -28,6 +28,7 @@ test("default browser Cucumber profile selects all web-backed shared features",
+     "club_member_invitations.feature",
+     "club_membership_administration.feature",
+     "club_message_replies.feature",
++    "custom_group_conversations.feature",
+     "custom_group_creation.feature",
+     "email_branding.feature",
+     "group_conversations.feature",
+@@ -196,6 +197,32 @@ test("iteration 062 custom-group creation scenarios run in each intended accepta
+   );
+ });
+ 
++test("iteration 062 custom-group conversation scenarios run in both acceptance layers", () => {
++  const feature = browserFeatures().find(
++    ({ name }) => name === "custom_group_conversations.feature"
++  );
++  const iterationScenarios = feature.scenarios.filter((scenario) =>
++    scenario.tags.includes("@iteration-062")
++  );
++  const domainScenarioNames = iterationScenarios
++    .filter((scenario) => !scenario.tags.includes("@not-domain"))
++    .map((scenario) => scenario.name);
++  const browserScenarioNames = iterationScenarios
++    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
++    .map((scenario) => scenario.name);
++
++  assert.equal(iterationScenarios.length, 8);
++  assert.deepEqual(domainScenarioNames, iterationScenarios.map((scenario) => scenario.name));
++  assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
++  assert.deepEqual(
++    iterationScenarios.filter(
++      (scenario) =>
++        scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
++    ),
++    []
++  );
++});
++
+ test("iteration 059 UI scenarios run while its concurrency scenario remains domain-only", () => {
+   const feature = browserFeatures().find(
+     ({ name }) => name === "club_membership_administration.feature"
+diff --git a/acceptance-tests/test/custom_group_conversation_step_definitions.test.js b/acceptance-tests/test/custom_group_conversation_step_definitions.test.js
+new file mode 100644
+index 0000000..aeddf0a
+--- /dev/null
++++ b/acceptance-tests/test/custom_group_conversation_step_definitions.test.js
+@@ -0,0 +1,37 @@
++const assert = require("node:assert/strict");
++const test = require("node:test");
++
++const { loadConfiguration, runCucumber } = require("@cucumber/cucumber/api");
++
++test("browser-backed custom-group conversation scenarios have executable step plumbing", async () => {
++  let scenarioCount = 0;
++  const statuses = [];
++  const { runConfiguration } = await loadConfiguration({
++    file: false,
++    provided: {
++      dryRun: true,
++      format: ["message:/dev/null"],
++      paths: ["features/custom_group_conversations.feature"],
++      publishQuiet: true,
++      require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
++      tags: "@iteration-062 and not @not-ui"
++    }
++  });
++
++  await runCucumber(runConfiguration, undefined, (message) => {
++    if (message.testCaseStarted) {
++      scenarioCount += 1;
++    }
++
++    if (message.testStepFinished) {
++      statuses.push(message.testStepFinished.testStepResult.status);
++    }
++  });
++
++  assert.equal(scenarioCount, 13);
++  assert.deepEqual(
++    [...new Set(statuses)],
++    ["SKIPPED"],
++    "Expected every browser-backed custom-group conversation step to have exactly one definition"
++  );
++});
+diff --git a/web/test/features/custom_group_conversation_steps_test.exs b/web/test/features/custom_group_conversation_steps_test.exs
+new file mode 100644
+index 0000000..2a6f39c
+--- /dev/null
++++ b/web/test/features/custom_group_conversation_steps_test.exs
+@@ -0,0 +1,30 @@
++defmodule Memba.CustomGroupConversationStepsTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.DomainCucumberRunner
++
++  @feature_basename "custom_group_conversations.feature"
++
++  @selected_scenarios DomainCucumberRunner.selected_scenarios()
++                      |> Enum.filter(&(Path.basename(&1.feature.file) == @feature_basename))
++
++  for %{scenario: scenario} = selected_scenario <- @selected_scenarios do
++    test "domain step definitions execute #{scenario.name}" do
++      discovery = DomainCucumberRunner.discover()
++
++      DomainCucumberRunner.run_scenario(
++        unquote(Macro.escape(selected_scenario)),
++        discovery.step_registry
++      )
++    end
++  end
++
++  test "all iteration-062 conversation examples are selected" do
++    selected_names = Enum.map(@selected_scenarios, & &1.scenario.name)
++
++    assert length(selected_names) == 13
++    assert "Bob starts a Board discussion without addressing Everyone" in selected_names
++    assert "Carol's email reply stays in Bob's Board conversation" in selected_names
++    assert "Carol stops following but can still read Board's agenda" in selected_names
++  end
++end
+diff --git a/web/test/features/domain_cucumber_runner_test.exs b/web/test/features/domain_cucumber_runner_test.exs
+index f25d9cd..7932a6a 100644
+--- a/web/test/features/domain_cucumber_runner_test.exs
++++ b/web/test/features/domain_cucumber_runner_test.exs
+@@ -83,4 +83,33 @@ defmodule Memba.DomainCucumberRunnerTest do
+     assert "A stored address identifies a group even when its name is different" in selected_names
+     refute "Alice sees the email address before creating Trips" in selected_names
+   end
++
++  test "iteration 062 custom-group conversation scenarios run at the domain layer" do
++    selected_names =
++      DomainCucumberRunner.selected_scenarios()
++      |> Enum.map(& &1.scenario.name)
++
++    assert "Bob starts a Board discussion without addressing Everyone" in selected_names
++    assert "Eve emails Board while remaining outside it" in selected_names
++    assert "Bob receives the ordinary recipient copy of his own Board email" in selected_names
++    assert "Carol's email reply stays in Bob's Board conversation" in selected_names
++    assert "Carol follows Board's agenda while Alice does not" in selected_names
++    assert "Carol stops following but can still read Board's agenda" in selected_names
++
++    assert Enum.count(
++             selected_names,
++             &String.starts_with?(
++               &1,
++               "Someone outside the active club membership cannot email Board"
++             )
++           ) == 3
++
++    assert Enum.count(
++             selected_names,
++             &String.starts_with?(
++               &1,
++               "Sending Board an email does not let Eve or Dan reply to it"
++             )
++           ) == 4
++  end
+ end
+diff --git a/web/test/features/step_definitions/custom_group_conversation_steps.exs b/web/test/features/step_definitions/custom_group_conversation_steps.exs
+new file mode 100644
+index 0000000..6386d2b
+--- /dev/null
++++ b/web/test/features/step_definitions/custom_group_conversation_steps.exs
+@@ -0,0 +1,747 @@
++defmodule Memba.Cucumber.CustomGroupConversationSteps do
++  use Cucumber.StepDefinition
++
++  import ExUnit.Assertions
++
++  alias Memba.ClubInboundEmailAddress
++  alias Memba.Membership
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.CreateGroup
++  alias Memba.Membership.SystemGroups
++  alias Memba.Messaging
++  alias Memba.Messaging.EmailDeliveryDispatcher
++  alias Memba.Messaging.EmailDeliveryProviders.Fake
++
++  @club_name "Kootenay Mountaineering Club"
++  @board_name "Board"
++  @board_address "board@kmc.clubs.memba.io"
++
++  step "Bob, Carol, and Eve are its ordinary active club members", context do
++    Enum.reduce(["Bob", "Carol", "Eve"], context, &ensure_active_member(&2, @club_name, &1))
++  end
++
++  step "Alice, Bob, and Carol are the only members of its custom group Board", context do
++    context = ensure_custom_group(context, @club_name, @board_name, "board")
++
++    Enum.reduce(["Alice", "Bob", "Carol"], context, fn person_name, context ->
++      add_group_member(context, @club_name, @board_name, person_name)
++    end)
++  end
++
++  step "Board's email address is {string}", %{args: [expected_address]} = context do
++    club = Membership.get_club(club_id!(context, @club_name))
++    group = group!(context, @club_name, @board_name)
++
++    assert ClubInboundEmailAddress.address(club, group.email_slug) == expected_address
++    context
++  end
++
++  step ~r/^(\w+) sends "([^"]+)" to Board on the website$/,
++       %{args: [sender_name, subject]} = context do
++    send_board_conversation(context, sender_name, subject, :current_member)
++  end
++
++  step ~r/^"([^"]+)" should be a Board conversation$/,
++       %{args: [subject]} = context do
++    assert_board_conversation(context, subject)
++  end
++
++  step ~r/^(.+) should be able to read it$/,
++       %{args: [person_names]} = context do
++    Enum.each(parse_person_list(person_names), fn person_name ->
++      assert_member_access(context, person_name, last_subject!(context), :read, true)
++    end)
++
++    context
++  end
++
++  step ~r/^(.+) should each receive its initial email$/,
++       %{args: [person_names]} = context do
++    assert_initial_recipients(context, last_subject!(context), parse_person_list(person_names))
++  end
++
++  step ~r/^(.+) should neither be able to read it nor receive its email$/,
++       %{args: [person_names]} = context do
++    subject = last_subject!(context)
++
++    Enum.each(parse_person_list(person_names), fn person_name ->
++      assert_member_access(context, person_name, subject, :read, false)
++      refute_recipient(context, subject, person_name)
++    end)
++
++    context
++  end
++
++  step "it should not appear among Everyone's conversations", context do
++    subject = last_subject!(context)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id!(context, @club_name))
++
++    refute Enum.any?(
++             Messaging.list_conversations_for_group(everyone_group_id),
++             &(&1.subject == subject)
++           )
++
++    context
++  end
++
++  step ~r/^Board should have the conversation "([^"]+)"$/,
++       %{args: [subject]} = context do
++    assert_board_conversation(context, subject)
++  end
++
++  step ~r/^(\w+) should not receive its initial email or become its follower$/,
++       %{args: [person_name]} = context do
++    subject = last_subject!(context)
++    message = message!(context, subject)
++
++    refute_recipient(context, subject, person_name)
++    refute Messaging.following_conversation?(message.message_id, person_id!(context, person_name))
++    context
++  end
++
++  step ~r/^(\w+) should neither belong to Board nor gain permission to read or reply to the conversation$/,
++       %{args: [person_name]} = context do
++    board_id = group_id!(context, @club_name, @board_name)
++    person_id = person_id!(context, person_name)
++    subject = last_subject!(context)
++
++    refute Membership.active_member_of_group?(board_id, person_id)
++    assert_member_access(context, person_name, subject, :read, false)
++    assert_member_access(context, person_name, subject, :write, false)
++    context
++  end
++
++  step ~r/^(\w+) should be following "([^"]+)"$/,
++       %{args: [person_name, subject]} = context do
++    assert Messaging.following_conversation?(
++             message!(context, subject).message_id,
++             person_id!(context, person_name)
++           )
++
++    context
++  end
++
++  step "Pat belongs to Nelson Paddling Club but not KMC", context do
++    context
++    |> ensure_club("Nelson Paddling Club", "nelson")
++    |> ensure_active_member("Nelson Paddling Club", "Pat")
++  end
++
++  step "Robin has no club membership", context do
++    ensure_person(context, "Robin")
++  end
++
++  step "Eve is no longer an active member of KMC", context do
++    membership_id = membership_id!(context, @club_name, "Eve")
++    assert :ok = Membership.remove_member(%{membership_id: membership_id}, consistency: :strong)
++
++    update_context(context, :memberships, fn memberships ->
++      Map.delete(memberships, {@club_name, "Eve"})
++    end)
++  end
++
++  step ~r/^no Board conversation named "([^"]+)" should be created$/,
++       %{args: [subject]} = context do
++    board_id = group_id!(context, @club_name, @board_name)
++
++    refute Enum.any?(
++             Messaging.list_conversations_for_group(board_id),
++             &(&1.subject == subject)
++           )
++
++    context
++  end
++
++  step ~r/^(\w+) should receive the existing message-not-posted rejection email$/,
++       %{args: [person_name]} = context do
++    assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
++
++    expected_address =
++      get_in(context, [:inbound_from_addresses, person_name]) ||
++        person_email!(context, person_name)
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert Enum.any?(email.to, &email_address?(&1, expected_address)),
++           "Expected rejection email to #{expected_address}; got #{inspect(email.to)}"
++
++    assert email.text_body =~ "wasn't posted"
++    context
++  end
++
++  step ~r/^(\w+) tries to reply "([^"]+)" to that conversation (on the website|by email)$/,
++       %{args: [person_name, body, channel]} = context do
++    subject = last_subject!(context)
++    message = message!(context, subject)
++    message_count_before = length(Messaging.list_conversation_messages(message.message_id))
++
++    {result, context} =
++      case channel do
++        "on the website" ->
++          result =
++            Messaging.post_message_reply(
++              %{
++                message_id: Memba.ID.generate(:message),
++                conversation_id: message.message_id,
++                sender_id: person_id!(context, person_name),
++                body: body
++              },
++              consistency: :strong
++            )
++
++          {result, context}
++
++        "by email" ->
++          dispatch_pending_email_deliveries()
++          outbound_message_id = outbound_message_id!(message.message_id)
++
++          receive_inbound_email(context, person_name, "Re: #{subject}", @board_address,
++            text_body: body,
++            in_reply_to_message_ids: [outbound_message_id]
++          )
++      end
++
++    Map.put(context, :reply_attempt, %{
++      body: body,
++      channel: channel,
++      conversation_id: message.message_id,
++      message_count_before: message_count_before,
++      person_name: person_name,
++      result: result
++    })
++  end
++
++  step ~r/^"([^"]+)" should not be added to that conversation$/,
++       %{args: [body]} = context do
++    attempt = Map.fetch!(context, :reply_attempt)
++    messages = Messaging.list_conversation_messages(attempt.conversation_id)
++
++    assert length(messages) == attempt.message_count_before
++    refute Enum.any?(messages, &(&1.body == body))
++    context
++  end
++
++  step ~r/^(\w+) should not gain access to that conversation$/,
++       %{args: [person_name]} = context do
++    subject = last_subject!(context)
++    assert_member_access(context, person_name, subject, :read, false)
++    assert_member_access(context, person_name, subject, :write, false)
++    context
++  end
++
++  step ~r/^(\w+) replies by email "([^"]+)" to "([^"]+)"$/,
++       %{args: [person_name, body, subject]} = context do
++    message = message!(context, subject)
++    dispatch_pending_email_deliveries()
++    Fake.reset()
++
++    {result, context} =
++      receive_inbound_email(context, person_name, "Re: #{subject}", @board_address,
++        text_body: body,
++        in_reply_to_message_ids: [outbound_message_id!(message.message_id)]
++      )
++
++    assert {:ok, %{message_id: reply_id, conversation_id: conversation_id}} = result
++    assert conversation_id == message.message_id
++    reply = Messaging.get_message(reply_id)
++
++    context
++    |> Map.put(:last_reply, reply_context(reply, person_name, subject))
++    |> put_reply_context(subject, person_name, body, reply_context(reply, person_name, subject))
++  end
++
++  step ~r/^"([^"]+)" should be a reply in Board's "([^"]+)" conversation$/,
++       %{args: [body, subject]} = context do
++    board_id = group_id!(context, @club_name, @board_name)
++    root = message!(context, subject)
++
++    assert Enum.any?(
++             Messaging.list_conversation_messages_for_group(root.message_id, board_id),
++             &(is_binary(&1.reply_to_message_id) and &1.body == body)
++           )
++
++    context
++  end
++
++  step ~r/^(\w+) should be following that conversation$/,
++       %{args: [person_name]} = context do
++    message = message!(context, last_subject!(context))
++    assert Messaging.following_conversation?(message.message_id, person_id!(context, person_name))
++    context
++  end
++
++  step ~r/^(\w+) should receive (\w+)'s reply by email$/,
++       %{args: [recipient_name, sender_name]} = context do
++    assert_reply_recipients(context, sender_name, [recipient_name])
++  end
++
++  step ~r/^(.+) should not receive it$/,
++       %{args: [person_names]} = context do
++    reply = Map.fetch!(context, :last_reply)
++    refute_reply_recipients(context, reply, parse_person_list(person_names))
++  end
++
++  step ~r/^(\w+) started Board's conversation "([^"]+)"$/,
++       %{args: [person_name, subject]} = context do
++    context
++    |> send_board_conversation(person_name, subject, :fixture)
++    |> clear_initial_deliveries()
++  end
++
++  step ~r/^(\w+) follows "([^"]+)"$/,
++       %{args: [person_name, subject]} = context do
++    set_following(context, person_name, subject, true)
++  end
++
++  step ~r/^(\w+) does not follow "([^"]+)"$/,
++       %{args: [person_name, subject]} = context do
++    set_following(context, person_name, subject, false)
++  end
++
++  step ~r/^(\w+) has stopped following "([^"]+)"$/,
++       %{args: [person_name, subject]} = context do
++    set_following(context, person_name, subject, false)
++  end
++
++  step ~r/^(\w+) replies "([^"]+)" to "([^"]+)" on the website$/,
++       %{args: [person_name, body, subject]} = context do
++    post_reply(context, person_name, subject, body)
++  end
++
++  step ~r/^(\w+) should still be able to read the whole conversation$/,
++       %{args: [person_name]} = context do
++    subject = last_subject!(context)
++    message = message!(context, subject)
++    board_id = group_id!(context, @club_name, @board_name)
++
++    assert_member_access(context, person_name, subject, :read, true)
++    assert length(Messaging.list_conversation_messages_for_group(message.message_id, board_id)) >= 2
++    context
++  end
++
++  defp ensure_club(context, club_name, slug) do
++    case get_in(context, [:clubs, club_name]) do
++      club_id when is_binary(club_id) ->
++        context
++
++      nil ->
++        club_id = Memba.ID.generate(:club)
++
++        assert :ok =
++                 Membership.create_club(
++                   %{club_id: club_id, name: club_name, slug: slug},
++                   consistency: :strong
++                 )
++
++        put_context(context, :clubs, club_name, club_id)
++    end
++  end
++
++  defp ensure_active_member(context, club_name, person_name) do
++    context = ensure_person(context, person_name)
++    key = {club_name, person_name}
++
++    case get_in(context, [:memberships, key]) do
++      membership_id when is_binary(membership_id) ->
++        context
++
++      nil ->
++        membership_id = Memba.ID.generate(:membership)
++
++        assert :ok =
++                 Membership.add_member(
++                   %{
++                     club_id: club_id!(context, club_name),
++                     membership_id: membership_id,
++                     person_id: person_id!(context, person_name)
++                   },
++                   consistency: :strong
++                 )
++
++        put_context(context, :memberships, key, membership_id)
++    end
++  end
++
++  defp ensure_person(context, person_name) do
++    case get_in(context, [:people, person_name]) do
++      %{person_id: person_id} when is_binary(person_id) ->
++        context
++
++      nil ->
++        person_id = Memba.ID.generate(:person)
++        email = "#{String.downcase(person_name)}-#{scenario_suffix(context)}@example.test"
++
++        assert :ok =
++                 Membership.create_person(
++                   %{
++                     person_id: person_id,
++                     name: person_name,
++                     email_addresses: [%{email: email, is_primary: true}]
++                   },
++                   consistency: :strong
++                 )
++
++        put_context(context, :people, person_name, %{
++          email: email,
++          name: person_name,
++          person_id: person_id
++        })
++    end
++  end
++
++  defp ensure_custom_group(context, club_name, group_name, email_slug) do
++    group_id = Memba.ID.generate(:group)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreateGroup{
++                 club_id: club_id!(context, club_name),
++                 group_id: group_id,
++                 group_key: nil,
++                 email_slug: email_slug,
++                 name: group_name
++               },
++               consistency: :strong
++             )
++
++    put_context(context, :groups, {club_name, group_name}, group_id)
++  end
++
++  defp add_group_member(context, club_name, group_name, person_name) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddGroupMember{
++                 club_id: club_id!(context, club_name),
++                 group_id: group_id!(context, club_name, group_name),
++                 membership_id: membership_id!(context, club_name, person_name),
++                 person_id: person_id!(context, person_name)
++               },
++               consistency: :strong
++             )
++
++    context
++  end
++
++  defp send_board_conversation(context, sender_name, subject, mode) do
++    Fake.reset()
++    message_id = Memba.ID.generate(:message)
++
++    attrs = %{
++      message_id: message_id,
++      club_id: club_id!(context, @club_name),
++      sender_id: person_id!(context, sender_name),
++      audience_group_id: group_id!(context, @club_name, @board_name),
++      subject: subject,
++      body: "#{subject} details."
++    }
++
++    result =
++      case mode do
++        :current_member -> Messaging.send_club_message_as_current_member(attrs, consistency: :strong)
++        :fixture -> Messaging.send_club_message(attrs, consistency: :strong)
++      end
++
++    assert :ok = result
++    message = Messaging.get_message(message_id)
++
++    context
++    |> Map.put(:last_message_id, message_id)
++    |> Map.put(:last_message_subject, subject)
++    |> Map.put(:sent_message, message)
++    |> put_context(:messages, subject, message)
++  end
++
++  defp assert_board_conversation(context, subject) do
++    message = ensure_recorded_message(context, subject)
++    board_id = group_id!(context, @club_name, @board_name)
++
++    assert Enum.any?(
++             Messaging.list_conversations_for_group(board_id),
++             &(&1.message_id == message.message_id and &1.subject == subject)
++           )
++
++    context
++    |> Map.put(:last_message_subject, subject)
++    |> put_context(:messages, subject, message)
++  end
++
++  defp ensure_recorded_message(context, subject) do
++    case get_in(context, [:messages, subject]) do
++      nil ->
++        group_id = group_id!(context, @club_name, @board_name)
++
++        Messaging.list_conversations_for_group(group_id)
++        |> Enum.find(&(&1.subject == subject))
++        |> case do
++          nil -> flunk("Expected Board conversation #{inspect(subject)}")
++          message -> message
++        end
++
++      message ->
++        message
++    end
++  end
++
++  defp assert_initial_recipients(context, subject, expected_names) do
++    message = message!(context, subject)
++    deliveries = Messaging.list_recipient_deliveries(message.message_id)
++
++    assert Enum.sort(Enum.map(deliveries, & &1.recipient_name)) == Enum.sort(expected_names)
++    dispatch_pending_email_deliveries()
++
++    provider_names =
++      Fake.deliveries()
++      |> Enum.filter(&(&1.message_id == message.message_id))
++      |> Enum.map(& &1.recipient_name)
++
++    assert Enum.sort(provider_names) == Enum.sort(expected_names)
++    context
++  end
++
++  defp refute_recipient(context, subject, person_name) do
++    message = message!(context, subject)
++    person_id = person_id!(context, person_name)
++
++    refute Enum.any?(
++             Messaging.list_recipient_deliveries(message.message_id),
++             &(&1.recipient_id == person_id)
++           )
++
++    dispatch_pending_email_deliveries()
++
++    refute Enum.any?(
++             Fake.deliveries(),
++             &(&1.message_id == message.message_id and &1.recipient_id == person_id)
++           )
++  end
++
++  defp assert_member_access(context, person_name, subject, access_level, expected) do
++    message = message!(context, subject)
++
++    assert Messaging.member_has_conversation_access?(
++             message.message_id,
++             message.club_id,
++             person_id!(context, person_name),
++             access_level
++           ) == expected
++  end
++
++  defp receive_inbound_email(context, sender_name, subject, to_address, opts) do
++    result =
++      Messaging.receive_inbound_club_email(
++        %{
++          provider: "domain-custom-group-conversations",
++          provider_message_id:
++            "custom-group-#{Memba.ID.generate(:message)}-#{String.downcase(sender_name)}",
++          from_address: person_email!(context, sender_name),
++          recipient_addresses: [to_address],
++          subject: subject,
++          text_body: Keyword.fetch!(opts, :text_body),
++          html_body: nil,
++          in_reply_to_message_ids: Keyword.get(opts, :in_reply_to_message_ids, []),
++          references_message_ids: [],
++          attachments: []
++        },
++        consistency: :strong
++      )
++
++    {result, Map.put(context, :last_inbound_email_result, result)}
++  end
++
++  defp outbound_message_id!(message_id) do
++    Messaging.list_recipient_deliveries(message_id)
++    |> Enum.find_value(& &1.outbound_message_id)
++    |> case do
++      nil -> flunk("Expected an outbound Message-ID for #{message_id}")
++      outbound_message_id -> outbound_message_id
++    end
++  end
++
++  defp post_reply(context, person_name, subject, body) do
++    Fake.reset()
++    root = message!(context, subject)
++    reply_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.post_message_reply(
++               %{
++                 message_id: reply_id,
++                 conversation_id: root.message_id,
++                 sender_id: person_id!(context, person_name),
++                 body: body
++               },
++               consistency: :strong
++             )
++
++    reply = Messaging.get_message(reply_id)
++    reply = reply_context(reply, person_name, subject)
++
++    context
++    |> Map.put(:last_reply, reply)
++    |> put_reply_context(subject, person_name, body, reply)
++  end
++
++  defp set_following(context, person_name, subject, true) do
++    message = message!(context, subject)
++
++    assert :ok =
++             Messaging.follow_conversation_as_current_member(
++               %{
++                 club_id: message.club_id,
++                 conversation_id: message.message_id,
++                 member_id: person_id!(context, person_name)
++               },
++               consistency: :strong
++             )
++
++    context
++  end
++
++  defp set_following(context, person_name, subject, false) do
++    message = message!(context, subject)
++    person_id = person_id!(context, person_name)
++
++    if Messaging.following_conversation?(message.message_id, person_id) do
++      assert :ok =
++               Messaging.unfollow_conversation_as_current_member(
++                 %{
++                   club_id: message.club_id,
++                   conversation_id: message.message_id,
++                   member_id: person_id
++                 },
++                 consistency: :strong
++               )
++    end
++
++    context
++  end
++
++  defp assert_reply_recipients(context, sender_name, included_names) do
++    reply = Map.fetch!(context, :last_reply)
++    assert reply.sender_name == sender_name
++    dispatch_pending_email_deliveries()
++
++    recipient_names =
++      Fake.deliveries()
++      |> Enum.filter(&(&1.message_id == reply.message_id))
++      |> Enum.map(& &1.recipient_name)
++
++    Enum.each(included_names, &assert(&1 in recipient_names))
++    context
++  end
++
++  defp refute_reply_recipients(context, reply, excluded_names) do
++    dispatch_pending_email_deliveries()
++
++    recipient_names =
++      Fake.deliveries()
++      |> Enum.filter(&(&1.message_id == reply.message_id))
++      |> Enum.map(& &1.recipient_name)
++
++    Enum.each(excluded_names, &refute(&1 in recipient_names))
++    context
++  end
++
++  defp clear_initial_deliveries(context) do
++    dispatch_pending_email_deliveries()
++    Fake.reset()
++    context
++  end
++
++  defp dispatch_pending_email_deliveries do
++    _deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++    :ok
++  end
++
++  defp group!(context, club_name, group_name) do
++    context
++    |> group_id!(club_name, group_name)
++    |> then(&Membership.get_group/1)
++    |> case do
++      %{group_id: group_id} = group when is_binary(group_id) -> group
++      nil -> flunk("Expected #{group_name} in #{club_name}")
++    end
++  end
++
++  defp group_id!(context, club_name, group_name) do
++    context
++    |> Map.fetch!(:groups)
++    |> Map.fetch!({club_name, group_name})
++  end
++
++  defp club_id!(context, club_name), do: fetch_context!(context, :clubs, club_name)
++
++  defp person_id!(context, person_name) do
++    context
++    |> fetch_context!(:people, person_name)
++    |> Map.fetch!(:person_id)
++  end
++
++  defp person_email!(context, person_name) do
++    context
++    |> fetch_context!(:people, person_name)
++    |> Map.fetch!(:email)
++  end
++
++  defp membership_id!(context, club_name, person_name) do
++    fetch_context!(context, :memberships, {club_name, person_name})
++  end
++
++  defp message!(context, subject), do: fetch_context!(context, :messages, subject)
++
++  defp last_subject!(context) do
++    Map.get(context, :last_message_subject) ||
++      Map.fetch!(context, :sent_message).subject
++  end
++
++  defp fetch_context!(context, collection_key, item_key) do
++    context
++    |> Map.fetch!(collection_key)
++    |> Map.fetch!(item_key)
++  end
++
++  defp put_context(context, collection_key, item_key, value) do
++    update_context(context, collection_key, &Map.put(&1, item_key, value))
++  end
++
++  defp put_reply_context(context, subject, person_name, body, reply) do
++    update_context(context, {:replies, subject}, fn replies ->
++      Map.put(replies, {person_name, body}, reply)
++    end)
++  end
++
++  defp update_context(context, collection_key, fun) do
++    Map.update(context, collection_key, fun.(%{}), fun)
++  end
++
++  defp reply_context(reply, person_name, subject) do
++    %{
++      body: reply.body,
++      club_id: reply.club_id,
++      conversation_id: reply.conversation_id,
++      message_id: reply.message_id,
++      sender_id: reply.sender_id,
++      sender_name: person_name,
++      subject: subject
++    }
++  end
++
++  defp email_address?({_name, address}, expected), do: same_email?(address, expected)
++  defp email_address?(address, expected) when is_binary(address), do: same_email?(address, expected)
++
++  defp same_email?(left, right), do: String.downcase(left) == String.downcase(right)
++
++  defp parse_person_list(text) do
++    text
++    |> String.replace(~r/,?\s+and\s+/, ", ")
++    |> String.split(~r/\s*,\s*/, trim: true)
++  end
++
++  defp scenario_suffix(context) do
++    context
++    |> Map.get(:scenario_name, "scenario")
++    |> :erlang.phash2(1_000_000)
++    |> Integer.to_string(36)
++  end
++end
