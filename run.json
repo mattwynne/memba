@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T20:33:31.768938757Z",
-  "last_event_at": "2026-09-14T21:26:22.946506559Z",
+  "last_event_at": "2026-09-14T21:26:27.320953518Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -10219,9 +10219,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2577,
       "checkpoint": {
-        "timestamp": "2026-09-14T21:26:22.949882647Z",
+        "timestamp": "2026-09-14T21:26:27.146258666Z",
         "current_node": "validate_task",
         "completed_nodes": [
           "start",
@@ -10259,10 +10259,377 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.rankdir": "LR",
+          "internal.run_id": "01M2GSY9BXZSK7X2GP9786P2J6",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.apply_task_verdict.current_node": "sync_task_list",
+          "current_node": "validate_task",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.read_plan": 0,
+          "output.validate_task": {
+            "decision": "accept",
+            "task": "- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.",
+            "reason": "At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write."
+          },
+          "preferred_label": "accept",
+          "thread.revise_task.current_node": "validate_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.revise_task": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.todo_readable": 0,
+          "internal.retry_count.apply_task_verdict": 0,
+          "failure_class": "",
+          "internal.retry_count.start": 0,
+          "response.implement_next_task": "Task 004 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 004 Reuse GroupMemberAdded and the existing projection.`\n\n2. Changes made\n\n- Consolidated trusted and authenticated group additions onto the same `group_member_added_event/1` builder in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:1060).\n- Both `AddGroupMember` and `AddCustomGroupMember` continue emitting the established `GroupMemberAdded` event.\n- Added an integration assertion in [add_custom_group_member_dispatch_test.exs](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) proving that authenticated admission updates the existing `GroupMembership` projection with the exact club, group, membership, and person identities.\n- No new event, projector, projection schema, or projection-only mutation was introduced.\n\n3. Focused validation\n\n- `PATH=\"/workspace/memba/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/group_projection_test.exs test/memba/membership/club_test.exs`\n  - 66 tests, 0 failures.\n- `mix format --check-formatted lib/memba/membership/club.ex test/memba/membership/add_custom_group_member_dispatch_test.exs`\n  - Passed.\n- `git diff --check`\n  - Passed.\n\nFull `dev check` remains explicit task 016 and was not run here.\n\n4. Todo state\n\nStill exactly unchecked and ready for independent review:\n\n`- [ ] 004 Reuse GroupMemberAdded and the existing projection.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0002: the authenticated admission remains an event-sourced aggregate decision projected into the existing Ecto read model.\n- ADR 0007: the event and projection remain owned by the Membership bounded context.\n- ADR 0011: existing caller-generated typed club, group, membership, and person identities are retained.\n- ADR 0024: the Club aggregate emits the membership transition; authorization and mutation are not inferred from or performed directly against the projection.",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.validate_task": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+          "internal.thread_id": "implement_next_task",
+          "graph.default_fidelity": "summary:high",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "failure_signature": "",
+          "internal.retry_count.verify_source_head": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "outcome": "succeeded",
+          "thread.start.current_node": "verify_source_head",
+          "internal.work_dir": "/workspace/memba",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.max_node_visits": "80",
+          "command.output": "blob://sha256/51773fcac56fd98da40082fe027cf72e3483c1a8da64401a6ab3b086605235c6",
+          "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to ",
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write.\"}",
+          "internal.retry_count.resume_gate": 0,
+          "last_stage": "validate_task",
+          "internal.node_visit_count": 5
+        },
+        "node_outcomes": {
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/51773fcac56fd98da40082fe027cf72e3483c1a8da64401a6ab3b086605235c6"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "accept",
+            "context_updates": {
+              "command.output": "blob://sha256/e279a680ae048d0ab66e2ddfa2521932516439fd4e0725c3517a155032093992"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 170,
+              "active_time_ms": 170
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19059a8ddbbd7924d847396f332c0d8fafe9dc29f31ebfa20a6cba7481f98a7b"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93740,
+              "active_time_ms": 93740
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fc8ae99a7b32d42ca67b9bff8ee094681e7130a131c4843242da17fffb9323a9"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5608ddd22619488cd9e32c50169b19f5f4ebb0d2ccd86ffdfa78a35743d6f07e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5ee0f0d12234c892042d0b23b37b750df2c7f7b139acb1e2fc0e4b9d0d768dae"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1719,
+              "active_time_ms": 1719
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a5e3da4fb595b78c08280e5a8d35f5f8d52d5f98e716c9ba0bf9fa278775aae4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a1227baf2245062e6699ab37f0ab3d9dc7bb62d0fd08248e40963cd47b657473"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '428368266c49feca44a1f1756ded7ed8ac16d43a'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 217,
+              "active_time_ms": 217
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Task 004 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 004 Reuse GroupMemberAdded and the existing projection.`\n\n2. Changes made\n\n- Consolidated trusted and authenticated group additions onto the same `group_member_added_event/1` builder in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:1060).\n- Both `AddGroupMember` and `AddCustomGroupMember` continue emitting the established `GroupMemberAdded` event.\n- Added an integration assertion in [add_custom_group_member_dispatch_test.exs](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) proving that authenticated admission updates the existing `GroupMembership` projection with the exact club, group, membership, and person identities.\n- No new event, projector, projection schema, or projection-only mutation was introduced.\n\n3. Focused validation\n\n- `PATH=\"/workspace/memba/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/group_projection_test.exs test/memba/membership/club_test.exs`\n  - 66 tests, 0 failures.\n- `mix format --check-formatted lib/memba/membership/club.ex test/memba/membership/add_custom_group_member_dispatch_test.exs`\n  - Passed.\n- `git diff --check`\n  - Passed.\n\nFull `dev check` remains explicit task 016 and was not run here.\n\n4. Todo state\n\nStill exactly unchecked and ready for independent review:\n\n`- [ ] 004 Reuse GroupMemberAdded and the existing projection.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0002: the authenticated admission remains an event-sourced aggregate decision projected into the existing Ecto read model.\n- ADR 0007: the event and projection remain owned by the Membership bounded context.\n- ADR 0011: existing caller-generated typed club, group, membership, and person identities are retained.\n- ADR 0024: the Club aggregate emits the membership transition; authorization and mutation are not inferred from or performed directly against the projection.",
+              "last_response": "Task 004 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 004 Reuse GroupMemberAdded and the existing projection.`\n\n2. Changes made\n\n- Consolidated trusted and authenticated "
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 131386,
+                    "output_tokens": 3563,
+                    "reasoning_tokens": 2249,
+                    "cache_read_tokens": 376960,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1019770
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 126123,
+              "tool_time_ms": 13820,
+              "active_time_ms": 139943
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to ",
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write.\"}",
+              "output.validate_task": {
+                "decision": "accept",
+                "task": "- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.",
+                "reason": "At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write."
+              }
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 111280,
+                    "output_tokens": 2706,
+                    "reasoning_tokens": 616,
+                    "cache_read_tokens": 265472,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 788796
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 82112,
+              "tool_time_ms": 11685,
+              "active_time_ms": 93797
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "revise_task",
+              "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+              "last_response": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. "
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 453538,
+                    "output_tokens": 8583,
+                    "reasoning_tokens": 4914,
+                    "cache_read_tokens": 1726080,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3535640
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 312534,
+              "tool_time_ms": 262424,
+              "active_time_ms": 574958
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "apply_task_verdict",
+        "git_commit_sha": "73703ba83acac99a490030953f45f99a3cf644f9",
+        "node_visits": {
+          "implement_next_task": 4,
+          "apply_task_verdict": 4,
+          "revise_task": 1,
+          "start": 1,
+          "sync_task_list": 4,
+          "validate_task": 5,
+          "todo_readable": 4,
+          "verify_source_head": 1,
+          "read_plan": 1,
+          "resume_gate": 1,
+          "wip_gate": 1,
+          "preflight_sandbox": 1,
+          "all_tasks_done": 4
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 12,
+          "additions": 771,
+          "deletions": 9
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T21:26:27.325481813Z",
+        "current_node": "apply_task_verdict",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.verify_source_head": 0,
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.all_tasks_done": 0,
-          "internal.thread_id": "implement_next_task",
+          "internal.thread_id": "validate_task",
           "thread.revise_task.current_node": "validate_task",
           "internal.retry_count.wip_gate": 0,
           "internal.fidelity": "summary:high",
@@ -10289,14 +10656,14 @@
           "thread.start.current_node": "verify_source_head",
           "internal.retry_count.resume_gate": 0,
           "thread.verify_source_head.current_node": "read_plan",
-          "current_node": "validate_task",
+          "current_node": "apply_task_verdict",
           "thread.apply_task_verdict.current_node": "sync_task_list",
           "internal.node_visit_count": 5,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write.\"}",
           "graph.max_node_visits": "80",
-          "command.output": "blob://sha256/51773fcac56fd98da40082fe027cf72e3483c1a8da64401a6ab3b086605235c6",
+          "command.output": "blob://sha256/24a5f8586efec3688072b6584149960fd7aa05660c4931e9bd1a240579c4a5b6",
           "thread.sync_task_list.current_node": "todo_readable",
           "internal.retry_count.implement_next_task": 0,
           "failure_signature": "",
@@ -10546,19 +10913,19 @@
             "status": "succeeded",
             "preferred_label": "accept",
             "context_updates": {
-              "command.output": "blob://sha256/e279a680ae048d0ab66e2ddfa2521932516439fd4e0725c3517a155032093992"
+              "command.output": "blob://sha256/24a5f8586efec3688072b6584149960fd7aa05660c4931e9bd1a240579c4a5b6"
             },
             "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 170,
-              "active_time_ms": 170
+              "tool_time_ms": 163,
+              "active_time_ms": 163
             }
           }
         },
-        "next_node_id": "apply_task_verdict",
+        "next_node_id": "sync_task_list",
         "node_visits": {
           "start": 1,
           "verify_source_head": 1,
@@ -10569,7 +10936,7 @@
           "wip_gate": 1,
           "preflight_sandbox": 1,
           "sync_task_list": 4,
-          "apply_task_verdict": 4,
+          "apply_task_verdict": 5,
           "revise_task": 1,
           "validate_task": 5,
           "resume_gate": 1
@@ -12262,7 +12629,12 @@
       "first_event_seq": 2438,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T21:26:22.948847434Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -12277,16 +12649,20 @@
       "started_at": "2026-09-14T21:24:48.795748593Z",
       "handler": "agent",
       "graph_visit": 5,
-      "live_inference_ms": 74531,
-      "live_tool_ms": 11683,
+      "timing": {
+        "wall_time_ms": 94152,
+        "inference_time_ms": 82112,
+        "tool_time_ms": 11685,
+        "active_time_ms": 93797
+      },
       "usage": {
-        "input_tokens": 110822,
-        "output_tokens": 2545,
-        "total_tokens": 332551,
-        "reasoning_tokens": 560,
-        "cache_read_tokens": 218624,
+        "input_tokens": 111280,
+        "output_tokens": 2706,
+        "total_tokens": 380074,
+        "reasoning_tokens": 616,
+        "cache_read_tokens": 265472,
         "cache_write_tokens": 0,
-        "total_usd_micros": 756572
+        "total_usd_micros": 788796
       },
       "model": {
         "provider": "openai",
@@ -12395,51 +12771,80 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 46962,
-        "usage_percent": 17.26544117647059,
+        "input_tokens": 47306,
+        "usage_percent": 17.39191176470588,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-14T21:26:14.582261520Z",
-        "event_seq": 2557,
+        "generated_at": "2026-09-14T21:26:22.946442540Z",
+        "event_seq": 2570,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2993,
-            "usage_percent": 1.1003676470588235
+            "tokens": 2961,
+            "usage_percent": 1.0886029411764706
           },
           {
             "category": "tools",
-            "tokens": 917,
-            "usage_percent": 0.3371323529411765
+            "tokens": 907,
+            "usage_percent": 0.33345588235294116
           },
           {
             "category": "memory",
-            "tokens": 415,
-            "usage_percent": 0.15257352941176472
+            "tokens": 410,
+            "usage_percent": 0.15073529411764705
           },
           {
             "category": "conversation",
-            "tokens": 42631,
-            "usage_percent": 15.673161764705883
+            "tokens": 43021,
+            "usage_percent": 15.816544117647059
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
           }
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "77a0bc38-b611-4e90-80f5-d933e8664290",
-        "started_at": "2026-09-14T21:26:15.374118666Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-14T21:26:19.931635940Z",
-        "first_output_kind": "text",
-        "retries": 0
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "apply_task_verdict@5": {
+      "first_event_seq": 2580,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/24a5f8586efec3688072b6584149960fd7aa05660c4931e9bd1a240579c4a5b6",
+        "exit_code": 0,
+        "duration_ms": 163,
+        "termination": "exited",
+        "output_bytes": 748,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 748,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-14T21:26:27.153570682Z",
+      "handler": "command",
+      "graph_visit": 5,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "agent_control": "running",
       "state": "running"
