@@ -311,7 +311,7 @@ defmodule Memba.Messaging do
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
          {:ok, receive_result} <- dispatch_inbound_email_received(receive_command, dispatch_opts) do
-      if duplicate_inbound_email_receipt?(receive_result) do
+      if completed_duplicate_inbound_email_receipt?(receive_result) do
         duplicate_inbound_email_response(receive_command, receive_result)
       else
         post_first_inbound_club_email(receive_command, dispatch_opts)
@@ -1265,8 +1265,14 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp duplicate_inbound_email_receipt?(%ExecutionResult{events: []}), do: true
-  defp duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
+  defp completed_duplicate_inbound_email_receipt?(%ExecutionResult{
+         events: [],
+         aggregate_state: %InboundEmailReceipt{status: status}
+       })
+       when status in [:accepted, :rejected],
+       do: true
+
+  defp completed_duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
 
   defp duplicate_inbound_email_response(
          receive_command,
@@ -1963,7 +1969,7 @@ defmodule Memba.Messaging do
            :authorization_stability_timeout,
            @default_authorization_stability_timeout
          ) do
-      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      timeout when is_integer(timeout) and timeout >= 0 -> timeout
       _invalid -> @default_authorization_stability_timeout
     end
   end

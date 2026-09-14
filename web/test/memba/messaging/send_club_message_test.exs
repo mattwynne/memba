@@ -28,7 +28,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
 
-  alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
 
@@ -439,7 +438,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
   end
 
-  test "defers provider handoff until lagging membership access projections catch up" do
+  test "startup recovers a projection-timeout deferral after dispatcher restart" do
     Application.put_env(:memba, :email_delivery_projection_timeout, 25)
     Application.put_env(:memba, :authorization_stability_timeout, 25)
 
@@ -555,60 +554,50 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     dispatcher_name = :"#{__MODULE__}.lag_recovery"
 
-    start_supervised!(
-      {EmailDeliveryDispatcher,
-       name: dispatcher_name,
-       dispatch_enabled: true,
-       dispatch_observer: self(),
-       projection_catch_up_retry_interval: 500}
-    )
+    dispatcher_opts = [
+      name: dispatcher_name,
+      dispatch_enabled: true,
+      dispatch_observer: self(),
+      projection_catch_up_retry_interval: 60_000
+    ]
 
-    assert :ok =
-             Memba.ReadModelChanges.publish(
-               EmailDeliveryProjector,
-               %EmailDeliveryCreated{
-                 message_id: carol_delivery.message_id,
-                 delivery_id: carol_delivery.delivery_id,
-                 recipient_id: carol_delivery.recipient_id,
-                 recipient_name: carol_delivery.recipient_name,
-                 recipient_email: carol_delivery.recipient_address
-               },
-               %{},
-               %{}
-             )
+    dispatcher_pid = start_supervised!({EmailDeliveryDispatcher, dispatcher_opts})
 
     assert_receive {:email_delivery_dispatch_requested,
                     %{
-                      source: :read_model_change,
+                      source: :startup,
                       claimed_delivery_ids: initially_claimed_delivery_ids
                     }},
                    1_000
 
     assert carol_delivery_id in initially_claimed_delivery_ids
 
+    dispatcher_monitor = Process.monitor(dispatcher_pid)
+    assert :ok = stop_supervised(EmailDeliveryDispatcher)
+    assert_receive {:DOWN, ^dispatcher_monitor, :process, ^dispatcher_pid, :shutdown}
+
     restart_projector!(membership_projector_child_id)
     restart_projector!(group_membership_projector_child_id)
+    restart_projector!(conversation_access_projector_child_id)
 
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
 
     Memba.ProjectionBarrier.await!(
-      [MembershipProjector, GroupMembershipProjector],
+      [MembershipProjector, GroupMembershipProjector, ConversationGroupAccessProjector],
       checkpoint: checkpoint,
       timeout: 1_000
     )
 
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
 
-    _ = :sys.get_state(dispatcher_name)
-
-    restart_projector!(conversation_access_projector_child_id)
+    start_supervised!({EmailDeliveryDispatcher, dispatcher_opts})
 
     assert_receive {:email_delivery_dispatch_requested,
                     %{
-                      source: :projection_catch_up_retry,
+                      source: :startup,
                       claimed_delivery_ids: retried_delivery_ids
                     }},
-                   1_500
+                   1_000
 
     assert carol_delivery_id in retried_delivery_ids
 

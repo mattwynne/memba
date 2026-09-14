@@ -2,16 +2,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @moduledoc """
   OTP process responsible for asynchronous email delivery dispatch.
 
-  The dispatcher subscribes to committed read-model changes and treats new
-  `EmailDelivery` records as nudges to look for pending delivery work. An
-  authorization-timeout deferral schedules one coalesced, bounded-delay catch-up
-  retry; repeated deferrals replace that timer until the required projections
-  catch up, including when they acknowledge only irrelevant events and publish
-  no read-model change. The dispatcher also owns the provider handoff
-  request-building boundary and persisted dispatch outcomes so command
-  application services do not call email providers directly. Failed deliveries
-  can be retried through the explicit manual retry API; the dispatcher does not
-  automatically retry failed deliveries.
+  The dispatcher checks for pending work on startup and subscribes to committed
+  read-model changes, treating new `EmailDelivery` records as nudges to look
+  again. An authorization-timeout deferral schedules one coalesced, bounded-delay
+  catch-up retry; repeated deferrals replace that timer until the required
+  projections catch up, including when they acknowledge only irrelevant events
+  and publish no read-model change. The startup check restores that pending-work
+  nudge after a dispatcher or application restart. The dispatcher also owns the
+  provider handoff request-building boundary and persisted dispatch outcomes so
+  command application services do not call email providers directly. Failed
+  deliveries can be retried through the explicit manual retry API; the
+  dispatcher does not automatically retry failed deliveries.
   """
 
   use GenServer
@@ -213,6 +214,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
       projection_catch_up_retry_timer: nil
     }
 
+    if state.dispatch_enabled do
+      send(self(), {:dispatch_pending_email_deliveries, %{source: :startup}})
+    end
+
     {:ok, state}
   end
 
@@ -258,6 +263,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   end
 
   defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload, _claimed_deliveries), do: :ok
+
+  defp notify_dispatch_observer(
+         %{dispatch_observer: observer},
+         %{source: :startup},
+         []
+       )
+       when is_pid(observer),
+       do: :ok
 
   defp notify_dispatch_observer(%{dispatch_observer: observer}, payload, claimed_deliveries)
        when is_pid(observer) do

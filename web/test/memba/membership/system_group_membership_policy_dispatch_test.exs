@@ -142,7 +142,9 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
              1
 
     assert count_group_events(club_events, GroupMemberRemoved, admin_group_id, membership_id) == 1
-    assert count_group_events(club_events, GroupMemberRemoved, custom_group_id, membership_id) == 1
+
+    assert count_group_events(club_events, GroupMemberRemoved, custom_group_id, membership_id) ==
+             1
   end
 
   test "redelivered lifecycle events use Club group state rather than handler workflow memory" do

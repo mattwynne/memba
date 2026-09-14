@@ -18,6 +18,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundClubEmailRejected
+  alias Memba.Messaging.Events.InboundEmailReceived
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
@@ -29,6 +30,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
     original_postmark_config = Application.get_env(:memba, Postmark)
     original_resend_config = Application.get_env(:memba, Resend)
+
+    original_authorization_stability_timeout =
+      Application.get_env(:memba, :authorization_stability_timeout)
 
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
     Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
@@ -45,6 +49,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Postmark, original_postmark_config)
       restore_env(Resend, original_resend_config)
+      restore_env(:authorization_stability_timeout, original_authorization_stability_timeout)
       Fake.reset()
     end)
 
@@ -1980,6 +1985,51 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok, _result} =
              Membership.await_group_access_projections(timeout: 1_000)
+  end
+
+  test "provider retry resumes a receipt left incomplete by authorization stabilization" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-authorization-timeout-retry",
+      from_address: "alice@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "Resume after authorization stabilization",
+      text_body: "A provider retry should finish this post."
+    }
+
+    Application.put_env(:memba, :authorization_stability_timeout, 0)
+
+    assert {:error, :authorization_stability_timeout} =
+             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert 1 == count_events(InboundEmailReceived)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+
+    Application.put_env(:memba, :authorization_stability_timeout, 5_000)
+
+    assert {:ok,
+            %{
+              inbound_email_id: inbound_email_id,
+              message_id: message_id,
+              club_id: club_id,
+              sender_id: sender_id
+            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert is_binary(inbound_email_id)
+    assert club_id == kmc.club_id
+    assert sender_id == alice.person_id
+    assert is_binary(message_id)
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
+    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
   end
 
   test "the Admin route rejects inactive and other-club senders before private delivery" do
