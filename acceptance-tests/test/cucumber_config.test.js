@@ -28,6 +28,7 @@ test("default browser Cucumber profile selects all web-backed shared features", 
     "club_member_invitations.feature",
     "club_membership_administration.feature",
     "club_message_replies.feature",
+    "custom_group_creation.feature",
     "email_branding.feature",
     "group_conversations.feature",
     "homepage.feature",
@@ -168,6 +169,29 @@ test("iteration 061 scenarios run in each intended acceptance layer", () => {
       (scenario) =>
         scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
     ),
+    []
+  );
+});
+
+test("iteration 062 custom-group creation scenarios run in each intended acceptance layer", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "custom_group_creation.feature"
+  );
+  const iterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-062")
+  );
+  const domainScenarioNames = iterationScenarios
+    .filter((scenario) => !scenario.tags.includes("@not-domain"))
+    .map((scenario) => scenario.name);
+  const browserScenarioNames = iterationScenarios
+    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+    .map((scenario) => scenario.name);
+
+  assert.equal(iterationScenarios.length, 14);
+  assert.equal(domainScenarioNames.length, 10);
+  assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
+  assert.deepEqual(
+    iterationScenarios.filter((scenario) => scenario.tags.includes("@todo-ui")),
     []
   );
 });
