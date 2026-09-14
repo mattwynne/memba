@@ -1,7 +1,7 @@
 # Admins create usable custom groups
 
 Date: 2026-09-13
-Status: implementing
+Status: merged
 
 Stakeholder review complete; Fabro plan validation pending.
 
