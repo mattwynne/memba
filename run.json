@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T20:33:31.768938757Z",
-  "last_event_at": "2026-09-14T21:45:55.681092003Z",
+  "last_event_at": "2026-09-14T21:45:59.641029465Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -15819,9 +15819,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 3707,
       "checkpoint": {
-        "timestamp": "2026-09-14T21:45:55.847620542Z",
+        "timestamp": "2026-09-14T21:45:59.634569790Z",
         "current_node": "todo_readable",
         "completed_nodes": [
           "start",
@@ -15874,10 +15874,392 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "current_node": "todo_readable",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.resume_gate": 0,
+          "last_stage": "validate_task",
+          "outcome": "succeeded",
+          "output.validate_task": {
+            "decision": "accept",
+            "task": "- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.",
+            "reason": "At clean HEAD 0584e00, the focused lifecycle test in clear_removed_group_member_follows_policy_test.exs exercises club departure, rejoin under a new membership identity, and explicit admission through Membership.add_custom_group_member/2. It proves the old follow remains cleared, the departed group-membership projection stays inactive, the new membership becomes active, and the Club stream contains GroupMemberAdded, GroupMemberRemoved, then a new GroupMemberAdded rather than any projection-only restoration. Independent validation passed all 7 tests with 0 failures. The candidate changes only this test, leaves acceptance feature files untouched, and conforms to ADRs 0002, 0007, 0009, 0011, and 0024."
+          },
+          "internal.thread_id": "sync_task_list",
+          "internal.retry_count.start": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "internal.retry_count.validate_task": 0,
+          "thread.revise_task.current_node": "validate_task",
+          "internal.retry_count.sync_task_list": 0,
+          "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.\",\"reason\":\"At clean HEAD 0584e00, the focused lifecy",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3",
+          "failure_class": "",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "internal.fidelity": "summary:high",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.apply_task_verdict": 0,
+          "internal.run_id": "01M2GSY9BXZSK7X2GP9786P2J6",
+          "response.implement_next_task": "Task 006 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.`\n\n2. Changes made\n\nAdded focused lifecycle coverage in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:307).\n\nThe test proves that:\n\n- Club departure clears the member’s custom-group conversation follow.\n- Club rejoin uses a new membership identity.\n- Explicit custom-group admission returns a confirmed `:member_added` transition.\n- The departed membership remains inactive while the new membership becomes active.\n- The former conversation follow remains cleared.\n- Membership changes are represented by `GroupMemberAdded`, `GroupMemberRemoved`, and a later `GroupMemberAdded` event, then projected normally.\n\nNo production changes were necessary because the accepted tasks 001–005 already use the correct Club aggregate, domain-event, and projection path. No acceptance feature files were changed.\n\n3. Focused validation\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs`\n  - 7 tests, 0 failures.\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/group_projection_test.exs`\n  - 21 tests, 0 failures.\n\n- `mix format --check-formatted test/memba/membership/clear_removed_group_member_follows_policy_test.exs`\n  - Passed.\n\n- `git diff --check`\n  - Passed.\n\nFull `dev check` was not run because it remains the explicit final task 016.\n\n4. Todo state\n\nStill exactly unchecked and ready for independent review:\n\n`- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0002: the regression requires admission to remain an event-sourced aggregate transition.\n- ADR 0007: follow cleanup continues through Membership’s policy collaboration with Messaging’s public API.\n- ADR 0009: group membership read state is updated through the existing projector, with no direct projection mutation.\n- ADR 0011: departure and rejoin retain distinct caller-generated membership identities.\n- ADR 0024: active target validation and custom-group admission remain decisions of the Club consistency boundary.",
+          "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.wip_gate": 0,
+          "internal.node_visit_count": 7,
+          "internal.retry_count.todo_readable": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "failure_signature": "",
+          "graph.rankdir": "LR",
+          "internal.retry_count.preflight_sandbox": 0,
+          "preferred_label": "accept",
+          "thread.apply_task_verdict.current_node": "sync_task_list",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "thread.verify_source_head.current_node": "read_plan",
+          "thread.start.current_node": "verify_source_head",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.revise_task": 0,
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.\",\"reason\":\"At clean HEAD 0584e00, the focused lifecycle test in clear_removed_group_member_follows_policy_test.exs exercises club departure, rejoin under a new membership identity, and explicit admission through Membership.add_custom_group_member/2. It proves the old follow remains cleared, the departed group-membership projection stays inactive, the new membership becomes active, and the Club stream contains GroupMemberAdded, GroupMemberRemoved, then a new GroupMemberAdded rather than any projection-only restoration. Independent validation passed all 7 tests with 0 failures. The candidate changes only this test, leaves acceptance feature files untouched, and conforms to ADRs 0002, 0007, 0009, 0011, and 0024.\"}",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "output.validate_task": {
+                "decision": "accept",
+                "task": "- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.",
+                "reason": "At clean HEAD 0584e00, the focused lifecycle test in clear_removed_group_member_follows_policy_test.exs exercises club departure, rejoin under a new membership identity, and explicit admission through Membership.add_custom_group_member/2. It proves the old follow remains cleared, the departed group-membership projection stays inactive, the new membership becomes active, and the Club stream contains GroupMemberAdded, GroupMemberRemoved, then a new GroupMemberAdded rather than any projection-only restoration. Independent validation passed all 7 tests with 0 failures. The candidate changes only this test, leaves acceptance feature files untouched, and conforms to ADRs 0002, 0007, 0009, 0011, and 0024."
+              },
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.\",\"reason\":\"At clean HEAD 0584e00, the focused lifecycle test in clear_removed_group_member_follows_policy_test.exs exercises club departure, rejoin under a new membership identity, and explicit admission through Membership.add_custom_group_member/2. It proves the old follow remains cleared, the departed group-membership projection stays inactive, the new membership becomes active, and the Club stream contains GroupMemberAdded, GroupMemberRemoved, then a new GroupMemberAdded rather than any projection-only restoration. Independent validation passed all 7 tests with 0 failures. The candidate changes only this test, leaves acceptance feature files untouched, and conforms to ADRs 0002, 0007, 0009, 0011, and 0024.\"}",
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.\",\"reason\":\"At clean HEAD 0584e00, the focused lifecy"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 115626,
+                    "output_tokens": 1710,
+                    "reasoning_tokens": 863,
+                    "cache_read_tokens": 139904,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 725272
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 62600,
+              "tool_time_ms": 10194,
+              "active_time_ms": 72794
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161,
+              "active_time_ms": 161
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a1227baf2245062e6699ab37f0ab3d9dc7bb62d0fd08248e40963cd47b657473"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '428368266c49feca44a1f1756ded7ed8ac16d43a'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 217,
+              "active_time_ms": 217
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/83bb0f28486da85424f68e6f04d5d41004c392bcd717c353960f0efbdf8f8330"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "accept",
+            "context_updates": {
+              "command.output": "blob://sha256/deb9e86c1dc00bd06404463d29620a9db351af457d3bda295be13e0c99b465ba"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19059a8ddbbd7924d847396f332c0d8fafe9dc29f31ebfa20a6cba7481f98a7b"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93740,
+              "active_time_ms": 93740
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fc8ae99a7b32d42ca67b9bff8ee094681e7130a131c4843242da17fffb9323a9"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5097544f1d4ef0b87be21daff467083b70be44149345cd9df50e84e4db6a3c8c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5ee0f0d12234c892042d0b23b37b750df2c7f7b139acb1e2fc0e4b9d0d768dae"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1719,
+              "active_time_ms": 1719
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Task 006 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.`\n\n2. Changes made\n\nAdded focused lifecycle coverage in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:307).\n\nThe test proves that:\n\n- Club departure clears the member’s custom-group conversation follow.\n- Club rejoin uses a new membership identity.\n- Explicit custom-group admission returns a confirmed `:member_added` transition.\n- The departed membership remains inactive while the new membership becomes active.\n- The former conversation follow remains cleared.\n- Membership changes are represented by `GroupMemberAdded`, `GroupMemberRemoved`, and a later `GroupMemberAdded` event, then projected normally.\n\nNo production changes were necessary because the accepted tasks 001–005 already use the correct Club aggregate, domain-event, and projection path. No acceptance feature files were changed.\n\n3. Focused validation\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs`\n  - 7 tests, 0 failures.\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/group_projection_test.exs`\n  - 21 tests, 0 failures.\n\n- `mix format --check-formatted test/memba/membership/clear_removed_group_member_follows_policy_test.exs`\n  - Passed.\n\n- `git diff --check`\n  - Passed.\n\nFull `dev check` was not run because it remains the explicit final task 016.\n\n4. Todo state\n\nStill exactly unchecked and ready for independent review:\n\n`- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0002: the regression requires admission to remain an event-sourced aggregate transition.\n- ADR 0007: follow cleanup continues through Membership’s policy collaboration with Messaging’s public API.\n- ADR 0009: group membership read state is updated through the existing projector, with no direct projection mutation.\n- ADR 0011: departure and rejoin retain distinct caller-generated membership identities.\n- ADR 0024: active target validation and custom-group admission remain decisions of the Club consistency boundary.",
+              "last_response": "Task 006 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.`\n\n2",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 242530,
+                    "output_tokens": 6167,
+                    "reasoning_tokens": 6410,
+                    "cache_read_tokens": 2073216,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2626568
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 278554,
+              "tool_time_ms": 25955,
+              "active_time_ms": 304509
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a5e3da4fb595b78c08280e5a8d35f5f8d52d5f98e716c9ba0bf9fa278775aae4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "revise_task",
+              "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+              "last_response": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. "
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 453538,
+                    "output_tokens": 8583,
+                    "reasoning_tokens": 4914,
+                    "cache_read_tokens": 1726080,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3535640
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 312534,
+              "tool_time_ms": 262424,
+              "active_time_ms": 574958
+            }
+          }
+        },
+        "next_node_id": "all_tasks_done",
+        "git_commit_sha": "7d52d8885fb7265bb21c80cdde74ad638ecdee14",
+        "node_visits": {
+          "validate_task": 7,
+          "read_plan": 1,
+          "all_tasks_done": 6,
+          "revise_task": 1,
+          "verify_source_head": 1,
+          "start": 1,
+          "wip_gate": 1,
+          "todo_readable": 7,
+          "resume_gate": 1,
+          "apply_task_verdict": 7,
+          "sync_task_list": 7,
+          "implement_next_task": 6,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 14,
+          "additions": 1030,
+          "deletions": 9
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T21:45:59.803860987Z",
+        "current_node": "all_tasks_done",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.verify_source_head": 0,
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.all_tasks_done": 0,
-          "internal.thread_id": "sync_task_list",
+          "internal.thread_id": "todo_readable",
           "thread.revise_task.current_node": "validate_task",
           "internal.retry_count.wip_gate": 0,
           "internal.fidelity": "summary:high",
@@ -15904,14 +16286,14 @@
           "thread.start.current_node": "verify_source_head",
           "internal.retry_count.resume_gate": 0,
           "thread.verify_source_head.current_node": "read_plan",
-          "current_node": "todo_readable",
+          "current_node": "all_tasks_done",
           "thread.apply_task_verdict.current_node": "sync_task_list",
           "internal.node_visit_count": 7,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.\",\"reason\":\"At clean HEAD 0584e00, the focused lifecycle test in clear_removed_group_member_follows_policy_test.exs exercises club departure, rejoin under a new membership identity, and explicit admission through Membership.add_custom_group_member/2. It proves the old follow remains cleared, the departed group-membership projection stays inactive, the new membership becomes active, and the Club stream contains GroupMemberAdded, GroupMemberRemoved, then a new GroupMemberAdded rather than any projection-only restoration. Independent validation passed all 7 tests with 0 failures. The candidate changes only this test, leaves acceptance feature files untouched, and conforms to ADRs 0002, 0007, 0009, 0011, and 0024.\"}",
           "graph.max_node_visits": "80",
-          "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3",
+          "command.output": "blob://sha256/f961ce44aa77538c58bcccd2b50e0d26bc948b1c206ce7a7e2b3bc7f90d6532f",
           "thread.sync_task_list.current_node": "todo_readable",
           "internal.retry_count.implement_next_task": 0,
           "failure_signature": "",
@@ -16104,15 +16486,15 @@
           "all_tasks_done": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/83bb0f28486da85424f68e6f04d5d41004c392bcd717c353960f0efbdf8f8330"
+              "command.output": "blob://sha256/f961ce44aa77538c58bcccd2b50e0d26bc948b1c206ce7a7e2b3bc7f90d6532f"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 152,
-              "active_time_ms": 152
+              "tool_time_ms": 156,
+              "active_time_ms": 156
             }
           },
           "read_plan": {
@@ -16173,14 +16555,14 @@
             }
           }
         },
-        "next_node_id": "all_tasks_done",
+        "next_node_id": "implement_next_task",
         "node_visits": {
           "start": 1,
           "verify_source_head": 1,
           "todo_readable": 7,
           "implement_next_task": 6,
           "read_plan": 1,
-          "all_tasks_done": 6,
+          "all_tasks_done": 7,
           "wip_gate": 1,
           "preflight_sandbox": 1,
           "sync_task_list": 7,
@@ -17114,7 +17496,12 @@
       "first_event_seq": 3700,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T21:45:55.846922243Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -17123,12 +17510,28 @@
         "language": "shell",
         "timeout_ms": 120000
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3",
+        "exit_code": 0,
+        "duration_ms": 161,
+        "termination": "exited",
+        "output_bytes": 88,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 88,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-09-14T21:45:55.680483558Z",
       "handler": "command",
       "graph_visit": 7,
+      "timing": {
+        "wall_time_ms": 164,
+        "inference_time_ms": 0,
+        "tool_time_ms": 161,
+        "active_time_ms": 161
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -17138,7 +17541,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "resume_gate@1": {
       "first_event_seq": 65,
@@ -17520,6 +17923,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "all_tasks_done@7": {
+      "first_event_seq": 3710,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T21:45:59.640403330Z",
+      "handler": "command",
+      "graph_visit": 7,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "validate_task@3": {
       "first_event_seq": 1496,
