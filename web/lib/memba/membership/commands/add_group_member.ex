@@ -7,7 +7,9 @@ defmodule Memba.Membership.Commands.AddGroupMember do
 
   This is a trusted internal command registered for system-group policy/backfill
   work and event-sourced fixture setup. It is not the public, actor-authorized
-  path for changing custom-group membership.
+  path for changing custom-group membership. Web callers must use
+  `Memba.Membership.add_custom_group_member/2`, whose actor-bearing command is
+  authorized by the Club aggregate.
   """
 
   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]

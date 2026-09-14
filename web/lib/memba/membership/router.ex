@@ -4,6 +4,10 @@ defmodule Memba.Membership.Router do
 
   Membership activation and removal share the Club aggregate boundary with
   club roles and their invariants. There is no membership-ID aggregate route.
+
+  The router also retains trusted actor-free commands used by Membership
+  policies and backfills. Web delivery uses the public `Memba.Membership`
+  application service rather than dispatching those commands directly.
   """
 
   use Commanded.Commands.Router
