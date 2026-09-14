@@ -15,7 +15,7 @@
 - [x] 013 Existing last-member/last-Admin invariants stay intact.
 - [x] 014 Add the new-group LiveView/form using shared inputs and route helpers.
 - [x] 015 Use server-side live validation/preview, rechecking at submit, with accessible field associations.
-- [ ] 016 Reuse normal pending/success and generic technical-error treatment.
+- [x] 016 Reuse normal pending/success and generic technical-error treatment.
 - [ ] 017 Extend group queries/routing only where the existing generic paths need it.
 - [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.
 - [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.
