@@ -472,3 +472,50 @@ The failed browser scenario was `Pat cannot remove Robin while Robin is the only
 A focused Node regression in `acceptance-tests/test/membership_administration.test.js` models the page as initially disconnected and rejects a click before the connection wait. It failed before the change, then passed after the helper began calling the existing `waitForLiveViewConnected` before Remove. This proves the missing synchronization in the helper; the original run did not capture connection state, so it is not proof of that run's precise socket timing.
 
 The named browser scenario then passed (one scenario, seven steps) with the same database/node settings. No application code, Gherkin, business assertion, or timeout was changed. This bounded helper repair follows the existing LiveView-readiness convention rather than rerunning a known unsynchronized click or extending assertion timeouts.
+
+### Additional observation: 2026-09-14 — iteration 062 stopped after 23 of 25 tasks
+
+#### Context and workflow step
+
+Iteration 062, Create custom groups (`docs/iterations/062-create-custom-groups/plan.md`), was progressing through implementation toward acceptance testing and publication. Matt supplied this status when requesting the note:
+
+> 062: progressed through 23 of 25 tasks, including the difficult email-access fixes. The latest run then hit a 40-minute timeout. Two acceptance-testing tasks remain; it is not merged.
+
+This is reported run evidence, not an independent inspection of its logs. The run ID, active node/task, and checkpoint were not supplied. The remaining tasks do not establish which task was active when the timeout fired.
+
+#### Expected standard
+
+The workflow should complete acceptance testing and the required quality gates before merging. If a time budget prevents completion, it should preserve completed and pending work separately and provide a clear, safe recovery handoff rather than leave a nearly finished iteration stopped without an obvious next step.
+
+The current standard in `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md` requires focused per-task checks, awareness of the 600-second command and 2,400-second node budgets, and blocker/recovery evidence when validation cannot finish. Explicit final-validation tasks still require successful validation; progress counts are not a substitute.
+
+#### Actual abnormality and impact
+
+The latest run stopped at a reported 40-minute timeout after progress through 23 of 25 tasks, including the difficult email-access fixes. Two acceptance-testing tasks remain and the iteration is not merged. Delivery is blocked pending recovery and completion of acceptance testing. There is no evidence here that completed work was lost, that the 23 tasks were independently accepted, or that a product assertion failed.
+
+This repeats the late-delivery timeout symptom recorded above. It does not establish that the earlier full-suite duplication, child-agent waits, or teardown defect caused this run's failure.
+
+#### What allowed it to happen — suspected system weakness
+
+The suspected weakness is the boundary between bounded task execution and recovery: useful progress can still end in a hard stop before acceptance work finishes, while a prompt-level instruction to report a blocker cannot guarantee a handoff after cancellation.
+
+Local inspection at `7b7ee1b85` confirms that `implement_next_task` still has a 2,400-second timeout. Its failure edge now leads to `task_stopped`, whose static message asks the operator to inspect the preceding stage and latest verdict; it does not itself produce a timeout-specific task/checkpoint handoff. The earlier `task_not_ready` wording in this note is historical, not the current graph. The failed run's workflow revision and actual terminal output remain unverified.
+
+The observation warrants checking whether acceptance work fits the execution budget and whether stopping preserves enough evidence to resume safely. It does not justify concluding that 25 tasks exceeded a run limit or that the timeout should simply be raised.
+
+#### Relationship to the recent failure-handling fix
+
+The [2026-09-13 task-verdict fix](2026-09-13-task-retry-verdict-terminates-iteration.md#resolution) separates a completed review requesting revision from failure to execute a node. Its strict `accept / revise / blocked` verdict and deterministic application step keep repairable candidates pending, route them through bounded in-place revision, and check off only accepted tasks. Execution failures still stop deliberately; automatic timeout recovery was not part of that fix.
+
+The earlier focused-validation and single-owner changes in this note reduce avoidable work inside the deadline. They do not guarantee completion or a handoff after hard cancellation. Iteration 062 therefore adds evidence of the remaining timeout symptom, not proof that the new revision routing regressed. Confirm the run's workflow revision and failing node before attributing it to either mechanism; old run branches may retain the earlier workflow and check-off rules.
+
+#### Open questions
+
+- Which run, workflow revision, node, and selected task timed out, and what command or activity consumed the budget?
+- Which checkpoint preserves the 23 tasks, what independent acceptance evidence exists, and what partial work remains for the two unchecked tasks?
+- Did the run provide a usable recovery handoff, and did it follow the current focused-validation and budget rules?
+
+#### Possible prevention ideas
+
+- Make timeout handoff deterministic: record the active task, last command/result, accepted versus pending work, checkpoint, and supported recovery path even when the agent cannot return a summary.
+- Check acceptance-task scope and expected command duration against the available budget before execution; preserve all required tests and final quality gates.
