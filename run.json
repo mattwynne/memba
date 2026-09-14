@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T03:12:31.611605878Z",
-  "last_event_at": "2026-09-14T03:38:23.956043337Z",
+  "last_event_at": "2026-09-14T03:38:27.802672466Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2858,9 +2858,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1119,
       "checkpoint": {
-        "timestamp": "2026-09-14T03:38:23.961004471Z",
+        "timestamp": "2026-09-14T03:38:27.641378919Z",
         "current_node": "validate_task",
         "completed_nodes": [
           "start",
@@ -2877,7 +2877,293 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.node_visit_count": 1,
+          "internal.work_dir": "/workspace/memba",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.start.current_node": "verify_source_head",
+          "internal.retry_count.verify_source_head": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.read_plan": 0,
+          "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
+          "internal.run_id": "01M2EYC0HJJ4ATR8WGJZFKYYZN",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.resume_gate": 0,
+          "command.output": "blob://sha256/bf59d3750cda1b87b1e3f1d785912dabaa3023af385e17d14204b5ddd4c58d2c",
+          "failure_class": "",
+          "graph.rankdir": "LR",
+          "internal.retry_count.todo_readable": 0,
+          "failure_signature": "",
+          "internal.fidelity": "summary:high",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.todo_readable.current_node": "all_tasks_done",
           "current_node": "validate_task",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.thread_id": "implement_next_task",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.wip_gate": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "response.implement_next_task": "Task 019’s candidate implementation is ready for independent review and remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n2. Changes made\n\n- Preserved the existing provider-handoff safety work in [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:125):\n  - waits for `Message` and `ConversationGroupAccess`;\n  - waits for Membership’s `Membership` and `GroupMembership` projections through the public Membership API;\n  - repeats authorization if the event-store checkpoint changes;\n  - performs the final stable authorization read immediately before calling the provider.\n- Projection timeouts now defer delivery instead of creating a terminal failure:\n  - normal dispatch returns to `pending`;\n  - manual retry returns to `failed` while preserving its existing diagnostics;\n  - neither path increments the attempt count or calls the provider.\n- Added a configurable projection timeout for deterministic lag testing while retaining the 5-second production default.\n- Extended [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:306) to prove departure/rejoin clears the former member’s follow, denies replies, excludes them from future recipients, and blocks an already-pending private email.\n- Added a projection-lag scenario at [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:433):\n  - both Membership access projectors are stopped;\n  - departure is committed while their read models still incorrectly show access;\n  - provider handoff is deferred without exposing content or recording failure;\n  - after projections catch up, the departed recipient is permanently rejected while the authorized recipient is delivered normally.\n- No dashboard, retry UI, provider transaction, or database lock around an external provider call was introduced.\n\n3. Validation\n\nPassing:\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/send_club_message_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba_web/controllers/conversation_follow_controller_test.exs`\n  - 57 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/send_club_message_test.exs`\n  - 13 tests, 0 failures after the final follow-cleanup assertion.\n- `MIX_ENV=test mix format --check-formatted lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/send_club_message_test.exs`\n  - passed.\n- `git diff --check`\n  - passed.\n\nThe new lag test was first run red and reproduced the defect: projection timeouts marked deliveries failed with `recipient_access_projection_timeout`. It passed after implementing deferral.\n\n`dev check --quick` was attempted but could not complete because its formatter tried to rewrite sandbox-owned modified files and received `permission denied`. The unrelated formatting mutation it made before stopping was reverted. Per the task workflow, full `dev check` remains explicitly owned by pending task 021.\n\n4. Exact unchecked line\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0007: Messaging obtains membership authorization through Membership’s public API; it does not query Membership projection schemas directly.\n- ADR 0009: the implementation treats projection state as asynchronous read models and does not move cross-context side effects into projectors.\n- ADR 0021: existing committed read-model notifications remain unchanged.\n- ADR 0022: authorization uses explicit event-store checkpoints and projection barriers for all four required projectors.\n- ADR 0024: Club remains the authoritative owner of membership departure and custom-group removal facts.\n- ADRs 0004 and 0005: the existing Message aggregate and resolved-recipient delivery model remain intact.",
+          "graph.default_fidelity": "summary:high",
+          "last_stage": "validate_task",
+          "outcome": "succeeded",
+          "output.validate_task": {
+            "decision": "revise",
+            "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
+            "reason": "The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean."
+          },
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean.\"}",
+          "internal.retry_count.validate_task": 0,
+          "thread.resume_gate.current_node": "sync_task_list"
+        },
+        "node_outcomes": {
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9c6ae4f76d28d258a33101ca5400535ef4d6d7793c5dcc91690ddd6bd4989926"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6e68aad8af2f88aaeb4e0e49ad1be56c30282f0db54f39a42d921a644a308573"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d02ae3fbcf009686d036f0f3c3931835e85e384c508c28e35fb843d5318f329e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean.\"}",
+              "output.validate_task": {
+                "decision": "revise",
+                "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
+                "reason": "The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean."
+              },
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 226695,
+                    "output_tokens": 5301,
+                    "reasoning_tokens": 5154,
+                    "cache_read_tokens": 1022464,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1958357
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 252041,
+              "tool_time_ms": 235137,
+              "active_time_ms": 487178
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f7d479576a039ac7cb97566e18806cd07a922f641cab187321eba2b3606cf8d5"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '66e9acd4eb478fc028ba97536040b5d693ca051b'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1eefb75549c1f4a856df127950cda780b2b7e7227005f1814863ee211db8d577"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1607,
+              "active_time_ms": 1607
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf59d3750cda1b87b1e3f1d785912dabaa3023af385e17d14204b5ddd4c58d2c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c1d21d6b75b9d2b3a2e16ab0d1fb9e6b2383dde2892e313c2700c39e03cabb80"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 94221,
+              "active_time_ms": 94221
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Task 019’s candidate implementation is ready for independent review and remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n2. Changes made\n\n- Preserved the existing provider-handoff safety work in [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:125):\n  - waits for `Message` and `ConversationGroupAccess`;\n  - waits for Membership’s `Membership` and `GroupMembership` projections through the public Membership API;\n  - repeats authorization if the event-store checkpoint changes;\n  - performs the final stable authorization read immediately before calling the provider.\n- Projection timeouts now defer delivery instead of creating a terminal failure:\n  - normal dispatch returns to `pending`;\n  - manual retry returns to `failed` while preserving its existing diagnostics;\n  - neither path increments the attempt count or calls the provider.\n- Added a configurable projection timeout for deterministic lag testing while retaining the 5-second production default.\n- Extended [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:306) to prove departure/rejoin clears the former member’s follow, denies replies, excludes them from future recipients, and blocks an already-pending private email.\n- Added a projection-lag scenario at [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:433):\n  - both Membership access projectors are stopped;\n  - departure is committed while their read models still incorrectly show access;\n  - provider handoff is deferred without exposing content or recording failure;\n  - after projections catch up, the departed recipient is permanently rejected while the authorized recipient is delivered normally.\n- No dashboard, retry UI, provider transaction, or database lock around an external provider call was introduced.\n\n3. Validation\n\nPassing:\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/send_club_message_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba_web/controllers/conversation_follow_controller_test.exs`\n  - 57 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/send_club_message_test.exs`\n  - 13 tests, 0 failures after the final follow-cleanup assertion.\n- `MIX_ENV=test mix format --check-formatted lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/send_club_message_test.exs`\n  - passed.\n- `git diff --check`\n  - passed.\n\nThe new lag test was first run red and reproduced the defect: projection timeouts marked deliveries failed with `recipient_access_projection_timeout`. It passed after implementing deferral.\n\n`dev check --quick` was attempted but could not complete because its formatter tried to rewrite sandbox-owned modified files and received `permission denied`. The unrelated formatting mutation it made before stopping was reverted. Per the task workflow, full `dev check` remains explicitly owned by pending task 021.\n\n4. Exact unchecked line\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0007: Messaging obtains membership authorization through Membership’s public API; it does not query Membership projection schemas directly.\n- ADR 0009: the implementation treats projection state as asynchronous read models and does not move cross-context side effects into projectors.\n- ADR 0021: existing committed read-model notifications remain unchanged.\n- ADR 0022: authorization uses explicit event-store checkpoints and projection barriers for all four required projectors.\n- ADR 0024: Club remains the authoritative owner of membership departure and custom-group removal facts.\n- ADRs 0004 and 0005: the existing Message aggregate and resolved-recipient delivery model remain intact.",
+              "last_stage": "implement_next_task",
+              "last_response": "Task 019’s candidate implementation is ready for independent review and remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff bou"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 367143,
+                    "output_tokens": 15826,
+                    "reasoning_tokens": 13721,
+                    "cache_read_tokens": 6077440,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5760845
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 776688,
+              "tool_time_ms": 154638,
+              "active_time_ms": 931326
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2c689d635cca514d7dea46648c9c158365c87f9f1786964d0e3c0f47dc1469d5"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          }
+        },
+        "next_node_id": "apply_task_verdict",
+        "git_commit_sha": "d743b4b6feae16b81303327244c20f72262d2327",
+        "node_visits": {
+          "all_tasks_done": 1,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "verify_source_head": 1,
+          "resume_gate": 1,
+          "start": 1,
+          "sync_task_list": 1,
+          "todo_readable": 1,
+          "implement_next_task": 1,
+          "validate_task": 1,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 2,
+          "additions": 182,
+          "deletions": 6
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T03:38:27.804904922Z",
+        "current_node": "apply_task_verdict",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "current_node": "apply_task_verdict",
           "output.validate_task": {
             "decision": "revise",
             "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
@@ -2893,6 +3179,7 @@
           "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean.\"}",
           "internal.run_id": "01M2EYC0HJJ4ATR8WGJZFKYYZN",
           "internal.retry_count.all_tasks_done": 0,
+          "preferred_label": "revise",
           "thread.read_plan.current_node": "wip_gate",
           "internal.retry_count.read_plan": 0,
           "graph.default_fidelity": "summary:high",
@@ -2908,15 +3195,17 @@
           "thread.todo_readable.current_node": "all_tasks_done",
           "internal.node_visit_count": 1,
           "internal.retry_count.start": 0,
-          "command.output": "blob://sha256/bf59d3750cda1b87b1e3f1d785912dabaa3023af385e17d14204b5ddd4c58d2c",
+          "command.output": "blob://sha256/e04ae19891aefa665418b6dbb99c5a38f4dbc5728f13a2ba7ce31538daf7f333",
           "thread.sync_task_list.current_node": "todo_readable",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.validate_task.current_node": "apply_task_verdict",
           "graph.max_node_visits": "80",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
           "internal.retry_count.sync_task_list": 0,
-          "internal.thread_id": "implement_next_task",
+          "internal.thread_id": "validate_task",
           "failure_class": "",
+          "internal.retry_count.apply_task_verdict": 0,
           "thread.resume_gate.current_node": "sync_task_list",
           "graph.rankdir": "LR",
           "failure_signature": "",
@@ -3025,6 +3314,21 @@
             "status": "succeeded",
             "usage": null
           },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/e04ae19891aefa665418b6dbb99c5a38f4dbc5728f13a2ba7ce31538daf7f333"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/062-create-custom-groups/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
           "read_plan": {
             "status": "succeeded",
             "context_updates": {
@@ -3118,11 +3422,12 @@
             }
           }
         },
-        "next_node_id": "apply_task_verdict",
+        "next_node_id": "revise_task",
         "node_visits": {
           "implement_next_task": 1,
           "preflight_sandbox": 1,
           "validate_task": 1,
+          "apply_task_verdict": 1,
           "sync_task_list": 1,
           "verify_source_head": 1,
           "wip_gate": 1,
@@ -3455,6 +3760,46 @@
       "agent_control": "running",
       "state": "succeeded"
     },
+    "apply_task_verdict@1": {
+      "first_event_seq": 1122,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/062-create-custom-groups/plan.md'",
+        "command": "exec 2>&1\npython3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/062-create-custom-groups/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/e04ae19891aefa665418b6dbb99c5a38f4dbc5728f13a2ba7ce31538daf7f333",
+        "exit_code": 0,
+        "duration_ms": 152,
+        "termination": "exited",
+        "output_bytes": 1500,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 1500,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-14T03:38:27.646621052Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
+    },
     "todo_readable@1": {
       "first_event_seq": 87,
       "prompt": null,
@@ -3560,7 +3905,12 @@
       "first_event_seq": 581,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T03:38:23.960051935Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -3575,16 +3925,20 @@
       "started_at": "2026-09-14T03:30:16.411647037Z",
       "handler": "agent",
       "graph_visit": 1,
-      "live_inference_ms": 252029,
-      "live_tool_ms": 235129,
+      "timing": {
+        "wall_time_ms": 487547,
+        "inference_time_ms": 252041,
+        "tool_time_ms": 235137,
+        "active_time_ms": 487178
+      },
       "usage": {
-        "input_tokens": 532995,
-        "output_tokens": 11579,
-        "total_tokens": 3428430,
-        "reasoning_tokens": 13456,
-        "cache_read_tokens": 2870400,
+        "input_tokens": 226695,
+        "output_tokens": 5301,
+        "total_tokens": 1259614,
+        "reasoning_tokens": 5154,
+        "cache_read_tokens": 1022464,
         "cache_write_tokens": 0,
-        "total_usd_micros": 4851225
+        "total_usd_micros": 1958357
       },
       "model": {
         "provider": "openai",
@@ -3596,9 +3950,7 @@
           "depth": 1,
           "task": "Independently review candidate task 019 in /workspace/memba without editing files. Focus on web/lib/memba/messaging/email_delivery_dispatcher.ex and web/test/memba/messaging/send_club_message_test.exs changes from 66e9acd..HEAD, related authorization/projection semantics, races, task/plan and ADR compliance. Identify concrete defects or conclude sound, citing lines/tests. Do not run broad dev check; read-only/testing allowed.",
           "status": {
-            "kind": "completed",
-            "success": true,
-            "turns_used": 46
+            "kind": "closed"
           }
         }
       ],
@@ -3717,7 +4069,7 @@
         "warnings": []
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "sync_task_list@1": {
       "first_event_seq": 77,
