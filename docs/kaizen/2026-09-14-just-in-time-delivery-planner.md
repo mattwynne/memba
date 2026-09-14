@@ -1,6 +1,6 @@
 # Just-in-time delivery planner
 
-Status: approved for implementation; not yet implemented or validated.
+Status: implemented in isolated branch `kaizen/delivery-planner`; deterministic and native runtime validation passed. Operational effectiveness is pending a later authorized real delivery run.
 
 ## Decision
 
@@ -109,3 +109,18 @@ Use focused deterministic tests and the installed Fabro runtime harness first. C
 Then run full `dev check` for this workflow/config change on the exact committed state, or with the final diff staged as required by project guidance. Use isolated local database/server settings; do not compete with a live recovery's resources. Capture exit status and exact tree/commit. If an unrelated failure occurs, investigate it and report it accurately rather than weakening tests or claiming a pass.
 
 Commit scoped implementation and documentation changes. Do not push, merge, start delivery or remove Fabro runs. Update the original kaizen note with changes and actual validation; leave operational effectiveness pending until a subsequent authorized delivery demonstrates task completion, useful early replan and bounded context in practice.
+
+## Implementation status — 2026-09-14
+
+Implemented in the isolated delivery-planner worktree/branch. The workflow now prepares each task through a delivery planner, stores durable `.delivery/` execution state, worker packet, worker result and review artifacts beside the iteration plan, validates packet provenance deterministically, routes worker replan requests back to the planner without review/check-off, and returns accepted/revision verdicts to the planner before selecting the next worker packet. Task-loop model nodes use minimal Fabro fidelity and explicit artifact loading. Existing independent review, exact-task check-off, bounded revision worker visits, final `dev ci`, plan conformance, final artifact and publication gates were preserved.
+
+Validation performed for this branch:
+
+- `bash .fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh` — passed, including delivery-planner artifact contract and verdict helper tests.
+- `bash .fabro/workflows/iteration-implementation/scripts/test_sync_task_list.sh` — passed.
+- `bash .fabro/workflows/iteration-implementation/scripts/test_workflow_routing.sh` — passed.
+- All iteration-implementation shell helper tests under `.fabro/workflows/iteration-implementation/scripts/test_*.sh` — passed.
+- All iteration-implementation Python tests under `.fabro/workflows/iteration-implementation/scripts/test_*.py` — passed, including the native Fabro runtime fixture with mock/scripted nodes and no model calls.
+- Final full gate on the final staged diff: `env -u DEVENV_RUNTIME MEMBA_POSTGRES_PORT=15461 ACCEPTANCE_SERVER_NODE=memba_delivery_planner@localhost ./bin/dev check` — passed with 1292 tests / 0 failures and 145 acceptance scenarios / 1052 steps passing.
+
+Operational effectiveness remains pending: no live delivery run was started or modified for this implementation.

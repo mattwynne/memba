@@ -6,9 +6,11 @@ digraph IterationImplementation {
         model_stylesheet="
             * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
             #read_plan { reasoning_effort: low; }
-            #sync_task_list { reasoning_effort: high; }
+            #sync_task_list { reasoning_effort: low; }
             #resume_gate { reasoning_effort: low; }
+            #delivery_planner { reasoning_effort: high; }
             #implement_next_task { reasoning_effort: high; }
+            #revise_task { reasoning_effort: high; }
             #validate_task { reasoning_effort: high; }
             #fix_dev_check { reasoning_effort: high; }
             #plan_conformance_gate { reasoning_effort: high; }
@@ -107,17 +109,50 @@ digraph IterationImplementation {
         timeout="120s"
     ]
 
-    implement_next_task [
-        label="Implement Next Task",
-        prompt="@prompts/implement_next_task.md",
+    before_delivery_planner [
+        label="Snapshot Before Delivery Planner",
+        shape=parallelogram,
+        script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner '{{ inputs.plan_path }}'",
+        timeout="120s"
+    ]
+
+    delivery_planner [
+        label="Delivery Planner",
+        prompt="@prompts/delivery_planner.md",
+        fidelity="truncate",
         timeout="2400s",
         max_visits=30
+    ]
+
+    guard_delivery_packet [
+        label="Validate Delivery Packet",
+        shape=parallelogram,
+        output_schema="routing",
+        script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner '{{ inputs.plan_path }}'",
+        timeout="120s"
+    ]
+
+    implement_next_task [
+        label="Implement Prepared Task",
+        prompt="@prompts/implement_next_task.md",
+        fidelity="truncate",
+        timeout="2400s",
+        max_visits=30
+    ]
+
+    route_worker_result [
+        label="Route Worker Result",
+        shape=parallelogram,
+        output_schema="routing",
+        script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker '{{ inputs.plan_path }}'",
+        timeout="120s"
     ]
 
     validate_task [
         label="Review Candidate Task",
         output_schema="@schemas/task-verdict.json",
         prompt="@prompts/validate_task.md",
+        fidelity="truncate",
         max_visits=30
     ]
 
@@ -139,8 +174,9 @@ digraph IterationImplementation {
     // Iteration-wide guard, not per task. Fabro 0.316 stops BEFORE visit 3,
     // allowing two executed revisions (the same guard as the former reset node).
     revise_task [
-        label="Revise Candidate Task",
+        label="Revise Prepared Task",
         prompt="@prompts/implement_next_task.md",
+        fidelity="truncate",
         timeout="2400s",
         max_visits=3
     ]
@@ -272,18 +308,30 @@ digraph IterationImplementation {
     sync_task_list -> task_stopped
     todo_readable -> all_tasks_done [condition="outcome=succeeded"]
     todo_readable -> task_stopped
-    all_tasks_done -> implement_next_task [label="Tasks remain", condition="outcome=succeeded"]
+    all_tasks_done -> before_delivery_planner [label="Tasks remain", condition="outcome=succeeded"]
     all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=failed"]
     all_tasks_done -> task_stopped
-    implement_next_task -> validate_task [condition="outcome=succeeded"]
+    before_delivery_planner -> delivery_planner [condition="outcome=succeeded"]
+    before_delivery_planner -> task_stopped
+    delivery_planner -> guard_delivery_packet [condition="outcome=succeeded"]
+    delivery_planner -> task_stopped
+    guard_delivery_packet -> implement_next_task [condition="outcome=succeeded && preferred_label=implement"]
+    guard_delivery_packet -> revise_task [condition="outcome=succeeded && preferred_label=revise"]
+    guard_delivery_packet -> dev_check [condition="outcome=succeeded && preferred_label=all_done"]
+    guard_delivery_packet -> task_stopped
+    implement_next_task -> route_worker_result [condition="outcome=succeeded"]
     implement_next_task -> task_stopped
+    revise_task -> route_worker_result [condition="outcome=succeeded"]
+    revise_task -> task_stopped
+    route_worker_result -> validate_task [condition="outcome=succeeded && preferred_label=review"]
+    route_worker_result -> before_delivery_planner [condition="outcome=succeeded && preferred_label=replan"]
+    route_worker_result -> task_stopped [condition="outcome=succeeded && preferred_label=human_blocked"]
+    route_worker_result -> task_stopped
     validate_task -> apply_task_verdict [condition="outcome=succeeded"]
     validate_task -> task_stopped
-    apply_task_verdict -> sync_task_list [condition="outcome=succeeded && preferred_label=accept"]
-    apply_task_verdict -> revise_task [condition="outcome=succeeded && preferred_label=revise"]
+    apply_task_verdict -> before_delivery_planner [condition="outcome=succeeded && preferred_label=accept"]
+    apply_task_verdict -> before_delivery_planner [condition="outcome=succeeded && preferred_label=revise"]
     apply_task_verdict -> task_stopped
-    revise_task -> validate_task [condition="outcome=succeeded"]
-    revise_task -> task_stopped
     // Fabro requires fallback edges. task_stopped fails without reaching normal exit,
     // avoiding an unrelated unsatisfied publish goal gate as the terminal error.
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Create or preserve an iteration implementation todo list.
+"""Create or preserve an iteration implementation todo list bootstrap.
 
 The approved plan is the source of scope. The todo file is execution state; once
-it exists, this helper preserves it. On first creation, split substantive
-Implementation Plan sub-bullets into separate one-node-sized tasks rather than
-flattening a broad numbered plan item into one oversized todo.
+it exists, this helper preserves it. This script is only mechanical bootstrap
+compatibility for final artifact/conformance checks; the delivery planner owns
+semantic sizing, splitting, combining and ordering before each worker packet.
 """
 
 from __future__ import annotations
@@ -186,7 +186,6 @@ def sync_task_list(plan_path: Path, todo_path: Path) -> None:
     section = implementation_plan_lines(plan_text, plan_path)
     items = parse_plan_items(section, plan_path)
     tasks = implementation_tasks_only(task_texts(items))
-    validate_granularity(tasks)
 
     todo_path.parent.mkdir(parents=True, exist_ok=True)
     todo_path.write_text(render_todo(tasks))

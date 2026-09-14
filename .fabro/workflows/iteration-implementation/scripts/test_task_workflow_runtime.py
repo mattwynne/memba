@@ -32,7 +32,8 @@ TASK_LATER = "- [ ] later010 implement the later task"
 TASK_ACCEPTED = "- [x] task001 already accepted"
 
 TASK_NODES = {
-    "sync_task_list", "todo_readable", "all_tasks_done", "implement_next_task",
+    "sync_task_list", "todo_readable", "all_tasks_done", "before_delivery_planner",
+    "delivery_planner", "guard_delivery_packet", "implement_next_task", "route_worker_result",
     "validate_task", "apply_task_verdict", "task_stopped", "revise_task",
     "dev_check", "publish_to_main",
 }
@@ -155,7 +156,7 @@ class FabroTaskRuntime(unittest.TestCase):
         shutil.copy2(WORKFLOW_DIR / "schemas/task-verdict.json", fixture / "schemas/task-verdict.json")
         helpers = fixture / ".fabro/workflows/iteration-implementation/scripts"
         helpers.mkdir(parents=True)
-        for name in ("apply_task_verdict.py", "sync_task_list.py"):
+        for name in ("apply_task_verdict.py", "sync_task_list.py", "delivery_planner_state.py"):
             shutil.copy2(WORKFLOW_DIR / "scripts" / name, helpers / name)
 
         (fixture / "scenario.json").write_text(json.dumps(scenario, indent=2) + "\n")
@@ -211,7 +212,7 @@ class FabroTaskRuntime(unittest.TestCase):
             block = nodes[name]
             # Keep production schema, stdin_source, limits and command bodies.
             # Replace only LLM work and delivery side effects with inert fixtures.
-            if name in ("implement_next_task", "validate_task", "revise_task"):
+            if name in ("delivery_planner", "implement_next_task", "validate_task", "revise_task"):
                 command = "python3 scripts/validate.py" if name == "validate_task" else f"python3 scripts/step.py {name}"
                 block = re.sub(r'prompt="[^"]*"', f'shape=parallelogram, script="{command}"', block)
             elif name in ("dev_check", "publish_to_main"):
@@ -314,13 +315,31 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertIn(TASK_CURRENT.replace("[ ]", "[x]"), reviews[2])
         self.assertIn(TASK_LATER, reviews[2])
         self.assertEqual((fixture / "work.log").read_text().splitlines(), [
-            f"implement_next_task:{TASK_CURRENT}", f"revise_task:{TASK_CURRENT}",
-            f"implement_next_task:{TASK_LATER}",
+            f"implement_next_task:{TASK_CURRENT}:ready_for_review", f"revise_task:{TASK_CURRENT}:ready_for_review",
+            f"implement_next_task:{TASK_LATER}:ready_for_review",
         ])
         self.assertNotIn("- [ ]", self.todo(fixture))
         self.assertIn(TASK_ACCEPTED, self.todo(fixture))
         self.assertEqual(result["stages"].count("apply_task_verdict"), 3)
         self.assertTrue((fixture / "published.txt").exists())
+        combined = result["combined"]
+        self.assertIn("Fidelity resolved node=delivery_planner fidelity=truncate", combined)
+        self.assertIn("Fidelity resolved node=implement_next_task fidelity=truncate", combined)
+        self.assertIn("Fidelity resolved node=validate_task fidelity=truncate", combined)
+
+    def test_worker_replan_returns_to_planner_without_review_or_checkoff(self) -> None:
+        fixture = self.make_fixture(
+            "worker-replan",
+            {"worker_results": [{"result": "replan"}, {"result": "ready_for_review"}], "verdicts": [{"decision": "accept"}, {"decision": "accept"}]},
+        )
+        result = self.run_fixture(fixture)
+        self.assertEqual(result["status"], 0, result["combined"])
+        stages = result["stages"]
+        first_route = stages.index("route_worker_result")
+        self.assertEqual(stages[first_route + 1], "before_delivery_planner")
+        self.assertLess(stages.index("validate_task"), stages.index("publish_to_main"))
+        self.assertIn(f"implement_next_task:{TASK_CURRENT}:replan", (fixture / "work.log").read_text())
+        self.assertNotIn("- [ ]", self.todo(fixture))
 
     def test_failed_review_cannot_reuse_prior_acceptance(self) -> None:
         fixture = self.make_fixture(
@@ -363,10 +382,10 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertEqual(result["status"], 1, result["combined"])
         self.assertIn(TASK_CURRENT, self.todo(fixture))
         work = (fixture / "work.log").read_text()
-        self.assertIn(f"implement_next_task:{TASK_CURRENT}", work)
+        self.assertIn(f"implement_next_task:{TASK_CURRENT}:ready_for_review", work)
         # Fabro 0.316 increments the visit count before checking the limit:
         # max_visits=3 stops before executing the third revision.
-        self.assertEqual(work.count(f"revise_task:{TASK_CURRENT}"), 2, work)
+        self.assertEqual(work.count(f"revise_task:{TASK_CURRENT}:ready_for_review"), 2, work)
         self.assertIn('node "revise_task" visited 3 times', result["combined"])
         self.assertNotIn("publish_to_main", result["stages"])
 
@@ -377,12 +396,14 @@ class FabroTaskRuntime(unittest.TestCase):
         saved_work = (fixture / "work.log").read_text()
         self.assertIn(TASK_CURRENT, self.todo(fixture))
         (fixture / "scenario.json").write_text(json.dumps({"verdicts": [{"decision": "accept"}]}))
+        self.git(fixture, "add", "scenario.json")
+        self.git(fixture, "commit", "-q", "-m", "test fixture decision update")
         second = self.run_fixture(fixture)
         self.assertEqual(second["status"], 0, second["combined"])
         self.assertNotEqual(first["run_id"], second["run_id"])
         work = (fixture / "work.log").read_text()
         self.assertTrue(work.startswith(saved_work))
-        self.assertEqual(work.splitlines()[1], f"implement_next_task:{TASK_CURRENT}")
+        self.assertEqual(work.splitlines()[1], f"implement_next_task:{TASK_CURRENT}:ready_for_review")
         self.assertNotIn("- [ ]", self.todo(fixture))
 
     def test_task_stopped_failure_does_not_report_publish_goal_gate_noise(self) -> None:
@@ -397,25 +418,116 @@ class FabroTaskRuntime(unittest.TestCase):
 STEP_SCRIPT = r'''#!/usr/bin/env python3
 from __future__ import annotations
 from pathlib import Path
+import json
+import subprocess
 import sys
 
-import subprocess
-
 kind = sys.argv[1]
-todo = Path("docs/iterations/009-runtime/todo.md").read_text().splitlines()
+plan_path = "docs/iterations/009-runtime/plan.md"
+todo_path = "docs/iterations/009-runtime/todo.md"
+delivery = Path("docs/iterations/009-runtime/.delivery")
+todo = Path(todo_path).read_text().splitlines()
 pending = next((line for line in todo if line.startswith("- [ ] ")), None)
+
+
+def git_head() -> str:
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+
+
+def maybe_commit(message: str, *paths: str) -> None:
+    subprocess.run(["git", "add", *paths], check=True)
+    if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode != 0:
+        subprocess.run(["git", "commit", "-qm", message], check=True)
+
+
+def write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
 if kind in ("dev_check", "publish_to_main"):
     assert pending is None, "Unaccepted work reached the final gates"
     if kind == "publish_to_main":
         Path("published.txt").write_text("Inert fixture publication only.\n")
     sys.exit(0)
+
+if kind == "delivery_planner":
+    baseline = json.loads((delivery / "planner-guard-baseline.json").read_text())
+    accepted = [line for line in todo if line.startswith("- [x] ")]
+    latest_review = json.loads((delivery / "latest-review.json").read_text()) if (delivery / "latest-review.json").exists() else {}
+    attempt = "revision" if latest_review.get("decision") == "revise" else "implementation"
+    pending_obligations = [] if pending is None else [{
+        "task_id": "task-current",
+        "todo_line": pending,
+        "origin": "fixture todo",
+        "status": "prepared",
+        "coverage": ["fixture"],
+        "replaces": [],
+    }]
+    write_json(delivery / "execution-state.json", {
+        "schema_version": 1,
+        "plan_path": plan_path,
+        "todo_path": todo_path,
+        "source_baseline": baseline["baseline_head"],
+        "accepted_tasks": accepted,
+        "pending_obligations": pending_obligations,
+        "coverage_map": [{"scope": "fixture", "covered_by": ["task-current"]}] if pending else [],
+        "planner_note": f"fixture planner prepared {attempt}",
+    })
+    if pending is not None:
+        write_json(delivery / "current-worker-packet.json", {
+            "schema_version": 1,
+            "packet_id": f"task-current-{baseline['baseline_head'][:7]}-{attempt}",
+            "task_id": "task-current",
+            "todo_line": pending,
+            "attempt": attempt,
+            "plan_path": plan_path,
+            "todo_path": todo_path,
+            "source_baseline": baseline["baseline_head"],
+            "outcome": "fixture outcome",
+            "scope": ["append work log"],
+            "scope_exclusions": [],
+            "references": [{"path": "work.log", "facts": "fixture candidate evidence"}],
+            "constraints": [],
+            "focused_validation": ["scripted reviewer"],
+            "completion_evidence_required": ["latest-worker-result.json"],
+            "latest_review": latest_review,
+        })
+    with (delivery / "history.jsonl").open("a") as output:
+        output.write(json.dumps({"kind": "fixture_planner", "pending": pending, "attempt": attempt}) + "\n")
+    maybe_commit("planner checkpoint", todo_path, str(delivery))
+    print(f"planned {pending}")
+    sys.exit(0)
+
 assert pending is not None
+packet = json.loads((delivery / "current-worker-packet.json").read_text())
+scenario = json.loads(Path("scenario.json").read_text())
+worker_state_path = Path("worker-state.json")
+worker_state = json.loads(worker_state_path.read_text()) if worker_state_path.exists() else {"workers": 0}
+worker_index = worker_state["workers"]
+worker_state["workers"] = worker_index + 1
+worker_state_path.write_text(json.dumps(worker_state, indent=2) + "\n")
+worker_templates = scenario.get("worker_results", [])
+worker_template = worker_templates[worker_index] if worker_index < len(worker_templates) else {}
+result = worker_template.get("result", "ready_for_review")
 with Path("work.log").open("a") as output:
-    output.write(f"{kind}:{pending}\n")
-# Checkpoint only fixture work and todo locally, with no configured git remote.
-subprocess.run(["git", "add", "work.log", "docs/iterations/009-runtime/todo.md"], check=True)
-subprocess.run(["git", "commit", "-qm", "candidate checkpoint"], check=True)
-print(f"{kind} work for {pending}")
+    output.write(f"{kind}:{pending}:{result}\n")
+worker_result = {
+    "schema_version": 1,
+    "packet_id": packet["packet_id"],
+    "task_id": packet["task_id"],
+    "todo_line": packet["todo_line"],
+    "result": result,
+    "changed_paths": ["work.log"],
+    "validation": [{"command": "fixture", "exit_status": 0, "evidence": "passed"}],
+    "notes": "fixture worker complete",
+    "unresolved": [],
+}
+if result == "replan":
+    worker_result["replan_request"] = {"blocker": "fixture prerequisite", "partial_work": ["work.log"], "completed_checks": [], "remaining_validation": ["retry"]}
+write_json(delivery / "latest-worker-result.json", worker_result)
+maybe_commit("candidate checkpoint", "work.log", "worker-state.json", str(delivery))
+print(f"{kind} work for {pending}: {result}")
 '''
 
 VALIDATE_SCRIPT = r'''#!/usr/bin/env python3

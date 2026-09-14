@@ -684,3 +684,9 @@ Matt subsequently approved a capable delivery planner that can split, combine an
 Matt explicitly rejected a separate readiness-review loop. The existing independent implementation review and final gates remain. Use Sol for the initial planner; no new compaction policy, tool-capability fence or hard-timeout retry policy is selected.
 
 The approved [implementation design](2026-09-14-just-in-time-delivery-planner.md) records responsibilities, durable artifacts, code targets and validation requirements. Matt requested that this be written up and dispatched to a Sol implementation subagent. Status: authorized for implementation, not yet validated; operational effectiveness remains to be demonstrated by a later authorized delivery.
+
+### Follow-up implementation: 2026-09-14 — just-in-time delivery planner
+
+Implemented the approved delivery-planner loop on branch `kaizen/delivery-planner` in an isolated worktree. The task loop now routes through a Sol delivery planner before every worker packet, records durable `.delivery/` artifacts beside each iteration plan, and sends worker `ready_for_review`, `replan`, and `human_blocked` outcomes through deterministic routing. Workers no longer choose, split or reorder tasks; semantic sizing belongs to the planner. Existing independent review, deterministic check-off, bounded revision worker visits, final `dev ci`, plan-conformance, final artifact and publish gates remain in place.
+
+Validation added/updated deterministic helper tests and native Fabro runtime fixtures for initial/existing/resumed state, artifact provenance, worker replan without acceptance, revision through planner with the existing visit guard, fail-closed malformed/stale/mismatched artifacts, artifact-only checkpoint tolerance, and minimal task-loop fidelity. Full effectiveness remains pending until a later authorized real delivery run demonstrates useful early replanning and bounded worker context in practice.
