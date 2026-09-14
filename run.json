@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T20:33:31.768938757Z",
-  "last_event_at": "2026-09-14T21:33:17.185747675Z",
+  "last_event_at": "2026-09-14T21:39:01.159438150Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -12060,9 +12060,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2871,
       "checkpoint": {
-        "timestamp": "2026-09-14T21:33:17.193716496Z",
+        "timestamp": "2026-09-14T21:33:21.257204420Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -12105,10 +12105,383 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.resume_gate": 0,
+          "failure_signature": "",
+          "current_node": "implement_next_task",
+          "internal.fidelity": "summary:high",
+          "internal.thread_id": "all_tasks_done",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.node_visit_count": 5,
+          "internal.retry_count.read_plan": 0,
+          "last_response": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the wel",
+          "internal.retry_count.apply_task_verdict": 0,
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write.\"}",
+          "thread.apply_task_verdict.current_node": "sync_task_list",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "thread.verify_source_head.current_node": "read_plan",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "thread.start.current_node": "verify_source_head",
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.todo_readable": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "outcome": "succeeded",
+          "internal.retry_count.wip_gate": 0,
+          "internal.run_id": "01M2GSY9BXZSK7X2GP9786P2J6",
+          "last_stage": "implement_next_task",
+          "response.implement_next_task": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n2. Changes made\n\n   - Added [CustomGroupAdmission](/workspace/memba/web/lib/memba/membership/custom_group_admission.ex:1), an explicit use-case result containing the actor and target identities plus:\n     - `:member_added` for a committed new transition.\n     - `:already_member` for an idempotent retry.\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:88) so `add_custom_group_member/2` derives that result from Commanded’s execution result, without projection preflight or projection-only mutation.\n   - Preserved explicitly requested Commanded `:returning` modes for existing lower-level callers.\n   - Kept `GroupMemberAdded` actor-free and backward-compatible; the actor belongs to the admission result rather than the shared event used by trusted system-group operations.\n   - Added aggregate and dispatch coverage in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:1249) and [add_custom_group_member_dispatch_test.exs](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:96). The tests prove a duplicate emits no event and reports `:already_member`.\n   - No acceptance feature files were changed.\n\n3. Focused validation\n\n   - Initial TDD run failed as expected while the actor/new-transition contract was absent.\n   - Final focused run:\n\n     `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/group_projection_test.exs`\n\n     Result: 72 tests, 0 failures.\n\n   - `mix format --check-formatted ...` passed for all touched Elixir files.\n   - `git diff --check` passed.\n   - Full `dev check` was not run because it remains explicit task 016.\n\n4. Todo state\n\n   Still exactly unchecked and ready for independent review:\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: transition status is derived from the aggregate’s persisted event decision.\n   - ADR 0007: the result remains owned by Membership’s public application-service boundary.\n   - ADR 0009: no projection mutation or projection-based transition inference was introduced.\n   - ADR 0011: caller-generated typed identities are preserved in the result.\n   - ADR 0024: duplicate detection remains serialized inside `Membership.Club`; the application service only interprets its execution result.",
+          "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+          "thread.implement_next_task.current_node": "validate_task",
+          "failure_class": "",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "preferred_label": "accept",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "command.output": "blob://sha256/d37988a82916e5bd9e77ef699f995fc0829fb0bd2473ebb688024a0788ae4182",
+          "output.validate_task": {
+            "decision": "accept",
+            "task": "- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.",
+            "reason": "At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write."
+          },
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.revise_task.current_node": "validate_task",
+          "internal.retry_count.revise_task": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "graph.default_fidelity": "summary:high"
+        },
+        "node_outcomes": {
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d37988a82916e5bd9e77ef699f995fc0829fb0bd2473ebb688024a0788ae4182"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the wel",
+              "response.implement_next_task": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n2. Changes made\n\n   - Added [CustomGroupAdmission](/workspace/memba/web/lib/memba/membership/custom_group_admission.ex:1), an explicit use-case result containing the actor and target identities plus:\n     - `:member_added` for a committed new transition.\n     - `:already_member` for an idempotent retry.\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:88) so `add_custom_group_member/2` derives that result from Commanded’s execution result, without projection preflight or projection-only mutation.\n   - Preserved explicitly requested Commanded `:returning` modes for existing lower-level callers.\n   - Kept `GroupMemberAdded` actor-free and backward-compatible; the actor belongs to the admission result rather than the shared event used by trusted system-group operations.\n   - Added aggregate and dispatch coverage in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:1249) and [add_custom_group_member_dispatch_test.exs](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:96). The tests prove a duplicate emits no event and reports `:already_member`.\n   - No acceptance feature files were changed.\n\n3. Focused validation\n\n   - Initial TDD run failed as expected while the actor/new-transition contract was absent.\n   - Final focused run:\n\n     `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/group_projection_test.exs`\n\n     Result: 72 tests, 0 failures.\n\n   - `mix format --check-formatted ...` passed for all touched Elixir files.\n   - `git diff --check` passed.\n   - Full `dev check` was not run because it remains explicit task 016.\n\n4. Todo state\n\n   Still exactly unchecked and ready for independent review:\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: transition status is derived from the aggregate’s persisted event decision.\n   - ADR 0007: the result remains owned by Membership’s public application-service boundary.\n   - ADR 0009: no projection mutation or projection-based transition inference was introduced.\n   - ADR 0011: caller-generated typed identities are preserved in the result.\n   - ADR 0024: duplicate detection remains serialized inside `Membership.Club`; the application service only interprets its execution result.",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 249143,
+                    "output_tokens": 8662,
+                    "reasoning_tokens": 7468,
+                    "cache_read_tokens": 2066816,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2763023
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 347096,
+              "tool_time_ms": 46066,
+              "active_time_ms": 393162
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d0355d8c1a0c3004398090f2b7f87fb38e071bf8621c9dac6c73bb035c988403"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a1227baf2245062e6699ab37f0ab3d9dc7bb62d0fd08248e40963cd47b657473"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '428368266c49feca44a1f1756ded7ed8ac16d43a'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 217,
+              "active_time_ms": 217
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19059a8ddbbd7924d847396f332c0d8fafe9dc29f31ebfa20a6cba7481f98a7b"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93740,
+              "active_time_ms": 93740
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fc8ae99a7b32d42ca67b9bff8ee094681e7130a131c4843242da17fffb9323a9"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "revise_task",
+              "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+              "last_response": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. "
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 453538,
+                    "output_tokens": 8583,
+                    "reasoning_tokens": 4914,
+                    "cache_read_tokens": 1726080,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3535640
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 312534,
+              "tool_time_ms": 262424,
+              "active_time_ms": 574958
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to ",
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write.\"}",
+              "output.validate_task": {
+                "decision": "accept",
+                "task": "- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.",
+                "reason": "At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write."
+              }
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 111280,
+                    "output_tokens": 2706,
+                    "reasoning_tokens": 616,
+                    "cache_read_tokens": 265472,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 788796
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 82112,
+              "tool_time_ms": 11685,
+              "active_time_ms": 93797
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "accept",
+            "context_updates": {
+              "command.output": "blob://sha256/24a5f8586efec3688072b6584149960fd7aa05660c4931e9bd1a240579c4a5b6"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5ee0f0d12234c892042d0b23b37b750df2c7f7b139acb1e2fc0e4b9d0d768dae"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1719,
+              "active_time_ms": 1719
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a5e3da4fb595b78c08280e5a8d35f5f8d52d5f98e716c9ba0bf9fa278775aae4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "7a0b04a7401314dddc3689e85d85c51cc5653b65",
+        "node_visits": {
+          "verify_source_head": 1,
+          "preflight_sandbox": 1,
+          "implement_next_task": 5,
+          "all_tasks_done": 5,
+          "read_plan": 1,
+          "validate_task": 5,
+          "todo_readable": 5,
+          "resume_gate": 1,
+          "revise_task": 1,
+          "start": 1,
+          "sync_task_list": 5,
+          "wip_gate": 1,
+          "apply_task_verdict": 5
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex\nindex a224c8d..cd2dd22 100644\n--- a/web/lib/memba/membership.ex\n+++ b/web/lib/memba/membership.ex\n@@ -26,9 +26,11 @@ defmodule Memba.Membership do\n   alias Memba.Membership.Commands.ResendClubMemberInvitation\n   alias Memba.Membership.Commands.UpdateClub\n   alias Memba.Membership.Commands.VerifyPersonEmailAddress\n+  alias Memba.Membership.CustomGroupAdmission\n   alias Memba.Membership.CustomGroupSlug\n   alias Memba.Membership.EmailAddressVerificationToken\n   alias Memba.Membership.EmailAddresses\n+  alias Memba.Membership.Events.GroupMemberAdded\n   alias Memba.Membership.GroupName\n   alias Memba.Membership.InvitationToken\n   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows\n@@ -93,11 +95,18 @@ defmodule Memba.Membership do\n   actor who either belongs to the custom group or has its club's\n   `club.manage_members` permission. System groups are not writable through this\n   use case.\n+\n+  By default, success returns a `CustomGroupAdmission` identifying the actor,\n+  target, and whether this command applied a new membership transition or was\n+  an already-applied retry. This lets follow-up work such as welcome delivery\n+  respond only to a confirmed new transition without consulting a potentially\n+  stale projection. Callers may explicitly select a Commanded `:returning`\n+  mode when they need its lower-level dispatch result instead.\n   \"\"\"\n   def add_custom_group_member(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n     with {:ok, command} <- add_custom_group_member_command(attrs) do\n-      dispatch(command, dispatch_opts)\n+      dispatch_custom_group_admission(command, dispatch_opts)\n     end\n   end\n \n@@ -2554,6 +2563,58 @@ defmodule Memba.Membership do\n     dispatch(command, member_lifecycle_consistency(dispatch_opts))\n   end\n \n+  defp dispatch_custom_group_admission(command, dispatch_opts) do\n+    if explicit_commanded_returning_mode?(dispatch_opts) do\n+      dispatch(command, dispatch_opts)\n+    else\n+      dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)\n+\n+      case dispatch(command, dispatch_opts) do\n+        {:ok, %Commanded.Commands.ExecutionResult{} = result} ->\n+          {:ok, custom_group_admission(command, result)}\n+\n+        {:error, _reason} = error ->\n+          error\n+      end\n+    end\n+  end\n+\n+  defp explicit_commanded_returning_mode?(dispatch_opts) do\n+    Keyword.has_key?(dispatch_opts, :returning) or\n+      Keyword.get(dispatch_opts, :include_execution_result) == true or\n+      Keyword.get(dispatch_opts, :include_aggregate_version) == true\n+  end\n+\n+  defp custom_group_admission(command, %Commanded.Commands.ExecutionResult{events: events}) do\n+    transition =\n+      if Enum.any?(events, fn\n+           %GroupMemberAdded{\n+             club_id: club_id,\n+             group_id: group_id,\n+             membership_id: membership_id,\n+             person_id: person_id\n+           } ->\n+             club_id == command.club_id and group_id == command.group_id and\n+               membership_id == command.membership_id and person_id == command.person_id\n+\n+           _event ->\n+             false\n+         end) do\n+        :member_added\n+      else\n+        :already_member\n+      end\n+\n+    %CustomGroupAdmission{\n+      club_id: command.club_id,\n+      group_id: command.group_id,\n+      membership_id: command.membership_id,\n+      person_id: command.person_id,\n+      actor_person_id: command.actor_person_id,\n+      transition: transition\n+    }\n+  end\n+\n   defp member_lifecycle_consistency(dispatch_opts) do\n     dispatch_opts\n     |> system_group_membership_consistency()\ndiff --git a/web/lib/memba/membership/custom_group_admission.ex b/web/lib/memba/membership/custom_group_admission.ex\nnew file mode 100644\nindex 0000000..4e7ddc8\n--- /dev/null\n+++ b/web/lib/memba/membership/custom_group_admission.ex\n@@ -0,0 +1,30 @@\n+defmodule Memba.Membership.CustomGroupAdmission do\n+  @moduledoc \"\"\"\n+  Result of the authenticated custom-group admission use case.\n+\n+  `transition` is `:member_added` only when the command committed a new\n+  `GroupMemberAdded` event. An idempotent retry for an active group member\n+  returns `:already_member`.\n+  \"\"\"\n+\n+  @type transition :: :member_added | :already_member\n+\n+  @type t :: %__MODULE__{\n+          club_id: String.t(),\n+          group_id: String.t(),\n+          membership_id: String.t(),\n+          person_id: String.t(),\n+          actor_person_id: String.t(),\n+          transition: transition()\n+        }\n+\n+  @enforce_keys [\n+    :club_id,\n+    :group_id,\n+    :membership_id,\n+    :person_id,\n+    :actor_person_id,\n+    :transition\n+  ]\n+  defstruct [:club_id, :group_id, :membership_id, :person_id, :actor_person_id, :transition]\n+end\ndiff --git a/web/test/memba/membership/add_custom_group_member_dispatch_test.exs b/web/test/memba/membership/add_custom_group_member_dispatch_test.exs\nindex 62fd818..a2f2807 100644\n--- a/web/test/memba/membership/add_custom_group_member_dispatch_test.exs\n+++ b/web/test/memba/membership/add_custom_group_member_dispatch_test.exs\n@@ -7,6 +7,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do\n   alias Memba.Membership.Commands.AddCustomGroupMember\n   alias Memba.Membership.Commands.AddGroupMember\n   alias Memba.Membership.Commands.AssignClubRoleToMember\n+  alias Memba.Membership.CustomGroupAdmission\n   alias Memba.Membership.Events.GroupMemberAdded\n   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection\n   alias Memba.Membership.Roles\n@@ -92,6 +93,54 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do\n              )\n   end\n \n+  test \"add_custom_group_member/2 reports a new transition once and an idempotent no-op on retry\" do\n+    club_id = Memba.ID.generate(:club)\n+    group_id = Memba.ID.generate(:group)\n+    actor_person_id = Memba.ID.generate(:person)\n+    actor_membership_id = Memba.ID.generate(:membership)\n+    target_person_id = Memba.ID.generate(:person)\n+    target_membership_id = Memba.ID.generate(:membership)\n+\n+    create_club!(club_id)\n+    create_member!(club_id, actor_membership_id, actor_person_id)\n+    create_member!(club_id, target_membership_id, target_person_id)\n+    create_custom_group!(club_id, group_id, actor_person_id)\n+\n+    assert {:ok,\n+            %CustomGroupAdmission{\n+              club_id: ^club_id,\n+              group_id: ^group_id,\n+              membership_id: ^target_membership_id,\n+              person_id: ^target_person_id,\n+              actor_person_id: ^actor_person_id,\n+              transition: :member_added\n+            }} =\n+             add_custom_group_member(\n+               club_id,\n+               group_id,\n+               target_membership_id,\n+               target_person_id,\n+               actor_person_id\n+             )\n+\n+    assert {:ok,\n+            %CustomGroupAdmission{\n+              club_id: ^club_id,\n+              group_id: ^group_id,\n+              membership_id: ^target_membership_id,\n+              person_id: ^target_person_id,\n+              actor_person_id: ^actor_person_id,\n+              transition: :already_member\n+            }} =\n+             add_custom_group_member(\n+               club_id,\n+               group_id,\n+               target_membership_id,\n+               target_person_id,\n+               actor_person_id\n+             )\n+  end\n+\n   test \"add_custom_group_member/2 lets an active Admin outside the group admit another member without joining\" do\n     club_id = Memba.ID.generate(:club)\n     group_id = Memba.ID.generate(:group)\ndiff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs\nindex 13883e6..e7ba207 100644\n--- a/web/test/memba/membership/club_test.exs\n+++ b/web/test/memba/membership/club_test.exs\n@@ -1246,6 +1246,34 @@ defmodule Memba.Membership.ClubTest do\n       assert {:error, :unauthorized} = Club.execute(club, command)\n     end\n \n+    test \"makes an already-active custom-group admission an idempotent no-op\" do\n+      club_id = Memba.ID.generate(:club)\n+      group_id = Memba.ID.generate(:group)\n+      actor_membership_id = Memba.ID.generate(:membership)\n+      actor_person_id = Memba.ID.generate(:person)\n+      target_membership_id = Memba.ID.generate(:membership)\n+      target_person_id = Memba.ID.generate(:person)\n+\n+      club =\n+        club_id\n+        |> created_club()\n+        |> create_group(group_id, nil, \"Board\")\n+        |> activate_member(actor_membership_id, actor_person_id)\n+        |> activate_member(target_membership_id, target_person_id)\n+        |> add_group_member(group_id, actor_membership_id, actor_person_id)\n+        |> add_group_member(group_id, target_membership_id, target_person_id)\n+\n+      command = %AddCustomGroupMember{\n+        club_id: club_id,\n+        group_id: group_id,\n+        membership_id: target_membership_id,\n+        person_id: target_person_id,\n+        actor_person_id: actor_person_id\n+      }\n+\n+      assert [] = Club.execute(club, command)\n+    end\n+\n     test \"uses the actor's current active club membership and manage-members permission\" do\n       club_id = Memba.ID.generate(:club)\n       group_id = Memba.ID.generate(:group)\n",
+        "summary": {
+          "files_changed": 13,
+          "additions": 939,
+          "deletions": 9
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T21:39:01.164483672Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.verify_source_head": 0,
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.all_tasks_done": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.revise_task.current_node": "validate_task",
           "internal.retry_count.wip_gate": 0,
           "internal.fidelity": "summary:high",
@@ -12124,23 +12497,23 @@
           "failure_class": "",
           "thread.wip_gate.current_node": "preflight_sandbox",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "last_stage": "implement_next_task",
+          "last_stage": "validate_task",
           "response.implement_next_task": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n2. Changes made\n\n   - Added [CustomGroupAdmission](/workspace/memba/web/lib/memba/membership/custom_group_admission.ex:1), an explicit use-case result containing the actor and target identities plus:\n     - `:member_added` for a committed new transition.\n     - `:already_member` for an idempotent retry.\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:88) so `add_custom_group_member/2` derives that result from Commanded’s execution result, without projection preflight or projection-only mutation.\n   - Preserved explicitly requested Commanded `:returning` modes for existing lower-level callers.\n   - Kept `GroupMemberAdded` actor-free and backward-compatible; the actor belongs to the admission result rather than the shared event used by trusted system-group operations.\n   - Added aggregate and dispatch coverage in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:1249) and [add_custom_group_member_dispatch_test.exs](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:96). The tests prove a duplicate emits no event and reports `:already_member`.\n   - No acceptance feature files were changed.\n\n3. Focused validation\n\n   - Initial TDD run failed as expected while the actor/new-transition contract was absent.\n   - Final focused run:\n\n     `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/group_projection_test.exs`\n\n     Result: 72 tests, 0 failures.\n\n   - `mix format --check-formatted ...` passed for all touched Elixir files.\n   - `git diff --check` passed.\n   - Full `dev check` was not run because it remains explicit task 016.\n\n4. Todo state\n\n   Still exactly unchecked and ready for independent review:\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: transition status is derived from the aggregate’s persisted event decision.\n   - ADR 0007: the result remains owned by Membership’s public application-service boundary.\n   - ADR 0009: no projection mutation or projection-based transition inference was introduced.\n   - ADR 0011: caller-generated typed identities are preserved in the result.\n   - ADR 0024: duplicate detection remains serialized inside `Membership.Club`; the application service only interprets its execution result.",
           "output.validate_task": {
             "decision": "accept",
-            "task": "- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.",
-            "reason": "At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write."
+            "task": "- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.",
+            "reason": "At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed."
           },
           "internal.retry_count.apply_task_verdict": 0,
           "thread.start.current_node": "verify_source_head",
           "internal.retry_count.resume_gate": 0,
           "thread.verify_source_head.current_node": "read_plan",
-          "current_node": "implement_next_task",
+          "current_node": "validate_task",
           "thread.apply_task_verdict.current_node": "sync_task_list",
-          "internal.node_visit_count": 5,
+          "internal.node_visit_count": 6,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.all_tasks_done.current_node": "implement_next_task",
-          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write.\"}",
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed.\"}",
           "graph.max_node_visits": "80",
           "command.output": "blob://sha256/d37988a82916e5bd9e77ef699f995fc0829fb0bd2473ebb688024a0788ae4182",
           "thread.sync_task_list.current_node": "todo_readable",
@@ -12152,7 +12525,7 @@
           "graph.default_fidelity": "summary:high",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.todo_readable": 0,
-          "last_response": "Task 005 is implemented and ready for independent review.\n\n1. Selected task\n\n   `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the wel",
+          "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Mem",
           "graph.rankdir": "LR",
           "thread.validate_task.current_node": "apply_task_verdict",
           "thread.implement_next_task.current_node": "validate_task",
@@ -12280,13 +12653,13 @@
           "validate_task": {
             "status": "succeeded",
             "context_updates": {
-              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to ",
               "last_stage": "validate_task",
-              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.\",\"reason\":\"At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write.\"}",
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Mem",
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.\",\"reason\":\"At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed.\"}",
               "output.validate_task": {
                 "decision": "accept",
-                "task": "- [ ] 004 Reuse `GroupMemberAdded` and the existing projection.",
-                "reason": "At clean HEAD 3527618, both trusted and authenticated additions use the shared event builder to emit the established GroupMemberAdded event, whose existing aggregate apply function and strongly consistent GroupMembership Ecto projector remain unchanged. The authenticated dispatch integration test now verifies the projected club, group, membership, person, and active state. Focused validation passed 66 tests with 0 failures; formatting and diff checks passed; no acceptance feature files changed. This satisfies the plan and ADRs 0002, 0007, 0009, 0011, and 0024 without introducing a new event, projector, or projection-only write."
+                "task": "- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.",
+                "reason": "At clean HEAD 7a0b04a, Membership.Club returns no event for an already-active matching group membership, while Membership.add_custom_group_member/2 derives a CustomGroupAdmission from Commanded's per-command ExecutionResult: matching GroupMemberAdded events report :member_added and empty-event retries report :already_member. The result carries club, group, target membership/person and authenticated actor identities, avoiding projection preflight and providing sufficient welcome-delivery metadata. A genuine inactive-member re-add still emits GroupMemberAdded. Aggregate and dispatch tests cover the no-op and first-add/retry result contract; independent focused validation passed 72 tests with 0 failures. The work conforms to ADRs 0002, 0007, 0009, 0011 and 0024, and no acceptance feature files were changed."
               }
             },
             "notes": "Stage completed: validate_task",
@@ -12298,10 +12671,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 111280,
-                    "output_tokens": 2706,
-                    "reasoning_tokens": 616,
-                    "cache_read_tokens": 265472,
+                    "input_tokens": 145736,
+                    "output_tokens": 3088,
+                    "reasoning_tokens": 1637,
+                    "cache_read_tokens": 481792,
                     "cache_write_tokens": 0
                   }
                 },
@@ -12309,13 +12682,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 788796
+              "total_usd_micros": 1111326
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 82112,
-              "tool_time_ms": 11685,
-              "active_time_ms": 93797
+              "inference_time_ms": 118150,
+              "tool_time_ms": 221386,
+              "active_time_ms": 339536
             }
           },
           "verify_source_head": {
@@ -12404,7 +12777,7 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "apply_task_verdict",
         "node_visits": {
           "start": 1,
           "verify_source_head": 1,
@@ -12417,7 +12790,7 @@
           "sync_task_list": 5,
           "apply_task_verdict": 5,
           "revise_task": 1,
-          "validate_task": 5,
+          "validate_task": 6,
           "resume_gate": 1
         }
       },
@@ -12989,7 +13362,12 @@
       "first_event_seq": 2620,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T21:33:17.192833003Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -13004,16 +13382,20 @@
       "started_at": "2026-09-14T21:26:43.598205772Z",
       "handler": "agent",
       "graph_visit": 5,
-      "live_inference_ms": 327088,
-      "live_tool_ms": 46073,
+      "timing": {
+        "wall_time_ms": 393594,
+        "inference_time_ms": 347096,
+        "tool_time_ms": 46066,
+        "active_time_ms": 393162
+      },
       "usage": {
-        "input_tokens": 245391,
-        "output_tokens": 8030,
-        "total_tokens": 2204576,
-        "reasoning_tokens": 7091,
-        "cache_read_tokens": 1944064,
+        "input_tokens": 249143,
+        "output_tokens": 8662,
+        "total_tokens": 2332089,
+        "reasoning_tokens": 7468,
+        "cache_read_tokens": 2066816,
         "cache_write_tokens": 0,
-        "total_usd_micros": 2652617
+        "total_usd_micros": 2763023
       },
       "model": {
         "provider": "openai",
@@ -13098,17 +13480,17 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 122912,
-        "usage_percent": 45.188235294117646,
+        "input_tokens": 126504,
+        "usage_percent": 46.508823529411764,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-14T21:32:57.038418255Z",
-        "event_seq": 2854,
+        "generated_at": "2026-09-14T21:33:17.185697118Z",
+        "event_seq": 2864,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2834,
-            "usage_percent": 1.0419117647058824
+            "tokens": 2836,
+            "usage_percent": 1.0426470588235295
           },
           {
             "category": "tools",
@@ -13122,30 +13504,19 @@
           },
           {
             "category": "conversation",
-            "tokens": 118810,
-            "usage_percent": 43.68014705882353
+            "tokens": 122399,
+            "usage_percent": 44.99963235294118
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
           }
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "03b933fa-ab16-4624-b2cb-61f76ee6e5b1",
-        "started_at": "2026-09-14T21:32:57.202710445Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-14T21:33:05.624927345Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "resume_gate@1": {
       "first_event_seq": 65,
@@ -13197,6 +13568,180 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "validate_task@6": {
+      "first_event_seq": 2874,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T21:33:21.265878569Z",
+      "handler": "agent",
+      "graph_visit": 6,
+      "live_inference_ms": 109254,
+      "live_tool_ms": 221379,
+      "usage": {
+        "input_tokens": 299965,
+        "output_tokens": 8616,
+        "total_tokens": 1430400,
+        "reasoning_tokens": 7835,
+        "cache_read_tokens": 1113984,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 2550347
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "subagents": [
+        {
+          "agent_id": "fa700b0d",
+          "depth": 1,
+          "task": "Independently review candidate task 005 in /workspace/memba without editing files: `- [ ] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.` Inspect plan/todo, commit 7a0b04a and relevant cumulative code/ADRs. Look specifically for correctness gaps in the CustomGroupAdmission result, Commanded dispatch semantics, idempotency/concurrency, API compatibility, and test adequacy. Return accept/revise recommendation with concrete evidence. Do not run full dev check; read-only/focused tests allowed.",
+          "status": {
+            "kind": "completed",
+            "success": true,
+            "turns_used": 36
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 85498,
+        "usage_percent": 31.433088235294118,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-14T21:38:52.272798247Z",
+        "event_seq": 3247,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2689,
+            "usage_percent": 0.9886029411764706
+          },
+          {
+            "category": "tools",
+            "tokens": 460,
+            "usage_percent": 0.16911764705882354
+          },
+          {
+            "category": "memory",
+            "tokens": 373,
+            "usage_percent": 0.13713235294117648
+          },
+          {
+            "category": "conversation",
+            "tokens": 81970,
+            "usage_percent": 30.136029411764707
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "inference": {
+        "session_id": "819026ff-6869-47c3-b755-9509c24a6631",
+        "started_at": "2026-09-14T21:38:52.275830044Z",
+        "requested_model": {
+          "provider": "openai",
+          "model_id": "gpt-5.6-sol"
+        },
+        "first_output_at": "2026-09-14T21:38:57.275908282Z",
+        "first_output_kind": "text",
+        "retries": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "implement_next_task@4": {
       "first_event_seq": 2295,
