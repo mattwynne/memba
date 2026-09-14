@@ -1007,6 +1007,20 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "Add member"
            )
 
+    assert has_element?(
+             view,
+             "#member-group-membership-guidance[data-viewer-access='participating_member']",
+             "Anyone in Trip Planning can add other"
+           )
+
+    assert has_element?(view, "#member-group-membership-guidance strong", "Alpine Club")
+
+    assert has_element?(
+             view,
+             "#member-group-membership-guidance",
+             "that never changes their club membership"
+           )
+
     view
     |> element("#member-section-action-add-group-member")
     |> render_click()
@@ -1272,6 +1286,26 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-group-add-self-help",
              "You'll get Private Planning's emails from now on and can read its whole history."
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-add-self-help",
+             "That won't change your club admin role."
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-membership-guidance[data-viewer-access='outside_admin']",
+             "As a club admin you can too"
+           )
+
+    assert has_element?(view, "#member-group-membership-guidance strong", "Alpine Club")
+
+    assert has_element?(
+             view,
+             "#member-group-membership-guidance",
+             "that never changes anyone's club membership"
            )
 
     assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")

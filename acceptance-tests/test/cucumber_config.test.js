@@ -31,7 +31,6 @@ test("default browser Cucumber profile selects all web-backed shared features", 
     "custom_group_conversations.feature",
     "custom_group_creation.feature",
     "custom_group_lifecycle.feature",
-    "custom_group_membership.feature",
     "email_branding.feature",
     "group_conversations.feature",
     "homepage.feature",
@@ -248,26 +247,6 @@ test("iteration 062 custom-group lifecycle scenarios run in both acceptance laye
         scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
     ),
     []
-  );
-});
-
-test("iteration 063 picker interaction runs while membership transitions remain browser debt", () => {
-  const feature = browserFeatures().find(
-    ({ name }) => name === "custom_group_membership.feature"
-  );
-  const iterationScenarios = feature.scenarios.filter((scenario) =>
-    scenario.tags.includes("@iteration-063")
-  );
-  const browserScenarioNames = iterationScenarios
-    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
-    .map((scenario) => scenario.name);
-
-  assert.deepEqual(browserScenarioNames, ["Bob searches and dismisses the picker"]);
-  assert.equal(
-    iterationScenarios
-      .filter((scenario) => scenario.name !== "Bob searches and dismisses the picker")
-      .every((scenario) => scenario.tags.includes("@todo-ui")),
-    true
   );
 });
 

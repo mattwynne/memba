@@ -112,6 +112,67 @@ defmodule MembaWeb.MemberComponentsTest do
     end
   end
 
+  describe "custom_group_membership_guidance/1" do
+    test "explains a group member's admission authority without implying club authority" do
+      html =
+        render_component(&MemberComponents.custom_group_membership_guidance/1, %{
+          club_name: "Alpine Club",
+          group_name: "Board",
+          viewer_access: :participating_member
+        })
+
+      assert_selector(
+        html,
+        "#member-group-membership-guidance.members-note" <>
+          "[data-viewer-access='participating_member']"
+      )
+
+      assert_text(html, "#member-group-membership-guidance", "Board members can read every")
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "Anyone in Board can add other"
+      )
+
+      assert_text(html, "#member-group-membership-guidance strong", "Alpine Club")
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "that never changes their club membership"
+      )
+    end
+
+    test "explains an outside admin's admission authority without implying group access" do
+      html =
+        render_component(&MemberComponents.custom_group_membership_guidance/1, %{
+          club_name: "Alpine Club",
+          group_name: "Board",
+          viewer_access: :outside_admin
+        })
+
+      assert_selector(
+        html,
+        "#member-group-membership-guidance.members-note[data-viewer-access='outside_admin']"
+      )
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "As a club admin you can too"
+      )
+
+      assert_text(html, "#member-group-membership-guidance strong", "Alpine Club")
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "that never changes anyone's club membership"
+      )
+    end
+  end
+
   describe "custom_group_member_picker/1" do
     test "renders searchable active-club candidates with stable admission identities" do
       dana_membership_id = Memba.ID.generate(:membership)

@@ -204,6 +204,32 @@ defmodule MembaWeb.MemberComponents do
 
   attr :club_name, :string, required: true
   attr :group_name, :string, required: true
+
+  attr :viewer_access, :atom,
+    required: true,
+    values: [:participating_member, :outside_admin]
+
+  def custom_group_membership_guidance(assigns) do
+    ~H"""
+    <p
+      id="member-group-membership-guidance"
+      class="members-note"
+      data-viewer-access={@viewer_access}
+    >
+      <%= if @viewer_access == :participating_member do %>
+        {@group_name} members can read every {@group_name} conversation and get its emails.
+        Anyone in {@group_name} can add other <strong>{@club_name}</strong>
+        members—that never changes their club membership.
+      <% else %>
+        Anyone in {@group_name} can add other <strong>{@club_name}</strong>
+        members. As a club admin you can too—that never changes anyone's club membership.
+      <% end %>
+    </p>
+    """
+  end
+
+  attr :club_name, :string, required: true
+  attr :group_name, :string, required: true
   attr :candidates, :list, required: true
   attr :query, :string, default: ""
   attr :search_form, Phoenix.HTML.Form, required: true
@@ -341,6 +367,7 @@ defmodule MembaWeb.MemberComponents do
           </.button>
           <small id="member-group-add-self-help">
             You'll get {@group_name}'s emails from now on and can read its whole history.
+            That won't change your club admin role.
           </small>
         </div>
       </div>

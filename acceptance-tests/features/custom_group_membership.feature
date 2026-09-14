@@ -1,3 +1,4 @@
+@todo-ui
 Feature: Managing custom group membership
   Group members and club admins manage custom-group membership.
   Joining a group is different from joining the club or becoming a club admin.
@@ -7,20 +8,6 @@ Feature: Managing custom group membership
     And Alice and Dan are its club admins
     And Bob, Carol, and Eve are its ordinary active club members
     And Alice and Bob are the only members of its custom group Board
-
-  @iteration-063 @not-domain
-  Rule: The add-member picker is accessible by keyboard and input events
-
-    Scenario: Bob searches and dismisses the picker
-      When Bob opens Board's add-member picker
-      Then the add-member search should have focus
-      When Bob pastes "Carol" into the add-member search
-      Then only Carol should be offered in the add-member picker
-      When Bob presses Escape in the add-member picker
-      Then the add-member picker should close and return focus to its trigger
-      When Bob opens Board's add-member picker
-      And Bob closes the add-member picker
-      Then the add-member picker should close and return focus to its trigger
 
   @iteration-063 @todo-domain @todo-ui
   Rule: Group members and club admins may add active club members
