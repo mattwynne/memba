@@ -1,0 +1,490 @@
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index ac9c5a3..b5d4d1f 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -32,6 +32,8 @@ defmodule Memba.Membership do
+   alias Memba.Membership.InvitationToken
+   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+   alias Memba.Membership.Policies.SystemGroupMembership
++  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
++  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+   alias Memba.Membership.SystemGroups
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.ClubInvitation
+@@ -44,9 +46,11 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Projections.RoleAssignment
+   alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
++  alias Memba.ProjectionBarrier
+   alias Memba.Repo
+ 
+   @person_email_address_verification_token_ttl_seconds 15 * 60
++  @group_access_projectors [GroupMembershipProjector, MembershipProjector]
+ 
+   @doc """
+   Create a club through the Membership Commanded application.
+@@ -1342,6 +1346,17 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Wait until the Membership read models used by `active_member_of_group?/2`
++  have processed every event committed before this call.
++
++  Privacy-sensitive consumers can use this before checking group membership so
++  an asynchronous projection cannot briefly preserve access after departure.
++  """
++  def await_group_access_projections(opts \\ []) when is_list(opts) do
++    ProjectionBarrier.await(@group_access_projectors, opts)
++  end
++
+   @doc """
+   Return whether an email address currently has an active membership in a club.
+ 
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index 44a618c..2dd151f 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -21,10 +21,16 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   alias Memba.Messaging.EmailDeliveryStatus
+   alias Memba.Messaging.ConversationStopFollowToken
+   alias Memba.Messaging.Events.EmailDeliveryCreated
++
++  alias Memba.Messaging.Projectors.ConversationGroupAccess,
++    as: ConversationGroupAccessProjector
++
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
++  alias Memba.Messaging.Projectors.Message, as: MessageProjector
+   alias Memba.Messaging.Projections.ConversationGroupAccess
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
++  alias Memba.ProjectionBarrier
+   alias Memba.ReadModelChanges
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+@@ -34,6 +40,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   @dispatching_status EmailDeliveryStatus.dispatching()
+   @sent_status EmailDeliveryStatus.sent()
+   @failed_status EmailDeliveryStatus.failed()
++  @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
++  @projection_timeout 5_000
+ 
+   @doc """
+   Atomically claim one pending email delivery for provider dispatch.
+@@ -144,7 +152,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   committed read-model state: the `EmailDelivery` projection supplies
+   per-recipient delivery data and the `Message` projection supplies message,
+   club, and sender IDs. Membership's public query API enriches the request with
+-  sender and club display context.
++  sender and club display context. Immediately before provider handoff, the
++  recipient must still have read access to the conversation; a delivery resolved
++  before membership ended is failed without exposing its private content. The
++  final stable authorization read is the handoff boundary: a departure ordered
++  after it has raced with a provider call that has already begun.
+   """
+   def deliver_to_provider(work)
+ 
+@@ -350,7 +362,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   defp delivery_error_name(reason), do: inspect(reason, limit: 10, printable_limit: 200)
+ 
+   defp email_delivery_request(%EmailDeliveryProjection{} = delivery) do
+-    with %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
++    with :ok <- await_delivery_context_projections(),
++         %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
+          {:ok, channel} <- request_channel(delivery.channel),
+          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
+       club = Membership.get_club(message.club_id)
+@@ -393,6 +406,69 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+     end
+   end
+ 
++  defp await_delivery_context_projections do
++    case ProjectionBarrier.await(@delivery_context_projectors, timeout: @projection_timeout) do
++      {:ok, _result} -> :ok
++      {:error, :timeout, _result} -> {:error, :delivery_context_projection_timeout}
++    end
++  end
++
++  defp await_recipient_access_projections(checkpoint, timeout) do
++    with {:ok, _result} <-
++           ProjectionBarrier.await(@delivery_context_projectors,
++             checkpoint: checkpoint,
++             timeout: timeout
++           ),
++         {:ok, _result} <-
++           Membership.await_group_access_projections(
++             checkpoint: checkpoint,
++             timeout: timeout
++           ) do
++      :ok
++    else
++      {:error, :timeout, _result} -> {:error, :recipient_access_projection_timeout}
++    end
++  end
++
++  defp authorize_recipient_for_handoff(request, delivery) do
++    deadline = System.monotonic_time(:millisecond) + @projection_timeout
++    authorize_recipient_for_handoff(request, delivery, deadline)
++  end
++
++  defp authorize_recipient_for_handoff(request, delivery, deadline) do
++    checkpoint = ProjectionBarrier.current_checkpoint()
++    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
++
++    if timeout == 0 do
++      {:error, :recipient_access_projection_timeout}
++    else
++      with :ok <- await_recipient_access_projections(checkpoint, timeout),
++           :ok <- authorize_recipient_access(request, delivery) do
++        if ProjectionBarrier.current_checkpoint() == checkpoint do
++          :ok
++        else
++          authorize_recipient_for_handoff(request, delivery, deadline)
++        end
++      end
++    end
++  end
++
++  defp authorize_recipient_access(
++         %EmailDeliveryRequest{} = request,
++         %EmailDeliveryProjection{} = delivery
++       ) do
++    if Memba.Messaging.member_has_conversation_access?(
++         request.message_id,
++         request.club_id,
++         delivery.recipient_id,
++         :read
++       ) do
++      :ok
++    else
++      {:error, :recipient_access_ended}
++    end
++  end
++
+   defp request_channel("email"), do: {:ok, :email}
+   defp request_channel(channel), do: {:error, {:unsupported_delivery_channel, channel}}
+ 
+@@ -400,7 +476,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          %EmailDeliveryRequest{} = request,
+          %EmailDeliveryProjection{} = delivery
+        ) do
+-    EmailDeliveryProvider.deliver(request)
++    with :ok <- authorize_recipient_for_handoff(request, delivery) do
++      EmailDeliveryProvider.deliver(request)
++    end
+   rescue
+     exception ->
+       stacktrace = __STACKTRACE__
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+index 29537fc..276ce61 100644
+--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -3,6 +3,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+ 
+   import ExUnit.CaptureLog
+ 
++  alias Memba.Membership.Projections.Group, as: GroupProjection
++  alias Memba.Membership.Projections.GroupMembership
++  alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Raising
+@@ -16,6 +21,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+   alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
++  alias Memba.Messaging.Projections.ConversationGroupAccess
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.ReadModelChanges
+@@ -499,6 +505,32 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+                Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+     end
+ 
++    test "does not hand off a pending delivery after the recipient's access ends" do
++      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
++
++      {1, nil} =
++        Repo.update_all(
++          from(group_membership in GroupMembership,
++            where: group_membership.person_id == ^delivery.recipient_id
++          ),
++          set: [active: false]
++        )
++
++      assert [
++               %EmailDeliveryProjection{
++                 delivery_id: delivery_id,
++                 status: "failed",
++                 attempt_count: 1,
++                 latest_error: "recipient_access_ended",
++                 sent_at: nil,
++                 failed_at: %DateTime{}
++               }
++             ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++
++      assert delivery_id == delivery.delivery_id
++      assert Fake.deliveries() == []
++    end
++
+     test "marks a claimed delivery as failed and persists diagnostics when the provider errors" do
+       Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
+ 
+@@ -756,7 +788,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+     delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
+     message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+ 
+-    Repo.insert!(%EmailDeliveryProjection{
++    %EmailDeliveryProjection{
+       delivery_id: delivery_id,
+       message_id: message_id,
+       outbound_message_id:
+@@ -778,7 +810,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+       failed_at: Keyword.get(attrs, :failed_at),
+       inserted_at: Keyword.get(attrs, :inserted_at, now),
+       updated_at: Keyword.get(attrs, :updated_at, now)
+-    })
++    }
++    |> Repo.insert!()
++    |> ensure_delivery_recipient_access!()
+   end
+ 
+   defp insert_dispatchable_delivery!(attrs) when is_list(attrs) do
+@@ -838,6 +872,101 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+     })
+   end
+ 
++  defp ensure_delivery_recipient_access!(%EmailDeliveryProjection{} = delivery) do
++    case Repo.get(MessageProjection, delivery.message_id) do
++      %MessageProjection{} = message ->
++        group_id = ensure_conversation_access!(message)
++        membership_id = ensure_active_membership!(message.club_id, delivery)
++        ensure_active_group_membership!(message.club_id, group_id, membership_id, delivery)
++        delivery
++
++      nil ->
++        delivery
++    end
++  end
++
++  defp ensure_conversation_access!(%MessageProjection{} = message) do
++    case Repo.get_by(ConversationGroupAccess, conversation_id: message.conversation_id) do
++      %ConversationGroupAccess{group_id: group_id} ->
++        group_id
++
++      nil ->
++        group_id = SystemGroups.everyone_group_id(message.club_id)
++
++        if is_nil(Repo.get(GroupProjection, group_id)) do
++          Repo.insert!(%GroupProjection{
++            club_id: message.club_id,
++            group_id: group_id,
++            email_slug: "everyone",
++            group_key: SystemGroups.everyone_key(),
++            name: SystemGroups.everyone_name(),
++            name_uniqueness_key: "everyone"
++          })
++        end
++
++        Repo.insert!(%ConversationGroupAccess{
++          conversation_id: message.conversation_id,
++          club_id: message.club_id,
++          group_id: group_id,
++          access_level: "write"
++        })
++
++        group_id
++    end
++  end
++
++  defp ensure_active_membership!(club_id, %EmailDeliveryProjection{} = delivery) do
++    if is_nil(Repo.get(Person, delivery.recipient_id)) do
++      Repo.insert!(%Person{
++        person_id: delivery.recipient_id,
++        name: delivery.recipient_name,
++        email: delivery.recipient_address
++      })
++    end
++
++    case Repo.get_by(Membership, club_id: club_id, person_id: delivery.recipient_id) do
++      %Membership{membership_id: membership_id} ->
++        membership_id
++
++      nil ->
++        membership_id = Memba.ID.generate(:membership)
++
++        Repo.insert!(%Membership{
++          membership_id: membership_id,
++          club_id: club_id,
++          person_id: delivery.recipient_id,
++          active: true
++        })
++
++        membership_id
++    end
++  end
++
++  defp ensure_active_group_membership!(
++         club_id,
++         group_id,
++         membership_id,
++         %EmailDeliveryProjection{} = delivery
++       ) do
++    case Repo.get_by(GroupMembership,
++           group_id: group_id,
++           membership_id: membership_id,
++           person_id: delivery.recipient_id
++         ) do
++      %GroupMembership{} ->
++        :ok
++
++      nil ->
++        Repo.insert!(%GroupMembership{
++          club_id: club_id,
++          group_id: group_id,
++          membership_id: membership_id,
++          person_id: delivery.recipient_id,
++          active: true
++        })
++    end
++  end
++
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index 1117e47..6469ae2 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -15,6 +15,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
++  alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+   alias Memba.Messaging.EmailDeliveryRequest
+@@ -22,6 +23,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
++  alias Memba.Messaging.Projections.Message, as: MessageProjection
+ 
+   @email_delivery_replay_projectors [
+     Memba.Messaging.Projectors.EmailDelivery
+@@ -301,6 +303,113 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert [%{message_id: ^message_id}] = Messaging.list_conversations_for_group(trips_group_id)
+   end
+ 
++  test "does not hand private email to a departed member who has rejoined only Everyone" do
++    club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
++
++    alice = create_person(name: "Alice Admin", email: "alice@example.com")
++    carol = create_person(name: "Carol Member", email: "carol@example.com")
++
++    alice_membership_id = add_member(club_id, alice.person_id)
++    carol_membership_id = add_member(club_id, carol.person_id)
++    board_group_id = create_group(club_id, "Board")
++
++    add_group_member(club_id, board_group_id, alice_membership_id, alice.person_id)
++    add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)
++
++    private_message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: private_message_id,
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 audience_group_id: board_group_id,
++                 subject: "Private Board topic",
++                 body: "Only current Board members should receive this."
++               },
++               consistency: :strong
++             )
++
++    assert [
++             %EmailDeliveryProjection{recipient_id: alice_id},
++             %EmailDeliveryProjection{
++               delivery_id: carol_delivery_id,
++               recipient_id: carol_id,
++               status: "pending"
++             }
++           ] = pending_deliveries_for_message(private_message_id)
++
++    assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
++
++    assert :ok =
++             Memba.Membership.remove_member(
++               %{membership_id: carol_membership_id},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Memba.Membership.add_member(
++               %{
++                 membership_id: Memba.ID.generate(:membership),
++                 club_id: club_id,
++                 person_id: carol.person_id
++               },
++               consistency: :strong
++             )
++
++    assert Memba.Membership.active_member_of_club?(club_id, carol.person_id)
++    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
++
++    departed_reply_id = Memba.ID.generate(:message)
++
++    assert {:error, :not_current_member} =
++             Messaging.post_message_reply(
++               %{
++                 message_id: departed_reply_id,
++                 conversation_id: private_message_id,
++                 sender_id: carol.person_id,
++                 body: "Rejoining the club must not restore this private action."
++               },
++               consistency: :strong
++             )
++
++    refute Repo.get(MessageProjection, departed_reply_id)
++
++    assert [
++             %EmailDeliveryProjection{recipient_id: ^alice_id, status: "sent"},
++             %EmailDeliveryProjection{
++               delivery_id: ^carol_delivery_id,
++               recipient_id: ^carol_id,
++               status: "failed",
++               latest_error: "recipient_access_ended",
++               attempt_count: 1
++             }
++           ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++
++    assert [%EmailDeliveryRequest{recipient_id: ^alice_id}] = Fake.deliveries()
++
++    later_message_id = Memba.ID.generate(:message)
++
++    assert {:ok, %ExecutionResult{events: later_events}} =
++             Messaging.send_club_message(
++               %{
++                 message_id: later_message_id,
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 audience_group_id: board_group_id,
++                 subject: "Later Board topic",
++                 body: "Carol should not be resolved as a recipient."
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^alice_id}, &1))
++    refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
++  end
++
+   test "rejects an unknown audience group before dispatching the message command" do
+     club_id = Memba.ID.generate(:club)
+     create_club(club_id, "Kootenay Mountaineering Club")
