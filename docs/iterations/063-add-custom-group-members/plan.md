@@ -1,7 +1,7 @@
 # Add active club members to custom groups
 
 Date: 2026-09-13
-Status: validated
+Status: implementing
 
 Stakeholder review complete; Fabro plan validation pending.
 
