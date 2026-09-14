@@ -3,11 +3,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   OTP process responsible for asynchronous email delivery dispatch.
 
   The dispatcher subscribes to committed read-model changes and treats new
-  `EmailDelivery` projection records as a nudge to look for pending delivery
-  work. It also owns the provider handoff request-building boundary and
-  persisted dispatch outcomes so command application services do not call email
-  providers directly. Failed deliveries can be retried through the explicit
-  manual retry API; the dispatcher does not perform automatic retry sweeps.
+  `EmailDelivery` records and access-projector catch-up as nudges to look for
+  pending delivery work. Catch-up nudges let authorization-timeout deferrals
+  resume without a periodic sweep. The dispatcher also owns the provider
+  handoff request-building boundary and persisted dispatch outcomes so command
+  application services do not call email providers directly. Failed deliveries
+  can be retried through the explicit manual retry API; the dispatcher does not
+  automatically retry failed deliveries.
   """
 
   use GenServer
@@ -16,6 +18,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   require Logger
 
   alias Memba.Membership
+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.EmailDeliveryStatus
@@ -41,6 +45,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @sent_status EmailDeliveryStatus.sent()
   @failed_status EmailDeliveryStatus.failed()
   @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
+  @access_catch_up_projectors [
+    ConversationGroupAccessProjector,
+    MessageProjector,
+    GroupMembershipProjector,
+    MembershipProjector
+  ]
   @default_projection_timeout 5_000
   @projection_timeout_errors [
     :delivery_context_projection_timeout,
@@ -213,6 +223,20 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     Logger.debug("email_delivery_dispatch_nudged",
       delivery_id: payload_delivery_id(payload),
       source_event: inspect(EmailDeliveryCreated)
+    )
+
+    send(self(), {:dispatch_pending_email_deliveries, payload})
+
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:read_model_changed, %{projector: projector} = payload},
+        state
+      )
+      when projector in @access_catch_up_projectors do
+    Logger.debug("email_delivery_access_catch_up_nudged",
+      projector: inspect(projector)
     )
 
     send(self(), {:dispatch_pending_email_deliveries, payload})

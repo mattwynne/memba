@@ -37,6 +37,9 @@ defmodule Memba.Messaging.SendClubMessageTest do
     original_projection_timeout =
       Application.get_env(:memba, :email_delivery_projection_timeout)
 
+    original_authorization_stability_timeout =
+      Application.get_env(:memba, :authorization_stability_timeout)
+
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
     original_postmark_config = Application.get_env(:memba, Postmark)
     dispatcher_was_running? = stop_email_delivery_dispatcher()
@@ -46,6 +49,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     on_exit(fn ->
       restore_env(:messaging_email_delivery_provider, original_provider)
       restore_env(:email_delivery_projection_timeout, original_projection_timeout)
+      restore_env(:authorization_stability_timeout, original_authorization_stability_timeout)
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Postmark, original_postmark_config)
       Fake.reset()
@@ -432,6 +436,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   test "defers provider handoff until lagging membership access projections catch up" do
     Application.put_env(:memba, :email_delivery_projection_timeout, 25)
+    Application.put_env(:memba, :authorization_stability_timeout, 25)
 
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
@@ -482,6 +487,50 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
 
+    reply_message_id = Memba.ID.generate(:message)
+
+    assert {:error, :not_current_member} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: message_id,
+                 sender_id: carol.person_id,
+                 body: "A stale membership projection must not authorize this reply."
+               },
+               consistency: :strong
+             )
+
+    refute Repo.get(MessageProjection, reply_message_id)
+
+    assert {:error, :not_current_member} =
+             Messaging.follow_conversation_as_current_member(
+               %{
+                 club_id: club_id,
+                 conversation_id: message_id,
+                 member_id: carol.person_id
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(message_id, carol.person_id)
+
+    new_message_id = Memba.ID.generate(:message)
+
+    assert {:error, :not_current_member} =
+             Messaging.send_club_message_as_current_member(
+               %{
+                 message_id: new_message_id,
+                 club_id: club_id,
+                 sender_id: carol.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Stale compose",
+                 body: "A stale compose view must not authorize this message."
+               },
+               consistency: :strong
+             )
+
+    refute Repo.get(MessageProjection, new_message_id)
+
     assert Enum.any?(
              EmailDeliveryDispatcher.dispatch_pending_email_deliveries(),
              &match?(
@@ -498,22 +547,30 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Fake.deliveries() == []
 
+    dispatcher_name = :"#{__MODULE__}.lag_recovery"
+
+    start_supervised!(
+      {EmailDeliveryDispatcher,
+       name: dispatcher_name, dispatch_enabled: true, dispatch_observer: self()}
+    )
+
     restart_projector!(membership_projector_child_id)
     restart_projector!(group_membership_projector_child_id)
 
-    assert {:ok, _result} =
-             Memba.Membership.await_group_access_projections(timeout: 1_000)
+    assert_receive {:email_delivery_dispatch_requested,
+                    %{claimed_delivery_ids: claimed_delivery_ids}},
+                   1_000
+
+    assert carol_delivery_id in claimed_delivery_ids
 
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
-
-    dispatch_results = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
     assert %EmailDeliveryProjection{
              delivery_id: ^carol_delivery_id,
              status: "failed",
              attempt_count: 1,
              latest_error: "recipient_access_ended"
-           } = Enum.find(dispatch_results, &(&1.delivery_id == carol_delivery_id))
+           } = Repo.get!(EmailDeliveryProjection, carol_delivery_id)
 
     assert [%EmailDeliveryRequest{recipient_id: alice_id}] = Fake.deliveries()
     assert alice_id == alice.person_id

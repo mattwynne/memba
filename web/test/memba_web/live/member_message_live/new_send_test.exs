@@ -5,7 +5,6 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership
-  alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
@@ -18,11 +17,15 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   setup do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
 
+    original_authorization_stability_timeout =
+      Application.get_env(:memba, :authorization_stability_timeout)
+
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
     Fake.reset()
 
     on_exit(fn ->
       restore_env(:messaging_email_delivery_provider, original_provider)
+      restore_env(:authorization_stability_timeout, original_authorization_stability_timeout)
       Fake.reset()
     end)
 
@@ -382,6 +385,64 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert Fake.deliveries() == []
   end
 
+  test "an open compose view fails closed while departure projections lag", %{conn: conn} do
+    Application.put_env(:memba, :authorization_stability_timeout, 25)
+
+    club_id = Memba.ID.generate(:club)
+    _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new")
+
+    membership_projector_child_id =
+      stop_projector!(Memba.Membership.Projectors.Membership)
+
+    group_membership_projector_child_id =
+      stop_projector!(Memba.Membership.Projectors.GroupMembership)
+
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: alice.membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Membership.active_member_of_group?(
+             SystemGroups.everyone_group_id(club_id),
+             alice.person_id
+           )
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Stale compose",
+        "body" => "This must not be sent after departure."
+      }
+    })
+
+    assert has_element?(
+             view,
+             "#member-message-compose[data-compose-state='send_failed']"
+           )
+
+    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
+    assert Messaging.list_messages_for_club(club_id) == []
+    assert Fake.deliveries() == []
+
+    restart_projector!(membership_projector_child_id)
+    restart_projector!(group_membership_projector_child_id)
+
+    assert {:ok, _result} =
+             Membership.await_group_access_projections(timeout: 1_000)
+  end
+
   test "submit accepts the message without waiting for every delivery diagnostics projector", %{
     conn: conn
   } do
@@ -523,24 +584,38 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   end
 
   defp create_group(attrs) do
-    Repo.insert!(%Group{
-      club_id: Keyword.fetch!(attrs, :club_id),
-      group_id: Memba.ID.generate(:group),
-      group_key: Keyword.fetch!(attrs, :group_key),
-      name: Keyword.fetch!(attrs, :name),
-      name_uniqueness_key:
-        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
-    })
+    club_id = Keyword.fetch!(attrs, :club_id)
+    group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug:
+                   attrs
+                   |> Keyword.fetch!(:group_key)
+                   |> String.replace("_", "-"),
+                 group_key: nil,
+                 name: Keyword.fetch!(attrs, :name)
+               },
+               consistency: :strong
+             )
+
+    Membership.get_group(group_id)
   end
 
   defp add_group_member(group, member) do
-    Repo.insert!(%GroupMembership{
-      club_id: member.club_id,
-      group_id: group.group_id,
-      membership_id: member.membership_id,
-      person_id: member.person_id,
-      active: true
-    })
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.AddGroupMember{
+                 club_id: member.club_id,
+                 group_id: group.group_id,
+                 membership_id: member.membership_id,
+                 person_id: member.person_id
+               },
+               consistency: :strong
+             )
   end
 
   defp await_delivery_projection! do
@@ -560,7 +635,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     case Supervisor.terminate_child(Memba.Supervisor, child_id) do
       :ok ->
         on_exit(fn -> restart_projector!(child_id) end)
-        :ok
+        child_id
 
       {:error, :not_found} ->
         flunk("Expected #{inspect(projector)} to be supervised")

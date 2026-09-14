@@ -304,94 +304,174 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
   end
 
   test "discovering a group does not confer member access or permit in-app follow actions" do
-    club = insert_membership_club!(name: "Alpine Club")
-    alice = insert_membership_person!(name: "Alice Adams", email: "alice@example.com")
-    bob = insert_membership_person!(name: "Bob Builder", email: "bob@example.com")
-    group = insert_group!(club.club_id, "Trip planners")
-    insert_active_club_member!(club.club_id, alice.person_id)
-    insert_active_club_member!(club.club_id, bob.person_id)
+    club_id = Memba.ID.generate(:club)
+    alice_person_id = Memba.ID.generate(:person)
+    alice_membership_id = Memba.ID.generate(:membership)
+    bob_person_id = Memba.ID.generate(:person)
+    bob_membership_id = Memba.ID.generate(:membership)
+    group_id = Memba.ID.generate(:group)
+    conversation_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Memba.Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Alpine Club"),
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.create_person(
+               %{
+                 person_id: alice_person_id,
+                 name: "Alice Adams",
+                 email: "alice@example.com"
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.create_person(
+               %{
+                 person_id: bob_person_id,
+                 name: "Bob Builder",
+                 email: "bob@example.com"
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.add_member(
+               %{
+                 club_id: club_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice_person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.add_member(
+               %{
+                 club_id: club_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob_person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: "trip-planners",
+                 name: "Trip planners"
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice_person_id
+               },
+               consistency: :strong
+             )
 
     assert Enum.any?(
              Memba.Membership.list_discoverable_groups_for_member(
-               club.club_id,
-               bob.person_id
+               club_id,
+               bob_person_id
              ),
-             &(&1.group_id == group.group_id)
+             &(&1.group_id == group_id)
            )
 
     refute Enum.any?(
-             Memba.Membership.list_active_groups_for_member(club.club_id, bob.person_id),
-             &(&1.group_id == group.group_id)
+             Memba.Membership.list_active_groups_for_member(club_id, bob_person_id),
+             &(&1.group_id == group_id)
            )
 
-    root =
-      insert_message!(
-        club_id: club.club_id,
-        sender_id: alice.person_id,
-        subject: "Private trip planning"
-      )
-
-    Repo.insert!(%ConversationGroupAccessProjection{
-      conversation_id: root.message_id,
-      club_id: club.club_id,
-      group_id: group.group_id,
-      access_level: "write"
-    })
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: conversation_id,
+                 club_id: club_id,
+                 sender_id: alice_person_id,
+                 audience_group_id: group_id,
+                 subject: "Private trip planning",
+                 body: "Bring route ideas."
+               },
+               consistency: :strong
+             )
 
     attrs = %{
-      club_id: club.club_id,
-      conversation_id: root.message_id,
-      member_id: bob.person_id
+      club_id: club_id,
+      conversation_id: conversation_id,
+      member_id: bob_person_id
     }
 
     refute Messaging.member_has_conversation_access?(
-             root.message_id,
-             club.club_id,
-             bob.person_id,
+             conversation_id,
+             club_id,
+             bob_person_id,
              :read
            )
 
     assert {:error, :not_current_member} =
              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
 
-    refute Messaging.following_conversation?(root.message_id, bob.person_id)
+    refute Messaging.following_conversation?(conversation_id, bob_person_id)
 
-    bob_group_membership =
-      insert_active_group_member!(club.club_id, group.group_id, bob.person_id)
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob_person_id
+               },
+               consistency: :strong
+             )
 
     assert :ok =
              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
 
-    assert Messaging.following_conversation?(root.message_id, bob.person_id)
+    assert Messaging.following_conversation?(conversation_id, bob_person_id)
 
     assert :ok =
              Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
 
-    refute Messaging.following_conversation?(root.message_id, bob.person_id)
+    refute Messaging.following_conversation?(conversation_id, bob_person_id)
 
     assert :ok =
              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
 
-    assert Messaging.following_conversation?(root.message_id, bob.person_id)
+    assert Messaging.following_conversation?(conversation_id, bob_person_id)
 
     assert {:error, :conversation_not_found} =
              attrs
              |> Map.put(:club_id, Memba.ID.generate(:club))
              |> Messaging.unfollow_conversation_as_current_member(consistency: :strong)
 
-    assert Messaging.following_conversation?(root.message_id, bob.person_id)
+    assert Messaging.following_conversation?(conversation_id, bob_person_id)
 
-    from(group_membership in GroupMembership,
-      where:
-        group_membership.group_id == ^bob_group_membership.group_id and
-          group_membership.membership_id == ^bob_group_membership.membership_id
-    )
-    |> Repo.update_all(set: [active: false])
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob_person_id
+               },
+               consistency: :strong
+             )
 
     assert {:error, :not_current_member} =
              Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
 
-    assert Messaging.following_conversation?(root.message_id, bob.person_id)
+    refute Messaging.following_conversation?(conversation_id, bob_person_id)
   end
 
   defp projector_metadata(event_number) do

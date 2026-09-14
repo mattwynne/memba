@@ -34,6 +34,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
+  alias Memba.Messaging.Message
   alias Memba.Messaging.OutboundMessageID
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
@@ -47,9 +48,12 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
+  alias Memba.ProjectionBarrier
   alias Memba.Repo
 
   import Ecto.Query
+
+  @default_authorization_stability_timeout 5_000
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -71,6 +75,28 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  Send a club message from an in-app current-member surface.
+
+  Unlike inbound email posting, browser composition requires the sender to
+  retain active membership in the selected audience group. The Membership
+  aggregate is rechecked at a stable event-store checkpoint before dispatch, so
+  a committed departure cannot be accepted through stale projections.
+  """
+  def send_club_message_as_current_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- send_club_message_command(attrs),
+                  :ok <- authorize_message_sender(command) do
+               {:ok, command}
+             end
+           end),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
   Post a reply to an existing club-message conversation.
 
   The caller supplies the reply `:message_id`, root `:conversation_id`, replying
@@ -80,8 +106,13 @@ defmodule Memba.Messaging do
   """
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- post_message_reply_command(attrs),
-         :ok <- authorize_reply_sender(command),
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- post_message_reply_command(attrs),
+                  :ok <- authorize_reply_sender(command) do
+               {:ok, command}
+             end
+           end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -165,8 +196,13 @@ defmodule Memba.Messaging do
   """
   def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- follow_conversation_command(attrs),
-         :ok <- authorize_current_member_conversation_action(command),
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- follow_conversation_command(attrs),
+                  :ok <- authorize_current_member_conversation_action(command) do
+               {:ok, command}
+             end
+           end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -193,8 +229,13 @@ defmodule Memba.Messaging do
   """
   def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- unfollow_conversation_command(attrs),
-         :ok <- authorize_current_member_conversation_action(command),
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- unfollow_conversation_command(attrs),
+                  :ok <- authorize_current_member_conversation_action(command) do
+               {:ok, command}
+             end
+           end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -1824,7 +1865,7 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_reply_sender(%PostMessageReply{} = command) do
-    case member_has_conversation_access?(
+    case member_has_authoritative_conversation_access?(
            command.conversation_id,
            command.club_id,
            command.sender_id,
@@ -1835,11 +1876,23 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp authorize_message_sender(%SendMessage{} = command) do
+    if Membership.active_member_of_group_authoritatively?(
+         command.club_id,
+         command.audience_group_id,
+         command.sender_id
+       ) do
+      :ok
+    else
+      {:error, :not_current_member}
+    end
+  end
+
   defp authorize_current_member_conversation_action(command) do
     with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),
          :ok <- require_conversation_in_club(root_message, command.club_id),
          true <-
-           member_has_conversation_access?(
+           member_has_authoritative_conversation_access?(
              command.conversation_id,
              command.club_id,
              command.member_id,
@@ -1849,6 +1902,70 @@ defmodule Memba.Messaging do
     else
       false -> {:error, :not_current_member}
       {:error, _reason} = error -> error
+    end
+  end
+
+  defp authorize_at_stable_checkpoint(authorization) when is_function(authorization, 0) do
+    deadline =
+      System.monotonic_time(:millisecond) + authorization_stability_timeout()
+
+    authorize_at_stable_checkpoint(authorization, deadline)
+  end
+
+  defp authorize_at_stable_checkpoint(authorization, deadline) do
+    if System.monotonic_time(:millisecond) >= deadline do
+      {:error, :authorization_stability_timeout}
+    else
+      checkpoint = ProjectionBarrier.current_checkpoint()
+
+      with {:ok, authorized} <- authorization.() do
+        if ProjectionBarrier.current_checkpoint() == checkpoint do
+          {:ok, authorized}
+        else
+          authorize_at_stable_checkpoint(authorization, deadline)
+        end
+      end
+    end
+  end
+
+  defp authorization_stability_timeout do
+    case Application.get_env(
+           :memba,
+           :authorization_stability_timeout,
+           @default_authorization_stability_timeout
+         ) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _invalid -> @default_authorization_stability_timeout
+    end
+  end
+
+  defp member_has_authoritative_conversation_access?(
+         conversation_id,
+         club_id,
+         person_id,
+         access_level
+       ) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level),
+         %Message{
+           message_id: ^conversation_id,
+           club_id: ^club_id,
+           group_access: group_access
+         } <- App.aggregate_state(Message, conversation_id) do
+      grant_levels = ConversationAccess.grant_levels_including(access_level)
+
+      Enum.any?(group_access, fn {group_id, granted_access_level} ->
+        granted_access_level in grant_levels and
+          Membership.active_member_of_group_authoritatively?(
+            club_id,
+            group_id,
+            person_id
+          )
+      end)
+    else
+      _invalid_missing_or_inaccessible -> false
     end
   end
 

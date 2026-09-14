@@ -1347,6 +1347,29 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Return whether the Club aggregate currently records a person as an active
+  member of one of its groups.
+
+  Privacy-sensitive action boundaries use this narrow authoritative query when
+  a just-committed departure may not yet be visible in Membership projections.
+  System groups are derived from active club membership and Admin authority;
+  custom groups require the same active membership identity that holds the
+  group membership.
+  """
+  def active_member_of_group_authoritatively?(club_id, group_id, person_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         %Memba.Membership.Club{club_id: ^club_id} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id),
+         true <- Map.has_key?(club.groups, group_id) do
+      authoritative_group_member?(club, group_id, person_id)
+    else
+      _invalid_missing_or_inactive -> false
+    end
+  end
+
+  @doc """
   Wait until the Membership read models used by `active_member_of_group?/2`
   have processed every event committed before this call.
 
@@ -1355,6 +1378,34 @@ defmodule Memba.Membership do
   """
   def await_group_access_projections(opts \\ []) when is_list(opts) do
     ProjectionBarrier.await(@group_access_projectors, opts)
+  end
+
+  defp authoritative_group_member?(club, group_id, person_id) do
+    active_membership_ids =
+      club.active_memberships
+      |> Enum.flat_map(fn
+        {membership_id, ^person_id} -> [membership_id]
+        {_membership_id, _other_person_id} -> []
+      end)
+
+    cond do
+      group_id == SystemGroups.everyone_group_id(club.club_id) ->
+        active_membership_ids != []
+
+      group_id == SystemGroups.admin_group_id(club.club_id) ->
+        Enum.any?(
+          active_membership_ids,
+          &MapSet.member?(club.active_admin_membership_ids, &1)
+        )
+
+      true ->
+        Enum.any?(active_membership_ids, fn membership_id ->
+          case Map.get(club.group_memberships, {group_id, membership_id}) do
+            %{person_id: ^person_id, active: true} -> true
+            _inactive_or_different_person -> false
+          end
+        end)
+    end
   end
 
   @doc """
