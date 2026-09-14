@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T20:33:31.768938757Z",
-  "last_event_at": "2026-09-14T21:16:59.127486760Z",
+  "last_event_at": "2026-09-14T21:22:00.840151972Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -7682,9 +7682,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1847,
       "checkpoint": {
-        "timestamp": "2026-09-14T21:16:59.133392585Z",
+        "timestamp": "2026-09-14T21:17:03.189260993Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -7715,10 +7715,371 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.default_fidelity": "summary:high",
+          "graph.rankdir": "LR",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.verify_source_head.current_node": "read_plan",
+          "thread.apply_task_verdict.current_node": "sync_task_list",
+          "current_node": "implement_next_task",
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.\",\"reason\":\"At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures.\"}",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.node_visit_count": 3,
+          "command.output": "blob://sha256/609a5bfa1f338f0df44ab86455f6ba1084c3bec24f3b984d1901d9f9a600a173",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "failure_signature": "",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+          "failure_class": "",
+          "internal.retry_count.todo_readable": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.revise_task.current_node": "validate_task",
+          "graph.max_node_visits": "80",
+          "internal.run_id": "01M2GSY9BXZSK7X2GP9786P2J6",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.work_dir": "/workspace/memba",
+          "last_stage": "implement_next_task",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.wip_gate": 0,
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.retry_count.read_plan": 0,
+          "internal.thread_id": "all_tasks_done",
+          "last_response": "Task 003 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n2. Changes made\n\n- A",
+          "outcome": "succeeded",
+          "output.validate_task": {
+            "decision": "accept",
+            "task": "- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.",
+            "reason": "At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures."
+          },
+          "preferred_label": "accept",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.revise_task": 0,
+          "response.implement_next_task": "Task 003 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n2. Changes made\n\n- Added an architectural boundary test in [membership_command_boundary_test.exs](/workspace/memba/web/test/memba_web/membership_command_boundary_test.exs:1). It scans production web-delivery modules and prevents direct references to the trusted actor-free `AddGroupMember`, `CreateGroup`, and `RemoveGroupMember` commands.\n- Clarified in [add_group_member.ex](/workspace/memba/web/lib/memba/membership/commands/add_group_member.ex:8) that `AddGroupMember` remains an internal policy/backfill command and that web callers must use the actor-authorized `Membership.add_custom_group_member/2` API.\n- Documented the public-versus-internal command boundary in [router.ex](/workspace/memba/web/lib/memba/membership/router.ex:8).\n- Preserved the existing trusted command routing and the system-group policy/backfill implementations unchanged.\n- Existing focused tests also verify that:\n  - `AddGroupMember` remains registered with the Commanded application.\n  - System-group policies and backfills can still dispatch it.\n  - The public `Membership` API does not export `add_group_member`.\n  - The public actor-authorized operation rejects system groups while trusted dispatch remains available.\n\n3. Focused validation\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/membership_command_boundary_test.exs test/memba/membership/public_api_test.exs test/memba/membership/app_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/system_groups_backfill_test.exs`\n  - 53 tests, 0 failures.\n- `mix format --check-formatted lib/memba/membership/commands/add_group_member.ex lib/memba/membership/router.ex test/memba_web/membership_command_boundary_test.exs`\n  - Passed.\n- `git diff --check`\n  - Passed.\n\nFull `dev check` remains explicit task 016.\n\n4. Todo state\n\nStill exactly unchecked:\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0002: trusted system-group work remains Commanded command dispatch through the existing event-sourced aggregate.\n- ADR 0007: web delivery is constrained to Membership’s public context API; internal policy and backfill producers retain their lower-level command path.\n- ADR 0011: existing caller-generated typed identities and command fields are unchanged.\n- ADR 0024: both trusted and actor-authorized commands continue routing to the Club consistency boundary; no projection-backed authorization path was introduced.",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "internal.retry_count.validate_task": 0,
+          "thread.start.current_node": "verify_source_head",
+          "internal.retry_count.apply_task_verdict": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.implement_next_task": 0
+        },
+        "node_outcomes": {
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 148,
+              "active_time_ms": 148
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "accept",
+            "context_updates": {
+              "command.output": "blob://sha256/4df7fe36ba9a7eccaf62c664c02807faa2a3bcf2979fa962e53f5a230e867fd7"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Task 003 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n2. Changes made\n\n- A",
+              "response.implement_next_task": "Task 003 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n2. Changes made\n\n- Added an architectural boundary test in [membership_command_boundary_test.exs](/workspace/memba/web/test/memba_web/membership_command_boundary_test.exs:1). It scans production web-delivery modules and prevents direct references to the trusted actor-free `AddGroupMember`, `CreateGroup`, and `RemoveGroupMember` commands.\n- Clarified in [add_group_member.ex](/workspace/memba/web/lib/memba/membership/commands/add_group_member.ex:8) that `AddGroupMember` remains an internal policy/backfill command and that web callers must use the actor-authorized `Membership.add_custom_group_member/2` API.\n- Documented the public-versus-internal command boundary in [router.ex](/workspace/memba/web/lib/memba/membership/router.ex:8).\n- Preserved the existing trusted command routing and the system-group policy/backfill implementations unchanged.\n- Existing focused tests also verify that:\n  - `AddGroupMember` remains registered with the Commanded application.\n  - System-group policies and backfills can still dispatch it.\n  - The public `Membership` API does not export `add_group_member`.\n  - The public actor-authorized operation rejects system groups while trusted dispatch remains available.\n\n3. Focused validation\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/membership_command_boundary_test.exs test/memba/membership/public_api_test.exs test/memba/membership/app_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/system_groups_backfill_test.exs`\n  - 53 tests, 0 failures.\n- `mix format --check-formatted lib/memba/membership/commands/add_group_member.ex lib/memba/membership/router.ex test/memba_web/membership_command_boundary_test.exs`\n  - Passed.\n- `git diff --check`\n  - Passed.\n\nFull `dev check` remains explicit task 016.\n\n4. Todo state\n\nStill exactly unchecked:\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0002: trusted system-group work remains Commanded command dispatch through the existing event-sourced aggregate.\n- ADR 0007: web delivery is constrained to Membership’s public context API; internal policy and backfill producers retain their lower-level command path.\n- ADR 0011: existing caller-generated typed identities and command fields are unchanged.\n- ADR 0024: both trusted and actor-authorized commands continue routing to the Club consistency boundary; no projection-backed authorization path was introduced."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 158082,
+                    "output_tokens": 4400,
+                    "reasoning_tokens": 3264,
+                    "cache_read_tokens": 799616,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1420138
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 177047,
+              "tool_time_ms": 34916,
+              "active_time_ms": 211963
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fc8ae99a7b32d42ca67b9bff8ee094681e7130a131c4843242da17fffb9323a9"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "revise_task",
+              "response.revise_task": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. Selected task\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n2. Changes made\n\n- Preserved the existing public API, actor-bearing command, router registration, and `GroupMemberAdded` event path.\n- Updated [`Membership.Club`](/workspace/memba/web/lib/memba/membership/club.ex:142) to require, from current aggregate state:\n\n  - An existing custom group, rejecting Everyone and Admin system groups.\n  - An active actor who is either an active member of that custom group or holds `club.manage_members`.\n  - An exact active target membership/person identity in the same club.\n\n- Missing, inactive, forged, and unauthorized actors now return `{:error, :unauthorized}`.\n- Missing and cross-club targets return `{:error, :member_not_active}`; mismatched membership/person tuples return `{:error, :membership_person_mismatch}`.\n- Kept trusted raw `AddGroupMember` commands available for system-group policies and backfills.\n- Updated API and command documentation in [`membership.ex`](/workspace/memba/web/lib/memba/membership.ex:86) and [`add_custom_group_member.ex`](/workspace/memba/web/lib/memba/membership/commands/add_custom_group_member.ex:1).\n- Expanded [`add_custom_group_member_dispatch_test.exs`](/workspace/memba/web/test/memba/membership/add_custom_group_member_dispatch_test.exs:14) to cover:\n\n  - Admission by an ordinary custom-group member.\n  - Admission by an outside Admin without implicitly joining.\n  - Forged, unauthorized, and departed actors.\n  - Missing, mismatched, and cross-club targets.\n  - System-group bypass denial.\n  - Continued trusted-command access to system groups.\n\nNo acceptance feature files were changed.\n\n3. Focused validation\n\n- TDD red run: 6 tests, 3 expected failures demonstrating the missing actor, target, and system-group checks.\n- Focused regression run:\n\n  `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/club_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/app_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/public_api_test.exs`\n\n  Result: 98 tests, 0 failures.\n\n- Broad quick gate:\n\n  `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n\n  Result: 1,416 tests, 0 failures.\n\n- Touched-file formatting and `git diff --check` passed.\n- Full `dev check` remains explicit task 016 and was not run in this per-task node.\n\n4. Todo state\n\nStill exactly unchecked in [`todo.md`](/workspace/memba/docs/iterations/063-add-custom-group-members/todo.md:3):\n\n`- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by Membership.Club.`\n\n5. Todo changes\n\nNone. Tasks were not split, added, reordered, or checked off. The minimum authorization and system-group safeguards overlapping tasks 002–003 were necessary to make task 001 a safe authenticated public write and directly address the independent revision verdict.\n\n6. ADR conformance\n\n- ADR 0002: admission remains a Commanded command and event-sourced aggregate decision.\n- ADR 0007: the mutation remains within Membership’s public API and bounded context.\n- ADR 0011: club, group, membership, and person identities remain caller-generated typed UUIDs.\n- ADR 0024: actor authority, target eligibility, system-group identity, and membership transition are all decided from serialized `Membership.Club` state without projection-backed authorization preflights.",
+              "last_response": "Task 001 is revised and ready for independent review. The public admission path now performs authoritative authorization inside the Club aggregate instead of accepting any well-formed actor UUID.\n\n1. "
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 453538,
+                    "output_tokens": 8583,
+                    "reasoning_tokens": 4914,
+                    "cache_read_tokens": 1726080,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3535640
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 312534,
+              "tool_time_ms": 262424,
+              "active_time_ms": 574958
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "output.validate_task": {
+                "decision": "accept",
+                "task": "- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.",
+                "reason": "At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures."
+              },
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current ag",
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.\",\"reason\":\"At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures.\"}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 83631,
+                    "output_tokens": 2481,
+                    "reasoning_tokens": 774,
+                    "cache_read_tokens": 224640,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 628125
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 75962,
+              "tool_time_ms": 12543,
+              "active_time_ms": 88505
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a1227baf2245062e6699ab37f0ab3d9dc7bb62d0fd08248e40963cd47b657473"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '428368266c49feca44a1f1756ded7ed8ac16d43a'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 217,
+              "active_time_ms": 217
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/609a5bfa1f338f0df44ab86455f6ba1084c3bec24f3b984d1901d9f9a600a173"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19059a8ddbbd7924d847396f332c0d8fafe9dc29f31ebfa20a6cba7481f98a7b"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93740,
+              "active_time_ms": 93740
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a5e3da4fb595b78c08280e5a8d35f5f8d52d5f98e716c9ba0bf9fa278775aae4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/23b40206c57d7dfc0e6c87bf554000c8607296724d2db54c5f3ef1ece5d7fbe7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5ee0f0d12234c892042d0b23b37b750df2c7f7b139acb1e2fc0e4b9d0d768dae"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1719,
+              "active_time_ms": 1719
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "481981240817933629f0b151efab412bd37be4ac",
+        "node_visits": {
+          "read_plan": 1,
+          "todo_readable": 3,
+          "implement_next_task": 3,
+          "preflight_sandbox": 1,
+          "sync_task_list": 3,
+          "revise_task": 1,
+          "validate_task": 3,
+          "start": 1,
+          "wip_gate": 1,
+          "all_tasks_done": 3,
+          "resume_gate": 1,
+          "verify_source_head": 1,
+          "apply_task_verdict": 3
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/lib/memba/membership/commands/add_group_member.ex b/web/lib/memba/membership/commands/add_group_member.ex\nindex bedd0cb..1fa197d 100644\n--- a/web/lib/memba/membership/commands/add_group_member.ex\n+++ b/web/lib/memba/membership/commands/add_group_member.ex\n@@ -7,7 +7,9 @@ defmodule Memba.Membership.Commands.AddGroupMember do\n \n   This is a trusted internal command registered for system-group policy/backfill\n   work and event-sourced fixture setup. It is not the public, actor-authorized\n-  path for changing custom-group membership.\n+  path for changing custom-group membership. Web callers must use\n+  `Memba.Membership.add_custom_group_member/2`, whose actor-bearing command is\n+  authorized by the Club aggregate.\n   \"\"\"\n \n   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]\ndiff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex\nindex 2f108a8..ddcc9c7 100644\n--- a/web/lib/memba/membership/router.ex\n+++ b/web/lib/memba/membership/router.ex\n@@ -4,6 +4,10 @@ defmodule Memba.Membership.Router do\n \n   Membership activation and removal share the Club aggregate boundary with\n   club roles and their invariants. There is no membership-ID aggregate route.\n+\n+  The router also retains trusted actor-free commands used by Membership\n+  policies and backfills. Web delivery uses the public `Memba.Membership`\n+  application service rather than dispatching those commands directly.\n   \"\"\"\n \n   use Commanded.Commands.Router\ndiff --git a/web/test/memba_web/membership_command_boundary_test.exs b/web/test/memba_web/membership_command_boundary_test.exs\nnew file mode 100644\nindex 0000000..63601f4\n--- /dev/null\n+++ b/web/test/memba_web/membership_command_boundary_test.exs\n@@ -0,0 +1,27 @@\n+defmodule MembaWeb.MembershipCommandBoundaryTest do\n+  use ExUnit.Case, async: true\n+\n+  @web_source_root Path.expand(\"../../lib/memba_web\", __DIR__)\n+\n+  @internal_membership_references [\n+    \"Memba.Membership.Commands.AddGroupMember\",\n+    \"Memba.Membership.Commands.CreateGroup\",\n+    \"Memba.Membership.Commands.RemoveGroupMember\"\n+  ]\n+\n+  test \"web delivery does not bypass the public Membership command boundary\" do\n+    @web_source_root\n+    |> Path.join(\"**/*.ex\")\n+    |> Path.wildcard()\n+    |> Enum.each(fn path ->\n+      source = File.read!(path)\n+      relative_path = Path.relative_to(path, @web_source_root)\n+\n+      Enum.each(@internal_membership_references, fn internal_reference ->\n+        refute source =~ internal_reference,\n+               \"#{relative_path} must use the public Memba.Membership API, \" <>\n+                 \"not #{internal_reference}\"\n+      end)\n+    end)\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 12,
+          "additions": 757,
+          "deletions": 4
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T21:22:04.033935310Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.verify_source_head": 0,
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.all_tasks_done": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.revise_task.current_node": "validate_task",
           "internal.retry_count.wip_gate": 0,
           "internal.fidelity": "summary:high",
@@ -7734,23 +8095,23 @@
           "failure_class": "",
           "thread.wip_gate.current_node": "preflight_sandbox",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "last_stage": "implement_next_task",
+          "last_stage": "validate_task",
           "response.implement_next_task": "Task 003 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n2. Changes made\n\n- Added an architectural boundary test in [membership_command_boundary_test.exs](/workspace/memba/web/test/memba_web/membership_command_boundary_test.exs:1). It scans production web-delivery modules and prevents direct references to the trusted actor-free `AddGroupMember`, `CreateGroup`, and `RemoveGroupMember` commands.\n- Clarified in [add_group_member.ex](/workspace/memba/web/lib/memba/membership/commands/add_group_member.ex:8) that `AddGroupMember` remains an internal policy/backfill command and that web callers must use the actor-authorized `Membership.add_custom_group_member/2` API.\n- Documented the public-versus-internal command boundary in [router.ex](/workspace/memba/web/lib/memba/membership/router.ex:8).\n- Preserved the existing trusted command routing and the system-group policy/backfill implementations unchanged.\n- Existing focused tests also verify that:\n  - `AddGroupMember` remains registered with the Commanded application.\n  - System-group policies and backfills can still dispatch it.\n  - The public `Membership` API does not export `add_group_member`.\n  - The public actor-authorized operation rejects system groups while trusted dispatch remains available.\n\n3. Focused validation\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/membership_command_boundary_test.exs test/memba/membership/public_api_test.exs test/memba/membership/app_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs test/memba/membership/system_groups_backfill_test.exs`\n  - 53 tests, 0 failures.\n- `mix format --check-formatted lib/memba/membership/commands/add_group_member.ex lib/memba/membership/router.ex test/memba_web/membership_command_boundary_test.exs`\n  - Passed.\n- `git diff --check`\n  - Passed.\n\nFull `dev check` remains explicit task 016.\n\n4. Todo state\n\nStill exactly unchecked:\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0002: trusted system-group work remains Commanded command dispatch through the existing event-sourced aggregate.\n- ADR 0007: web delivery is constrained to Membership’s public context API; internal policy and backfill producers retain their lower-level command path.\n- ADR 0011: existing caller-generated typed identities and command fields are unchanged.\n- ADR 0024: both trusted and actor-authorized commands continue routing to the Club consistency boundary; no projection-backed authorization path was introduced.",
           "output.validate_task": {
             "decision": "accept",
-            "task": "- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.",
-            "reason": "At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures."
+            "task": "- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.",
+            "reason": "At clean HEAD 4819812, CreateGroup, AddGroupMember, and RemoveGroupMember remain registered actor-free commands used by the existing system-group policy and backfill, while Membership exposes only the actor-authorized add_custom_group_member/2 path and the Club aggregate rejects system groups through it. The new web-delivery boundary test guards against direct references to the trusted commands, and command/router documentation makes the boundary explicit. This conforms to the plan and ADRs 0002, 0007, and 0024. No acceptance feature files changed; git diff --check and touched-file formatting passed; live focused validation passed 53 tests with 0 failures."
           },
           "internal.retry_count.apply_task_verdict": 0,
           "thread.start.current_node": "verify_source_head",
           "internal.retry_count.resume_gate": 0,
           "thread.verify_source_head.current_node": "read_plan",
-          "current_node": "implement_next_task",
+          "current_node": "validate_task",
           "thread.apply_task_verdict.current_node": "sync_task_list",
-          "internal.node_visit_count": 3,
+          "internal.node_visit_count": 4,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.all_tasks_done.current_node": "implement_next_task",
-          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.\",\"reason\":\"At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures.\"}",
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.\",\"reason\":\"At clean HEAD 4819812, CreateGroup, AddGroupMember, and RemoveGroupMember remain registered actor-free commands used by the existing system-group policy and backfill, while Membership exposes only the actor-authorized add_custom_group_member/2 path and the Club aggregate rejects system groups through it. The new web-delivery boundary test guards against direct references to the trusted commands, and command/router documentation makes the boundary explicit. This conforms to the plan and ADRs 0002, 0007, and 0024. No acceptance feature files changed; git diff --check and touched-file formatting passed; live focused validation passed 53 tests with 0 failures.\"}",
           "graph.max_node_visits": "80",
           "command.output": "blob://sha256/609a5bfa1f338f0df44ab86455f6ba1084c3bec24f3b984d1901d9f9a600a173",
           "thread.sync_task_list.current_node": "todo_readable",
@@ -7762,7 +8123,7 @@
           "graph.default_fidelity": "summary:high",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.todo_readable": 0,
-          "last_response": "Task 003 is implemented and ready for independent review.\n\n1. Selected task\n\n`- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.`\n\n2. Changes made\n\n- A",
+          "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.\",\"reason\":\"At clean HEAD 4819812, CreateGroup, AddGroupMember, and Remo",
           "graph.rankdir": "LR",
           "thread.validate_task.current_node": "apply_task_verdict",
           "thread.implement_next_task.current_node": "validate_task",
@@ -7891,13 +8252,13 @@
             "status": "succeeded",
             "context_updates": {
               "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.\",\"reason\":\"At clean HEAD 4819812, CreateGroup, AddGroupMember, and RemoveGroupMember remain registered actor-free commands used by the existing system-group policy and backfill, while Membership exposes only the actor-authorized add_custom_group_member/2 path and the Club aggregate rejects system groups through it. The new web-delivery boundary test guards against direct references to the trusted commands, and command/router documentation makes the boundary explicit. This conforms to the plan and ADRs 0002, 0007, and 0024. No acceptance feature files changed; git diff --check and touched-file formatting passed; live focused validation passed 53 tests with 0 failures.\"}",
               "output.validate_task": {
                 "decision": "accept",
-                "task": "- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.",
-                "reason": "At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures."
+                "task": "- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.",
+                "reason": "At clean HEAD 4819812, CreateGroup, AddGroupMember, and RemoveGroupMember remain registered actor-free commands used by the existing system-group policy and backfill, while Membership exposes only the actor-authorized add_custom_group_member/2 path and the Club aggregate rejects system groups through it. The new web-delivery boundary test guards against direct references to the trusted commands, and command/router documentation makes the boundary explicit. This conforms to the plan and ADRs 0002, 0007, and 0024. No acceptance feature files changed; git diff --check and touched-file formatting passed; live focused validation passed 53 tests with 0 failures."
               },
-              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current ag",
-              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.\",\"reason\":\"At clean HEAD f1a3f69, Membership.Club authorizes AddCustomGroupMember entirely from current event-applied aggregate state: the actor must have an active club membership and either active membership in the custom group or a currently assigned role carrying club.manage_members; the target must be the exact active membership/person pair; and the group must exist and not be Everyone or Admin. The candidate adds direct aggregate regression tests proving authorization is revoked after group removal, club departure, or role removal and covering inactive/mismatched targets plus unknown/system groups. This conforms to the plan and ADRs 0002, 0007, 0011, and 0024. No acceptance feature files changed, git diff --check passed, and live focused validation passed 59 tests with 0 failures.\"}"
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.\",\"reason\":\"At clean HEAD 4819812, CreateGroup, AddGroupMember, and Remo"
             },
             "notes": "Stage completed: validate_task",
             "usage": {
@@ -7908,10 +8269,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 83631,
-                    "output_tokens": 2481,
-                    "reasoning_tokens": 774,
-                    "cache_read_tokens": 224640,
+                    "input_tokens": 115815,
+                    "output_tokens": 3161,
+                    "reasoning_tokens": 2012,
+                    "cache_read_tokens": 611328,
                     "cache_write_tokens": 0
                   }
                 },
@@ -7919,13 +8280,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 628125
+              "total_usd_micros": 1039929
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 75962,
-              "tool_time_ms": 12543,
-              "active_time_ms": 88505
+              "inference_time_ms": 127938,
+              "tool_time_ms": 172530,
+              "active_time_ms": 300468
             }
           },
           "verify_source_head": {
@@ -8014,7 +8375,7 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "apply_task_verdict",
         "node_visits": {
           "start": 1,
           "verify_source_head": 1,
@@ -8027,7 +8388,7 @@
           "sync_task_list": 3,
           "apply_task_verdict": 3,
           "revise_task": 1,
-          "validate_task": 3,
+          "validate_task": 4,
           "resume_gate": 1
         }
       },
@@ -9149,7 +9510,12 @@
       "first_event_seq": 1657,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T21:16:59.132594864Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -9164,16 +9530,20 @@
       "started_at": "2026-09-14T21:13:26.795464392Z",
       "handler": "agent",
       "graph_visit": 3,
-      "live_inference_ms": 161325,
-      "live_tool_ms": 34912,
+      "timing": {
+        "wall_time_ms": 212335,
+        "inference_time_ms": 177047,
+        "tool_time_ms": 34916,
+        "active_time_ms": 211963
+      },
       "usage": {
-        "input_tokens": 156415,
-        "output_tokens": 3790,
-        "total_tokens": 885389,
+        "input_tokens": 158082,
+        "output_tokens": 4400,
+        "total_tokens": 965362,
         "reasoning_tokens": 3264,
-        "cache_read_tokens": 721920,
+        "cache_read_tokens": 799616,
         "cache_write_tokens": 0,
-        "total_usd_micros": 1354655
+        "total_usd_micros": 1420138
       },
       "model": {
         "provider": "openai",
@@ -9258,32 +9628,32 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 77822,
-        "usage_percent": 28.611029411764704,
+        "input_tokens": 79363,
+        "usage_percent": 29.177573529411763,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-14T21:16:43.243288591Z",
-        "event_seq": 1830,
+        "generated_at": "2026-09-14T21:16:59.127418999Z",
+        "event_seq": 1840,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2912,
-            "usage_percent": 1.0705882352941176
+            "tokens": 2893,
+            "usage_percent": 1.0636029411764707
           },
           {
             "category": "tools",
-            "tokens": 892,
-            "usage_percent": 0.32794117647058824
+            "tokens": 887,
+            "usage_percent": 0.3261029411764706
           },
           {
             "category": "memory",
-            "tokens": 404,
-            "usage_percent": 0.14852941176470588
+            "tokens": 401,
+            "usage_percent": 0.1474264705882353
           },
           {
             "category": "conversation",
-            "tokens": 73608,
-            "usage_percent": 27.061764705882354
+            "tokens": 75176,
+            "usage_percent": 27.638235294117646
           },
           {
             "category": "other",
@@ -9293,19 +9663,8 @@
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "c156e156-9af2-48b7-aa9f-4ea5cde0c69c",
-        "started_at": "2026-09-14T21:16:43.417204713Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-14T21:16:46.156532047Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "read_plan@1": {
       "first_event_seq": 35,
@@ -9356,6 +9715,204 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "validate_task@4": {
+      "first_event_seq": 1850,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T21:17:03.197567310Z",
+      "handler": "agent",
+      "graph_visit": 4,
+      "live_inference_ms": 122235,
+      "live_tool_ms": 172526,
+      "usage": {
+        "input_tokens": 260139,
+        "output_tokens": 8145,
+        "total_tokens": 1624175,
+        "reasoning_tokens": 5875,
+        "cache_read_tokens": 1350016,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 2396303
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:2c2ee48f-d3ba-4b6e-8c21-9bbc8672d82f",
+        "items": [
+          {
+            "id": "01f66254a93c1f9d",
+            "status": "completed",
+            "order": 0,
+            "subject": "Confirm the first unchecked task and repository/checkpoint state"
+          },
+          {
+            "id": "26f5f2199c9159ec",
+            "status": "completed",
+            "order": 1,
+            "subject": "Inspect the candidate’s full diff, relevant code, tests, plan, and ADR constraints"
+          },
+          {
+            "id": "685323811fa0bf25",
+            "status": "completed",
+            "order": 2,
+            "subject": "Run focused validation and return the verdict"
+          }
+        ]
+      },
+      "subagents": [
+        {
+          "agent_id": "0ddf9de8",
+          "depth": 1,
+          "task": "Independently inspect candidate task 003 only in /workspace/memba: \"Preserve trusted system-group commands rather than exposing them directly to web callers.\" Do not edit anything. Inspect plan/todo, current git history/diff, relevant architecture docs, implementation and tests. Report concrete acceptance gaps or confirm evidence. Do not run broad dev check; focused read-only/test inspection is okay.",
+          "status": {
+            "kind": "completed",
+            "success": true,
+            "turns_used": 44
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 56596,
+        "usage_percent": 20.80735294117647,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-14T21:21:58.344685295Z",
+        "event_seq": 2236,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2933,
+            "usage_percent": 1.0783088235294118
+          },
+          {
+            "category": "tools",
+            "tokens": 899,
+            "usage_percent": 0.33051470588235293
+          },
+          {
+            "category": "memory",
+            "tokens": 407,
+            "usage_percent": 0.14963235294117647
+          },
+          {
+            "category": "conversation",
+            "tokens": 52351,
+            "usage_percent": 19.246691176470588
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "inference": {
+        "session_id": "2c2ee48f-d3ba-4b6e-8c21-9bbc8672d82f",
+        "started_at": "2026-09-14T21:21:58.346064492Z",
+        "requested_model": {
+          "provider": "openai",
+          "model_id": "gpt-5.6-sol"
+        },
+        "first_output_at": "2026-09-14T21:22:00.840151972Z",
+        "first_output_kind": "text",
+        "retries": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "sync_task_list@3": {
       "first_event_seq": 1627,
