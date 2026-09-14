@@ -67,19 +67,13 @@ defmodule Memba.Membership.Projectors.Role do
       conflict_target: [:role_id, :permission]
     )
     |> Ecto.Multi.run(:membership_member_permissions_from_role_permission, fn repo, _changes ->
-      active_assignments =
-        repo.all(
-          from(assignment in RoleAssignmentProjection,
-            where: assignment.role_id == ^event.role_id,
-            where: assignment.active == true
-          )
-        )
+      membership_ids = active_membership_ids_for_role(repo, event.club_id, event.role_id)
 
-      Enum.each(active_assignments, fn assignment ->
-        increment_member_permission(repo, assignment, event.permission)
+      Enum.each(membership_ids, fn membership_id ->
+        reconcile_member_permissions_for_membership(repo, membership_id)
       end)
 
-      {:ok, length(active_assignments)}
+      {:ok, membership_ids}
     end)
   end)
 
@@ -133,21 +127,7 @@ defmodule Memba.Membership.Projectors.Role do
       conflict_target: [:membership_id, :role_id]
     )
     |> Ecto.Multi.run(:membership_member_permissions_from_role_assignment, fn repo, _changes ->
-      permissions = role_permissions(repo, event.role_id)
-
-      assignment = %RoleAssignmentProjection{
-        club_id: event.club_id,
-        membership_id: event.membership_id,
-        person_id: event.person_id,
-        role_id: event.role_id,
-        active: true
-      }
-
-      Enum.each(permissions, fn permission ->
-        increment_member_permission(repo, assignment, permission)
-      end)
-
-      {:ok, permissions}
+      {:ok, reconcile_member_permissions_for_membership(repo, event.membership_id)}
     end)
   end
 
@@ -162,13 +142,7 @@ defmodule Memba.Membership.Projectors.Role do
     )
     |> Ecto.Multi.run(:membership_member_permissions_from_removed_role_assignment, fn repo,
                                                                                       _changes ->
-      permissions = role_permissions(repo, event.role_id)
-
-      Enum.each(permissions, fn permission ->
-        decrement_member_permission(repo, event, permission)
-      end)
-
-      {:ok, permissions}
+      {:ok, reconcile_member_permissions_for_membership(repo, event.membership_id)}
     end)
   end
 
@@ -187,54 +161,94 @@ defmodule Memba.Membership.Projectors.Role do
     )
   end
 
-  defp role_permissions(repo, role_id) do
+  defp active_membership_ids_for_role(repo, club_id, role_id) do
     repo.all(
-      from(permission in RolePermissionProjection,
-        where: permission.role_id == ^role_id,
-        order_by: [asc: permission.permission],
-        select: permission.permission
+      from(assignment in RoleAssignmentProjection,
+        where: assignment.club_id == ^club_id,
+        where: assignment.role_id == ^role_id,
+        where: assignment.active == true,
+        distinct: true,
+        select: assignment.membership_id
       )
     )
   end
 
-  defp increment_member_permission(repo, assignment, permission) do
+  defp reconcile_member_permissions_for_membership(repo, membership_id) do
     now = DateTime.utc_now(:microsecond)
+    existing_inserted_at = existing_member_permission_inserted_at_by_identity(repo, membership_id)
 
-    repo.insert_all(
-      MemberPermissionProjection,
-      [
-        %{
-          club_id: assignment.club_id,
-          membership_id: assignment.membership_id,
-          person_id: assignment.person_id,
-          permission: permission,
-          grant_count: 1,
-          inserted_at: now,
-          updated_at: now
-        }
+    rows =
+      membership_id
+      |> member_permission_counts_for_membership_query()
+      |> repo.all()
+      |> Enum.map(fn row ->
+        row
+        |> Map.put(:inserted_at, existing_inserted_at_for(row, existing_inserted_at, now))
+        |> Map.put(:updated_at, now)
+      end)
+
+    repo.delete_all(member_permissions_by_membership_query(membership_id))
+
+    if rows != [] do
+      repo.insert_all(
+        MemberPermissionProjection,
+        rows,
+        on_conflict: {:replace, [:grant_count, :updated_at]},
+        conflict_target: [:club_id, :person_id, :membership_id, :permission]
+      )
+    end
+
+    rows
+  end
+
+  defp member_permission_counts_for_membership_query(membership_id) do
+    from(assignment in RoleAssignmentProjection,
+      join: permission in RolePermissionProjection,
+      on:
+        permission.club_id == assignment.club_id and
+          permission.role_id == assignment.role_id,
+      where: assignment.membership_id == ^membership_id,
+      where: assignment.active == true,
+      group_by: [
+        assignment.club_id,
+        assignment.membership_id,
+        assignment.person_id,
+        permission.permission
       ],
-      on_conflict: [inc: [grant_count: 1], set: [updated_at: now]],
-      conflict_target: [:club_id, :person_id, :membership_id, :permission]
+      order_by: [asc: permission.permission],
+      select: %{
+        club_id: assignment.club_id,
+        membership_id: assignment.membership_id,
+        person_id: assignment.person_id,
+        permission: permission.permission,
+        grant_count: count(assignment.role_id, :distinct)
+      }
     )
   end
 
-  defp decrement_member_permission(repo, event, permission) do
-    now = DateTime.utc_now(:microsecond)
-
-    repo.update_all(
-      member_permission_query(event.club_id, event.person_id, event.membership_id, permission),
-      inc: [grant_count: -1],
-      set: [updated_at: now]
-    )
-
-    repo.delete_all(
+  defp existing_member_permission_inserted_at_by_identity(repo, membership_id) do
+    repo.all(
       from(member_permission in MemberPermissionProjection,
-        where: member_permission.club_id == ^event.club_id,
-        where: member_permission.person_id == ^event.person_id,
-        where: member_permission.membership_id == ^event.membership_id,
-        where: member_permission.permission == ^permission,
-        where: member_permission.grant_count <= 0
+        where: member_permission.membership_id == ^membership_id,
+        select: {
+          member_permission.club_id,
+          member_permission.person_id,
+          member_permission.membership_id,
+          member_permission.permission,
+          member_permission.inserted_at
+        }
       )
+    )
+    |> Map.new(fn {club_id, person_id, membership_id, permission, inserted_at} ->
+      {{club_id, person_id, membership_id, permission}, inserted_at}
+    end)
+  end
+
+  defp existing_inserted_at_for(row, existing_inserted_at, default) do
+    Map.get(
+      existing_inserted_at,
+      {row.club_id, row.person_id, row.membership_id, row.permission},
+      default
     )
   end
 
@@ -254,15 +268,6 @@ defmodule Memba.Membership.Projectors.Role do
   defp member_permissions_by_membership_query(membership_id) do
     from(member_permission in MemberPermissionProjection,
       where: member_permission.membership_id == ^membership_id
-    )
-  end
-
-  defp member_permission_query(club_id, person_id, membership_id, permission) do
-    from(member_permission in MemberPermissionProjection,
-      where: member_permission.club_id == ^club_id,
-      where: member_permission.person_id == ^person_id,
-      where: member_permission.membership_id == ^membership_id,
-      where: member_permission.permission == ^permission
     )
   end
 

@@ -100,7 +100,18 @@ defmodule MembaWeb.MemberGroupLive.New do
          )}
 
       {:error, :unauthorized} ->
-        forbidden!()
+        {:noreply,
+         socket
+         |> put_flash(:error, "You no longer have permission to create groups.")
+         |> push_navigate(
+           to: groups_path(socket.assigns.selected_club, socket.assigns.route_params)
+         )}
+
+      {:error, :authorization_state_mismatch} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "We couldn't create the group. Try again.")
+         |> refresh_group_form(group_params)}
 
       {:error, _reason} ->
         {:noreply,

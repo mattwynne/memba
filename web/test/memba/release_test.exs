@@ -34,6 +34,16 @@ defmodule Memba.ReleaseTest do
     assert Agent.get(log, & &1) == @release_steps
   end
 
+  test "source-backed Admin invariant wrapper is not part of the migrate sequence" do
+    log = start_supervised!({Agent, fn -> [] end})
+    Application.put_env(:memba, :release_step_overrides, recording_overrides(log))
+
+    assert :ok = Release.migrate()
+
+    assert Agent.get(log, & &1) == @release_steps
+    refute :verify_source_backed_admin_invariant in @release_steps
+  end
+
   test "release migration propagates system-group backfill failures and aborts remaining release work" do
     log = start_supervised!({Agent, fn -> [] end})
 

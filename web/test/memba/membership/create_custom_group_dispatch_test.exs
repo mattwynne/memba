@@ -2,21 +2,32 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   use Memba.EventSourcedCase, async: false
 
   import Ecto.Query
+  import ExUnit.CaptureLog
 
   alias Commanded.Commands.ExecutionResult
+  alias Commanded.Event.Mapper
   alias Commanded.EventStore
   alias Commanded.EventStore.RecordedEvent
   alias Memba.Membership
   alias Memba.Membership.App
+  alias Memba.Membership.Authorization
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateCustomGroup
+  alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubRoleDefined
+  alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Roles
+  alias Memba.Membership.SystemGroups
+  alias Memba.ProjectionBarrier
 
   test "create_custom_group/2 atomically creates an addressable group with its Admin creator" do
     club_id = Memba.ID.generate(:club)
@@ -260,6 +271,43 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
 
     create_club_with_admin!(club_id)
     create_member!(club_id, Memba.ID.generate(:membership), actor_person_id)
+
+    assert {:error, :unauthorized} = create_custom_group(club_id, group_id, actor_person_id)
+    refute_partial_group(club_id, group_id)
+  end
+
+  test "create_custom_group/2 reports authorization state mismatch when projection grants but aggregate denies" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    group_name = "Board Private Plans"
+    {_membership_id, actor_person_id} = create_source_backed_member_without_admin_role!(club_id)
+
+    grant_projected_manage_members!(club_id, actor_person_id)
+    assert :ok = Authorization.authorize_manage_members(club_id, actor_person_id)
+
+    log =
+      capture_log(fn ->
+        assert {:error, :authorization_state_mismatch} =
+                 create_custom_group(club_id, group_id, actor_person_id, group_name)
+      end)
+
+    refute_partial_group(club_id, group_id)
+
+    assert log =~ "custom_group_creation_authorization_state_mismatch"
+    assert log =~ club_id
+    assert log =~ actor_person_id
+    assert log =~ group_id
+    assert log =~ "Memba.Membership.Commands.CreateCustomGroup"
+    assert log =~ "custom_group_creation"
+    assert log =~ ~s("projected_grant":true)
+    assert log =~ ~s("aggregate_authorized":false)
+    refute log =~ group_name
+  end
+
+  test "create_custom_group/2 still returns unauthorized when projection also denies" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    {_membership_id, actor_person_id} = create_source_backed_member_without_admin_role!(club_id)
 
     assert {:error, :unauthorized} = create_custom_group(club_id, group_id, actor_person_id)
     refute_partial_group(club_id, group_id)
@@ -564,6 +612,95 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                },
                consistency: :strong
              )
+  end
+
+  defp create_source_backed_member_without_admin_role!(club_id) do
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+    role_id = Roles.membership_administrator_role_id(club_id)
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: "Projection Admin",
+                 email: "#{person_id}@example.com"
+               },
+               consistency: :strong
+             )
+
+    events =
+      [
+        %ClubCreated{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+        %ClubRoleDefined{
+          club_id: club_id,
+          role_id: role_id,
+          role_key: Roles.membership_administrator_key(),
+          name: Roles.membership_administrator_name()
+        },
+        %ClubRolePermissionGranted{
+          club_id: club_id,
+          role_id: role_id,
+          permission: Permissions.club_manage_members()
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: SystemGroups.everyone_group_id(club_id),
+          group_key: SystemGroups.everyone_key(),
+          name: SystemGroups.everyone_name()
+        },
+        %GroupEmailSlugAssigned{
+          club_id: club_id,
+          group_id: SystemGroups.everyone_group_id(club_id),
+          email_slug: SystemGroups.everyone_email_slug()
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: SystemGroups.admin_group_id(club_id),
+          group_key: SystemGroups.admin_key(),
+          name: SystemGroups.admin_name()
+        },
+        %GroupEmailSlugAssigned{
+          club_id: club_id,
+          group_id: SystemGroups.admin_group_id(club_id),
+          email_slug: SystemGroups.admin_email_slug()
+        },
+        %ClubMemberAdded{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id
+        }
+      ]
+      |> Enum.map(&Mapper.map_to_event_data/1)
+
+    assert :ok = EventStore.append_to_stream(App, club_id, 0, events)
+
+    ProjectionBarrier.await!(
+      [
+        Memba.Membership.Projectors.Club,
+        Memba.Membership.Projectors.Group,
+        Memba.Membership.Projectors.Membership
+      ],
+      timeout: 5_000
+    )
+
+    {membership_id, person_id}
+  end
+
+  defp grant_projected_manage_members!(club_id, person_id) do
+    membership_id =
+      club_id
+      |> Membership.list_active_members_of_club()
+      |> Enum.find(&(&1.id == person_id))
+      |> Map.fetch!(:membership_id)
+
+    Repo.insert!(%MemberPermission{
+      club_id: club_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
+    })
   end
 
   defp create_custom_group(club_id, group_id, actor_person_id, name \\ "Board") do
