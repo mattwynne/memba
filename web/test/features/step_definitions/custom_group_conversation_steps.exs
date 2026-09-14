@@ -233,13 +233,16 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
   step ~r/^(\w+) replies by email "([^"]+)" to "([^"]+)"$/,
        %{args: [person_name, body, subject]} = context do
     message = message!(context, subject)
+    person_id = person_id!(context, person_name)
     dispatch_pending_email_deliveries()
     Fake.reset()
 
     {result, context} =
       receive_inbound_email(context, person_name, "Re: #{subject}", @board_address,
         text_body: body,
-        in_reply_to_message_ids: [outbound_message_id!(message.message_id)]
+        in_reply_to_message_ids: [
+          outbound_message_id_for_recipient!(message.message_id, person_id)
+        ]
       )
 
     assert {:ok, %{message_id: reply_id, conversation_id: conversation_id}} = result
@@ -301,7 +304,9 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
 
   step ~r/^(\w+) has stopped following "([^"]+)"$/,
        %{args: [person_name, subject]} = context do
-    set_following(context, person_name, subject, false)
+    context
+    |> set_following(person_name, subject, true)
+    |> set_following(person_name, subject, false)
   end
 
   step ~r/^(\w+) replies "([^"]+)" to "([^"]+)" on the website$/,
@@ -564,6 +569,20 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     end
   end
 
+  defp outbound_message_id_for_recipient!(message_id, recipient_id) do
+    message_id
+    |> Messaging.list_recipient_deliveries()
+    |> Enum.find(&(&1.recipient_id == recipient_id))
+    |> case do
+      %{outbound_message_id: outbound_message_id}
+      when is_binary(outbound_message_id) and outbound_message_id != "" ->
+        outbound_message_id
+
+      _missing ->
+        flunk("Expected an outbound Message-ID for recipient #{recipient_id}")
+    end
+  end
+
   defp post_reply(context, person_name, subject, body) do
     Fake.reset()
     root = message!(context, subject)
@@ -590,17 +609,19 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
 
   defp set_following(context, person_name, subject, true) do
     message = message!(context, subject)
+    person_id = person_id!(context, person_name)
 
     assert :ok =
              Messaging.follow_conversation_as_current_member(
                %{
                  club_id: message.club_id,
                  conversation_id: message.message_id,
-                 member_id: person_id!(context, person_name)
+                 member_id: person_id
                },
                consistency: :strong
              )
 
+    assert Messaging.following_conversation?(message.message_id, person_id)
     context
   end
 
@@ -620,6 +641,7 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
                )
     end
 
+    refute Messaging.following_conversation?(message.message_id, person_id)
     context
   end
 

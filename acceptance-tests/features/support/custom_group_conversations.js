@@ -389,9 +389,13 @@ async function doNotFollowBoardConversation(world, personName, subject) {
 }
 
 async function stopFollowingBoardConversation(world, personName, subject) {
-  await withMemberHarness(world, personName, (member) =>
-    unfollowConversation(member, personName, subject)
-  );
+  await withMemberHarness(world, personName, async (member) => {
+    await followConversation(member, personName, subject);
+    assert.equal(following(member, personName, subject), true);
+
+    await unfollowConversation(member, personName, subject);
+    assert.equal(following(member, personName, subject), false);
+  });
 }
 
 async function replyOnWebsite(world, personName, body, subject) {
