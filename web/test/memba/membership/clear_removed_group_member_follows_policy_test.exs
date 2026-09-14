@@ -1,6 +1,7 @@
 defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Commanded.Commands.ExecutionResult
   alias Commanded.EventStore
   alias Commanded.Event.Handler
   alias Commanded.Registration
@@ -13,6 +14,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
+  alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
@@ -23,6 +25,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationUnfollowed
+  alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Recipient
 
   test "is a strongly consistent Membership event handler that replays from origin" do
@@ -86,12 +89,22 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     custom_group_id = Memba.ID.generate(:group)
     conversation_id = Memba.ID.generate(:message)
 
+    create_person(departing_person_id, "Departing Member", "departing@example.com")
+    create_person(replacement_person_id, "Replacement Member", "replacement@example.com")
     create_club(club_id)
     add_member(club_id, departing_membership_id, departing_person_id)
     add_member(club_id, replacement_membership_id, replacement_person_id)
     assign_admin(club_id, replacement_membership_id, replacement_person_id)
     create_custom_group(club_id, custom_group_id)
     add_group_member(club_id, custom_group_id, departing_membership_id, departing_person_id)
+
+    add_group_member(
+      club_id,
+      custom_group_id,
+      replacement_membership_id,
+      replacement_person_id
+    )
+
     create_followed_conversation(club_id, custom_group_id, conversation_id, departing_person_id)
 
     clear_follows_handler = clear_follows_handler_pid()
@@ -139,6 +152,28 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                  )
 
         assert Task.yield(readdition, 100) == nil
+
+        refute Membership.active_member_of_club?(club_id, departing_person_id)
+
+        reply_message_id = Memba.ID.generate(:message)
+
+        assert {:ok, %ExecutionResult{events: reply_events}} =
+                 Messaging.post_message_reply(
+                   %{
+                     message_id: reply_message_id,
+                     conversation_id: conversation_id,
+                     sender_id: replacement_person_id,
+                     body: "Cleanup still has to finish."
+                   },
+                   returning: :execution_result,
+                   consistency: :strong
+                 )
+
+        refute Enum.any?(reply_events, fn
+                 %EmailDeliveryCreated{recipient_id: ^departing_person_id} -> true
+                 _event -> false
+               end)
+
         readdition
       after
         :ok = :sys.resume(clear_follows_handler)
@@ -147,6 +182,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     assert :ok = Task.await(removal)
     assert :ok = Task.await(readdition)
 
+    assert Membership.active_member_of_club?(club_id, departing_person_id)
     refute Messaging.following_conversation?(conversation_id, departing_person_id)
 
     everyone_group_id = SystemGroups.everyone_group_id(club_id)
@@ -180,6 +216,18 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
 
     refute Messaging.following_conversation?(conversation_id, person_id)
     assert count_unfollow_events(conversation_id, person_id) == 1
+  end
+
+  defp create_person(person_id, name, email) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %CreatePerson{
+                 person_id: person_id,
+                 name: name,
+                 email: email
+               },
+               consistency: :strong
+             )
   end
 
   defp create_club(club_id) do

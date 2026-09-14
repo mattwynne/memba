@@ -25,6 +25,8 @@ defmodule Memba.Application do
       Memba.Messaging.Projectors.MemberEmailDelivery,
       Memba.Messaging.Projectors.MembaStaffEmailDelivery,
       Memba.Messaging.Projectors.InboundEmailSource,
+      # Membership activation waits for this policy's prior Club-stream work.
+      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.ClubInvitation,
       Memba.Membership.Projectors.Membership,
@@ -33,7 +35,6 @@ defmodule Memba.Application do
       Memba.Membership.Projectors.Role,
       Memba.Membership.Projectors.Person,
       Memba.Membership.Policies.SystemGroupMembership,
-      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
       # Start a worker by calling: Memba.Worker.start_link(arg)
       # {Memba.Worker, arg},
