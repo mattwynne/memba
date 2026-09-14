@@ -1,0 +1,1152 @@
+diff --git a/acceptance-tests/features/custom_group_lifecycle.feature b/acceptance-tests/features/custom_group_lifecycle.feature
+index de5f62b..8a6df4c 100644
+--- a/acceptance-tests/features/custom_group_lifecycle.feature
++++ b/acceptance-tests/features/custom_group_lifecycle.feature
+@@ -1,4 +1,3 @@
+-@todo-ui
+ Feature: Joining and leaving custom groups
+   Membership grants the whole conversation history.
+   Losing membership ends access and future emails, not ownership of delivered copies.
+@@ -11,7 +10,7 @@ Feature: Joining and leaving custom groups
+     And Board's email address is "board@kmc.clubs.memba.io"
+     And Board has the conversation "September agenda" with the reply "Include the hut budget"
+ 
+-  @iteration-062 @todo-domain @todo-ui
++  @iteration-062
+   Rule: Leaving the club ends custom-group memberships and their follows
+ 
+     Scenario: Carol's club departure ends Board and Trips membership
+diff --git a/acceptance-tests/features/step_definitions/custom_group_creation_steps.js b/acceptance-tests/features/step_definitions/custom_group_creation_steps.js
+index ee52cb1..a02f5df 100644
+--- a/acceptance-tests/features/step_definitions/custom_group_creation_steps.js
++++ b/acceptance-tests/features/step_definitions/custom_group_creation_steps.js
+@@ -134,8 +134,8 @@ When(/^(\w+) creates the group$/, async function (_personName) {
+   await submitEnteredCustomGroup(this);
+ });
+ 
+-Then(/^(\w+) should belong to (.+)$/, function (groupName, clubName) {
+-  assertGroupBelongsToClub(this, groupName, clubName);
++Then(/^Board should belong to (.+)$/, function (clubName) {
++  assertGroupBelongsToClub(this, "Board", clubName);
+ });
+ 
+ Then(/^(\w+) should be its only member$/, function (personName) {
+diff --git a/acceptance-tests/features/step_definitions/custom_group_lifecycle_steps.js b/acceptance-tests/features/step_definitions/custom_group_lifecycle_steps.js
+new file mode 100644
+index 0000000..05523f1
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/custom_group_lifecycle_steps.js
+@@ -0,0 +1,89 @@
++const { Given, When, Then } = require("@cucumber/cucumber");
++const {
++  assertCarolBelongsToEveryone,
++  assertCarolHasNoConversationAccess,
++  assertCarolNoLongerFollows,
++  assertCarolOutsideCustomGroups,
++  assertCarolReceivesNoFutureGroupEmail,
++  assertCarolSeesAccessGuidance,
++  endCarolMembership,
++  ensureBoardConversationWithReply,
++  ensureLifecycleBackground,
++  followLifecycleConversations,
++  rejoinCarol,
++  setupDepartureMemberships,
++  setupEndedDeparture
++} = require("../support/custom_group_lifecycle");
++
++Given("Alice and Bob are the only members of its custom group Board", function () {
++  ensureLifecycleBackground(this);
++});
++
++Given(
++  "Board has the conversation {string} with the reply {string}",
++  function (subject, replyBody) {
++    ensureBoardConversationWithReply(this, subject, replyBody);
++  }
++);
++
++Given("Carol belongs to Board and the custom group Trips", function () {
++  setupDepartureMemberships(this);
++});
++
++Given("Carol follows conversations in both groups", function () {
++  followLifecycleConversations(this);
++});
++
++When("Carol's KMC membership ends", async function () {
++  await endCarolMembership(this);
++});
++
++Then("Carol should no longer belong to Board or Trips", function () {
++  assertCarolOutsideCustomGroups(this);
++});
++
++Then("Carol should no longer follow their conversations", function () {
++  assertCarolNoLongerFollows(this);
++});
++
++Then("Carol should have no access to their conversations", async function () {
++  await assertCarolHasNoConversationAccess(this);
++});
++
++Then(
++  "Carol should receive no future conversation or followed-reply emails from either group",
++  async function () {
++    await assertCarolReceivesNoFutureGroupEmail(this);
++  }
++);
++
++Given(
++  "Carol belonged to Board and Trips before her KMC membership ended",
++  async function () {
++    await setupEndedDeparture(this);
++  }
++);
++
++When("Carol becomes an active KMC member again", function () {
++  rejoinCarol(this);
++});
++
++Then("Carol should belong to Everyone", function () {
++  assertCarolBelongsToEveryone(this);
++});
++
++Then("Carol should belong to neither Board nor Trips", function () {
++  assertCarolOutsideCustomGroups(this);
++});
++
++Then(
++  "Carol should have no access to their conversations or future group emails",
++  async function () {
++    await assertCarolHasNoConversationAccess(this);
++    await assertCarolReceivesNoFutureGroupEmail(this);
++  }
++);
++
++Then("Carol should see their access guidance", async function () {
++  await assertCarolSeesAccessGuidance(this);
++});
+diff --git a/acceptance-tests/features/support/custom_group_lifecycle.js b/acceptance-tests/features/support/custom_group_lifecycle.js
+new file mode 100644
+index 0000000..4c588ad
+--- /dev/null
++++ b/acceptance-tests/features/support/custom_group_lifecycle.js
+@@ -0,0 +1,449 @@
++const assert = require("node:assert/strict");
++const { expect } = require("@playwright/test");
++const {
++  clubSiteUrl,
++  emailFor,
++  removeMemberFromClub,
++  testLocalDeliveryFacts
++} = require("./member_message");
++const { withMemberHarness } = require("./member_harness");
++const {
++  addCustomGroupMember,
++  ensureCustomGroup,
++  kootenayClubName
++} = require("./custom_group_creation");
++const {
++  ensureConversationBackground,
++  startBoardConversationFixture
++} = require("./custom_group_conversations");
++const serverCommands = require("./server_commands");
++
++const boardName = "Board";
++const tripsName = "Trips";
++const agendaSubject = "September agenda";
++const tripsSubject = "Trips departure planning";
++
++function ensureLifecycleBackground(world) {
++  ensureConversationBackground(world);
++  ensureCustomGroup(world, kootenayClubName, boardName, "board", ["Alice", "Bob"]);
++
++  const names = serverCommands.runCommand(
++    `
++%{
++  names:
++    Map.fetch!(payload, "groupId")
++    |> Memba.Membership.list_active_members_of_group()
++    |> Enum.map(& &1.name)
++}
++`,
++    { groupId: groupId(world, boardName) }
++  ).names;
++
++  assert.deepEqual(names, ["Alice", "Bob"]);
++}
++
++function ensureBoardConversationWithReply(world, subject, replyBody) {
++  startBoardConversationFixture(world, "Alice", subject);
++
++  serverCommands.runCommand(
++    `
++:ok =
++  Memba.Messaging.post_message_reply(
++    %{
++      message_id: Memba.ID.generate(:message),
++      conversation_id: Map.fetch!(payload, "conversationId"),
++      sender_id: Map.fetch!(payload, "senderId"),
++      body: Map.fetch!(payload, "body")
++    },
++    consistency: :strong
++  )
++
++%{status: "replied"}
++`,
++    {
++      body: replyBody,
++      conversationId: world.messages[subject].messageId,
++      senderId: person(world, "Bob").personId
++    }
++  );
++
++  serverCommands.dispatchPendingEmailDeliveries();
++}
++
++function setupDepartureMemberships(world) {
++  addCustomGroupMember(world, kootenayClubName, boardName, "Carol");
++  ensureCustomGroup(world, kootenayClubName, tripsName, "trips", ["Alice", "Carol"]);
++
++  if (!world.messages[tripsSubject]) {
++    const result = serverCommands.sendClubMessage({
++      audienceGroupId: groupId(world, tripsName),
++      body: `${tripsSubject} details.`,
++      clubId: club(world).clubId,
++      senderId: person(world, "Alice").personId,
++      senderName: "Alice",
++      subject: tripsSubject
++    });
++
++    world.messages[tripsSubject] = {
++      body: result.body,
++      clubId: result.clubId,
++      clubSlug: club(world).slug,
++      messageId: result.messageId,
++      senderName: "Alice",
++      subject: tripsSubject
++    };
++  }
++
++  serverCommands.dispatchPendingEmailDeliveries();
++}
++
++function followLifecycleConversations(world) {
++  for (const subject of [agendaSubject, tripsSubject]) {
++    const result = serverCommands.runCommand(
++      `
++:ok =
++  Memba.Messaging.follow_conversation_as_current_member(
++    %{
++      club_id: Map.fetch!(payload, "clubId"),
++      conversation_id: Map.fetch!(payload, "conversationId"),
++      member_id: Map.fetch!(payload, "personId")
++    },
++    consistency: :strong
++  )
++
++%{
++  following:
++    Memba.Messaging.following_conversation?(
++      Map.fetch!(payload, "conversationId"),
++      Map.fetch!(payload, "personId")
++    )
++}
++`,
++      {
++        clubId: club(world).clubId,
++        conversationId: message(world, subject).messageId,
++        personId: person(world, "Carol").personId
++      }
++    );
++
++    assert.equal(result.following, true);
++  }
++}
++
++async function endCarolMembership(world) {
++  await testLocalDeliveryFacts(world);
++  removeMemberFromClub(world, "Carol", kootenayClubName);
++}
++
++async function setupEndedDeparture(world) {
++  setupDepartureMemberships(world);
++  followLifecycleConversations(world);
++  await endCarolMembership(world);
++}
++
++function rejoinCarol(world) {
++  const member = serverCommands.ensureMember({
++    clubName: kootenayClubName,
++    clubSlug: club(world).slug,
++    personName: "Carol",
++    email: emailFor("Carol")
++  });
++
++  world.memberships[`${kootenayClubName}:Carol`] = {
++    clubId: member.clubId,
++    membershipId: member.membershipId,
++    personId: member.personId
++  };
++}
++
++function assertCarolBelongsToEveryone(world) {
++  const status = lifecycleMembershipStatus(world);
++  assert.equal(status.activeClubMember, true);
++  assert.equal(status.everyone, true);
++}
++
++function assertCarolOutsideCustomGroups(world) {
++  const status = lifecycleMembershipStatus(world);
++
++  assert.equal(status.boardExists, true);
++  assert.equal(status.tripsExists, true);
++  assert.equal(status.board, false);
++  assert.equal(status.trips, false);
++  assert.equal(status.authoritativeBoard, false);
++  assert.equal(status.authoritativeTrips, false);
++}
++
++function assertCarolNoLongerFollows(world) {
++  const status = lifecycleConversationStatus(world);
++  assert.equal(status.boardFollowing, false);
++  assert.equal(status.tripsFollowing, false);
++}
++
++async function assertCarolHasNoConversationAccess(world) {
++  const status = lifecycleConversationStatus(world);
++
++  assert.equal(status.boardRead, false);
++  assert.equal(status.boardWrite, false);
++  assert.equal(status.tripsRead, false);
++  assert.equal(status.tripsWrite, false);
++
++  await withMemberHarness(world, "Carol", async (member) => {
++    const expectedStatus = lifecycleMembershipStatus(world).activeClubMember ? 404 : 403;
++
++    for (const [groupName, subject] of [
++      [boardName, agendaSubject],
++      [tripsName, tripsSubject]
++    ]) {
++      const response = await member.page.goto(
++        clubSiteUrl(
++          member.baseUrl,
++          club(world),
++          `/messages/${encodeURIComponent(message(world, subject).messageId)}` +
++            `?group_id=${encodeURIComponent(groupId(world, groupName))}`
++        )
++      );
++
++      assert.equal(response && response.status(), expectedStatus);
++      await expect(member.page.getByText(subject, { exact: true })).toHaveCount(0);
++      await expect(member.page.locator("#member-message-reply-form")).toHaveCount(0);
++    }
++  });
++}
++
++async function assertCarolReceivesNoFutureGroupEmail(world) {
++  const generatedMessageIds = createFutureGroupActivity(world);
++  serverCommands.dispatchPendingEmailDeliveries();
++
++  const personId = person(world, "Carol").personId;
++  const facts = await testLocalDeliveryFacts(world);
++  const futureFacts = facts.filter((fact) => generatedMessageIds.includes(fact.message_id));
++
++  assert.equal(
++    futureFacts.some((fact) => fact.recipient_id === personId),
++    false,
++    "Expected no post-departure Board or Trips email to reach Carol's provider boundary"
++  );
++}
++
++async function assertCarolSeesAccessGuidance(world) {
++  await withMemberHarness(world, "Carol", async (member) => {
++    for (const groupName of [boardName, tripsName]) {
++      const selectedGroupId = groupId(world, groupName);
++
++      await member.page.goto(
++        clubSiteUrl(
++          member.baseUrl,
++          club(world),
++          `/groups/${encodeURIComponent(selectedGroupId)}`
++        )
++      );
++
++      await expect(member.page.locator("#member-club-home")).toHaveAttribute(
++        "data-selected-group-id",
++        selectedGroupId
++      );
++      await expect(member.page.locator("#member-group-name")).toHaveText(groupName);
++      await expect(member.page.locator("#member-group-access-guidance")).toBeVisible();
++    }
++  });
++}
++
++function lifecycleMembershipStatus(world) {
++  return serverCommands.runCommand(
++    `
++club_id = Map.fetch!(payload, "clubId")
++person_id = Map.fetch!(payload, "personId")
++board_id = Map.fetch!(payload, "boardId")
++trips_id = Map.fetch!(payload, "tripsId")
++
++%{
++  activeClubMember: Memba.Membership.active_member_of_club?(club_id, person_id),
++  everyone:
++    Memba.Membership.active_member_of_group?(
++      Memba.Membership.SystemGroups.everyone_group_id(club_id),
++      person_id
++    ),
++  boardExists: not is_nil(Memba.Membership.get_group(board_id)),
++  tripsExists: not is_nil(Memba.Membership.get_group(trips_id)),
++  board: Memba.Membership.active_member_of_group?(board_id, person_id),
++  trips: Memba.Membership.active_member_of_group?(trips_id, person_id),
++  authoritativeBoard:
++    Memba.Membership.active_member_of_group_authoritatively?(club_id, board_id, person_id),
++  authoritativeTrips:
++    Memba.Membership.active_member_of_group_authoritatively?(club_id, trips_id, person_id)
++}
++`,
++    lifecycleIds(world)
++  );
++}
++
++function lifecycleConversationStatus(world) {
++  return serverCommands.runCommand(
++    `
++club_id = Map.fetch!(payload, "clubId")
++person_id = Map.fetch!(payload, "personId")
++board_conversation_id = Map.fetch!(payload, "boardConversationId")
++trips_conversation_id = Map.fetch!(payload, "tripsConversationId")
++
++%{
++  boardFollowing:
++    Memba.Messaging.following_conversation?(board_conversation_id, person_id),
++  tripsFollowing:
++    Memba.Messaging.following_conversation?(trips_conversation_id, person_id),
++  boardRead:
++    Memba.Messaging.member_has_conversation_access?(
++      board_conversation_id,
++      club_id,
++      person_id,
++      :read
++    ),
++  boardWrite:
++    Memba.Messaging.member_has_conversation_access?(
++      board_conversation_id,
++      club_id,
++      person_id,
++      :write
++    ),
++  tripsRead:
++    Memba.Messaging.member_has_conversation_access?(
++      trips_conversation_id,
++      club_id,
++      person_id,
++      :read
++    ),
++  tripsWrite:
++    Memba.Messaging.member_has_conversation_access?(
++      trips_conversation_id,
++      club_id,
++      person_id,
++      :write
++    )
++}
++`,
++    {
++      ...lifecycleIds(world),
++      boardConversationId: message(world, agendaSubject).messageId,
++      tripsConversationId: message(world, tripsSubject).messageId
++    }
++  );
++}
++
++function createFutureGroupActivity(world) {
++  return serverCommands.runCommand(
++    `
++club_id = Map.fetch!(payload, "clubId")
++sender_id = Map.fetch!(payload, "senderId")
++
++message_ids =
++  Enum.flat_map(Map.fetch!(payload, "groups"), fn group ->
++    reply_id = Memba.ID.generate(:message)
++    root_id = Memba.ID.generate(:message)
++
++    :ok =
++      Memba.Messaging.post_message_reply(
++        %{
++          message_id: reply_id,
++          conversation_id: Map.fetch!(group, "conversationId"),
++          sender_id: sender_id,
++          body: "#{Map.fetch!(group, "name")} followed reply after departure."
++        },
++        consistency: :strong
++      )
++
++    :ok =
++      Memba.Messaging.send_club_message(
++        %{
++          message_id: root_id,
++          club_id: club_id,
++          sender_id: sender_id,
++          audience_group_id: Map.fetch!(group, "groupId"),
++          subject: "#{Map.fetch!(group, "name")} after Carol's departure",
++          body: "Future private-group conversation."
++        },
++        consistency: :strong
++      )
++
++    [reply_id, root_id]
++  end)
++
++carol_id = Map.fetch!(payload, "carolId")
++
++Enum.each(message_ids, fn message_id ->
++  if Enum.any?(
++       Memba.Messaging.list_recipient_deliveries(message_id),
++       &(&1.recipient_id == carol_id)
++     ) do
++    raise "Carol was resolved as a recipient after departure"
++  end
++end)
++
++%{messageIds: message_ids}
++`,
++    {
++      carolId: person(world, "Carol").personId,
++      clubId: club(world).clubId,
++      groups: [
++        {
++          conversationId: message(world, agendaSubject).messageId,
++          groupId: groupId(world, boardName),
++          name: boardName
++        },
++        {
++          conversationId: message(world, tripsSubject).messageId,
++          groupId: groupId(world, tripsName),
++          name: tripsName
++        }
++      ],
++      senderId: person(world, "Alice").personId
++    }
++  ).messageIds;
++}
++
++function lifecycleIds(world) {
++  return {
++    boardId: groupId(world, boardName),
++    clubId: club(world).clubId,
++    personId: person(world, "Carol").personId,
++    tripsId: groupId(world, tripsName)
++  };
++}
++
++function club(world) {
++  const result = world.clubs && world.clubs[kootenayClubName];
++  assert.ok(result, `Expected ${kootenayClubName}`);
++  return result;
++}
++
++function person(world, personName) {
++  const result = world.people && world.people[personName];
++  assert.ok(result, `Expected person ${personName}`);
++  return result;
++}
++
++function groupId(world, groupName) {
++  const result = world.groups && world.groups[`${kootenayClubName}:${groupName}`];
++  assert.ok(result, `Expected custom group ${groupName}`);
++  return result;
++}
++
++function message(world, subject) {
++  const result = world.messages && world.messages[subject];
++  assert.ok(result, `Expected conversation ${subject}`);
++  return result;
++}
++
++module.exports = {
++  assertCarolBelongsToEveryone,
++  assertCarolHasNoConversationAccess,
++  assertCarolNoLongerFollows,
++  assertCarolOutsideCustomGroups,
++  assertCarolReceivesNoFutureGroupEmail,
++  assertCarolSeesAccessGuidance,
++  endCarolMembership,
++  ensureBoardConversationWithReply,
++  ensureLifecycleBackground,
++  followLifecycleConversations,
++  rejoinCarol,
++  setupDepartureMemberships,
++  setupEndedDeparture
++};
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index b3cb326..20f7f62 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -30,6 +30,7 @@ test("default browser Cucumber profile selects all web-backed shared features",
+     "club_message_replies.feature",
+     "custom_group_conversations.feature",
+     "custom_group_creation.feature",
++    "custom_group_lifecycle.feature",
+     "email_branding.feature",
+     "group_conversations.feature",
+     "homepage.feature",
+@@ -223,6 +224,32 @@ test("iteration 062 custom-group conversation scenarios run in both acceptance l
+   );
+ });
+ 
++test("iteration 062 custom-group lifecycle scenarios run in both acceptance layers", () => {
++  const feature = browserFeatures().find(
++    ({ name }) => name === "custom_group_lifecycle.feature"
++  );
++  const iterationScenarios = feature.scenarios.filter((scenario) =>
++    scenario.tags.includes("@iteration-062")
++  );
++  const domainScenarioNames = iterationScenarios
++    .filter((scenario) => !scenario.tags.includes("@not-domain"))
++    .map((scenario) => scenario.name);
++  const browserScenarioNames = iterationScenarios
++    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
++    .map((scenario) => scenario.name);
++
++  assert.equal(iterationScenarios.length, 2);
++  assert.deepEqual(domainScenarioNames, iterationScenarios.map((scenario) => scenario.name));
++  assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
++  assert.deepEqual(
++    iterationScenarios.filter(
++      (scenario) =>
++        scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
++    ),
++    []
++  );
++});
++
+ test("iteration 059 UI scenarios run while its concurrency scenario remains domain-only", () => {
+   const feature = browserFeatures().find(
+     ({ name }) => name === "club_membership_administration.feature"
+diff --git a/acceptance-tests/test/custom_group_lifecycle_step_definitions.test.js b/acceptance-tests/test/custom_group_lifecycle_step_definitions.test.js
+new file mode 100644
+index 0000000..95dfd69
+--- /dev/null
++++ b/acceptance-tests/test/custom_group_lifecycle_step_definitions.test.js
+@@ -0,0 +1,37 @@
++const assert = require("node:assert/strict");
++const test = require("node:test");
++
++const { loadConfiguration, runCucumber } = require("@cucumber/cucumber/api");
++
++test("browser-backed iteration-062 custom-group lifecycle scenarios have executable step plumbing", async () => {
++  let scenarioCount = 0;
++  const statuses = [];
++  const { runConfiguration } = await loadConfiguration({
++    file: false,
++    provided: {
++      dryRun: true,
++      format: ["message:/dev/null"],
++      paths: ["features/custom_group_lifecycle.feature"],
++      publishQuiet: true,
++      require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
++      tags: "@iteration-062 and not @not-ui"
++    }
++  });
++
++  await runCucumber(runConfiguration, undefined, (message) => {
++    if (message.testCaseStarted) {
++      scenarioCount += 1;
++    }
++
++    if (message.testStepFinished) {
++      statuses.push(message.testStepFinished.testStepResult.status);
++    }
++  });
++
++  assert.equal(scenarioCount, 2);
++  assert.deepEqual(
++    [...new Set(statuses)],
++    ["SKIPPED"],
++    "Expected every browser-backed lifecycle step to have exactly one definition"
++  );
++});
+diff --git a/web/test/features/custom_group_lifecycle_steps_test.exs b/web/test/features/custom_group_lifecycle_steps_test.exs
+new file mode 100644
+index 0000000..45271de
+--- /dev/null
++++ b/web/test/features/custom_group_lifecycle_steps_test.exs
+@@ -0,0 +1,30 @@
++defmodule Memba.CustomGroupLifecycleStepsTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.DomainCucumberRunner
++
++  @feature_basename "custom_group_lifecycle.feature"
++
++  @selected_scenarios DomainCucumberRunner.selected_scenarios()
++                      |> Enum.filter(&(Path.basename(&1.feature.file) == @feature_basename))
++
++  for %{scenario: scenario} = selected_scenario <- @selected_scenarios do
++    test "domain step definitions execute #{scenario.name}" do
++      discovery = DomainCucumberRunner.discover()
++
++      DomainCucumberRunner.run_scenario(
++        unquote(Macro.escape(selected_scenario)),
++        discovery.step_registry
++      )
++    end
++  end
++
++  test "all iteration-062 lifecycle examples are selected" do
++    selected_names = Enum.map(@selected_scenarios, & &1.scenario.name)
++
++    assert selected_names == [
++             "Carol's club departure ends Board and Trips membership",
++             "Returning to KMC does not put Carol back into Board or Trips"
++           ]
++  end
++end
+diff --git a/web/test/features/domain_cucumber_runner_test.exs b/web/test/features/domain_cucumber_runner_test.exs
+index 7932a6a..f47c2fe 100644
+--- a/web/test/features/domain_cucumber_runner_test.exs
++++ b/web/test/features/domain_cucumber_runner_test.exs
+@@ -112,4 +112,13 @@ defmodule Memba.DomainCucumberRunnerTest do
+              )
+            ) == 4
+   end
++
++  test "iteration 062 custom-group lifecycle scenarios run at the domain layer" do
++    selected_names =
++      DomainCucumberRunner.selected_scenarios()
++      |> Enum.map(& &1.scenario.name)
++
++    assert "Carol's club departure ends Board and Trips membership" in selected_names
++    assert "Returning to KMC does not put Carol back into Board or Trips" in selected_names
++  end
+ end
+diff --git a/web/test/features/step_definitions/custom_group_creation_steps.exs b/web/test/features/step_definitions/custom_group_creation_steps.exs
+index 2883c7d..78450b7 100644
+--- a/web/test/features/step_definitions/custom_group_creation_steps.exs
++++ b/web/test/features/step_definitions/custom_group_creation_steps.exs
+@@ -57,10 +57,10 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
+     context
+   end
+ 
+-  step ~r/^(\w+) should belong to (.+)$/,
+-       %{args: [group_name, club_name]} = context do
++  step ~r/^Board should belong to (.+)$/,
++       %{args: [club_name]} = context do
+     club_id = club_id!(context, club_name)
+-    assert %GroupProjection{club_id: ^club_id} = custom_group!(club_id, group_name)
++    assert %GroupProjection{club_id: ^club_id} = custom_group!(club_id, "Board")
+     context
+   end
+ 
+diff --git a/web/test/features/step_definitions/custom_group_lifecycle_steps.exs b/web/test/features/step_definitions/custom_group_lifecycle_steps.exs
+new file mode 100644
+index 0000000..3a639da
+--- /dev/null
++++ b/web/test/features/step_definitions/custom_group_lifecycle_steps.exs
+@@ -0,0 +1,403 @@
++defmodule Memba.Cucumber.CustomGroupLifecycleSteps do
++  use Cucumber.StepDefinition
++
++  import ExUnit.Assertions
++
++  alias Memba.Membership
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.CreateGroup
++  alias Memba.Membership.SystemGroups
++  alias Memba.Messaging
++  alias Memba.Messaging.EmailDeliveryDispatcher
++  alias Memba.Messaging.EmailDeliveryProviders.Fake
++
++  @club_name "Kootenay Mountaineering Club"
++  @board_name "Board"
++  @trips_name "Trips"
++  @agenda_subject "September agenda"
++  @trips_subject "Trips departure planning"
++
++  step "Alice and Bob are the only members of its custom group Board", context do
++    context = ensure_group(context, @board_name, "board")
++
++    context =
++      Enum.reduce(["Alice", "Bob"], context, fn person_name, context ->
++        add_group_member(context, @board_name, person_name)
++      end)
++
++    member_names =
++      context
++      |> group_id!(@board_name)
++      |> Membership.list_active_members_of_group()
++      |> Enum.map(& &1.name)
++
++    assert member_names == ["Alice", "Bob"]
++    context
++  end
++
++  step "Board has the conversation {string} with the reply {string}",
++       %{args: [subject, reply_body]} = context do
++    context = create_group_conversation(context, @board_name, "Alice", subject)
++    post_reply(context, subject, "Bob", reply_body)
++  end
++
++  step "Carol belongs to Board and the custom group Trips", context do
++    setup_departure_memberships(context)
++  end
++
++  step "Carol follows conversations in both groups", context do
++    follow_lifecycle_conversations(context)
++  end
++
++  step "Carol's KMC membership ends", context do
++    end_carol_membership(context)
++  end
++
++  step "Carol should no longer belong to Board or Trips", context do
++    assert_custom_memberships_ended(context)
++  end
++
++  step "Carol should no longer follow their conversations", context do
++    Enum.each(lifecycle_conversations(context), fn message ->
++      refute Messaging.following_conversation?(message.message_id, carol_person_id!(context))
++    end)
++
++    context
++  end
++
++  step "Carol should have no access to their conversations", context do
++    assert_no_conversation_access(context)
++  end
++
++  step "Carol should receive no future conversation or followed-reply emails from either group",
++       context do
++    assert_no_future_group_email(context)
++  end
++
++  step "Carol belonged to Board and Trips before her KMC membership ended", context do
++    context
++    |> setup_departure_memberships()
++    |> follow_lifecycle_conversations()
++    |> end_carol_membership()
++  end
++
++  step "Carol becomes an active KMC member again", context do
++    membership_id = Memba.ID.generate(:membership)
++
++    assert :ok =
++             Membership.add_member(
++               %{
++                 club_id: club_id!(context),
++                 membership_id: membership_id,
++                 person_id: carol_person_id!(context)
++               },
++               consistency: :strong
++             )
++
++    put_context(context, :memberships, {@club_name, "Carol"}, membership_id)
++  end
++
++  step "Carol should belong to Everyone", context do
++    assert Membership.active_member_of_group?(
++             SystemGroups.everyone_group_id(club_id!(context)),
++             carol_person_id!(context)
++           )
++
++    context
++  end
++
++  step "Carol should belong to neither Board nor Trips", context do
++    assert_custom_memberships_ended(context)
++  end
++
++  step "Carol should have no access to their conversations or future group emails", context do
++    context
++    |> assert_no_conversation_access()
++    |> assert_no_future_group_email()
++  end
++
++  step "Carol should see their access guidance", context do
++    discoverable_ids =
++      context
++      |> club_id!()
++      |> Membership.list_discoverable_groups_for_member(carol_person_id!(context))
++      |> Enum.map(& &1.group_id)
++      |> MapSet.new()
++
++    participating_ids =
++      context
++      |> club_id!()
++      |> Membership.list_active_groups_for_member(carol_person_id!(context))
++      |> Enum.map(& &1.group_id)
++      |> MapSet.new()
++
++    Enum.each([@board_name, @trips_name], fn group_name ->
++      group_id = group_id!(context, group_name)
++      assert MapSet.member?(discoverable_ids, group_id)
++      refute MapSet.member?(participating_ids, group_id)
++    end)
++
++    context
++  end
++
++  defp setup_departure_memberships(context) do
++    context = add_group_member(context, @board_name, "Carol")
++    context = ensure_group(context, @trips_name, "trips")
++
++    context =
++      Enum.reduce(["Alice", "Carol"], context, fn person_name, context ->
++        add_group_member(context, @trips_name, person_name)
++      end)
++
++    context = create_group_conversation(context, @trips_name, "Alice", @trips_subject)
++
++    dispatch_pending_email_deliveries()
++    Fake.reset()
++    context
++  end
++
++  defp follow_lifecycle_conversations(context) do
++    Enum.each(lifecycle_conversations(context), fn message ->
++      assert :ok =
++               Messaging.follow_conversation_as_current_member(
++                 %{
++                   club_id: club_id!(context),
++                   conversation_id: message.message_id,
++                   member_id: carol_person_id!(context)
++                 },
++                 consistency: :strong
++               )
++
++      assert Messaging.following_conversation?(message.message_id, carol_person_id!(context))
++    end)
++
++    context
++  end
++
++  defp end_carol_membership(context) do
++    assert :ok =
++             Membership.remove_member(
++               %{
++                 club_id: club_id!(context),
++                 membership_id: membership_id!(context, "Carol"),
++                 person_id: carol_person_id!(context)
++               },
++               consistency: :strong
++             )
++
++    context
++  end
++
++  defp assert_custom_memberships_ended(context) do
++    Enum.each([@board_name, @trips_name], fn group_name ->
++      group_id = group_id!(context, group_name)
++      assert Membership.get_group(group_id)
++      refute Membership.active_member_of_group?(group_id, carol_person_id!(context))
++
++      refute Membership.active_member_of_group_authoritatively?(
++               club_id!(context),
++               group_id,
++               carol_person_id!(context)
++             )
++    end)
++
++    context
++  end
++
++  defp assert_no_conversation_access(context) do
++    Enum.each(lifecycle_conversations(context), fn message ->
++      for access_level <- [:read, :write] do
++        refute Messaging.member_has_conversation_access?(
++                 message.message_id,
++                 club_id!(context),
++                 carol_person_id!(context),
++                 access_level
++               )
++      end
++    end)
++
++    context
++  end
++
++  defp assert_no_future_group_email(context) do
++    dispatch_pending_email_deliveries()
++    Fake.reset()
++
++    future_message_ids =
++      Enum.flat_map([@board_name, @trips_name], fn group_name ->
++        root = message!(context, lifecycle_subject(group_name))
++        reply_id = Memba.ID.generate(:message)
++        future_subject = "#{group_name} after Carol's departure"
++        future_root_id = Memba.ID.generate(:message)
++
++        assert :ok =
++                 Messaging.post_message_reply(
++                   %{
++                     message_id: reply_id,
++                     conversation_id: root.message_id,
++                     sender_id: person_id!(context, "Alice"),
++                     body: "#{group_name} followed reply after departure."
++                   },
++                   consistency: :strong
++                 )
++
++        assert :ok =
++                 Messaging.send_club_message(
++                   %{
++                     message_id: future_root_id,
++                     club_id: club_id!(context),
++                     sender_id: person_id!(context, "Alice"),
++                     audience_group_id: group_id!(context, group_name),
++                     subject: future_subject,
++                     body: "#{future_subject} details."
++                   },
++                   consistency: :strong
++                 )
++
++        [reply_id, future_root_id]
++      end)
++
++    Enum.each(future_message_ids, fn message_id ->
++      refute Enum.any?(
++               Messaging.list_recipient_deliveries(message_id),
++               &(&1.recipient_id == carol_person_id!(context))
++             )
++    end)
++
++    dispatch_pending_email_deliveries()
++
++    refute Enum.any?(
++             Fake.deliveries(),
++             &(&1.message_id in future_message_ids and
++                 &1.recipient_id == carol_person_id!(context))
++           )
++
++    context
++  end
++
++  defp ensure_group(context, group_name, email_slug) do
++    case get_in(context, [:groups, {@club_name, group_name}]) do
++      group_id when is_binary(group_id) ->
++        context
++
++      nil ->
++        group_id = Memba.ID.generate(:group)
++
++        assert :ok =
++                 MembershipApp.dispatch(
++                   %CreateGroup{
++                     club_id: club_id!(context),
++                     group_id: group_id,
++                     group_key: nil,
++                     email_slug: email_slug,
++                     name: group_name
++                   },
++                   consistency: :strong
++                 )
++
++        put_context(context, :groups, {@club_name, group_name}, group_id)
++    end
++  end
++
++  defp add_group_member(context, group_name, person_name) do
++    group_id = group_id!(context, group_name)
++    person_id = person_id!(context, person_name)
++
++    unless Membership.active_member_of_group?(group_id, person_id) do
++      assert :ok =
++               MembershipApp.dispatch(
++                 %AddGroupMember{
++                   club_id: club_id!(context),
++                   group_id: group_id,
++                   membership_id: membership_id!(context, person_name),
++                   person_id: person_id
++                 },
++                 consistency: :strong
++               )
++    end
++
++    context
++  end
++
++  defp create_group_conversation(context, group_name, sender_name, subject) do
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id!(context),
++                 sender_id: person_id!(context, sender_name),
++                 audience_group_id: group_id!(context, group_name),
++                 subject: subject,
++                 body: "#{subject} details."
++               },
++               consistency: :strong
++             )
++
++    message = Messaging.get_message(message_id)
++
++    context
++    |> Map.put(:last_message_subject, subject)
++    |> put_context(:messages, subject, message)
++  end
++
++  defp post_reply(context, subject, sender_name, body) do
++    reply_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.post_message_reply(
++               %{
++                 message_id: reply_id,
++                 conversation_id: message!(context, subject).message_id,
++                 sender_id: person_id!(context, sender_name),
++                 body: body
++               },
++               consistency: :strong
++             )
++
++    context
++  end
++
++  defp lifecycle_conversations(context) do
++    Enum.map([@agenda_subject, @trips_subject], &message!(context, &1))
++  end
++
++  defp lifecycle_subject(@board_name), do: @agenda_subject
++  defp lifecycle_subject(@trips_name), do: @trips_subject
++
++  defp dispatch_pending_email_deliveries do
++    _deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++    :ok
++  end
++
++  defp club_id!(context), do: fetch_context!(context, :clubs, @club_name)
++  defp carol_person_id!(context), do: person_id!(context, "Carol")
++
++  defp person_id!(context, person_name) do
++    context
++    |> fetch_context!(:people, person_name)
++    |> Map.fetch!(:person_id)
++  end
++
++  defp membership_id!(context, person_name) do
++    fetch_context!(context, :memberships, {@club_name, person_name})
++  end
++
++  defp group_id!(context, group_name) do
++    fetch_context!(context, :groups, {@club_name, group_name})
++  end
++
++  defp message!(context, subject), do: fetch_context!(context, :messages, subject)
++
++  defp fetch_context!(context, collection_key, item_key) do
++    context
++    |> Map.fetch!(collection_key)
++    |> Map.fetch!(item_key)
++  end
++
++  defp put_context(context, collection_key, item_key, value) do
++    Map.update(context, collection_key, %{item_key => value}, &Map.put(&1, item_key, value))
++  end
++end
