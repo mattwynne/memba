@@ -7,6 +7,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Roles
@@ -89,6 +90,54 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
              Repo.get_by(GroupMembershipProjection,
                group_id: group_id,
                membership_id: target_membership_id
+             )
+  end
+
+  test "add_custom_group_member/2 reports a new transition once and an idempotent no-op on retry" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+
+    create_club!(club_id)
+    create_member!(club_id, actor_membership_id, actor_person_id)
+    create_member!(club_id, target_membership_id, target_person_id)
+    create_custom_group!(club_id, group_id, actor_person_id)
+
+    assert {:ok,
+            %CustomGroupAdmission{
+              club_id: ^club_id,
+              group_id: ^group_id,
+              membership_id: ^target_membership_id,
+              person_id: ^target_person_id,
+              actor_person_id: ^actor_person_id,
+              transition: :member_added
+            }} =
+             add_custom_group_member(
+               club_id,
+               group_id,
+               target_membership_id,
+               target_person_id,
+               actor_person_id
+             )
+
+    assert {:ok,
+            %CustomGroupAdmission{
+              club_id: ^club_id,
+              group_id: ^group_id,
+              membership_id: ^target_membership_id,
+              person_id: ^target_person_id,
+              actor_person_id: ^actor_person_id,
+              transition: :already_member
+            }} =
+             add_custom_group_member(
+               club_id,
+               group_id,
+               target_membership_id,
+               target_person_id,
+               actor_person_id
              )
   end
 

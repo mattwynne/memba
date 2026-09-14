@@ -26,9 +26,11 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
+  alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
@@ -93,11 +95,18 @@ defmodule Memba.Membership do
   actor who either belongs to the custom group or has its club's
   `club.manage_members` permission. System groups are not writable through this
   use case.
+
+  By default, success returns a `CustomGroupAdmission` identifying the actor,
+  target, and whether this command applied a new membership transition or was
+  an already-applied retry. This lets follow-up work such as welcome delivery
+  respond only to a confirmed new transition without consulting a potentially
+  stale projection. Callers may explicitly select a Commanded `:returning`
+  mode when they need its lower-level dispatch result instead.
   """
   def add_custom_group_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_custom_group_member_command(attrs) do
-      dispatch(command, dispatch_opts)
+      dispatch_custom_group_admission(command, dispatch_opts)
     end
   end
 
@@ -2552,6 +2561,58 @@ defmodule Memba.Membership do
 
   defp dispatch_member_lifecycle_command(command, dispatch_opts) do
     dispatch(command, member_lifecycle_consistency(dispatch_opts))
+  end
+
+  defp dispatch_custom_group_admission(command, dispatch_opts) do
+    if explicit_commanded_returning_mode?(dispatch_opts) do
+      dispatch(command, dispatch_opts)
+    else
+      dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
+
+      case dispatch(command, dispatch_opts) do
+        {:ok, %Commanded.Commands.ExecutionResult{} = result} ->
+          {:ok, custom_group_admission(command, result)}
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
+  defp explicit_commanded_returning_mode?(dispatch_opts) do
+    Keyword.has_key?(dispatch_opts, :returning) or
+      Keyword.get(dispatch_opts, :include_execution_result) == true or
+      Keyword.get(dispatch_opts, :include_aggregate_version) == true
+  end
+
+  defp custom_group_admission(command, %Commanded.Commands.ExecutionResult{events: events}) do
+    transition =
+      if Enum.any?(events, fn
+           %GroupMemberAdded{
+             club_id: club_id,
+             group_id: group_id,
+             membership_id: membership_id,
+             person_id: person_id
+           } ->
+             club_id == command.club_id and group_id == command.group_id and
+               membership_id == command.membership_id and person_id == command.person_id
+
+           _event ->
+             false
+         end) do
+        :member_added
+      else
+        :already_member
+      end
+
+    %CustomGroupAdmission{
+      club_id: command.club_id,
+      group_id: command.group_id,
+      membership_id: command.membership_id,
+      person_id: command.person_id,
+      actor_person_id: command.actor_person_id,
+      transition: transition
+    }
   end
 
   defp member_lifecycle_consistency(dispatch_opts) do

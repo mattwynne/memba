@@ -1246,6 +1246,34 @@ defmodule Memba.Membership.ClubTest do
       assert {:error, :unauthorized} = Club.execute(club, command)
     end
 
+    test "makes an already-active custom-group admission an idempotent no-op" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      actor_membership_id = Memba.ID.generate(:membership)
+      actor_person_id = Memba.ID.generate(:person)
+      target_membership_id = Memba.ID.generate(:membership)
+      target_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, nil, "Board")
+        |> activate_member(actor_membership_id, actor_person_id)
+        |> activate_member(target_membership_id, target_person_id)
+        |> add_group_member(group_id, actor_membership_id, actor_person_id)
+        |> add_group_member(group_id, target_membership_id, target_person_id)
+
+      command = %AddCustomGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: target_membership_id,
+        person_id: target_person_id,
+        actor_person_id: actor_person_id
+      }
+
+      assert [] = Club.execute(club, command)
+    end
+
     test "uses the actor's current active club membership and manage-members permission" do
       club_id = Memba.ID.generate(:club)
       group_id = Memba.ID.generate(:group)
