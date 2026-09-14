@@ -17,7 +17,7 @@
 - [x] 015 Use server-side live validation/preview, rechecking at submit, with accessible field associations.
 - [x] 016 Reuse normal pending/success and generic technical-error treatment.
 - [x] 017 Extend group queries/routing only where the existing generic paths need it.
-- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.
+- [x] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.
 - [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.
 - [ ] 020 Preserve already-handed-off email semantics; do not add an error dashboard or email retry product.
 - [ ] 021 Implement the tagged scenarios and targeted Club concurrency, identity, replay, departure/rejoin, slug-length and LiveView typing tests. Run `dev check` on the exact delivery state.
