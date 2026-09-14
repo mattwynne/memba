@@ -41,3 +41,26 @@ Validation:
 Remaining follow-up:
 
 - None for this narrow harness race. The delayed-join harness is opt-in and should remain disabled in normal acceptance runs.
+
+## Additional observation and repair: 2026-09-14 — group-tab keyboard input
+
+The full gate for the [iteration-062 timeout countermeasure](2026-09-03-iteration-workflow-timeout-masks-test-failure.md#iteration-062-investigation-and-partial-resolution-focused-browser-selection) failed in `An Admin member views Admin conversations and members` (`group_conversations.feature:33`). A focused rerun and a baseline using the original, unchanged Cucumber configuration reproduced the failure. The test expected Members to become selected after ArrowRight, but it stayed unselected.
+
+Passive browser instrumentation captured ArrowRight at 292.5 ms after navigation while the transport was connected, the root was `phx-loading`, and the SectionTabs keyboard handler was absent. The hook installed the handler at 312.0 ms; the root became `phx-connected` at 313.1 ms. No tab click followed the lost key. Waiting longer for the resulting attribute cannot recover input dispatched before its handler exists.
+
+Root cause: `selectGroup` navigated to a server-rendered group page, and `viewMembersAndAssertPresence` then exercised hook-dependent keyboard behaviour without calling the existing root-readiness barrier. The shared barrier was already correct; this call site, introduced in iteration 061 (`54a6ef709`), omitted it. This extends the earlier occurrence pattern from pre-join form edits to pre-mount keyboard input. Previous readiness tests and delayed-join URL targeting did not cover the group tab route.
+
+Fix applied:
+
+- `acceptance-tests/features/step_definitions/group_conversation_steps.js`: calls the already-imported `waitForLiveViewConnected` before reading tab state or focusing/pressing keys. Every existing keyboard, focus and membership assertion remains unchanged.
+- `acceptance-tests/test/group_conversation_readiness.test.js`: executes the registered Cucumber step against a not-yet-ready harness; proves readiness precedes tab interaction, whether Members is already selected or not.
+- `acceptance-tests/features/support/delayed_liveview_join.js`: includes the group root route in the existing opt-in delayed-join harness. Normal browser runs still have delay injection disabled.
+
+Validation:
+
+- Focused helper regression: both cases failed before the wait (`tab state read before LiveView readiness`) and passed after it.
+- Controlled real-browser comparison with `ACCEPTANCE_DELAY_LIVEVIEW_JOIN_MS=2000`: before the wait, 1 scenario failed (8 passed, 1 failed, 1 skipped steps); after the wait, the same scenario and all 10 steps passed. No timeout increase, fixed sleep in production, retry, scenario edit, or application-code change was made.
+- Evidence: `/tmp/memba-062-original-config-diagnostic-run.log`, `/tmp/memba-062-tab-events.jsonl`, `/tmp/memba-062-tab-delayed-red.log`, `/tmp/memba-062-tab-delayed-green.log`, and corresponding delayed-join event logs.
+- Final full gate and Node config suite results on the staged candidate are recorded in the repair commit message; logs: `/tmp/memba-062-dev-check-final.log` and `/tmp/memba-062-config-suite-final.log`.
+
+Expected result: keyboard assertions start only after the current view's hook is mounted. The delayed-join red/green run demonstrates this mechanism at the identified call site; it does not establish that every acceptance interaction already uses the readiness barrier.

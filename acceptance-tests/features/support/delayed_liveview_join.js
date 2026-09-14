@@ -6,7 +6,7 @@ const delayedJoinConfig = {
     "person-name-input",
     "edit-club-slug-input"
   ]),
-  targetPathPattern: /\/messages\/new|\/people\/new|\/admin\/clubs\/clb_[^/]+$/
+  targetPathPattern: /\/messages\/new|\/people\/new|\/admin\/clubs\/clb_[^/]+$|\/groups\/grp_[^/?#]+(?:[?#]|$)/
 };
 
 function configuredJoinHoldMs() {

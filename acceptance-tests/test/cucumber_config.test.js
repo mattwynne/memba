@@ -16,10 +16,6 @@ test("default browser Cucumber profile excludes scenarios not ready or not inten
   assert.equal(cucumberConfig.default.tags, defaultBrowserTagExpression);
 });
 
-test("default browser Cucumber profile still loads the shared feature suite", () => {
-  assert.deepEqual(cucumberConfig.default.paths, ["features/**/*.feature"]);
-});
-
 test("default browser Cucumber profile selects all web-backed shared features", () => {
   const selectedFeatureNames = browserSelectedFeatureNames();
 
@@ -218,8 +214,6 @@ function browserSkippedFeatures() {
 }
 
 function browserFeatures() {
-  assert.deepEqual(cucumberConfig.default.paths, ["features/**/*.feature"]);
-
   const featuresRoot = path.resolve(__dirname, "../features");
 
   return listFeatureFiles(featuresRoot).map((filePath) => ({

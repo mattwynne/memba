@@ -519,3 +519,76 @@ The earlier focused-validation and single-owner changes in this note reduce avoi
 
 - Make timeout handoff deterministic: record the active task, last command/result, accepted versus pending work, checkpoint, and supported recovery path even when the agent cannot return a summary.
 - Check acceptance-task scope and expected command duration against the available budget before execution; preserve all required tests and final quality gates.
+
+## Iteration 062 investigation and partial resolution: focused browser selection
+
+Date: 2026-09-14
+
+### Verified run and failure boundary
+
+The reported run is `01M2F8XHWAHNSG7M6S0MXC3WA5`. Its source was recovery checkpoint `b44cc1c2b1e3d5c3a9271c8d37302f6a42bbb4e8`; the implementation workflow directory at that commit is identical to the task-verdict fix in `ced78e9ca`. This was not an old-workflow rollout failure.
+
+The run accepted tasks 019–023 through `validate_task` and `apply_task_verdict`. Task 024 remained pending. Its sixth `implement_next_task` visit began at 07:54:07.823 UTC and failed at 08:34:07.956 with `handler timed out after 2400000ms`. No task-024 review or acceptance followed. The failure edge went to `task_stopped`, not the old retry-bypassing `task_not_ready` route. There was no node-visit-limit failure.
+
+The failed candidate checkpoint `f8e5a6407b8301632ed7cfb75f5e33cd73412066` preserves eight changed/new acceptance files (1,725 additions), without checking off task 024. Final checkpoint `72c2a652b678ccf59c944bc94cf62724ac0e4c29` preserves 23 checked and two unchecked tasks:
+
+- 024: custom-group conversation scenarios at both domain and browser layers.
+- 025: custom-group lifecycle scenarios at both layers, then exact-state `dev check`.
+
+A separate recovery run, `01M2G3K7JZ4VTQFH9W99AVPBRS`, had already been launched by another session. This investigation did not launch, steer, stop, or modify it. The failure status above describes the captured run, not that recovery's eventual outcome.
+
+### Where the time went
+
+- The task combined two acceptance layers. Domain coverage reached 14 tests passing by 08:04:31, about ten minutes into the node.
+- Three browser commands supplied `features/custom_group_conversations.feature` and iteration-062 tags, but each ran 30 scenarios rather than the requested file's 13. They took 250.119, 258.027 and 252.652 seconds: about 12m41s total, including both necessary scenario work and unrelated creation scenarios. This is not a measurement of time saved by narrowing them.
+- The browser runs exposed real unfinished acceptance plumbing: an unexported helper, undefined message context, and email assertions. This was not an otherwise green task merely awaiting check-off. The agent repaired some issues but did not establish final passing browser evidence.
+- After context compaction at 08:12–08:13, the parent spawned browser and domain reviewers at 08:22:52 and 08:22:55, despite its loaded prompt forbidding subagents and duplicate independent review. Compaction preceded the violation; the evidence does not prove it erased or caused disregard of that instruction.
+- Parent and children then ran tests against the shared sandbox. Parent commands bypassed the `bin/dev` quality-gate lock through direct `acceptance-test` calls, while children invoked `dev test` and `dev acceptance`. Logs show overlapping command intervals and subsequent database-in-use, connection and server-readiness errors. The exact process holding each failed database operation is not established.
+- At 08:29:58.742 the parent called `wait` for reviewer `74fd6fe5`. It never received completion before cancellation about 4m09s later. Both child reviews lacked a completion event before the outer timeout.
+
+No full `dev check` was run by the task-024 parent. The previous full-suite-duplication diagnosis must not be copied onto this run: the demonstrated widening happened inside supposedly focused browser commands.
+
+### Cause analysis: occurrence and escape
+
+| Boundary | Evidence-supported mechanism |
+| --- | --- |
+| Why did task 024 stop before review? | Its composite implementation handler exhausted its 40-minute budget, with an outstanding child-review wait. |
+| Why was focused browser feedback broader than requested? | `acceptance-tests/cucumber.js` configured `paths: ["features/**/*.feature"]`. Installed Cucumber merges configuration paths with CLI paths; a positional filename adds to the suite glob rather than replacing it. Its warning and the 30-scenario output confirm this in the failed run. |
+| Why did the selection defect escape tests? | Existing configuration tests asserted that the explicit suite glob was present and enumerated tags. They did not exercise Cucumber's actual configuration/source resolution with a requested file or line. The focused-validation prompt therefore relied on an untested command contract. |
+| Why could duplicate review consume the deadline? | Single-owner execution was a prompt rule, not an enforced capability boundary. Fabro still exposed `spawn_agent` and `wait`; native subagents have no default turn limit. No deterministic reserve stopped the parent from waiting across its deadline. |
+| Why was recovery still manual? | The new verdict contract safely keeps unaccepted work pending, but deliberately treats execution failure as terminal. `task_stopped` points to earlier logs rather than creating a timeout-specific handoff or bounded continuation. |
+
+The smallest proven tooling defect addressed here is path widening. It contributed waste but is not established as the sole or sufficient cause of the timeout. Extra review, shared-environment interference, and the size of the dual-layer task remain separate contributors or follow-up questions.
+
+### Countermeasure applied
+
+Remove the explicit default `paths` setting and use Cucumber's native no-argument feature discovery. Explicit paths then select only the requested files/lines; ordinary `dev check` still runs the default suite. No feature tags, scenarios, assertions, timeouts, retry bounds, or publication gates change.
+
+Files:
+
+- `acceptance-tests/cucumber.js`: removes the glob that broadened explicit selections.
+- `acceptance-tests/test/cucumber_selection.test.js`: exercises the installed Cucumber configuration and source APIs for one file, multiple files, one file/line, and no-argument full-suite equivalence.
+- `acceptance-tests/test/cucumber_config.test.js`: removes assertions requiring the faulty raw setting; retains tag and feature-inventory coverage.
+
+Prediction: a file-targeted acceptance invocation will no longer spend time on other features, while no-argument delivery validation retains the same scenario inventory. This is occurrence prevention for selection widening, not automatic recovery or proof that future 40-minute nodes will finish.
+
+### Validation and evidence
+
+- New native Cucumber selection tests before the fix: three focused-selection cases failed; full-suite equivalence passed.
+- After the fix: selection and existing configuration tests passed, 14/14.
+- Compared actual default source plans before and after the configuration change: identical 145 scenario instances. This is source-selection evidence, not a claim that browser execution passed.
+- Existing isolated Fabro runtime regressions passed 7/7 before the change. They establish verdict routing and fail-closed behaviour, not hard-timeout recovery or agent adherence.
+- First staged full `dev check`: exit 1 after 1,100 seconds. All 1,292 unit tests passed; browser acceptance had 141/145 passing scenarios. The config suite passed 71/71. Logs: `/tmp/memba-062-dev-check.log` and `/tmp/memba-062-config-suite.log`.
+- File/line-targeted rerun selected exactly the four failed scenarios: three passed unchanged, while the Admin-group keyboard-tab failure reproduced. The other failures were two email-address interaction timeouts and `ERR_NETWORK_CHANGED`; their causes are not claimed fixed.
+- A baseline with the original Cucumber config also reproduced the tab failure. Passive instrumentation proved that ArrowRight arrived before the tab hook installed its handler. The small supporting readiness repair and its red/green evidence are recorded in [Acceptance inputs raced LiveView root join](2026-09-12-acceptance-inputs-race-liveview-join.md#additional-observation-and-repair-2026-09-14--group-tab-keyboard-input).
+- Full `dev check` is required on the final staged candidate before committing. Its final result and final Node suite counts are recorded in the fix commit message; logs are retained separately at `/tmp/memba-062-dev-check-final.log` and `/tmp/memba-062-config-suite-final.log`.
+
+Run evidence is retained in `/tmp/memba-kaizen-062-failed-run/` (`events.jsonl`, `graph.fabro`, stage artifacts and run log). Important event sequences: 3761 (node start), 4129 (domain green), 4166/4197/4239 (broadened browser results), 4244/4254 (child spawns), 4854 (database-in-use failure), 5028 (parent wait), 5113 (timeout), 5123 (terminal fallback). Durable references are `origin/fabro/run/01M2F8XHWAHNSG7M6S0MXC3WA5` and its matching `origin/fabro/meta/` branch, especially `stages/040-implement_next_task@6/`.
+
+### Remaining resolution options — decision pending
+
+1. Enforce single-owner implementation/revision nodes in tool configuration rather than adding another prose reminder. This targets duplicate waits and shared-sandbox concurrency, but available per-node controls in deployed Fabro need verification; its ordinary permission levels always permit subagents.
+2. Add a deterministic timeout handoff while retaining terminal failure. This makes preserved candidate work easier to recover safely, but does not make unattended delivery continue.
+3. Add bounded timeout continuation for the same pending candidate, with independent acceptance and final gates retained. This could recover productive interrupted work, but can also repeat a stuck approach, spend more, or encounter surviving child/process state. It requires an explicit budget and cleanup policy, not an unconditional retry edge.
+
+Recommendation: retain the narrow selection fix; decide whether the next improvement should prevent forbidden delegation or make hard-timeout recovery explicit before changing execution policy. Review the next file-targeted Fabro invocation for the requested scenario inventory and absence of the path-merge warning. A later real timeout is the effectiveness check for whichever recovery policy is chosen. These follow-ups remain open; the kaizen note is not fully resolved.
