@@ -1,0 +1,205 @@
+diff --git a/docs/iterations/062-create-custom-groups/todo.md b/docs/iterations/062-create-custom-groups/todo.md
+index 11b2059..c0ee449 100644
+--- a/docs/iterations/062-create-custom-groups/todo.md
++++ b/docs/iterations/062-create-custom-groups/todo.md
+@@ -20,4 +20,5 @@
+ - [x] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.
+ - [x] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.
+ - [x] 020 Preserve already-handed-off email semantics; do not add an error dashboard or email retry product.
+-- [ ] 021 Implement the tagged scenarios and targeted Club concurrency, identity, replay, departure/rejoin, slug-length and LiveView typing tests. Run `dev check` on the exact delivery state.
++- [ ] 021 Complete targeted Club concurrency, identity, replay, departure/rejoin, slug-length and LiveView validation test coverage.
++- [ ] 022 Implement the iteration-062 tagged scenarios at their intended domain/browser layers, including browser typing/caret coverage, and run `dev check` on the exact delivery state.
+diff --git a/web/test/memba/membership/create_custom_group_dispatch_test.exs b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+index e2fbcc2..a648aea 100644
+--- a/web/test/memba/membership/create_custom_group_dispatch_test.exs
++++ b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+@@ -311,6 +311,112 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
+            } = Repo.get_by(GroupMembership, group_id: original_group_id)
+   end
+ 
++  test "concurrent same-name attempts serialize to one group and one creator membership" do
++    club_id = Memba.ID.generate(:club)
++    first_group_id = Memba.ID.generate(:group)
++    second_group_id = Memba.ID.generate(:group)
++    {first_membership_id, first_person_id} = create_club_with_admin!(club_id)
++    second_membership_id = Memba.ID.generate(:membership)
++    second_person_id = Memba.ID.generate(:person)
++
++    create_member!(club_id, second_membership_id, second_person_id)
++    assign_admin!(club_id, second_membership_id, second_person_id)
++
++    results =
++      [{first_group_id, first_person_id}, {second_group_id, second_person_id}]
++      |> Task.async_stream(
++        fn {group_id, actor_person_id} ->
++          {group_id, create_custom_group(club_id, group_id, actor_person_id, "Board")}
++        end,
++        ordered: false,
++        timeout: :infinity
++      )
++      |> Enum.map(fn {:ok, result} -> result end)
++
++    assert Enum.count(results, &match?({_group_id, :ok}, &1)) == 1
++
++    assert Enum.count(
++             results,
++             &match?({_group_id, {:error, :group_name_already_defined}}, &1)
++           ) == 1
++
++    [{successful_group_id, :ok}] =
++      Enum.filter(results, &match?({_group_id, :ok}, &1))
++
++    expected_creator =
++      if successful_group_id == first_group_id do
++        {first_membership_id, first_person_id}
++      else
++        {second_membership_id, second_person_id}
++      end
++
++    assert [
++             %GroupMembership{
++               membership_id: creator_membership_id,
++               person_id: creator_person_id,
++               active: true
++             }
++           ] =
++             Repo.all(
++               from group_membership in GroupMembership,
++                 where: group_membership.group_id == ^successful_group_id
++             )
++
++    assert {creator_membership_id, creator_person_id} == expected_creator
++
++    assert [%GroupProjection{name: "Board", email_slug: "board"}] =
++             Repo.all(
++               from group in GroupProjection,
++                 where:
++                   group.club_id == ^club_id and
++                     group.name_uniqueness_key == "board"
++             )
++  end
++
++  test "concurrent distinct names with one slug stem receive different replay-stable addresses" do
++    club_id = Memba.ID.generate(:club)
++    first_group_id = Memba.ID.generate(:group)
++    second_group_id = Memba.ID.generate(:group)
++    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
++
++    results =
++      [{"Board!", first_group_id}, {"Board?", second_group_id}]
++      |> Task.async_stream(
++        fn {name, group_id} ->
++          {group_id, create_custom_group(club_id, group_id, actor_person_id, name)}
++        end,
++        ordered: false,
++        timeout: :infinity
++      )
++      |> Enum.map(fn {:ok, result} -> result end)
++
++    assert Enum.sort(results) == Enum.sort([{first_group_id, :ok}, {second_group_id, :ok}])
++
++    slugs =
++      club_id
++      |> then(&App.aggregate_state(Club, &1))
++      |> Map.fetch!(:groups)
++      |> Map.take([first_group_id, second_group_id])
++      |> Map.values()
++      |> Enum.map(& &1.email_slug)
++      |> Enum.sort()
++
++    assert slugs == ["board", "board-2"]
++
++    Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
++
++    replayed_slugs =
++      club_id
++      |> then(&App.aggregate_state(Club, &1))
++      |> Map.fetch!(:groups)
++      |> Map.take([first_group_id, second_group_id])
++      |> Map.values()
++      |> Enum.map(& &1.email_slug)
++      |> Enum.sort()
++
++    assert replayed_slugs == slugs
++  end
++
+   test "aggregate name uniqueness remains authoritative when its projection is missing" do
+     club_id = Memba.ID.generate(:club)
+     {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+diff --git a/web/test/memba/membership/custom_group_slug_test.exs b/web/test/memba/membership/custom_group_slug_test.exs
+index 8a139bc..c33e9bc 100644
+--- a/web/test/memba/membership/custom_group_slug_test.exs
++++ b/web/test/memba/membership/custom_group_slug_test.exs
+@@ -21,6 +21,24 @@ defmodule Memba.Membership.CustomGroupSlugTest do
+     assert Slug.valid?(allocated_slug)
+   end
+ 
++  test "shortens the stem again when the first available suffix gains a digit" do
++    stem = String.duplicate("a", Slug.max_length())
++
++    occupied_slugs =
++      1..9
++      |> Enum.map(fn
++        1 -> stem
++        suffix -> String.slice(stem, 0, Slug.max_length() - 2) <> "-#{suffix}"
++      end)
++      |> MapSet.new()
++
++    allocated_slug = CustomGroupSlug.allocate(stem, occupied_slugs)
++
++    assert allocated_slug == String.duplicate("a", Slug.max_length() - 3) <> "-10"
++    assert String.length(allocated_slug) == Slug.max_length()
++    assert Slug.valid?(allocated_slug)
++  end
++
+   test "uses and suffixes a fallback when the display name has no ASCII stem" do
+     assert CustomGroupSlug.allocate("董事会", MapSet.new()) == "group"
+     assert CustomGroupSlug.allocate("Совет", MapSet.new(["group"])) == "group-2"
+diff --git a/web/test/memba_web/live/member_group_live/new_test.exs b/web/test/memba_web/live/member_group_live/new_test.exs
+index 1e20a7d..01a4f1a 100644
+--- a/web/test/memba_web/live/member_group_live/new_test.exs
++++ b/web/test/memba_web/live/member_group_live/new_test.exs
+@@ -201,6 +201,43 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
+     |> refute_has("#member-group-create-button[disabled]")
+   end
+ 
++  test "successive server-side typing validations preserve the latest input value", %{conn: conn} do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    grant_manage_members!(robin)
++    club = Membership.get_club(robin.club_id)
++
++    conn = signed_in_club_host(conn, "robin@example.com", robin)
++    {:ok, view, _html} = live(conn, ~p"/groups/new")
++
++    for partial_name <- ["T", "Tr", "Tri", "Trip", "Trips"] do
++      view
++      |> form("#member-group-new-form", group: %{name: partial_name})
++      |> render_change()
++
++      assert has_element?(
++               view,
++               "#member-group-name-input[value='#{partial_name}']"
++             )
++
++      assert has_element?(
++               view,
++               "#member-group-email-preview[data-state='available']",
++               ClubInboundEmailAddress.address(club, String.downcase(partial_name))
++             )
++    end
++
++    refute Repo.get_by(Group,
++             club_id: robin.club_id,
++             name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key("Trips")
++           )
++  end
++
+   test "the live preview uses the creation allocator for slug collisions and Unicode fallback", %{
+     conn: conn
+   } do
