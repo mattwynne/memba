@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberDashboardLive do
   use MembaWeb, :live_view
 
   alias Memba.Accounts
+  alias Memba.Membership
   alias Memba.ReadModelChanges
   alias MembaWeb.IdentityAuth
   alias MembaWeb.MemberDashboardPresentation
@@ -102,6 +103,38 @@ defmodule MembaWeb.MemberDashboardLive do
 
   def handle_event("filter_custom_group_member_candidates", _params, socket),
     do: {:noreply, socket}
+
+  def handle_event(
+        "add_custom_group_member",
+        %{"membership_id" => membership_id, "person_id" => person_id},
+        socket
+      ) do
+    attrs = %{
+      club_id: socket.assigns.selected_club.club_id,
+      group_id: socket.assigns.selected_group.group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      actor_person_id: socket.assigns.current_member.id
+    }
+
+    case Membership.add_custom_group_member(attrs, consistency: :strong) do
+      {:ok, _admission} ->
+        {:noreply,
+         refresh_dashboard(
+           socket,
+           socket.assigns.selected_club.club_id,
+           socket.assigns.selected_group_route_id
+         )}
+
+      {:error, _reason} ->
+        {:noreply,
+         put_flash(socket, :error, "We couldn't add that member. Refresh and try again.")}
+    end
+  end
+
+  def handle_event("add_custom_group_member", _params, socket) do
+    {:noreply, put_flash(socket, :error, "We couldn't add that member. Refresh and try again.")}
+  end
 
   @impl Phoenix.LiveView
   def handle_event(
