@@ -234,6 +234,10 @@ defmodule MembaWeb.MemberComponents do
   attr :query, :string, default: ""
   attr :search_form, Phoenix.HTML.Form, required: true
 
+  slot :candidate_action,
+    required: true,
+    doc: "action rendered for each visible candidate, receiving the candidate as its slot value"
+
   def custom_group_member_picker(assigns) do
     assigns =
       assign(assigns, :visible_candidates, filter_candidates(assigns.candidates, assigns.query))
@@ -311,18 +315,7 @@ defmodule MembaWeb.MemberComponents do
               Club admin
             </small>
           </div>
-          <.button
-            id={"custom-group-member-candidate-add-#{candidate.id}"}
-            type="button"
-            variant="primary"
-            size="sm"
-            class="btn-outline"
-            data-custom-group-member-action="add"
-            data-membership-id={candidate.membership_id}
-            data-person-id={candidate.id}
-          >
-            Add
-          </.button>
+          {render_slot(@candidate_action, candidate)}
         </div>
       </div>
 
@@ -338,6 +331,10 @@ defmodule MembaWeb.MemberComponents do
   end
 
   attr :group_name, :string, required: true
+
+  slot :add_self_action,
+    required: true,
+    doc: "caller-owned action for admitting the viewing admin to the group"
 
   def outside_group_admin_notice(assigns) do
     ~H"""
@@ -357,14 +354,7 @@ defmodule MembaWeb.MemberComponents do
           unless you're a member—being a club admin doesn't grant that on its own.
         </p>
         <div class="outside__actions">
-          <.button
-            id="member-group-add-self"
-            type="button"
-            size="sm"
-            data-custom-group-member-action="add-self"
-          >
-            Add yourself to {@group_name}
-          </.button>
+          {render_slot(@add_self_action)}
           <small id="member-group-add-self-help">
             You'll get {@group_name}'s emails from now on and can read its whole history.
             That won't change your club admin role.
