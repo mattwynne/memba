@@ -1,0 +1,306 @@
+diff --git a/web/lib/memba/membership/projectors/membership.ex b/web/lib/memba/membership/projectors/membership.ex
+index 59565dc..04e3a08 100644
+--- a/web/lib/memba/membership/projectors/membership.ex
++++ b/web/lib/memba/membership/projectors/membership.ex
+@@ -3,8 +3,9 @@ defmodule Memba.Membership.Projectors.Membership do
+   Projects membership events into the Membership read model.
+ 
+   An added membership is not exposed as active until the follow-cleanup policy
+-  has handled all earlier facts on that Club stream. This keeps a rapid re-add
+-  from making a departed member eligible for stale private-group follows.
++  has durably acknowledged that event's global EventStore position. This keeps
++  a rapid re-add from making a departed member eligible for stale private-group
++  follows while allowing this projector to rebuild independently.
+   """
+ 
+   use Commanded.Projections.Ecto,
+@@ -13,16 +14,13 @@ defmodule Memba.Membership.Projectors.Membership do
+     name: "Memba.Membership.Projectors.Membership",
+     consistency: :strong
+ 
+-  alias Commanded.Event.Handler
+-  alias Commanded.Registration
+-  alias Commanded.Subscriptions
+-  alias Memba.Membership.App
+   alias Memba.Membership.Events.ClubMemberAdded
+   alias Memba.Membership.Events.ClubMemberRemoved
+   alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.ProjectionBarrier
+ 
+   @impl Commanded.Event.Handler
+   def handle(%ClubMemberAdded{} = event, metadata) do
+@@ -42,33 +40,23 @@ defmodule Memba.Membership.Projectors.Membership do
+   end)
+ 
+   defp project_member_added_after_follow_cleanup(event, metadata) do
+-    with :ok <- await_follow_cleanup(event.club_id, metadata.stream_version) do
++    with :ok <- await_follow_cleanup(metadata.event_number) do
+       update_projection(event, metadata, fn multi ->
+         project_member_added(multi, event)
+       end)
+     end
+   end
+ 
+-  defp await_follow_cleanup(club_id, stream_version) do
+-    handler_name = Handler.name(App, inspect(ClearRemovedGroupMemberFollows))
++  defp await_follow_cleanup(event_number) do
++    case ProjectionBarrier.await(
++           [ClearRemovedGroupMemberFollows],
++           checkpoint: event_number,
++           timeout: 5_000
++         ) do
++      {:ok, _result} ->
++        :ok
+ 
+-    case Registration.whereis_name(App, handler_name) do
+-      pid when is_pid(pid) ->
+-        with :ok <-
+-               Subscriptions.wait_for(
+-                 App,
+-                 club_id,
+-                 stream_version,
+-                 consistency: [ClearRemovedGroupMemberFollows]
+-               ),
+-             ^pid <- Registration.whereis_name(App, handler_name) do
+-          :ok
+-        else
+-          :undefined -> {:error, :removed_group_member_follow_cleanup_unavailable}
+-          _replacement_pid -> {:error, :removed_group_member_follow_cleanup_restarted}
+-        end
+-
+-      :undefined ->
++      {:error, :timeout, _result} ->
+         {:error, :removed_group_member_follow_cleanup_unavailable}
+     end
+   end
+diff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+index eb35352..74d40b0 100644
+--- a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
++++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+@@ -16,9 +16,13 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.RemoveClubMember
++  alias Memba.Membership.Events.ClubMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+   alias Memba.Membership.Policies.SystemGroupMembership
++  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+@@ -46,6 +50,96 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     refute Keyword.has_key?(opts, :state)
+   end
+ 
++  test "membership projection replay uses durable cleanup progress for legacy streams" do
++    club_id = Memba.ID.generate(:club)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club(club_id)
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    assert {:ok, _result} =
++             Memba.ProjectionBarrier.await(
++               [ClearRemovedGroupMemberFollows],
++               checkpoint: checkpoint
++             )
++
++    :ok = Subscriptions.reset(MembershipApp)
++
++    event = %LegacyMemberAdded{
++      club_id: club_id,
++      membership_id: membership_id,
++      person_id: person_id
++    }
++
++    metadata = %{
++      event_number: checkpoint,
++      handler_name: "legacy-membership-replay-#{Ecto.UUID.generate()}",
++      stream_id: membership_id,
++      # Historic MemberAdded facts used membership-ID streams. This deliberately
++      # cannot be interpreted as a version on the Club stream.
++      stream_version: checkpoint + 100
++    }
++
++    assert :ok = MembershipProjector.handle(event, metadata)
++
++    assert %MembershipProjection{
++             club_id: ^club_id,
++             membership_id: ^membership_id,
++             person_id: ^person_id,
++             active: true
++           } = Repo.get(MembershipProjection, membership_id)
++  end
++
++  test "membership projection can rebuild without replaying completed follow cleanup" do
++    club_id = Memba.ID.generate(:club)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club(club_id)
++    add_member(club_id, membership_id, person_id)
++
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    Memba.ProjectionBarrier.await!(
++      [ClearRemovedGroupMemberFollows, MembershipProjector],
++      checkpoint: checkpoint
++    )
++
++    assert %MembershipProjection{active: true} =
++             Repo.get(MembershipProjection, membership_id)
++
++    membership_projector_child_id = stop_membership_projector!()
++
++    Repo.delete_all(MembershipProjection)
++
++    MembershipProjector.ProjectionVersion
++    |> where([version], version.projection_name == ^inspect(MembershipProjector))
++    |> Repo.delete_all()
++
++    assert :ok =
++             EventStore.delete_subscription(
++               MembershipApp,
++               :all,
++               inspect(MembershipProjector)
++             )
++
++    :ok = Subscriptions.reset(MembershipApp)
++    restart_membership_projector!(membership_projector_child_id)
++
++    Memba.ProjectionBarrier.await!(
++      [MembershipProjector],
++      checkpoint: checkpoint
++    )
++
++    assert %MembershipProjection{
++             club_id: ^club_id,
++             membership_id: ^membership_id,
++             person_id: ^person_id,
++             active: true
++           } = Repo.get(MembershipProjection, membership_id)
++  end
++
+   test "club departure clears follows for conversations in the departed custom group" do
+     club_id = Memba.ID.generate(:club)
+     departing_membership_id = Memba.ID.generate(:membership)
+@@ -133,6 +227,9 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+ 
+         assert Task.yield(removal, 100) == nil
+ 
++        assert :ok = EventStore.subscribe(MembershipApp, club_id)
++        assert :ok = Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
++
+         readdition =
+           Task.async(fn ->
+             Membership.add_member(%{
+@@ -142,14 +239,13 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+             })
+           end)
+ 
+-        assert :ok =
+-                 Subscriptions.wait_for(
+-                   MembershipApp,
+-                   club_id,
+-                   removal_target_version + 1,
+-                   [consistency: [SystemGroupMembership]],
+-                   1_000
+-                 )
++        assert is_integer(await_club_member_added!(rejoined_membership_id))
++
++        assert %Club{
++                 active_memberships: %{
++                   ^rejoined_membership_id => ^departing_person_id
++                 }
++               } = MembershipApp.aggregate_state(Club, club_id)
+ 
+         assert Task.yield(readdition, 100) == nil
+ 
+@@ -182,6 +278,16 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     assert :ok = Task.await(removal)
+     assert :ok = Task.await(readdition)
+ 
++    assert_receive {:read_model_changed,
++                    %{
++                      projector: MembershipProjector,
++                      source_event: %ClubMemberAdded{membership_id: ^rejoined_membership_id}
++                    }},
++                   1_000
++
++    assert %MembershipProjection{active: true} =
++             Repo.get(MembershipProjection, rejoined_membership_id)
++
+     assert Membership.active_member_of_club?(club_id, departing_person_id)
+     refute Messaging.following_conversation?(conversation_id, departing_person_id)
+ 
+@@ -345,6 +451,32 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     pid
+   end
+ 
++  defp stop_membership_projector! do
++    child_id =
++      Supervisor.which_children(Memba.Supervisor)
++      |> Enum.find_value(fn
++        {child_id, _pid, :worker, [MembershipProjector]} -> child_id
++        _child -> nil
++      end)
++
++    assert child_id
++    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
++
++    on_exit(fn ->
++      restart_membership_projector!(child_id)
++    end)
++
++    child_id
++  end
++
++  defp restart_membership_projector!(child_id) do
++    case Supervisor.restart_child(Memba.Supervisor, child_id) do
++      {:ok, _pid} -> :ok
++      {:ok, _pid, _info} -> :ok
++      {:error, :running} -> :ok
++    end
++  end
++
+   defp latest_club_stream_version(club_id) do
+     MembershipApp
+     |> EventStore.stream_forward(club_id)
+@@ -352,4 +484,30 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     |> List.last()
+     |> Map.fetch!(:stream_version)
+   end
++
++  defp await_club_member_added!(membership_id) do
++    deadline = System.monotonic_time(:millisecond) + 1_000
++    await_club_member_added!(membership_id, deadline)
++  end
++
++  defp await_club_member_added!(membership_id, deadline) do
++    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
++
++    receive do
++      {:events, events} ->
++        case Enum.find(events, fn
++               %{data: %ClubMemberAdded{membership_id: ^membership_id}} ->
++                 true
++
++               _event ->
++                 false
++             end) do
++          %{event_number: event_number} -> event_number
++          nil -> await_club_member_added!(membership_id, deadline)
++        end
++    after
++      timeout ->
++        flunk("ClubMemberAdded was not persisted for membership #{membership_id}")
++    end
++  end
+ end
