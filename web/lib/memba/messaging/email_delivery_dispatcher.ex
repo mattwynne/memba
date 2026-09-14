@@ -116,9 +116,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   attempt count, and store the latest error diagnostics. If the projections
   required for a final authorization read have not caught up before the short
   timeout, the claim is released back to `pending` without calling the provider
-  or recording a terminal failure. Each claimed delivery is handled
-  independently so one unavailable recipient does not prevent later claimed
-  deliveries from being considered.
+  or recording a terminal failure. Once provider acceptance has marked a
+  delivery `sent`, later access loss does not recall, fail, or retry that
+  already-handed-off email. Each claimed delivery is handled independently so
+  one unavailable recipient does not prevent later claimed deliveries from
+  being considered.
   """
   def dispatch_pending_email_deliveries do
     claim_pending_email_deliveries()

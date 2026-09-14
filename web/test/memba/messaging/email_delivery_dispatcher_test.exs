@@ -531,6 +531,62 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert Fake.deliveries() == []
     end
 
+    test "preserves a sent delivery after the recipient's access ends" do
+      %{message: message, delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+
+      assert [
+               %EmailDeliveryProjection{
+                 delivery_id: delivery_id,
+                 status: "sent",
+                 sent_at: %DateTime{} = sent_at
+               }
+             ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert delivery_id == delivery.delivery_id
+
+      assert [
+               %EmailDeliveryRequest{
+                 message_id: message_id,
+                 delivery_id: ^delivery_id,
+                 recipient_id: recipient_id
+               }
+             ] = Fake.deliveries()
+
+      assert message_id == message.message_id
+      assert recipient_id == delivery.recipient_id
+
+      {1, nil} =
+        Repo.update_all(
+          from(group_membership in GroupMembership,
+            where: group_membership.person_id == ^delivery.recipient_id
+          ),
+          set: [active: false]
+        )
+
+      refute Messaging.member_has_conversation_access?(
+               message.message_id,
+               message.club_id,
+               delivery.recipient_id,
+               :read
+             )
+
+      assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert {:error, {:not_retryable, "sent"}} =
+               Messaging.retry_failed_email_delivery(delivery.delivery_id)
+
+      assert %EmailDeliveryProjection{
+               status: "sent",
+               attempt_count: 0,
+               latest_error: nil,
+               latest_detail: nil,
+               sent_at: ^sent_at,
+               failed_at: nil
+             } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert [_single_provider_handoff] = Fake.deliveries()
+    end
+
     test "marks a claimed delivery as failed and persists diagnostics when the provider errors" do
       Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
 
