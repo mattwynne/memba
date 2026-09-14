@@ -676,3 +676,11 @@ The packet covers only Board web composition at the domain layer: one existing s
 Preparation identified existing fixture, send, access, provider-observation and runner code; it supplied context shapes and highlighted private-helper and wording adaptations. This separates real integration work from the broad subsystem discovery that the original worker performed. No implementation was attempted. A temporary tag-only selection check confirmed that the proposed scope can enable exactly one domain scenario without enabling browser coverage or changing scenario text.
 
 The artifacts are for the next design conversation. They do not prove a worker can finish within a particular token/time budget, and no new workflow architecture has been selected.
+
+### Resolution selected: just-in-time delivery planner
+
+Matt subsequently approved a capable delivery planner that can split, combine and reorder pending implementation work, prepare one bounded handoff against current code, and incorporate worker notes and existing review results. It may change the execution plan, not the approved scope or acceptance contract. Workers return early when missing preparation or excessive scope requires replanning; incomplete work remains unaccepted.
+
+Matt explicitly rejected a separate readiness-review loop. The existing independent implementation review and final gates remain. Use Sol for the initial planner; no new compaction policy, tool-capability fence or hard-timeout retry policy is selected.
+
+The approved [implementation design](2026-09-14-just-in-time-delivery-planner.md) records responsibilities, durable artifacts, code targets and validation requirements. Matt requested that this be written up and dispatched to a Sol implementation subagent. Status: authorized for implementation, not yet validated; operational effectiveness remains to be demonstrated by a later authorized delivery.
