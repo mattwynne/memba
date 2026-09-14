@@ -5,11 +5,11 @@ description: Offer to capture and, when accepted, write a docs/kaizen observatio
 
 # Kaizen Note
 
-Use this skill when a conversation or run reveals an imperfection in the machinery we use to create the product: Fabro workflows, Pi skills/prompts, planning/review/implementation handoffs, sandboxing, checkpoints, CI/dev scripts, model routing, observability, recovery, or other delivery pipeline/factory friction.
+Use this skill when a conversation or run reveals an imperfection in the machinery we use to create the product: delivery workflows, agent skills/prompts, planning/review/implementation handoffs, sandboxing, checkpoints, CI/dev scripts, model routing, observability, recovery, or other delivery pipeline/factory friction.
 
 The purpose is defect prevention: do not just patch around the immediate problem; capture what allowed it to happen so we can remove the cause and keep it from coming back.
 
-A kaizen note is not the fix. It is a timely observation that preserves the evidence a later fix will need: what we expected, what actually happened, what made the failure possible, and what kind of guardrail might have caught or prevented it. Keep the note factual. Do not turn it into a solution plan unless Matt asks.
+A kaizen note is not the fix. It is a timely observation that preserves the evidence a later fix will need: what we expected, what actually happened, what made the failure possible, and what kind of guardrail might have caught or prevented it. Keep the note factual. Do not turn it into a solution plan unless the user asks.
 
 ## How to Think While Capturing
 
@@ -28,9 +28,9 @@ When you notice relevant friction, pause and offer to record it:
 
 > This looks like pipeline/workflow friction. Would you like me to write a kaizen note in `docs/kaizen/` capturing the context and observations?
 
-If Matt declines, acknowledge and continue. Do not write the note.
+If the user declines, acknowledge and continue. Do not write the note.
 
-If Matt explicitly invokes `/kaizen-note`, `/skill:kaizen-note`, says to record a kaizen note, or otherwise clearly asks for one, treat that as consent and write it unless important facts are missing.
+If the user explicitly invokes `/kaizen-note`, `/skill:kaizen-note`, says to record a kaizen note, or otherwise clearly asks for one, treat that as consent and write it unless important facts are missing.
 
 ## What Qualifies
 
@@ -52,10 +52,10 @@ Usually not candidates:
 
 1. Confirm consent unless the user explicitly requested the note.
 2. Inspect enough local context to write accurately. Useful sources include:
-   - recent conversation details supplied by Matt;
+   - recent conversation details supplied by the user;
    - `git status --short --branch`;
    - relevant workflow, skill, prompt, script, or docs paths;
-   - Fabro run IDs, events, logs, URLs, commands, or failure text when available.
+   - workflow run IDs, events, logs, URLs, commands, or failure text when available.
 3. Identify the suspected system weakness without over-investigating:
    - What kind of protection was missing or weak? Examples: guardrail, validation, error message, default, documentation, checklist, handoff, recovery path, observability, or ownership boundary.
    - How urgent is it? Examples: minor friction, repeated friction, blocked work, quality risk, or customer risk.
@@ -67,7 +67,7 @@ Usually not candidates:
    - add the new evidence under the most relevant existing heading, or add a dated subsection such as `### Additional observation: YYYY-MM-DD`;
    - preserve the original observation and distinguish earlier evidence from the new observation;
    - update `Impact`, `What allowed it to happen`, `Open questions`, or `Possible prevention ideas` only when the new observation changes them;
-   - do not rewrite the note into a solution plan unless Matt asks.
+   - do not rewrite the note into a solution plan unless the user asks.
 6. If no matching note exists, choose a concise slug and create:
    - `docs/kaizen/YYYY-MM-DD-short-observation-slug.md`
 7. Keep the note factual and diagnostic.
