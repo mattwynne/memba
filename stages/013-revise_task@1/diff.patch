@@ -1,0 +1,214 @@
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 66cb73f..0e9b748 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -25,6 +25,8 @@ defmodule Memba.Application do
+       Memba.Messaging.Projectors.MemberEmailDelivery,
+       Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+       Memba.Messaging.Projectors.InboundEmailSource,
++      # Membership activation waits for this policy's prior Club-stream work.
++      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.ClubInvitation,
+       Memba.Membership.Projectors.Membership,
+@@ -33,7 +35,6 @@ defmodule Memba.Application do
+       Memba.Membership.Projectors.Role,
+       Memba.Membership.Projectors.Person,
+       Memba.Membership.Policies.SystemGroupMembership,
+-      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
+       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
+       # Start a worker by calling: Memba.Worker.start_link(arg)
+       # {Memba.Worker, arg},
+diff --git a/web/lib/memba/membership/projectors/membership.ex b/web/lib/memba/membership/projectors/membership.ex
+index 8854262..59565dc 100644
+--- a/web/lib/memba/membership/projectors/membership.ex
++++ b/web/lib/memba/membership/projectors/membership.ex
+@@ -1,6 +1,10 @@
+ defmodule Memba.Membership.Projectors.Membership do
+   @moduledoc """
+   Projects membership events into the Membership read model.
++
++  An added membership is not exposed as active until the follow-cleanup policy
++  has handled all earlier facts on that Club stream. This keeps a rapid re-add
++  from making a departed member eligible for stale private-group follows.
+   """
+ 
+   use Commanded.Projections.Ecto,
+@@ -9,19 +13,25 @@ defmodule Memba.Membership.Projectors.Membership do
+     name: "Memba.Membership.Projectors.Membership",
+     consistency: :strong
+ 
++  alias Commanded.Event.Handler
++  alias Commanded.Registration
++  alias Commanded.Subscriptions
++  alias Memba.Membership.App
+   alias Memba.Membership.Events.ClubMemberAdded
+   alias Memba.Membership.Events.ClubMemberRemoved
+   alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
++  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+ 
+-  project(%ClubMemberAdded{} = event, fn multi ->
+-    project_member_added(multi, event)
+-  end)
++  @impl Commanded.Event.Handler
++  def handle(%ClubMemberAdded{} = event, metadata) do
++    project_member_added_after_follow_cleanup(event, metadata)
++  end
+ 
+-  project(%LegacyMemberAdded{} = event, fn multi ->
+-    project_member_added(multi, event)
+-  end)
++  def handle(%LegacyMemberAdded{} = event, metadata) do
++    project_member_added_after_follow_cleanup(event, metadata)
++  end
+ 
+   project(%ClubMemberRemoved{} = event, fn multi ->
+     project_member_removed(multi, event)
+@@ -31,6 +41,38 @@ defmodule Memba.Membership.Projectors.Membership do
+     project_member_removed(multi, event)
+   end)
+ 
++  defp project_member_added_after_follow_cleanup(event, metadata) do
++    with :ok <- await_follow_cleanup(event.club_id, metadata.stream_version) do
++      update_projection(event, metadata, fn multi ->
++        project_member_added(multi, event)
++      end)
++    end
++  end
++
++  defp await_follow_cleanup(club_id, stream_version) do
++    handler_name = Handler.name(App, inspect(ClearRemovedGroupMemberFollows))
++
++    case Registration.whereis_name(App, handler_name) do
++      pid when is_pid(pid) ->
++        with :ok <-
++               Subscriptions.wait_for(
++                 App,
++                 club_id,
++                 stream_version,
++                 consistency: [ClearRemovedGroupMemberFollows]
++               ),
++             ^pid <- Registration.whereis_name(App, handler_name) do
++          :ok
++        else
++          :undefined -> {:error, :removed_group_member_follow_cleanup_unavailable}
++          _replacement_pid -> {:error, :removed_group_member_follow_cleanup_restarted}
++        end
++
++      :undefined ->
++        {:error, :removed_group_member_follow_cleanup_unavailable}
++    end
++  end
++
+   defp project_member_added(multi, event) do
+     Ecto.Multi.insert(multi, :membership_membership, %MembershipProjection{
+       membership_id: event.membership_id,
+diff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+index d7cccad..eb35352 100644
+--- a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
++++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+@@ -1,6 +1,7 @@
+ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   use Memba.EventSourcedCase, async: false
+ 
++  alias Commanded.Commands.ExecutionResult
+   alias Commanded.EventStore
+   alias Commanded.Event.Handler
+   alias Commanded.Registration
+@@ -13,6 +14,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreateGroup
++  alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+@@ -23,6 +25,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Events.ConversationUnfollowed
++  alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Recipient
+ 
+   test "is a strongly consistent Membership event handler that replays from origin" do
+@@ -86,12 +89,22 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     custom_group_id = Memba.ID.generate(:group)
+     conversation_id = Memba.ID.generate(:message)
+ 
++    create_person(departing_person_id, "Departing Member", "departing@example.com")
++    create_person(replacement_person_id, "Replacement Member", "replacement@example.com")
+     create_club(club_id)
+     add_member(club_id, departing_membership_id, departing_person_id)
+     add_member(club_id, replacement_membership_id, replacement_person_id)
+     assign_admin(club_id, replacement_membership_id, replacement_person_id)
+     create_custom_group(club_id, custom_group_id)
+     add_group_member(club_id, custom_group_id, departing_membership_id, departing_person_id)
++
++    add_group_member(
++      club_id,
++      custom_group_id,
++      replacement_membership_id,
++      replacement_person_id
++    )
++
+     create_followed_conversation(club_id, custom_group_id, conversation_id, departing_person_id)
+ 
+     clear_follows_handler = clear_follows_handler_pid()
+@@ -139,6 +152,28 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+                  )
+ 
+         assert Task.yield(readdition, 100) == nil
++
++        refute Membership.active_member_of_club?(club_id, departing_person_id)
++
++        reply_message_id = Memba.ID.generate(:message)
++
++        assert {:ok, %ExecutionResult{events: reply_events}} =
++                 Messaging.post_message_reply(
++                   %{
++                     message_id: reply_message_id,
++                     conversation_id: conversation_id,
++                     sender_id: replacement_person_id,
++                     body: "Cleanup still has to finish."
++                   },
++                   returning: :execution_result,
++                   consistency: :strong
++                 )
++
++        refute Enum.any?(reply_events, fn
++                 %EmailDeliveryCreated{recipient_id: ^departing_person_id} -> true
++                 _event -> false
++               end)
++
+         readdition
+       after
+         :ok = :sys.resume(clear_follows_handler)
+@@ -147,6 +182,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     assert :ok = Task.await(removal)
+     assert :ok = Task.await(readdition)
+ 
++    assert Membership.active_member_of_club?(club_id, departing_person_id)
+     refute Messaging.following_conversation?(conversation_id, departing_person_id)
+ 
+     everyone_group_id = SystemGroups.everyone_group_id(club_id)
+@@ -182,6 +218,18 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     assert count_unfollow_events(conversation_id, person_id) == 1
+   end
+ 
++  defp create_person(person_id, name, email) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreatePerson{
++                 person_id: person_id,
++                 name: name,
++                 email: email
++               },
++               consistency: :strong
++             )
++  end
++
+   defp create_club(club_id) do
+     assert :ok =
+              MembershipApp.dispatch(

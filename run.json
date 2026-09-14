@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T00:13:34.240878361Z",
-  "last_event_at": "2026-09-14T00:43:07.985738535Z",
+  "last_event_at": "2026-09-14T00:52:44.683789198Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3448,9 +3448,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1024,
       "checkpoint": {
-        "timestamp": "2026-09-14T00:43:07.991813859Z",
+        "timestamp": "2026-09-14T00:43:11.755524451Z",
         "current_node": "revise_task",
         "completed_nodes": [
           "start",
@@ -3469,16 +3469,365 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.wip_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.apply_task_verdict": 0,
+          "graph.rankdir": "LR",
+          "internal.retry_count.implement_next_task": 0,
+          "last_response": "Implemented the revision for task 012 and closed the observable rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes",
+          "internal.retry_count.read_plan": 0,
+          "outcome": "succeeded",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.start": 0,
+          "internal.node_visit_count": 1,
+          "current_node": "revise_task",
+          "thread.start.current_node": "verify_source_head",
+          "failure_signature": "",
+          "last_stage": "revise_task",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "response.revise_task": "Implemented the revision for task 012 and closed the observable rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updated the [Membership projector](/workspace/memba/web/lib/memba/membership/projectors/membership.ex:27) so modern and legacy member-add events are not projected as active until `ClearRemovedGroupMemberFollows` has processed that Club-stream event.\n   - The barrier verifies that the same cleanup-handler process remains registered, preventing handler absence or restart from producing a false-positive completion.\n   - Started the cleanup policy before the dependent Membership projector in [application.ex](/workspace/memba/web/lib/memba/application.ex:28).\n   - Preserved the previous caller-completion barrier in `Membership.add_member/2`.\n   - Strengthened the [rapid re-add race test](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:82). While cleanup is suspended, it now proves:\n     - the committed re-add is not exposed as active;\n     - a concurrent private-group reply creates no delivery for the departed member;\n     - the re-add call remains pending;\n     - after cleanup resumes, membership becomes active while the old custom membership and stale follow remain inactive.\n\n3. Validation\n\n   - TDD red run: focused policy test failed because the re-added member was prematurely visible as active.\n   - Focused lifecycle test: 4 tests, 0 failures.\n   - Membership regression suite: 316 tests, 0 failures.\n   - Focused projection/replay/reply set on the final implementation: 14 tests, 0 failures.\n   - Formatting check for all affected files: passed.\n   - `dev check --quick`: 1,319 tests, 0 failures.\n   - The successfully checked diff is staged exactly, with no unstaged changes. Full browser-inclusive `dev check` remains with the workflow’s final deterministic gate.\n\n4. Todo state\n\n   The selected line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:14):\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: uses persisted lifecycle events and Commanded’s ordered subscription acknowledgements.\n   - ADR 0007: cross-context unfollowing remains in the Membership-to-Messaging policy; the projector performs no Messaging calls or side effects.\n   - ADR 0011: rapid rejoining continues to use a new caller-generated membership identity.\n   - ADR 0022: uses a domain-specific handler-completion barrier rather than treating a projection checkpoint as proof that asynchronous cleanup finished.\n   - ADR 0024: Club-stream ordering remains the lifecycle consistency boundary; no projection-backed write invariant or competing aggregate was introduced.",
+          "internal.run_id": "01M2EM4RDNFFXJQEEP5ACBQTR8",
+          "thread.sync_task_list.current_node": "todo_readable",
           "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"The focused test passes (4 tests, 0 failures), but it proves only that Membership.add_member/2 does not return while ClearRemovedGroupMemberFollows is suspended. membership.ex applies that handler consistency as a post-dispatch wait, so ClubMemberAdded is already committed; the test itself waits until SystemGroupMembership processes the re-add while follow cleanup remains paused. During that interval the Membership projection can expose the person as an active club member while the old ConversationFollow is still active, and Messaging.resolve_reply_recipients/3 selects active club members from that stale follower set. A concurrent reply can therefore include the rejoined former custom-group member before cleanup, contrary to the plan's ordering/privacy requirement. Prevent re-add activation from becoming observable until prior removal cleanup completes, or enforce equivalent protection at the recipient/action boundaries, and add a race test that checks active membership/reply eligibility while cleanup is suspended—not merely Task completion.\"}",
+          "response.implement_next_task": "Implemented task 012 and closed the concurrent rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:272) so both member removal and member addition use the same lifecycle consistency barrier.\n   - A concurrent `add_member/2` now waits for `ClearRemovedGroupMemberFollows` to process all earlier events on the Club stream before reporting the re-add complete.\n   - Preserved the existing removal-side guarantee that system-group changes and custom-group follow cleanup complete before `remove_member/2` returns.\n   - Strengthened [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:79) to suspend follow cleanup, begin removal, attempt a concurrent re-add, and prove the re-add cannot complete until cleanup resumes. The test then confirms the stale follow is gone, the former custom membership stays inactive, and only the new Everyone membership becomes active.\n\n3. Validation\n\n   - Red test before implementation: concurrent re-add returned `{:ok, :ok}` while follow cleanup was paused.\n   - Focused rapid-re-add test after implementation: 4 tests, 0 failures.\n   - Focused Membership regression set: 38 tests, 0 failures.\n   - Wider lifecycle/invitation regression set: 55 tests, 0 failures.\n   - `mix format --check-formatted` for both touched files: passed.\n   - `dev check --quick`: exited 0 with 1,319 tests and 0 failures. The exact final diff was subsequently rechecked with the focused 38-test run and formatting check.\n   - Full browser-inclusive `dev check` was not run in this ordinary per-task node; the workflow’s final deterministic gate owns that run.\n\n4. Todo state\n\n   The exact selected line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:14):\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: uses Commanded event-handler consistency and persisted lifecycle events.\n   - ADR 0007: preserves the Membership/Messaging context boundary; no direct Messaging persistence access or projector side effects were introduced.\n   - ADR 0022: uses the domain-specific strongly consistent handler completion signal required for this cross-context consequence.\n   - ADR 0024: relies on ordered events from the existing Club consistency boundary, including concurrent removal and re-add commands; no competing aggregate or projection-backed write invariant was added.\n   - ADR 0011: rejoining continues to use a new caller-generated membership identity.",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "preferred_label": "revise",
+          "internal.retry_count.sync_task_list": 0,
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "graph.max_node_visits": "80",
+          "failure_class": "",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.validate_task": 0,
+          "command.output": "blob://sha256/c61400af9a772dc3c0c80cc1c2d3b06389fd9e9ea18d74fa7d83e239193c83d5",
+          "internal.retry_count.todo_readable": 0,
+          "internal.thread_id": "apply_task_verdict",
+          "thread.apply_task_verdict.current_node": "revise_task",
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.revise_task": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.read_plan.current_node": "wip_gate",
           "output.validate_task": {
             "decision": "revise",
             "task": "- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.",
             "reason": "The focused test passes (4 tests, 0 failures), but it proves only that Membership.add_member/2 does not return while ClearRemovedGroupMemberFollows is suspended. membership.ex applies that handler consistency as a post-dispatch wait, so ClubMemberAdded is already committed; the test itself waits until SystemGroupMembership processes the re-add while follow cleanup remains paused. During that interval the Membership projection can expose the person as an active club member while the old ConversationFollow is still active, and Messaging.resolve_reply_recipients/3 selects active club members from that stale follower set. A concurrent reply can therefore include the rejoined former custom-group member before cleanup, contrary to the plan's ordering/privacy requirement. Prevent re-add activation from becoming observable until prior removal cleanup completes, or enforce equivalent protection at the recipient/action boundaries, and add a race test that checks active membership/reply eligibility while cleanup is suspended—not merely Task completion."
           },
+          "thread.validate_task.current_node": "apply_task_verdict"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/34ad42be7e618049872a9d743f28d4b40b60d5883abc73fab94e40ecdcfbd04e"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93299,
+              "active_time_ms": 93299
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/60a1817bdce7ee625fb3a0dabe9d669b825f4643873f96cd98e973967b3bbf17"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh 'd42be85e2364a81c0cb146f7ddd89d6215a9e6cd'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 190,
+              "active_time_ms": 190
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d02ae3fbcf009686d036f0f3c3931835e85e384c508c28e35fb843d5318f329e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented task 012 and closed the concurrent rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updat",
+              "response.implement_next_task": "Implemented task 012 and closed the concurrent rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:272) so both member removal and member addition use the same lifecycle consistency barrier.\n   - A concurrent `add_member/2` now waits for `ClearRemovedGroupMemberFollows` to process all earlier events on the Club stream before reporting the re-add complete.\n   - Preserved the existing removal-side guarantee that system-group changes and custom-group follow cleanup complete before `remove_member/2` returns.\n   - Strengthened [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:79) to suspend follow cleanup, begin removal, attempt a concurrent re-add, and prove the re-add cannot complete until cleanup resumes. The test then confirms the stale follow is gone, the former custom membership stays inactive, and only the new Everyone membership becomes active.\n\n3. Validation\n\n   - Red test before implementation: concurrent re-add returned `{:ok, :ok}` while follow cleanup was paused.\n   - Focused rapid-re-add test after implementation: 4 tests, 0 failures.\n   - Focused Membership regression set: 38 tests, 0 failures.\n   - Wider lifecycle/invitation regression set: 55 tests, 0 failures.\n   - `mix format --check-formatted` for both touched files: passed.\n   - `dev check --quick`: exited 0 with 1,319 tests and 0 failures. The exact final diff was subsequently rechecked with the focused 38-test run and formatting check.\n   - Full browser-inclusive `dev check` was not run in this ordinary per-task node; the workflow’s final deterministic gate owns that run.\n\n4. Todo state\n\n   The exact selected line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:14):\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: uses Commanded event-handler consistency and persisted lifecycle events.\n   - ADR 0007: preserves the Membership/Messaging context boundary; no direct Messaging persistence access or projector side effects were introduced.\n   - ADR 0022: uses the domain-specific strongly consistent handler completion signal required for this cross-context consequence.\n   - ADR 0024: relies on ordered events from the existing Club consistency boundary, including concurrent removal and re-add commands; no competing aggregate or projection-backed write invariant was added.\n   - ADR 0011: rejoining continues to use a new caller-generated membership identity.",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 2103708,
+                    "output_tokens": 8561,
+                    "reasoning_tokens": 7260,
+                    "cache_read_tokens": 1041152,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 11513746
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 420658,
+              "tool_time_ms": 319320,
+              "active_time_ms": 739978
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/c61400af9a772dc3c0c80cc1c2d3b06389fd9e9ea18d74fa7d83e239193c83d5"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/062-create-custom-groups/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b5fa0ce95b1b367d040181c2107d8deb8857324f2d9b197d4b7334015b0f123d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.revise_task": "Implemented the revision for task 012 and closed the observable rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updated the [Membership projector](/workspace/memba/web/lib/memba/membership/projectors/membership.ex:27) so modern and legacy member-add events are not projected as active until `ClearRemovedGroupMemberFollows` has processed that Club-stream event.\n   - The barrier verifies that the same cleanup-handler process remains registered, preventing handler absence or restart from producing a false-positive completion.\n   - Started the cleanup policy before the dependent Membership projector in [application.ex](/workspace/memba/web/lib/memba/application.ex:28).\n   - Preserved the previous caller-completion barrier in `Membership.add_member/2`.\n   - Strengthened the [rapid re-add race test](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:82). While cleanup is suspended, it now proves:\n     - the committed re-add is not exposed as active;\n     - a concurrent private-group reply creates no delivery for the departed member;\n     - the re-add call remains pending;\n     - after cleanup resumes, membership becomes active while the old custom membership and stale follow remain inactive.\n\n3. Validation\n\n   - TDD red run: focused policy test failed because the re-added member was prematurely visible as active.\n   - Focused lifecycle test: 4 tests, 0 failures.\n   - Membership regression suite: 316 tests, 0 failures.\n   - Focused projection/replay/reply set on the final implementation: 14 tests, 0 failures.\n   - Formatting check for all affected files: passed.\n   - `dev check --quick`: 1,319 tests, 0 failures.\n   - The successfully checked diff is staged exactly, with no unstaged changes. Full browser-inclusive `dev check` remains with the workflow’s final deterministic gate.\n\n4. Todo state\n\n   The selected line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:14):\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: uses persisted lifecycle events and Commanded’s ordered subscription acknowledgements.\n   - ADR 0007: cross-context unfollowing remains in the Membership-to-Messaging policy; the projector performs no Messaging calls or side effects.\n   - ADR 0011: rapid rejoining continues to use a new caller-generated membership identity.\n   - ADR 0022: uses a domain-specific handler-completion barrier rather than treating a projection checkpoint as proof that asynchronous cleanup finished.\n   - ADR 0024: Club-stream ordering remains the lifecycle consistency boundary; no projection-backed write invariant or competing aggregate was introduced.",
+              "last_response": "Implemented the revision for task 012 and closed the observable rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes",
+              "last_stage": "revise_task"
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 2535965,
+                    "output_tokens": 9027,
+                    "reasoning_tokens": 9747,
+                    "cache_read_tokens": 1154816,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 13820453
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 464576,
+              "tool_time_ms": 229207,
+              "active_time_ms": 693783
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1e5a95b66bd3fcda4f99bb1eab2fd2537fa20091e987c1b3e4d59439a8ddaa38"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2a50f81072a1884b3f88ab6c72962f3b7085ed961f27d158d014e174bb90bb02"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2c689d635cca514d7dea46648c9c158365c87f9f1786964d0e3c0f47dc1469d5"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"The focused test passes (4 tests, 0 failures), but it proves only that Membership.add_member/2 does not return while ClearRemovedGroupMemberFollows is suspended. membership.ex applies that handler consistency as a post-dispatch wait, so ClubMemberAdded is already committed; the test itself waits until SystemGroupMembership processes the re-add while follow cleanup remains paused. During that interval the Membership projection can expose the person as an active club member while the old ConversationFollow is still active, and Messaging.resolve_reply_recipients/3 selects active club members from that stale follower set. A concurrent reply can therefore include the rejoined former custom-group member before cleanup, contrary to the plan's ordering/privacy requirement. Prevent re-add activation from becoming observable until prior removal cleanup completes, or enforce equivalent protection at the recipient/action boundaries, and add a race test that checks active membership/reply eligibility while cleanup is suspended—not merely Task completion.\"}",
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"The focused test passes (4 tests, 0 failures), but it proves only that Members",
+              "last_stage": "validate_task",
+              "output.validate_task": {
+                "decision": "revise",
+                "task": "- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.",
+                "reason": "The focused test passes (4 tests, 0 failures), but it proves only that Membership.add_member/2 does not return while ClearRemovedGroupMemberFollows is suspended. membership.ex applies that handler consistency as a post-dispatch wait, so ClubMemberAdded is already committed; the test itself waits until SystemGroupMembership processes the re-add while follow cleanup remains paused. During that interval the Membership projection can expose the person as an active club member while the old ConversationFollow is still active, and Messaging.resolve_reply_recipients/3 selects active club members from that stale follower set. A concurrent reply can therefore include the rejoined former custom-group member before cleanup, contrary to the plan's ordering/privacy requirement. Prevent re-add activation from becoming observable until prior removal cleanup completes, or enforce equivalent protection at the recipient/action boundaries, and add a race test that checks active membership/reply eligibility while cleanup is suspended—not merely Task completion."
+              }
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 714080,
+                    "output_tokens": 4136,
+                    "reasoning_tokens": 3962,
+                    "cache_read_tokens": 94976,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3860828
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 179802,
+              "tool_time_ms": 19228,
+              "active_time_ms": 199030
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4398f1538046a042a38a6c394be2535ea56e03c70f9de677b91797a189d4d74d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1732,
+              "active_time_ms": 1732
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "5d4aca9d2d51bf7f688fa2ff8d603aea8f6c7e6b",
+        "node_visits": {
+          "verify_source_head": 1,
+          "wip_gate": 1,
+          "apply_task_verdict": 1,
+          "sync_task_list": 1,
+          "revise_task": 1,
+          "read_plan": 1,
+          "implement_next_task": 1,
+          "start": 1,
+          "resume_gate": 1,
+          "all_tasks_done": 1,
+          "preflight_sandbox": 1,
+          "todo_readable": 1,
+          "validate_task": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex\nindex 66cb73f..0e9b748 100644\n--- a/web/lib/memba/application.ex\n+++ b/web/lib/memba/application.ex\n@@ -25,6 +25,8 @@ defmodule Memba.Application do\n       Memba.Messaging.Projectors.MemberEmailDelivery,\n       Memba.Messaging.Projectors.MembaStaffEmailDelivery,\n       Memba.Messaging.Projectors.InboundEmailSource,\n+      # Membership activation waits for this policy's prior Club-stream work.\n+      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,\n       Memba.Membership.Projectors.Club,\n       Memba.Membership.Projectors.ClubInvitation,\n       Memba.Membership.Projectors.Membership,\n@@ -33,7 +35,6 @@ defmodule Memba.Application do\n       Memba.Membership.Projectors.Role,\n       Memba.Membership.Projectors.Person,\n       Memba.Membership.Policies.SystemGroupMembership,\n-      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,\n       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},\n       # Start a worker by calling: Memba.Worker.start_link(arg)\n       # {Memba.Worker, arg},\ndiff --git a/web/lib/memba/membership/projectors/membership.ex b/web/lib/memba/membership/projectors/membership.ex\nindex 8854262..59565dc 100644\n--- a/web/lib/memba/membership/projectors/membership.ex\n+++ b/web/lib/memba/membership/projectors/membership.ex\n@@ -1,6 +1,10 @@\n defmodule Memba.Membership.Projectors.Membership do\n   @moduledoc \"\"\"\n   Projects membership events into the Membership read model.\n+\n+  An added membership is not exposed as active until the follow-cleanup policy\n+  has handled all earlier facts on that Club stream. This keeps a rapid re-add\n+  from making a departed member eligible for stale private-group follows.\n   \"\"\"\n \n   use Commanded.Projections.Ecto,\n@@ -9,19 +13,25 @@ defmodule Memba.Membership.Projectors.Membership do\n     name: \"Memba.Membership.Projectors.Membership\",\n     consistency: :strong\n \n+  alias Commanded.Event.Handler\n+  alias Commanded.Registration\n+  alias Commanded.Subscriptions\n+  alias Memba.Membership.App\n   alias Memba.Membership.Events.ClubMemberAdded\n   alias Memba.Membership.Events.ClubMemberRemoved\n   alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded\n   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved\n+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows\n   alias Memba.Membership.Projections.Membership, as: MembershipProjection\n \n-  project(%ClubMemberAdded{} = event, fn multi ->\n-    project_member_added(multi, event)\n-  end)\n+  @impl Commanded.Event.Handler\n+  def handle(%ClubMemberAdded{} = event, metadata) do\n+    project_member_added_after_follow_cleanup(event, metadata)\n+  end\n \n-  project(%LegacyMemberAdded{} = event, fn multi ->\n-    project_member_added(multi, event)\n-  end)\n+  def handle(%LegacyMemberAdded{} = event, metadata) do\n+    project_member_added_after_follow_cleanup(event, metadata)\n+  end\n \n   project(%ClubMemberRemoved{} = event, fn multi ->\n     project_member_removed(multi, event)\n@@ -31,6 +41,38 @@ defmodule Memba.Membership.Projectors.Membership do\n     project_member_removed(multi, event)\n   end)\n \n+  defp project_member_added_after_follow_cleanup(event, metadata) do\n+    with :ok <- await_follow_cleanup(event.club_id, metadata.stream_version) do\n+      update_projection(event, metadata, fn multi ->\n+        project_member_added(multi, event)\n+      end)\n+    end\n+  end\n+\n+  defp await_follow_cleanup(club_id, stream_version) do\n+    handler_name = Handler.name(App, inspect(ClearRemovedGroupMemberFollows))\n+\n+    case Registration.whereis_name(App, handler_name) do\n+      pid when is_pid(pid) ->\n+        with :ok <-\n+               Subscriptions.wait_for(\n+                 App,\n+                 club_id,\n+                 stream_version,\n+                 consistency: [ClearRemovedGroupMemberFollows]\n+               ),\n+             ^pid <- Registration.whereis_name(App, handler_name) do\n+          :ok\n+        else\n+          :undefined -> {:error, :removed_group_member_follow_cleanup_unavailable}\n+          _replacement_pid -> {:error, :removed_group_member_follow_cleanup_restarted}\n+        end\n+\n+      :undefined ->\n+        {:error, :removed_group_member_follow_cleanup_unavailable}\n+    end\n+  end\n+\n   defp project_member_added(multi, event) do\n     Ecto.Multi.insert(multi, :membership_membership, %MembershipProjection{\n       membership_id: event.membership_id,\ndiff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\nindex d7cccad..eb35352 100644\n--- a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\n+++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\n@@ -1,6 +1,7 @@\n defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n   use Memba.EventSourcedCase, async: false\n \n+  alias Commanded.Commands.ExecutionResult\n   alias Commanded.EventStore\n   alias Commanded.Event.Handler\n   alias Commanded.Registration\n@@ -13,6 +14,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n   alias Memba.Membership.Commands.AssignClubRoleToMember\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreateGroup\n+  alias Memba.Membership.Commands.CreatePerson\n   alias Memba.Membership.Commands.RemoveClubMember\n   alias Memba.Membership.Events.GroupMemberRemoved\n   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows\n@@ -23,6 +25,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n   alias Memba.Messaging.App, as: MessagingApp\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Events.ConversationUnfollowed\n+  alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.Recipient\n \n   test \"is a strongly consistent Membership event handler that replays from origin\" do\n@@ -86,12 +89,22 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n     custom_group_id = Memba.ID.generate(:group)\n     conversation_id = Memba.ID.generate(:message)\n \n+    create_person(departing_person_id, \"Departing Member\", \"departing@example.com\")\n+    create_person(replacement_person_id, \"Replacement Member\", \"replacement@example.com\")\n     create_club(club_id)\n     add_member(club_id, departing_membership_id, departing_person_id)\n     add_member(club_id, replacement_membership_id, replacement_person_id)\n     assign_admin(club_id, replacement_membership_id, replacement_person_id)\n     create_custom_group(club_id, custom_group_id)\n     add_group_member(club_id, custom_group_id, departing_membership_id, departing_person_id)\n+\n+    add_group_member(\n+      club_id,\n+      custom_group_id,\n+      replacement_membership_id,\n+      replacement_person_id\n+    )\n+\n     create_followed_conversation(club_id, custom_group_id, conversation_id, departing_person_id)\n \n     clear_follows_handler = clear_follows_handler_pid()\n@@ -139,6 +152,28 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n                  )\n \n         assert Task.yield(readdition, 100) == nil\n+\n+        refute Membership.active_member_of_club?(club_id, departing_person_id)\n+\n+        reply_message_id = Memba.ID.generate(:message)\n+\n+        assert {:ok, %ExecutionResult{events: reply_events}} =\n+                 Messaging.post_message_reply(\n+                   %{\n+                     message_id: reply_message_id,\n+                     conversation_id: conversation_id,\n+                     sender_id: replacement_person_id,\n+                     body: \"Cleanup still has to finish.\"\n+                   },\n+                   returning: :execution_result,\n+                   consistency: :strong\n+                 )\n+\n+        refute Enum.any?(reply_events, fn\n+                 %EmailDeliveryCreated{recipient_id: ^departing_person_id} -> true\n+                 _event -> false\n+               end)\n+\n         readdition\n       after\n         :ok = :sys.resume(clear_follows_handler)\n@@ -147,6 +182,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n     assert :ok = Task.await(removal)\n     assert :ok = Task.await(readdition)\n \n+    assert Membership.active_member_of_club?(club_id, departing_person_id)\n     refute Messaging.following_conversation?(conversation_id, departing_person_id)\n \n     everyone_group_id = SystemGroups.everyone_group_id(club_id)\n@@ -182,6 +218,18 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n     assert count_unfollow_events(conversation_id, person_id) == 1\n   end\n \n+  defp create_person(person_id, name, email) do\n+    assert :ok =\n+             MembershipApp.dispatch(\n+               %CreatePerson{\n+                 person_id: person_id,\n+                 name: name,\n+                 email: email\n+               },\n+               consistency: :strong\n+             )\n+  end\n+\n   defp create_club(club_id) do\n     assert :ok =\n              MembershipApp.dispatch(\n",
+        "summary": {
+          "files_changed": 4,
+          "additions": 144,
+          "deletions": 34
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T00:52:44.688449454Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"Focused validation passes (4 policy tests and 31 replay/projector/public-API tests), and no feature files changed, but the ordering mechanism is not replay-safe. Membership.Projectors.Membership applies await_follow_cleanup/2 to LegacyMemberAdded using event.club_id with metadata.stream_version; historical MemberAdded events were stored on membership-ID streams, so this combines a version from one stream with another stream’s identity and can pass accidentally or time out, violating ADR 0024’s historical replay requirement. More generally, the projector depends on Commanded.Subscriptions’ volatile acknowledgement cache: an isolated Membership projection rebuild after those acknowledgements expire can repeatedly time out because the cleanup policy’s durable subscription will not replay already handled events. Use durable cleanup completion/ordering or otherwise preserve independent projection replay, and give legacy additions correct replay semantics. The strengthened race test also does not positively prove the re-add was committed before checking inactivity: after the two-event removal, SystemGroupMembership appends Everyone/Admin removal facts, so waiting for removal_target_version + 1 can complete before the rejoined ClubMemberAdded exists. Synchronize on that exact re-add event or assert aggregate state first, then verify projected inactivity and absence of reply delivery while cleanup is suspended.\"}",
+          "output.validate_task": {
+            "decision": "revise",
+            "task": "- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.",
+            "reason": "Focused validation passes (4 policy tests and 31 replay/projector/public-API tests), and no feature files changed, but the ordering mechanism is not replay-safe. Membership.Projectors.Membership applies await_follow_cleanup/2 to LegacyMemberAdded using event.club_id with metadata.stream_version; historical MemberAdded events were stored on membership-ID streams, so this combines a version from one stream with another stream’s identity and can pass accidentally or time out, violating ADR 0024’s historical replay requirement. More generally, the projector depends on Commanded.Subscriptions’ volatile acknowledgement cache: an isolated Membership projection rebuild after those acknowledgements expire can repeatedly time out because the cleanup policy’s durable subscription will not replay already handled events. Use durable cleanup completion/ordering or otherwise preserve independent projection replay, and give legacy additions correct replay semantics. The strengthened race test also does not positively prove the re-add was committed before checking inactivity: after the two-event removal, SystemGroupMembership appends Everyone/Admin removal facts, so waiting for removal_target_version + 1 can complete before the rejoined ClubMemberAdded exists. Synchronize on that exact re-add event or assert aggregate state first, then verify projected inactivity and absence of reply delivery while cleanup is suspended."
+          },
           "internal.run_id": "01M2EM4RDNFFXJQEEP5ACBQTR8",
           "response.implement_next_task": "Implemented task 012 and closed the concurrent rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updated [membership.ex](/workspace/memba/web/lib/memba/membership.ex:272) so both member removal and member addition use the same lifecycle consistency barrier.\n   - A concurrent `add_member/2` now waits for `ClearRemovedGroupMemberFollows` to process all earlier events on the Club stream before reporting the re-add complete.\n   - Preserved the existing removal-side guarantee that system-group changes and custom-group follow cleanup complete before `remove_member/2` returns.\n   - Strengthened [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:79) to suspend follow cleanup, begin removal, attempt a concurrent re-add, and prove the re-add cannot complete until cleanup resumes. The test then confirms the stale follow is gone, the former custom membership stays inactive, and only the new Everyone membership becomes active.\n\n3. Validation\n\n   - Red test before implementation: concurrent re-add returned `{:ok, :ok}` while follow cleanup was paused.\n   - Focused rapid-re-add test after implementation: 4 tests, 0 failures.\n   - Focused Membership regression set: 38 tests, 0 failures.\n   - Wider lifecycle/invitation regression set: 55 tests, 0 failures.\n   - `mix format --check-formatted` for both touched files: passed.\n   - `dev check --quick`: exited 0 with 1,319 tests and 0 failures. The exact final diff was subsequently rechecked with the focused 38-test run and formatting check.\n   - Full browser-inclusive `dev check` was not run in this ordinary per-task node; the workflow’s final deterministic gate owns that run.\n\n4. Todo state\n\n   The exact selected line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:14):\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002: uses Commanded event-handler consistency and persisted lifecycle events.\n   - ADR 0007: preserves the Membership/Messaging context boundary; no direct Messaging persistence access or projector side effects were introduced.\n   - ADR 0022: uses the domain-specific strongly consistent handler completion signal required for this cross-context consequence.\n   - ADR 0024: relies on ordered events from the existing Club consistency boundary, including concurrent removal and re-add commands; no competing aggregate or projection-backed write invariant was added.\n   - ADR 0011: rejoining continues to use a new caller-generated membership identity.",
-          "last_response": "Implemented the revision for task 012 and closed the observable rapid re-add race.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes",
+          "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"Focused validation passes (4 policy tests and 31 replay/projector/public-API t",
           "internal.retry_count.resume_gate": 0,
+          "thread.revise_task.current_node": "validate_task",
           "thread.sync_task_list.current_node": "todo_readable",
           "thread.todo_readable.current_node": "all_tasks_done",
           "graph.rankdir": "LR",
@@ -3508,13 +3857,13 @@
           "thread.implement_next_task.current_node": "validate_task",
           "thread.validate_task.current_node": "apply_task_verdict",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "current_node": "revise_task",
+          "current_node": "validate_task",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
-          "internal.thread_id": "apply_task_verdict",
+          "internal.thread_id": "revise_task",
           "outcome": "succeeded",
-          "last_stage": "revise_task",
+          "last_stage": "validate_task",
           "internal.retry_count.sync_task_list": 0,
-          "internal.node_visit_count": 1,
+          "internal.node_visit_count": 2,
           "thread.wip_gate.current_node": "preflight_sandbox",
           "graph.max_node_visits": "80",
           "thread.read_plan.current_node": "wip_gate",
@@ -3671,14 +4020,14 @@
           "validate_task": {
             "status": "succeeded",
             "context_updates": {
-              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"The focused test passes (4 tests, 0 failures), but it proves only that Membership.add_member/2 does not return while ClearRemovedGroupMemberFollows is suspended. membership.ex applies that handler consistency as a post-dispatch wait, so ClubMemberAdded is already committed; the test itself waits until SystemGroupMembership processes the re-add while follow cleanup remains paused. During that interval the Membership projection can expose the person as an active club member while the old ConversationFollow is still active, and Messaging.resolve_reply_recipients/3 selects active club members from that stale follower set. A concurrent reply can therefore include the rejoined former custom-group member before cleanup, contrary to the plan's ordering/privacy requirement. Prevent re-add activation from becoming observable until prior removal cleanup completes, or enforce equivalent protection at the recipient/action boundaries, and add a race test that checks active membership/reply eligibility while cleanup is suspended—not merely Task completion.\"}",
-              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"The focused test passes (4 tests, 0 failures), but it proves only that Members",
-              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"Focused validation passes (4 policy tests and 31 replay/projector/public-API tests), and no feature files changed, but the ordering mechanism is not replay-safe. Membership.Projectors.Membership applies await_follow_cleanup/2 to LegacyMemberAdded using event.club_id with metadata.stream_version; historical MemberAdded events were stored on membership-ID streams, so this combines a version from one stream with another stream’s identity and can pass accidentally or time out, violating ADR 0024’s historical replay requirement. More generally, the projector depends on Commanded.Subscriptions’ volatile acknowledgement cache: an isolated Membership projection rebuild after those acknowledgements expire can repeatedly time out because the cleanup policy’s durable subscription will not replay already handled events. Use durable cleanup completion/ordering or otherwise preserve independent projection replay, and give legacy additions correct replay semantics. The strengthened race test also does not positively prove the re-add was committed before checking inactivity: after the two-event removal, SystemGroupMembership appends Everyone/Admin removal facts, so waiting for removal_target_version + 1 can complete before the rejoined ClubMemberAdded exists. Synchronize on that exact re-add event or assert aggregate state first, then verify projected inactivity and absence of reply delivery while cleanup is suspended.\"}",
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.\",\"reason\":\"Focused validation passes (4 policy tests and 31 replay/projector/public-API t",
               "output.validate_task": {
                 "decision": "revise",
                 "task": "- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.",
-                "reason": "The focused test passes (4 tests, 0 failures), but it proves only that Membership.add_member/2 does not return while ClearRemovedGroupMemberFollows is suspended. membership.ex applies that handler consistency as a post-dispatch wait, so ClubMemberAdded is already committed; the test itself waits until SystemGroupMembership processes the re-add while follow cleanup remains paused. During that interval the Membership projection can expose the person as an active club member while the old ConversationFollow is still active, and Messaging.resolve_reply_recipients/3 selects active club members from that stale follower set. A concurrent reply can therefore include the rejoined former custom-group member before cleanup, contrary to the plan's ordering/privacy requirement. Prevent re-add activation from becoming observable until prior removal cleanup completes, or enforce equivalent protection at the recipient/action boundaries, and add a race test that checks active membership/reply eligibility while cleanup is suspended—not merely Task completion."
-              }
+                "reason": "Focused validation passes (4 policy tests and 31 replay/projector/public-API tests), and no feature files changed, but the ordering mechanism is not replay-safe. Membership.Projectors.Membership applies await_follow_cleanup/2 to LegacyMemberAdded using event.club_id with metadata.stream_version; historical MemberAdded events were stored on membership-ID streams, so this combines a version from one stream with another stream’s identity and can pass accidentally or time out, violating ADR 0024’s historical replay requirement. More generally, the projector depends on Commanded.Subscriptions’ volatile acknowledgement cache: an isolated Membership projection rebuild after those acknowledgements expire can repeatedly time out because the cleanup policy’s durable subscription will not replay already handled events. Use durable cleanup completion/ordering or otherwise preserve independent projection replay, and give legacy additions correct replay semantics. The strengthened race test also does not positively prove the re-add was committed before checking inactivity: after the two-event removal, SystemGroupMembership appends Everyone/Admin removal facts, so waiting for removal_target_version + 1 can complete before the rejoined ClubMemberAdded exists. Synchronize on that exact re-add event or assert aggregate state first, then verify projected inactivity and absence of reply delivery while cleanup is suspended."
+              },
+              "last_stage": "validate_task"
             },
             "notes": "Stage completed: validate_task",
             "usage": {
@@ -3689,10 +4038,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 714080,
-                    "output_tokens": 4136,
-                    "reasoning_tokens": 3962,
-                    "cache_read_tokens": 94976,
+                    "input_tokens": 728694,
+                    "output_tokens": 5415,
+                    "reasoning_tokens": 7620,
+                    "cache_read_tokens": 1057792,
                     "cache_write_tokens": 0
                   }
                 },
@@ -3700,13 +4049,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 3860828
+              "total_usd_micros": 4563416
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 179802,
-              "tool_time_ms": 19228,
-              "active_time_ms": 199030
+              "inference_time_ms": 321805,
+              "tool_time_ms": 250748,
+              "active_time_ms": 572553
             }
           },
           "apply_task_verdict": {
@@ -3767,12 +4116,12 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "apply_task_verdict",
         "node_visits": {
           "implement_next_task": 1,
           "apply_task_verdict": 1,
           "preflight_sandbox": 1,
-          "validate_task": 1,
+          "validate_task": 2,
           "all_tasks_done": 1,
           "resume_gate": 1,
           "verify_source_head": 1,
@@ -4024,6 +4373,210 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "validate_task@2": {
+      "first_event_seq": 1027,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T00:43:11.761043658Z",
+      "handler": "agent",
+      "graph_visit": 2,
+      "live_inference_ms": 315072,
+      "live_tool_ms": 250749,
+      "usage": {
+        "input_tokens": 1438139,
+        "output_tokens": 15025,
+        "total_tokens": 3938740,
+        "reasoning_tokens": 18120,
+        "cache_read_tokens": 2467456,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 9418773
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:e5dff77d-95b0-40fe-b9b9-079e2fc7e6ee",
+        "items": [
+          {
+            "id": "df2a14671239c6aa",
+            "status": "completed",
+            "order": 0,
+            "subject": "Confirm the candidate todo identity, plan constraints, repository state, and checkpoint history"
+          },
+          {
+            "id": "d19a6de61bbef8a3",
+            "status": "completed",
+            "order": 1,
+            "subject": "Inspect the complete task diff and relevant architecture/reference guidance"
+          },
+          {
+            "id": "e67ace3a5050c794",
+            "status": "completed",
+            "order": 2,
+            "subject": "Evaluate implementation and tests against the rapid re-add privacy race"
+          },
+          {
+            "id": "16d186444f0447b3",
+            "status": "completed",
+            "order": 3,
+            "subject": "Run focused read-only validation if needed and return the JSON verdict"
+          }
+        ]
+      },
+      "subagents": [
+        {
+          "agent_id": "e26eb67e",
+          "depth": 1,
+          "task": "Independently review candidate todo task 012 in /workspace/memba without editing files. Focus on the full diff from d234c79^ through HEAD, especially the revised Membership projector waiting on ClearRemovedGroupMemberFollows, runtime/replay/deadlock/failure semantics, and whether the race test truly proves privacy. Read relevant code and ADRs. Return an accept/revise recommendation with concrete file evidence; do not modify anything.",
+          "status": {
+            "kind": "completed",
+            "success": true,
+            "turns_used": 44
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 95905,
+        "usage_percent": 35.25919117647059,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-14T00:52:37.967366790Z",
+        "event_seq": 1624,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2714,
+            "usage_percent": 0.9977941176470588
+          },
+          {
+            "category": "tools",
+            "tokens": 833,
+            "usage_percent": 0.30625
+          },
+          {
+            "category": "memory",
+            "tokens": 376,
+            "usage_percent": 0.13823529411764707
+          },
+          {
+            "category": "conversation",
+            "tokens": 91975,
+            "usage_percent": 33.814338235294116
+          },
+          {
+            "category": "other",
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
+          }
+        ],
+        "warnings": []
+      },
+      "inference": {
+        "session_id": "e5dff77d-95b0-40fe-b9b9-079e2fc7e6ee",
+        "started_at": "2026-09-14T00:52:37.969363342Z",
+        "requested_model": {
+          "provider": "openai",
+          "model_id": "gpt-5.6-sol"
+        },
+        "first_output_at": "2026-09-14T00:52:39.447590883Z",
+        "first_output_kind": "text",
+        "retries": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "verify_source_head@1": {
       "first_event_seq": 25,
@@ -4510,7 +5063,12 @@
       "first_event_seq": 668,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: revise_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T00:43:07.991133166Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -4525,8 +5083,12 @@
       "started_at": "2026-09-14T00:31:33.792215275Z",
       "handler": "agent",
       "graph_visit": 1,
-      "live_inference_ms": 464540,
-      "live_tool_ms": 229198,
+      "timing": {
+        "wall_time_ms": 694198,
+        "inference_time_ms": 464576,
+        "tool_time_ms": 229207,
+        "active_time_ms": 693783
+      },
       "usage": {
         "input_tokens": 2535965,
         "output_tokens": 9027,
@@ -4655,7 +5217,7 @@
         "warnings": []
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "wip_gate@1": {
       "first_event_seq": 45,
