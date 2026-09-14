@@ -145,7 +145,19 @@ defmodule Memba.Membership.Club do
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
-         :ok <- ensure_group_exists(club, command.group_id) do
+         :ok <- ensure_custom_group(club, command.group_id),
+         :ok <-
+           authorize_custom_group_admission_actor(
+             club,
+             command.group_id,
+             command.actor_person_id
+           ),
+         :ok <-
+           ensure_active_custom_group_target(
+             club,
+             command.membership_id,
+             command.person_id
+           ) do
       add_custom_group_member_decision(club, command)
     end
   end
@@ -862,6 +874,65 @@ defmodule Memba.Membership.Club do
     end
   end
 
+  defp authorize_custom_group_admission_actor(
+         %__MODULE__{} = club,
+         group_id,
+         actor_person_id
+       ) do
+    authorized? =
+      Enum.any?(club.active_memberships, fn
+        {membership_id, ^actor_person_id} ->
+          active_group_membership?(club, group_id, membership_id, actor_person_id) or
+            membership_has_permission?(
+              club,
+              membership_id,
+              actor_person_id,
+              Permissions.club_manage_members()
+            )
+
+        {_membership_id, _other_person_id} ->
+          false
+      end)
+
+    if authorized?, do: :ok, else: {:error, :unauthorized}
+  end
+
+  defp active_group_membership?(%__MODULE__{} = club, group_id, membership_id, person_id) do
+    case Map.get(club.group_memberships, group_membership_key(group_id, membership_id)) do
+      %{active: true, person_id: ^person_id} -> true
+      _missing_inactive_or_mismatched -> false
+    end
+  end
+
+  defp membership_has_permission?(
+         %__MODULE__{} = club,
+         membership_id,
+         person_id,
+         permission
+       ) do
+    Enum.any?(club.role_assignments, fn
+      {{^membership_id, role_id}, %{person_id: ^person_id}} ->
+        club.role_permissions
+        |> Map.get(role_id, MapSet.new())
+        |> MapSet.member?(permission)
+
+      {_assignment_key, _assignment} ->
+        false
+    end)
+  end
+
+  defp ensure_active_custom_group_target(
+         %__MODULE__{} = club,
+         membership_id,
+         person_id
+       ) do
+    case Map.fetch(club.active_memberships, membership_id) do
+      {:ok, ^person_id} -> :ok
+      {:ok, _different_person_id} -> {:error, :membership_person_mismatch}
+      :error -> {:error, :member_not_active}
+    end
+  end
+
   defp ensure_group_name_available(%__MODULE__{} = club, group_id, name) do
     case Map.fetch(club.group_name_keys, GroupName.uniqueness_key(name)) do
       :error -> :ok
@@ -972,6 +1043,16 @@ defmodule Memba.Membership.Club do
       :ok
     else
       {:error, :group_not_defined}
+    end
+  end
+
+  defp ensure_custom_group(%__MODULE__{} = club, group_id) do
+    with :ok <- ensure_group_exists(club, group_id),
+         true <- SystemGroups.custom_group?(%{club_id: club.club_id, group_id: group_id}) do
+      :ok
+    else
+      false -> {:error, :system_group_not_allowed}
+      {:error, _reason} = error -> error
     end
   end
 

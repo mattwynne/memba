@@ -88,8 +88,11 @@ defmodule Memba.Membership do
 
   The caller supplies the Club and group identities, the target
   membership/person pair, and the authenticated actor's person identity. The
-  application service translates that request into an actor-bearing command;
-  the Club aggregate owns the authoritative admission decision.
+  application service translates that request into an actor-bearing command.
+  The Club aggregate authoritatively requires an active target and an active
+  actor who either belongs to the custom group or has its club's
+  `club.manage_members` permission. System groups are not writable through this
+  use case.
   """
   def add_custom_group_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
