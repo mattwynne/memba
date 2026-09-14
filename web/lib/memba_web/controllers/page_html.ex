@@ -195,6 +195,11 @@ defmodule MembaWeb.PageHTML do
   defp member_section_path(section, selected_club, _source, nil),
     do: ClubSite.url(selected_club, "/#{section}")
 
+  defp member_new_group_path(_selected_club, "host"), do: ~p"/groups/new"
+
+  defp member_new_group_path(selected_club, _source),
+    do: ClubSite.url(selected_club, ~p"/groups/new")
+
   defp member_compose_path(selected_club, source, group_id) do
     selected_club
     |> member_compose_path(source)
