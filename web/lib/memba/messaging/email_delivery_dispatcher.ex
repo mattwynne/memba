@@ -21,10 +21,16 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   alias Memba.Messaging.EmailDeliveryStatus
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.Events.EmailDeliveryCreated
+
+  alias Memba.Messaging.Projectors.ConversationGroupAccess,
+    as: ConversationGroupAccessProjector
+
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+  alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
+  alias Memba.ProjectionBarrier
   alias Memba.ReadModelChanges
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -34,6 +40,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @dispatching_status EmailDeliveryStatus.dispatching()
   @sent_status EmailDeliveryStatus.sent()
   @failed_status EmailDeliveryStatus.failed()
+  @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
+  @projection_timeout 5_000
 
   @doc """
   Atomically claim one pending email delivery for provider dispatch.
@@ -144,7 +152,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   committed read-model state: the `EmailDelivery` projection supplies
   per-recipient delivery data and the `Message` projection supplies message,
   club, and sender IDs. Membership's public query API enriches the request with
-  sender and club display context.
+  sender and club display context. Immediately before provider handoff, the
+  recipient must still have read access to the conversation; a delivery resolved
+  before membership ended is failed without exposing its private content. The
+  final stable authorization read is the handoff boundary: a departure ordered
+  after it has raced with a provider call that has already begun.
   """
   def deliver_to_provider(work)
 
@@ -350,7 +362,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp delivery_error_name(reason), do: inspect(reason, limit: 10, printable_limit: 200)
 
   defp email_delivery_request(%EmailDeliveryProjection{} = delivery) do
-    with %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
+    with :ok <- await_delivery_context_projections(),
+         %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
          {:ok, channel} <- request_channel(delivery.channel),
          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
       club = Membership.get_club(message.club_id)
@@ -393,6 +406,69 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     end
   end
 
+  defp await_delivery_context_projections do
+    case ProjectionBarrier.await(@delivery_context_projectors, timeout: @projection_timeout) do
+      {:ok, _result} -> :ok
+      {:error, :timeout, _result} -> {:error, :delivery_context_projection_timeout}
+    end
+  end
+
+  defp await_recipient_access_projections(checkpoint, timeout) do
+    with {:ok, _result} <-
+           ProjectionBarrier.await(@delivery_context_projectors,
+             checkpoint: checkpoint,
+             timeout: timeout
+           ),
+         {:ok, _result} <-
+           Membership.await_group_access_projections(
+             checkpoint: checkpoint,
+             timeout: timeout
+           ) do
+      :ok
+    else
+      {:error, :timeout, _result} -> {:error, :recipient_access_projection_timeout}
+    end
+  end
+
+  defp authorize_recipient_for_handoff(request, delivery) do
+    deadline = System.monotonic_time(:millisecond) + @projection_timeout
+    authorize_recipient_for_handoff(request, delivery, deadline)
+  end
+
+  defp authorize_recipient_for_handoff(request, delivery, deadline) do
+    checkpoint = ProjectionBarrier.current_checkpoint()
+    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    if timeout == 0 do
+      {:error, :recipient_access_projection_timeout}
+    else
+      with :ok <- await_recipient_access_projections(checkpoint, timeout),
+           :ok <- authorize_recipient_access(request, delivery) do
+        if ProjectionBarrier.current_checkpoint() == checkpoint do
+          :ok
+        else
+          authorize_recipient_for_handoff(request, delivery, deadline)
+        end
+      end
+    end
+  end
+
+  defp authorize_recipient_access(
+         %EmailDeliveryRequest{} = request,
+         %EmailDeliveryProjection{} = delivery
+       ) do
+    if Memba.Messaging.member_has_conversation_access?(
+         request.message_id,
+         request.club_id,
+         delivery.recipient_id,
+         :read
+       ) do
+      :ok
+    else
+      {:error, :recipient_access_ended}
+    end
+  end
+
   defp request_channel("email"), do: {:ok, :email}
   defp request_channel(channel), do: {:error, {:unsupported_delivery_channel, channel}}
 
@@ -400,7 +476,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          %EmailDeliveryRequest{} = request,
          %EmailDeliveryProjection{} = delivery
        ) do
-    EmailDeliveryProvider.deliver(request)
+    with :ok <- authorize_recipient_for_handoff(request, delivery) do
+      EmailDeliveryProvider.deliver(request)
+    end
   rescue
     exception ->
       stacktrace = __STACKTRACE__

@@ -15,6 +15,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryRequest
@@ -22,6 +23,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+  alias Memba.Messaging.Projections.Message, as: MessageProjection
 
   @email_delivery_replay_projectors [
     Memba.Messaging.Projectors.EmailDelivery
@@ -299,6 +301,113 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
     assert Messaging.group_has_conversation_access?(message_id, trips_group_id, :write)
     assert [%{message_id: ^message_id}] = Messaging.list_conversations_for_group(trips_group_id)
+  end
+
+  test "does not hand private email to a departed member who has rejoined only Everyone" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice Admin", email: "alice@example.com")
+    carol = create_person(name: "Carol Member", email: "carol@example.com")
+
+    alice_membership_id = add_member(club_id, alice.person_id)
+    carol_membership_id = add_member(club_id, carol.person_id)
+    board_group_id = create_group(club_id, "Board")
+
+    add_group_member(club_id, board_group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)
+
+    private_message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: private_message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Private Board topic",
+                 body: "Only current Board members should receive this."
+               },
+               consistency: :strong
+             )
+
+    assert [
+             %EmailDeliveryProjection{recipient_id: alice_id},
+             %EmailDeliveryProjection{
+               delivery_id: carol_delivery_id,
+               recipient_id: carol_id,
+               status: "pending"
+             }
+           ] = pending_deliveries_for_message(private_message_id)
+
+    assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
+
+    assert :ok =
+             Memba.Membership.remove_member(
+               %{membership_id: carol_membership_id},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.add_member(
+               %{
+                 membership_id: Memba.ID.generate(:membership),
+                 club_id: club_id,
+                 person_id: carol.person_id
+               },
+               consistency: :strong
+             )
+
+    assert Memba.Membership.active_member_of_club?(club_id, carol.person_id)
+    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+
+    departed_reply_id = Memba.ID.generate(:message)
+
+    assert {:error, :not_current_member} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: departed_reply_id,
+                 conversation_id: private_message_id,
+                 sender_id: carol.person_id,
+                 body: "Rejoining the club must not restore this private action."
+               },
+               consistency: :strong
+             )
+
+    refute Repo.get(MessageProjection, departed_reply_id)
+
+    assert [
+             %EmailDeliveryProjection{recipient_id: ^alice_id, status: "sent"},
+             %EmailDeliveryProjection{
+               delivery_id: ^carol_delivery_id,
+               recipient_id: ^carol_id,
+               status: "failed",
+               latest_error: "recipient_access_ended",
+               attempt_count: 1
+             }
+           ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+    assert [%EmailDeliveryRequest{recipient_id: ^alice_id}] = Fake.deliveries()
+
+    later_message_id = Memba.ID.generate(:message)
+
+    assert {:ok, %ExecutionResult{events: later_events}} =
+             Messaging.send_club_message(
+               %{
+                 message_id: later_message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Later Board topic",
+                 body: "Carol should not be resolved as a recipient."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^alice_id}, &1))
+    refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
   end
 
   test "rejects an unknown audience group before dispatching the message command" do

@@ -32,6 +32,8 @@ defmodule Memba.Membership do
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroups
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
@@ -44,9 +46,11 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
+  alias Memba.ProjectionBarrier
   alias Memba.Repo
 
   @person_email_address_verification_token_ttl_seconds 15 * 60
+  @group_access_projectors [GroupMembershipProjector, MembershipProjector]
 
   @doc """
   Create a club through the Membership Commanded application.
@@ -1340,6 +1344,17 @@ defmodule Memba.Membership do
     else
       :error -> false
     end
+  end
+
+  @doc """
+  Wait until the Membership read models used by `active_member_of_group?/2`
+  have processed every event committed before this call.
+
+  Privacy-sensitive consumers can use this before checking group membership so
+  an asynchronous projection cannot briefly preserve access after departure.
+  """
+  def await_group_access_projections(opts \\ []) when is_list(opts) do
+    ProjectionBarrier.await(@group_access_projectors, opts)
   end
 
   @doc """

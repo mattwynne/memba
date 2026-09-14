@@ -3,6 +3,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
   import ExUnit.CaptureLog
 
+  alias Memba.Membership.Projections.Group, as: GroupProjection
+  alias Memba.Membership.Projections.GroupMembership
+  alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Person
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Raising
@@ -16,6 +21,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
+  alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.ReadModelChanges
@@ -499,6 +505,32 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
     end
 
+    test "does not hand off a pending delivery after the recipient's access ends" do
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+
+      {1, nil} =
+        Repo.update_all(
+          from(group_membership in GroupMembership,
+            where: group_membership.person_id == ^delivery.recipient_id
+          ),
+          set: [active: false]
+        )
+
+      assert [
+               %EmailDeliveryProjection{
+                 delivery_id: delivery_id,
+                 status: "failed",
+                 attempt_count: 1,
+                 latest_error: "recipient_access_ended",
+                 sent_at: nil,
+                 failed_at: %DateTime{}
+               }
+             ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert delivery_id == delivery.delivery_id
+      assert Fake.deliveries() == []
+    end
+
     test "marks a claimed delivery as failed and persists diagnostics when the provider errors" do
       Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
 
@@ -756,7 +788,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
     delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
     message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
 
-    Repo.insert!(%EmailDeliveryProjection{
+    %EmailDeliveryProjection{
       delivery_id: delivery_id,
       message_id: message_id,
       outbound_message_id:
@@ -778,7 +810,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       failed_at: Keyword.get(attrs, :failed_at),
       inserted_at: Keyword.get(attrs, :inserted_at, now),
       updated_at: Keyword.get(attrs, :updated_at, now)
-    })
+    }
+    |> Repo.insert!()
+    |> ensure_delivery_recipient_access!()
   end
 
   defp insert_dispatchable_delivery!(attrs) when is_list(attrs) do
@@ -836,6 +870,101 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       inserted_at: Keyword.get(attrs, :inserted_at, now),
       updated_at: Keyword.get(attrs, :updated_at, now)
     })
+  end
+
+  defp ensure_delivery_recipient_access!(%EmailDeliveryProjection{} = delivery) do
+    case Repo.get(MessageProjection, delivery.message_id) do
+      %MessageProjection{} = message ->
+        group_id = ensure_conversation_access!(message)
+        membership_id = ensure_active_membership!(message.club_id, delivery)
+        ensure_active_group_membership!(message.club_id, group_id, membership_id, delivery)
+        delivery
+
+      nil ->
+        delivery
+    end
+  end
+
+  defp ensure_conversation_access!(%MessageProjection{} = message) do
+    case Repo.get_by(ConversationGroupAccess, conversation_id: message.conversation_id) do
+      %ConversationGroupAccess{group_id: group_id} ->
+        group_id
+
+      nil ->
+        group_id = SystemGroups.everyone_group_id(message.club_id)
+
+        if is_nil(Repo.get(GroupProjection, group_id)) do
+          Repo.insert!(%GroupProjection{
+            club_id: message.club_id,
+            group_id: group_id,
+            email_slug: "everyone",
+            group_key: SystemGroups.everyone_key(),
+            name: SystemGroups.everyone_name(),
+            name_uniqueness_key: "everyone"
+          })
+        end
+
+        Repo.insert!(%ConversationGroupAccess{
+          conversation_id: message.conversation_id,
+          club_id: message.club_id,
+          group_id: group_id,
+          access_level: "write"
+        })
+
+        group_id
+    end
+  end
+
+  defp ensure_active_membership!(club_id, %EmailDeliveryProjection{} = delivery) do
+    if is_nil(Repo.get(Person, delivery.recipient_id)) do
+      Repo.insert!(%Person{
+        person_id: delivery.recipient_id,
+        name: delivery.recipient_name,
+        email: delivery.recipient_address
+      })
+    end
+
+    case Repo.get_by(Membership, club_id: club_id, person_id: delivery.recipient_id) do
+      %Membership{membership_id: membership_id} ->
+        membership_id
+
+      nil ->
+        membership_id = Memba.ID.generate(:membership)
+
+        Repo.insert!(%Membership{
+          membership_id: membership_id,
+          club_id: club_id,
+          person_id: delivery.recipient_id,
+          active: true
+        })
+
+        membership_id
+    end
+  end
+
+  defp ensure_active_group_membership!(
+         club_id,
+         group_id,
+         membership_id,
+         %EmailDeliveryProjection{} = delivery
+       ) do
+    case Repo.get_by(GroupMembership,
+           group_id: group_id,
+           membership_id: membership_id,
+           person_id: delivery.recipient_id
+         ) do
+      %GroupMembership{} ->
+        :ok
+
+      nil ->
+        Repo.insert!(%GroupMembership{
+          club_id: club_id,
+          group_id: group_id,
+          membership_id: membership_id,
+          person_id: delivery.recipient_id,
+          active: true
+        })
+    end
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
