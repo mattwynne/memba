@@ -14,7 +14,7 @@
 - [x] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.
 - [x] 013 Existing last-member/last-Admin invariants stay intact.
 - [x] 014 Add the new-group LiveView/form using shared inputs and route helpers.
-- [ ] 015 Use server-side live validation/preview, rechecking at submit, with accessible field associations.
+- [x] 015 Use server-side live validation/preview, rechecking at submit, with accessible field associations.
 - [ ] 016 Reuse normal pending/success and generic technical-error treatment.
 - [ ] 017 Extend group queries/routing only where the existing generic paths need it.
 - [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.
