@@ -141,6 +141,7 @@ defmodule MembaWeb.MemberComponents do
   attr :rows, :list, required: true
   attr :active_member_count, :integer, required: true
   attr :current_member, :map, default: nil
+  attr :group_name, :string, required: true
 
   def member_list(assigns) do
     ~H"""
@@ -150,6 +151,10 @@ defmodule MembaWeb.MemberComponents do
       data-active-members-state={active_members_state(@active_member_count)}
       class="member-list mt-4"
     >
+      <p :if={@rows == []} id="active-members-empty-state" class="empty-members">
+        <strong>{@group_name} has no members.</strong>
+        Its conversations and emails are kept; whoever you add next will see them all.
+      </p>
       <.member_row :for={row <- @rows} row={row} current_member={@current_member} />
     </div>
     """
@@ -201,6 +206,7 @@ defmodule MembaWeb.MemberComponents do
   attr :group_name, :string, required: true
   attr :candidates, :list, required: true
   attr :query, :string, default: ""
+  attr :search_form, Phoenix.HTML.Form, required: true
 
   def custom_group_member_picker(assigns) do
     assigns =
@@ -211,6 +217,8 @@ defmodule MembaWeb.MemberComponents do
       id="custom-group-member-picker"
       class="picker"
       aria-labelledby="custom-group-member-picker-title"
+      phx-window-keydown={close_custom_group_member_picker()}
+      phx-key="Escape"
     >
       <div class="picker__head">
         <div>
@@ -228,24 +236,29 @@ defmodule MembaWeb.MemberComponents do
           type="button"
           variant="ghost"
           size="sm"
-          phx-click="close_custom_group_member_picker"
+          phx-click={close_custom_group_member_picker()}
         >
           Close
         </.button>
       </div>
 
-      <.input
-        id="custom-group-member-search"
-        name="query"
-        type="search"
-        value={@query}
-        class="input mt-3 w-full"
-        placeholder="Search club members…"
-        autocomplete="off"
-        aria-label="Search club members"
-        phx-keyup="filter_custom_group_member_candidates"
-        phx-debounce="150"
-      />
+      <.form
+        for={@search_form}
+        id="custom-group-member-search-form"
+        phx-change="filter_custom_group_member_candidates"
+      >
+        <.input
+          field={@search_form[:query]}
+          id="custom-group-member-search"
+          type="search"
+          class="input mt-3 w-full"
+          placeholder="Search club members…"
+          autocomplete="off"
+          aria-label="Search club members"
+          phx-debounce="150"
+          phx-mounted={JS.focus()}
+        />
+      </.form>
 
       <div
         :if={@visible_candidates != []}
@@ -275,8 +288,9 @@ defmodule MembaWeb.MemberComponents do
           <.button
             id={"custom-group-member-candidate-add-#{candidate.id}"}
             type="button"
-            variant="secondary"
+            variant="primary"
             size="sm"
+            class="btn-outline"
             data-custom-group-member-action="add"
             data-membership-id={candidate.membership_id}
             data-person-id={candidate.id}
@@ -334,11 +348,15 @@ defmodule MembaWeb.MemberComponents do
     """
   end
 
-  defp active_members_state(active_member_count) when active_member_count <= 1 do
-    "first-member"
-  end
+  defp active_members_state(0), do: "empty"
+  defp active_members_state(1), do: "first-member"
 
   defp active_members_state(_active_member_count), do: "active-members"
+
+  defp close_custom_group_member_picker do
+    JS.push("close_custom_group_member_picker")
+    |> JS.focus(to: "#member-section-action-add-group-member")
+  end
 
   defp participant_avatar_stack_visible?(participants, additional_count) do
     participants != [] or additional_count > 0

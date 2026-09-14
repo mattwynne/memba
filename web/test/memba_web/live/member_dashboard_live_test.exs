@@ -1035,14 +1035,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     view
-    |> element("#custom-group-member-search")
-    |> render_keyup(%{"value" => "nobody"})
+    |> form("#custom-group-member-search-form", member_search: %{query: "nobody"})
+    |> render_change()
 
     assert has_element?(
              view,
              "#custom-group-member-picker-empty",
              "No active club members match your search."
            )
+
+    view
+    |> element("#custom-group-member-picker")
+    |> render_keydown(%{"key" => "Escape"})
+
+    refute has_element?(view, "#custom-group-member-picker")
+    assert has_element?(view, "#member-section-action-add-group-member[aria-expanded='false']")
+
+    view
+    |> element("#member-section-action-add-group-member")
+    |> render_click()
 
     view
     |> element("#custom-group-member-picker-close")
@@ -3000,6 +3011,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       custom_group_member_candidates: [],
       custom_group_member_picker_open?: false,
       custom_group_member_picker_query: "",
+      custom_group_member_picker_form:
+        Phoenix.Component.to_form(%{"query" => ""}, as: :member_search),
       active_section: "conversations",
       club_id_source: "host",
       members: [],

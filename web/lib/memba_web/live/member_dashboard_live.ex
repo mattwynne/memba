@@ -46,7 +46,7 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:selected_group_route_id, selected_group_id)
          |> assign(:active_section, "conversations")
          |> assign(:custom_group_member_picker_open?, false)
-         |> assign(:custom_group_member_picker_query, "")
+         |> assign_custom_group_member_picker_query("")
          |> assign(dashboard_assigns)}
 
       {:error, :forbidden} ->
@@ -64,7 +64,7 @@ defmodule MembaWeb.MemberDashboardLive do
     socket =
       socket
       |> assign(:custom_group_member_picker_open?, false)
-      |> assign(:custom_group_member_picker_query, "")
+      |> assign_custom_group_member_picker_query("")
       |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
 
     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
@@ -79,7 +79,7 @@ defmodule MembaWeb.MemberDashboardLive do
     {:noreply,
      socket
      |> assign(:custom_group_member_picker_open?, true)
-     |> assign(:custom_group_member_picker_query, "")}
+     |> assign_custom_group_member_picker_query("")}
   end
 
   def handle_event("open_custom_group_member_picker", _params, socket), do: {:noreply, socket}
@@ -88,16 +88,16 @@ defmodule MembaWeb.MemberDashboardLive do
     {:noreply,
      socket
      |> assign(:custom_group_member_picker_open?, false)
-     |> assign(:custom_group_member_picker_query, "")}
+     |> assign_custom_group_member_picker_query("")}
   end
 
   def handle_event(
         "filter_custom_group_member_candidates",
-        %{"value" => query},
+        %{"member_search" => %{"query" => query}},
         %{assigns: %{custom_group_member_picker_open?: true}} = socket
       )
       when is_binary(query) do
-    {:noreply, assign(socket, :custom_group_member_picker_query, query)}
+    {:noreply, assign_custom_group_member_picker_query(socket, query)}
   end
 
   def handle_event("filter_custom_group_member_candidates", _params, socket),
@@ -172,6 +172,12 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp active_section(:members), do: "members"
   defp active_section(_live_action), do: "conversations"
+
+  defp assign_custom_group_member_picker_query(socket, query) do
+    socket
+    |> assign(:custom_group_member_picker_query, query)
+    |> assign(:custom_group_member_picker_form, to_form(%{"query" => query}, as: :member_search))
+  end
 
   defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
   defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"

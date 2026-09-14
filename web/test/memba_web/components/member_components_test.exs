@@ -7,6 +7,31 @@ defmodule MembaWeb.MemberComponentsTest do
   alias MembaWeb.MemberComponents
 
   describe "member_list/1" do
+    test "renders the designed empty custom-group state for zero members" do
+      html =
+        render_member_list(
+          rows: [],
+          active_member_count: 0,
+          current_member: %{id: Memba.ID.generate(:person), name: "Dana Diaz"},
+          group_name: "Board"
+        )
+
+      assert_selector(
+        html,
+        "#active-members-list[data-active-member-count='0'][data-active-members-state='empty']"
+      )
+
+      assert_text(html, "#active-members-empty-state", "Board has no members.")
+
+      assert_text(
+        html,
+        "#active-members-empty-state",
+        "Its conversations and emails are kept; whoever you add next will see them all."
+      )
+
+      refute_selector(html, "[data-testid='club-member-row']")
+    end
+
     test "renders a single current member row with roles and no first-member banner" do
       member_id = Memba.ID.generate(:person)
 
@@ -105,7 +130,8 @@ defmodule MembaWeb.MemberComponentsTest do
               roles: ["Admin"]
             }
           ],
-          query: "dan"
+          query: "dan",
+          search_form: to_form(%{"query" => "dan"}, as: :member_search)
         })
 
       assert_selector(
@@ -117,8 +143,15 @@ defmodule MembaWeb.MemberComponentsTest do
 
       assert_selector(
         html,
-        "#custom-group-member-search[type='search'][name='query'][value='dan']" <>
-          "[phx-keyup='filter_custom_group_member_candidates']"
+        "#custom-group-member-search-form[phx-change='filter_custom_group_member_candidates'] " <>
+          "#custom-group-member-search[type='search'][name='member_search[query]'][value='dan']"
+      )
+
+      refute_selector(html, "#custom-group-member-search[phx-keyup]")
+
+      assert_selector(
+        html,
+        "#custom-group-member-picker[phx-window-keydown][phx-key='Escape']"
       )
 
       assert_selector(
@@ -142,12 +175,12 @@ defmodule MembaWeb.MemberComponentsTest do
       assert_selector(
         html,
         "#custom-group-member-candidate-add-#{dana_person_id}" <>
-          "[data-custom-group-member-action='add']"
+          ".btn-outline.btn-primary[data-custom-group-member-action='add']"
       )
 
       assert_selector(
         html,
-        "#custom-group-member-picker-close[phx-click='close_custom_group_member_picker']"
+        "#custom-group-member-picker-close[phx-click]"
       )
     end
 
@@ -157,7 +190,8 @@ defmodule MembaWeb.MemberComponentsTest do
           club_name: "Alpine Club",
           group_name: "Board",
           candidates: [],
-          query: ""
+          query: "",
+          search_form: to_form(%{"query" => ""}, as: :member_search)
         })
 
       assert_text(
@@ -293,7 +327,10 @@ defmodule MembaWeb.MemberComponentsTest do
   end
 
   defp render_member_list(assigns) do
-    assigns = Map.new(assigns)
+    assigns =
+      assigns
+      |> Map.new()
+      |> Map.put_new(:group_name, "Board")
 
     render_component(&MemberComponents.member_list/1, assigns)
   end
