@@ -10,6 +10,7 @@ Production release: Fly release `v283`, deployed at 2026-09-14 17:53 UTC from Gi
 
 Related work:
 
+- [Proposed repair runbook](2026-09-14-custom-group-creation-repair-runbook.md)
 - [Iteration 027: Membership Administrator role foundation](../iterations/027-membership-administrator-role/plan.md)
 - [Iteration 059: Populated clubs always have an Admin](../iterations/059-populated-clubs-always-have-an-admin/plan.md)
 - [Iteration 059 production cutover check](../iterations/059-populated-clubs-always-have-an-admin/cutover-check.md)
