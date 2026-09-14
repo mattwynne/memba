@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T04:37:11.222670242Z",
-  "last_event_at": "2026-09-14T05:58:59.694362636Z",
+  "last_event_at": "2026-09-14T06:13:40.725987854Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -4492,9 +4492,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2885,
       "checkpoint": {
-        "timestamp": "2026-09-14T05:58:59.702036362Z",
+        "timestamp": "2026-09-14T05:59:03.702735743Z",
         "current_node": "revise_task",
         "completed_nodes": [
           "start",
@@ -4516,9 +4516,361 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.revise_task": 0,
+          "internal.retry_count.todo_readable": 0,
+          "internal.retry_count.wip_gate": 0,
+          "last_response": "Implemented the task 019 revision and left it unchecked for independent validation.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; ",
+          "failure_signature": "",
+          "internal.thread_id": "apply_task_verdict",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "command.output": "blob://sha256/bc9bd1e78ddad344537f68f998e291be67df6c685562a3e8e07891dfbc4fdbbc",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.node_visit_count": 2,
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.run_id": "01M2F37AFX3WZ6KSY3SJR0NKAJ",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.max_node_visits": "80",
+          "output.validate_task": {
+            "decision": "revise",
+            "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
+            "reason": "The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race."
+          },
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.read_plan": 0,
+          "failure_class": "",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "internal.work_dir": "/workspace/memba",
+          "preferred_label": "revise",
+          "internal.retry_count.resume_gate": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.apply_task_verdict.current_node": "revise_task",
+          "internal.retry_count.apply_task_verdict": 0,
+          "internal.fidelity": "summary:high",
+          "thread.start.current_node": "verify_source_head",
+          "internal.retry_count.validate_task": 0,
+          "graph.rankdir": "LR",
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.implement_next_task": "Implemented the two requested task 019 recovery fixes. The task remains unchecked for independent validation.\n\n1. Selected todo\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\nSee [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:21).\n\n2. Changes made\n\n- [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:198) now issues an enabled-only pending-work nudge on startup. Pending deliveries deferred because authorization projections timed out therefore recover after dispatcher or application restart.\n- The startup path uses the existing claim → stable recipient authorization → provider handoff flow. The provider-handoff linearization point was not moved or weakened.\n- [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:310) now treats only terminal accepted/rejected receipts as completed duplicates. A duplicate receipt whose aggregate status remains `nil` resumes destination resolution, current authorization, posting or rejection.\n- Authorization stability accepts a zero timeout so the timeout/retry regression can deterministically create the exact receipt-only state without scheduling races.\n- [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:441) proves that a projection-timeout deferral survives dispatcher termination and is reclaimed by the restarted dispatcher’s startup nudge.\n- [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:1991) proves the first provider call records `InboundEmailReceived` and times out, then the retry completes exactly one message and one acceptance instead of returning a `nil`-status duplicate.\n- [show_test.exs](/workspace/memba/web/test/memba_web/live/member_message_live/show_test.exs:396) now uses authoritative event-sourced fixtures for its positive follow-action test. The broad check exposed that its old projection-only fixture could no longer satisfy task 019’s authoritative action boundary.\n- Formatting normalized one existing assertion in `system_group_membership_policy_dispatch_test.exs`; there was no behavioral change there.\n\n3. Validation\n\n- Focused restart recovery: 1 test, 0 failures.\n- Focused inbound timeout/provider retry: 1 test, 0 failures.\n- Adjacent dispatcher, outbound message, and inbound message suites: 66 tests, 0 failures.\n- Focused LiveView follow regression: 1 test, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,337 tests, 0 failures.\n- `git diff --check`: passed.\n\nThe full browser-inclusive `dev check` was not run in this per-task node, consistent with the workflow’s ordinary-task constraint; final full validation remains explicitly owned by task 021 and the workflow gate.\n\n4. Exact unchecked line\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, removed, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0004/0005: message and delivery ownership and resolved-recipient command semantics remain unchanged.\n- ADR 0007: Messaging continues to depend on Membership through its public API; no cross-context projector mutation or direct Membership read-model coupling was introduced.\n- ADR 0009/0021/0022: the dispatcher reacts to committed projection state and uses the existing projection-barrier authorization path. Startup is only an additional pending-work nudge.\n- ADR 0024: current membership authority remains in the Club aggregate and is reached through Membership’s authoritative public queries.\n- Existing already-handed-off email semantics remain intact: every recovered pending delivery still passes through the same final stable authorization immediately before the provider call.",
+          "response.revise_task": "Implemented the task 019 revision and left it unchecked for independent validation.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\nSee [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:21).\n\n2. Changes made\n\n- [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:1344) now reconciles an already-committed deterministic inbound message before repeating mutable sender authorization. It verifies the message’s sender, club, destination, subject, body, and reply reference before recording the receipt as accepted.\n- Concurrent rejection processing now inspects the `RejectInboundClubEmail` execution result. Only the caller that emitted `InboundClubEmailRejected` sends the rejection email; callers receiving the idempotent no-event result return the duplicate outcome without another side effect.\n- Reply recipient resolution now requires both an active projected follow and authoritative conversation access through the root message’s current group grants and the Club aggregate’s current group membership.\n- [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:2035) proves:\n  - a committed message is accepted after its sender departs, without recording or emailing a rejection;\n  - eight concurrent rejected retries produce one rejection event and one rejection email.\n- [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:684) now recreates the actual policy-lag race: the conversation-access projector misses the conversation during departure cleanup, the stale follow remains after an Everyone-only rejoin, and reply resolution still excludes the former private-group member.\n- [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:134) now explicitly verifies that projected followers without authoritative conversation access receive no reply delivery.\n\n3. Validation\n\n- Focused four-regression run: 59 tests discovered, 4 selected, 0 failures.\n- Complete send-message suite: 15 tests, 0 failures.\n- Complete Messaging suite: 269 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,342 tests, 0 failures.\n- Formatter check for all touched files: passed.\n- `git diff --check`: passed.\n\nThe browser-inclusive full `dev check` remains assigned to task 021 and the workflow’s final validation gate.\n\n4. Task remains unchecked\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, removed, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0004: messages and their deliveries remain owned by one Message aggregate.\n- ADR 0005: recipients remain resolved before message dispatch; reply resolution now excludes followers without authoritative access.\n- ADR 0007: Messaging uses Membership’s public authoritative APIs and does not access Membership aggregates or schemas directly.\n- ADR 0009 and 0021: projections remain read models; rejection side effects are owned by the caller that records the aggregate outcome, not by a projector.\n- ADR 0022: existing projection-barrier synchronization remains in place for projected follow state.\n- ADR 0024: current club and group membership authority remains with the Club aggregate.\n- Provider-handoff behavior and already-handed-off email semantics were not changed.",
+          "thread.implement_next_task.current_node": "validate_task",
+          "graph.default_fidelity": "summary:high",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "last_stage": "revise_task",
+          "outcome": "succeeded",
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race.\"}",
+          "thread.revise_task.current_node": "validate_task",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.verify_source_head.current_node": "read_plan",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "internal.retry_count.implement_next_task": 0,
+          "current_node": "revise_task"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race.\"}",
+              "output.validate_task": {
+                "decision": "revise",
+                "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
+                "reason": "The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race."
+              }
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 244342,
+                    "output_tokens": 5174,
+                    "reasoning_tokens": 6571,
+                    "cache_read_tokens": 2147968,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2648044
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 290033,
+              "tool_time_ms": 285167,
+              "active_time_ms": 575200
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented the two requested task 019 recovery fixes. The task remains unchecked for independent validation.\n\n1. Selected todo\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/pro",
+              "response.implement_next_task": "Implemented the two requested task 019 recovery fixes. The task remains unchecked for independent validation.\n\n1. Selected todo\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\nSee [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:21).\n\n2. Changes made\n\n- [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:198) now issues an enabled-only pending-work nudge on startup. Pending deliveries deferred because authorization projections timed out therefore recover after dispatcher or application restart.\n- The startup path uses the existing claim → stable recipient authorization → provider handoff flow. The provider-handoff linearization point was not moved or weakened.\n- [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:310) now treats only terminal accepted/rejected receipts as completed duplicates. A duplicate receipt whose aggregate status remains `nil` resumes destination resolution, current authorization, posting or rejection.\n- Authorization stability accepts a zero timeout so the timeout/retry regression can deterministically create the exact receipt-only state without scheduling races.\n- [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:441) proves that a projection-timeout deferral survives dispatcher termination and is reclaimed by the restarted dispatcher’s startup nudge.\n- [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:1991) proves the first provider call records `InboundEmailReceived` and times out, then the retry completes exactly one message and one acceptance instead of returning a `nil`-status duplicate.\n- [show_test.exs](/workspace/memba/web/test/memba_web/live/member_message_live/show_test.exs:396) now uses authoritative event-sourced fixtures for its positive follow-action test. The broad check exposed that its old projection-only fixture could no longer satisfy task 019’s authoritative action boundary.\n- Formatting normalized one existing assertion in `system_group_membership_policy_dispatch_test.exs`; there was no behavioral change there.\n\n3. Validation\n\n- Focused restart recovery: 1 test, 0 failures.\n- Focused inbound timeout/provider retry: 1 test, 0 failures.\n- Adjacent dispatcher, outbound message, and inbound message suites: 66 tests, 0 failures.\n- Focused LiveView follow regression: 1 test, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,337 tests, 0 failures.\n- `git diff --check`: passed.\n\nThe full browser-inclusive `dev check` was not run in this per-task node, consistent with the workflow’s ordinary-task constraint; final full validation remains explicitly owned by task 021 and the workflow gate.\n\n4. Exact unchecked line\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, removed, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0004/0005: message and delivery ownership and resolved-recipient command semantics remain unchanged.\n- ADR 0007: Messaging continues to depend on Membership through its public API; no cross-context projector mutation or direct Membership read-model coupling was introduced.\n- ADR 0009/0021/0022: the dispatcher reacts to committed projection state and uses the existing projection-barrier authorization path. Startup is only an additional pending-work nudge.\n- ADR 0024: current membership authority remains in the Club aggregate and is reached through Membership’s authoritative public queries.\n- Existing already-handed-off email semantics remain intact: every recovered pending delivery still passes through the same final stable authorization immediately before the provider call."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1261382,
+                    "output_tokens": 11912,
+                    "reasoning_tokens": 11279,
+                    "cache_read_tokens": 7205376,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 10605328
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 580085,
+              "tool_time_ms": 473105,
+              "active_time_ms": 1053190
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf59d3750cda1b87b1e3f1d785912dabaa3023af385e17d14204b5ddd4c58d2c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2c689d635cca514d7dea46648c9c158365c87f9f1786964d0e3c0f47dc1469d5"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 160,
+              "active_time_ms": 160
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.revise_task": "Implemented the task 019 revision and left it unchecked for independent validation.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\nSee [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:21).\n\n2. Changes made\n\n- [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:1344) now reconciles an already-committed deterministic inbound message before repeating mutable sender authorization. It verifies the message’s sender, club, destination, subject, body, and reply reference before recording the receipt as accepted.\n- Concurrent rejection processing now inspects the `RejectInboundClubEmail` execution result. Only the caller that emitted `InboundClubEmailRejected` sends the rejection email; callers receiving the idempotent no-event result return the duplicate outcome without another side effect.\n- Reply recipient resolution now requires both an active projected follow and authoritative conversation access through the root message’s current group grants and the Club aggregate’s current group membership.\n- [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:2035) proves:\n  - a committed message is accepted after its sender departs, without recording or emailing a rejection;\n  - eight concurrent rejected retries produce one rejection event and one rejection email.\n- [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:684) now recreates the actual policy-lag race: the conversation-access projector misses the conversation during departure cleanup, the stale follow remains after an Everyone-only rejoin, and reply resolution still excludes the former private-group member.\n- [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:134) now explicitly verifies that projected followers without authoritative conversation access receive no reply delivery.\n\n3. Validation\n\n- Focused four-regression run: 59 tests discovered, 4 selected, 0 failures.\n- Complete send-message suite: 15 tests, 0 failures.\n- Complete Messaging suite: 269 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,342 tests, 0 failures.\n- Formatter check for all touched files: passed.\n- `git diff --check`: passed.\n\nThe browser-inclusive full `dev check` remains assigned to task 021 and the workflow’s final validation gate.\n\n4. Task remains unchecked\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, removed, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0004: messages and their deliveries remain owned by one Message aggregate.\n- ADR 0005: recipients remain resolved before message dispatch; reply resolution now excludes followers without authoritative access.\n- ADR 0007: Messaging uses Membership’s public authoritative APIs and does not access Membership aggregates or schemas directly.\n- ADR 0009 and 0021: projections remain read models; rejection side effects are owned by the caller that records the aggregate outcome, not by a projector.\n- ADR 0022: existing projection-barrier synchronization remains in place for projected follow state.\n- ADR 0024: current club and group membership authority remains with the Club aggregate.\n- Provider-handoff behavior and already-handed-off email semantics were not changed.",
+              "last_stage": "revise_task",
+              "last_response": "Implemented the task 019 revision and left it unchecked for independent validation.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; "
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 352665,
+                    "output_tokens": 12894,
+                    "reasoning_tokens": 8350,
+                    "cache_read_tokens": 5941504,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5371397
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 573067,
+              "tool_time_ms": 360369,
+              "active_time_ms": 933436
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d02ae3fbcf009686d036f0f3c3931835e85e384c508c28e35fb843d5318f329e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ec8a6a94eaea51272913cff2171babb1eaf0ba1d8380d18cb78542f7e922e8a8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/31e44ac6b0c1bbb767732a1309b9e345314dcda88707e54f92d83eb9a810c653"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1719,
+              "active_time_ms": 1719
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/bc9bd1e78ddad344537f68f998e291be67df6c685562a3e8e07891dfbc4fdbbc"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/062-create-custom-groups/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4ead77617ed935be3825b76ac5dbeace3645e07ee675a06bbd68b810754049e0"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '9145c637f459d58db623e4e23446b6ba0547ef5b'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161,
+              "active_time_ms": 161
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6e68aad8af2f88aaeb4e0e49ad1be56c30282f0db54f39a42d921a644a308573"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d79e8bb357750b26e810d6edad88d619dc8e4bc2eb672ff6258ce2610592a54d"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93975,
+              "active_time_ms": 93975
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "1f7fc8258844ceeb6bfd652928349061cae911db",
+        "node_visits": {
+          "start": 1,
+          "verify_source_head": 1,
+          "wip_gate": 1,
+          "resume_gate": 1,
+          "implement_next_task": 1,
+          "read_plan": 1,
+          "preflight_sandbox": 1,
+          "revise_task": 2,
+          "sync_task_list": 1,
+          "validate_task": 2,
+          "all_tasks_done": 1,
+          "apply_task_verdict": 2,
+          "todo_readable": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex 9268313..2c50b69 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -27,6 +27,7 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.ConversationFollowers\n   alias Memba.Messaging.ConversationStopFollowToken\n   alias Memba.Messaging.EmailDeliveryDispatcher\n+  alias Memba.Messaging.Events.InboundClubEmailRejected\n   alias Memba.Messaging.GroupEmailPostingPolicy\n   alias Memba.Messaging.InboundClubDestination\n   alias Memba.Messaging.InboundClubRejectionEmail\n@@ -1340,6 +1341,34 @@ defmodule Memba.Messaging do\n          %InboundClubSender{} = sender,\n          dispatch_opts\n        ) do\n+    case recover_committed_inbound_message(\n+           receive_command,\n+           destination,\n+           sender,\n+           dispatch_opts\n+         ) do\n+      {:ok, response} ->\n+        {:ok, response}\n+\n+      :not_found ->\n+        authorize_and_post_first_inbound_club_email(\n+          receive_command,\n+          destination,\n+          sender,\n+          dispatch_opts\n+        )\n+\n+      {:error, _reason} = error ->\n+        error\n+    end\n+  end\n+\n+  defp authorize_and_post_first_inbound_club_email(\n+         receive_command,\n+         %InboundClubDestination{} = destination,\n+         %InboundClubSender{} = sender,\n+         dispatch_opts\n+       ) do\n     case authorize_inbound_club_email_sender(sender, destination) do\n       :ok ->\n         post_authorized_first_inbound_club_email(\n@@ -1363,6 +1392,109 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  defp recover_committed_inbound_message(\n+         receive_command,\n+         %InboundClubDestination{} = destination,\n+         %InboundClubSender{} = sender,\n+         dispatch_opts\n+       ) do\n+    message_id = inbound_message_id(receive_command)\n+\n+    case App.aggregate_state(Message, message_id) do\n+      %Message{message_id: ^message_id} = message ->\n+        with :ok <-\n+               confirm_matching_committed_inbound_message(\n+                 message,\n+                 receive_command,\n+                 destination,\n+                 sender\n+               ),\n+             :ok <-\n+               record_inbound_club_email_accepted(\n+                 receive_command.inbound_email,\n+                 destination,\n+                 sender,\n+                 message_id,\n+                 dispatch_opts\n+               ) do\n+          {:ok,\n+           accepted_inbound_email_response(\n+             receive_command,\n+             destination,\n+             sender,\n+             message\n+           )}\n+        end\n+\n+      _missing_message ->\n+        :not_found\n+    end\n+  end\n+\n+  defp confirm_matching_committed_inbound_message(\n+         %Message{} = message,\n+         receive_command,\n+         destination,\n+         sender\n+       ) do\n+    with {:ok, body} <- InboundEmailBody.normalize_text_body(receive_command.inbound_email),\n+         true <- message.message_id == inbound_message_id(receive_command),\n+         true <- message.club_id == destination.club_id,\n+         true <- message.sender_id == sender.person_id,\n+         true <- message.subject == receive_command.inbound_email.subject,\n+         true <- message.body == body,\n+         true <-\n+           committed_inbound_message_destination_matches?(\n+             message,\n+             receive_command,\n+             destination\n+           ) do\n+      :ok\n+    else\n+      _mismatch -> {:error, :inbound_message_mismatch}\n+    end\n+  end\n+\n+  defp committed_inbound_message_destination_matches?(\n+         %Message{\n+           message_id: message_id,\n+           conversation_id: message_id,\n+           group_access: group_access\n+         },\n+         _receive_command,\n+         destination\n+       ) do\n+    Map.get(group_access, destination.group_id) == \"write\"\n+  end\n+\n+  defp committed_inbound_message_destination_matches?(\n+         %Message{conversation_id: conversation_id},\n+         receive_command,\n+         destination\n+       ) do\n+    case resolve_inbound_reply_reference(receive_command.inbound_email, destination) do\n+      %{conversation_id: ^conversation_id} -> true\n+      _missing_or_different_reference -> false\n+    end\n+  end\n+\n+  defp accepted_inbound_email_response(receive_command, destination, sender, message) do\n+    response = %{\n+      inbound_email_id: receive_command.inbound_email_id,\n+      message_id: message.message_id,\n+      club_id: destination.club_id,\n+      sender_id: sender.person_id,\n+      from_address: sender.from_address,\n+      to_address: destination.to_address\n+    }\n+\n+    if message.conversation_id == message.message_id do\n+      response\n+    else\n+      Map.put(response, :conversation_id, message.conversation_id)\n+    end\n+  end\n+\n   defp post_authorized_first_inbound_club_email(\n          receive_command,\n          %InboundClubDestination{} = destination,\n@@ -1546,31 +1678,38 @@ defmodule Memba.Messaging do\n        ) do\n     rejection_email_delivery_reference = ID.generate(:delivery)\n \n-    with :ok <-\n-           record_inbound_club_email_rejected(\n-             receive_command.inbound_email,\n-             to_address,\n-             rejection_reason,\n-             rejection_email_delivery_reference,\n-             dispatch_opts\n-           ),\n-         :ok <-\n-           InboundClubRejectionEmail.deliver(\n-             receive_command.inbound_email,\n-             to_address,\n-             rejection_reason,\n-             rejection_email_delivery_reference,\n-             opts\n-           ) do\n-      {:ok,\n-       %{\n-         inbound_email_id: receive_command.inbound_email_id,\n-         status: :rejected,\n-         rejection_reason: rejection_reason,\n-         from_address: receive_command.inbound_email.from_address,\n-         to_address: to_address,\n-         rejection_email_delivery_reference: rejection_email_delivery_reference\n-       }}\n+    case record_inbound_club_email_rejected(\n+           receive_command.inbound_email,\n+           to_address,\n+           rejection_reason,\n+           rejection_email_delivery_reference,\n+           dispatch_opts\n+         ) do\n+      {:ok, :recorded} ->\n+        with :ok <-\n+               InboundClubRejectionEmail.deliver(\n+                 receive_command.inbound_email,\n+                 to_address,\n+                 rejection_reason,\n+                 rejection_email_delivery_reference,\n+                 opts\n+               ) do\n+          {:ok,\n+           %{\n+             inbound_email_id: receive_command.inbound_email_id,\n+             status: :rejected,\n+             rejection_reason: rejection_reason,\n+             from_address: receive_command.inbound_email.from_address,\n+             to_address: to_address,\n+             rejection_email_delivery_reference: rejection_email_delivery_reference\n+           }}\n+        end\n+\n+      {:ok, {:duplicate, %ExecutionResult{} = result}} ->\n+        duplicate_inbound_email_response(receive_command, result)\n+\n+      {:error, _reason} = error ->\n+        error\n     end\n   end\n \n@@ -1733,16 +1872,31 @@ defmodule Memba.Messaging do\n          rejection_email_delivery_reference,\n          dispatch_opts\n        ) do\n-    dispatch_ok(\n-      %RejectInboundClubEmail{\n-        inbound_email_id: InboundEmail.identity(inbound_email),\n-        inbound_email: inbound_email,\n-        to_address: to_address,\n-        rejection_reason: rejection_reason,\n-        rejection_email_delivery_reference: rejection_email_delivery_reference\n-      },\n-      dispatch_opts\n-    )\n+    command = %RejectInboundClubEmail{\n+      inbound_email_id: InboundEmail.identity(inbound_email),\n+      inbound_email: inbound_email,\n+      to_address: to_address,\n+      rejection_reason: rejection_reason,\n+      rejection_email_delivery_reference: rejection_email_delivery_reference\n+    }\n+\n+    dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)\n+\n+    case dispatch_command(command, dispatch_opts) do\n+      {:ok, {:ok, %ExecutionResult{events: [%InboundClubEmailRejected{} | _events]}}} ->\n+        {:ok, :recorded}\n+\n+      {:ok,\n+       {:ok,\n+        %ExecutionResult{\n+          events: [],\n+          aggregate_state: %InboundEmailReceipt{status: :rejected}\n+        } = result}} ->\n+        {:ok, {:duplicate, result}}\n+\n+      {:error, _reason} = error ->\n+        error\n+    end\n   end\n \n   defp rejection_reason(reason) when is_atom(reason), do: Atom.to_string(reason)\n@@ -2145,7 +2299,14 @@ defmodule Memba.Messaging do\n     |> Membership.list_active_members_of_club()\n     |> Enum.filter(&MapSet.member?(follower_ids, &1.id))\n     |> Enum.reject(&(&1.id == except_person_id))\n-    |> Enum.filter(&Membership.active_member_of_club_authoritatively?(club_id, &1.id))\n+    |> Enum.filter(\n+      &member_has_authoritative_conversation_access?(\n+        conversation_id,\n+        club_id,\n+        &1.id,\n+        :read\n+      )\n+    )\n     |> Enum.map(&resolved_recipient/1)\n   end\n \ndiff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\nindex 09f6af5..533176a 100644\n--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n+++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n@@ -2034,9 +2034,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n \n   test \"provider retry accepts the same message after MessageSent committed before the receipt outcome\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    bob = create_person!(name: \"Bob Admin\", email: \"bob@example.com\")\n     alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n \n-    add_member!(kmc.club_id, alice.person_id)\n+    add_member!(kmc.club_id, bob.person_id)\n+    alice_membership_id = add_member!(kmc.club_id, alice.person_id)\n \n     inbound_attrs = %{\n       provider: \"resend\",\n@@ -2066,9 +2068,21 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n \n     assert 1 == count_events(InboundEmailReceived)\n     assert 1 == count_events(MessageSent)\n-    assert 1 == count_events(EmailDeliveryCreated)\n+    assert 2 == count_events(EmailDeliveryCreated)\n     assert 0 == count_events(InboundClubEmailAccepted)\n \n+    assert :ok =\n+             MembershipApp.dispatch(\n+               %RemoveClubMember{\n+                 club_id: kmc.club_id,\n+                 membership_id: alice_membership_id,\n+                 person_id: alice.person_id\n+               },\n+               consistency: :strong\n+             )\n+\n+    refute Membership.active_member_of_club_authoritatively?(kmc.club_id, alice.person_id)\n+\n     assert {:ok,\n             %{\n               inbound_email_id: inbound_email_id,\n@@ -2082,9 +2096,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     assert sender_id == alice.person_id\n     assert 1 == count_events(InboundEmailReceived)\n     assert 1 == count_events(MessageSent)\n-    assert 1 == count_events(EmailDeliveryCreated)\n+    assert 2 == count_events(EmailDeliveryCreated)\n     assert 1 == count_events(InboundClubEmailAccepted)\n+    assert 0 == count_events(InboundClubEmailRejected)\n     assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)\n+    refute_receive {:email, %Swoosh.Email{}}\n   end\n \n   test \"concurrent provider retries create and accept exactly one message\" do\n@@ -2130,6 +2146,38 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)\n   end\n \n+  test \"concurrent rejected provider retries send exactly one rejection email\" do\n+    inbound_attrs = %{\n+      provider: \"resend\",\n+      provider_message_id: \"task-019-concurrent-rejection\",\n+      from_address: \"unknown@example.com\",\n+      recipient_addresses: [\"everyone@unknown.clubs.memba.io\"],\n+      subject: \"Unknown destination\",\n+      text_body: \"A provider retry must not send another rejection.\"\n+    }\n+\n+    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)\n+    assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)\n+\n+    results =\n+      1..8\n+      |> Task.async_stream(\n+        fn _attempt ->\n+          Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)\n+        end,\n+        max_concurrency: 8,\n+        timeout: 10_000\n+      )\n+      |> Enum.map(fn {:ok, result} -> result end)\n+\n+    assert Enum.all?(results, &match?({:ok, %{status: :rejected}}, &1))\n+    assert 1 == count_events(InboundEmailReceived)\n+    assert 1 == count_events(InboundClubEmailRejected)\n+\n+    assert_receive {:email, %Swoosh.Email{}}\n+    refute_receive {:email, %Swoosh.Email{}}\n+  end\n+\n   test \"the Admin route rejects inactive and other-club senders before private delivery\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n     npc = create_club!(name: \"Nelson Paddling Club\", slug: \"npc\")\ndiff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs\nindex 43d192b..768f09d 100644\n--- a/web/test/memba/messaging/post_message_reply_test.exs\n+++ b/web/test/memba/messaging/post_message_reply_test.exs\n@@ -131,7 +131,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do\n            ] = pending_deliveries_for_message(reply_message_id)\n   end\n \n-  test \"reply authorization group does not constrain follower delivery recipients\" do\n+  test \"reply recipients must be followers with authoritative conversation access\" do\n     club_id = Memba.ID.generate(:club)\n     alice = create_person(name: \"Alice\", email: \"alice@example.com\")\n     bob = create_person(name: \"Bob\", email: \"bob@example.com\")\n@@ -156,10 +156,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do\n \n     assert {:ok,\n             %ExecutionResult{\n-              events: [\n-                %MessageSent{message_id: ^reply_message_id}\n-                | delivery_events\n-              ]\n+              events: [%MessageSent{message_id: ^reply_message_id}]\n             }} =\n              Messaging.post_message_reply(\n                %{\n@@ -172,16 +169,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do\n                consistency: :strong\n              )\n \n-    assert [alice.person_id, dana.person_id] == Enum.map(delivery_events, & &1.recipient_id)\n-    refute bob.person_id in Enum.map(delivery_events, & &1.recipient_id)\n-    refute chris.person_id in Enum.map(delivery_events, & &1.recipient_id)\n-\n-    assert [\n-             %EmailDeliveryProjection{recipient_id: alice_id},\n-             %EmailDeliveryProjection{recipient_id: dana_id}\n-           ] = pending_deliveries_for_message(reply_message_id)\n-\n-    assert [alice_id, dana_id] == [alice.person_id, dana.person_id]\n+    assert [] = pending_deliveries_for_message(reply_message_id)\n   end\n \n   test \"a person who is not a current member of the root message club cannot reply\" do\ndiff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs\nindex f280534..164209b 100644\n--- a/web/test/memba/messaging/send_club_message_test.exs\n+++ b/web/test/memba/messaging/send_club_message_test.exs\n@@ -33,6 +33,7 @@ defmodule Memba.Messaging.SendClubMessageTest do\n   alias Memba.Messaging.Projectors.ConversationFollow,\n     as: ConversationFollowProjector\n \n+  alias Memba.Messaging.Projectors.Message, as: MessageProjector\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n   alias Memba.Messaging.Projections.Message, as: MessageProjection\n \n@@ -680,9 +681,7 @@ defmodule Memba.Messaging.SendClubMessageTest do\n     ])\n   end\n \n-  test \"does not create a reply delivery after departure and rejoin only Everyone when projections lag\" do\n-    Application.put_env(:memba, :authorization_stability_timeout, 25)\n-\n+  test \"does not create a reply delivery when access projection lag makes departure follow cleanup miss the conversation\" do\n     club_id = Memba.ID.generate(:club)\n     create_club(club_id, \"Kootenay Mountaineering Club\")\n \n@@ -697,6 +696,7 @@ defmodule Memba.Messaging.SendClubMessageTest do\n     add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)\n \n     conversation_id = Memba.ID.generate(:message)\n+    conversation_access_projector_child_id = stop_projector!(ConversationGroupAccessProjector)\n \n     assert :ok =\n              Messaging.send_club_message(\n@@ -708,7 +708,7 @@ defmodule Memba.Messaging.SendClubMessageTest do\n                  subject: \"Private Board topic\",\n                  body: \"Carol initially has access.\"\n                },\n-               consistency: :strong\n+               consistency: [MessageProjector]\n              )\n \n     assert :ok =\n@@ -718,14 +718,10 @@ defmodule Memba.Messaging.SendClubMessageTest do\n                  conversation_id: conversation_id,\n                  member_id: carol.person_id\n                },\n-               consistency: :strong\n+               consistency: [ConversationFollowProjector]\n              )\n \n-    membership_projector_child_id = stop_projector!(MembershipProjector)\n-    group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)\n-    conversation_follow_projector_child_id = stop_projector!(ConversationFollowProjector)\n-    system_group_policy_child_id = stop_projector!(SystemGroupMembership)\n-    clear_follows_policy_child_id = stop_projector!(ClearRemovedGroupMemberFollows)\n+    assert [] = Messaging.list_conversations_for_group(board_group_id)\n \n     assert :ok =\n              MembershipApp.dispatch(\n@@ -737,15 +733,12 @@ defmodule Memba.Messaging.SendClubMessageTest do\n                consistency: :eventual\n              )\n \n-    assert :ok =\n-             Messaging.unfollow_conversation(\n-               %{\n-                 club_id: club_id,\n-                 conversation_id: conversation_id,\n-                 member_id: carol.person_id\n-               },\n-               consistency: :eventual\n-             )\n+    await_restarted_subscribers!([\n+      MembershipProjector,\n+      GroupMembershipProjector,\n+      SystemGroupMembership,\n+      ClearRemovedGroupMemberFollows\n+    ])\n \n     assert :ok =\n              MembershipApp.dispatch(\n@@ -757,8 +750,19 @@ defmodule Memba.Messaging.SendClubMessageTest do\n                consistency: :eventual\n              )\n \n-    assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)\n+    await_restarted_subscribers!([\n+      MembershipProjector,\n+      GroupMembershipProjector,\n+      SystemGroupMembership\n+    ])\n+\n+    restart_projector!(conversation_access_projector_child_id)\n+\n+    await_restarted_subscribers!([ConversationGroupAccessProjector])\n+\n+    assert Messaging.group_has_conversation_access?(conversation_id, board_group_id, :read)\n     assert Messaging.following_conversation?(conversation_id, carol.person_id)\n+    assert Memba.Membership.active_member_of_club_authoritatively?(club_id, carol.person_id)\n \n     refute Memba.Membership.active_member_of_group_authoritatively?(\n              club_id,\n@@ -768,35 +772,6 @@ defmodule Memba.Messaging.SendClubMessageTest do\n \n     reply_message_id = Memba.ID.generate(:message)\n \n-    assert {:error, :authorization_stability_timeout} =\n-             Messaging.post_message_reply(\n-               %{\n-                 message_id: reply_message_id,\n-                 conversation_id: conversation_id,\n-                 sender_id: alice.person_id,\n-                 body: \"Carol must not receive this after rejoining only Everyone.\"\n-               },\n-               consistency: :strong\n-             )\n-\n-    refute Repo.get(MessageProjection, reply_message_id)\n-\n-    restart_projector!(membership_projector_child_id)\n-    restart_projector!(group_membership_projector_child_id)\n-    restart_projector!(conversation_follow_projector_child_id)\n-    restart_projector!(system_group_policy_child_id)\n-    restart_projector!(clear_follows_policy_child_id)\n-\n-    await_restarted_subscribers!([\n-      MembershipProjector,\n-      GroupMembershipProjector,\n-      ConversationFollowProjector,\n-      SystemGroupMembership,\n-      ClearRemovedGroupMemberFollows\n-    ])\n-\n-    Application.put_env(:memba, :authorization_stability_timeout, 5_000)\n-\n     assert {:ok, %ExecutionResult{events: events}} =\n              Messaging.post_message_reply(\n                %{\n",
+        "summary": {
+          "files_changed": 7,
+          "additions": 827,
+          "deletions": 122
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T06:13:40.735587022Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.run_id": "01M2F37AFX3WZ6KSY3SJR0NKAJ",
           "internal.retry_count.read_plan": 0,
-          "current_node": "revise_task",
+          "current_node": "validate_task",
           "thread.apply_task_verdict.current_node": "revise_task",
           "internal.retry_count.resume_gate": 0,
           "internal.retry_count.revise_task": 0,
@@ -4535,7 +4887,7 @@
           "output.validate_task": {
             "decision": "revise",
             "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
-            "reason": "The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race."
+            "reason": "The first pending task is unambiguous, the worktree is clean, no acceptance feature changed, and the focused 59-test messaging run passes. Two correctness gaps remain. First, committed inbound replies cannot be recovered: confirm_matching_committed_inbound_message/4 compares the stored reply subject with the incoming email subject, but replies deliberately inherit the root subject (for example stored \"Trip planning night\" versus inbound \"Re: Trip planning night\"). Add a split message/receipt retry test for a reply and match the canonical persisted reply command semantics. Second, the projection-lag test proves ClearRemovedGroupMemberFollows can acknowledge departure while leaving the old follow active; authoritative recipient filtering only masks it until the person regains that private-group membership, when the stale follow resumes. This violates the plan requirement to clear follows before re-add can reactivate them. Synchronize cleanup discovery with conversation-access projection progress or use an authoritative discovery mechanism, and test that the follow is actually removed and stays removed after club/group re-add. Also close or deterministically test the remaining race between the recovery lookup and rejection recording, where another retry can commit MessageSent after the lookup but before a departure-driven rejection."
           },
           "preferred_label": "revise",
           "outcome": "succeeded",
@@ -4546,25 +4898,25 @@
           "thread.revise_task.current_node": "validate_task",
           "internal.retry_count.wip_gate": 0,
           "graph.max_node_visits": "80",
-          "internal.thread_id": "apply_task_verdict",
+          "internal.thread_id": "revise_task",
           "response.revise_task": "Implemented the task 019 revision and left it unchecked for independent validation.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\nSee [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:21).\n\n2. Changes made\n\n- [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:1344) now reconciles an already-committed deterministic inbound message before repeating mutable sender authorization. It verifies the message’s sender, club, destination, subject, body, and reply reference before recording the receipt as accepted.\n- Concurrent rejection processing now inspects the `RejectInboundClubEmail` execution result. Only the caller that emitted `InboundClubEmailRejected` sends the rejection email; callers receiving the idempotent no-event result return the duplicate outcome without another side effect.\n- Reply recipient resolution now requires both an active projected follow and authoritative conversation access through the root message’s current group grants and the Club aggregate’s current group membership.\n- [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:2035) proves:\n  - a committed message is accepted after its sender departs, without recording or emailing a rejection;\n  - eight concurrent rejected retries produce one rejection event and one rejection email.\n- [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:684) now recreates the actual policy-lag race: the conversation-access projector misses the conversation during departure cleanup, the stale follow remains after an Everyone-only rejoin, and reply resolution still excludes the former private-group member.\n- [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:134) now explicitly verifies that projected followers without authoritative conversation access receive no reply delivery.\n\n3. Validation\n\n- Focused four-regression run: 59 tests discovered, 4 selected, 0 failures.\n- Complete send-message suite: 15 tests, 0 failures.\n- Complete Messaging suite: 269 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,342 tests, 0 failures.\n- Formatter check for all touched files: passed.\n- `git diff --check`: passed.\n\nThe browser-inclusive full `dev check` remains assigned to task 021 and the workflow’s final validation gate.\n\n4. Task remains unchecked\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, removed, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0004: messages and their deliveries remain owned by one Message aggregate.\n- ADR 0005: recipients remain resolved before message dispatch; reply resolution now excludes followers without authoritative access.\n- ADR 0007: Messaging uses Membership’s public authoritative APIs and does not access Membership aggregates or schemas directly.\n- ADR 0009 and 0021: projections remain read models; rejection side effects are owned by the caller that records the aggregate outcome, not by a projector.\n- ADR 0022: existing projection-barrier synchronization remains in place for projected follow state.\n- ADR 0024: current club and group membership authority remains with the Club aggregate.\n- Provider-handoff behavior and already-handed-off email semantics were not changed.",
           "internal.work_dir": "/workspace/memba",
           "thread.all_tasks_done.current_node": "implement_next_task",
-          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race.\"}",
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The first pending task is unambiguous, the worktree is clean, no acceptance feature changed, and the focused 59-test messaging run passes. Two correctness gaps remain. First, committed inbound replies cannot be recovered: confirm_matching_committed_inbound_message/4 compares the stored reply subject with the incoming email subject, but replies deliberately inherit the root subject (for example stored \\\"Trip planning night\\\" versus inbound \\\"Re: Trip planning night\\\"). Add a split message/receipt retry test for a reply and match the canonical persisted reply command semantics. Second, the projection-lag test proves ClearRemovedGroupMemberFollows can acknowledge departure while leaving the old follow active; authoritative recipient filtering only masks it until the person regains that private-group membership, when the stale follow resumes. This violates the plan requirement to clear follows before re-add can reactivate them. Synchronize cleanup discovery with conversation-access projection progress or use an authoritative discovery mechanism, and test that the follow is actually removed and stays removed after club/group re-add. Also close or deterministically test the remaining race between the recovery lookup and rejection recording, where another retry can commit MessageSent after the lookup but before a departure-driven rejection.\"}",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "thread.start.current_node": "verify_source_head",
           "failure_class": "",
           "internal.retry_count.validate_task": 0,
-          "last_stage": "revise_task",
+          "last_stage": "validate_task",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "internal.node_visit_count": 2,
+          "internal.node_visit_count": 3,
           "failure_signature": "",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.all_tasks_done": 0,
           "thread.verify_source_head.current_node": "read_plan",
           "thread.sync_task_list.current_node": "todo_readable",
           "thread.resume_gate.current_node": "sync_task_list",
-          "last_response": "Implemented the task 019 revision and left it unchecked for independent validation.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; ",
+          "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
           "graph.rankdir": "LR",
           "command.output": "blob://sha256/bc9bd1e78ddad344537f68f998e291be67df6c685562a3e8e07891dfbc4fdbbc",
           "internal.retry_count.verify_source_head": 0
@@ -4722,11 +5074,11 @@
             "context_updates": {
               "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
               "last_stage": "validate_task",
-              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race.\"}",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The first pending task is unambiguous, the worktree is clean, no acceptance feature changed, and the focused 59-test messaging run passes. Two correctness gaps remain. First, committed inbound replies cannot be recovered: confirm_matching_committed_inbound_message/4 compares the stored reply subject with the incoming email subject, but replies deliberately inherit the root subject (for example stored \\\"Trip planning night\\\" versus inbound \\\"Re: Trip planning night\\\"). Add a split message/receipt retry test for a reply and match the canonical persisted reply command semantics. Second, the projection-lag test proves ClearRemovedGroupMemberFollows can acknowledge departure while leaving the old follow active; authoritative recipient filtering only masks it until the person regains that private-group membership, when the stale follow resumes. This violates the plan requirement to clear follows before re-add can reactivate them. Synchronize cleanup discovery with conversation-access projection progress or use an authoritative discovery mechanism, and test that the follow is actually removed and stays removed after club/group re-add. Also close or deterministically test the remaining race between the recovery lookup and rejection recording, where another retry can commit MessageSent after the lookup but before a departure-driven rejection.\"}",
               "output.validate_task": {
                 "decision": "revise",
                 "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
-                "reason": "The focused 58-test messaging suite passes and no acceptance feature was changed, but three race gaps remain. First, a nil-status inbound retry repeats mutable authorization before reconciling the deterministic message: if MessageSent committed, the sender then departed, the retry can record InboundClubEmailRejected and send a rejection despite the existing posted message. Recover the existing deterministic message before reauthorization or persist an aggregate-owned processing decision, and test that transition. Second, concurrent rejected retries can both continue from status nil; the second RejectInboundClubEmail is a successful no-op and dispatch_ok/2 still lets both callers send rejection emails with different references. Make only the caller that records/owns the rejection outcome perform the side effect and add concurrent rejection coverage. Third, reply recipient resolution waits only for ConversationFollowProjector and filters followers by authoritative club membership, not authoritative conversation access. ClearRemovedGroupMemberFollows can miss a conversation while ConversationGroupAccessProjector lags; after an Everyone-only rejoin, the still-current follow can create a private delivery. Intersect reply followers with authoritative conversation access and/or synchronize cleanup discovery. The new test manually emits the unfollow event, so it does not cover this real policy-lag race."
+                "reason": "The first pending task is unambiguous, the worktree is clean, no acceptance feature changed, and the focused 59-test messaging run passes. Two correctness gaps remain. First, committed inbound replies cannot be recovered: confirm_matching_committed_inbound_message/4 compares the stored reply subject with the incoming email subject, but replies deliberately inherit the root subject (for example stored \"Trip planning night\" versus inbound \"Re: Trip planning night\"). Add a split message/receipt retry test for a reply and match the canonical persisted reply command semantics. Second, the projection-lag test proves ClearRemovedGroupMemberFollows can acknowledge departure while leaving the old follow active; authoritative recipient filtering only masks it until the person regains that private-group membership, when the stale follow resumes. This violates the plan requirement to clear follows before re-add can reactivate them. Synchronize cleanup discovery with conversation-access projection progress or use an authoritative discovery mechanism, and test that the follow is actually removed and stays removed after club/group re-add. Also close or deterministically test the remaining race between the recovery lookup and rejection recording, where another retry can commit MessageSent after the lookup but before a departure-driven rejection."
               }
             },
             "notes": "Stage completed: validate_task",
@@ -4738,10 +5090,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 244342,
-                    "output_tokens": 5174,
-                    "reasoning_tokens": 6571,
-                    "cache_read_tokens": 2147968,
+                    "input_tokens": 200385,
+                    "output_tokens": 4606,
+                    "reasoning_tokens": 4298,
+                    "cache_read_tokens": 824704,
                     "cache_write_tokens": 0
                   }
                 },
@@ -4749,13 +5101,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 2648044
+              "total_usd_micros": 1681397
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 290033,
-              "tool_time_ms": 285167,
-              "active_time_ms": 575200
+              "inference_time_ms": 213520,
+              "tool_time_ms": 663133,
+              "active_time_ms": 876653
             }
           },
           "sync_task_list": {
@@ -4815,11 +5167,11 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "apply_task_verdict",
         "node_visits": {
           "apply_task_verdict": 2,
           "resume_gate": 1,
-          "validate_task": 2,
+          "validate_task": 3,
           "start": 1,
           "todo_readable": 1,
           "implement_next_task": 1,
@@ -5688,7 +6040,12 @@
       "first_event_seq": 2438,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: revise_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T05:58:59.701418197Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -5703,8 +6060,12 @@
       "started_at": "2026-09-14T05:43:25.806358856Z",
       "handler": "agent",
       "graph_visit": 2,
-      "live_inference_ms": 573026,
-      "live_tool_ms": 360353,
+      "timing": {
+        "wall_time_ms": 933894,
+        "inference_time_ms": 573067,
+        "tool_time_ms": 360369,
+        "active_time_ms": 933436
+      },
       "usage": {
         "input_tokens": 352665,
         "output_tokens": 12894,
@@ -5833,7 +6194,7 @@
         "warnings": []
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "apply_task_verdict@1": {
       "first_event_seq": 1204,
@@ -6075,6 +6436,183 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "validate_task@3": {
+      "first_event_seq": 2888,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T05:59:03.710307534Z",
+      "handler": "agent",
+      "graph_visit": 3,
+      "live_inference_ms": 213503,
+      "live_tool_ms": 663127,
+      "usage": {
+        "input_tokens": 1383043,
+        "output_tokens": 33172,
+        "total_tokens": 9723998,
+        "reasoning_tokens": 30663,
+        "cache_read_tokens": 8277120,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 12968825
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "subagents": [
+        {
+          "agent_id": "0e14accf",
+          "depth": 1,
+          "task": "Independently review candidate task 019 in /workspace/memba read-only. Focus on inbound email retry/rejection concurrency and deterministic message recovery. Inspect live files/diffs and report concrete correctness gaps only; do not edit.",
+          "status": {
+            "kind": "closed"
+          }
+        },
+        {
+          "agent_id": "fa01d713",
+          "depth": 1,
+          "task": "Independently review candidate task 019 in /workspace/memba read-only. Focus on departure/rejoin privacy for action boundaries, recipient resolution, follow cleanup lag, and provider handoff. Inspect live code/tests and accepted ADRs. Report concrete gaps only; do not edit.",
+          "status": {
+            "kind": "closed"
+          }
+        },
+        {
+          "agent_id": "3c033704",
+          "depth": 1,
+          "task": "Independently review candidate task 019 in /workspace/memba read-only. Focus on test quality, scope, checkpoint trail, acceptance-feature constraints, and whether focused validation is sufficient. Run read-only inspections if useful; do not edit.",
+          "status": {
+            "kind": "closed"
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 106021,
+        "usage_percent": 38.97830882352941,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-14T06:13:40.725115686Z",
+        "event_seq": 4241,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2787,
+            "usage_percent": 1.0246323529411765
+          },
+          {
+            "category": "tools",
+            "tokens": 854,
+            "usage_percent": 0.3139705882352941
+          },
+          {
+            "category": "memory",
+            "tokens": 386,
+            "usage_percent": 0.14191176470588235
+          },
+          {
+            "category": "conversation",
+            "tokens": 101988,
+            "usage_percent": 37.495588235294115
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "implement_next_task@1": {
       "first_event_seq": 107,
