@@ -311,6 +311,112 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
            } = Repo.get_by(GroupMembership, group_id: original_group_id)
   end
 
+  test "concurrent same-name attempts serialize to one group and one creator membership" do
+    club_id = Memba.ID.generate(:club)
+    first_group_id = Memba.ID.generate(:group)
+    second_group_id = Memba.ID.generate(:group)
+    {first_membership_id, first_person_id} = create_club_with_admin!(club_id)
+    second_membership_id = Memba.ID.generate(:membership)
+    second_person_id = Memba.ID.generate(:person)
+
+    create_member!(club_id, second_membership_id, second_person_id)
+    assign_admin!(club_id, second_membership_id, second_person_id)
+
+    results =
+      [{first_group_id, first_person_id}, {second_group_id, second_person_id}]
+      |> Task.async_stream(
+        fn {group_id, actor_person_id} ->
+          {group_id, create_custom_group(club_id, group_id, actor_person_id, "Board")}
+        end,
+        ordered: false,
+        timeout: :infinity
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.count(results, &match?({_group_id, :ok}, &1)) == 1
+
+    assert Enum.count(
+             results,
+             &match?({_group_id, {:error, :group_name_already_defined}}, &1)
+           ) == 1
+
+    [{successful_group_id, :ok}] =
+      Enum.filter(results, &match?({_group_id, :ok}, &1))
+
+    expected_creator =
+      if successful_group_id == first_group_id do
+        {first_membership_id, first_person_id}
+      else
+        {second_membership_id, second_person_id}
+      end
+
+    assert [
+             %GroupMembership{
+               membership_id: creator_membership_id,
+               person_id: creator_person_id,
+               active: true
+             }
+           ] =
+             Repo.all(
+               from group_membership in GroupMembership,
+                 where: group_membership.group_id == ^successful_group_id
+             )
+
+    assert {creator_membership_id, creator_person_id} == expected_creator
+
+    assert [%GroupProjection{name: "Board", email_slug: "board"}] =
+             Repo.all(
+               from group in GroupProjection,
+                 where:
+                   group.club_id == ^club_id and
+                     group.name_uniqueness_key == "board"
+             )
+  end
+
+  test "concurrent distinct names with one slug stem receive different replay-stable addresses" do
+    club_id = Memba.ID.generate(:club)
+    first_group_id = Memba.ID.generate(:group)
+    second_group_id = Memba.ID.generate(:group)
+    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+
+    results =
+      [{"Board!", first_group_id}, {"Board?", second_group_id}]
+      |> Task.async_stream(
+        fn {name, group_id} ->
+          {group_id, create_custom_group(club_id, group_id, actor_person_id, name)}
+        end,
+        ordered: false,
+        timeout: :infinity
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.sort(results) == Enum.sort([{first_group_id, :ok}, {second_group_id, :ok}])
+
+    slugs =
+      club_id
+      |> then(&App.aggregate_state(Club, &1))
+      |> Map.fetch!(:groups)
+      |> Map.take([first_group_id, second_group_id])
+      |> Map.values()
+      |> Enum.map(& &1.email_slug)
+      |> Enum.sort()
+
+    assert slugs == ["board", "board-2"]
+
+    Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
+
+    replayed_slugs =
+      club_id
+      |> then(&App.aggregate_state(Club, &1))
+      |> Map.fetch!(:groups)
+      |> Map.take([first_group_id, second_group_id])
+      |> Map.values()
+      |> Enum.map(& &1.email_slug)
+      |> Enum.sort()
+
+    assert replayed_slugs == slugs
+  end
+
   test "aggregate name uniqueness remains authoritative when its projection is missing" do
     club_id = Memba.ID.generate(:club)
     {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)

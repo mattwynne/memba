@@ -20,4 +20,5 @@
 - [x] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.
 - [x] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.
 - [x] 020 Preserve already-handed-off email semantics; do not add an error dashboard or email retry product.
-- [ ] 021 Implement the tagged scenarios and targeted Club concurrency, identity, replay, departure/rejoin, slug-length and LiveView typing tests. Run `dev check` on the exact delivery state.
+- [ ] 021 Complete targeted Club concurrency, identity, replay, departure/rejoin, slug-length and LiveView validation test coverage.
+- [ ] 022 Implement the iteration-062 tagged scenarios at their intended domain/browser layers, including browser typing/caret coverage, and run `dev check` on the exact delivery state.

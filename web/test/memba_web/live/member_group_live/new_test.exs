@@ -201,6 +201,43 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     |> refute_has("#member-group-create-button[disabled]")
   end
 
+  test "successive server-side typing validations preserve the latest input value", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+    club = Membership.get_club(robin.club_id)
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+
+    for partial_name <- ["T", "Tr", "Tri", "Trip", "Trips"] do
+      view
+      |> form("#member-group-new-form", group: %{name: partial_name})
+      |> render_change()
+
+      assert has_element?(
+               view,
+               "#member-group-name-input[value='#{partial_name}']"
+             )
+
+      assert has_element?(
+               view,
+               "#member-group-email-preview[data-state='available']",
+               ClubInboundEmailAddress.address(club, String.downcase(partial_name))
+             )
+    end
+
+    refute Repo.get_by(Group,
+             club_id: robin.club_id,
+             name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key("Trips")
+           )
+  end
+
   test "the live preview uses the creation allocator for slug collisions and Unicode fallback", %{
     conn: conn
   } do
