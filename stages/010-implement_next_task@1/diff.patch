@@ -1,0 +1,116 @@
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 0c094e7..1218784 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -274,11 +274,14 @@ defmodule Memba.Membership do
+ 
+   The caller supplies the membership identity as `:membership_id` or
+   `"membership_id"`. The command is routed to the Club aggregate, which decides
+-  first-member authority, idempotency, and duplicate active membership.
++  first-member authority, idempotency, and duplicate active membership. The call
++  completes only after any earlier custom-group follow cleanup on the Club
++  stream, so a rapid re-add cannot restore access before stale follows are
++  cleared.
+   """
+   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- add_member_command(attrs) do
+-      dispatch_system_group_membership_command(command, dispatch_opts)
++      dispatch_member_lifecycle_command(command, dispatch_opts)
+     end
+   end
+ 
+@@ -434,7 +437,7 @@ defmodule Memba.Membership do
+   """
+   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- remove_member_command(attrs) do
+-      dispatch_member_departure_command(command, dispatch_opts)
++      dispatch_member_lifecycle_command(command, dispatch_opts)
+     end
+   end
+ 
+@@ -2341,11 +2344,11 @@ defmodule Memba.Membership do
+     dispatch(command, system_group_membership_consistency(dispatch_opts))
+   end
+ 
+-  defp dispatch_member_departure_command(command, dispatch_opts) do
+-    dispatch(command, member_departure_consistency(dispatch_opts))
++  defp dispatch_member_lifecycle_command(command, dispatch_opts) do
++    dispatch(command, member_lifecycle_consistency(dispatch_opts))
+   end
+ 
+-  defp member_departure_consistency(dispatch_opts) do
++  defp member_lifecycle_consistency(dispatch_opts) do
+     dispatch_opts
+     |> system_group_membership_consistency()
+     |> Keyword.update!(
+diff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+index fee7222..d7cccad 100644
+--- a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
++++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+@@ -107,29 +107,45 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+         })
+       end)
+ 
+-    try do
+-      assert :ok =
+-               Subscriptions.wait_for(
+-                 MembershipApp,
+-                 club_id,
+-                 removal_target_version,
+-                 [consistency: [SystemGroupMembership]],
+-                 1_000
+-               )
+-
+-      assert Task.yield(removal, 100) == nil
+-    after
+-      :ok = :sys.resume(clear_follows_handler)
+-    end
++    readdition =
++      try do
++        assert :ok =
++                 Subscriptions.wait_for(
++                   MembershipApp,
++                   club_id,
++                   removal_target_version,
++                   [consistency: [SystemGroupMembership]],
++                   1_000
++                 )
++
++        assert Task.yield(removal, 100) == nil
++
++        readdition =
++          Task.async(fn ->
++            Membership.add_member(%{
++              club_id: club_id,
++              membership_id: rejoined_membership_id,
++              person_id: departing_person_id
++            })
++          end)
++
++        assert :ok =
++                 Subscriptions.wait_for(
++                   MembershipApp,
++                   club_id,
++                   removal_target_version + 1,
++                   [consistency: [SystemGroupMembership]],
++                   1_000
++                 )
++
++        assert Task.yield(readdition, 100) == nil
++        readdition
++      after
++        :ok = :sys.resume(clear_follows_handler)
++      end
+ 
+     assert :ok = Task.await(removal)
+-
+-    assert :ok =
+-             Membership.add_member(%{
+-               club_id: club_id,
+-               membership_id: rejoined_membership_id,
+-               person_id: departing_person_id
+-             })
++    assert :ok = Task.await(readdition)
+ 
+     refute Messaging.following_conversation?(conversation_id, departing_person_id)
+ 
