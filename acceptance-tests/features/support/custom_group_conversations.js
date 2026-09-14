@@ -324,7 +324,12 @@ function assertFollowingLastConversation(world, personName) {
 }
 
 async function assertReplyDelivered(world, recipientName, senderName) {
-  await assertReplyEmailDeliveredToMembers(world, senderName, [recipientName], boardName);
+  await assertReplyEmailDeliveredToMembers(
+    world,
+    senderName,
+    [recipientName],
+    kootenayClubName
+  );
 }
 
 async function assertReplyNotDelivered(world, personNames) {

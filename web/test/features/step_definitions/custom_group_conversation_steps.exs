@@ -316,7 +316,10 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     board_id = group_id!(context, @club_name, @board_name)
 
     assert_member_access(context, person_name, subject, :read, true)
-    assert length(Messaging.list_conversation_messages_for_group(message.message_id, board_id)) >= 2
+
+    assert length(Messaging.list_conversation_messages_for_group(message.message_id, board_id)) >=
+             2
+
     context
   end
 
@@ -438,8 +441,11 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
 
     result =
       case mode do
-        :current_member -> Messaging.send_club_message_as_current_member(attrs, consistency: :strong)
-        :fixture -> Messaging.send_club_message(attrs, consistency: :strong)
+        :current_member ->
+          Messaging.send_club_message_as_current_member(attrs, consistency: :strong)
+
+        :fixture ->
+          Messaging.send_club_message(attrs, consistency: :strong)
       end
 
     assert :ok = result
@@ -728,7 +734,9 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
   end
 
   defp email_address?({_name, address}, expected), do: same_email?(address, expected)
-  defp email_address?(address, expected) when is_binary(address), do: same_email?(address, expected)
+
+  defp email_address?(address, expected) when is_binary(address),
+    do: same_email?(address, expected)
 
   defp same_email?(left, right), do: String.downcase(left) == String.downcase(right)
 
