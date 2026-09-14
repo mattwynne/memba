@@ -25,6 +25,8 @@ defmodule Memba.Application do
       Memba.Messaging.Projectors.MemberEmailDelivery,
       Memba.Messaging.Projectors.MembaStaffEmailDelivery,
       Memba.Messaging.Projectors.InboundEmailSource,
+      # Membership activation waits for this policy's prior Club-stream work.
+      Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.ClubInvitation,
       Memba.Membership.Projectors.Membership,

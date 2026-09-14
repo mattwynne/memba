@@ -702,7 +702,9 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
         group_id: group_id,
         group_key: SystemGroups.everyone_key(),
         email_slug: SystemGroups.everyone_email_slug(),
-        name: SystemGroups.everyone_name()
+        name: SystemGroups.everyone_name(),
+        name_uniqueness_key:
+          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
       },
       on_conflict: :nothing
     )
@@ -722,7 +724,9 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
       group_id: Memba.ID.generate(:group),
       email_slug: Keyword.get(attrs, :email_slug),
       group_key: Keyword.fetch!(attrs, :group_key),
-      name: Keyword.fetch!(attrs, :name)
+      name: Keyword.fetch!(attrs, :name),
+      name_uniqueness_key:
+        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
     })
   end
 

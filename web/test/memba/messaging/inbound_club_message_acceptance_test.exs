@@ -4,6 +4,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
@@ -16,7 +18,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundClubEmailRejected
+  alias Memba.Messaging.Events.InboundEmailReceived
   alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -26,6 +30,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
     original_postmark_config = Application.get_env(:memba, Postmark)
     original_resend_config = Application.get_env(:memba, Resend)
+
+    original_authorization_stability_timeout =
+      Application.get_env(:memba, :authorization_stability_timeout)
 
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
     Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
@@ -42,6 +49,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Postmark, original_postmark_config)
       restore_env(Resend, original_resend_config)
+      restore_env(:authorization_stability_timeout, original_authorization_stability_timeout)
       Fake.reset()
     end)
 
@@ -190,18 +198,177 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   test "authorization accepts an active club member outside the addressed group" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
     dana = create_person!(name: "Dana Example", email: "dana@example.com")
 
-    insert_active_membership_projection_without_group(kmc.club_id, dana.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+    add_member!(kmc.club_id, dana.person_id)
 
     assert {:ok, destination} =
              Messaging.resolve_inbound_club_email_destination([
-               "everyone@kmc.clubs.memba.io"
+               "admin@kmc.clubs.memba.io"
              ])
 
     assert {:ok, sender} = Messaging.resolve_inbound_club_email_sender("dana@example.com")
     refute Membership.active_member_of_group?(destination.group_id, sender.person_id)
     assert :ok = Messaging.authorize_inbound_club_email_sender(sender, destination)
+  end
+
+  test "a custom-group address lets an active club non-member start a private conversation without gaining access" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Admin", email: "alice@example.com")
+    eve = create_person!(name: "Eve Member", email: "eve@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, eve.person_id)
+
+    board_group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             Membership.create_custom_group(
+               %{
+                 club_id: kmc.club_id,
+                 group_id: board_group_id,
+                 actor_person_id: alice.person_id,
+                 name: "Board"
+               },
+               consistency: :strong
+             )
+
+    assert %{
+             club_id: club_id,
+             group_id: ^board_group_id,
+             email_slug: "board",
+             group_key: nil,
+             name: "Board"
+           } = Membership.get_group_by_email_slug(kmc.club_id, "board")
+
+    assert club_id == kmc.club_id
+    assert Membership.active_member_of_group?(board_group_id, alice.person_id)
+    refute Membership.active_member_of_group?(board_group_id, eve.person_id)
+
+    assert {:ok,
+            %InboundClubDestination{
+              club_id: ^club_id,
+              group_id: ^board_group_id,
+              group_email_slug: "board",
+              group_name: "Board",
+              to_address: "board@kmc.clubs.memba.io"
+            }} =
+             Messaging.resolve_inbound_club_email_destination([
+               "board@kmc.clubs.memba.io"
+             ])
+
+    assert {:ok,
+            %{
+              message_id: conversation_id,
+              club_id: ^club_id,
+              sender_id: eve_id,
+              to_address: "board@kmc.clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-062-custom-group-root",
+                 provider_event_id: "task-062-custom-group-root-event",
+                 from_address: "eve@example.com",
+                 recipient_addresses: ["board@kmc.clubs.memba.io"],
+                 subject: "Could you fund new ropes?",
+                 text_body: "The old ropes need replacing."
+               },
+               consistency: :strong
+             )
+
+    assert eve_id == eve.person_id
+    assert Messaging.group_has_conversation_access?(conversation_id, board_group_id, :write)
+
+    refute Messaging.group_has_conversation_access?(
+             conversation_id,
+             SystemGroups.everyone_group_id(kmc.club_id),
+             :read
+           )
+
+    assert Messaging.member_has_conversation_access?(
+             conversation_id,
+             kmc.club_id,
+             alice.person_id,
+             :write
+           )
+
+    refute Messaging.member_has_conversation_access?(
+             conversation_id,
+             kmc.club_id,
+             eve.person_id,
+             :read
+           )
+
+    assert [%{message_id: ^conversation_id, recipient_id: alice_id}] =
+             Messaging.list_recipient_deliveries(conversation_id)
+
+    assert alice_id == alice.person_id
+    assert is_nil(Messaging.get_member_email_delivery(conversation_id, eve.person_id))
+    refute Messaging.following_conversation?(conversation_id, eve.person_id)
+
+    assert [%{message_id: ^conversation_id, subject: "Could you fund new ropes?"}] =
+             Messaging.list_conversations_for_group(board_group_id)
+
+    assert [] =
+             Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(kmc.club_id))
+
+    website_reply_id = Memba.ID.generate(:message)
+
+    assert {:error, :not_current_member} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: website_reply_id,
+                 conversation_id: conversation_id,
+                 sender_id: eve.person_id,
+                 body: "Here are the prices."
+               },
+               consistency: :strong
+             )
+
+    assert is_nil(Messaging.get_message(website_reply_id))
+
+    alice_outbound_message_id =
+      outbound_message_id_for_recipient!(conversation_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              status: :rejected,
+              rejection_reason: "not_current_member",
+              to_address: "board@kmc.clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-062-custom-group-reply",
+                 provider_event_id: "task-062-custom-group-reply-event",
+                 from_address: "eve@example.com",
+                 recipient_addresses: ["board@kmc.clubs.memba.io"],
+                 subject: "Re: Could you fund new ropes?",
+                 text_body: "Here are the prices.",
+                 in_reply_to_message_ids: [alice_outbound_message_id]
+               },
+               consistency: :strong
+             )
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "not_current_member",
+             to_address: "board@kmc.clubs.memba.io"
+           } =
+             Messaging.get_inbound_email_source("resend", "task-062-custom-group-reply")
+
+    assert [%{message_id: ^conversation_id}] =
+             Messaging.list_conversation_messages_for_group(
+               conversation_id,
+               board_group_id
+             )
+
+    refute Messaging.following_conversation?(conversation_id, eve.person_id)
+    assert 1 == count_events(MessageSent)
   end
 
   test "an inbound root message carries the resolved Admin audience group into SendMessage" do
@@ -1764,6 +1931,341 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     )
   end
 
+  test "committed departure rejects a new inbound conversation while membership projection lags" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, bob.person_id)
+    alice_membership_id = add_member!(kmc.club_id, alice.person_id)
+    membership_projector_child_id = stop_projector!(MembershipProjector)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: kmc.club_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Membership.active_member_of_club?(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              status: :rejected,
+              rejection_reason: "sender_not_active_member",
+              from_address: "alice@example.com",
+              to_address: "everyone@kmc.clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-019-departed-projection-lag",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+                 subject: "Stale inbound authorization",
+                 text_body: "This must not create a conversation after departure."
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
+    )
+
+    restart_projector!(membership_projector_child_id)
+
+    assert {:ok, _result} =
+             Membership.await_group_access_projections(timeout: 1_000)
+  end
+
+  test "provider retry resumes a receipt left incomplete by authorization stabilization" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-authorization-timeout-retry",
+      from_address: "alice@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "Resume after authorization stabilization",
+      text_body: "A provider retry should finish this post."
+    }
+
+    Application.put_env(:memba, :authorization_stability_timeout, 0)
+
+    assert {:error, :authorization_stability_timeout} =
+             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert 1 == count_events(InboundEmailReceived)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+
+    Application.put_env(:memba, :authorization_stability_timeout, 5_000)
+
+    assert {:ok,
+            %{
+              inbound_email_id: inbound_email_id,
+              message_id: message_id,
+              club_id: club_id,
+              sender_id: sender_id
+            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert is_binary(inbound_email_id)
+    assert club_id == kmc.club_id
+    assert sender_id == alice.person_id
+    assert is_binary(message_id)
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
+    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+  end
+
+  test "provider retry accepts the same message after MessageSent committed before the receipt outcome" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, bob.person_id)
+    alice_membership_id = add_member!(kmc.club_id, alice.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-message-sent-before-accepted",
+      from_address: "alice@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "Resume after message commit",
+      text_body: "A provider retry must reuse this message."
+    }
+
+    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
+
+    message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: kmc.club_id,
+                 sender_id: alice.person_id,
+                 subject: inbound_attrs.subject,
+                 body: inbound_attrs.text_body
+               },
+               consistency: :strong
+             )
+
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(MessageSent)
+    assert 2 == count_events(EmailDeliveryCreated)
+    assert 0 == count_events(InboundClubEmailAccepted)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: kmc.club_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    refute Membership.active_member_of_club_authoritatively?(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: inbound_email_id,
+              message_id: ^message_id,
+              club_id: club_id,
+              sender_id: sender_id
+            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert inbound_email_id == receive_command.inbound_email_id
+    assert club_id == kmc.club_id
+    assert sender_id == alice.person_id
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(MessageSent)
+    assert 2 == count_events(EmailDeliveryCreated)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
+    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+    refute_receive {:email, %Swoosh.Email{}}
+  end
+
+  test "provider retry reconciles a committed reply with its canonical root subject before reauthorization" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Admin", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+
+    root_message_id =
+      send_club_message!(
+        club_id: kmc.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring route ideas."
+      )
+
+    bob_outbound_message_id =
+      outbound_message_id_for_recipient!(root_message_id, bob.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-reply-sent-before-accepted",
+      from_address: "bob@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "Re: Trip planning night",
+      text_body: "I can bring maps.",
+      in_reply_to_message_ids: [bob_outbound_message_id]
+    }
+
+    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
+
+    reply_message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: root_message_id,
+                 sender_id: bob.person_id,
+                 body: inbound_attrs.text_body
+               },
+               consistency: :strong
+             )
+
+    assert %{
+             message_id: ^reply_message_id,
+             conversation_id: ^root_message_id,
+             subject: "Trip planning night"
+           } = Messaging.get_message(reply_message_id)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: kmc.club_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob.person_id
+               },
+               consistency: :strong
+             )
+
+    refute Membership.active_member_of_club_authoritatively?(kmc.club_id, bob.person_id)
+    Application.put_env(:memba, :authorization_stability_timeout, 0)
+
+    assert {:ok,
+            %{
+              inbound_email_id: inbound_email_id,
+              message_id: ^reply_message_id,
+              conversation_id: ^root_message_id,
+              club_id: club_id,
+              sender_id: sender_id
+            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert inbound_email_id == receive_command.inbound_email_id
+    assert club_id == kmc.club_id
+    assert sender_id == bob.person_id
+    assert 1 == count_events(InboundEmailReceived)
+    assert 2 == count_events(MessageSent)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
+    refute_receive {:email, %Swoosh.Email{}}
+  end
+
+  test "concurrent provider retries create and accept exactly one message" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-concurrent-provider-retries",
+      from_address: "alice@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "One message from concurrent retries",
+      text_body: "Both provider calls represent this one inbound email."
+    }
+
+    results =
+      1..2
+      |> Task.async_stream(
+        fn _attempt ->
+          Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+        end,
+        max_concurrency: 2,
+        timeout: 10_000
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.all?(
+             results,
+             &match?({:ok, %{message_id: message_id}} when is_binary(message_id), &1)
+           )
+
+    assert [message_id] =
+             results
+             |> Enum.map(fn {:ok, result} -> result.message_id end)
+             |> Enum.uniq()
+
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(MessageSent)
+    assert 1 == count_events(EmailDeliveryCreated)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+  end
+
+  test "concurrent rejected provider retries send exactly one rejection email" do
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-concurrent-rejection",
+      from_address: "unknown@example.com",
+      recipient_addresses: ["everyone@unknown.clubs.memba.io"],
+      subject: "Unknown destination",
+      text_body: "A provider retry must not send another rejection."
+    }
+
+    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
+
+    results =
+      1..8
+      |> Task.async_stream(
+        fn _attempt ->
+          Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+        end,
+        max_concurrency: 8,
+        timeout: 10_000
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.all?(results, &match?({:ok, %{status: :rejected}}, &1))
+
+    assert 1 ==
+             Enum.count(results, fn {:ok, result} -> not Map.get(result, :duplicate?, false) end)
+
+    assert 7 == Enum.count(results, &match?({:ok, %{duplicate?: true}}, &1))
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert_receive {:email, %Swoosh.Email{}}
+    refute_receive {:email, %Swoosh.Email{}}
+  end
+
   test "the Admin route rejects inactive and other-club senders before private delivery" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
@@ -2111,6 +2613,30 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       person_id: person_id,
       active: true
     })
+  end
+
+  defp stop_projector!(projector) do
+    child_id =
+      Supervisor.which_children(Memba.Supervisor)
+      |> Enum.find_value(fn
+        {child_id, _pid, :worker, [^projector]} -> child_id
+        _child -> nil
+      end)
+
+    assert child_id
+    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+
+    on_exit(fn -> restart_projector!(child_id) end)
+
+    child_id
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+    end
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

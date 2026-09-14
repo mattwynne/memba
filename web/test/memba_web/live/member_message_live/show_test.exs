@@ -395,14 +395,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
   test "current member changes follow state with the compact follow toggle", %{conn: conn} do
     alice =
-      create_active_member(
+      create_authoritative_active_member(
         email: "alice@example.com",
         name: "Alice Adams",
         club_name: "Alpine Club"
       )
 
     bob =
-      create_active_member(
+      create_authoritative_active_member(
         email: "bob@example.com",
         name: "Bob Builder",
         club_name: "Alpine Club",
@@ -410,7 +410,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       )
 
     message =
-      create_message(
+      create_authoritative_message(
         club_id: alice.club_id,
         sender_id: alice.person_id,
         subject: "Trip planning night"
@@ -1174,13 +1174,59 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     |> Map.put(:membership_id, membership.membership_id)
   end
 
+  defp create_authoritative_active_member(attrs) do
+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+    person_id = Memba.ID.generate(:person)
+
+    unless Memba.Membership.get_club(club_id) do
+      assert :ok =
+               Memba.Membership.create_club(
+                 %{
+                   club_id: club_id,
+                   name: Keyword.fetch!(attrs, :club_name),
+                   slug: "alpine-club"
+                 },
+                 consistency: :strong
+               )
+    end
+
+    assert :ok =
+             Memba.Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.get(attrs, :name, "Test Member"),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
+
+    membership_id = Memba.ID.generate(:membership)
+
+    assert :ok =
+             Memba.Membership.add_member(
+               %{
+                 membership_id: membership_id,
+                 club_id: club_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    club_id
+    |> Memba.Membership.get_club()
+    |> Map.from_struct()
+    |> Map.put(:person_id, person_id)
+    |> Map.put(:membership_id, membership_id)
+  end
+
   defp create_group(club_id, name) do
     Repo.insert!(%Group{
       group_id: Memba.ID.generate(:group),
       club_id: club_id,
       group_key: "private_planning",
       email_slug: "private-planning",
-      name: name
+      name: name,
+      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
     })
   end
 
@@ -1216,7 +1262,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         club_id: club_id,
         group_key: SystemGroups.everyone_key(),
         email_slug: SystemGroups.everyone_email_slug(),
-        name: SystemGroups.everyone_name()
+        name: SystemGroups.everyone_name(),
+        name_uniqueness_key:
+          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
       })
 
     Repo.insert!(%GroupMembership{
@@ -1239,6 +1287,26 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
   defp create_message(attrs) do
     insert_group_accessible_message!(attrs)
+  end
+
+  defp create_authoritative_message(attrs) do
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message_as_current_member(
+               %{
+                 message_id: message_id,
+                 club_id: Keyword.fetch!(attrs, :club_id),
+                 sender_id: Keyword.fetch!(attrs, :sender_id),
+                 audience_group_id:
+                   SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id)),
+                 subject: Keyword.fetch!(attrs, :subject),
+                 body: Keyword.get(attrs, :body, "Message body")
+               },
+               consistency: :strong
+             )
+
+    Messaging.get_message(message_id)
   end
 
   defp create_member_email_delivery(attrs) do

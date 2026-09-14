@@ -36,11 +36,11 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
-  test "public Membership API does not expose custom group mutation functions in this slice" do
+  test "public Membership API exposes custom creation but not later group membership mutations" do
     refute function_exported?(Membership, :create_group, 1)
     refute function_exported?(Membership, :create_group, 2)
-    refute function_exported?(Membership, :create_custom_group, 1)
-    refute function_exported?(Membership, :create_custom_group, 2)
+    assert function_exported?(Membership, :create_custom_group, 1)
+    assert function_exported?(Membership, :create_custom_group, 2)
 
     refute function_exported?(Membership, :add_group_member, 1)
     refute function_exported?(Membership, :add_group_member, 2)

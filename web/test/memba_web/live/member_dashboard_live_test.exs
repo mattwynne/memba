@@ -914,7 +914,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         club_id: robin.club_id,
         group_id: admin_group_id,
         group_key: SystemGroups.admin_key(),
-        name: SystemGroups.admin_name()
+        name: SystemGroups.admin_name(),
+        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
       })
 
     add_group_member(admin_group, robin)
@@ -1330,6 +1331,45 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     refute html_has_selector?(html, "#member-section-tab-conversations[phx-click]")
     refute html_has_selector?(html, "#member-section-tab-members[phx-click]")
+  end
+
+  test "group privacy metadata uses structural system-group identity, not display metadata" do
+    club_id = Memba.ID.generate(:club)
+
+    custom_group = %{
+      club_id: club_id,
+      group_id: Memba.ID.generate(:group),
+      group_key: SystemGroups.everyone_key(),
+      name: SystemGroups.everyone_name(),
+      email_slug: "everyone-2",
+      email_address: "everyone-2@alpine-club.clubs.memba.io",
+      active_member_count: 1
+    }
+
+    custom_html =
+      dashboard_html(%{
+        groups: [custom_group],
+        selected_group: custom_group
+      })
+
+    assert html_has_selector?(custom_html, "#member-group-metadata", "Private group")
+    assert html_has_selector?(custom_html, "#member-group-metadata", "You're a member")
+
+    renamed_system_group = %{
+      custom_group
+      | group_id: SystemGroups.everyone_group_id(club_id),
+        group_key: nil,
+        name: "Club-wide discussion"
+    }
+
+    system_html =
+      dashboard_html(%{
+        groups: [renamed_system_group],
+        selected_group: renamed_system_group
+      })
+
+    refute html_has_selector?(system_html, "#member-group-metadata", "Private group")
+    refute html_has_selector?(system_html, "#member-group-metadata", "You're a member")
   end
 
   test "club template renders named member rows with current marker and a single members action" do
@@ -2095,7 +2135,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         group_id: SystemGroups.admin_group_id(robin.club_id),
         group_key: SystemGroups.admin_key(),
         email_slug: SystemGroups.admin_email_slug(),
-        name: SystemGroups.admin_name()
+        name: SystemGroups.admin_name(),
+        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
       })
 
     add_group_member(admin_group, robin)
@@ -2715,7 +2756,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         club_id: club_id,
         group_id: group_id,
         group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name()
+        name: SystemGroups.everyone_name(),
+        name_uniqueness_key:
+          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
       },
       on_conflict: :nothing
     )
@@ -2735,7 +2778,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       group_id: Memba.ID.generate(:group),
       group_key: Keyword.fetch!(attrs, :group_key),
       email_slug: Keyword.get(attrs, :email_slug),
-      name: Keyword.fetch!(attrs, :name)
+      name: Keyword.fetch!(attrs, :name),
+      name_uniqueness_key:
+        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
     })
   end
 

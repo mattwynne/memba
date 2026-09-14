@@ -606,7 +606,8 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
       club_id: club_id,
       group_key: "private_planning",
       email_slug: "private-planning",
-      name: name
+      name: name,
+      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
     })
   end
 
@@ -642,7 +643,9 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
         club_id: club_id,
         group_key: SystemGroups.everyone_key(),
         email_slug: SystemGroups.everyone_email_slug(),
-        name: SystemGroups.everyone_name()
+        name: SystemGroups.everyone_name(),
+        name_uniqueness_key:
+          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
       })
 
     Repo.insert!(%GroupMembership{

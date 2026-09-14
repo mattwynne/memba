@@ -1,6 +1,11 @@
 defmodule Memba.Membership.Projectors.Membership do
   @moduledoc """
   Projects membership events into the Membership read model.
+
+  An added membership is not exposed as active until the follow-cleanup policy
+  has durably acknowledged that event's global EventStore position. This keeps
+  a rapid re-add from making a departed member eligible for stale private-group
+  follows while allowing this projector to rebuild independently.
   """
 
   use Commanded.Projections.Ecto,
@@ -13,15 +18,18 @@ defmodule Memba.Membership.Projectors.Membership do
   alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.ProjectionBarrier
 
-  project(%ClubMemberAdded{} = event, fn multi ->
-    project_member_added(multi, event)
-  end)
+  @impl Commanded.Event.Handler
+  def handle(%ClubMemberAdded{} = event, metadata) do
+    project_member_added_after_follow_cleanup(event, metadata)
+  end
 
-  project(%LegacyMemberAdded{} = event, fn multi ->
-    project_member_added(multi, event)
-  end)
+  def handle(%LegacyMemberAdded{} = event, metadata) do
+    project_member_added_after_follow_cleanup(event, metadata)
+  end
 
   project(%ClubMemberRemoved{} = event, fn multi ->
     project_member_removed(multi, event)
@@ -30,6 +38,28 @@ defmodule Memba.Membership.Projectors.Membership do
   project(%LegacyMemberRemoved{} = event, fn multi ->
     project_member_removed(multi, event)
   end)
+
+  defp project_member_added_after_follow_cleanup(event, metadata) do
+    with :ok <- await_follow_cleanup(metadata.event_number) do
+      update_projection(event, metadata, fn multi ->
+        project_member_added(multi, event)
+      end)
+    end
+  end
+
+  defp await_follow_cleanup(event_number) do
+    case ProjectionBarrier.await(
+           [ClearRemovedGroupMemberFollows],
+           checkpoint: event_number,
+           timeout: 5_000
+         ) do
+      {:ok, _result} ->
+        :ok
+
+      {:error, :timeout, _result} ->
+        {:error, :removed_group_member_follow_cleanup_unavailable}
+    end
+  end
 
   defp project_member_added(multi, event) do
     Ecto.Multi.insert(multi, :membership_membership, %MembershipProjection{

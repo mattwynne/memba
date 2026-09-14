@@ -27,6 +27,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.EmailDeliveryDispatcher
+  alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubRejectionEmail
@@ -34,10 +35,14 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
+  alias Memba.Messaging.Message
   alias Memba.Messaging.OutboundMessageID
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
+
+  alias Memba.Messaging.Projectors.ConversationFollow,
+    as: ConversationFollowProjector
 
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
@@ -47,9 +52,12 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
+  alias Memba.ProjectionBarrier
   alias Memba.Repo
 
   import Ecto.Query
+
+  @default_authorization_stability_timeout 5_000
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -71,17 +79,52 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  Send a club message from an in-app current-member surface.
+
+  Unlike inbound email posting, browser composition requires the sender to
+  retain active membership in the selected audience group. The Membership
+  aggregate is rechecked at a stable event-store checkpoint before dispatch, so
+  a committed departure cannot be accepted through stale projections. That
+  successful stable check is the action's membership-ordering point: a departure
+  committed before it is observed and denies the action; one committed after it
+  races with an action already authorized for dispatch.
+  """
+  def send_club_message_as_current_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- send_club_message_command(attrs),
+                  :ok <- authorize_message_sender(command) do
+               {:ok, command}
+             end
+           end),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
   Post a reply to an existing club-message conversation.
 
   The caller supplies the reply `:message_id`, root `:conversation_id`, replying
   `:sender_id`, and non-blank `:body`. The reply inherits the root message's
   club and subject. Reply authorization requires the sender to hold active
-  membership in a group that has write access to the root conversation.
+  membership in a group that has write access to the root conversation. The
+  successful stable authorization check is the membership-ordering point, with
+  a later concurrent departure racing an action already authorized for dispatch.
   """
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- post_message_reply_command(attrs),
-         :ok <- authorize_reply_sender(command),
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(
+             fn ->
+               with {:ok, command} <- post_message_reply_command(attrs),
+                    :ok <- authorize_reply_sender(command) do
+                 {:ok, command}
+               end
+             end,
+             projections: [ConversationFollowProjector]
+           ),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -165,8 +208,13 @@ defmodule Memba.Messaging do
   """
   def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- follow_conversation_command(attrs),
-         :ok <- authorize_current_member_conversation_action(command),
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- follow_conversation_command(attrs),
+                  :ok <- authorize_current_member_conversation_action(command) do
+               {:ok, command}
+             end
+           end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -193,8 +241,13 @@ defmodule Memba.Messaging do
   """
   def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- unfollow_conversation_command(attrs),
-         :ok <- authorize_current_member_conversation_action(command),
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- unfollow_conversation_command(attrs),
+                  :ok <- authorize_current_member_conversation_action(command) do
+               {:ok, command}
+             end
+           end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -270,10 +323,10 @@ defmodule Memba.Messaging do
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
          {:ok, receive_result} <- dispatch_inbound_email_received(receive_command, dispatch_opts) do
-      if duplicate_inbound_email_receipt?(receive_result) do
+      if completed_duplicate_inbound_email_receipt?(receive_result) do
         duplicate_inbound_email_response(receive_command, receive_result)
       else
-        post_first_inbound_club_email(receive_command, dispatch_opts)
+        recover_or_post_first_inbound_club_email(receive_command, dispatch_opts)
       end
     end
   end
@@ -313,7 +366,16 @@ defmodule Memba.Messaging do
   Membership of the addressed group is not required to start a conversation.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
-    GroupEmailPostingPolicy.authorize(sender, destination)
+    case authorize_at_stable_checkpoint(fn ->
+           case GroupEmailPostingPolicy.authorize(sender, destination) do
+             :ok -> {:ok, :authorized}
+             {:error, _reason, _details} = error -> error
+           end
+         end) do
+      {:ok, :authorized} -> :ok
+      {:error, _reason, _details} = error -> error
+      {:error, _reason} = error -> error
+    end
   end
 
   @doc """
@@ -1215,8 +1277,14 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp duplicate_inbound_email_receipt?(%ExecutionResult{events: []}), do: true
-  defp duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
+  defp completed_duplicate_inbound_email_receipt?(%ExecutionResult{
+         events: [],
+         aggregate_state: %InboundEmailReceipt{status: status}
+       })
+       when status in [:accepted, :rejected],
+       do: true
+
+  defp completed_duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
 
   defp duplicate_inbound_email_response(
          receive_command,
@@ -1230,6 +1298,22 @@ defmodule Memba.Messaging do
        message_id: receipt.message_id,
        rejection_reason: receipt.rejection_reason
      }}
+  end
+
+  defp recover_or_post_first_inbound_club_email(receive_command, dispatch_opts) do
+    message_id = inbound_message_id(receive_command)
+
+    case App.aggregate_state(Message, message_id) do
+      %Message{message_id: ^message_id} = message ->
+        recover_committed_inbound_message(
+          message,
+          receive_command,
+          dispatch_opts
+        )
+
+      _missing_message ->
+        post_first_inbound_club_email(receive_command, dispatch_opts)
+    end
   end
 
   defp post_first_inbound_club_email(receive_command, dispatch_opts) do
@@ -1278,6 +1362,20 @@ defmodule Memba.Messaging do
          %InboundClubSender{} = sender,
          dispatch_opts
        ) do
+    authorize_and_post_first_inbound_club_email(
+      receive_command,
+      destination,
+      sender,
+      dispatch_opts
+    )
+  end
+
+  defp authorize_and_post_first_inbound_club_email(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         dispatch_opts
+       ) do
     case authorize_inbound_club_email_sender(sender, destination) do
       :ok ->
         post_authorized_first_inbound_club_email(
@@ -1295,6 +1393,146 @@ defmodule Memba.Messaging do
           dispatch_opts,
           club_name: destination.club_name
         )
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp recover_committed_inbound_message(
+         %Message{} = message,
+         receive_command,
+         dispatch_opts
+       ) do
+    with :ok <- confirm_matching_committed_inbound_message_content(message, receive_command),
+         {:ok, %InboundClubDestination{} = destination} <-
+           resolve_inbound_club_email_destination(receive_command.inbound_email),
+         {:ok, %InboundClubSender{} = sender} <-
+           resolve_inbound_club_email_sender(receive_command.inbound_email),
+         :ok <-
+           confirm_matching_committed_inbound_message_context(
+             message,
+             receive_command,
+             destination,
+             sender
+           ),
+         :ok <-
+           record_inbound_club_email_accepted(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message.message_id,
+             dispatch_opts
+           ) do
+      {:ok,
+       accepted_inbound_email_response(
+         receive_command,
+         destination,
+         sender,
+         message
+       )}
+    end
+  end
+
+  defp confirm_matching_committed_inbound_message_content(%Message{} = message, receive_command) do
+    with {:ok, body} <- InboundEmailBody.normalize_text_body(receive_command.inbound_email),
+         true <- message.message_id == inbound_message_id(receive_command),
+         true <-
+           committed_inbound_message_subject_matches?(message, receive_command.inbound_email),
+         true <- message.body == body do
+      :ok
+    else
+      _mismatch -> {:error, :inbound_message_mismatch}
+    end
+  end
+
+  defp confirm_matching_committed_inbound_message_context(
+         %Message{} = message,
+         receive_command,
+         destination,
+         sender
+       ) do
+    with true <- message.club_id == destination.club_id,
+         true <- message.sender_id == sender.person_id,
+         true <-
+           committed_inbound_message_destination_matches?(
+             message,
+             receive_command,
+             destination
+           ) do
+      :ok
+    else
+      _mismatch -> {:error, :inbound_message_mismatch}
+    end
+  end
+
+  defp committed_inbound_message_subject_matches?(
+         %Message{
+           message_id: message_id,
+           conversation_id: message_id,
+           subject: subject
+         },
+         %InboundEmail{subject: subject}
+       ),
+       do: true
+
+  defp committed_inbound_message_subject_matches?(
+         %Message{message_id: message_id, conversation_id: conversation_id, subject: subject},
+         %InboundEmail{}
+       )
+       when message_id != conversation_id do
+    case App.aggregate_state(Message, conversation_id) do
+      %Message{
+        message_id: ^conversation_id,
+        conversation_id: ^conversation_id,
+        subject: ^subject
+      } ->
+        true
+
+      _missing_or_different_root ->
+        false
+    end
+  end
+
+  defp committed_inbound_message_subject_matches?(%Message{}, %InboundEmail{}), do: false
+
+  defp committed_inbound_message_destination_matches?(
+         %Message{
+           message_id: message_id,
+           conversation_id: message_id,
+           group_access: group_access
+         },
+         _receive_command,
+         destination
+       ) do
+    Map.get(group_access, destination.group_id) == "write"
+  end
+
+  defp committed_inbound_message_destination_matches?(
+         %Message{conversation_id: conversation_id},
+         receive_command,
+         destination
+       ) do
+    case resolve_inbound_reply_reference(receive_command.inbound_email, destination) do
+      %{conversation_id: ^conversation_id} -> true
+      _missing_or_different_reference -> false
+    end
+  end
+
+  defp accepted_inbound_email_response(receive_command, destination, sender, message) do
+    response = %{
+      inbound_email_id: receive_command.inbound_email_id,
+      message_id: message.message_id,
+      club_id: destination.club_id,
+      sender_id: sender.person_id,
+      from_address: sender.from_address,
+      to_address: destination.to_address
+    }
+
+    if message.conversation_id == message.message_id do
+      response
+    else
+      Map.put(response, :conversation_id, message.conversation_id)
     end
   end
 
@@ -1377,7 +1615,7 @@ defmodule Memba.Messaging do
          conversation_id,
          dispatch_opts
        ) do
-    message_id = Memba.ID.generate(:message)
+    message_id = inbound_message_id(receive_command)
 
     case post_inbound_club_message_reply(
            conversation_id,
@@ -1428,34 +1666,47 @@ defmodule Memba.Messaging do
          body,
          dispatch_opts
        ) do
-    message_id = Memba.ID.generate(:message)
+    message_id = inbound_message_id(receive_command)
 
-    with :ok <-
-           send_inbound_club_message(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             body,
-             dispatch_opts
-           ),
-         :ok <-
-           record_inbound_club_email_accepted(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             dispatch_opts
-           ) do
-      {:ok,
-       %{
-         inbound_email_id: receive_command.inbound_email_id,
-         message_id: message_id,
-         club_id: destination.club_id,
-         sender_id: sender.person_id,
-         from_address: sender.from_address,
-         to_address: destination.to_address
-       }}
+    case send_inbound_club_message(
+           receive_command.inbound_email,
+           destination,
+           sender,
+           message_id,
+           body,
+           dispatch_opts
+         ) do
+      :ok ->
+        with :ok <-
+               record_inbound_club_email_accepted(
+                 receive_command.inbound_email,
+                 destination,
+                 sender,
+                 message_id,
+                 dispatch_opts
+               ) do
+          {:ok,
+           %{
+             inbound_email_id: receive_command.inbound_email_id,
+             message_id: message_id,
+             club_id: destination.club_id,
+             sender_id: sender.person_id,
+             from_address: sender.from_address,
+             to_address: destination.to_address
+           }}
+        end
+
+      {:error, :sender_not_active_member, _details} ->
+        reject_first_inbound_club_email(
+          receive_command,
+          destination.to_address,
+          "sender_not_active_member",
+          dispatch_opts,
+          club_name: destination.club_name
+        )
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -1468,31 +1719,38 @@ defmodule Memba.Messaging do
        ) do
     rejection_email_delivery_reference = ID.generate(:delivery)
 
-    with :ok <-
-           record_inbound_club_email_rejected(
-             receive_command.inbound_email,
-             to_address,
-             rejection_reason,
-             rejection_email_delivery_reference,
-             dispatch_opts
-           ),
-         :ok <-
-           InboundClubRejectionEmail.deliver(
-             receive_command.inbound_email,
-             to_address,
-             rejection_reason,
-             rejection_email_delivery_reference,
-             opts
-           ) do
-      {:ok,
-       %{
-         inbound_email_id: receive_command.inbound_email_id,
-         status: :rejected,
-         rejection_reason: rejection_reason,
-         from_address: receive_command.inbound_email.from_address,
-         to_address: to_address,
-         rejection_email_delivery_reference: rejection_email_delivery_reference
-       }}
+    case record_inbound_club_email_rejected(
+           receive_command.inbound_email,
+           to_address,
+           rejection_reason,
+           rejection_email_delivery_reference,
+           dispatch_opts
+         ) do
+      {:ok, :recorded} ->
+        with :ok <-
+               InboundClubRejectionEmail.deliver(
+                 receive_command.inbound_email,
+                 to_address,
+                 rejection_reason,
+                 rejection_email_delivery_reference,
+                 opts
+               ) do
+          {:ok,
+           %{
+             inbound_email_id: receive_command.inbound_email_id,
+             status: :rejected,
+             rejection_reason: rejection_reason,
+             from_address: receive_command.inbound_email.from_address,
+             to_address: to_address,
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           }}
+        end
+
+      {:ok, {:duplicate, %ExecutionResult{} = result}} ->
+        duplicate_inbound_email_response(receive_command, result)
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -1504,19 +1762,23 @@ defmodule Memba.Messaging do
          body,
          dispatch_opts
        ) do
-    case send_club_message(
-           %{
-             message_id: message_id,
-             club_id: destination.club_id,
-             sender_id: sender.person_id,
-             audience_group_id: destination.group_id,
-             subject: inbound_email.subject,
-             body: body
-           },
-           dispatch_opts
-         ) do
-      {:error, _reason} = error -> error
-      _send_result -> :ok
+    attrs = %{
+      message_id: message_id,
+      club_id: destination.club_id,
+      sender_id: sender.person_id,
+      audience_group_id: destination.group_id,
+      subject: inbound_email.subject,
+      body: body
+    }
+
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with :ok <- GroupEmailPostingPolicy.authorize(sender, destination),
+                  {:ok, command} <- send_club_message_command(attrs) do
+               {:ok, command}
+             end
+           end) do
+      dispatch_inbound_message_once(command, dispatch_opts)
     end
   end
 
@@ -1527,17 +1789,77 @@ defmodule Memba.Messaging do
          body,
          dispatch_opts
        ) do
-    case post_message_reply(
-           %{
-             message_id: message_id,
-             conversation_id: conversation_id,
-             sender_id: sender.person_id,
-             body: body
-           },
-           dispatch_opts
-         ) do
+    attrs = %{
+      message_id: message_id,
+      conversation_id: conversation_id,
+      sender_id: sender.person_id,
+      body: body
+    }
+
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(
+             fn ->
+               with {:ok, command} <- post_message_reply_command(attrs),
+                    :ok <- authorize_reply_sender(command) do
+                 {:ok, command}
+               end
+             end,
+             projections: [ConversationFollowProjector]
+           ) do
+      dispatch_inbound_message_once(command, dispatch_opts)
+    end
+  end
+
+  defp inbound_message_id(%ReceiveInboundEmail{inbound_email_id: inbound_email_id}) do
+    ID.deterministic(:message, [inbound_email_id])
+  end
+
+  defp dispatch_inbound_message_once(command, dispatch_opts) do
+    case dispatch_ok(command, dispatch_opts) do
+      :ok -> :ok
+      {:error, :already_sent} -> confirm_matching_inbound_message(command)
       {:error, _reason} = error -> error
-      _reply_result -> :ok
+    end
+  end
+
+  defp confirm_matching_inbound_message(%SendMessage{} = command) do
+    case App.aggregate_state(Message, command.message_id) do
+      %Message{
+        message_id: message_id,
+        club_id: club_id,
+        sender_id: sender_id,
+        conversation_id: message_id,
+        group_access: group_access
+      }
+      when message_id == command.message_id and club_id == command.club_id and
+             sender_id == command.sender_id ->
+        if Map.get(group_access, command.audience_group_id) == "write" do
+          :ok
+        else
+          {:error, :already_sent}
+        end
+
+      _missing_or_different_message ->
+        {:error, :already_sent}
+    end
+  end
+
+  defp confirm_matching_inbound_message(%PostMessageReply{} = command) do
+    case App.aggregate_state(Message, command.message_id) do
+      %Message{
+        message_id: message_id,
+        club_id: club_id,
+        sender_id: sender_id,
+        conversation_id: conversation_id,
+        reply_to_message_id: reply_to_message_id
+      }
+      when message_id == command.message_id and club_id == command.club_id and
+             sender_id == command.sender_id and conversation_id == command.conversation_id and
+             reply_to_message_id == command.reply_to_message_id ->
+        :ok
+
+      _missing_or_different_message ->
+        {:error, :already_sent}
     end
   end
 
@@ -1591,16 +1913,31 @@ defmodule Memba.Messaging do
          rejection_email_delivery_reference,
          dispatch_opts
        ) do
-    dispatch_ok(
-      %RejectInboundClubEmail{
-        inbound_email_id: InboundEmail.identity(inbound_email),
-        inbound_email: inbound_email,
-        to_address: to_address,
-        rejection_reason: rejection_reason,
-        rejection_email_delivery_reference: rejection_email_delivery_reference
-      },
-      dispatch_opts
-    )
+    command = %RejectInboundClubEmail{
+      inbound_email_id: InboundEmail.identity(inbound_email),
+      inbound_email: inbound_email,
+      to_address: to_address,
+      rejection_reason: rejection_reason,
+      rejection_email_delivery_reference: rejection_email_delivery_reference
+    }
+
+    dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
+
+    case dispatch_command(command, dispatch_opts) do
+      {:ok, {:ok, %ExecutionResult{events: [%InboundClubEmailRejected{} | _events]}}} ->
+        {:ok, :recorded}
+
+      {:ok,
+       {:ok,
+        %ExecutionResult{
+          events: [],
+          aggregate_state: %InboundEmailReceipt{status: :rejected}
+        } = result}} ->
+        {:ok, {:duplicate, result}}
+
+      {:error, _reason} = error ->
+        error
+    end
   end
 
   defp rejection_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
@@ -1668,7 +2005,7 @@ defmodule Memba.Messaging do
          audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_group_recipients(audience_group_id)
+         recipients: resolve_group_recipients(club_id, audience_group_id)
        }}
     end
   end
@@ -1824,7 +2161,7 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_reply_sender(%PostMessageReply{} = command) do
-    case member_has_conversation_access?(
+    case member_has_authoritative_conversation_access?(
            command.conversation_id,
            command.club_id,
            command.sender_id,
@@ -1835,11 +2172,23 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp authorize_message_sender(%SendMessage{} = command) do
+    if Membership.active_member_of_group_authoritatively?(
+         command.club_id,
+         command.audience_group_id,
+         command.sender_id
+       ) do
+      :ok
+    else
+      {:error, :not_current_member}
+    end
+  end
+
   defp authorize_current_member_conversation_action(command) do
     with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),
          :ok <- require_conversation_in_club(root_message, command.club_id),
          true <-
-           member_has_conversation_access?(
+           member_has_authoritative_conversation_access?(
              command.conversation_id,
              command.club_id,
              command.member_id,
@@ -1849,6 +2198,91 @@ defmodule Memba.Messaging do
     else
       false -> {:error, :not_current_member}
       {:error, _reason} = error -> error
+    end
+  end
+
+  defp authorize_at_stable_checkpoint(authorization) when is_function(authorization, 0) do
+    authorize_at_stable_checkpoint(authorization, [])
+  end
+
+  defp authorize_at_stable_checkpoint(authorization, opts)
+       when is_function(authorization, 0) and is_list(opts) do
+    deadline =
+      System.monotonic_time(:millisecond) + authorization_stability_timeout()
+
+    authorize_at_stable_checkpoint(
+      authorization,
+      Keyword.get(opts, :projections, []),
+      deadline
+    )
+  end
+
+  defp authorize_at_stable_checkpoint(authorization, projections, deadline) do
+    if System.monotonic_time(:millisecond) >= deadline do
+      {:error, :authorization_stability_timeout}
+    else
+      checkpoint = ProjectionBarrier.current_checkpoint()
+
+      with :ok <- await_authorization_projections(projections, checkpoint, deadline),
+           {:ok, authorized} <- authorization.() do
+        if ProjectionBarrier.current_checkpoint() == checkpoint do
+          {:ok, authorized}
+        else
+          authorize_at_stable_checkpoint(authorization, projections, deadline)
+        end
+      end
+    end
+  end
+
+  defp await_authorization_projections([], _checkpoint, _deadline), do: :ok
+
+  defp await_authorization_projections(projections, checkpoint, deadline) do
+    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    case ProjectionBarrier.await(projections, checkpoint: checkpoint, timeout: timeout) do
+      {:ok, _result} -> :ok
+      {:error, :timeout, _result} -> {:error, :authorization_stability_timeout}
+    end
+  end
+
+  defp authorization_stability_timeout do
+    case Application.get_env(
+           :memba,
+           :authorization_stability_timeout,
+           @default_authorization_stability_timeout
+         ) do
+      timeout when is_integer(timeout) and timeout >= 0 -> timeout
+      _invalid -> @default_authorization_stability_timeout
+    end
+  end
+
+  defp member_has_authoritative_conversation_access?(
+         conversation_id,
+         club_id,
+         person_id,
+         access_level
+       ) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level),
+         %Message{
+           message_id: ^conversation_id,
+           club_id: ^club_id,
+           group_access: group_access
+         } <- App.aggregate_state(Message, conversation_id) do
+      grant_levels = ConversationAccess.grant_levels_including(access_level)
+
+      Enum.any?(group_access, fn {group_id, granted_access_level} ->
+        granted_access_level in grant_levels and
+          Membership.active_member_of_group_authoritatively?(
+            club_id,
+            group_id,
+            person_id
+          )
+      end)
+    else
+      _invalid_missing_or_inaccessible -> false
     end
   end
 
@@ -1888,12 +2322,13 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp resolve_group_recipients(group_id, opts \\ []) do
+  defp resolve_group_recipients(club_id, group_id, opts \\ []) do
     except_person_id = Keyword.get(opts, :except_person_id)
 
     group_id
     |> Membership.list_active_members_of_group()
     |> Enum.reject(&(&1.id == except_person_id))
+    |> Enum.filter(&Membership.active_member_of_group_authoritatively?(club_id, group_id, &1.id))
     |> Enum.map(&resolved_recipient/1)
   end
 
@@ -1905,6 +2340,14 @@ defmodule Memba.Messaging do
     |> Membership.list_active_members_of_club()
     |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
     |> Enum.reject(&(&1.id == except_person_id))
+    |> Enum.filter(
+      &member_has_authoritative_conversation_access?(
+        conversation_id,
+        club_id,
+        &1.id,
+        :read
+      )
+    )
     |> Enum.map(&resolved_recipient/1)
   end
 

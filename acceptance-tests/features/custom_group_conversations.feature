@@ -1,4 +1,4 @@
-@iteration-062 @todo-domain @todo-ui
+@iteration-062
 Feature: Conversations within custom groups
   Group members use the existing conversation, reply, and follow behaviour.
   Emailing a group to start a conversation is not the same as joining it.

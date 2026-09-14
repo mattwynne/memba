@@ -5,8 +5,10 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   alias Memba.Membership.App
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -87,13 +89,14 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
   end
 
-  test "ClubMemberRemoved dispatches removals for both Everyone and Admin system groups" do
+  test "RemoveClubMember emits custom removal while the policy removes Everyone and Admin" do
     club_id = Memba.ID.generate(:club)
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
     admin_role_id = Roles.membership_administrator_role_id(club_id)
     everyone_group_id = SystemGroups.everyone_group_id(club_id)
     admin_group_id = SystemGroups.admin_group_id(club_id)
+    custom_group_id = Memba.ID.generate(:group)
 
     replacement_membership_id = Memba.ID.generate(:membership)
     replacement_person_id = Memba.ID.generate(:person)
@@ -101,6 +104,8 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     create_club(club_id)
     add_member(club_id, membership_id, person_id)
     add_member(club_id, replacement_membership_id, replacement_person_id)
+    create_group(club_id, custom_group_id)
+    add_group_member(club_id, custom_group_id, membership_id, person_id)
 
     assert :ok =
              App.dispatch(
@@ -115,6 +120,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
+    assert_group_membership(club_id, custom_group_id, membership_id, person_id, true)
 
     assert :ok =
              App.dispatch(
@@ -128,6 +134,17 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
+    assert_group_membership(club_id, custom_group_id, membership_id, person_id, false)
+
+    club_events = recorded_events(club_id)
+
+    assert count_group_events(club_events, GroupMemberRemoved, everyone_group_id, membership_id) ==
+             1
+
+    assert count_group_events(club_events, GroupMemberRemoved, admin_group_id, membership_id) == 1
+
+    assert count_group_events(club_events, GroupMemberRemoved, custom_group_id, membership_id) ==
+             1
   end
 
   test "redelivered lifecycle events use Club group state rather than handler workflow memory" do
@@ -262,6 +279,32 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
              )
 
     await_group_membership_projector!()
+  end
+
+  defp create_group(club_id, group_id) do
+    assert :ok =
+             App.dispatch(
+               %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: "board",
+                 name: "Board"
+               },
+               consistency: :strong
+             )
+  end
+
+  defp add_group_member(club_id, group_id, membership_id, person_id) do
+    assert :ok =
+             App.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
   end
 
   defp assert_group_membership(club_id, group_id, membership_id, person_id, active?) do

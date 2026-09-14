@@ -131,7 +131,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
            ] = pending_deliveries_for_message(reply_message_id)
   end
 
-  test "reply authorization group does not constrain follower delivery recipients" do
+  test "reply recipients must be followers with authoritative conversation access" do
     club_id = Memba.ID.generate(:club)
     alice = create_person(name: "Alice", email: "alice@example.com")
     bob = create_person(name: "Bob", email: "bob@example.com")
@@ -156,10 +156,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
 
     assert {:ok,
             %ExecutionResult{
-              events: [
-                %MessageSent{message_id: ^reply_message_id}
-                | delivery_events
-              ]
+              events: [%MessageSent{message_id: ^reply_message_id}]
             }} =
              Messaging.post_message_reply(
                %{
@@ -172,16 +169,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
                consistency: :strong
              )
 
-    assert [alice.person_id, dana.person_id] == Enum.map(delivery_events, & &1.recipient_id)
-    refute bob.person_id in Enum.map(delivery_events, & &1.recipient_id)
-    refute chris.person_id in Enum.map(delivery_events, & &1.recipient_id)
-
-    assert [
-             %EmailDeliveryProjection{recipient_id: alice_id},
-             %EmailDeliveryProjection{recipient_id: dana_id}
-           ] = pending_deliveries_for_message(reply_message_id)
-
-    assert [alice_id, dana_id] == [alice.person_id, dana.person_id]
+    assert [] = pending_deliveries_for_message(reply_message_id)
   end
 
   test "a person who is not a current member of the root message club cannot reply" do

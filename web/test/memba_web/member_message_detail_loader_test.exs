@@ -304,7 +304,8 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
         club_id: member.club_id,
         group_key: String.downcase(name),
         email_slug: String.downcase(name),
-        name: name
+        name: name,
+        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
       })
 
     Repo.insert!(%GroupMembership{

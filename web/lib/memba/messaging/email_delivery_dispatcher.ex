@@ -2,12 +2,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @moduledoc """
   OTP process responsible for asynchronous email delivery dispatch.
 
-  The dispatcher subscribes to committed read-model changes and treats new
-  `EmailDelivery` projection records as a nudge to look for pending delivery
-  work. It also owns the provider handoff request-building boundary and
-  persisted dispatch outcomes so command application services do not call email
-  providers directly. Failed deliveries can be retried through the explicit
-  manual retry API; the dispatcher does not perform automatic retry sweeps.
+  The dispatcher checks for pending work on startup and subscribes to committed
+  read-model changes, treating new `EmailDelivery` records as nudges to look
+  again. An authorization-timeout deferral schedules one coalesced, bounded-delay
+  catch-up retry; repeated deferrals replace that timer until the required
+  projections catch up, including when they acknowledge only irrelevant events
+  and publish no read-model change. The startup check restores that pending-work
+  nudge after a dispatcher or application restart. The dispatcher also owns the
+  provider handoff request-building boundary and persisted dispatch outcomes so
+  command application services do not call email providers directly. Failed
+  deliveries can be retried through the explicit manual retry API; the
+  dispatcher does not automatically retry failed deliveries.
   """
 
   use GenServer
@@ -21,10 +26,16 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   alias Memba.Messaging.EmailDeliveryStatus
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.Events.EmailDeliveryCreated
+
+  alias Memba.Messaging.Projectors.ConversationGroupAccess,
+    as: ConversationGroupAccessProjector
+
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+  alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
+  alias Memba.ProjectionBarrier
   alias Memba.ReadModelChanges
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -34,6 +45,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @dispatching_status EmailDeliveryStatus.dispatching()
   @sent_status EmailDeliveryStatus.sent()
   @failed_status EmailDeliveryStatus.failed()
+  @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
+  @default_projection_timeout 5_000
+  @default_projection_catch_up_retry_interval 100
+  @projection_timeout_errors [
+    :delivery_context_projection_timeout,
+    :recipient_access_projection_timeout
+  ]
 
   @doc """
   Atomically claim one pending email delivery for provider dispatch.
@@ -95,9 +113,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   Provider acceptance marks a claimed delivery as `sent`. Provider/request
   errors mark the individual delivery as `failed`, increment the persisted
-  attempt count, and store the latest error diagnostics. Each claimed delivery
-  is handled independently so one failure does not prevent later claimed
-  deliveries from being attempted.
+  attempt count, and store the latest error diagnostics. If the projections
+  required for a final authorization read have not caught up before the short
+  timeout, the claim is released back to `pending` without calling the provider
+  or recording a terminal failure. Once provider acceptance has marked a
+  delivery `sent`, later access loss does not recall, fail, or retry that
+  already-handed-off email. Each claimed delivery is handled independently so
+  one unavailable recipient does not prevent later claimed deliveries from
+  being considered.
   """
   def dispatch_pending_email_deliveries do
     claim_pending_email_deliveries()
@@ -112,6 +135,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
       :ok ->
         log_provider_success(delivery)
         mark_delivery_sent(delivery)
+
+      {:error, reason} when reason in @projection_timeout_errors ->
+        log_dispatch_deferred(delivery, reason, @pending_status)
+        defer_claimed_delivery(delivery, @pending_status)
 
       {:error, reason} ->
         log_provider_error(delivery, reason)
@@ -144,7 +171,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   committed read-model state: the `EmailDelivery` projection supplies
   per-recipient delivery data and the `Message` projection supplies message,
   club, and sender IDs. Membership's public query API enriches the request with
-  sender and club display context.
+  sender and club display context. Immediately before provider handoff, the
+  recipient must still have read access to the conversation; a delivery resolved
+  before membership ended is failed without exposing its private content. The
+  final stable authorization read is the handoff boundary: a departure ordered
+  after it has raced with a provider call that has already begun.
   """
   def deliver_to_provider(work)
 
@@ -172,8 +203,22 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
     state = %{
       dispatch_enabled: Keyword.get(opts, :dispatch_enabled, true),
-      dispatch_observer: Keyword.get(opts, :dispatch_observer)
+      dispatch_observer: Keyword.get(opts, :dispatch_observer),
+      projection_catch_up_retry_interval:
+        positive_interval(
+          Keyword.get(
+            opts,
+            :projection_catch_up_retry_interval,
+            @default_projection_catch_up_retry_interval
+          ),
+          @default_projection_catch_up_retry_interval
+        ),
+      projection_catch_up_retry_timer: nil
     }
+
+    if state.dispatch_enabled do
+      send(self(), {:dispatch_pending_email_deliveries, %{source: :startup}})
+    end
 
     {:ok, state}
   end
@@ -202,7 +247,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   end
 
   def handle_info({:dispatch_pending_email_deliveries, payload}, state) do
+    state = consume_projection_catch_up_retry(state, payload)
     claimed_deliveries = dispatch_pending_email_deliveries(state)
+    state = maybe_schedule_projection_catch_up_retry(state, claimed_deliveries)
 
     notify_dispatch_observer(state, payload, claimed_deliveries)
 
@@ -219,18 +266,55 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload, _claimed_deliveries), do: :ok
 
+  defp notify_dispatch_observer(
+         %{dispatch_observer: observer},
+         %{source: :startup},
+         []
+       )
+       when is_pid(observer),
+       do: :ok
+
   defp notify_dispatch_observer(%{dispatch_observer: observer}, payload, claimed_deliveries)
        when is_pid(observer) do
     send(
       observer,
       {:email_delivery_dispatch_requested,
        payload
-       |> Map.put(:source, :read_model_change)
+       |> Map.put_new(:source, :read_model_change)
        |> Map.put(:claimed_delivery_ids, Enum.map(claimed_deliveries, & &1.delivery_id))}
     )
 
     :ok
   end
+
+  defp maybe_schedule_projection_catch_up_retry(state, claimed_deliveries) do
+    if is_nil(state.projection_catch_up_retry_timer) and
+         state.dispatch_enabled and
+         Enum.any?(claimed_deliveries, &(&1.status == @pending_status)) do
+      timer =
+        Process.send_after(
+          self(),
+          {:dispatch_pending_email_deliveries, %{source: :projection_catch_up_retry}},
+          state.projection_catch_up_retry_interval
+        )
+
+      %{state | projection_catch_up_retry_timer: timer}
+    else
+      state
+    end
+  end
+
+  defp consume_projection_catch_up_retry(
+         state,
+         %{source: :projection_catch_up_retry}
+       ) do
+    %{state | projection_catch_up_retry_timer: nil}
+  end
+
+  defp consume_projection_catch_up_retry(state, _payload), do: state
+
+  defp positive_interval(value, _fallback) when is_integer(value) and value > 0, do: value
+  defp positive_interval(_value, fallback), do: fallback
 
   defp claim_failed_delivery(delivery_id) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
@@ -270,6 +354,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
       :ok ->
         log_provider_success(delivery)
         mark_delivery_sent(delivery, increment_attempt_count?: true)
+
+      {:error, reason} when reason in @projection_timeout_errors ->
+        log_dispatch_deferred(delivery, reason, @failed_status)
+        defer_claimed_delivery(delivery, @failed_status)
 
       {:error, reason} ->
         log_provider_error(delivery, reason)
@@ -326,6 +414,16 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
   end
 
+  defp defer_claimed_delivery(%EmailDeliveryProjection{} = delivery, resume_status) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    delivery
+    |> outcome_query()
+    |> Repo.update_all(set: [status: resume_status, updated_at: now])
+
+    Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+  end
+
   defp outcome_query(%EmailDeliveryProjection{} = delivery) do
     from projected_delivery in EmailDeliveryProjection,
       where:
@@ -350,7 +448,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp delivery_error_name(reason), do: inspect(reason, limit: 10, printable_limit: 200)
 
   defp email_delivery_request(%EmailDeliveryProjection{} = delivery) do
-    with %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
+    with :ok <- await_delivery_context_projections(),
+         %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
          {:ok, channel} <- request_channel(delivery.channel),
          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
       club = Membership.get_club(message.club_id)
@@ -393,6 +492,69 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     end
   end
 
+  defp await_delivery_context_projections do
+    case ProjectionBarrier.await(@delivery_context_projectors, timeout: projection_timeout()) do
+      {:ok, _result} -> :ok
+      {:error, :timeout, _result} -> {:error, :delivery_context_projection_timeout}
+    end
+  end
+
+  defp await_recipient_access_projections(checkpoint, timeout) do
+    with {:ok, _result} <-
+           ProjectionBarrier.await(@delivery_context_projectors,
+             checkpoint: checkpoint,
+             timeout: timeout
+           ),
+         {:ok, _result} <-
+           Membership.await_group_access_projections(
+             checkpoint: checkpoint,
+             timeout: timeout
+           ) do
+      :ok
+    else
+      {:error, :timeout, _result} -> {:error, :recipient_access_projection_timeout}
+    end
+  end
+
+  defp authorize_recipient_for_handoff(request, delivery) do
+    deadline = System.monotonic_time(:millisecond) + projection_timeout()
+    authorize_recipient_for_handoff(request, delivery, deadline)
+  end
+
+  defp authorize_recipient_for_handoff(request, delivery, deadline) do
+    checkpoint = ProjectionBarrier.current_checkpoint()
+    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    if timeout == 0 do
+      {:error, :recipient_access_projection_timeout}
+    else
+      with :ok <- await_recipient_access_projections(checkpoint, timeout),
+           :ok <- authorize_recipient_access(request, delivery) do
+        if ProjectionBarrier.current_checkpoint() == checkpoint do
+          :ok
+        else
+          authorize_recipient_for_handoff(request, delivery, deadline)
+        end
+      end
+    end
+  end
+
+  defp authorize_recipient_access(
+         %EmailDeliveryRequest{} = request,
+         %EmailDeliveryProjection{} = delivery
+       ) do
+    if Memba.Messaging.member_has_conversation_access?(
+         request.message_id,
+         request.club_id,
+         delivery.recipient_id,
+         :read
+       ) do
+      :ok
+    else
+      {:error, :recipient_access_ended}
+    end
+  end
+
   defp request_channel("email"), do: {:ok, :email}
   defp request_channel(channel), do: {:error, {:unsupported_delivery_channel, channel}}
 
@@ -400,7 +562,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          %EmailDeliveryRequest{} = request,
          %EmailDeliveryProjection{} = delivery
        ) do
-    EmailDeliveryProvider.deliver(request)
+    with :ok <- authorize_recipient_for_handoff(request, delivery) do
+      EmailDeliveryProvider.deliver(request)
+    end
   rescue
     exception ->
       stacktrace = __STACKTRACE__
@@ -419,6 +583,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp normalize_provider_result(:ok), do: :ok
   defp normalize_provider_result({:error, reason}), do: {:error, reason}
   defp normalize_provider_result(other), do: {:error, {:unexpected_provider_response, other}}
+
+  defp projection_timeout do
+    case Application.get_env(
+           :memba,
+           :email_delivery_projection_timeout,
+           @default_projection_timeout
+         ) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _invalid -> @default_projection_timeout
+    end
+  end
 
   defp sender_context(sender_id) do
     with %{name: sender_name} <- Membership.get_person(sender_id),
@@ -583,6 +758,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     Logger.warning(
       "email_delivery_provider_error",
       Keyword.merge(delivery_metadata(delivery, @failed_status), reason: inspect(reason))
+    )
+  end
+
+  defp log_dispatch_deferred(%EmailDeliveryProjection{} = delivery, reason, resume_status) do
+    Logger.warning(
+      "email_delivery_dispatch_deferred",
+      Keyword.merge(delivery_metadata(delivery, resume_status), reason: inspect(reason))
     )
   end
 

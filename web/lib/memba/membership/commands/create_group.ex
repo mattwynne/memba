@@ -8,10 +8,13 @@ defmodule Memba.Membership.Commands.CreateGroup do
   matching historic group appends that missing fact without replacing its
   original creation event.
 
-  This command is registered for system-group policy/backfill work and the
-  event-sourced group foundation. It is not a public custom-group API in this
-  slice; external callers use `Memba.Membership`, which intentionally exposes no
-  custom-group mutation functions yet.
+  This is a trusted internal command registered for system-group policy/backfill
+  work and event-sourced fixture setup. It deliberately remains actor-free so
+  those existing producers can replay and repair historical group definitions.
+
+  User-facing custom-group creation must instead use
+  `Memba.Membership.create_custom_group/2`, whose actor-bearing command is
+  authorized by the Club aggregate.
   """
 
   @enforce_keys [:club_id, :group_id, :name]

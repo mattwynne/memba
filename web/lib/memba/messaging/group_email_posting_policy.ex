@@ -6,8 +6,9 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   destination club may start a conversation by email. It is deliberately fixed
   in code rather than persisted or configurable.
 
-  Authorization uses Membership's public query API so Messaging can enforce the
-  policy without coupling to Membership projection storage.
+  Authorization uses Membership's public authoritative API so Messaging can
+  enforce the policy without coupling to Membership aggregate or projection
+  storage.
   """
 
   alias Memba.Membership
@@ -45,7 +46,10 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
         %InboundClubSender{} = sender,
         %InboundClubDestination{} = destination
       ) do
-    if Membership.active_member_of_club?(destination.club_id, sender.person_id) do
+    if Membership.active_member_of_club_authoritatively?(
+         destination.club_id,
+         sender.person_id
+       ) do
       :ok
     else
       {:error, :sender_not_active_member, rejection_details(sender, destination)}

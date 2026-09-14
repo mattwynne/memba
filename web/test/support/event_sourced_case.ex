@@ -27,7 +27,8 @@ defmodule Memba.EventSourcedCase do
     Memba.Messaging.Projectors.InboundEmailSource
   ]
   @event_handlers [
-    Memba.Membership.Policies.SystemGroupMembership
+    Memba.Membership.Policies.SystemGroupMembership,
+    Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   ]
   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
 

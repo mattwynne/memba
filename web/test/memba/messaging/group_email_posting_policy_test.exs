@@ -1,9 +1,7 @@
 defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
-  use Memba.DataCase, async: true
+  use Memba.EventSourcedCase, async: false
 
   alias Memba.Membership
-  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
-  alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.GroupEmailPostingPolicy
@@ -16,10 +14,9 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
 
   describe "authorize_inbound_club_email_sender/2" do
     test "authorizes a resolved sender who is an active member of the destination club's Everyone group" do
-      club = insert_membership_club!(slug: "kmc")
-      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
-      membership = insert_membership!(club, alice, active: true)
-      insert_everyone_group_membership!(club, membership, alice, active: true)
+      club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      alice = create_person!(name: "Alice Example", email: "alice@example.com")
+      add_member!(club.club_id, alice.person_id)
 
       assert :ok ==
                Messaging.authorize_inbound_club_email_sender(
@@ -29,11 +26,10 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
     end
 
     test "rejects a resolved sender who is only active in another club" do
-      kmc = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
-      npc = insert_membership_club!(name: "Nelson Paddling Club", slug: "npc")
-      pat = insert_membership_person!(name: "Pat Example", email: "pat@example.com")
-      membership = insert_membership!(npc, pat, active: true)
-      insert_everyone_group_membership!(npc, membership, pat, active: true)
+      kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
+      pat = create_person!(name: "Pat Example", email: "pat@example.com")
+      add_member!(npc.club_id, pat.person_id)
 
       assert {:error, :sender_not_active_member,
               %{
@@ -49,9 +45,11 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
     end
 
     test "authorizes an active destination-club member without membership of the addressed Admin group" do
-      club = insert_membership_club!(slug: "kmc")
-      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
-      insert_membership!(club, alice, active: true)
+      club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+      alice = create_person!(name: "Alice Example", email: "alice@example.com")
+      add_member!(club.club_id, bob.person_id)
+      add_member!(club.club_id, alice.person_id)
 
       refute Membership.active_member_of_group?(
                SystemGroups.admin_group_id(club.club_id),
@@ -66,10 +64,21 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
     end
 
     test "rejects a resolved sender with an inactive destination-club membership" do
-      club = insert_membership_club!(slug: "kmc")
-      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
-      membership = insert_membership!(club, alice, active: false)
-      insert_everyone_group_membership!(club, membership, alice, active: true)
+      club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+      alice = create_person!(name: "Alice Example", email: "alice@example.com")
+      add_member!(club.club_id, bob.person_id)
+      membership_id = add_member!(club.club_id, alice.person_id)
+
+      assert :ok =
+               Membership.remove_member(
+                 %{
+                   club_id: club.club_id,
+                   membership_id: membership_id,
+                   person_id: alice.person_id
+                 },
+                 consistency: :strong
+               )
 
       assert {:error, :sender_not_active_member,
               %{
@@ -117,22 +126,51 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
     }
   end
 
-  defp insert_membership!(club, person, attrs) do
-    Repo.insert!(%MembershipProjection{
-      membership_id: Memba.ID.generate(:membership),
-      club_id: club.club_id,
-      person_id: person.person_id,
-      active: Keyword.fetch!(attrs, :active)
-    })
+  defp create_club!(attrs) do
+    club_id = Memba.ID.generate(:club)
+
+    assert :ok =
+             Membership.create_club(
+               %{
+                 club_id: club_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 slug: Keyword.fetch!(attrs, :slug)
+               },
+               consistency: :strong
+             )
+
+    Membership.get_club(club_id)
   end
 
-  defp insert_everyone_group_membership!(club, membership, person, attrs) do
-    Repo.insert!(%GroupMembershipProjection{
-      club_id: club.club_id,
-      group_id: SystemGroups.everyone_group_id(club.club_id),
-      membership_id: membership.membership_id,
-      person_id: person.person_id,
-      active: Keyword.fetch!(attrs, :active)
-    })
+  defp create_person!(attrs) do
+    person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
+
+    Membership.get_person(person_id)
+  end
+
+  defp add_member!(club_id, person_id) do
+    membership_id = Memba.ID.generate(:membership)
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: membership_id,
+                 club_id: club_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    membership_id
   end
 end

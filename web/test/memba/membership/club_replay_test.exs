@@ -3,6 +3,8 @@ defmodule Memba.Membership.ClubReplayTest do
 
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.ClubMemberAdded
@@ -140,6 +142,78 @@ defmodule Memba.Membership.ClubReplayTest do
         native_membership_ids: MapSet.new([ids.first_membership_id]),
         active_admin_membership_ids: MapSet.new()
       )
+    end
+
+    test "uses replayed legacy membership state to record custom-group departures" do
+      ids = replay_ids()
+      club_id = ids.club_id
+      custom_group_id = Memba.ID.generate(:group)
+      membership_id = ids.first_membership_id
+      person_id = ids.first_person_id
+
+      historic_events = [
+        %LegacyMemberAdded{
+          club_id: ids.club_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        },
+        %LegacyMemberAdded{
+          club_id: ids.club_id,
+          membership_id: ids.second_membership_id,
+          person_id: ids.second_person_id
+        },
+        %GroupCreated{
+          club_id: ids.club_id,
+          group_id: custom_group_id,
+          group_key: nil,
+          name: "Board"
+        },
+        %GroupMemberAdded{
+          club_id: ids.club_id,
+          group_id: custom_group_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        }
+      ]
+
+      club = replay(ids.club_id, historic_events)
+
+      assert [
+               %ClubMemberRemoved{
+                 club_id: ^club_id,
+                 membership_id: ^membership_id,
+                 person_id: ^person_id
+               },
+               %GroupMemberRemoved{
+                 club_id: ^club_id,
+                 group_id: ^custom_group_id,
+                 membership_id: ^membership_id,
+                 person_id: ^person_id
+               }
+             ] =
+               removal_events =
+               Club.execute(club, %RemoveClubMember{
+                 club_id: ids.club_id,
+                 membership_id: ids.first_membership_id,
+                 person_id: ids.first_person_id
+               })
+
+      replayed = replay(ids.club_id, historic_events ++ removal_events)
+
+      assert_replay_state(replayed,
+        active_memberships: %{ids.second_membership_id => ids.second_person_id},
+        native_membership_ids: MapSet.new([ids.first_membership_id, ids.second_membership_id]),
+        active_admin_membership_ids: MapSet.new()
+      )
+
+      assert %{
+               {^custom_group_id, ^membership_id} => %{
+                 person_id: ^person_id,
+                 active: false
+               }
+             } = replayed.group_memberships
+
+      assert %{^custom_group_id => %{name: "Board"}} = replayed.groups
     end
   end
 

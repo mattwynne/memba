@@ -71,4 +71,54 @@ defmodule Memba.DomainCucumberRunnerTest do
     refute "Bob has Members but no Conversations while outside Board" in selected_names
     refute "Alice returns to a group she has not joined" in selected_names
   end
+
+  test "iteration 062 custom-group creation scenarios run at the domain layer except live input examples" do
+    selected_names =
+      DomainCucumberRunner.selected_scenarios()
+      |> Enum.map(& &1.scenario.name)
+
+    assert "Alice creates Board and belongs to it immediately" in selected_names
+    assert "Alice and Dan both try to create Board" in selected_names
+    assert "Board receives its own club-scoped email address" in selected_names
+    assert "A stored address identifies a group even when its name is different" in selected_names
+    refute "Alice sees the email address before creating Trips" in selected_names
+  end
+
+  test "iteration 062 custom-group conversation scenarios run at the domain layer" do
+    selected_names =
+      DomainCucumberRunner.selected_scenarios()
+      |> Enum.map(& &1.scenario.name)
+
+    assert "Bob starts a Board discussion without addressing Everyone" in selected_names
+    assert "Eve emails Board while remaining outside it" in selected_names
+    assert "Bob receives the ordinary recipient copy of his own Board email" in selected_names
+    assert "Carol's email reply stays in Bob's Board conversation" in selected_names
+    assert "Carol follows Board's agenda while Alice does not" in selected_names
+    assert "Carol stops following but can still read Board's agenda" in selected_names
+
+    assert Enum.count(
+             selected_names,
+             &String.starts_with?(
+               &1,
+               "Someone outside the active club membership cannot email Board"
+             )
+           ) == 3
+
+    assert Enum.count(
+             selected_names,
+             &String.starts_with?(
+               &1,
+               "Sending Board an email does not let Eve or Dan reply to it"
+             )
+           ) == 4
+  end
+
+  test "iteration 062 custom-group lifecycle scenarios run at the domain layer" do
+    selected_names =
+      DomainCucumberRunner.selected_scenarios()
+      |> Enum.map(& &1.scenario.name)
+
+    assert "Carol's club departure ends Board and Trips membership" in selected_names
+    assert "Returning to KMC does not put Carol back into Board or Trips" in selected_names
+  end
 end

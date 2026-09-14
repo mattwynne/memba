@@ -1263,7 +1263,9 @@ defmodule MembaWeb.PageControllerTest do
         club_id: club_id,
         group_id: group_id,
         group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name()
+        name: SystemGroups.everyone_name(),
+        name_uniqueness_key:
+          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
       },
       on_conflict: :nothing
     )

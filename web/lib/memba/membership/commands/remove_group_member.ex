@@ -5,10 +5,9 @@ defmodule Memba.Membership.Commands.RemoveGroupMember do
   The caller supplies the club aggregate identity as `club_id` and identifies
   both the group and member being removed.
 
-  This command is registered for system-group policy/backfill work and the
-  event-sourced group foundation. It is not a public custom-group API in this
-  slice; external callers use `Memba.Membership`, which intentionally exposes no
-  custom-group mutation functions yet.
+  This is a trusted internal command registered for system-group policy work and
+  event-sourced fixture setup. It is not the public, actor-authorized path for
+  changing custom-group membership.
   """
 
   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]

@@ -1,7 +1,7 @@
 # Admins create usable custom groups
 
 Date: 2026-09-13
-Status: implementing
+Status: merged
 
 Stakeholder review complete; Fabro plan validation pending.
 
@@ -52,8 +52,12 @@ Matt reviewed the rules and HTML prototype during planning.
 
 ## Allowed acceptance feature changes
 
-- The three exact files above: implement this slice's tagged examples and remove/narrow only their runner-debt tags. Preserve later iteration tags/debt and existing regression features. Low-level fixture setup may establish a named group with several members without exposing 063's user action.
+- `acceptance-tests/features/custom_group_creation.feature`: tag-only changes for iteration 062, removing or narrowing only `@todo-domain`/`@todo-ui` runner-debt tags while preserving `@not-domain` and later-iteration boundaries.
+- `acceptance-tests/features/custom_group_conversations.feature`: tag-only change for iteration 062, removing only this slice's `@todo-domain`/`@todo-ui` runner-debt tags.
+- `acceptance-tests/features/custom_group_lifecycle.feature`: tag-only changes for iteration 062, removing or narrowing only this slice's `@todo-domain`/`@todo-ui` runner-debt tags while preserving later iteration tags/debt.
 - `acceptance-tests/features/member_message_deliverability.feature`: no scenario changes required. Keep its unknown-route fixture genuinely absent; existing Admin/Everyone posting and unknown-destination coverage must remain.
+
+Low-level fixture setup may establish a named group with several members without exposing 063's user action.
 
 ## Designs
 

@@ -253,9 +253,10 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
-    test "rejects final-member removal before sole-Admin removal" do
+    test "rejects final-member removal before custom-group cleanup or sole-Admin removal" do
       club_id = Memba.ID.generate(:club)
       admin_role_id = Roles.membership_administrator_role_id(club_id)
+      custom_group_id = Memba.ID.generate(:group)
       membership_id = Memba.ID.generate(:membership)
       person_id = Memba.ID.generate(:person)
 
@@ -264,6 +265,15 @@ defmodule Memba.Membership.ClubTest do
         |> created_club()
         |> activate_member(membership_id, person_id)
         |> assign_member_role(membership_id, person_id, admin_role_id)
+        |> create_group(custom_group_id, nil, "Board")
+        |> add_group_member(custom_group_id, membership_id, person_id)
+
+      assert %{
+               {^custom_group_id, ^membership_id} => %{
+                 person_id: ^person_id,
+                 active: true
+               }
+             } = club.group_memberships
 
       assert {:error, :last_active_member} =
                Club.execute(club, %RemoveClubMember{
@@ -273,9 +283,10 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
-    test "rejects removing the sole active Admin while another member remains" do
+    test "rejects sole-Admin removal before custom-group cleanup while another member remains" do
       club_id = Memba.ID.generate(:club)
       admin_role_id = Roles.membership_administrator_role_id(club_id)
+      custom_group_id = Memba.ID.generate(:group)
       admin_membership_id = Memba.ID.generate(:membership)
       admin_person_id = Memba.ID.generate(:person)
       ordinary_membership_id = Memba.ID.generate(:membership)
@@ -287,6 +298,15 @@ defmodule Memba.Membership.ClubTest do
         |> activate_member(admin_membership_id, admin_person_id)
         |> assign_member_role(admin_membership_id, admin_person_id, admin_role_id)
         |> activate_member(ordinary_membership_id, ordinary_person_id)
+        |> create_group(custom_group_id, nil, "Board")
+        |> add_group_member(custom_group_id, admin_membership_id, admin_person_id)
+
+      assert %{
+               {^custom_group_id, ^admin_membership_id} => %{
+                 person_id: ^admin_person_id,
+                 active: true
+               }
+             } = club.group_memberships
 
       assert {:error, :last_membership_administrator} =
                Club.execute(club, %RemoveClubMember{
@@ -335,6 +355,86 @@ defmodule Memba.Membership.ClubTest do
                club.active_admin_membership_ids,
                MapSet.new([replacement_membership_id])
              )
+    end
+
+    test "ends every active custom-group membership in the club-member removal decision" do
+      club_id = Memba.ID.generate(:club)
+      departing_membership_id = Memba.ID.generate(:membership)
+      departing_person_id = Memba.ID.generate(:person)
+      remaining_membership_id = Memba.ID.generate(:membership)
+      remaining_person_id = Memba.ID.generate(:person)
+
+      [first_custom_group_id, second_custom_group_id, inactive_custom_group_id] =
+        Enum.sort([
+          Memba.ID.generate(:group),
+          Memba.ID.generate(:group),
+          Memba.ID.generate(:group)
+        ])
+
+      everyone_group_id = SystemGroups.everyone_group_id(club_id)
+      admin_group_id = SystemGroups.admin_group_id(club_id)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(departing_membership_id, departing_person_id)
+        |> activate_member(remaining_membership_id, remaining_person_id)
+        |> create_group(everyone_group_id, SystemGroups.everyone_key(), "Everyone")
+        |> create_group(admin_group_id, SystemGroups.admin_key(), "Admin")
+        |> create_group(first_custom_group_id, "board", "Board")
+        |> create_group(second_custom_group_id, "trips", "Trips")
+        |> create_group(inactive_custom_group_id, "events", "Events")
+        |> add_group_member(
+          everyone_group_id,
+          departing_membership_id,
+          departing_person_id
+        )
+        |> add_group_member(admin_group_id, departing_membership_id, departing_person_id)
+        |> add_group_member(
+          first_custom_group_id,
+          departing_membership_id,
+          departing_person_id
+        )
+        |> add_group_member(
+          second_custom_group_id,
+          departing_membership_id,
+          departing_person_id
+        )
+        |> add_group_member(
+          inactive_custom_group_id,
+          departing_membership_id,
+          departing_person_id
+        )
+        |> remove_group_member(
+          inactive_custom_group_id,
+          departing_membership_id,
+          departing_person_id
+        )
+
+      assert [
+               %ClubMemberRemoved{
+                 club_id: ^club_id,
+                 membership_id: ^departing_membership_id,
+                 person_id: ^departing_person_id
+               },
+               %GroupMemberRemoved{
+                 club_id: ^club_id,
+                 group_id: ^first_custom_group_id,
+                 membership_id: ^departing_membership_id,
+                 person_id: ^departing_person_id
+               },
+               %GroupMemberRemoved{
+                 club_id: ^club_id,
+                 group_id: ^second_custom_group_id,
+                 membership_id: ^departing_membership_id,
+                 person_id: ^departing_person_id
+               }
+             ] =
+               Club.execute(club, %RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: departing_membership_id,
+                 person_id: departing_person_id
+               })
     end
 
     test "treats an exact active membership identity as an idempotent activation" do
@@ -840,6 +940,24 @@ defmodule Memba.Membership.ClubTest do
                  group_id: Memba.ID.generate(:group),
                  group_key: "everyone",
                  name: "Everyone"
+               })
+    end
+
+    test "rejects a non-ASCII case variant from trusted group creation" do
+      club_id = Memba.ID.generate(:club)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(Memba.ID.generate(:group), "uppercase_sigma", "Σ")
+
+      assert {:error, :group_name_already_defined} =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: Memba.ID.generate(:group),
+                 email_slug: "lowercase-sigma",
+                 group_key: "lowercase_sigma",
+                 name: " σ "
                })
     end
 

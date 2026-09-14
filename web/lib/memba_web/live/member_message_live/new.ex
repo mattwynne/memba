@@ -425,25 +425,15 @@ defmodule MembaWeb.MemberMessageLive.New do
         "body" => Map.get(message_params, "body", "")
       }
 
-      with :ok <- authorize_current_audience(club_id, sender_id, audience_group_id) do
-        case Messaging.send_club_message(attrs, consistency: [MessageProjector]) do
-          :ok -> {:ok, message_id}
-          {:ok, _result} -> {:ok, message_id}
-          {:error, reason} -> {:error, reason}
-        end
+      case Messaging.send_club_message_as_current_member(attrs,
+             consistency: [MessageProjector]
+           ) do
+        :ok -> {:ok, message_id}
+        {:ok, _result} -> {:ok, message_id}
+        {:error, reason} -> {:error, reason}
       end
     else
       _missing_compose_context -> {:error, :forbidden}
-    end
-  end
-
-  defp authorize_current_audience(club_id, sender_id, audience_group_id) do
-    club_id
-    |> Membership.list_active_groups_for_member(sender_id)
-    |> Enum.any?(&(&1.group_id == audience_group_id))
-    |> case do
-      true -> :ok
-      false -> {:error, :forbidden}
     end
   end
 

@@ -41,6 +41,20 @@ defmodule Memba.Membership.SystemGroups do
     group_id(club_id, @admin_key)
   end
 
+  @doc """
+  Return whether a group summary identifies a custom conversation group.
+
+  Classification uses the club-scoped deterministic identities of the built-in
+  groups. Display names, email slugs, and caller-supplied group keys are not
+  group-type authority.
+  """
+  def custom_group?(%{club_id: club_id, group_id: group_id})
+      when is_binary(club_id) and is_binary(group_id) do
+    group_id not in [everyone_group_id(club_id), admin_group_id(club_id)]
+  end
+
+  def custom_group?(_group), do: false
+
   defp group_id(club_id, group_key) do
     ID.deterministic(:group, [@system_group_id_seed, club_id, group_key])
   end

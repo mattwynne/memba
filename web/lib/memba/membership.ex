@@ -14,6 +14,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
@@ -24,10 +25,15 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
+  alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroups
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
@@ -40,9 +46,11 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
+  alias Memba.ProjectionBarrier
   alias Memba.Repo
 
   @person_email_address_verification_token_ttl_seconds 15 * 60
+  @group_access_projectors [GroupMembershipProjector, MembershipProjector]
 
   @doc """
   Create a club through the Membership Commanded application.
@@ -54,6 +62,47 @@ defmodule Memba.Membership do
     with {:ok, command} <- create_club_command(attrs),
          :ok <- prevent_duplicate_club_slug(command) do
       dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Create a custom conversation group as an authenticated club member.
+
+  The caller supplies the Club aggregate identity, a caller-generated group
+  identity, and the authenticated actor's person identity. The group identity
+  is the creation request's retry key: allocate it once and reuse it when the
+  outcome of a dispatch is uncertain. This application service only translates
+  the use case into an actor-bearing command; the Club aggregate owns the
+  authoritative creation decision.
+  """
+  def create_custom_group(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- create_custom_group_command(attrs) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Preview a custom group's normalized name and allocated email address.
+
+  This authenticated read is advisory: it uses the current projections and
+  never reserves a name or address. `create_custom_group/2` must still be used
+  on submit so the Club aggregate can recheck authority and identity claims at
+  the serialized write boundary.
+  """
+  def preview_custom_group(attrs) when is_map(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, club_id} <- cast_id(:club, club_id, :not_found),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+         {:ok, actor_person_id} <- cast_id(:person, actor_person_id, :unauthorized),
+         :ok <- Authorization.authorize_manage_members(club_id, actor_person_id),
+         %Club{} = club <- Repo.get(Club, club_id),
+         {:ok, submitted_name} <- fetch_required(attrs, :name),
+         {:ok, name} <- GroupName.normalize(submitted_name) do
+      custom_group_identity_preview(club, name)
+    else
+      nil -> {:error, :not_found}
+      {:error, _reason} = error -> error
     end
   end
 
@@ -255,11 +304,14 @@ defmodule Memba.Membership do
 
   The caller supplies the membership identity as `:membership_id` or
   `"membership_id"`. The command is routed to the Club aggregate, which decides
-  first-member authority, idempotency, and duplicate active membership.
+  first-member authority, idempotency, and duplicate active membership. The call
+  completes only after any earlier custom-group follow cleanup on the Club
+  stream, so a rapid re-add cannot restore access before stale follows are
+  cleared.
   """
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_member_command(attrs) do
-      dispatch_system_group_membership_command(command, dispatch_opts)
+      dispatch_member_lifecycle_command(command, dispatch_opts)
     end
   end
 
@@ -408,11 +460,14 @@ defmodule Memba.Membership do
   The caller supplies `:membership_id` or `"membership_id"`. It may also supply
   the matching club and person identities; otherwise the application service
   resolves those routing fields from the membership projection before the Club
-  aggregate validates them and decides the Admin and member floors.
+  aggregate validates them and decides the Admin and member floors. A successful
+  decision also ends every active custom-group membership held by that club
+  membership. The call completes only after system-group membership and
+  custom-group conversation follows have been cleared.
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
-      dispatch_system_group_membership_command(command, dispatch_opts)
+      dispatch_member_lifecycle_command(command, dispatch_opts)
     end
   end
 
@@ -1292,6 +1347,89 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Return whether the Club aggregate currently records a person as an active
+  club member.
+
+  This authoritative query is intended for privacy-sensitive action boundaries
+  where a just-committed departure may not yet be visible in Membership
+  projections. Invalid IDs and missing or inactive memberships return `false`.
+  """
+  def active_member_of_club_authoritatively?(club_id, person_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         %Memba.Membership.Club{club_id: ^club_id} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id) do
+      active_membership_ids_for_person(club, person_id) != []
+    else
+      _invalid_missing_or_inactive -> false
+    end
+  end
+
+  @doc """
+  Return whether the Club aggregate currently records a person as an active
+  member of one of its groups.
+
+  Privacy-sensitive action boundaries use this narrow authoritative query when
+  a just-committed departure may not yet be visible in Membership projections.
+  System groups are derived from active club membership and Admin authority;
+  custom groups require the same active membership identity that holds the
+  group membership.
+  """
+  def active_member_of_group_authoritatively?(club_id, group_id, person_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         %Memba.Membership.Club{club_id: ^club_id} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id),
+         true <- Map.has_key?(club.groups, group_id) do
+      authoritative_group_member?(club, group_id, person_id)
+    else
+      _invalid_missing_or_inactive -> false
+    end
+  end
+
+  @doc """
+  Wait until the Membership read models used by `active_member_of_group?/2`
+  have processed every event committed before this call.
+
+  Privacy-sensitive consumers can use this before checking group membership so
+  an asynchronous projection cannot briefly preserve access after departure.
+  """
+  def await_group_access_projections(opts \\ []) when is_list(opts) do
+    ProjectionBarrier.await(@group_access_projectors, opts)
+  end
+
+  defp authoritative_group_member?(club, group_id, person_id) do
+    active_membership_ids = active_membership_ids_for_person(club, person_id)
+
+    cond do
+      group_id == SystemGroups.everyone_group_id(club.club_id) ->
+        active_membership_ids != []
+
+      group_id == SystemGroups.admin_group_id(club.club_id) ->
+        Enum.any?(
+          active_membership_ids,
+          &MapSet.member?(club.active_admin_membership_ids, &1)
+        )
+
+      true ->
+        Enum.any?(active_membership_ids, fn membership_id ->
+          case Map.get(club.group_memberships, {group_id, membership_id}) do
+            %{person_id: ^person_id, active: true} -> true
+            _inactive_or_different_person -> false
+          end
+        end)
+    end
+  end
+
+  defp active_membership_ids_for_person(club, person_id) do
+    Enum.flat_map(club.active_memberships, fn
+      {membership_id, ^person_id} -> [membership_id]
+      {_membership_id, _other_person_id} -> []
+    end)
+  end
+
+  @doc """
   Return whether an email address currently has an active membership in a club.
 
   Email lookup is normalized by trimming whitespace and comparing
@@ -1374,6 +1512,63 @@ defmodule Memba.Membership do
   """
   def person_has_club_permission?(club_id, person_id, permission) do
     Authorization.has_permission?(club_id, person_id, permission)
+  end
+
+  defp cast_id(type, id, error) do
+    case ID.cast(type, id) do
+      {:ok, cast_id} -> {:ok, cast_id}
+      :error -> {:error, error}
+    end
+  end
+
+  defp custom_group_identity_preview(%Club{} = club, name) do
+    name_uniqueness_key = GroupName.uniqueness_key(name)
+
+    case Repo.get_by(GroupProjection,
+           club_id: club.club_id,
+           name_uniqueness_key: name_uniqueness_key
+         ) do
+      nil ->
+        available_custom_group_identity_preview(club, name)
+
+      %GroupProjection{name: existing_name} ->
+        {:error, {:group_name_already_defined, existing_name}}
+    end
+  end
+
+  defp available_custom_group_identity_preview(%Club{} = club, name) do
+    club_id = club.club_id
+
+    occupied_email_slugs =
+      GroupProjection
+      |> where([group], group.club_id == ^club_id)
+      |> where([group], not is_nil(group.email_slug))
+      |> select([group], group.email_slug)
+      |> Repo.all()
+      |> MapSet.new()
+
+    unsuffixed_email_slug = CustomGroupSlug.allocate(name, MapSet.new())
+    email_slug = CustomGroupSlug.allocate(name, occupied_email_slugs)
+
+    collision_group_name =
+      if email_slug == unsuffixed_email_slug do
+        nil
+      else
+        GroupProjection
+        |> where([group], group.club_id == ^club_id)
+        |> where([group], group.email_slug == ^unsuffixed_email_slug)
+        |> select([group], group.name)
+        |> Repo.one()
+      end
+
+    {:ok,
+     %{
+       name: name,
+       email_slug: email_slug,
+       email_address: ClubInboundEmailAddress.address(club, email_slug),
+       unsuffixed_email_slug: unsuffixed_email_slug,
+       collision_group_name: collision_group_name
+     }}
   end
 
   defp cast_ids(type, ids) do
@@ -1540,6 +1735,21 @@ defmodule Memba.Membership do
          {:ok, name} <- fetch_required(attrs, :name),
          {:ok, slug} <- club_slug(attrs, name) do
       {:ok, %CreateClub{club_id: club_id, name: name, slug: slug}}
+    end
+  end
+
+  defp create_custom_group_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+         {:ok, name} <- fetch_required(attrs, :name) do
+      {:ok,
+       %CreateCustomGroup{
+         club_id: club_id,
+         group_id: group_id,
+         actor_person_id: actor_person_id,
+         name: name
+       }}
     end
   end
 
@@ -2304,6 +2514,19 @@ defmodule Memba.Membership do
     dispatch(command, system_group_membership_consistency(dispatch_opts))
   end
 
+  defp dispatch_member_lifecycle_command(command, dispatch_opts) do
+    dispatch(command, member_lifecycle_consistency(dispatch_opts))
+  end
+
+  defp member_lifecycle_consistency(dispatch_opts) do
+    dispatch_opts
+    |> system_group_membership_consistency()
+    |> Keyword.update!(
+      :consistency,
+      &include_removed_group_member_follows_consistency/1
+    )
+  end
+
   defp system_group_membership_consistency(dispatch_opts) do
     Keyword.update(
       dispatch_opts,
@@ -2333,6 +2556,26 @@ defmodule Memba.Membership do
   end
 
   defp system_group_membership_handler?(_handler), do: false
+
+  defp include_removed_group_member_follows_consistency(:strong), do: :strong
+
+  defp include_removed_group_member_follows_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &removed_group_member_follows_handler?/1) do
+      handlers
+    else
+      [ClearRemovedGroupMemberFollows | handlers]
+    end
+  end
+
+  defp include_removed_group_member_follows_consistency(consistency), do: consistency
+
+  defp removed_group_member_follows_handler?(ClearRemovedGroupMemberFollows), do: true
+
+  defp removed_group_member_follows_handler?(handler) when is_binary(handler) do
+    handler == inspect(ClearRemovedGroupMemberFollows)
+  end
+
+  defp removed_group_member_follows_handler?(_handler), do: false
 
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do

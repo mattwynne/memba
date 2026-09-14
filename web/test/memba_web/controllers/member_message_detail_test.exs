@@ -326,7 +326,9 @@ defmodule MembaWeb.MemberMessageDetailTest do
         club_id: club_id,
         group_key: SystemGroups.everyone_key(),
         email_slug: SystemGroups.everyone_email_slug(),
-        name: SystemGroups.everyone_name()
+        name: SystemGroups.everyone_name(),
+        name_uniqueness_key:
+          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
       })
 
     Repo.insert!(%GroupMembership{

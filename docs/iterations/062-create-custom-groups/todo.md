@@ -1,0 +1,27 @@
+# Implementation TODO
+
+- [x] 001 Add a thin authenticated Membership use case and actor-bearing custom-creation command, handled by the existing Club aggregate.
+- [x] 002 Validate current active admin authority, same-club identity, group-name uniqueness and slug allocation inside that serialized boundary.
+- [x] 003 Preserve trusted system/backfill command behaviour and historical events.
+- [x] 004 Use a retry-stable group ID so retry does not silently become a second creation or change its address.
+- [x] 005 Emit the existing group-created, slug-assigned and creator-added facts as one successful decision.
+- [x] 006 Extend aggregate state/projection constraints only as necessary for normalized name uniqueness; keep projections as projections.
+- [x] 007 Make new user-facing operations distinguish custom groups structurally, not by arbitrary display-name checks.
+- [x] 008 Close the custom-membership departure gap now.
+- [x] 009 Native `RemoveClubMember` currently emits only `ClubMemberRemoved`, and `SystemGroupMembership` removes only Everyone/Admin.
+- [x] 010 Extend the Club-owned lifecycle to emit custom removals for the departing membership and keep legacy/replay handling safe.
+- [x] 011 Arrange an idempotent Membership-to-Messaging policy for clearing affected follows, using public APIs and existing unfollow commands; do not put cross-context side effects in projectors.
+- [x] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.
+- [x] 013 Existing last-member/last-Admin invariants stay intact.
+- [x] 014 Add the new-group LiveView/form using shared inputs and route helpers.
+- [x] 015 Use server-side live validation/preview, rechecking at submit, with accessible field associations.
+- [x] 016 Reuse normal pending/success and generic technical-error treatment.
+- [x] 017 Extend group queries/routing only where the existing generic paths need it.
+- [x] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.
+- [x] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.
+- [x] 020 Preserve already-handed-off email semantics; do not add an error dashboard or email retry product.
+- [x] 021 Complete targeted Club concurrency, identity, replay, departure/rejoin, slug-length and LiveView validation test coverage.
+- [x] 022 Implement the iteration-062 custom-group creation scenarios at the domain layer.
+- [x] 023 Implement the iteration-062 custom-group creation scenarios at the browser layer, including typing/caret coverage.
+- [x] 024 Implement the iteration-062 custom-group conversation scenarios at the domain and browser layers.
+- [x] 025 Implement the iteration-062 custom-group lifecycle scenarios at the domain and browser layers, then run `dev check` on the exact delivery state.
