@@ -11,6 +11,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -31,6 +33,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   setup do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+
+    original_projection_timeout =
+      Application.get_env(:memba, :email_delivery_projection_timeout)
+
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
     original_postmark_config = Application.get_env(:memba, Postmark)
     dispatcher_was_running? = stop_email_delivery_dispatcher()
@@ -39,6 +45,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     on_exit(fn ->
       restore_env(:messaging_email_delivery_provider, original_provider)
+      restore_env(:email_delivery_projection_timeout, original_projection_timeout)
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Postmark, original_postmark_config)
       Fake.reset()
@@ -344,6 +351,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
 
     assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 club_id: club_id,
+                 conversation_id: private_message_id,
+                 member_id: carol.person_id
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(private_message_id, carol.person_id)
+
+    assert :ok =
              Memba.Membership.remove_member(
                %{membership_id: carol_membership_id},
                consistency: :strong
@@ -361,6 +380,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Memba.Membership.active_member_of_club?(club_id, carol.person_id)
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    refute Messaging.following_conversation?(private_message_id, carol.person_id)
 
     departed_reply_id = Memba.ID.generate(:message)
 
@@ -408,6 +428,95 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^alice_id}, &1))
     refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
+  end
+
+  test "defers provider handoff until lagging membership access projections catch up" do
+    Application.put_env(:memba, :email_delivery_projection_timeout, 25)
+
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice Admin", email: "alice@example.com")
+    carol = create_person(name: "Carol Member", email: "carol@example.com")
+
+    alice_membership_id = add_member(club_id, alice.person_id)
+    carol_membership_id = add_member(club_id, carol.person_id)
+    board_group_id = create_group(club_id, "Board")
+
+    add_group_member(club_id, board_group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)
+
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Private Board topic",
+                 body: "Do not hand this off using stale access."
+               },
+               consistency: :strong
+             )
+
+    carol_delivery =
+      message_id
+      |> pending_deliveries_for_message()
+      |> Enum.find(&(&1.recipient_id == carol.person_id))
+
+    carol_delivery_id = carol_delivery.delivery_id
+    membership_projector_child_id = stop_projector!(MembershipProjector)
+    group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: carol_membership_id,
+                 person_id: carol.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+
+    assert Enum.any?(
+             EmailDeliveryDispatcher.dispatch_pending_email_deliveries(),
+             &match?(
+               %EmailDeliveryProjection{
+                 delivery_id: ^carol_delivery_id,
+                 status: "pending",
+                 attempt_count: 0,
+                 latest_error: nil,
+                 failed_at: nil
+               },
+               &1
+             )
+           )
+
+    assert Fake.deliveries() == []
+
+    restart_projector!(membership_projector_child_id)
+    restart_projector!(group_membership_projector_child_id)
+
+    assert {:ok, _result} =
+             Memba.Membership.await_group_access_projections(timeout: 1_000)
+
+    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+
+    dispatch_results = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+    assert %EmailDeliveryProjection{
+             delivery_id: ^carol_delivery_id,
+             status: "failed",
+             attempt_count: 1,
+             latest_error: "recipient_access_ended"
+           } = Enum.find(dispatch_results, &(&1.delivery_id == carol_delivery_id))
+
+    assert [%EmailDeliveryRequest{recipient_id: alice_id}] = Fake.deliveries()
+    assert alice_id == alice.person_id
   end
 
   test "rejects an unknown audience group before dispatching the message command" do
@@ -754,6 +863,30 @@ defmodule Memba.Messaging.SendClubMessageTest do
       {:ok, _pid, _info} -> :ok
       {:error, :running} -> :ok
       {:error, :not_found} -> :ok
+    end
+  end
+
+  defp stop_projector!(projector) do
+    child_id =
+      Supervisor.which_children(Memba.Supervisor)
+      |> Enum.find_value(fn
+        {child_id, _pid, :worker, [^projector]} -> child_id
+        _child -> nil
+      end)
+
+    assert child_id
+    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+
+    on_exit(fn -> restart_projector!(child_id) end)
+
+    child_id
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
     end
   end
 
