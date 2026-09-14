@@ -71,4 +71,16 @@ defmodule Memba.DomainCucumberRunnerTest do
     refute "Bob has Members but no Conversations while outside Board" in selected_names
     refute "Alice returns to a group she has not joined" in selected_names
   end
+
+  test "iteration 062 custom-group creation scenarios run at the domain layer except live input examples" do
+    selected_names =
+      DomainCucumberRunner.selected_scenarios()
+      |> Enum.map(& &1.scenario.name)
+
+    assert "Alice creates Board and belongs to it immediately" in selected_names
+    assert "Alice and Dan both try to create Board" in selected_names
+    assert "Board receives its own club-scoped email address" in selected_names
+    assert "A stored address identifies a group even when its name is different" in selected_names
+    refute "Alice sees the email address before creating Trips" in selected_names
+  end
 end

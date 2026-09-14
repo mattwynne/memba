@@ -8,7 +8,7 @@ Feature: Creating custom club groups
     And Alice and Dan are its club admins
     And Bob and Eve are its ordinary active club members
 
-  @todo-domain @todo-ui
+  @todo-ui
   Rule: Only an active club admin can create a custom group and becomes its first member
 
     Scenario: Alice creates Board and belongs to it immediately
@@ -22,7 +22,7 @@ Feature: Creating custom club groups
       When Bob tries to create the custom group "Trips" in Kootenay Mountaineering Club
       Then no custom group named "Trips" should be created
 
-  @todo-domain @todo-ui
+  @todo-ui
   Rule: Group names are unique within a club, ignoring case and surrounding spaces
 
     Scenario Outline: Alice cannot create another Board under a spelling variant
@@ -58,7 +58,7 @@ Feature: Creating custom club groups
       And only its successful creator should join through creation
       And the other admin should be told that the name is already in use
 
-  @todo-domain @todo-ui
+  @todo-ui
   Rule: A group's email slug is generated once and stored separately from its name
 
     Scenario: Board receives its own club-scoped email address
@@ -73,7 +73,7 @@ Feature: Creating custom club groups
       Then "September agenda" should be an Elected committee conversation
       And its stored email slug should still be "board"
 
-  @todo-domain @todo-ui
+  @todo-ui
   Rule: Email slugs are unique within a club and collisions receive a numeric suffix
 
     Scenario: Board gets board-2 because another group's stored slug is board
