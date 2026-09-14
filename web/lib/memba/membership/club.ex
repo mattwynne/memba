@@ -14,6 +14,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
+  alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -322,6 +323,25 @@ defmodule Memba.Membership.Club do
         role_id: command.role_id,
         removed_by_person_id: command.removed_by_person_id
       }
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %ReconcileLegacyAdminHistory{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %ReconcileLegacyAdminHistory{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <-
+           ensure_active_membership_identity(
+             club,
+             command.membership_id,
+             command.person_id
+           ),
+         :ok <- ensure_legacy_admin_role_definition_reconcilable(club),
+         :ok <- ensure_legacy_admin_role_key_reconcilable(club),
+         :ok <- ensure_legacy_admin_assignment_reconcilable(club, command) do
+      reconcile_legacy_admin_history_decision(club, command)
     end
   end
 
@@ -687,6 +707,43 @@ defmodule Memba.Membership.Club do
     end
   end
 
+  defp ensure_legacy_admin_role_definition_reconcilable(%__MODULE__{} = club) do
+    role_id = Roles.membership_administrator_role_id(club.club_id)
+    role_key = Roles.membership_administrator_key()
+    name = Roles.membership_administrator_name()
+
+    case Map.fetch(club.roles, role_id) do
+      {:ok, %{role_key: ^role_key, name: ^name}} -> :ok
+      {:ok, %{}} -> {:error, :conflicting_legacy_admin_role_definition}
+      :error -> :ok
+    end
+  end
+
+  defp ensure_legacy_admin_role_key_reconcilable(%__MODULE__{} = club) do
+    role_id = Roles.membership_administrator_role_id(club.club_id)
+    role_key = Roles.membership_administrator_key()
+
+    case Map.fetch(club.role_keys, role_key) do
+      {:ok, ^role_id} -> :ok
+      {:ok, _other_role_id} -> {:error, :legacy_admin_role_key_conflict}
+      :error -> :ok
+    end
+  end
+
+  defp ensure_legacy_admin_assignment_reconcilable(
+         %__MODULE__{} = club,
+         %ReconcileLegacyAdminHistory{} = command
+       ) do
+    role_id = Roles.membership_administrator_role_id(club.club_id)
+    assignment_key = role_assignment_key(command.membership_id, role_id)
+
+    case Map.fetch(club.role_assignments, assignment_key) do
+      {:ok, %{person_id: person_id}} when person_id == command.person_id -> :ok
+      {:ok, %{}} -> {:error, :legacy_admin_assignment_person_mismatch}
+      :error -> :ok
+    end
+  end
+
   defp ensure_admin_role_removal_keeps_active_admin(
          %__MODULE__{} = club,
          membership_id,
@@ -852,6 +909,72 @@ defmodule Memba.Membership.Club do
       :error -> :ok
       {:ok, ^group_id} -> :ok
       {:ok, _other_group_id} -> {:error, :group_name_already_defined}
+    end
+  end
+
+  defp reconcile_legacy_admin_history_decision(
+         %__MODULE__{} = club,
+         %ReconcileLegacyAdminHistory{} = command
+       ) do
+    role_id = Roles.membership_administrator_role_id(club.club_id)
+    permission = Permissions.club_manage_members()
+
+    []
+    |> append_missing_legacy_admin_role_definition(club, command, role_id)
+    |> append_missing_legacy_admin_permission(club, command, role_id, permission)
+    |> append_missing_legacy_admin_assignment(club, command, role_id)
+  end
+
+  defp append_missing_legacy_admin_role_definition(events, %__MODULE__{} = club, command, role_id) do
+    if Map.has_key?(club.roles, role_id) do
+      events
+    else
+      events ++
+        [
+          %ClubRoleDefined{
+            club_id: command.club_id,
+            role_id: role_id,
+            role_key: Roles.membership_administrator_key(),
+            name: Roles.membership_administrator_name()
+          }
+        ]
+    end
+  end
+
+  defp append_missing_legacy_admin_permission(events, %__MODULE__{} = club, command, role_id, permission) do
+    granted_permissions = Map.get(club.role_permissions, role_id, MapSet.new())
+
+    if MapSet.member?(granted_permissions, permission) do
+      events
+    else
+      events ++
+        [
+          %ClubRolePermissionGranted{
+            club_id: command.club_id,
+            role_id: role_id,
+            permission: permission
+          }
+        ]
+    end
+  end
+
+  defp append_missing_legacy_admin_assignment(events, %__MODULE__{} = club, command, role_id) do
+    assignment_key = role_assignment_key(command.membership_id, role_id)
+
+    if Map.has_key?(club.role_assignments, assignment_key) do
+      events
+    else
+      events ++
+        [
+          %ClubRoleAssignedToMember{
+            club_id: command.club_id,
+            membership_id: command.membership_id,
+            person_id: command.person_id,
+            role_id: role_id,
+            assigned_by_person_id: nil,
+            assignment_source: "legacy_projection_reconciliation"
+          }
+        ]
     end
   end
 
