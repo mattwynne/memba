@@ -57,7 +57,10 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       "#member-group-new-form[aria-label='Create a group'] input#member-group-name-input[name='group[name]'][type='text']"
     )
     |> assert_has("#member-group-email-preview[for='member-group-name-input']")
-    |> assert_has("button#member-group-create-button[type='submit'][disabled]", "Create group")
+    |> assert_has(
+      "button#member-group-create-button[type='submit'][disabled][phx-disable-with='Creating…']",
+      "Create group"
+    )
     |> assert_has("#member-group-new-back-link[href='/conversations']", "Back to groups")
     |> assert_has("#member-group-new-cancel-link[href='/conversations']", "Cancel")
     |> refute_has("#member-group-new-form input[name='group[email_slug]']")
@@ -295,6 +298,72 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       |> Enum.filter(&(&1.name == "Board"))
 
     assert length(board_groups) == 1
+  end
+
+  test "successful creation confirms the group and continues to its Members page", %{conn: conn} do
+    robin =
+      create_event_sourced_admin(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers",
+        club_slug: "wcp"
+      )
+
+    conn
+    |> signed_in_club_host("robin@example.com", robin)
+    |> visit(~p"/groups/new")
+    |> fill_in("Group name", with: " Board ")
+    |> click_button("Create group")
+    |> assert_path("/groups/*/members")
+    |> assert_has("#flash-info", "Board created.")
+  end
+
+  test "a technical creation failure uses the generic flash and keeps the form ready to retry", %{
+    conn: conn
+  } do
+    robin =
+      create_event_sourced_admin(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers",
+        club_slug: "wcp"
+      )
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+    %{socket: socket} = :sys.get_state(view.pid)
+    group_id = socket.assigns.group_id
+
+    assert :ok =
+             Membership.create_custom_group(
+               %{
+                 club_id: robin.club_id,
+                 group_id: group_id,
+                 actor_person_id: robin.person_id,
+                 name: "Already claimed request"
+               },
+               consistency: :strong
+             )
+
+    view
+    |> form("#member-group-new-form", group: %{name: "Board"})
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#flash-error",
+             "We couldn't create the group. Try again."
+           )
+
+    assert has_element?(view, "#member-group-name-input[value='Board']")
+
+    assert has_element?(
+             view,
+             "#member-group-email-preview[data-state='available']",
+             "board@wcp.clubs.memba.io"
+           )
+
+    refute has_element?(view, "#member-group-create-button[disabled]")
   end
 
   defp signed_in_club_host(conn, email, club) do

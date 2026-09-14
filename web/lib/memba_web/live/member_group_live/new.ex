@@ -81,10 +81,10 @@ defmodule MembaWeb.MemberGroupLive.New do
 
     case Membership.create_custom_group(attrs, consistency: :strong) do
       :ok ->
-        navigate_to_created_group(socket)
+        navigate_to_created_group(socket, group_params)
 
       {:ok, _result} ->
-        navigate_to_created_group(socket)
+        navigate_to_created_group(socket, group_params)
 
       {:error, :invalid_name} ->
         {:noreply,
@@ -236,6 +236,7 @@ defmodule MembaWeb.MemberGroupLive.New do
                 variant="primary"
                 size="lg"
                 disabled={not @form_valid?}
+                phx-disable-with="Creating…"
               >
                 Create group
               </.button>
@@ -354,9 +355,13 @@ defmodule MembaWeb.MemberGroupLive.New do
     "There's already a group with that name in #{club_name}. Pick a different name."
   end
 
-  defp navigate_to_created_group(socket) do
+  defp navigate_to_created_group(socket, group_params) do
+    created_group_name = group_params |> Map.fetch!("name") |> String.trim()
+
     {:noreply,
-     push_navigate(socket,
+     socket
+     |> put_flash(:info, "#{created_group_name} created.")
+     |> push_navigate(
        to:
          created_group_path(
            socket.assigns.selected_club,
