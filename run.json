@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T03:12:31.611605878Z",
-  "last_event_at": "2026-09-14T03:58:12.468576897Z",
+  "last_event_at": "2026-09-14T04:05:57.263412372Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3448,9 +3448,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1755,
       "checkpoint": {
-        "timestamp": "2026-09-14T03:58:12.474658300Z",
+        "timestamp": "2026-09-14T03:58:16.407840651Z",
         "current_node": "revise_task",
         "completed_nodes": [
           "start",
@@ -3469,11 +3469,359 @@
         ],
         "node_retries": {},
         "context_values": {
-          "current_node": "revise_task",
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean.\"}",
+          "internal.retry_count.read_plan": 0,
           "output.validate_task": {
             "decision": "revise",
             "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
             "reason": "The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean."
+          },
+          "internal.retry_count.validate_task": 0,
+          "command.output": "blob://sha256/e04ae19891aefa665418b6dbb99c5a38f4dbc5728f13a2ba7ce31538daf7f333",
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01M2EYC0HJJ4ATR8WGJZFKYYZN",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "graph.default_fidelity": "summary:high",
+          "response.revise_task": "Task 019’s revised candidate implementation is complete and ready for independent review. The task remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n2. Changes made\n\n- Added a narrow public Membership API that checks active group membership from authoritative Club aggregate state, avoiding stale access projections at privacy-sensitive action boundaries: [membership.ex](/workspace/memba/web/lib/memba/membership.ex:1359).\n- Updated Messaging’s member-facing reply, follow, unfollow, and compose operations to authorize against authoritative Membership and Message aggregate state at a stable event-store checkpoint: [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:85).\n- Added `send_club_message_as_current_member/2` and routed the compose LiveView through it, so an already-open compose page fails closed after committed departure: [new.ex](/workspace/memba/web/lib/memba_web/live/member_message_live/new.ex:428).\n- Kept provider handoff guarded by stable projection barriers. Projection-lag timeouts defer pending deliveries without contacting the provider or recording a delivery attempt.\n- Extended the supervised dispatcher to treat Membership and conversation-access projector catch-up notifications as dispatch nudges. Deferred deliveries now recover automatically after projections catch up, without a manual sweep: [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:233).\n- Added regression coverage for stale reply/follow/compose authorization and automatic deferred-delivery recovery: [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:437), [new_send_test.exs](/workspace/memba/web/test/memba_web/live/member_message_live/new_send_test.exs:388).\n- Converted affected custom-group test fixtures to aggregate-backed Membership history, ensuring projection-only discovery does not confer participation rights: [conversation_group_access_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_group_access_projection_test.exs:306).\n- No acceptance feature files were changed.\n\n3. Focused validation\n\nPassed:\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_group_access_projection_test.exs:306`\n  - 1 selected test passed; 0 failures.\n- Full task-019 regression set across dispatcher, messaging, departure cleanup, controllers, and member-message LiveViews:\n  - 68 tests, 0 failures.\n- `MIX_ENV=test mix format --check-formatted ...`\n  - Passed for all seven changed files.\n- `git diff --check`\n  - Passed.\n- Worktree inspection confirms only the seven task-019 implementation/test files are modified.\n\nFull `dev check` was not run in this per-task node because pending task 021 explicitly owns the final exact-state gate.\n\n4. Exact unchecked task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0007: Messaging obtains membership authority through Membership’s public API.\n- ADR 0009: asynchronous projections remain read models; no cross-context side effects were placed in projectors.\n- ADR 0021: existing committed read-model notifications provide bounded catch-up nudges.\n- ADR 0022: authorization and provider handoff use explicit event-store checkpoint stability.\n- ADR 0024: Club aggregate state remains authoritative for departure and group membership.\n- ADRs 0004 and 0005: Message aggregates and resolved-recipient delivery semantics remain intact.",
+          "internal.retry_count.todo_readable": 0,
+          "thread.start.current_node": "verify_source_head",
+          "internal.retry_count.all_tasks_done": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.implement_next_task": 0,
+          "failure_signature": "",
+          "last_stage": "revise_task",
+          "thread.apply_task_verdict.current_node": "revise_task",
+          "graph.max_node_visits": "80",
+          "current_node": "revise_task",
+          "internal.thread_id": "apply_task_verdict",
+          "internal.retry_count.verify_source_head": 0,
+          "internal.work_dir": "/workspace/memba",
+          "outcome": "succeeded",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.resume_gate": 0,
+          "preferred_label": "revise",
+          "graph.rankdir": "LR",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.revise_task": 0,
+          "failure_class": "",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.apply_task_verdict": 0,
+          "internal.node_visit_count": 1,
+          "internal.retry_count.sync_task_list": 0,
+          "response.implement_next_task": "Task 019’s candidate implementation is ready for independent review and remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n2. Changes made\n\n- Preserved the existing provider-handoff safety work in [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:125):\n  - waits for `Message` and `ConversationGroupAccess`;\n  - waits for Membership’s `Membership` and `GroupMembership` projections through the public Membership API;\n  - repeats authorization if the event-store checkpoint changes;\n  - performs the final stable authorization read immediately before calling the provider.\n- Projection timeouts now defer delivery instead of creating a terminal failure:\n  - normal dispatch returns to `pending`;\n  - manual retry returns to `failed` while preserving its existing diagnostics;\n  - neither path increments the attempt count or calls the provider.\n- Added a configurable projection timeout for deterministic lag testing while retaining the 5-second production default.\n- Extended [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:306) to prove departure/rejoin clears the former member’s follow, denies replies, excludes them from future recipients, and blocks an already-pending private email.\n- Added a projection-lag scenario at [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:433):\n  - both Membership access projectors are stopped;\n  - departure is committed while their read models still incorrectly show access;\n  - provider handoff is deferred without exposing content or recording failure;\n  - after projections catch up, the departed recipient is permanently rejected while the authorized recipient is delivered normally.\n- No dashboard, retry UI, provider transaction, or database lock around an external provider call was introduced.\n\n3. Validation\n\nPassing:\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/send_club_message_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba_web/controllers/conversation_follow_controller_test.exs`\n  - 57 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/send_club_message_test.exs`\n  - 13 tests, 0 failures after the final follow-cleanup assertion.\n- `MIX_ENV=test mix format --check-formatted lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/send_club_message_test.exs`\n  - passed.\n- `git diff --check`\n  - passed.\n\nThe new lag test was first run red and reproduced the defect: projection timeouts marked deliveries failed with `recipient_access_projection_timeout`. It passed after implementing deferral.\n\n`dev check --quick` was attempted but could not complete because its formatter tried to rewrite sandbox-owned modified files and received `permission denied`. The unrelated formatting mutation it made before stopping was reverted. Per the task workflow, full `dev check` remains explicitly owned by pending task 021.\n\n4. Exact unchecked line\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0007: Messaging obtains membership authorization through Membership’s public API; it does not query Membership projection schemas directly.\n- ADR 0009: the implementation treats projection state as asynchronous read models and does not move cross-context side effects into projectors.\n- ADR 0021: existing committed read-model notifications remain unchanged.\n- ADR 0022: authorization uses explicit event-store checkpoints and projection barriers for all four required projectors.\n- ADR 0024: Club remains the authoritative owner of membership departure and custom-group removal facts.\n- ADRs 0004 and 0005: the existing Message aggregate and resolved-recipient delivery model remain intact.",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "last_response": "Task 019’s revised candidate implementation is complete and ready for independent review. The task remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-rec",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "internal.retry_count.preflight_sandbox": 0
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6e68aad8af2f88aaeb4e0e49ad1be56c30282f0db54f39a42d921a644a308573"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf59d3750cda1b87b1e3f1d785912dabaa3023af385e17d14204b5ddd4c58d2c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "revise_task",
+              "response.revise_task": "Task 019’s revised candidate implementation is complete and ready for independent review. The task remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n2. Changes made\n\n- Added a narrow public Membership API that checks active group membership from authoritative Club aggregate state, avoiding stale access projections at privacy-sensitive action boundaries: [membership.ex](/workspace/memba/web/lib/memba/membership.ex:1359).\n- Updated Messaging’s member-facing reply, follow, unfollow, and compose operations to authorize against authoritative Membership and Message aggregate state at a stable event-store checkpoint: [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:85).\n- Added `send_club_message_as_current_member/2` and routed the compose LiveView through it, so an already-open compose page fails closed after committed departure: [new.ex](/workspace/memba/web/lib/memba_web/live/member_message_live/new.ex:428).\n- Kept provider handoff guarded by stable projection barriers. Projection-lag timeouts defer pending deliveries without contacting the provider or recording a delivery attempt.\n- Extended the supervised dispatcher to treat Membership and conversation-access projector catch-up notifications as dispatch nudges. Deferred deliveries now recover automatically after projections catch up, without a manual sweep: [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:233).\n- Added regression coverage for stale reply/follow/compose authorization and automatic deferred-delivery recovery: [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:437), [new_send_test.exs](/workspace/memba/web/test/memba_web/live/member_message_live/new_send_test.exs:388).\n- Converted affected custom-group test fixtures to aggregate-backed Membership history, ensuring projection-only discovery does not confer participation rights: [conversation_group_access_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_group_access_projection_test.exs:306).\n- No acceptance feature files were changed.\n\n3. Focused validation\n\nPassed:\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_group_access_projection_test.exs:306`\n  - 1 selected test passed; 0 failures.\n- Full task-019 regression set across dispatcher, messaging, departure cleanup, controllers, and member-message LiveViews:\n  - 68 tests, 0 failures.\n- `MIX_ENV=test mix format --check-formatted ...`\n  - Passed for all seven changed files.\n- `git diff --check`\n  - Passed.\n- Worktree inspection confirms only the seven task-019 implementation/test files are modified.\n\nFull `dev check` was not run in this per-task node because pending task 021 explicitly owns the final exact-state gate.\n\n4. Exact unchecked task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0007: Messaging obtains membership authority through Membership’s public API.\n- ADR 0009: asynchronous projections remain read models; no cross-context side effects were placed in projectors.\n- ADR 0021: existing committed read-model notifications provide bounded catch-up nudges.\n- ADR 0022: authorization and provider handoff use explicit event-store checkpoint stability.\n- ADR 0024: Club aggregate state remains authoritative for departure and group membership.\n- ADRs 0004 and 0005: Message aggregates and resolved-recipient delivery semantics remain intact.",
+              "last_response": "Task 019’s revised candidate implementation is complete and ready for independent review. The task remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-rec"
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 502647,
+                    "output_tokens": 21660,
+                    "reasoning_tokens": 13276,
+                    "cache_read_tokens": 10008448,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 8565539
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 914744,
+              "tool_time_ms": 217845,
+              "active_time_ms": 1132589
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d02ae3fbcf009686d036f0f3c3931835e85e384c508c28e35fb843d5318f329e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9c6ae4f76d28d258a33101ca5400535ef4d6d7793c5dcc91690ddd6bd4989926"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean.\"}",
+              "output.validate_task": {
+                "decision": "revise",
+                "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
+                "reason": "The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean."
+              },
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 226695,
+                    "output_tokens": 5301,
+                    "reasoning_tokens": 5154,
+                    "cache_read_tokens": 1022464,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1958357
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 252041,
+              "tool_time_ms": 235137,
+              "active_time_ms": 487178
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1eefb75549c1f4a856df127950cda780b2b7e7227005f1814863ee211db8d577"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1607,
+              "active_time_ms": 1607
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2c689d635cca514d7dea46648c9c158365c87f9f1786964d0e3c0f47dc1469d5"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f7d479576a039ac7cb97566e18806cd07a922f641cab187321eba2b3606cf8d5"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '66e9acd4eb478fc028ba97536040b5d693ca051b'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/e04ae19891aefa665418b6dbb99c5a38f4dbc5728f13a2ba7ce31538daf7f333"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/062-create-custom-groups/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c1d21d6b75b9d2b3a2e16ab0d1fb9e6b2383dde2892e313c2700c39e03cabb80"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 94221,
+              "active_time_ms": 94221
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Task 019’s candidate implementation is ready for independent review and remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n2. Changes made\n\n- Preserved the existing provider-handoff safety work in [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:125):\n  - waits for `Message` and `ConversationGroupAccess`;\n  - waits for Membership’s `Membership` and `GroupMembership` projections through the public Membership API;\n  - repeats authorization if the event-store checkpoint changes;\n  - performs the final stable authorization read immediately before calling the provider.\n- Projection timeouts now defer delivery instead of creating a terminal failure:\n  - normal dispatch returns to `pending`;\n  - manual retry returns to `failed` while preserving its existing diagnostics;\n  - neither path increments the attempt count or calls the provider.\n- Added a configurable projection timeout for deterministic lag testing while retaining the 5-second production default.\n- Extended [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:306) to prove departure/rejoin clears the former member’s follow, denies replies, excludes them from future recipients, and blocks an already-pending private email.\n- Added a projection-lag scenario at [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:433):\n  - both Membership access projectors are stopped;\n  - departure is committed while their read models still incorrectly show access;\n  - provider handoff is deferred without exposing content or recording failure;\n  - after projections catch up, the departed recipient is permanently rejected while the authorized recipient is delivered normally.\n- No dashboard, retry UI, provider transaction, or database lock around an external provider call was introduced.\n\n3. Validation\n\nPassing:\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/send_club_message_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba_web/controllers/conversation_follow_controller_test.exs`\n  - 57 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/send_club_message_test.exs`\n  - 13 tests, 0 failures after the final follow-cleanup assertion.\n- `MIX_ENV=test mix format --check-formatted lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/send_club_message_test.exs`\n  - passed.\n- `git diff --check`\n  - passed.\n\nThe new lag test was first run red and reproduced the defect: projection timeouts marked deliveries failed with `recipient_access_projection_timeout`. It passed after implementing deferral.\n\n`dev check --quick` was attempted but could not complete because its formatter tried to rewrite sandbox-owned modified files and received `permission denied`. The unrelated formatting mutation it made before stopping was reverted. Per the task workflow, full `dev check` remains explicitly owned by pending task 021.\n\n4. Exact unchecked line\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0007: Messaging obtains membership authorization through Membership’s public API; it does not query Membership projection schemas directly.\n- ADR 0009: the implementation treats projection state as asynchronous read models and does not move cross-context side effects into projectors.\n- ADR 0021: existing committed read-model notifications remain unchanged.\n- ADR 0022: authorization uses explicit event-store checkpoints and projection barriers for all four required projectors.\n- ADR 0024: Club remains the authoritative owner of membership departure and custom-group removal facts.\n- ADRs 0004 and 0005: the existing Message aggregate and resolved-recipient delivery model remain intact.",
+              "last_stage": "implement_next_task",
+              "last_response": "Task 019’s candidate implementation is ready for independent review and remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff bou"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 367143,
+                    "output_tokens": 15826,
+                    "reasoning_tokens": 13721,
+                    "cache_read_tokens": 6077440,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5760845
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 776688,
+              "tool_time_ms": 154638,
+              "active_time_ms": 931326
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "7a443a9cf22012bcaa28af7e881b0092897684e5",
+        "node_visits": {
+          "validate_task": 1,
+          "read_plan": 1,
+          "apply_task_verdict": 1,
+          "implement_next_task": 1,
+          "all_tasks_done": 1,
+          "preflight_sandbox": 1,
+          "start": 1,
+          "verify_source_head": 1,
+          "wip_gate": 1,
+          "revise_task": 1,
+          "resume_gate": 1,
+          "sync_task_list": 1,
+          "todo_readable": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex\nindex b5d4d1f..b264953 100644\n--- a/web/lib/memba/membership.ex\n+++ b/web/lib/memba/membership.ex\n@@ -1346,6 +1346,29 @@ defmodule Memba.Membership do\n     end\n   end\n \n+  @doc \"\"\"\n+  Return whether the Club aggregate currently records a person as an active\n+  member of one of its groups.\n+\n+  Privacy-sensitive action boundaries use this narrow authoritative query when\n+  a just-committed departure may not yet be visible in Membership projections.\n+  System groups are derived from active club membership and Admin authority;\n+  custom groups require the same active membership identity that holds the\n+  group membership.\n+  \"\"\"\n+  def active_member_of_group_authoritatively?(club_id, group_id, person_id) do\n+    with {:ok, club_id} <- ID.cast(:club, club_id),\n+         {:ok, group_id} <- ID.cast(:group, group_id),\n+         {:ok, person_id} <- ID.cast(:person, person_id),\n+         %Memba.Membership.Club{club_id: ^club_id} = club <-\n+           App.aggregate_state(Memba.Membership.Club, club_id),\n+         true <- Map.has_key?(club.groups, group_id) do\n+      authoritative_group_member?(club, group_id, person_id)\n+    else\n+      _invalid_missing_or_inactive -> false\n+    end\n+  end\n+\n   @doc \"\"\"\n   Wait until the Membership read models used by `active_member_of_group?/2`\n   have processed every event committed before this call.\n@@ -1357,6 +1380,34 @@ defmodule Memba.Membership do\n     ProjectionBarrier.await(@group_access_projectors, opts)\n   end\n \n+  defp authoritative_group_member?(club, group_id, person_id) do\n+    active_membership_ids =\n+      club.active_memberships\n+      |> Enum.flat_map(fn\n+        {membership_id, ^person_id} -> [membership_id]\n+        {_membership_id, _other_person_id} -> []\n+      end)\n+\n+    cond do\n+      group_id == SystemGroups.everyone_group_id(club.club_id) ->\n+        active_membership_ids != []\n+\n+      group_id == SystemGroups.admin_group_id(club.club_id) ->\n+        Enum.any?(\n+          active_membership_ids,\n+          &MapSet.member?(club.active_admin_membership_ids, &1)\n+        )\n+\n+      true ->\n+        Enum.any?(active_membership_ids, fn membership_id ->\n+          case Map.get(club.group_memberships, {group_id, membership_id}) do\n+            %{person_id: ^person_id, active: true} -> true\n+            _inactive_or_different_person -> false\n+          end\n+        end)\n+    end\n+  end\n+\n   @doc \"\"\"\n   Return whether an email address currently has an active membership in a club.\n \ndiff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex 7a47697..23dcd91 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -34,6 +34,7 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.InboundEmail\n   alias Memba.Messaging.InboundEmailBody\n   alias Memba.Messaging.InboundEmailReceipt\n+  alias Memba.Messaging.Message\n   alias Memba.Messaging.OutboundMessageID\n \n   alias Memba.Messaging.Projectors.ConversationGroupAccess,\n@@ -47,10 +48,13 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n   alias Memba.Messaging.Recipient\n+  alias Memba.ProjectionBarrier\n   alias Memba.Repo\n \n   import Ecto.Query\n \n+  @default_authorization_stability_timeout 5_000\n+\n   @doc \"\"\"\n   Send a message to the active members of a club conversation group.\n \n@@ -70,6 +74,28 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  @doc \"\"\"\n+  Send a club message from an in-app current-member surface.\n+\n+  Unlike inbound email posting, browser composition requires the sender to\n+  retain active membership in the selected audience group. The Membership\n+  aggregate is rechecked at a stable event-store checkpoint before dispatch, so\n+  a committed departure cannot be accepted through stale projections.\n+  \"\"\"\n+  def send_club_message_as_current_member(attrs, dispatch_opts \\\\ [])\n+      when is_map(attrs) and is_list(dispatch_opts) do\n+    with {:ok, command} <-\n+           authorize_at_stable_checkpoint(fn ->\n+             with {:ok, command} <- send_club_message_command(attrs),\n+                  :ok <- authorize_message_sender(command) do\n+               {:ok, command}\n+             end\n+           end),\n+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n+      dispatch_result\n+    end\n+  end\n+\n   @doc \"\"\"\n   Post a reply to an existing club-message conversation.\n \n@@ -80,8 +106,13 @@ defmodule Memba.Messaging do\n   \"\"\"\n   def post_message_reply(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n-    with {:ok, command} <- post_message_reply_command(attrs),\n-         :ok <- authorize_reply_sender(command),\n+    with {:ok, command} <-\n+           authorize_at_stable_checkpoint(fn ->\n+             with {:ok, command} <- post_message_reply_command(attrs),\n+                  :ok <- authorize_reply_sender(command) do\n+               {:ok, command}\n+             end\n+           end),\n          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n       dispatch_result\n     end\n@@ -165,8 +196,13 @@ defmodule Memba.Messaging do\n   \"\"\"\n   def follow_conversation_as_current_member(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n-    with {:ok, command} <- follow_conversation_command(attrs),\n-         :ok <- authorize_current_member_conversation_action(command),\n+    with {:ok, command} <-\n+           authorize_at_stable_checkpoint(fn ->\n+             with {:ok, command} <- follow_conversation_command(attrs),\n+                  :ok <- authorize_current_member_conversation_action(command) do\n+               {:ok, command}\n+             end\n+           end),\n          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n       dispatch_result\n     end\n@@ -193,8 +229,13 @@ defmodule Memba.Messaging do\n   \"\"\"\n   def unfollow_conversation_as_current_member(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n-    with {:ok, command} <- unfollow_conversation_command(attrs),\n-         :ok <- authorize_current_member_conversation_action(command),\n+    with {:ok, command} <-\n+           authorize_at_stable_checkpoint(fn ->\n+             with {:ok, command} <- unfollow_conversation_command(attrs),\n+                  :ok <- authorize_current_member_conversation_action(command) do\n+               {:ok, command}\n+             end\n+           end),\n          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n       dispatch_result\n     end\n@@ -1824,7 +1865,7 @@ defmodule Memba.Messaging do\n   end\n \n   defp authorize_reply_sender(%PostMessageReply{} = command) do\n-    case member_has_conversation_access?(\n+    case member_has_authoritative_conversation_access?(\n            command.conversation_id,\n            command.club_id,\n            command.sender_id,\n@@ -1835,11 +1876,23 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  defp authorize_message_sender(%SendMessage{} = command) do\n+    if Membership.active_member_of_group_authoritatively?(\n+         command.club_id,\n+         command.audience_group_id,\n+         command.sender_id\n+       ) do\n+      :ok\n+    else\n+      {:error, :not_current_member}\n+    end\n+  end\n+\n   defp authorize_current_member_conversation_action(command) do\n     with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),\n          :ok <- require_conversation_in_club(root_message, command.club_id),\n          true <-\n-           member_has_conversation_access?(\n+           member_has_authoritative_conversation_access?(\n              command.conversation_id,\n              command.club_id,\n              command.member_id,\n@@ -1852,6 +1905,70 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  defp authorize_at_stable_checkpoint(authorization) when is_function(authorization, 0) do\n+    deadline =\n+      System.monotonic_time(:millisecond) + authorization_stability_timeout()\n+\n+    authorize_at_stable_checkpoint(authorization, deadline)\n+  end\n+\n+  defp authorize_at_stable_checkpoint(authorization, deadline) do\n+    if System.monotonic_time(:millisecond) >= deadline do\n+      {:error, :authorization_stability_timeout}\n+    else\n+      checkpoint = ProjectionBarrier.current_checkpoint()\n+\n+      with {:ok, authorized} <- authorization.() do\n+        if ProjectionBarrier.current_checkpoint() == checkpoint do\n+          {:ok, authorized}\n+        else\n+          authorize_at_stable_checkpoint(authorization, deadline)\n+        end\n+      end\n+    end\n+  end\n+\n+  defp authorization_stability_timeout do\n+    case Application.get_env(\n+           :memba,\n+           :authorization_stability_timeout,\n+           @default_authorization_stability_timeout\n+         ) do\n+      timeout when is_integer(timeout) and timeout > 0 -> timeout\n+      _invalid -> @default_authorization_stability_timeout\n+    end\n+  end\n+\n+  defp member_has_authoritative_conversation_access?(\n+         conversation_id,\n+         club_id,\n+         person_id,\n+         access_level\n+       ) do\n+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),\n+         {:ok, club_id} <- ID.cast(:club, club_id),\n+         {:ok, person_id} <- ID.cast(:person, person_id),\n+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level),\n+         %Message{\n+           message_id: ^conversation_id,\n+           club_id: ^club_id,\n+           group_access: group_access\n+         } <- App.aggregate_state(Message, conversation_id) do\n+      grant_levels = ConversationAccess.grant_levels_including(access_level)\n+\n+      Enum.any?(group_access, fn {group_id, granted_access_level} ->\n+        granted_access_level in grant_levels and\n+          Membership.active_member_of_group_authoritatively?(\n+            club_id,\n+            group_id,\n+            person_id\n+          )\n+      end)\n+    else\n+      _invalid_missing_or_inaccessible -> false\n+    end\n+  end\n+\n   defp require_conversation_in_club(%MessageProjection{club_id: club_id}, club_id), do: :ok\n \n   defp require_conversation_in_club(%MessageProjection{}, _club_id) do\ndiff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex\nindex 96d826b..b27b479 100644\n--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex\n+++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex\n@@ -3,11 +3,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n   OTP process responsible for asynchronous email delivery dispatch.\n \n   The dispatcher subscribes to committed read-model changes and treats new\n-  `EmailDelivery` projection records as a nudge to look for pending delivery\n-  work. It also owns the provider handoff request-building boundary and\n-  persisted dispatch outcomes so command application services do not call email\n-  providers directly. Failed deliveries can be retried through the explicit\n-  manual retry API; the dispatcher does not perform automatic retry sweeps.\n+  `EmailDelivery` records and access-projector catch-up as nudges to look for\n+  pending delivery work. Catch-up nudges let authorization-timeout deferrals\n+  resume without a periodic sweep. The dispatcher also owns the provider\n+  handoff request-building boundary and persisted dispatch outcomes so command\n+  application services do not call email providers directly. Failed deliveries\n+  can be retried through the explicit manual retry API; the dispatcher does not\n+  automatically retry failed deliveries.\n   \"\"\"\n \n   use GenServer\n@@ -16,6 +18,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n   require Logger\n \n   alias Memba.Membership\n+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector\n+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector\n   alias Memba.Messaging.EmailDeliveryProvider\n   alias Memba.Messaging.EmailDeliveryRequest\n   alias Memba.Messaging.EmailDeliveryStatus\n@@ -41,6 +45,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n   @sent_status EmailDeliveryStatus.sent()\n   @failed_status EmailDeliveryStatus.failed()\n   @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]\n+  @access_catch_up_projectors [\n+    ConversationGroupAccessProjector,\n+    MessageProjector,\n+    GroupMembershipProjector,\n+    MembershipProjector\n+  ]\n   @default_projection_timeout 5_000\n   @projection_timeout_errors [\n     :delivery_context_projection_timeout,\n@@ -220,6 +230,20 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n     {:noreply, state}\n   end\n \n+  def handle_info(\n+        {:read_model_changed, %{projector: projector} = payload},\n+        state\n+      )\n+      when projector in @access_catch_up_projectors do\n+    Logger.debug(\"email_delivery_access_catch_up_nudged\",\n+      projector: inspect(projector)\n+    )\n+\n+    send(self(), {:dispatch_pending_email_deliveries, payload})\n+\n+    {:noreply, state}\n+  end\n+\n   def handle_info({:read_model_changed, _payload}, state) do\n     {:noreply, state}\n   end\ndiff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex\nindex c64c05f..e0f0f86 100644\n--- a/web/lib/memba_web/live/member_message_live/new.ex\n+++ b/web/lib/memba_web/live/member_message_live/new.ex\n@@ -425,28 +425,18 @@ defmodule MembaWeb.MemberMessageLive.New do\n         \"body\" => Map.get(message_params, \"body\", \"\")\n       }\n \n-      with :ok <- authorize_current_audience(club_id, sender_id, audience_group_id) do\n-        case Messaging.send_club_message(attrs, consistency: [MessageProjector]) do\n-          :ok -> {:ok, message_id}\n-          {:ok, _result} -> {:ok, message_id}\n-          {:error, reason} -> {:error, reason}\n-        end\n+      case Messaging.send_club_message_as_current_member(attrs,\n+             consistency: [MessageProjector]\n+           ) do\n+        :ok -> {:ok, message_id}\n+        {:ok, _result} -> {:ok, message_id}\n+        {:error, reason} -> {:error, reason}\n       end\n     else\n       _missing_compose_context -> {:error, :forbidden}\n     end\n   end\n \n-  defp authorize_current_audience(club_id, sender_id, audience_group_id) do\n-    club_id\n-    |> Membership.list_active_groups_for_member(sender_id)\n-    |> Enum.any?(&(&1.group_id == audience_group_id))\n-    |> case do\n-      true -> :ok\n-      false -> {:error, :forbidden}\n-    end\n-  end\n-\n   defp log_send_failure(socket, reason) do\n     inspected_reason = inspect(reason)\n \ndiff --git a/web/test/memba/messaging/conversation_group_access_projection_test.exs b/web/test/memba/messaging/conversation_group_access_projection_test.exs\nindex 37ba3e6..de6c200 100644\n--- a/web/test/memba/messaging/conversation_group_access_projection_test.exs\n+++ b/web/test/memba/messaging/conversation_group_access_projection_test.exs\n@@ -304,94 +304,174 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do\n   end\n \n   test \"discovering a group does not confer member access or permit in-app follow actions\" do\n-    club = insert_membership_club!(name: \"Alpine Club\")\n-    alice = insert_membership_person!(name: \"Alice Adams\", email: \"alice@example.com\")\n-    bob = insert_membership_person!(name: \"Bob Builder\", email: \"bob@example.com\")\n-    group = insert_group!(club.club_id, \"Trip planners\")\n-    insert_active_club_member!(club.club_id, alice.person_id)\n-    insert_active_club_member!(club.club_id, bob.person_id)\n+    club_id = Memba.ID.generate(:club)\n+    alice_person_id = Memba.ID.generate(:person)\n+    alice_membership_id = Memba.ID.generate(:membership)\n+    bob_person_id = Memba.ID.generate(:person)\n+    bob_membership_id = Memba.ID.generate(:membership)\n+    group_id = Memba.ID.generate(:group)\n+    conversation_id = Memba.ID.generate(:message)\n+\n+    assert :ok =\n+             Memba.Membership.create_club(\n+               membership_club_attrs(club_id: club_id, name: \"Alpine Club\"),\n+               consistency: :strong\n+             )\n+\n+    assert :ok =\n+             Memba.Membership.create_person(\n+               %{\n+                 person_id: alice_person_id,\n+                 name: \"Alice Adams\",\n+                 email: \"alice@example.com\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert :ok =\n+             Memba.Membership.create_person(\n+               %{\n+                 person_id: bob_person_id,\n+                 name: \"Bob Builder\",\n+                 email: \"bob@example.com\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert :ok =\n+             Memba.Membership.add_member(\n+               %{\n+                 club_id: club_id,\n+                 membership_id: alice_membership_id,\n+                 person_id: alice_person_id\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert :ok =\n+             Memba.Membership.add_member(\n+               %{\n+                 club_id: club_id,\n+                 membership_id: bob_membership_id,\n+                 person_id: bob_person_id\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert :ok =\n+             Memba.Membership.App.dispatch(\n+               %Memba.Membership.Commands.CreateGroup{\n+                 club_id: club_id,\n+                 group_id: group_id,\n+                 email_slug: \"trip-planners\",\n+                 name: \"Trip planners\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert :ok =\n+             Memba.Membership.App.dispatch(\n+               %Memba.Membership.Commands.AddGroupMember{\n+                 club_id: club_id,\n+                 group_id: group_id,\n+                 membership_id: alice_membership_id,\n+                 person_id: alice_person_id\n+               },\n+               consistency: :strong\n+             )\n \n     assert Enum.any?(\n              Memba.Membership.list_discoverable_groups_for_member(\n-               club.club_id,\n-               bob.person_id\n+               club_id,\n+               bob_person_id\n              ),\n-             &(&1.group_id == group.group_id)\n+             &(&1.group_id == group_id)\n            )\n \n     refute Enum.any?(\n-             Memba.Membership.list_active_groups_for_member(club.club_id, bob.person_id),\n-             &(&1.group_id == group.group_id)\n+             Memba.Membership.list_active_groups_for_member(club_id, bob_person_id),\n+             &(&1.group_id == group_id)\n            )\n \n-    root =\n-      insert_message!(\n-        club_id: club.club_id,\n-        sender_id: alice.person_id,\n-        subject: \"Private trip planning\"\n-      )\n-\n-    Repo.insert!(%ConversationGroupAccessProjection{\n-      conversation_id: root.message_id,\n-      club_id: club.club_id,\n-      group_id: group.group_id,\n-      access_level: \"write\"\n-    })\n+    assert :ok =\n+             Messaging.send_club_message(\n+               %{\n+                 message_id: conversation_id,\n+                 club_id: club_id,\n+                 sender_id: alice_person_id,\n+                 audience_group_id: group_id,\n+                 subject: \"Private trip planning\",\n+                 body: \"Bring route ideas.\"\n+               },\n+               consistency: :strong\n+             )\n \n     attrs = %{\n-      club_id: club.club_id,\n-      conversation_id: root.message_id,\n-      member_id: bob.person_id\n+      club_id: club_id,\n+      conversation_id: conversation_id,\n+      member_id: bob_person_id\n     }\n \n     refute Messaging.member_has_conversation_access?(\n-             root.message_id,\n-             club.club_id,\n-             bob.person_id,\n+             conversation_id,\n+             club_id,\n+             bob_person_id,\n              :read\n            )\n \n     assert {:error, :not_current_member} =\n              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)\n \n-    refute Messaging.following_conversation?(root.message_id, bob.person_id)\n+    refute Messaging.following_conversation?(conversation_id, bob_person_id)\n \n-    bob_group_membership =\n-      insert_active_group_member!(club.club_id, group.group_id, bob.person_id)\n+    assert :ok =\n+             Memba.Membership.App.dispatch(\n+               %Memba.Membership.Commands.AddGroupMember{\n+                 club_id: club_id,\n+                 group_id: group_id,\n+                 membership_id: bob_membership_id,\n+                 person_id: bob_person_id\n+               },\n+               consistency: :strong\n+             )\n \n     assert :ok =\n              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)\n \n-    assert Messaging.following_conversation?(root.message_id, bob.person_id)\n+    assert Messaging.following_conversation?(conversation_id, bob_person_id)\n \n     assert :ok =\n              Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)\n \n-    refute Messaging.following_conversation?(root.message_id, bob.person_id)\n+    refute Messaging.following_conversation?(conversation_id, bob_person_id)\n \n     assert :ok =\n              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)\n \n-    assert Messaging.following_conversation?(root.message_id, bob.person_id)\n+    assert Messaging.following_conversation?(conversation_id, bob_person_id)\n \n     assert {:error, :conversation_not_found} =\n              attrs\n              |> Map.put(:club_id, Memba.ID.generate(:club))\n              |> Messaging.unfollow_conversation_as_current_member(consistency: :strong)\n \n-    assert Messaging.following_conversation?(root.message_id, bob.person_id)\n+    assert Messaging.following_conversation?(conversation_id, bob_person_id)\n \n-    from(group_membership in GroupMembership,\n-      where:\n-        group_membership.group_id == ^bob_group_membership.group_id and\n-          group_membership.membership_id == ^bob_group_membership.membership_id\n-    )\n-    |> Repo.update_all(set: [active: false])\n+    assert :ok =\n+             Memba.Membership.App.dispatch(\n+               %Memba.Membership.Commands.RemoveGroupMember{\n+                 club_id: club_id,\n+                 group_id: group_id,\n+                 membership_id: bob_membership_id,\n+                 person_id: bob_person_id\n+               },\n+               consistency: :strong\n+             )\n \n     assert {:error, :not_current_member} =\n              Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)\n \n-    assert Messaging.following_conversation?(root.message_id, bob.person_id)\n+    refute Messaging.following_conversation?(conversation_id, bob_person_id)\n   end\n \n   defp projector_metadata(event_number) do\ndiff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs\nindex 6dc15fd..4431c7e 100644\n--- a/web/test/memba/messaging/send_club_message_test.exs\n+++ b/web/test/memba/messaging/send_club_message_test.exs\n@@ -37,6 +37,9 @@ defmodule Memba.Messaging.SendClubMessageTest do\n     original_projection_timeout =\n       Application.get_env(:memba, :email_delivery_projection_timeout)\n \n+    original_authorization_stability_timeout =\n+      Application.get_env(:memba, :authorization_stability_timeout)\n+\n     original_mailer_config = Application.get_env(:memba, Memba.Mailer)\n     original_postmark_config = Application.get_env(:memba, Postmark)\n     dispatcher_was_running? = stop_email_delivery_dispatcher()\n@@ -46,6 +49,7 @@ defmodule Memba.Messaging.SendClubMessageTest do\n     on_exit(fn ->\n       restore_env(:messaging_email_delivery_provider, original_provider)\n       restore_env(:email_delivery_projection_timeout, original_projection_timeout)\n+      restore_env(:authorization_stability_timeout, original_authorization_stability_timeout)\n       restore_env(Memba.Mailer, original_mailer_config)\n       restore_env(Postmark, original_postmark_config)\n       Fake.reset()\n@@ -432,6 +436,7 @@ defmodule Memba.Messaging.SendClubMessageTest do\n \n   test \"defers provider handoff until lagging membership access projections catch up\" do\n     Application.put_env(:memba, :email_delivery_projection_timeout, 25)\n+    Application.put_env(:memba, :authorization_stability_timeout, 25)\n \n     club_id = Memba.ID.generate(:club)\n     create_club(club_id, \"Kootenay Mountaineering Club\")\n@@ -482,6 +487,50 @@ defmodule Memba.Messaging.SendClubMessageTest do\n \n     assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)\n \n+    reply_message_id = Memba.ID.generate(:message)\n+\n+    assert {:error, :not_current_member} =\n+             Messaging.post_message_reply(\n+               %{\n+                 message_id: reply_message_id,\n+                 conversation_id: message_id,\n+                 sender_id: carol.person_id,\n+                 body: \"A stale membership projection must not authorize this reply.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    refute Repo.get(MessageProjection, reply_message_id)\n+\n+    assert {:error, :not_current_member} =\n+             Messaging.follow_conversation_as_current_member(\n+               %{\n+                 club_id: club_id,\n+                 conversation_id: message_id,\n+                 member_id: carol.person_id\n+               },\n+               consistency: :strong\n+             )\n+\n+    refute Messaging.following_conversation?(message_id, carol.person_id)\n+\n+    new_message_id = Memba.ID.generate(:message)\n+\n+    assert {:error, :not_current_member} =\n+             Messaging.send_club_message_as_current_member(\n+               %{\n+                 message_id: new_message_id,\n+                 club_id: club_id,\n+                 sender_id: carol.person_id,\n+                 audience_group_id: board_group_id,\n+                 subject: \"Stale compose\",\n+                 body: \"A stale compose view must not authorize this message.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    refute Repo.get(MessageProjection, new_message_id)\n+\n     assert Enum.any?(\n              EmailDeliveryDispatcher.dispatch_pending_email_deliveries(),\n              &match?(\n@@ -498,22 +547,30 @@ defmodule Memba.Messaging.SendClubMessageTest do\n \n     assert Fake.deliveries() == []\n \n+    dispatcher_name = :\"#{__MODULE__}.lag_recovery\"\n+\n+    start_supervised!(\n+      {EmailDeliveryDispatcher,\n+       name: dispatcher_name, dispatch_enabled: true, dispatch_observer: self()}\n+    )\n+\n     restart_projector!(membership_projector_child_id)\n     restart_projector!(group_membership_projector_child_id)\n \n-    assert {:ok, _result} =\n-             Memba.Membership.await_group_access_projections(timeout: 1_000)\n+    assert_receive {:email_delivery_dispatch_requested,\n+                    %{claimed_delivery_ids: claimed_delivery_ids}},\n+                   1_000\n \n-    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)\n+    assert carol_delivery_id in claimed_delivery_ids\n \n-    dispatch_results = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()\n+    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)\n \n     assert %EmailDeliveryProjection{\n              delivery_id: ^carol_delivery_id,\n              status: \"failed\",\n              attempt_count: 1,\n              latest_error: \"recipient_access_ended\"\n-           } = Enum.find(dispatch_results, &(&1.delivery_id == carol_delivery_id))\n+           } = Repo.get!(EmailDeliveryProjection, carol_delivery_id)\n \n     assert [%EmailDeliveryRequest{recipient_id: alice_id}] = Fake.deliveries()\n     assert alice_id == alice.person_id\ndiff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs\nindex 001f9b5..0055807 100644\n--- a/web/test/memba_web/live/member_message_live/new_send_test.exs\n+++ b/web/test/memba_web/live/member_message_live/new_send_test.exs\n@@ -5,7 +5,6 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do\n   import Phoenix.LiveViewTest\n \n   alias Memba.Membership\n-  alias Memba.Membership.Projections.Group\n   alias Memba.Membership.Projections.GroupMembership\n   alias Memba.Membership.SystemGroups\n   alias Memba.Messaging\n@@ -18,11 +17,15 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do\n   setup do\n     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)\n \n+    original_authorization_stability_timeout =\n+      Application.get_env(:memba, :authorization_stability_timeout)\n+\n     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)\n     Fake.reset()\n \n     on_exit(fn ->\n       restore_env(:messaging_email_delivery_provider, original_provider)\n+      restore_env(:authorization_stability_timeout, original_authorization_stability_timeout)\n       Fake.reset()\n     end)\n \n@@ -382,6 +385,64 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do\n     assert Fake.deliveries() == []\n   end\n \n+  test \"an open compose view fails closed while departure projections lag\", %{conn: conn} do\n+    Application.put_env(:memba, :authorization_stability_timeout, 25)\n+\n+    club_id = Memba.ID.generate(:club)\n+    _bob = create_active_member(club_id, name: \"Bob Builder\", email: \"bob@example.com\")\n+    alice = create_active_member(club_id, name: \"Alice Adams\", email: \"alice@example.com\")\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> signed_in_club_host(\"alice@example.com\", %{club_id: club_id})\n+      |> live(~p\"/messages/new\")\n+\n+    membership_projector_child_id =\n+      stop_projector!(Memba.Membership.Projectors.Membership)\n+\n+    group_membership_projector_child_id =\n+      stop_projector!(Memba.Membership.Projectors.GroupMembership)\n+\n+    assert :ok =\n+             Memba.Membership.App.dispatch(\n+               %Memba.Membership.Commands.RemoveClubMember{\n+                 club_id: club_id,\n+                 membership_id: alice.membership_id,\n+                 person_id: alice.person_id\n+               },\n+               consistency: :eventual\n+             )\n+\n+    assert Membership.active_member_of_group?(\n+             SystemGroups.everyone_group_id(club_id),\n+             alice.person_id\n+           )\n+\n+    view\n+    |> element(\"#member-message-compose-form\")\n+    |> render_submit(%{\n+      \"message\" => %{\n+        \"subject\" => \"Stale compose\",\n+        \"body\" => \"This must not be sent after departure.\"\n+      }\n+    })\n+\n+    assert has_element?(\n+             view,\n+             \"#member-message-compose[data-compose-state='send_failed']\"\n+           )\n+\n+    assert has_element?(view, \"#member-compose-error-state\", \"Your message was not sent.\")\n+    assert Messaging.list_messages_for_club(club_id) == []\n+    assert Fake.deliveries() == []\n+\n+    restart_projector!(membership_projector_child_id)\n+    restart_projector!(group_membership_projector_child_id)\n+\n+    assert {:ok, _result} =\n+             Membership.await_group_access_projections(timeout: 1_000)\n+  end\n+\n   test \"submit accepts the message without waiting for every delivery diagnostics projector\", %{\n     conn: conn\n   } do\n@@ -523,24 +584,38 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do\n   end\n \n   defp create_group(attrs) do\n-    Repo.insert!(%Group{\n-      club_id: Keyword.fetch!(attrs, :club_id),\n-      group_id: Memba.ID.generate(:group),\n-      group_key: Keyword.fetch!(attrs, :group_key),\n-      name: Keyword.fetch!(attrs, :name),\n-      name_uniqueness_key:\n-        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()\n-    })\n+    club_id = Keyword.fetch!(attrs, :club_id)\n+    group_id = Memba.ID.generate(:group)\n+\n+    assert :ok =\n+             Memba.Membership.App.dispatch(\n+               %Memba.Membership.Commands.CreateGroup{\n+                 club_id: club_id,\n+                 group_id: group_id,\n+                 email_slug:\n+                   attrs\n+                   |> Keyword.fetch!(:group_key)\n+                   |> String.replace(\"_\", \"-\"),\n+                 group_key: nil,\n+                 name: Keyword.fetch!(attrs, :name)\n+               },\n+               consistency: :strong\n+             )\n+\n+    Membership.get_group(group_id)\n   end\n \n   defp add_group_member(group, member) do\n-    Repo.insert!(%GroupMembership{\n-      club_id: member.club_id,\n-      group_id: group.group_id,\n-      membership_id: member.membership_id,\n-      person_id: member.person_id,\n-      active: true\n-    })\n+    assert :ok =\n+             Memba.Membership.App.dispatch(\n+               %Memba.Membership.Commands.AddGroupMember{\n+                 club_id: member.club_id,\n+                 group_id: group.group_id,\n+                 membership_id: member.membership_id,\n+                 person_id: member.person_id\n+               },\n+               consistency: :strong\n+             )\n   end\n \n   defp await_delivery_projection! do\n@@ -560,7 +635,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do\n     case Supervisor.terminate_child(Memba.Supervisor, child_id) do\n       :ok ->\n         on_exit(fn -> restart_projector!(child_id) end)\n-        :ok\n+        child_id\n \n       {:error, :not_found} ->\n         flunk(\"Expected #{inspect(projector)} to be supervised\")\n",
+        "summary": {
+          "files_changed": 7,
+          "additions": 666,
+          "deletions": 96
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T04:05:57.267650743Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "current_node": "validate_task",
+          "output.validate_task": {
+            "decision": "revise",
+            "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
+            "reason": "The aggregate-backed reply/follow/compose authorization and provider-handoff barriers are concrete, and the focused 65-test set passes. Two gaps remain. First, new inbound group-email conversations are still authorized through the potentially stale Membership projection in GroupEmailPostingPolicy.authorize/2, then sent through unrestricted send_club_message/2; a committed departure during projection lag can therefore still authorize an email action. Use authoritative/stable active-club authorization at that boundary and add deterministic lag coverage. Second, deferred delivery recovery is not guaranteed: email_delivery_dispatcher.ex retries only after read_model_changed messages, while ProjectionBarrier documents that projectors acknowledge irrelevant events without publishing read-model changes. A projector can therefore catch up after timeout without producing a nudge, leaving the delivery pending indefinitely. Add a bounded retry/catch-up mechanism or explicit progress signal and test recovery where the lagging projector catches up only over irrelevant events. No acceptance feature files changed and the worktree is clean."
           },
           "thread.wip_gate.current_node": "preflight_sandbox",
           "response.revise_task": "Task 019’s revised candidate implementation is complete and ready for independent review. The task remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n2. Changes made\n\n- Added a narrow public Membership API that checks active group membership from authoritative Club aggregate state, avoiding stale access projections at privacy-sensitive action boundaries: [membership.ex](/workspace/memba/web/lib/memba/membership.ex:1359).\n- Updated Messaging’s member-facing reply, follow, unfollow, and compose operations to authorize against authoritative Membership and Message aggregate state at a stable event-store checkpoint: [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:85).\n- Added `send_club_message_as_current_member/2` and routed the compose LiveView through it, so an already-open compose page fails closed after committed departure: [new.ex](/workspace/memba/web/lib/memba_web/live/member_message_live/new.ex:428).\n- Kept provider handoff guarded by stable projection barriers. Projection-lag timeouts defer pending deliveries without contacting the provider or recording a delivery attempt.\n- Extended the supervised dispatcher to treat Membership and conversation-access projector catch-up notifications as dispatch nudges. Deferred deliveries now recover automatically after projections catch up, without a manual sweep: [email_delivery_dispatcher.ex](/workspace/memba/web/lib/memba/messaging/email_delivery_dispatcher.ex:233).\n- Added regression coverage for stale reply/follow/compose authorization and automatic deferred-delivery recovery: [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:437), [new_send_test.exs](/workspace/memba/web/test/memba_web/live/member_message_live/new_send_test.exs:388).\n- Converted affected custom-group test fixtures to aggregate-backed Membership history, ensuring projection-only discovery does not confer participation rights: [conversation_group_access_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_group_access_projection_test.exs:306).\n- No acceptance feature files were changed.\n\n3. Focused validation\n\nPassed:\n\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_group_access_projection_test.exs:306`\n  - 1 selected test passed; 0 failures.\n- Full task-019 regression set across dispatcher, messaging, departure cleanup, controllers, and member-message LiveViews:\n  - 68 tests, 0 failures.\n- `MIX_ENV=test mix format --check-formatted ...`\n  - Passed for all seven changed files.\n- `git diff --check`\n  - Passed.\n- Worktree inspection confirms only the seven task-019 implementation/test files are modified.\n\nFull `dev check` was not run in this per-task node because pending task 021 explicitly owns the final exact-state gate.\n\n4. Exact unchecked task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0007: Messaging obtains membership authority through Membership’s public API.\n- ADR 0009: asynchronous projections remain read models; no cross-context side effects were placed in projectors.\n- ADR 0021: existing committed read-model notifications provide bounded catch-up nudges.\n- ADR 0022: authorization and provider handoff use explicit event-store checkpoint stability.\n- ADR 0024: Club aggregate state remains authoritative for departure and group membership.\n- ADRs 0004 and 0005: Message aggregates and resolved-recipient delivery semantics remain intact.",
@@ -3481,9 +3829,9 @@
           "thread.preflight_sandbox.current_node": "resume_gate",
           "internal.retry_count.preflight_sandbox": 0,
           "outcome": "succeeded",
-          "last_stage": "revise_task",
+          "last_stage": "validate_task",
           "internal.retry_count.implement_next_task": 0,
-          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean.\"}",
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The aggregate-backed reply/follow/compose authorization and provider-handoff barriers are concrete, and the focused 65-test set passes. Two gaps remain. First, new inbound group-email conversations are still authorized through the potentially stale Membership projection in GroupEmailPostingPolicy.authorize/2, then sent through unrestricted send_club_message/2; a committed departure during projection lag can therefore still authorize an email action. Use authoritative/stable active-club authorization at that boundary and add deterministic lag coverage. Second, deferred delivery recovery is not guaranteed: email_delivery_dispatcher.ex retries only after read_model_changed messages, while ProjectionBarrier documents that projectors acknowledge irrelevant events without publishing read-model changes. A projector can therefore catch up after timeout without producing a nudge, leaving the delivery pending indefinitely. Add a bounded retry/catch-up mechanism or explicit progress signal and test recovery where the lagging projector catches up only over irrelevant events. No acceptance feature files changed and the worktree is clean.\"}",
           "internal.run_id": "01M2EYC0HJJ4ATR8WGJZFKYYZN",
           "internal.retry_count.all_tasks_done": 0,
           "preferred_label": "revise",
@@ -3500,7 +3848,7 @@
           "internal.work_dir": "/workspace/memba",
           "internal.retry_count.resume_gate": 0,
           "thread.todo_readable.current_node": "all_tasks_done",
-          "internal.node_visit_count": 1,
+          "internal.node_visit_count": 2,
           "internal.retry_count.start": 0,
           "command.output": "blob://sha256/e04ae19891aefa665418b6dbb99c5a38f4dbc5728f13a2ba7ce31538daf7f333",
           "thread.sync_task_list.current_node": "todo_readable",
@@ -3508,11 +3856,12 @@
           "thread.validate_task.current_node": "apply_task_verdict",
           "thread.apply_task_verdict.current_node": "revise_task",
           "internal.retry_count.revise_task": 0,
+          "thread.revise_task.current_node": "validate_task",
           "graph.max_node_visits": "80",
           "thread.all_tasks_done.current_node": "implement_next_task",
-          "last_response": "Task 019’s revised candidate implementation is complete and ready for independent review. The task remains unchecked.\n\n1. Selected task\n\n`- [ ] 019 Keep departure/rejoin safe at action and email-rec",
+          "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
           "internal.retry_count.sync_task_list": 0,
-          "internal.thread_id": "apply_task_verdict",
+          "internal.thread_id": "revise_task",
           "failure_class": "",
           "internal.retry_count.apply_task_verdict": 0,
           "thread.resume_gate.current_node": "sync_task_list",
@@ -3581,14 +3930,14 @@
           "validate_task": {
             "status": "succeeded",
             "context_updates": {
-              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
-              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean.\"}",
               "output.validate_task": {
                 "decision": "revise",
                 "task": "- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.",
-                "reason": "The provider-handoff authorization correctly waits for Messaging and Membership projections at a stable event-store checkpoint, uses Membership’s public API, and the focused 57-test run passes. However, two gaps remain. First, current-member actions are still authorized directly from potentially stale projections: post_message_reply/2 and the LiveView compose/follow paths do not wait for access projections or fail closed during lag. The new lag test itself proves active_member_of_group?/2 remains true after departure is committed while projectors are stopped, so a reply or other private action in that window can still be accepted. Add deterministic lag coverage and synchronize/recheck authorization at the action boundary. Second, a projection timeout returns a claimed delivery to pending, but the supervised dispatcher only schedules work for EmailDeliveryCreated changes and ignores the Membership/Messaging catch-up notifications. The test conceals this by manually calling dispatch_pending_email_deliveries/0 after restart; in production the delivery can remain pending indefinitely. Arrange a bounded catch-up nudge or equivalent non-product retry mechanism and test recovery through the running dispatcher. No acceptance feature files were changed, and the worktree is clean."
+                "reason": "The aggregate-backed reply/follow/compose authorization and provider-handoff barriers are concrete, and the focused 65-test set passes. Two gaps remain. First, new inbound group-email conversations are still authorized through the potentially stale Membership projection in GroupEmailPostingPolicy.authorize/2, then sent through unrestricted send_club_message/2; a committed departure during projection lag can therefore still authorize an email action. Use authoritative/stable active-club authorization at that boundary and add deterministic lag coverage. Second, deferred delivery recovery is not guaranteed: email_delivery_dispatcher.ex retries only after read_model_changed messages, while ProjectionBarrier documents that projectors acknowledge irrelevant events without publishing read-model changes. A projector can therefore catch up after timeout without producing a nudge, leaving the delivery pending indefinitely. Add a bounded retry/catch-up mechanism or explicit progress signal and test recovery where the lagging projector catches up only over irrelevant events. No acceptance feature files changed and the worktree is clean."
               },
-              "last_stage": "validate_task"
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"Th",
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 019 Keep departure/rejoin safe at action and email-recipient/provider-handoff boundaries; never send private content to someone whose access has ended.\",\"reason\":\"The aggregate-backed reply/follow/compose authorization and provider-handoff barriers are concrete, and the focused 65-test set passes. Two gaps remain. First, new inbound group-email conversations are still authorized through the potentially stale Membership projection in GroupEmailPostingPolicy.authorize/2, then sent through unrestricted send_club_message/2; a committed departure during projection lag can therefore still authorize an email action. Use authoritative/stable active-club authorization at that boundary and add deterministic lag coverage. Second, deferred delivery recovery is not guaranteed: email_delivery_dispatcher.ex retries only after read_model_changed messages, while ProjectionBarrier documents that projectors acknowledge irrelevant events without publishing read-model changes. A projector can therefore catch up after timeout without producing a nudge, leaving the delivery pending indefinitely. Add a bounded retry/catch-up mechanism or explicit progress signal and test recovery where the lagging projector catches up only over irrelevant events. No acceptance feature files changed and the worktree is clean.\"}"
             },
             "notes": "Stage completed: validate_task",
             "usage": {
@@ -3599,10 +3948,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 226695,
-                    "output_tokens": 5301,
-                    "reasoning_tokens": 5154,
-                    "cache_read_tokens": 1022464,
+                    "input_tokens": 221845,
+                    "output_tokens": 4974,
+                    "reasoning_tokens": 4325,
+                    "cache_read_tokens": 1076992,
                     "cache_write_tokens": 0
                   }
                 },
@@ -3610,13 +3959,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 1958357
+              "total_usd_micros": 1926691
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 252041,
-              "tool_time_ms": 235137,
-              "active_time_ms": 487178
+              "inference_time_ms": 221105,
+              "tool_time_ms": 239383,
+              "active_time_ms": 460488
             }
           },
           "start": {
@@ -3767,11 +4116,11 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "apply_task_verdict",
         "node_visits": {
           "implement_next_task": 1,
           "preflight_sandbox": 1,
-          "validate_task": 1,
+          "validate_task": 2,
           "apply_task_verdict": 1,
           "revise_task": 1,
           "sync_task_list": 1,
@@ -4262,7 +4611,12 @@
       "first_event_seq": 1132,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: revise_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T03:58:12.473993364Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -4277,8 +4631,12 @@
       "started_at": "2026-09-14T03:38:31.437750286Z",
       "handler": "agent",
       "graph_visit": 1,
-      "live_inference_ms": 914707,
-      "live_tool_ms": 217806,
+      "timing": {
+        "wall_time_ms": 1181035,
+        "inference_time_ms": 914744,
+        "tool_time_ms": 217845,
+        "active_time_ms": 1132589
+      },
       "usage": {
         "input_tokens": 502647,
         "output_tokens": 21660,
@@ -4437,7 +4795,7 @@
         "warnings": []
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@1": {
       "first_event_seq": 581,
@@ -4659,6 +5017,202 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "validate_task@2": {
+      "first_event_seq": 1758,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T03:58:16.416204573Z",
+      "handler": "agent",
+      "graph_visit": 2,
+      "live_inference_ms": 212867,
+      "live_tool_ms": 239384,
+      "usage": {
+        "input_tokens": 509753,
+        "output_tokens": 11891,
+        "total_tokens": 2920469,
+        "reasoning_tokens": 11497,
+        "cache_read_tokens": 2387328,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 4444069
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:6cbb2227-1c3e-42f7-b565-54218198a32d",
+        "items": [
+          {
+            "id": "df826503cbd80c57",
+            "status": "completed",
+            "order": 0,
+            "subject": "Confirm candidate identity and reconstruct its full checkpoint diff"
+          },
+          {
+            "id": "3a13436de1b56340",
+            "status": "completed",
+            "order": 1,
+            "subject": "Inspect plan, ADR constraints, implementation, and tests for task 019"
+          },
+          {
+            "id": "b700fa0c553a0caf",
+            "status": "completed",
+            "order": 2,
+            "subject": "Run focused validation and issue an evidence-based verdict"
+          }
+        ]
+      },
+      "subagents": [
+        {
+          "agent_id": "a694634e",
+          "depth": 1,
+          "task": "Independently inspect task 019 candidate from live repo without editing. Review full diff d27c4eb..HEAD, especially authoritative Membership check, stable checkpoint logic in Messaging action APIs, dispatcher projection catch-up nudges, and tests. Identify concrete correctness gaps/regressions versus plan/ADRs and previous review. Do not run broad dev check; focused read-only tests okay. Return concise findings with file/line evidence.",
+          "status": {
+            "kind": "closed"
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 109937,
+        "usage_percent": 40.41801470588236,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-14T04:05:49.037058645Z",
+        "event_seq": 2269,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2938,
+            "usage_percent": 1.0801470588235293
+          },
+          {
+            "category": "tools",
+            "tokens": 901,
+            "usage_percent": 0.33125
+          },
+          {
+            "category": "memory",
+            "tokens": 408,
+            "usage_percent": 0.15
+          },
+          {
+            "category": "conversation",
+            "tokens": 105684,
+            "usage_percent": 38.85441176470588
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "inference": {
+        "session_id": "6cbb2227-1c3e-42f7-b565-54218198a32d",
+        "started_at": "2026-09-14T04:05:49.039461441Z",
+        "requested_model": {
+          "provider": "openai",
+          "model_id": "gpt-5.6-sol"
+        },
+        "first_output_at": "2026-09-14T04:05:52.797206847Z",
+        "first_output_kind": "text",
+        "retries": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "preflight_sandbox@1": {
       "first_event_seq": 55,
