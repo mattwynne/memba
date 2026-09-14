@@ -11,7 +11,7 @@
 - [x] 009 Native `RemoveClubMember` currently emits only `ClubMemberRemoved`, and `SystemGroupMembership` removes only Everyone/Admin.
 - [x] 010 Extend the Club-owned lifecycle to emit custom removals for the departing membership and keep legacy/replay handling safe.
 - [x] 011 Arrange an idempotent Membership-to-Messaging policy for clearing affected follows, using public APIs and existing unfollow commands; do not put cross-context side effects in projectors.
-- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.
+- [x] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.
 - [ ] 013 Existing last-member/last-Admin invariants stay intact.
 - [ ] 014 Add the new-group LiveView/form using shared inputs and route helpers.
 - [ ] 015 Use server-side live validation/preview, rechecking at submit, with accessible field associations.
