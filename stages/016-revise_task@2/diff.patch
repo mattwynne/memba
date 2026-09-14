@@ -1,0 +1,733 @@
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index b264953..070f5a0 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -1346,6 +1346,25 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Return whether the Club aggregate currently records a person as an active
++  club member.
++
++  This authoritative query is intended for privacy-sensitive action boundaries
++  where a just-committed departure may not yet be visible in Membership
++  projections. Invalid IDs and missing or inactive memberships return `false`.
++  """
++  def active_member_of_club_authoritatively?(club_id, person_id) do
++    with {:ok, club_id} <- ID.cast(:club, club_id),
++         {:ok, person_id} <- ID.cast(:person, person_id),
++         %Memba.Membership.Club{club_id: ^club_id} = club <-
++           App.aggregate_state(Memba.Membership.Club, club_id) do
++      active_membership_ids_for_person(club, person_id) != []
++    else
++      _invalid_missing_or_inactive -> false
++    end
++  end
++
+   @doc """
+   Return whether the Club aggregate currently records a person as an active
+   member of one of its groups.
+@@ -1381,12 +1400,7 @@ defmodule Memba.Membership do
+   end
+ 
+   defp authoritative_group_member?(club, group_id, person_id) do
+-    active_membership_ids =
+-      club.active_memberships
+-      |> Enum.flat_map(fn
+-        {membership_id, ^person_id} -> [membership_id]
+-        {_membership_id, _other_person_id} -> []
+-      end)
++    active_membership_ids = active_membership_ids_for_person(club, person_id)
+ 
+     cond do
+       group_id == SystemGroups.everyone_group_id(club.club_id) ->
+@@ -1408,6 +1422,13 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp active_membership_ids_for_person(club, person_id) do
++    Enum.flat_map(club.active_memberships, fn
++      {membership_id, ^person_id} -> [membership_id]
++      {_membership_id, _other_person_id} -> []
++    end)
++  end
++
+   @doc """
+   Return whether an email address currently has an active membership in a club.
+ 
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 23dcd91..cef6aef 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -354,7 +354,16 @@ defmodule Memba.Messaging do
+   Membership of the addressed group is not required to start a conversation.
+   """
+   def authorize_inbound_club_email_sender(sender, destination) do
+-    GroupEmailPostingPolicy.authorize(sender, destination)
++    case authorize_at_stable_checkpoint(fn ->
++           case GroupEmailPostingPolicy.authorize(sender, destination) do
++             :ok -> {:ok, :authorized}
++             {:error, _reason, _details} = error -> error
++           end
++         end) do
++      {:ok, :authorized} -> :ok
++      {:error, _reason, _details} = error -> error
++      {:error, _reason} = error -> error
++    end
+   end
+ 
+   @doc """
+@@ -1336,6 +1345,9 @@ defmodule Memba.Messaging do
+           dispatch_opts,
+           club_name: destination.club_name
+         )
++
++      {:error, _reason} = error ->
++        error
+     end
+   end
+ 
+@@ -1471,32 +1483,45 @@ defmodule Memba.Messaging do
+        ) do
+     message_id = Memba.ID.generate(:message)
+ 
+-    with :ok <-
+-           send_inbound_club_message(
+-             receive_command.inbound_email,
+-             destination,
+-             sender,
+-             message_id,
+-             body,
+-             dispatch_opts
+-           ),
+-         :ok <-
+-           record_inbound_club_email_accepted(
+-             receive_command.inbound_email,
+-             destination,
+-             sender,
+-             message_id,
+-             dispatch_opts
+-           ) do
+-      {:ok,
+-       %{
+-         inbound_email_id: receive_command.inbound_email_id,
+-         message_id: message_id,
+-         club_id: destination.club_id,
+-         sender_id: sender.person_id,
+-         from_address: sender.from_address,
+-         to_address: destination.to_address
+-       }}
++    case send_inbound_club_message(
++           receive_command.inbound_email,
++           destination,
++           sender,
++           message_id,
++           body,
++           dispatch_opts
++         ) do
++      :ok ->
++        with :ok <-
++               record_inbound_club_email_accepted(
++                 receive_command.inbound_email,
++                 destination,
++                 sender,
++                 message_id,
++                 dispatch_opts
++               ) do
++          {:ok,
++           %{
++             inbound_email_id: receive_command.inbound_email_id,
++             message_id: message_id,
++             club_id: destination.club_id,
++             sender_id: sender.person_id,
++             from_address: sender.from_address,
++             to_address: destination.to_address
++           }}
++        end
++
++      {:error, :sender_not_active_member, _details} ->
++        reject_first_inbound_club_email(
++          receive_command,
++          destination.to_address,
++          "sender_not_active_member",
++          dispatch_opts,
++          club_name: destination.club_name
++        )
++
++      {:error, _reason} = error ->
++        error
+     end
+   end
+ 
+@@ -1545,19 +1570,23 @@ defmodule Memba.Messaging do
+          body,
+          dispatch_opts
+        ) do
+-    case send_club_message(
+-           %{
+-             message_id: message_id,
+-             club_id: destination.club_id,
+-             sender_id: sender.person_id,
+-             audience_group_id: destination.group_id,
+-             subject: inbound_email.subject,
+-             body: body
+-           },
+-           dispatch_opts
+-         ) do
+-      {:error, _reason} = error -> error
+-      _send_result -> :ok
++    attrs = %{
++      message_id: message_id,
++      club_id: destination.club_id,
++      sender_id: sender.person_id,
++      audience_group_id: destination.group_id,
++      subject: inbound_email.subject,
++      body: body
++    }
++
++    with {:ok, command} <-
++           authorize_at_stable_checkpoint(fn ->
++             with :ok <- GroupEmailPostingPolicy.authorize(sender, destination),
++                  {:ok, command} <- send_club_message_command(attrs) do
++               {:ok, command}
++             end
++           end) do
++      dispatch_ok(command, dispatch_opts)
+     end
+   end
+ 
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index b27b479..fe69d30 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -3,10 +3,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   OTP process responsible for asynchronous email delivery dispatch.
+ 
+   The dispatcher subscribes to committed read-model changes and treats new
+-  `EmailDelivery` records and access-projector catch-up as nudges to look for
+-  pending delivery work. Catch-up nudges let authorization-timeout deferrals
+-  resume without a periodic sweep. The dispatcher also owns the provider
+-  handoff request-building boundary and persisted dispatch outcomes so command
++  `EmailDelivery` records as nudges to look for pending delivery work. An
++  authorization-timeout deferral schedules one coalesced, bounded-delay catch-up
++  retry; repeated deferrals replace that timer until the required projections
++  catch up, including when they acknowledge only irrelevant events and publish
++  no read-model change. The dispatcher also owns the provider handoff
++  request-building boundary and persisted dispatch outcomes so command
+   application services do not call email providers directly. Failed deliveries
+   can be retried through the explicit manual retry API; the dispatcher does not
+   automatically retry failed deliveries.
+@@ -18,8 +20,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   require Logger
+ 
+   alias Memba.Membership
+-  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
+-  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.EmailDeliveryStatus
+@@ -45,13 +45,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   @sent_status EmailDeliveryStatus.sent()
+   @failed_status EmailDeliveryStatus.failed()
+   @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
+-  @access_catch_up_projectors [
+-    ConversationGroupAccessProjector,
+-    MessageProjector,
+-    GroupMembershipProjector,
+-    MembershipProjector
+-  ]
+   @default_projection_timeout 5_000
++  @default_projection_catch_up_retry_interval 100
+   @projection_timeout_errors [
+     :delivery_context_projection_timeout,
+     :recipient_access_projection_timeout
+@@ -205,7 +200,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+ 
+     state = %{
+       dispatch_enabled: Keyword.get(opts, :dispatch_enabled, true),
+-      dispatch_observer: Keyword.get(opts, :dispatch_observer)
++      dispatch_observer: Keyword.get(opts, :dispatch_observer),
++      projection_catch_up_retry_interval:
++        positive_interval(
++          Keyword.get(
++            opts,
++            :projection_catch_up_retry_interval,
++            @default_projection_catch_up_retry_interval
++          ),
++          @default_projection_catch_up_retry_interval
++        ),
++      projection_catch_up_retry_timer: nil
+     }
+ 
+     {:ok, state}
+@@ -230,26 +235,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+     {:noreply, state}
+   end
+ 
+-  def handle_info(
+-        {:read_model_changed, %{projector: projector} = payload},
+-        state
+-      )
+-      when projector in @access_catch_up_projectors do
+-    Logger.debug("email_delivery_access_catch_up_nudged",
+-      projector: inspect(projector)
+-    )
+-
+-    send(self(), {:dispatch_pending_email_deliveries, payload})
+-
+-    {:noreply, state}
+-  end
+-
+   def handle_info({:read_model_changed, _payload}, state) do
+     {:noreply, state}
+   end
+ 
+   def handle_info({:dispatch_pending_email_deliveries, payload}, state) do
++    state = consume_projection_catch_up_retry(state, payload)
+     claimed_deliveries = dispatch_pending_email_deliveries(state)
++    state = maybe_schedule_projection_catch_up_retry(state, claimed_deliveries)
+ 
+     notify_dispatch_observer(state, payload, claimed_deliveries)
+ 
+@@ -272,13 +265,42 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+       observer,
+       {:email_delivery_dispatch_requested,
+        payload
+-       |> Map.put(:source, :read_model_change)
++       |> Map.put_new(:source, :read_model_change)
+        |> Map.put(:claimed_delivery_ids, Enum.map(claimed_deliveries, & &1.delivery_id))}
+     )
+ 
+     :ok
+   end
+ 
++  defp maybe_schedule_projection_catch_up_retry(state, claimed_deliveries) do
++    if is_nil(state.projection_catch_up_retry_timer) and
++         state.dispatch_enabled and
++         Enum.any?(claimed_deliveries, &(&1.status == @pending_status)) do
++      timer =
++        Process.send_after(
++          self(),
++          {:dispatch_pending_email_deliveries, %{source: :projection_catch_up_retry}},
++          state.projection_catch_up_retry_interval
++        )
++
++      %{state | projection_catch_up_retry_timer: timer}
++    else
++      state
++    end
++  end
++
++  defp consume_projection_catch_up_retry(
++         state,
++         %{source: :projection_catch_up_retry}
++       ) do
++    %{state | projection_catch_up_retry_timer: nil}
++  end
++
++  defp consume_projection_catch_up_retry(state, _payload), do: state
++
++  defp positive_interval(value, _fallback) when is_integer(value) and value > 0, do: value
++  defp positive_interval(_value, fallback), do: fallback
++
+   defp claim_failed_delivery(delivery_id) do
+     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+ 
+diff --git a/web/lib/memba/messaging/group_email_posting_policy.ex b/web/lib/memba/messaging/group_email_posting_policy.ex
+index 744f5f1..7daf01f 100644
+--- a/web/lib/memba/messaging/group_email_posting_policy.ex
++++ b/web/lib/memba/messaging/group_email_posting_policy.ex
+@@ -6,8 +6,9 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
+   destination club may start a conversation by email. It is deliberately fixed
+   in code rather than persisted or configurable.
+ 
+-  Authorization uses Membership's public query API so Messaging can enforce the
+-  policy without coupling to Membership projection storage.
++  Authorization uses Membership's public authoritative API so Messaging can
++  enforce the policy without coupling to Membership aggregate or projection
++  storage.
+   """
+ 
+   alias Memba.Membership
+@@ -45,7 +46,10 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
+         %InboundClubSender{} = sender,
+         %InboundClubDestination{} = destination
+       ) do
+-    if Membership.active_member_of_club?(destination.club_id, sender.person_id) do
++    if Membership.active_member_of_club_authoritatively?(
++         destination.club_id,
++         sender.person_id
++       ) do
+       :ok
+     else
+       {:error, :sender_not_active_member, rejection_details(sender, destination)}
+diff --git a/web/test/memba/messaging/group_email_posting_policy_test.exs b/web/test/memba/messaging/group_email_posting_policy_test.exs
+index f8cfc56..9248d2c 100644
+--- a/web/test/memba/messaging/group_email_posting_policy_test.exs
++++ b/web/test/memba/messaging/group_email_posting_policy_test.exs
+@@ -1,9 +1,7 @@
+ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
+-  use Memba.DataCase, async: true
++  use Memba.EventSourcedCase, async: false
+ 
+   alias Memba.Membership
+-  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+-  alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.GroupEmailPostingPolicy
+@@ -16,10 +14,9 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
+ 
+   describe "authorize_inbound_club_email_sender/2" do
+     test "authorizes a resolved sender who is an active member of the destination club's Everyone group" do
+-      club = insert_membership_club!(slug: "kmc")
+-      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+-      membership = insert_membership!(club, alice, active: true)
+-      insert_everyone_group_membership!(club, membership, alice, active: true)
++      club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      alice = create_person!(name: "Alice Example", email: "alice@example.com")
++      add_member!(club.club_id, alice.person_id)
+ 
+       assert :ok ==
+                Messaging.authorize_inbound_club_email_sender(
+@@ -29,11 +26,10 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
+     end
+ 
+     test "rejects a resolved sender who is only active in another club" do
+-      kmc = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+-      npc = insert_membership_club!(name: "Nelson Paddling Club", slug: "npc")
+-      pat = insert_membership_person!(name: "Pat Example", email: "pat@example.com")
+-      membership = insert_membership!(npc, pat, active: true)
+-      insert_everyone_group_membership!(npc, membership, pat, active: true)
++      kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
++      pat = create_person!(name: "Pat Example", email: "pat@example.com")
++      add_member!(npc.club_id, pat.person_id)
+ 
+       assert {:error, :sender_not_active_member,
+               %{
+@@ -49,9 +45,11 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
+     end
+ 
+     test "authorizes an active destination-club member without membership of the addressed Admin group" do
+-      club = insert_membership_club!(slug: "kmc")
+-      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+-      insert_membership!(club, alice, active: true)
++      club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      bob = create_person!(name: "Bob Admin", email: "bob@example.com")
++      alice = create_person!(name: "Alice Example", email: "alice@example.com")
++      add_member!(club.club_id, bob.person_id)
++      add_member!(club.club_id, alice.person_id)
+ 
+       refute Membership.active_member_of_group?(
+                SystemGroups.admin_group_id(club.club_id),
+@@ -66,10 +64,21 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
+     end
+ 
+     test "rejects a resolved sender with an inactive destination-club membership" do
+-      club = insert_membership_club!(slug: "kmc")
+-      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+-      membership = insert_membership!(club, alice, active: false)
+-      insert_everyone_group_membership!(club, membership, alice, active: true)
++      club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      bob = create_person!(name: "Bob Admin", email: "bob@example.com")
++      alice = create_person!(name: "Alice Example", email: "alice@example.com")
++      add_member!(club.club_id, bob.person_id)
++      membership_id = add_member!(club.club_id, alice.person_id)
++
++      assert :ok =
++               Membership.remove_member(
++                 %{
++                   club_id: club.club_id,
++                   membership_id: membership_id,
++                   person_id: alice.person_id
++                 },
++                 consistency: :strong
++               )
+ 
+       assert {:error, :sender_not_active_member,
+               %{
+@@ -117,22 +126,51 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
+     }
+   end
+ 
+-  defp insert_membership!(club, person, attrs) do
+-    Repo.insert!(%MembershipProjection{
+-      membership_id: Memba.ID.generate(:membership),
+-      club_id: club.club_id,
+-      person_id: person.person_id,
+-      active: Keyword.fetch!(attrs, :active)
+-    })
++  defp create_club!(attrs) do
++    club_id = Memba.ID.generate(:club)
++
++    assert :ok =
++             Membership.create_club(
++               %{
++                 club_id: club_id,
++                 name: Keyword.fetch!(attrs, :name),
++                 slug: Keyword.fetch!(attrs, :slug)
++               },
++               consistency: :strong
++             )
++
++    Membership.get_club(club_id)
+   end
+ 
+-  defp insert_everyone_group_membership!(club, membership, person, attrs) do
+-    Repo.insert!(%GroupMembershipProjection{
+-      club_id: club.club_id,
+-      group_id: SystemGroups.everyone_group_id(club.club_id),
+-      membership_id: membership.membership_id,
+-      person_id: person.person_id,
+-      active: Keyword.fetch!(attrs, :active)
+-    })
++  defp create_person!(attrs) do
++    person_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: Keyword.fetch!(attrs, :name),
++                 email: Keyword.fetch!(attrs, :email)
++               },
++               consistency: :strong
++             )
++
++    Membership.get_person(person_id)
++  end
++
++  defp add_member!(club_id, person_id) do
++    membership_id = Memba.ID.generate(:membership)
++
++    assert :ok =
++             Membership.add_member(
++               %{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    membership_id
+   end
+ end
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 57e0308..a0d2245 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -4,6 +4,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+   alias Memba.Membership
+   alias Memba.Membership.App, as: MembershipApp
+   alias Memba.Membership.Commands.AssignClubRoleToMember
++  alias Memba.Membership.Commands.RemoveClubMember
++  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+@@ -191,13 +193,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+   test "authorization accepts an active club member outside the addressed group" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+     dana = create_person!(name: "Dana Example", email: "dana@example.com")
+ 
+-    insert_active_membership_projection_without_group(kmc.club_id, dana.person_id)
++    add_member!(kmc.club_id, bob.person_id)
++    add_member!(kmc.club_id, dana.person_id)
+ 
+     assert {:ok, destination} =
+              Messaging.resolve_inbound_club_email_destination([
+-               "everyone@kmc.clubs.memba.io"
++               "admin@kmc.clubs.memba.io"
+              ])
+ 
+     assert {:ok, sender} = Messaging.resolve_inbound_club_email_sender("dana@example.com")
+@@ -1922,6 +1926,62 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     )
+   end
+ 
++  test "committed departure rejects a new inbound conversation while membership projection lags" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
++    alice = create_person!(name: "Alice Example", email: "alice@example.com")
++
++    add_member!(kmc.club_id, bob.person_id)
++    alice_membership_id = add_member!(kmc.club_id, alice.person_id)
++    membership_projector_child_id = stop_projector!(MembershipProjector)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveClubMember{
++                 club_id: kmc.club_id,
++                 membership_id: alice_membership_id,
++                 person_id: alice.person_id
++               },
++               consistency: :eventual
++             )
++
++    assert Membership.active_member_of_club?(kmc.club_id, alice.person_id)
++
++    assert {:ok,
++            %{
++              status: :rejected,
++              rejection_reason: "sender_not_active_member",
++              from_address: "alice@example.com",
++              to_address: "everyone@kmc.clubs.memba.io"
++            }} =
++             Messaging.receive_inbound_club_email(
++               %{
++                 provider: "resend",
++                 provider_message_id: "task-019-departed-projection-lag",
++                 from_address: "alice@example.com",
++                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
++                 subject: "Stale inbound authorization",
++                 text_body: "This must not create a conversation after departure."
++               },
++               consistency: :strong
++             )
++
++    assert [] = Messaging.list_messages_for_club(kmc.club_id)
++    assert 0 == count_events(MessageSent)
++    assert 0 == count_events(InboundClubEmailAccepted)
++    assert 1 == count_events(InboundClubEmailRejected)
++
++    assert_rejection_email_received(
++      to: "alice@example.com",
++      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
++    )
++
++    restart_projector!(membership_projector_child_id)
++
++    assert {:ok, _result} =
++             Membership.await_group_access_projections(timeout: 1_000)
++  end
++
+   test "the Admin route rejects inactive and other-club senders before private delivery" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
+@@ -2271,6 +2331,30 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     })
+   end
+ 
++  defp stop_projector!(projector) do
++    child_id =
++      Supervisor.which_children(Memba.Supervisor)
++      |> Enum.find_value(fn
++        {child_id, _pid, :worker, [^projector]} -> child_id
++        _child -> nil
++      end)
++
++    assert child_id
++    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
++
++    on_exit(fn -> restart_projector!(child_id) end)
++
++    child_id
++  end
++
++  defp restart_projector!(child_id) do
++    case Supervisor.restart_child(Memba.Supervisor, child_id) do
++      {:ok, _pid} -> :ok
++      {:ok, _pid, _info} -> :ok
++      {:error, :running} -> :ok
++    end
++  end
++
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ 
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index 4431c7e..cd80032 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -24,6 +24,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.MessageSent
++
++  alias Memba.Messaging.Projectors.ConversationGroupAccess,
++    as: ConversationGroupAccessProjector
++
++  alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+ 
+@@ -474,6 +479,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     carol_delivery_id = carol_delivery.delivery_id
+     membership_projector_child_id = stop_projector!(MembershipProjector)
+     group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
++    conversation_access_projector_child_id = stop_projector!(ConversationGroupAccessProjector)
+ 
+     assert :ok =
+              MembershipApp.dispatch(
+@@ -551,20 +557,61 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+     start_supervised!(
+       {EmailDeliveryDispatcher,
+-       name: dispatcher_name, dispatch_enabled: true, dispatch_observer: self()}
++       name: dispatcher_name,
++       dispatch_enabled: true,
++       dispatch_observer: self(),
++       projection_catch_up_retry_interval: 500}
+     )
+ 
+-    restart_projector!(membership_projector_child_id)
+-    restart_projector!(group_membership_projector_child_id)
++    assert :ok =
++             Memba.ReadModelChanges.publish(
++               EmailDeliveryProjector,
++               %EmailDeliveryCreated{
++                 message_id: carol_delivery.message_id,
++                 delivery_id: carol_delivery.delivery_id,
++                 recipient_id: carol_delivery.recipient_id,
++                 recipient_name: carol_delivery.recipient_name,
++                 recipient_email: carol_delivery.recipient_address
++               },
++               %{},
++               %{}
++             )
+ 
+     assert_receive {:email_delivery_dispatch_requested,
+-                    %{claimed_delivery_ids: claimed_delivery_ids}},
++                    %{
++                      source: :read_model_change,
++                      claimed_delivery_ids: initially_claimed_delivery_ids
++                    }},
+                    1_000
+ 
+-    assert carol_delivery_id in claimed_delivery_ids
++    assert carol_delivery_id in initially_claimed_delivery_ids
++
++    restart_projector!(membership_projector_child_id)
++    restart_projector!(group_membership_projector_child_id)
++
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    Memba.ProjectionBarrier.await!(
++      [MembershipProjector, GroupMembershipProjector],
++      checkpoint: checkpoint,
++      timeout: 1_000
++    )
+ 
+     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+ 
++    _ = :sys.get_state(dispatcher_name)
++
++    restart_projector!(conversation_access_projector_child_id)
++
++    assert_receive {:email_delivery_dispatch_requested,
++                    %{
++                      source: :projection_catch_up_retry,
++                      claimed_delivery_ids: retried_delivery_ids
++                    }},
++                   1_500
++
++    assert carol_delivery_id in retried_delivery_ids
++
+     assert %EmailDeliveryProjection{
+              delivery_id: ^carol_delivery_id,
+              status: "failed",
