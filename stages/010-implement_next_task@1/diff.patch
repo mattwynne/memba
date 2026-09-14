@@ -1,0 +1,402 @@
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index cef6aef..c702860 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -311,7 +311,7 @@ defmodule Memba.Messaging do
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
+          {:ok, receive_result} <- dispatch_inbound_email_received(receive_command, dispatch_opts) do
+-      if duplicate_inbound_email_receipt?(receive_result) do
++      if completed_duplicate_inbound_email_receipt?(receive_result) do
+         duplicate_inbound_email_response(receive_command, receive_result)
+       else
+         post_first_inbound_club_email(receive_command, dispatch_opts)
+@@ -1265,8 +1265,14 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
+-  defp duplicate_inbound_email_receipt?(%ExecutionResult{events: []}), do: true
+-  defp duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
++  defp completed_duplicate_inbound_email_receipt?(%ExecutionResult{
++         events: [],
++         aggregate_state: %InboundEmailReceipt{status: status}
++       })
++       when status in [:accepted, :rejected],
++       do: true
++
++  defp completed_duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
+ 
+   defp duplicate_inbound_email_response(
+          receive_command,
+@@ -1963,7 +1969,7 @@ defmodule Memba.Messaging do
+            :authorization_stability_timeout,
+            @default_authorization_stability_timeout
+          ) do
+-      timeout when is_integer(timeout) and timeout > 0 -> timeout
++      timeout when is_integer(timeout) and timeout >= 0 -> timeout
+       _invalid -> @default_authorization_stability_timeout
+     end
+   end
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index fe69d30..4ae222d 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -2,16 +2,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   @moduledoc """
+   OTP process responsible for asynchronous email delivery dispatch.
+ 
+-  The dispatcher subscribes to committed read-model changes and treats new
+-  `EmailDelivery` records as nudges to look for pending delivery work. An
+-  authorization-timeout deferral schedules one coalesced, bounded-delay catch-up
+-  retry; repeated deferrals replace that timer until the required projections
+-  catch up, including when they acknowledge only irrelevant events and publish
+-  no read-model change. The dispatcher also owns the provider handoff
+-  request-building boundary and persisted dispatch outcomes so command
+-  application services do not call email providers directly. Failed deliveries
+-  can be retried through the explicit manual retry API; the dispatcher does not
+-  automatically retry failed deliveries.
++  The dispatcher checks for pending work on startup and subscribes to committed
++  read-model changes, treating new `EmailDelivery` records as nudges to look
++  again. An authorization-timeout deferral schedules one coalesced, bounded-delay
++  catch-up retry; repeated deferrals replace that timer until the required
++  projections catch up, including when they acknowledge only irrelevant events
++  and publish no read-model change. The startup check restores that pending-work
++  nudge after a dispatcher or application restart. The dispatcher also owns the
++  provider handoff request-building boundary and persisted dispatch outcomes so
++  command application services do not call email providers directly. Failed
++  deliveries can be retried through the explicit manual retry API; the
++  dispatcher does not automatically retry failed deliveries.
+   """
+ 
+   use GenServer
+@@ -213,6 +214,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+       projection_catch_up_retry_timer: nil
+     }
+ 
++    if state.dispatch_enabled do
++      send(self(), {:dispatch_pending_email_deliveries, %{source: :startup}})
++    end
++
+     {:ok, state}
+   end
+ 
+@@ -259,6 +264,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+ 
+   defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload, _claimed_deliveries), do: :ok
+ 
++  defp notify_dispatch_observer(
++         %{dispatch_observer: observer},
++         %{source: :startup},
++         []
++       )
++       when is_pid(observer),
++       do: :ok
++
+   defp notify_dispatch_observer(%{dispatch_observer: observer}, payload, claimed_deliveries)
+        when is_pid(observer) do
+     send(
+diff --git a/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs b/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
+index 075261c..c2904e5 100644
+--- a/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
++++ b/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
+@@ -142,7 +142,9 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
+              1
+ 
+     assert count_group_events(club_events, GroupMemberRemoved, admin_group_id, membership_id) == 1
+-    assert count_group_events(club_events, GroupMemberRemoved, custom_group_id, membership_id) == 1
++
++    assert count_group_events(club_events, GroupMemberRemoved, custom_group_id, membership_id) ==
++             1
+   end
+ 
+   test "redelivered lifecycle events use Club group state rather than handler workflow memory" do
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index a0d2245..ef94849 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -18,6 +18,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.InboundClubEmailAccepted
+   alias Memba.Messaging.Events.InboundClubEmailRejected
++  alias Memba.Messaging.Events.InboundEmailReceived
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.InboundClubDestination
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+@@ -30,6 +31,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     original_postmark_config = Application.get_env(:memba, Postmark)
+     original_resend_config = Application.get_env(:memba, Resend)
+ 
++    original_authorization_stability_timeout =
++      Application.get_env(:memba, :authorization_stability_timeout)
++
+     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
+     Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
+ 
+@@ -45,6 +49,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+       restore_env(Memba.Mailer, original_mailer_config)
+       restore_env(Postmark, original_postmark_config)
+       restore_env(Resend, original_resend_config)
++      restore_env(:authorization_stability_timeout, original_authorization_stability_timeout)
+       Fake.reset()
+     end)
+ 
+@@ -1982,6 +1987,51 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+              Membership.await_group_access_projections(timeout: 1_000)
+   end
+ 
++  test "provider retry resumes a receipt left incomplete by authorization stabilization" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    alice = create_person!(name: "Alice Example", email: "alice@example.com")
++
++    add_member!(kmc.club_id, alice.person_id)
++
++    inbound_attrs = %{
++      provider: "resend",
++      provider_message_id: "task-019-authorization-timeout-retry",
++      from_address: "alice@example.com",
++      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
++      subject: "Resume after authorization stabilization",
++      text_body: "A provider retry should finish this post."
++    }
++
++    Application.put_env(:memba, :authorization_stability_timeout, 0)
++
++    assert {:error, :authorization_stability_timeout} =
++             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
++
++    assert 1 == count_events(InboundEmailReceived)
++    assert 0 == count_events(InboundClubEmailAccepted)
++    assert 0 == count_events(InboundClubEmailRejected)
++    assert [] = Messaging.list_messages_for_club(kmc.club_id)
++
++    Application.put_env(:memba, :authorization_stability_timeout, 5_000)
++
++    assert {:ok,
++            %{
++              inbound_email_id: inbound_email_id,
++              message_id: message_id,
++              club_id: club_id,
++              sender_id: sender_id
++            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
++
++    assert is_binary(inbound_email_id)
++    assert club_id == kmc.club_id
++    assert sender_id == alice.person_id
++    assert is_binary(message_id)
++    assert 1 == count_events(InboundEmailReceived)
++    assert 1 == count_events(InboundClubEmailAccepted)
++    assert 0 == count_events(InboundClubEmailRejected)
++    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
++  end
++
+   test "the Admin route rejects inactive and other-club senders before private delivery" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index cd80032..9025ad1 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -28,7 +28,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Messaging.Projectors.ConversationGroupAccess,
+     as: ConversationGroupAccessProjector
+ 
+-  alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+ 
+@@ -439,7 +438,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
+   end
+ 
+-  test "defers provider handoff until lagging membership access projections catch up" do
++  test "startup recovers a projection-timeout deferral after dispatcher restart" do
+     Application.put_env(:memba, :email_delivery_projection_timeout, 25)
+     Application.put_env(:memba, :authorization_stability_timeout, 25)
+ 
+@@ -555,60 +554,50 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+     dispatcher_name = :"#{__MODULE__}.lag_recovery"
+ 
+-    start_supervised!(
+-      {EmailDeliveryDispatcher,
+-       name: dispatcher_name,
+-       dispatch_enabled: true,
+-       dispatch_observer: self(),
+-       projection_catch_up_retry_interval: 500}
+-    )
++    dispatcher_opts = [
++      name: dispatcher_name,
++      dispatch_enabled: true,
++      dispatch_observer: self(),
++      projection_catch_up_retry_interval: 60_000
++    ]
+ 
+-    assert :ok =
+-             Memba.ReadModelChanges.publish(
+-               EmailDeliveryProjector,
+-               %EmailDeliveryCreated{
+-                 message_id: carol_delivery.message_id,
+-                 delivery_id: carol_delivery.delivery_id,
+-                 recipient_id: carol_delivery.recipient_id,
+-                 recipient_name: carol_delivery.recipient_name,
+-                 recipient_email: carol_delivery.recipient_address
+-               },
+-               %{},
+-               %{}
+-             )
++    dispatcher_pid = start_supervised!({EmailDeliveryDispatcher, dispatcher_opts})
+ 
+     assert_receive {:email_delivery_dispatch_requested,
+                     %{
+-                      source: :read_model_change,
++                      source: :startup,
+                       claimed_delivery_ids: initially_claimed_delivery_ids
+                     }},
+                    1_000
+ 
+     assert carol_delivery_id in initially_claimed_delivery_ids
+ 
++    dispatcher_monitor = Process.monitor(dispatcher_pid)
++    assert :ok = stop_supervised(EmailDeliveryDispatcher)
++    assert_receive {:DOWN, ^dispatcher_monitor, :process, ^dispatcher_pid, :shutdown}
++
+     restart_projector!(membership_projector_child_id)
+     restart_projector!(group_membership_projector_child_id)
++    restart_projector!(conversation_access_projector_child_id)
+ 
+     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+ 
+     Memba.ProjectionBarrier.await!(
+-      [MembershipProjector, GroupMembershipProjector],
++      [MembershipProjector, GroupMembershipProjector, ConversationGroupAccessProjector],
+       checkpoint: checkpoint,
+       timeout: 1_000
+     )
+ 
+     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+ 
+-    _ = :sys.get_state(dispatcher_name)
+-
+-    restart_projector!(conversation_access_projector_child_id)
++    start_supervised!({EmailDeliveryDispatcher, dispatcher_opts})
+ 
+     assert_receive {:email_delivery_dispatch_requested,
+                     %{
+-                      source: :projection_catch_up_retry,
++                      source: :startup,
+                       claimed_delivery_ids: retried_delivery_ids
+                     }},
+-                   1_500
++                   1_000
+ 
+     assert carol_delivery_id in retried_delivery_ids
+ 
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 1f8725e..bbcf4cd 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -395,14 +395,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+   test "current member changes follow state with the compact follow toggle", %{conn: conn} do
+     alice =
+-      create_active_member(
++      create_authoritative_active_member(
+         email: "alice@example.com",
+         name: "Alice Adams",
+         club_name: "Alpine Club"
+       )
+ 
+     bob =
+-      create_active_member(
++      create_authoritative_active_member(
+         email: "bob@example.com",
+         name: "Bob Builder",
+         club_name: "Alpine Club",
+@@ -410,7 +410,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       )
+ 
+     message =
+-      create_message(
++      create_authoritative_message(
+         club_id: alice.club_id,
+         sender_id: alice.person_id,
+         subject: "Trip planning night"
+@@ -1174,6 +1174,51 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     |> Map.put(:membership_id, membership.membership_id)
+   end
+ 
++  defp create_authoritative_active_member(attrs) do
++    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
++    person_id = Memba.ID.generate(:person)
++
++    unless Memba.Membership.get_club(club_id) do
++      assert :ok =
++               Memba.Membership.create_club(
++                 %{
++                   club_id: club_id,
++                   name: Keyword.fetch!(attrs, :club_name),
++                   slug: "alpine-club"
++                 },
++                 consistency: :strong
++               )
++    end
++
++    assert :ok =
++             Memba.Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: Keyword.get(attrs, :name, "Test Member"),
++                 email: Keyword.fetch!(attrs, :email)
++               },
++               consistency: :strong
++             )
++
++    membership_id = Memba.ID.generate(:membership)
++
++    assert :ok =
++             Memba.Membership.add_member(
++               %{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    club_id
++    |> Memba.Membership.get_club()
++    |> Map.from_struct()
++    |> Map.put(:person_id, person_id)
++    |> Map.put(:membership_id, membership_id)
++  end
++
+   defp create_group(club_id, name) do
+     Repo.insert!(%Group{
+       group_id: Memba.ID.generate(:group),
+@@ -1244,6 +1289,26 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     insert_group_accessible_message!(attrs)
+   end
+ 
++  defp create_authoritative_message(attrs) do
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.send_club_message_as_current_member(
++               %{
++                 message_id: message_id,
++                 club_id: Keyword.fetch!(attrs, :club_id),
++                 sender_id: Keyword.fetch!(attrs, :sender_id),
++                 audience_group_id:
++                   SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id)),
++                 subject: Keyword.fetch!(attrs, :subject),
++                 body: Keyword.get(attrs, :body, "Message body")
++               },
++               consistency: :strong
++             )
++
++    Messaging.get_message(message_id)
++  end
++
+   defp create_member_email_delivery(attrs) do
+     Repo.insert!(%MemberEmailDelivery{
+       delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
