@@ -1,0 +1,81 @@
+diff --git a/web/test/memba_web/live/member_group_live/new_test.exs b/web/test/memba_web/live/member_group_live/new_test.exs
+index 50a21f0..1e20a7d 100644
+--- a/web/test/memba_web/live/member_group_live/new_test.exs
++++ b/web/test/memba_web/live/member_group_live/new_test.exs
+@@ -300,7 +300,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
+     assert length(board_groups) == 1
+   end
+ 
+-  test "successful creation confirms the group and continues to its Members page", %{conn: conn} do
++  test "successful creation continues through the generic group routes and queries", %{conn: conn} do
+     robin =
+       create_event_sourced_admin(
+         email: "robin@example.com",
+@@ -309,13 +309,61 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
+         club_slug: "wcp"
+       )
+ 
+-    conn
+-    |> signed_in_club_host("robin@example.com", robin)
+-    |> visit(~p"/groups/new")
+-    |> fill_in("Group name", with: " Board ")
+-    |> click_button("Create group")
+-    |> assert_path("/groups/*/members")
++    session =
++      conn
++      |> signed_in_club_host("robin@example.com", robin)
++      |> visit(~p"/groups/new")
++      |> fill_in("Group name", with: " Board ")
++      |> click_button("Create group")
++
++    assert %{
++             active_member_count: 1,
++             email_address: "board@wcp.clubs.memba.io",
++             group_id: group_id,
++             name: "Board"
++           } =
++             Enum.find(
++               Membership.list_active_groups_for_member(robin.club_id, robin.person_id),
++               &(&1.name == "Board")
++             )
++
++    assert %{
++             club_id: club_id,
++             group_id: ^group_id,
++             email_slug: "board",
++             group_key: nil,
++             name: "Board"
++           } = Membership.get_group(group_id)
++
++    assert club_id == robin.club_id
++
++    session
++    |> assert_path(~p"/groups/#{group_id}/members")
+     |> assert_has("#flash-info", "Board created.")
++    |> assert_has("#member-club-home[data-selected-group-id='#{group_id}']")
++    |> assert_has(
++      "#member-group-link-#{group_id}.is-active[aria-current='true']" <>
++        "[href='/groups/#{group_id}']",
++      "Board"
++    )
++    |> assert_has("#member-group-name", "Board")
++    |> assert_has("#member-group-metadata", "Private group")
++    |> assert_has("#member-group-member-count", "1 member")
++    |> assert_has(
++      "#member-group-email-address[href='mailto:board@wcp.clubs.memba.io']",
++      "board@wcp.clubs.memba.io"
++    )
++    |> assert_has(
++      "#member-section-tab-conversations[href='/groups/#{group_id}']",
++      "Conversations"
++    )
++    |> assert_has(
++      "#member-section-tab-members.is-active[aria-selected='true']" <>
++        "[href='/groups/#{group_id}/members']",
++      "Members"
++    )
++    |> assert_has("#club-member-#{robin.person_id}", "Robin Rivers")
++    |> refute_has("#member-dashboard-cta")
+   end
+ 
+   test "a technical creation failure uses the generic flash and keeps the form ready to retry", %{
