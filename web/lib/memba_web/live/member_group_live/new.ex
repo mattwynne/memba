@@ -3,11 +3,13 @@ defmodule MembaWeb.MemberGroupLive.New do
   Member-facing entry point for creating a private club group.
 
   The selected club comes from the canonical club subdomain and the surface is
-  available only to an active member with club-management authority. Live
-  validation and authoritative creation are layered onto this name-only form
-  separately.
+  available only to an active member with club-management authority. Its
+  name-only form previews the projected identity while authoritative creation
+  rechecks every claim in the Club aggregate.
   """
   use MembaWeb, :live_view
+
+  import Ecto.Changeset
 
   alias Memba.Accounts
   alias Memba.Membership
@@ -15,6 +17,7 @@ defmodule MembaWeb.MemberGroupLive.New do
   alias MembaWeb.ClubSite
 
   @empty_group %{"name" => ""}
+  @group_form_types %{name: :string}
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
@@ -31,7 +34,8 @@ defmodule MembaWeb.MemberGroupLive.New do
        socket
        |> assign(:route_params, route_params)
        |> assign(group_context)
-       |> assign(:form, to_form(@empty_group, as: :group))}
+       |> assign(:group_id, Memba.ID.generate(:group))
+       |> assign_group_form(@empty_group, nil, empty_preview())}
     else
       _missing_or_forbidden_context ->
         forbidden!()
@@ -39,6 +43,72 @@ defmodule MembaWeb.MemberGroupLive.New do
   end
 
   def mount(_params, _session, _socket), do: forbidden!()
+
+  @impl Phoenix.LiveView
+  def handle_event("validate_group", %{"group" => group_params}, socket) do
+    case preview_group(socket, group_params) do
+      {:ok, preview} ->
+        {:noreply, assign_group_form(socket, group_params, nil, available_preview(preview))}
+
+      {:error, :invalid_name} ->
+        {:noreply,
+         assign_group_form(socket, group_params, "Give the group a name.", empty_preview(""))}
+
+      {:error, {:group_name_already_defined, existing_name}} ->
+        {:noreply,
+         assign_group_form(
+           socket,
+           group_params,
+           duplicate_name_message(existing_name, socket.assigns.selected_club.name),
+           empty_preview("")
+         )}
+
+      {:error, :unauthorized} ->
+        forbidden!()
+
+      {:error, _reason} ->
+        forbidden!()
+    end
+  end
+
+  def handle_event("create_group", %{"group" => group_params}, socket) do
+    attrs = %{
+      club_id: socket.assigns.selected_club.club_id,
+      group_id: socket.assigns.group_id,
+      actor_person_id: socket.assigns.current_member.id,
+      name: Map.get(group_params, "name")
+    }
+
+    case Membership.create_custom_group(attrs, consistency: :strong) do
+      :ok ->
+        navigate_to_created_group(socket)
+
+      {:ok, _result} ->
+        navigate_to_created_group(socket)
+
+      {:error, :invalid_name} ->
+        {:noreply,
+         assign_group_form(socket, group_params, "Give the group a name.", empty_preview(""))}
+
+      {:error, :group_name_already_defined} ->
+        {:noreply,
+         assign_group_form(
+           socket,
+           group_params,
+           duplicate_name_message(nil, socket.assigns.selected_club.name),
+           empty_preview("")
+         )}
+
+      {:error, :unauthorized} ->
+        forbidden!()
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "We couldn't create the group. Try again.")
+         |> refresh_group_form(group_params)}
+    end
+  end
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -105,17 +175,21 @@ defmodule MembaWeb.MemberGroupLive.New do
             id="member-group-new-form"
             aria-label="Create a group"
             class="space-y-5 p-5"
+            phx-change="validate_group"
+            phx-submit="create_group"
           >
-            <.input
-              field={@form[:name]}
-              id="member-group-name-input"
-              type="text"
-              label="Group name"
-              autocomplete="off"
-              placeholder="e.g. Board, Trips committee, Newsletter"
-              aria-describedby="member-group-name-hint"
-              required
-            />
+            <div id="member-group-name-field" aria-live="polite">
+              <.input
+                field={@form[:name]}
+                id="member-group-name-input"
+                type="text"
+                label="Group name"
+                autocomplete="off"
+                placeholder="e.g. Board, Trips committee, Newsletter"
+                aria-describedby="member-group-name-hint"
+                required
+              />
+            </div>
             <p id="member-group-name-hint" class="-mt-4 text-sm leading-6 text-ink-3">
               Use a name that's different from the club's existing groups.
             </p>
@@ -134,11 +208,25 @@ defmodule MembaWeb.MemberGroupLive.New do
                 id="member-group-email-preview"
                 for="member-group-name-input"
                 aria-labelledby="member-group-email-preview-label"
+                aria-describedby={@email_preview.note && "member-group-email-preview-note"}
                 aria-live="polite"
-                class="mt-1 block min-h-6 text-sm italic text-ink-3"
+                data-state={@email_preview.state}
+                class={[
+                  "mt-1 block min-h-6 text-sm",
+                  @email_preview.state == "available" &&
+                    "break-words font-mono font-medium text-sage-700",
+                  @email_preview.state == "empty" && "italic text-ink-3"
+                ]}
               >
-                Appears here as you type the name
+                {@email_preview.text}
               </output>
+              <p
+                :if={@email_preview.note}
+                id="member-group-email-preview-note"
+                class="mt-1 text-sm leading-6 text-ink-3"
+              >
+                {@email_preview.note}
+              </p>
             </div>
 
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -147,7 +235,7 @@ defmodule MembaWeb.MemberGroupLive.New do
                 type="submit"
                 variant="primary"
                 size="lg"
-                disabled
+                disabled={not @form_valid?}
               >
                 Create group
               </.button>
@@ -190,6 +278,94 @@ defmodule MembaWeb.MemberGroupLive.New do
     |> Enum.find(fn member -> Accounts.normalize_email(member.email) == identity_email end)
   end
 
+  defp preview_group(socket, group_params) do
+    Membership.preview_custom_group(%{
+      club_id: socket.assigns.selected_club.club_id,
+      actor_person_id: socket.assigns.current_member.id,
+      name: Map.get(group_params, "name")
+    })
+  end
+
+  defp assign_group_form(socket, params, error, preview) do
+    changeset =
+      {@empty_group, @group_form_types}
+      |> cast(params, [:name])
+      |> maybe_add_name_error(error)
+      |> Map.put(:action, :validate)
+
+    assign(socket,
+      form: to_form(changeset, as: :group),
+      form_valid?: is_nil(error) and preview.state == "available",
+      email_preview: preview
+    )
+  end
+
+  defp refresh_group_form(socket, group_params) do
+    case preview_group(socket, group_params) do
+      {:ok, preview} ->
+        assign_group_form(socket, group_params, nil, available_preview(preview))
+
+      {:error, :invalid_name} ->
+        assign_group_form(socket, group_params, "Give the group a name.", empty_preview(""))
+
+      {:error, {:group_name_already_defined, existing_name}} ->
+        assign_group_form(
+          socket,
+          group_params,
+          duplicate_name_message(existing_name, socket.assigns.selected_club.name),
+          empty_preview("")
+        )
+
+      {:error, _reason} ->
+        assign_group_form(socket, group_params, nil, empty_preview(""))
+    end
+  end
+
+  defp maybe_add_name_error(changeset, nil), do: changeset
+  defp maybe_add_name_error(changeset, error), do: add_error(changeset, :name, error)
+
+  defp empty_preview(text \\ "Appears here as you type the name") do
+    %{state: "empty", text: text, note: nil}
+  end
+
+  defp available_preview(preview) do
+    %{
+      state: "available",
+      text: preview.email_address,
+      note: collision_note(preview)
+    }
+  end
+
+  defp collision_note(%{
+         collision_group_name: collision_group_name,
+         unsuffixed_email_slug: unsuffixed_email_slug
+       })
+       when is_binary(collision_group_name) do
+    "“#{unsuffixed_email_slug}” is already used by #{collision_group_name}, so this address gets a number."
+  end
+
+  defp collision_note(_preview), do: nil
+
+  defp duplicate_name_message(existing_name, club_name) when is_binary(existing_name) do
+    "There's already a group called “#{existing_name}” in #{club_name}. Pick a different name."
+  end
+
+  defp duplicate_name_message(_existing_name, club_name) do
+    "There's already a group with that name in #{club_name}. Pick a different name."
+  end
+
+  defp navigate_to_created_group(socket) do
+    {:noreply,
+     push_navigate(socket,
+       to:
+         created_group_path(
+           socket.assigns.selected_club,
+           socket.assigns.route_params,
+           socket.assigns.group_id
+         )
+     )}
+  end
+
   defp put_session_club_id(params, session) do
     case {Map.get(params, "club_id"), Map.get(session, "club_id")} do
       {nil, club_id} when is_binary(club_id) -> Map.put(params, "club_id", club_id)
@@ -208,6 +384,12 @@ defmodule MembaWeb.MemberGroupLive.New do
 
   defp groups_path(selected_club, _route_params),
     do: ClubSite.url(selected_club, ~p"/conversations")
+
+  defp created_group_path(_selected_club, %{"club_id_source" => "host"}, group_id),
+    do: ~p"/groups/#{group_id}/members"
+
+  defp created_group_path(selected_club, _route_params, group_id),
+    do: ClubSite.url(selected_club, ~p"/groups/#{group_id}/members")
 
   defp forbidden!, do: raise(MembaWeb.ForbiddenError)
 end

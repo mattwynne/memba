@@ -64,7 +64,7 @@ defmodule Memba.Membership.Club do
   @impl Aggregate
   def execute(%__MODULE__{club_id: nil}, %CreateClub{} = command) do
     with :ok <- validate_club_id(command.club_id),
-         {:ok, name} <- normalize_name(command.name),
+         {:ok, name} <- GroupName.normalize(command.name),
          {:ok, slug} <- Slug.validate(command.slug) do
       membership_administrator_role_id = Roles.membership_administrator_role_id(command.club_id)
 
@@ -115,7 +115,7 @@ defmodule Memba.Membership.Club do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
-         {:ok, name} <- normalize_name(command.name),
+         {:ok, name} <- GroupName.normalize(command.name),
          {:ok, creator_membership_id} <-
            active_admin_membership_id(club, command.actor_person_id),
          :ok <- ensure_group_name_available(club, command.group_id, name) do
@@ -181,7 +181,7 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{} = club, %DefineClubRole{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:role, command.role_id, :invalid_role_id),
-         {:ok, name} <- normalize_name(command.name),
+         {:ok, name} <- GroupName.normalize(command.name),
          {:ok, role_key} <- normalize_role_key(command.role_key),
          :ok <- ensure_role_id_available(club, command.role_id),
          :ok <- ensure_role_key_available(club, role_key) do
@@ -215,7 +215,7 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{} = club, %CreateGroup{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         {:ok, name} <- normalize_name(command.name),
+         {:ok, name} <- GroupName.normalize(command.name),
          {:ok, group_key} <- normalize_group_key(command.group_key),
          {:ok, email_slug} <- normalize_optional_group_email_slug(command.email_slug) do
       create_group_decision(club, command, group_key, name, email_slug)
@@ -329,7 +329,7 @@ defmodule Memba.Membership.Club do
 
   def execute(%__MODULE__{} = club, %UpdateClub{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
-         {:ok, name} <- normalize_name(command.name),
+         {:ok, name} <- GroupName.normalize(command.name),
          {:ok, slug} <- Slug.validate(command.slug) do
       %ClubUpdated{club_id: command.club_id, name: name, slug: slug}
     end
@@ -592,15 +592,6 @@ defmodule Memba.Membership.Club do
       :error -> {:error, :not_found}
     end
   end
-
-  defp normalize_name(name) when is_binary(name) do
-    case String.trim(name) do
-      "" -> {:error, :invalid_name}
-      trimmed_name -> {:ok, trimmed_name}
-    end
-  end
-
-  defp normalize_name(_name), do: {:error, :invalid_name}
 
   defp normalize_role_key(nil), do: {:ok, nil}
   defp normalize_role_key(""), do: {:ok, nil}

@@ -1,18 +1,28 @@
 defmodule MembaWeb.MemberGroupLive.NewTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.ConnCase, async: false
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.ClubInboundEmailAddress
+  alias Memba.Membership
+  alias Memba.Membership.App
+  alias Memba.Membership.Club, as: ClubAggregate
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
-  alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
+
+  setup do
+    Memba.EventSourcedCase.reset_event_sourced_system!()
+    :ok
+  end
 
   test "a Membership Admin navigates from the group rail to the name-only new-group form", %{
     conn: conn
@@ -117,6 +127,176 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     assert get_session(conn, IdentityAuth.return_to_session_key()) == return_path
   end
 
+  test "typing validates the name and previews its address without creating a group", %{
+    conn: conn
+  } do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+    club = Membership.get_club(robin.club_id)
+    insert_custom_group!(robin.club_id, "Board", "board")
+
+    session =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> visit(~p"/groups/new")
+
+    session
+    |> refute_has("#member-group-name-input[aria-invalid='true']")
+    |> assert_has("#member-group-name-input[aria-describedby='member-group-name-hint']")
+    |> assert_has(
+      "#member-group-email-preview[data-state='empty'][aria-live='polite']",
+      "Appears here as you type the name"
+    )
+    |> assert_has("#member-group-create-button[disabled]")
+
+    session =
+      session
+      |> fill_in("Group name", with: "Trips")
+      |> assert_has(
+        "#member-group-email-preview[data-state='available']",
+        ClubInboundEmailAddress.address(club, "trips")
+      )
+      |> refute_has("#member-group-create-button[disabled]")
+
+    assert is_nil(
+             Repo.get_by(Group,
+               club_id: robin.club_id,
+               name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key("Trips")
+             )
+           )
+
+    session
+    |> fill_in("Group name", with: "")
+    |> assert_has(
+      "#member-group-name-input[aria-invalid='true']" <>
+        "[aria-describedby~='member-group-name-hint']" <>
+        "[aria-describedby~='member-group-name-input-error-1']"
+    )
+    |> assert_has("#member-group-name-input-error-1", "Give the group a name.")
+    |> assert_has("#member-group-email-preview[data-state='empty']", "")
+    |> assert_has("#member-group-create-button[disabled]")
+    |> fill_in("Group name", with: " bOaRd ")
+    |> assert_has("#member-group-name-input[aria-invalid='true']")
+    |> assert_has(
+      "#member-group-name-input-error-1",
+      "There's already a group called “Board” in West Coast Paddlers. Pick a different name."
+    )
+    |> assert_has("#member-group-email-preview[data-state='empty']", "")
+    |> assert_has("#member-group-create-button[disabled]")
+    |> fill_in("Group name", with: "Trips")
+    |> refute_has("#member-group-name-input-error-1")
+    |> assert_has(
+      "#member-group-email-preview[data-state='available']",
+      ClubInboundEmailAddress.address(club, "trips")
+    )
+    |> refute_has("#member-group-create-button[disabled]")
+  end
+
+  test "the live preview uses the creation allocator for slug collisions and Unicode fallback", %{
+    conn: conn
+  } do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+    club = Membership.get_club(robin.club_id)
+    insert_custom_group!(robin.club_id, "Huts & maintenance", "huts-maintenance")
+    insert_custom_group!(robin.club_id, "Translations", "group")
+
+    session =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> visit(~p"/groups/new")
+      |> fill_in("Group name", with: "Huts maintenance")
+      |> assert_has(
+        "#member-group-email-preview[data-state='available']" <>
+          "[aria-describedby='member-group-email-preview-note']",
+        ClubInboundEmailAddress.address(club, "huts-maintenance-2")
+      )
+      |> assert_has(
+        "#member-group-email-preview-note",
+        "“huts-maintenance” is already used by Huts & maintenance, so this address gets a number."
+      )
+
+    session
+    |> fill_in("Group name", with: "董事会")
+    |> assert_has(
+      "#member-group-email-preview[data-state='available']",
+      ClubInboundEmailAddress.address(club, "group-2")
+    )
+    |> refute_has("#member-group-name-input[aria-invalid='true']")
+  end
+
+  test "submit rechecks creation in the Club aggregate when the live preview is stale", %{
+    conn: conn
+  } do
+    robin =
+      create_event_sourced_admin(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers",
+        club_slug: "wcp"
+      )
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+
+    view
+    |> form("#member-group-new-form", group: %{name: "Board"})
+    |> render_change()
+
+    assert has_element?(
+             view,
+             "#member-group-email-preview[data-state='available']",
+             "board@wcp.clubs.memba.io"
+           )
+
+    assert :ok =
+             Membership.create_custom_group(
+               %{
+                 club_id: robin.club_id,
+                 group_id: Memba.ID.generate(:group),
+                 actor_person_id: robin.person_id,
+                 name: "Board"
+               },
+               consistency: :strong
+             )
+
+    club_id = robin.club_id
+
+    Repo.delete_all(
+      from group in Group,
+        where: group.club_id == ^club_id and group.name_uniqueness_key == "board"
+    )
+
+    view
+    |> form("#member-group-new-form", group: %{name: "Board"})
+    |> render_submit()
+
+    assert has_element?(view, "#member-group-name-input[aria-invalid='true']")
+    assert has_element?(view, "#member-group-name-input-error-1", "already a group")
+    assert has_element?(view, "#member-group-create-button[disabled]")
+
+    board_groups =
+      robin.club_id
+      |> then(&App.aggregate_state(ClubAggregate, &1))
+      |> Map.fetch!(:groups)
+      |> Map.values()
+      |> Enum.filter(&(&1.name == "Board"))
+
+    assert length(board_groups) == 1
+  end
+
   defp signed_in_club_host(conn, email, club) do
     conn
     |> club_host(club)
@@ -147,7 +327,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     membership =
-      Repo.insert!(%Membership{
+      Repo.insert!(%MembershipProjection{
         membership_id: Memba.ID.generate(:membership),
         club_id: club_id,
         person_id: person.person_id,
@@ -161,6 +341,41 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       membership_id: membership.membership_id,
       person_id: person.person_id
     }
+  end
+
+  defp create_event_sourced_admin(attrs) do
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
+    email = Keyword.fetch!(attrs, :email)
+
+    assert :ok =
+             Membership.create_club(
+               %{
+                 club_id: club_id,
+                 name: Keyword.fetch!(attrs, :club_name),
+                 slug: Keyword.fetch!(attrs, :club_slug)
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: email
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+               consistency: :strong
+             )
+
+    %{club_id: club_id, membership_id: membership_id, person_id: person_id}
   end
 
   defp insert_everyone_membership!(club_id, membership_id, person_id) do
@@ -194,6 +409,17 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       person_id: member.person_id,
       permission: Permissions.club_manage_members(),
       grant_count: 1
+    })
+  end
+
+  defp insert_custom_group!(club_id, name, email_slug) do
+    Repo.insert!(%Group{
+      club_id: club_id,
+      group_id: Memba.ID.generate(:group),
+      email_slug: email_slug,
+      group_key: nil,
+      name: name,
+      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
     })
   end
 end
