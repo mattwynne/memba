@@ -2,7 +2,9 @@
 
 Date: 2026-09-14
 
-Status: Open — diagnosis complete; mitigation pending
+Status: Investigating — diagnosis high-confidence; production repair pending
+
+Current production state: No repair or other production mutation has been performed. The affected clubs still need an approved repair before their projected Admins can create custom groups.
 
 Production release: Fly release `v283`, deployed at 2026-09-14 17:53 UTC from Git commit `03978b3a4d2d6d32966b33a36d92fe8ef75f0f7b`
 
@@ -17,7 +19,7 @@ Related work:
 
 ## Summary
 
-Shortly after iteration 062 reached production, an active Admin of the `wynne-family` club tried twice to create a custom group named `Parents`. The New group page and live preview were available, but submission terminated the LiveView with `MembaWeb.ForbiddenError`.
+Shortly after iteration 062 reached production, an active member shown as an Admin by the `wynne-family` read model tried twice to create a custom group named `Parents`. The New group page and live preview were available, but submission terminated the LiveView with `MembaWeb.ForbiddenError`.
 
 The page and preview authorize against the `membership_member_permissions` read model. The authoritative create command authorizes against state reconstructed from the Club event stream. For two older production clubs, those sources disagree: the read model says an active member has `club.manage_members`, while the Club stream contains no Admin role-assignment fact. The aggregate therefore reconstructs zero active Admins and correctly rejects the command according to the history it owns.
 
@@ -25,7 +27,7 @@ This is a production-history compatibility failure, not expected iteration-062 b
 
 ## Impact
 
-- Admin custom-group creation is unavailable in 2 of 5 populated production clubs: `lean` and `wynne-family`.
+- Admin custom-group creation is unavailable to the projected Admins in 2 of 5 populated production clubs: `lean` and `wynne-family`.
 - The observed `Parents` group was not created. No partial group, membership, or email-address facts were appended.
 - The other 3 populated clubs have event-backed active Admin state and are not affected by this specific mismatch.
 - No data loss, unauthorized access, email delivery, or privacy breach has been observed.
@@ -61,12 +63,21 @@ All times are UTC on 2026-09-14 unless stated otherwise.
 | 17:53 | Fly release `v283` deployed iteration 062 commit `03978b3a4`; the release migration completed and the app started normally. |
 | 18:20:24 | First `Parents` submission was rejected as unauthorized; the LiveView terminated with `ForbiddenError`. |
 | 18:20:43 | A retry failed in the same way. |
-| approximately 18:25 | Matt reported the production failure and requested log investigation. |
-| approximately 18:28 | Read-only inspection confirmed that `wynne-family` had one projected Admin but zero aggregate active Admins and no aggregate role assignments. |
-| approximately 18:39 | A production-wide read-only comparison found the same mismatch in 2 of 5 populated clubs. No custom groups existed. |
+| approx. 18:25 | Matt reported the production failure and requested log investigation. |
+| approx. 18:28 | Read-only inspection confirmed that `wynne-family` had one projected Admin but zero aggregate active Admins and no aggregate role assignments. |
+| approx. 18:39 | A production-wide read-only comparison found the same mismatch in 2 of 5 populated clubs. No custom-group events from either failed attempt were found. |
 | 18:40 | The documented iteration-059 cutover transaction was run read-only against production. Membership-history check 1 returned zero violations; source-backed Admin check 2 returned two violations. |
 
 ## Technical analysis
+
+Confirmed facts in this section come from the linked source, tests, docs, and the read-only production inspection recorded above. Hypotheses and unknowns are labelled explicitly. No production write, deploy, or repair command has been run during this review.
+
+Evidence checked for this review:
+
+- The LiveView, Membership API, authorization query, and Club aggregate confirm that mount/preview use projected permissions while submit checks event-reconstructed Admin state.
+- Migration `20260607233402_backfill_membership_administrator_roles.exs` writes the legacy Admin state directly to projection tables.
+- UI access/preview tests can grant projected permission directly, while submit-path tests create event-backed Admin history.
+- `bin/deploy`, the continuous-delivery workflow, and `Memba.Release` do not run the iteration-059 Admin-source cutover SQL.
 
 ### The two authorization paths disagree
 
@@ -125,6 +136,14 @@ The projection rows already exist. In the current projector:
 
 For a legacy projected grant currently at `grant_count = 1`, a naive three-command repair can over-count the permission instead of remaining at one. The repair must first make equivalent projections idempotent, or use another explicitly designed and tested reconciliation path. Directly editing the projection alone is not a repair because the projection is already the side that claims the Admin exists.
 
+### Unknowns and hypotheses
+
+- Confirmed: the failed `wynne-family` create attempts appended no custom-group facts, and the populated-club mismatch is limited to `lean` and `wynne-family` in the inspected production state.
+- Confirmed: no approved production mutation or repair was performed during this review.
+- Hypothesis: the production mismatch began when the iteration-027 projection backfill ran for pre-existing clubs. This fits the migration source and current stream/projection shape; the exact production migration timestamp has not been reconstructed here.
+- Unknown: whether a similar cutover check was ever run outside the searched session history and notes. The current production state proves only that a zero-violation result was not established and retained.
+- Unknown: which reconciliation design Matt wants to approve for production repair.
+
 ## Five Whys
 
 ### Failure chain
@@ -157,7 +176,7 @@ For a legacy projected grant currently at `grant_count = 1`, a naive three-comma
 4. Deployment health was based on successful migration, app boot, and test status; it did not exercise or assert aggregate/read-model authorization parity for existing clubs.
 5. With no exception alerting or post-deploy changed-path check, the first production user action became the monitoring system.
 
-## Root cause and contributing factors
+## Root cause and contributing conditions
 
 ### Root cause
 
@@ -167,7 +186,7 @@ Legacy Admin authority was written only to read-model projections, while later w
 
 A known live-data compatibility condition was expressed as a manual, one-time cutover instruction without an enforced gate or durable evidence handoff.
 
-### Contributing factors
+### Contributing conditions
 
 - Different stages of one UI flow used different authority sources.
 - Test data represented current creation paths rather than production history.
@@ -208,9 +227,8 @@ These are recommendations from the initial review. They require Matt's decision 
 
 | Type | Priority | Action | Owner | Status | Verification |
 | --- | --- | --- | --- | --- | --- |
-| Correct | P0 | Hold iteration 063 production rollout until the Admin-history invariant is restored and custom-group creation is verified. | Matt | Proposed | Iteration 063 is not deployed before the P0 repair is complete. |
-| Prevent | P0 | Add a regression fixture that reproduces an iteration-027 projection-only Admin, then make reconciliation idempotent for equivalent legacy rows without changing `grant_count` semantics for distinct roles. | Engineering | Proposed | Reconciliation leaves the legacy Admin grant at 1, while two distinct roles granting the same permission still produce `grant_count = 2`. |
-| Correct | P0 | Implement an auditable repair command/runbook that inspects each affected stream for partial role facts, appends only the missing deterministic role definition, permission, and active Admin assignment facts, and is safe to retry without rewriting history or treating projection edits as truth. | Engineering + operator | Proposed | Dry run identifies exactly `lean` and `wynne-family`; complete and partial-state fixtures converge correctly; repeated execution is a no-op; event history and projections agree afterward. |
+| Correct | P0 | Keep iteration 063 planning and implementation isolated in its branch/worktree; do not merge it to `main` or deploy it to production until the Admin-history invariant is repaired and custom-group creation is verified. | Matt | Proposed | Iteration 063 may continue off `main`, but no merge or production deploy occurs before the P0 repair and verified custom-group creation. |
+| Correct | P0 | Implement an auditable, retry-safe reconciliation command/runbook for legacy projection-only Admins: include regression and partial-state fixtures, preserve legitimate distinct-role `grant_count` semantics, support dry-run scope, append only missing deterministic event facts, and prove event/projection convergence. | Engineering + operator | Proposed | Dry run identifies exactly `lean` and `wynne-family`; complete and partial-state fixtures converge correctly; repeated execution is a no-op; the legacy Admin grant remains 1 while two distinct roles still produce `grant_count = 2`; event history and projections agree afterward. |
 | Correct | P0 | Deploy the tested repair support through CI, obtain explicit approval for the production mutation, execute it with captured output, then rerun the iteration-059 check. | Operator | Proposed | Check 1 remains zero; check 2 changes from two violations to zero. |
 | Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Proposed | One group, stable slug, and creator membership exist; no exception is logged. |
 | Detect | P1 | Turn the source-backed Admin invariant into an executable release/preflight check with a blocking exit status and retained CI/deployment evidence. | Engineering | Proposed | A deliberately inconsistent production-like fixture blocks release; successful output is attached to the deployment. |
@@ -218,7 +236,7 @@ These are recommendations from the initial review. They require Matt's decision 
 | Prevent | P1 | Add a production-history compatibility test for projection-only migrations followed by aggregate-owned commands, and require this analysis when moving a consistency boundary. | Engineering | Proposed | Iteration-027-shaped history fails before repair and passes afterward. |
 | Prevent | P1 | Audit other direct projection/data migrations and flows that authorize reads from projections but writes from aggregates. | Engineering | Proposed | Findings list each mismatch risk, production blast radius, and required repair or proof of safety. |
 | Detect | P2 | Add exception tracking/alerting for production LiveView and command failures. | Engineering | Proposed | A controlled error generates an operator notification with release and request context. |
-| Prevent | P2 | Add a standard incident template and require incident-action follow-up until mitigations and prevention work are closed. | Engineering | Partly complete in `docs/incidents/` and `.pi/skills/incident-review/` | Incident index and action statuses remain current through resolution. |
+| Prevent | P2 | Add a standard incident template and incident-review skill. Keep incident-action follow-up explicit until mitigations and prevention work are closed. | Engineering | Completed | Template and skill exist in `docs/incidents/` and `.pi/skills/incident-review/`; incident index and action statuses still need to remain current through resolution. |
 
 ## Actions not recommended
 
@@ -237,7 +255,11 @@ These are recommendations from the initial review. They require Matt's decision 
 - Should production repair evidence live in a private operations log, a protected CI artifact, or both?
 - What alerting service is proportionate for the current production scale?
 
-## Current response state
+## Resolution
+
+Not resolved. The affected production state has not been repaired, and custom-group creation in `lean` and `wynne-family` should not be retried as a recovery step until an approved repair has been deployed, executed, and verified in production.
+
+## Follow-up
 
 - Diagnosis: complete with high confidence.
 - Blast-radius assessment: complete for populated production clubs.

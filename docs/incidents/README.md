@@ -25,4 +25,4 @@ An incident may link to all three. The incident record remains the chronological
 
 | Date | Incident | Impact | Status |
 | --- | --- | --- | --- |
-| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Admins in 2 of 5 populated production clubs cannot create custom groups; no data loss or privacy breach observed. | Open — diagnosed; mitigation pending |
+| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs cannot create custom groups; no data loss or privacy breach observed. | Investigating — diagnosis high-confidence; production repair pending |
