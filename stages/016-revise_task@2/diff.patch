@@ -1,0 +1,181 @@
+diff --git a/acceptance-tests/features/support/custom_group_conversations.js b/acceptance-tests/features/support/custom_group_conversations.js
+index 23cddb2..c797c09 100644
+--- a/acceptance-tests/features/support/custom_group_conversations.js
++++ b/acceptance-tests/features/support/custom_group_conversations.js
+@@ -16,6 +16,7 @@ const {
+   sendInboundClubEmailReply,
+   testLocalDeliveryFacts,
+   unfollowConversation,
++  waitForInboundEmailResult,
+   waitForLiveViewConnected
+ } = require("./member_message");
+ const { withMemberHarness } = require("./member_harness");
+@@ -255,6 +256,8 @@ async function tryReplyWithoutBoardAccess(world, personName, body, channel) {
+   const subject = lastSubject(world);
+   const message = await ensureMessage(world, subject);
+   const countBefore = conversationMessageBodies(message.messageId).length;
++  let conversationIdsBefore;
++  let inboundResult;
+ 
+   if (channel === "on the website") {
+     await withMemberHarness(world, personName, async (member) => {
+@@ -264,17 +267,26 @@ async function tryReplyWithoutBoardAccess(world, personName, body, channel) {
+     });
+   } else {
+     assert.equal(channel, "by email");
++    conversationIdsBefore = groupConversationIds(boardId(world));
+ 
+     await sendInboundClubEmailReply(world, personName, subject, body, {
+       requireReply: false,
+       toAddress: boardAddress
+     });
++
++    inboundResult = await waitForInboundEmailResult(
++      world,
++      world.lastInboundEmail.providerMessageId
++    );
+   }
+ 
+   world.lastMessageSubject = subject;
+   world.customGroupReplyAttempt = {
+     body,
++    channel,
++    conversationIdsBefore,
+     countBefore,
++    inboundResult,
+     messageId: message.messageId,
+     personName
+   };
+@@ -287,6 +299,32 @@ function assertReplyNotAdded(world, body) {
+   const bodies = conversationMessageBodies(attempt.messageId);
+   assert.equal(bodies.length, attempt.countBefore);
+   assert.equal(bodies.includes(body), false);
++
++  if (attempt.channel === "by email") {
++    assertRejectedInboundReplyAttempt(
++      attempt,
++      groupConversationIds(boardId(world))
++    );
++  }
++}
++
++function assertRejectedInboundReplyAttempt(attempt, conversationIdsAfter) {
++  const result = attempt.inboundResult;
++
++  assert.ok(result && result.source, "Expected an authoritative inbound reply result");
++  assert.equal(
++    result.source.status,
++    "rejected",
++    `Expected the unauthorized inbound reply to be rejected; saw ${JSON.stringify(result)}`
++  );
++  assert.equal(result.source.rejectionReason, "not_current_member");
++  assert.equal(result.source.messageId, null);
++  assert.equal(result.message, null);
++  assert.deepEqual(
++    [...conversationIdsAfter].sort(),
++    [...attempt.conversationIdsBefore].sort(),
++    "Expected the Board conversation set to remain unchanged after the rejected reply"
++  );
+ }
+ 
+ function assertNoConversationAccess(world, personName) {
+@@ -475,6 +513,20 @@ function groupConversationSubjects(groupId) {
+   ).subjects;
+ }
+ 
++function groupConversationIds(groupId) {
++  return serverCommands.runCommand(
++    `
++%{
++  messageIds:
++    Map.fetch!(payload, "groupId")
++    |> Memba.Messaging.list_conversations_for_group()
++    |> Enum.map(& &1.message_id)
++}
++`,
++    { groupId }
++  ).messageIds;
++}
++
+ function boardConversationEntries(world, messageId) {
+   return serverCommands.runCommand(
+     `
+@@ -643,6 +695,7 @@ module.exports = {
+   assertNoBoardMembershipOrConversationAccess,
+   assertNoConversationAccess,
+   assertNoInitialEmailOrFollow,
++  assertRejectedInboundReplyAttempt,
+   assertReplyDelivered,
+   assertReplyNotAdded,
+   assertReplyNotDelivered,
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index ad9401c..eee4a13 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -4252,6 +4252,7 @@ module.exports = {
+   updatePersonEmailAddresses,
+   unfollowConversation,
+   visitClubsIndex,
++  waitForInboundEmailResult,
+   waitForLiveViewConnected,
+   waitForLocalDeliveryFacts,
+   waitForMailboxEmails
+diff --git a/acceptance-tests/test/custom_group_conversation_step_definitions.test.js b/acceptance-tests/test/custom_group_conversation_step_definitions.test.js
+index aeddf0a..98ebf2b 100644
+--- a/acceptance-tests/test/custom_group_conversation_step_definitions.test.js
++++ b/acceptance-tests/test/custom_group_conversation_step_definitions.test.js
+@@ -2,6 +2,54 @@ const assert = require("node:assert/strict");
+ const test = require("node:test");
+ 
+ const { loadConfiguration, runCucumber } = require("@cucumber/cucumber/api");
++const {
++  assertRejectedInboundReplyAttempt
++} = require("../features/support/custom_group_conversations");
++
++test("an accepted root message cannot satisfy a rejected custom-group reply attempt", () => {
++  assert.throws(
++    () =>
++      assertRejectedInboundReplyAttempt(
++        {
++          conversationIdsBefore: ["original-message-id"],
++          inboundResult: {
++            message: {
++              messageId: "accidental-root-message-id",
++              replyToMessageId: null
++            },
++            source: {
++              messageId: "accidental-root-message-id",
++              rejectionReason: null,
++              status: "accepted"
++            }
++          }
++        },
++        ["original-message-id", "accidental-root-message-id"]
++      ),
++    /rejected/
++  );
++});
++
++test("a rejected custom-group reply cannot create a separate conversation", () => {
++  assert.throws(
++    () =>
++      assertRejectedInboundReplyAttempt(
++        {
++          conversationIdsBefore: ["original-message-id"],
++          inboundResult: {
++            message: null,
++            source: {
++              messageId: null,
++              rejectionReason: "not_current_member",
++              status: "rejected"
++            }
++          }
++        },
++        ["original-message-id", "separate-message-id"]
++      ),
++    /conversation set/
++  );
++});
+ 
+ test("browser-backed custom-group conversation scenarios have executable step plumbing", async () => {
+   let scenarioCount = 0;
