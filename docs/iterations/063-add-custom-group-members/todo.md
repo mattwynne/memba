@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by `Membership.Club`.
+- [x] 001 Add a public authenticated custom-group admission use case and actor-bearing command handled by `Membership.Club`.
 - [ ] 002 Evaluate actor active club membership, actor group membership or existing admin permission, target active membership and custom-group identity against current aggregate state.
 - [ ] 003 Preserve trusted system-group commands rather than exposing them directly to web callers.
 - [ ] 004 Reuse `GroupMemberAdded` and the existing projection.
