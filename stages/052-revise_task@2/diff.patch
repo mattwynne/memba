@@ -1,0 +1,621 @@
+diff --git a/acceptance-tests/features/custom_group_membership.feature b/acceptance-tests/features/custom_group_membership.feature
+index b577116..02131bf 100644
+--- a/acceptance-tests/features/custom_group_membership.feature
++++ b/acceptance-tests/features/custom_group_membership.feature
+@@ -1,4 +1,3 @@
+-@todo-ui
+ Feature: Managing custom group membership
+   Group members and club admins manage custom-group membership.
+   Joining a group is different from joining the club or becoming a club admin.
+@@ -9,6 +8,20 @@ Feature: Managing custom group membership
+     And Bob, Carol, and Eve are its ordinary active club members
+     And Alice and Bob are the only members of its custom group Board
+ 
++  @iteration-063 @not-domain
++  Rule: The add-member picker is accessible by keyboard and input events
++
++    Scenario: Bob searches and dismisses the picker
++      When Bob opens Board's add-member picker
++      Then the add-member search should have focus
++      When Bob pastes "Carol" into the add-member search
++      Then only Carol should be offered in the add-member picker
++      When Bob presses Escape in the add-member picker
++      Then the add-member picker should close and return focus to its trigger
++      When Bob opens Board's add-member picker
++      And Bob closes the add-member picker
++      Then the add-member picker should close and return focus to its trigger
++
+   @iteration-063 @todo-domain @todo-ui
+   Rule: Group members and club admins may add active club members
+ 
+diff --git a/acceptance-tests/features/step_definitions/custom_group_membership_steps.js b/acceptance-tests/features/step_definitions/custom_group_membership_steps.js
+new file mode 100644
+index 0000000..cac6eb9
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/custom_group_membership_steps.js
+@@ -0,0 +1,54 @@
++const { Then, When } = require("@cucumber/cucumber");
++const {
++  assertAddMemberPickerClosedWithTriggerFocused,
++  assertAddMemberSearchFocused,
++  assertOnlyMemberOffered,
++  closeAddMemberPicker,
++  openAddMemberPicker,
++  pasteIntoAddMemberSearch,
++  pressEscapeInAddMemberPicker
++} = require("../support/custom_group_membership");
++
++When(/^(\w+) opens (.+)'s add-member picker$/, async function (memberName, groupName) {
++  this.addMemberPickerActor = memberName;
++  await openAddMemberPicker(this, memberName, groupName);
++});
++
++Then("the add-member search should have focus", async function () {
++  await assertAddMemberSearchFocused(this, this.addMemberPickerActor);
++});
++
++When(
++  /^(\w+) pastes "([^"]+)" into the add-member search$/,
++  async function (memberName, query) {
++    this.addMemberPickerActor = memberName;
++    await pasteIntoAddMemberSearch(this, memberName, query);
++  }
++);
++
++Then(
++  /^only (\w+) should be offered in the add-member picker$/,
++  async function (memberName) {
++    await assertOnlyMemberOffered(this, this.addMemberPickerActor, memberName);
++  }
++);
++
++When(
++  /^(\w+) presses Escape in the add-member picker$/,
++  async function (memberName) {
++    this.addMemberPickerActor = memberName;
++    await pressEscapeInAddMemberPicker(this, memberName);
++  }
++);
++
++When(/^(\w+) closes the add-member picker$/, async function (memberName) {
++  this.addMemberPickerActor = memberName;
++  await closeAddMemberPicker(this, memberName);
++});
++
++Then(
++  "the add-member picker should close and return focus to its trigger",
++  async function () {
++    await assertAddMemberPickerClosedWithTriggerFocused(this, this.addMemberPickerActor);
++  }
++);
+diff --git a/acceptance-tests/features/support/custom_group_membership.js b/acceptance-tests/features/support/custom_group_membership.js
+new file mode 100644
+index 0000000..c32a185
+--- /dev/null
++++ b/acceptance-tests/features/support/custom_group_membership.js
+@@ -0,0 +1,89 @@
++const assert = require("node:assert/strict");
++const { expect } = require("@playwright/test");
++const { clubSiteUrl, waitForLiveViewConnected } = require("./member_message");
++const { withMemberHarness } = require("./member_harness");
++const { kootenayClubName } = require("./custom_group_creation");
++
++async function openAddMemberPicker(world, memberName, groupName) {
++  await withMemberHarness(world, memberName, async (member) => {
++    const club = world.clubs && world.clubs[kootenayClubName];
++    const groupId = world.groups && world.groups[`${kootenayClubName}:${groupName}`];
++
++    assert.ok(club, `Expected ${kootenayClubName}`);
++    assert.ok(groupId, `Expected ${groupName} custom group`);
++
++    await member.page.goto(
++      clubSiteUrl(
++        member.baseUrl,
++        club,
++        `/groups/${encodeURIComponent(groupId)}/members`
++      )
++    );
++    await waitForLiveViewConnected(member);
++    await member.page.locator("#member-section-action-add-group-member").click();
++    await expect(member.page.locator("#custom-group-member-picker")).toBeVisible();
++  });
++}
++
++async function assertAddMemberSearchFocused(world, memberName) {
++  await withMemberHarness(world, memberName, async (member) => {
++    await expect(member.page.locator("#custom-group-member-search")).toBeFocused();
++  });
++}
++
++async function pasteIntoAddMemberSearch(world, memberName, query) {
++  await withMemberHarness(world, memberName, async (member) => {
++    const search = member.page.locator("#custom-group-member-search");
++
++    await search.evaluate((input, value) => {
++      input.value = value;
++      input.dispatchEvent(
++        new InputEvent("input", {
++          bubbles: true,
++          data: value,
++          inputType: "insertFromPaste"
++        })
++      );
++    }, query);
++  });
++}
++
++async function assertOnlyMemberOffered(world, memberName, expectedName) {
++  await withMemberHarness(world, memberName, async (member) => {
++    const candidates = member.page.locator(
++      "#custom-group-member-candidates [data-testid='custom-group-member-candidate']"
++    );
++
++    await expect(candidates).toHaveCount(1);
++    await expect(candidates).toContainText(expectedName);
++  });
++}
++
++async function pressEscapeInAddMemberPicker(world, memberName) {
++  await withMemberHarness(world, memberName, async (member) => {
++    await member.page.keyboard.press("Escape");
++  });
++}
++
++async function closeAddMemberPicker(world, memberName) {
++  await withMemberHarness(world, memberName, async (member) => {
++    await member.page.locator("#custom-group-member-picker-close").click();
++  });
++}
++
++async function assertAddMemberPickerClosedWithTriggerFocused(world, memberName) {
++  await withMemberHarness(world, memberName, async (member) => {
++    await expect(member.page.locator("#custom-group-member-picker")).toHaveCount(0);
++    await expect(member.page.locator("#member-section-action-add-group-member")).toBeFocused();
++  });
++}
++
++module.exports = {
++  assertAddMemberPickerClosedWithTriggerFocused,
++  assertAddMemberSearchFocused,
++  assertOnlyMemberOffered,
++  closeAddMemberPicker,
++  openAddMemberPicker,
++  pasteIntoAddMemberSearch,
++  pressEscapeInAddMemberPicker
++};
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 20f7f62..587e4b8 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -31,6 +31,7 @@ test("default browser Cucumber profile selects all web-backed shared features",
+     "custom_group_conversations.feature",
+     "custom_group_creation.feature",
+     "custom_group_lifecycle.feature",
++    "custom_group_membership.feature",
+     "email_branding.feature",
+     "group_conversations.feature",
+     "homepage.feature",
+@@ -250,6 +251,26 @@ test("iteration 062 custom-group lifecycle scenarios run in both acceptance laye
+   );
+ });
+ 
++test("iteration 063 picker interaction runs while membership transitions remain browser debt", () => {
++  const feature = browserFeatures().find(
++    ({ name }) => name === "custom_group_membership.feature"
++  );
++  const iterationScenarios = feature.scenarios.filter((scenario) =>
++    scenario.tags.includes("@iteration-063")
++  );
++  const browserScenarioNames = iterationScenarios
++    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
++    .map((scenario) => scenario.name);
++
++  assert.deepEqual(browserScenarioNames, ["Bob searches and dismisses the picker"]);
++  assert.equal(
++    iterationScenarios
++      .filter((scenario) => scenario.name !== "Bob searches and dismisses the picker")
++      .every((scenario) => scenario.tags.includes("@todo-ui")),
++    true
++  );
++});
++
+ test("iteration 059 UI scenarios run while its concurrency scenario remains domain-only", () => {
+   const feature = browserFeatures().find(
+     ({ name }) => name === "club_membership_administration.feature"
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index f4902aa..8047562 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -357,6 +357,21 @@
+   text-align: center;
+ }
+ 
++.empty-members {
++  margin: 0;
++  padding: 18px;
++  border: 1px dashed var(--color-line-strong);
++  border-radius: 14px;
++  color: var(--color-ink-2);
++  font-size: 13.5px;
++  line-height: 1.5;
++  text-align: center;
++}
++
++.empty-members strong {
++  color: var(--color-ink);
++}
++
+ /* ============================================================
+    Base — cream canvas, Figtree body, tightened display tracking.
+    The <body> carries no bg class, so daisyUI would default it to
+@@ -1437,7 +1452,9 @@ h1, h2, h3, h4 {
+   .section-tabs__action .btn {
+     width: 100%;
+   }
++}
+ 
++@media (max-width: 700px) {
+   .picker__head {
+     flex-direction: column;
+   }
+diff --git a/web/lib/memba_web/components/member_components.ex b/web/lib/memba_web/components/member_components.ex
+index 4a50c8c..de36f4f 100644
+--- a/web/lib/memba_web/components/member_components.ex
++++ b/web/lib/memba_web/components/member_components.ex
+@@ -141,6 +141,7 @@ defmodule MembaWeb.MemberComponents do
+   attr :rows, :list, required: true
+   attr :active_member_count, :integer, required: true
+   attr :current_member, :map, default: nil
++  attr :group_name, :string, required: true
+ 
+   def member_list(assigns) do
+     ~H"""
+@@ -150,6 +151,10 @@ defmodule MembaWeb.MemberComponents do
+       data-active-members-state={active_members_state(@active_member_count)}
+       class="member-list mt-4"
+     >
++      <p :if={@rows == []} id="active-members-empty-state" class="empty-members">
++        <strong>{@group_name} has no members.</strong>
++        Its conversations and emails are kept; whoever you add next will see them all.
++      </p>
+       <.member_row :for={row <- @rows} row={row} current_member={@current_member} />
+     </div>
+     """
+@@ -201,6 +206,7 @@ defmodule MembaWeb.MemberComponents do
+   attr :group_name, :string, required: true
+   attr :candidates, :list, required: true
+   attr :query, :string, default: ""
++  attr :search_form, Phoenix.HTML.Form, required: true
+ 
+   def custom_group_member_picker(assigns) do
+     assigns =
+@@ -211,6 +217,8 @@ defmodule MembaWeb.MemberComponents do
+       id="custom-group-member-picker"
+       class="picker"
+       aria-labelledby="custom-group-member-picker-title"
++      phx-window-keydown={close_custom_group_member_picker()}
++      phx-key="Escape"
+     >
+       <div class="picker__head">
+         <div>
+@@ -228,24 +236,29 @@ defmodule MembaWeb.MemberComponents do
+           type="button"
+           variant="ghost"
+           size="sm"
+-          phx-click="close_custom_group_member_picker"
++          phx-click={close_custom_group_member_picker()}
+         >
+           Close
+         </.button>
+       </div>
+ 
+-      <.input
+-        id="custom-group-member-search"
+-        name="query"
+-        type="search"
+-        value={@query}
+-        class="input mt-3 w-full"
+-        placeholder="Search club members…"
+-        autocomplete="off"
+-        aria-label="Search club members"
+-        phx-keyup="filter_custom_group_member_candidates"
+-        phx-debounce="150"
+-      />
++      <.form
++        for={@search_form}
++        id="custom-group-member-search-form"
++        phx-change="filter_custom_group_member_candidates"
++      >
++        <.input
++          field={@search_form[:query]}
++          id="custom-group-member-search"
++          type="search"
++          class="input mt-3 w-full"
++          placeholder="Search club members…"
++          autocomplete="off"
++          aria-label="Search club members"
++          phx-debounce="150"
++          phx-mounted={JS.focus()}
++        />
++      </.form>
+ 
+       <div
+         :if={@visible_candidates != []}
+@@ -275,8 +288,9 @@ defmodule MembaWeb.MemberComponents do
+           <.button
+             id={"custom-group-member-candidate-add-#{candidate.id}"}
+             type="button"
+-            variant="secondary"
++            variant="primary"
+             size="sm"
++            class="btn-outline"
+             data-custom-group-member-action="add"
+             data-membership-id={candidate.membership_id}
+             data-person-id={candidate.id}
+@@ -334,12 +348,16 @@ defmodule MembaWeb.MemberComponents do
+     """
+   end
+ 
+-  defp active_members_state(active_member_count) when active_member_count <= 1 do
+-    "first-member"
+-  end
++  defp active_members_state(0), do: "empty"
++  defp active_members_state(1), do: "first-member"
+ 
+   defp active_members_state(_active_member_count), do: "active-members"
+ 
++  defp close_custom_group_member_picker do
++    JS.push("close_custom_group_member_picker")
++    |> JS.focus(to: "#member-section-action-add-group-member")
++  end
++
+   defp participant_avatar_stack_visible?(participants, additional_count) do
+     participants != [] or additional_count > 0
+   end
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index b08ea6c..22ec900 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -300,11 +300,13 @@
+               group_name={@selected_group.name}
+               candidates={@custom_group_member_candidates}
+               query={@custom_group_member_picker_query}
++              search_form={@custom_group_member_picker_form}
+             />
+             <.member_list
+               rows={@members}
+               active_member_count={@active_member_count}
+               current_member={@current_member}
++              group_name={@selected_group.name}
+             />
+           </section>
+         </div>
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 6980ba9..9699c53 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -46,7 +46,7 @@ defmodule MembaWeb.MemberDashboardLive do
+          |> assign(:selected_group_route_id, selected_group_id)
+          |> assign(:active_section, "conversations")
+          |> assign(:custom_group_member_picker_open?, false)
+-         |> assign(:custom_group_member_picker_query, "")
++         |> assign_custom_group_member_picker_query("")
+          |> assign(dashboard_assigns)}
+ 
+       {:error, :forbidden} ->
+@@ -64,7 +64,7 @@ defmodule MembaWeb.MemberDashboardLive do
+     socket =
+       socket
+       |> assign(:custom_group_member_picker_open?, false)
+-      |> assign(:custom_group_member_picker_query, "")
++      |> assign_custom_group_member_picker_query("")
+       |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
+ 
+     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
+@@ -79,7 +79,7 @@ defmodule MembaWeb.MemberDashboardLive do
+     {:noreply,
+      socket
+      |> assign(:custom_group_member_picker_open?, true)
+-     |> assign(:custom_group_member_picker_query, "")}
++     |> assign_custom_group_member_picker_query("")}
+   end
+ 
+   def handle_event("open_custom_group_member_picker", _params, socket), do: {:noreply, socket}
+@@ -88,16 +88,16 @@ defmodule MembaWeb.MemberDashboardLive do
+     {:noreply,
+      socket
+      |> assign(:custom_group_member_picker_open?, false)
+-     |> assign(:custom_group_member_picker_query, "")}
++     |> assign_custom_group_member_picker_query("")}
+   end
+ 
+   def handle_event(
+         "filter_custom_group_member_candidates",
+-        %{"value" => query},
++        %{"member_search" => %{"query" => query}},
+         %{assigns: %{custom_group_member_picker_open?: true}} = socket
+       )
+       when is_binary(query) do
+-    {:noreply, assign(socket, :custom_group_member_picker_query, query)}
++    {:noreply, assign_custom_group_member_picker_query(socket, query)}
+   end
+ 
+   def handle_event("filter_custom_group_member_candidates", _params, socket),
+@@ -173,6 +173,12 @@ defmodule MembaWeb.MemberDashboardLive do
+   defp active_section(:members), do: "members"
+   defp active_section(_live_action), do: "conversations"
+ 
++  defp assign_custom_group_member_picker_query(socket, query) do
++    socket
++    |> assign(:custom_group_member_picker_query, query)
++    |> assign(:custom_group_member_picker_form, to_form(%{"query" => query}, as: :member_search))
++  end
++
+   defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
+   defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"
+ 
+diff --git a/web/test/memba_web/app_css_test.exs b/web/test/memba_web/app_css_test.exs
+index 76a9177..ff6eabc 100644
+--- a/web/test/memba_web/app_css_test.exs
++++ b/web/test/memba_web/app_css_test.exs
+@@ -43,6 +43,17 @@ defmodule MembaWeb.AppCssTest do
+     assert css =~ "text-overflow: ellipsis;"
+   end
+ 
++  test "add-member picker uses the reviewed 700px responsive breakpoint" do
++    css = File.read!(@app_css_path)
++    [_, after_640_breakpoint] = String.split(css, "@media (max-width: 640px)", parts: 2)
++
++    [mobile_640_css, mobile_700_css] =
++      String.split(after_640_breakpoint, "@media (max-width: 700px)", parts: 2)
++
++    refute mobile_640_css =~ ".picker__head"
++    assert mobile_700_css =~ ~r/^\s*\{\s*\.picker__head\s*\{\s*flex-direction: column;/s
++  end
++
+   test "app css includes the club-home conversation row and avatar-stack rules" do
+     css = File.read!(@app_css_path)
+ 
+diff --git a/web/test/memba_web/components/member_components_test.exs b/web/test/memba_web/components/member_components_test.exs
+index 9f034e3..c1f643c 100644
+--- a/web/test/memba_web/components/member_components_test.exs
++++ b/web/test/memba_web/components/member_components_test.exs
+@@ -7,6 +7,31 @@ defmodule MembaWeb.MemberComponentsTest do
+   alias MembaWeb.MemberComponents
+ 
+   describe "member_list/1" do
++    test "renders the designed empty custom-group state for zero members" do
++      html =
++        render_member_list(
++          rows: [],
++          active_member_count: 0,
++          current_member: %{id: Memba.ID.generate(:person), name: "Dana Diaz"},
++          group_name: "Board"
++        )
++
++      assert_selector(
++        html,
++        "#active-members-list[data-active-member-count='0'][data-active-members-state='empty']"
++      )
++
++      assert_text(html, "#active-members-empty-state", "Board has no members.")
++
++      assert_text(
++        html,
++        "#active-members-empty-state",
++        "Its conversations and emails are kept; whoever you add next will see them all."
++      )
++
++      refute_selector(html, "[data-testid='club-member-row']")
++    end
++
+     test "renders a single current member row with roles and no first-member banner" do
+       member_id = Memba.ID.generate(:person)
+ 
+@@ -105,7 +130,8 @@ defmodule MembaWeb.MemberComponentsTest do
+               roles: ["Admin"]
+             }
+           ],
+-          query: "dan"
++          query: "dan",
++          search_form: to_form(%{"query" => "dan"}, as: :member_search)
+         })
+ 
+       assert_selector(
+@@ -117,8 +143,15 @@ defmodule MembaWeb.MemberComponentsTest do
+ 
+       assert_selector(
+         html,
+-        "#custom-group-member-search[type='search'][name='query'][value='dan']" <>
+-          "[phx-keyup='filter_custom_group_member_candidates']"
++        "#custom-group-member-search-form[phx-change='filter_custom_group_member_candidates'] " <>
++          "#custom-group-member-search[type='search'][name='member_search[query]'][value='dan']"
++      )
++
++      refute_selector(html, "#custom-group-member-search[phx-keyup]")
++
++      assert_selector(
++        html,
++        "#custom-group-member-picker[phx-window-keydown][phx-key='Escape']"
+       )
+ 
+       assert_selector(
+@@ -142,12 +175,12 @@ defmodule MembaWeb.MemberComponentsTest do
+       assert_selector(
+         html,
+         "#custom-group-member-candidate-add-#{dana_person_id}" <>
+-          "[data-custom-group-member-action='add']"
++          ".btn-outline.btn-primary[data-custom-group-member-action='add']"
+       )
+ 
+       assert_selector(
+         html,
+-        "#custom-group-member-picker-close[phx-click='close_custom_group_member_picker']"
++        "#custom-group-member-picker-close[phx-click]"
+       )
+     end
+ 
+@@ -157,7 +190,8 @@ defmodule MembaWeb.MemberComponentsTest do
+           club_name: "Alpine Club",
+           group_name: "Board",
+           candidates: [],
+-          query: ""
++          query: "",
++          search_form: to_form(%{"query" => ""}, as: :member_search)
+         })
+ 
+       assert_text(
+@@ -293,7 +327,10 @@ defmodule MembaWeb.MemberComponentsTest do
+   end
+ 
+   defp render_member_list(assigns) do
+-    assigns = Map.new(assigns)
++    assigns =
++      assigns
++      |> Map.new()
++      |> Map.put_new(:group_name, "Board")
+ 
+     render_component(&MemberComponents.member_list/1, assigns)
+   end
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index d0c13bb..0d04731 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -1035,8 +1035,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+ 
+     view
+-    |> element("#custom-group-member-search")
+-    |> render_keyup(%{"value" => "nobody"})
++    |> form("#custom-group-member-search-form", member_search: %{query: "nobody"})
++    |> render_change()
+ 
+     assert has_element?(
+              view,
+@@ -1044,6 +1044,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "No active club members match your search."
+            )
+ 
++    view
++    |> element("#custom-group-member-picker")
++    |> render_keydown(%{"key" => "Escape"})
++
++    refute has_element?(view, "#custom-group-member-picker")
++    assert has_element?(view, "#member-section-action-add-group-member[aria-expanded='false']")
++
++    view
++    |> element("#member-section-action-add-group-member")
++    |> render_click()
++
+     view
+     |> element("#custom-group-member-picker-close")
+     |> render_click()
+@@ -3000,6 +3011,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       custom_group_member_candidates: [],
+       custom_group_member_picker_open?: false,
+       custom_group_member_picker_query: "",
++      custom_group_member_picker_form:
++        Phoenix.Component.to_form(%{"query" => ""}, as: :member_search),
+       active_section: "conversations",
+       club_id_source: "host",
+       members: [],
