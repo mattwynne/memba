@@ -12,6 +12,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.ClubInvitation
   alias Memba.Membership.Person
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
+  alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddPersonEmailAddress
@@ -39,6 +40,7 @@ defmodule Memba.Membership.Router do
   identify(Person, by: :person_id)
 
   dispatch(AcceptClubMemberInvitation, to: ClubInvitation)
+  dispatch(AddCustomGroupMember, to: Club)
   dispatch(AddGroupMember, to: Club)
   dispatch(AddClubMember, to: Club)
   dispatch(AddPersonEmailAddress, to: Person)

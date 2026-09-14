@@ -10,6 +10,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
   alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -78,6 +79,21 @@ defmodule Memba.Membership do
   def create_custom_group(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- create_custom_group_command(attrs) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Add an existing club membership to a custom group as an authenticated actor.
+
+  The caller supplies the Club and group identities, the target
+  membership/person pair, and the authenticated actor's person identity. The
+  application service translates that request into an actor-bearing command;
+  the Club aggregate owns the authoritative admission decision.
+  """
+  def add_custom_group_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- add_custom_group_member_command(attrs) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -1749,6 +1765,23 @@ defmodule Memba.Membership do
          group_id: group_id,
          actor_person_id: actor_person_id,
          name: name
+       }}
+    end
+  end
+
+  defp add_custom_group_member_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
+      {:ok,
+       %AddCustomGroupMember{
+         club_id: club_id,
+         group_id: group_id,
+         membership_id: membership_id,
+         person_id: person_id,
+         actor_person_id: actor_person_id
        }}
     end
   end

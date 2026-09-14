@@ -5,6 +5,7 @@ defmodule Memba.Membership.Club do
 
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
+  alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
@@ -132,6 +133,20 @@ defmodule Memba.Membership.Club do
         name,
         email_slug
       )
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %AddCustomGroupMember{}),
+    do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %AddCustomGroupMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
+         :ok <- ensure_group_exists(club, command.group_id) do
+      add_custom_group_member_decision(club, command)
     end
   end
 
@@ -979,6 +994,28 @@ defmodule Memba.Membership.Club do
     end
   end
 
+  defp add_custom_group_member_decision(
+         %__MODULE__{} = club,
+         %AddCustomGroupMember{} = command
+       ) do
+    case Map.fetch(
+           club.group_memberships,
+           group_membership_key(command.group_id, command.membership_id)
+         ) do
+      {:ok, %{person_id: person_id}} when person_id != command.person_id ->
+        {:error, :group_membership_person_mismatch}
+
+      {:ok, %{active: true}} ->
+        []
+
+      {:ok, %{active: false}} ->
+        custom_group_member_added_event(command)
+
+      :error ->
+        custom_group_member_added_event(command)
+    end
+  end
+
   defp remove_group_member_decision(%__MODULE__{} = club, %RemoveGroupMember{} = command) do
     case Map.fetch(
            club.group_memberships,
@@ -1004,6 +1041,15 @@ defmodule Memba.Membership.Club do
   end
 
   defp group_member_added_event(%AddGroupMember{} = command) do
+    %GroupMemberAdded{
+      club_id: command.club_id,
+      group_id: command.group_id,
+      membership_id: command.membership_id,
+      person_id: command.person_id
+    }
+  end
+
+  defp custom_group_member_added_event(%AddCustomGroupMember{} = command) do
     %GroupMemberAdded{
       club_id: command.club_id,
       group_id: command.group_id,

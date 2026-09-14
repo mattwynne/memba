@@ -5,6 +5,7 @@ defmodule Memba.Membership.AppTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
+  alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddPersonEmailAddress
@@ -96,6 +97,7 @@ defmodule Memba.Membership.AppTest do
     expected_commands =
       MapSet.new([
         AcceptClubMemberInvitation,
+        AddCustomGroupMember,
         AddGroupMember,
         AddClubMember,
         AddPersonEmailAddress,
