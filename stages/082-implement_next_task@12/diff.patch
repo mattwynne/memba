@@ -1,0 +1,199 @@
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 3403ead..0c094e7 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -28,6 +28,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.EmailAddressVerificationToken
+   alias Memba.Membership.EmailAddresses
+   alias Memba.Membership.InvitationToken
++  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+   alias Memba.Membership.Policies.SystemGroupMembership
+   alias Memba.Membership.SystemGroups
+   alias Memba.Membership.Projections.Club
+@@ -428,11 +429,12 @@ defmodule Memba.Membership do
+   resolves those routing fields from the membership projection before the Club
+   aggregate validates them and decides the Admin and member floors. A successful
+   decision also ends every active custom-group membership held by that club
+-  membership.
++  membership. The call completes only after system-group membership and
++  custom-group conversation follows have been cleared.
+   """
+   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- remove_member_command(attrs) do
+-      dispatch_system_group_membership_command(command, dispatch_opts)
++      dispatch_member_departure_command(command, dispatch_opts)
+     end
+   end
+ 
+@@ -2339,6 +2341,19 @@ defmodule Memba.Membership do
+     dispatch(command, system_group_membership_consistency(dispatch_opts))
+   end
+ 
++  defp dispatch_member_departure_command(command, dispatch_opts) do
++    dispatch(command, member_departure_consistency(dispatch_opts))
++  end
++
++  defp member_departure_consistency(dispatch_opts) do
++    dispatch_opts
++    |> system_group_membership_consistency()
++    |> Keyword.update!(
++      :consistency,
++      &include_removed_group_member_follows_consistency/1
++    )
++  end
++
+   defp system_group_membership_consistency(dispatch_opts) do
+     Keyword.update(
+       dispatch_opts,
+@@ -2369,6 +2384,26 @@ defmodule Memba.Membership do
+ 
+   defp system_group_membership_handler?(_handler), do: false
+ 
++  defp include_removed_group_member_follows_consistency(:strong), do: :strong
++
++  defp include_removed_group_member_follows_consistency(handlers) when is_list(handlers) do
++    if Enum.any?(handlers, &removed_group_member_follows_handler?/1) do
++      handlers
++    else
++      [ClearRemovedGroupMemberFollows | handlers]
++    end
++  end
++
++  defp include_removed_group_member_follows_consistency(consistency), do: consistency
++
++  defp removed_group_member_follows_handler?(ClearRemovedGroupMemberFollows), do: true
++
++  defp removed_group_member_follows_handler?(handler) when is_binary(handler) do
++    handler == inspect(ClearRemovedGroupMemberFollows)
++  end
++
++  defp removed_group_member_follows_handler?(_handler), do: false
++
+   defp dispatch(command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> :ok
+diff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+index ebaa3ae..fee7222 100644
+--- a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
++++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+@@ -2,7 +2,12 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   use Memba.EventSourcedCase, async: false
+ 
+   alias Commanded.EventStore
++  alias Commanded.Event.Handler
++  alias Commanded.Registration
++  alias Commanded.Subscriptions
++  alias Memba.Membership
+   alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Club
+   alias Memba.Membership.Commands.AddClubMember
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+@@ -11,7 +16,9 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
++  alias Memba.Membership.Policies.SystemGroupMembership
+   alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.SendMessage
+@@ -69,6 +76,73 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     assert count_unfollow_events(conversation_id, departing_person_id) == 1
+   end
+ 
++  test "club departure completes follow clearing before a rapid re-add" do
++    club_id = Memba.ID.generate(:club)
++    departing_membership_id = Memba.ID.generate(:membership)
++    departing_person_id = Memba.ID.generate(:person)
++    replacement_membership_id = Memba.ID.generate(:membership)
++    replacement_person_id = Memba.ID.generate(:person)
++    rejoined_membership_id = Memba.ID.generate(:membership)
++    custom_group_id = Memba.ID.generate(:group)
++    conversation_id = Memba.ID.generate(:message)
++
++    create_club(club_id)
++    add_member(club_id, departing_membership_id, departing_person_id)
++    add_member(club_id, replacement_membership_id, replacement_person_id)
++    assign_admin(club_id, replacement_membership_id, replacement_person_id)
++    create_custom_group(club_id, custom_group_id)
++    add_group_member(club_id, custom_group_id, departing_membership_id, departing_person_id)
++    create_followed_conversation(club_id, custom_group_id, conversation_id, departing_person_id)
++
++    clear_follows_handler = clear_follows_handler_pid()
++    removal_target_version = latest_club_stream_version(club_id) + 2
++    :ok = :sys.suspend(clear_follows_handler)
++
++    removal =
++      Task.async(fn ->
++        Membership.remove_member(%{
++          club_id: club_id,
++          membership_id: departing_membership_id,
++          person_id: departing_person_id
++        })
++      end)
++
++    try do
++      assert :ok =
++               Subscriptions.wait_for(
++                 MembershipApp,
++                 club_id,
++                 removal_target_version,
++                 [consistency: [SystemGroupMembership]],
++                 1_000
++               )
++
++      assert Task.yield(removal, 100) == nil
++    after
++      :ok = :sys.resume(clear_follows_handler)
++    end
++
++    assert :ok = Task.await(removal)
++
++    assert :ok =
++             Membership.add_member(%{
++               club_id: club_id,
++               membership_id: rejoined_membership_id,
++               person_id: departing_person_id
++             })
++
++    refute Messaging.following_conversation?(conversation_id, departing_person_id)
++
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++
++    assert %Club{
++             group_memberships: %{
++               {^custom_group_id, ^departing_membership_id} => %{active: false},
++               {^everyone_group_id, ^rejoined_membership_id} => %{active: true}
++             }
++           } = MembershipApp.aggregate_state(Club, club_id)
++  end
++
+   test "handling the same custom-group removal repeatedly is idempotent" do
+     club_id = Memba.ID.generate(:club)
+     group_id = Memba.ID.generate(:group)
+@@ -195,4 +269,23 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+       match?(%ConversationUnfollowed{member_id: ^person_id}, recorded_event.data)
+     end)
+   end
++
++  defp clear_follows_handler_pid do
++    handler_name =
++      Handler.name(
++        MembershipApp,
++        inspect(ClearRemovedGroupMemberFollows)
++      )
++
++    assert pid = Registration.whereis_name(MembershipApp, handler_name)
++    pid
++  end
++
++  defp latest_club_stream_version(club_id) do
++    MembershipApp
++    |> EventStore.stream_forward(club_id)
++    |> Enum.to_list()
++    |> List.last()
++    |> Map.fetch!(:stream_version)
++  end
+ end
