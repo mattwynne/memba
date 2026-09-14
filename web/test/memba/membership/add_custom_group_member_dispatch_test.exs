@@ -8,6 +8,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
@@ -76,6 +77,18 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                },
                returning: :execution_result,
                consistency: :strong
+             )
+
+    assert %GroupMembershipProjection{
+             club_id: ^club_id,
+             group_id: ^group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id,
+             active: true
+           } =
+             Repo.get_by(GroupMembershipProjection,
+               group_id: group_id,
+               membership_id: target_membership_id
              )
   end
 

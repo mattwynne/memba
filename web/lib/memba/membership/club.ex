@@ -1090,10 +1090,10 @@ defmodule Memba.Membership.Club do
         []
 
       {:ok, %{active: false}} ->
-        custom_group_member_added_event(command)
+        group_member_added_event(command)
 
       :error ->
-        custom_group_member_added_event(command)
+        group_member_added_event(command)
     end
   end
 
@@ -1121,21 +1121,17 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp group_member_added_event(%AddGroupMember{} = command) do
+  defp group_member_added_event(%{
+         club_id: club_id,
+         group_id: group_id,
+         membership_id: membership_id,
+         person_id: person_id
+       }) do
     %GroupMemberAdded{
-      club_id: command.club_id,
-      group_id: command.group_id,
-      membership_id: command.membership_id,
-      person_id: command.person_id
-    }
-  end
-
-  defp custom_group_member_added_event(%AddCustomGroupMember{} = command) do
-    %GroupMemberAdded{
-      club_id: command.club_id,
-      group_id: command.group_id,
-      membership_id: command.membership_id,
-      person_id: command.person_id
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id
     }
   end
 
