@@ -1,0 +1,881 @@
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index fe7d72c..f4902aa 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -256,6 +256,107 @@
+   line-height: 1.5;
+ }
+ 
++.outside__actions {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 8px;
++  margin-top: 10px;
++}
++
++.outside__actions small {
++  color: var(--color-ink-3);
++  font-size: 12px;
++}
++
++.picker {
++  margin: 0 0 14px;
++  padding: 16px;
++  border: 1px solid var(--color-sage-200);
++  border-radius: 14px;
++  background: var(--color-paper);
++  box-shadow: 0 2px 8px rgb(21 32 28 / 6%);
++}
++
++.picker__head {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: 12px;
++}
++
++.picker__title {
++  margin: 0;
++  color: var(--color-ink);
++  font-size: 15px;
++  font-weight: 700;
++}
++
++.picker__hint {
++  max-width: 62ch;
++  margin: 4px 0 0;
++  color: var(--color-ink-3);
++  font-size: 12.5px;
++  line-height: 1.5;
++}
++
++.pick-list {
++  display: flex;
++  flex-direction: column;
++  margin-top: 10px;
++}
++
++.pick-row {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 9px 4px;
++  border-top: 1px solid var(--color-line);
++}
++
++.pick-row:first-child {
++  border-top: 0;
++}
++
++.pick-row__avatar {
++  display: grid;
++  flex: none;
++  width: 30px;
++  height: 30px;
++  place-items: center;
++  border-radius: 999px;
++  background: var(--color-sage-100);
++  color: var(--color-sage-800);
++  font-size: 11px;
++  font-weight: 700;
++}
++
++.pick-row__name {
++  min-width: 0;
++  flex: 1 1 auto;
++  color: var(--color-ink);
++  font-size: 13.5px;
++  font-weight: 600;
++}
++
++.pick-row__meta {
++  display: block;
++  color: var(--color-ink-3);
++  font-size: 12px;
++  font-weight: 500;
++}
++
++.pick-empty {
++  margin: 10px 0 0;
++  padding: 14px;
++  border: 1px dashed var(--color-line-strong);
++  border-radius: 11px;
++  color: var(--color-ink-2);
++  font-size: 13px;
++  line-height: 1.5;
++  text-align: center;
++}
++
+ /* ============================================================
+    Base — cream canvas, Figtree body, tightened display tracking.
+    The <body> carries no bg class, so daisyUI would default it to
+@@ -1336,4 +1437,8 @@ h1, h2, h3, h4 {
+   .section-tabs__action .btn {
+     width: 100%;
+   }
++
++  .picker__head {
++    flex-direction: column;
++  }
+ }
+diff --git a/web/lib/memba_web/components/member_components.ex b/web/lib/memba_web/components/member_components.ex
+index f62cea0..4a50c8c 100644
+--- a/web/lib/memba_web/components/member_components.ex
++++ b/web/lib/memba_web/components/member_components.ex
+@@ -197,6 +197,143 @@ defmodule MembaWeb.MemberComponents do
+     """
+   end
+ 
++  attr :club_name, :string, required: true
++  attr :group_name, :string, required: true
++  attr :candidates, :list, required: true
++  attr :query, :string, default: ""
++
++  def custom_group_member_picker(assigns) do
++    assigns =
++      assign(assigns, :visible_candidates, filter_candidates(assigns.candidates, assigns.query))
++
++    ~H"""
++    <section
++      id="custom-group-member-picker"
++      class="picker"
++      aria-labelledby="custom-group-member-picker-title"
++    >
++      <div class="picker__head">
++        <div>
++          <h2 id="custom-group-member-picker-title" class="picker__title">
++            Add to {@group_name}
++          </h2>
++          <p class="picker__hint">
++            Only people who are already active members of {@club_name} can be added.
++            They'll get a welcome email and can read everything in {@group_name}. Inviting
++            someone new to the club stays a separate action on Everyone.
++          </p>
++        </div>
++        <.button
++          id="custom-group-member-picker-close"
++          type="button"
++          variant="ghost"
++          size="sm"
++          phx-click="close_custom_group_member_picker"
++        >
++          Close
++        </.button>
++      </div>
++
++      <.input
++        id="custom-group-member-search"
++        name="query"
++        type="search"
++        value={@query}
++        class="input mt-3 w-full"
++        placeholder="Search club members…"
++        autocomplete="off"
++        aria-label="Search club members"
++        phx-keyup="filter_custom_group_member_candidates"
++        phx-debounce="150"
++      />
++
++      <div
++        :if={@visible_candidates != []}
++        id="custom-group-member-candidates"
++        class="pick-list"
++        role="list"
++        aria-label={"Club members not yet in #{@group_name}"}
++      >
++        <div
++          :for={candidate <- @visible_candidates}
++          id={"custom-group-member-candidate-#{candidate.id}"}
++          class="pick-row"
++          role="listitem"
++          data-testid="custom-group-member-candidate"
++          data-membership-id={candidate.membership_id}
++          data-person-id={candidate.id}
++        >
++          <div class="pick-row__avatar" aria-hidden="true">
++            {candidate.initials}
++          </div>
++          <div class="pick-row__name">
++            {candidate.name}
++            <small :if={candidate_club_admin?(candidate)} class="pick-row__meta">
++              Club admin
++            </small>
++          </div>
++          <.button
++            id={"custom-group-member-candidate-add-#{candidate.id}"}
++            type="button"
++            variant="secondary"
++            size="sm"
++            data-custom-group-member-action="add"
++            data-membership-id={candidate.membership_id}
++            data-person-id={candidate.id}
++          >
++            Add
++          </.button>
++        </div>
++      </div>
++
++      <p :if={@visible_candidates == []} id="custom-group-member-picker-empty" class="pick-empty">
++        <%= if empty_query?(@query) do %>
++          Everyone in {@club_name} is already in {@group_name}.
++        <% else %>
++          No active club members match your search.
++        <% end %>
++      </p>
++    </section>
++    """
++  end
++
++  attr :group_name, :string, required: true
++
++  def outside_group_admin_notice(assigns) do
++    ~H"""
++    <div
++      id="member-group-outside-admin-notice"
++      class="outside"
++      role="region"
++      aria-label="You're managing a group you're not in"
++    >
++      <.icon name="hero-user" class="size-5" aria-hidden="true" />
++      <div class="outside__body">
++        <h2 class="outside__title">
++          You're a club admin, but you're not in {@group_name}
++        </h2>
++        <p class="outside__copy">
++          You can manage who's in it. You can't read its conversations or get its emails
++          unless you're a member—being a club admin doesn't grant that on its own.
++        </p>
++        <div class="outside__actions">
++          <.button
++            id="member-group-add-self"
++            type="button"
++            size="sm"
++            data-custom-group-member-action="add-self"
++          >
++            Add yourself to {@group_name}
++          </.button>
++          <small id="member-group-add-self-help">
++            You'll get {@group_name}'s emails from now on and can read its whole history.
++          </small>
++        </div>
++      </div>
++    </div>
++    """
++  end
++
+   defp active_members_state(active_member_count) when active_member_count <= 1 do
+     "first-member"
+   end
+@@ -214,4 +351,22 @@ defmodule MembaWeb.MemberComponents do
+   defp current_dashboard_member?(_member, _current_member), do: false
+ 
+   defp member_roles(member), do: Map.get(member, :roles, [])
++
++  defp filter_candidates(candidates, query) do
++    normalized_query = query |> to_string() |> String.trim() |> String.downcase()
++
++    if normalized_query == "" do
++      candidates
++    else
++      Enum.filter(candidates, fn candidate ->
++        candidate.name
++        |> String.downcase()
++        |> String.contains?(normalized_query)
++      end)
++    end
++  end
++
++  defp candidate_club_admin?(candidate), do: "Admin" in member_roles(candidate)
++
++  defp empty_query?(query), do: String.trim(to_string(query)) == ""
+ end
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 367b906..929871f 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -6,7 +6,13 @@ defmodule MembaWeb.PageHTML do
+   """
+   use MembaWeb, :html
+ 
+-  import MembaWeb.MemberComponents, only: [conversation_list: 1, member_list: 1]
++  import MembaWeb.MemberComponents,
++    only: [
++      conversation_list: 1,
++      custom_group_member_picker: 1,
++      member_list: 1,
++      outside_group_admin_notice: 1
++    ]
+ 
+   alias Memba.Membership.SystemGroups
+   alias MembaWeb.ClubSite
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 0ce54b6..b08ea6c 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -171,7 +171,26 @@
+               New message
+             </.button>
+           </:conversations_action>
+-          <:members_action :if={participating_group? && @current_member_can_manage_members?}>
++          <:members_action :if={@can_add_custom_group_members?}>
++            <.button
++              id="member-section-action-add-group-member"
++              type="button"
++              variant="primary"
++              size="sm"
++              data-section-action="members"
++              phx-click="open_custom_group_member_picker"
++              aria-expanded={to_string(@custom_group_member_picker_open?)}
++              aria-controls="custom-group-member-picker"
++            >
++              Add member
++            </.button>
++          </:members_action>
++          <:members_action
++            :if={
++              not @can_add_custom_group_members? && participating_group? &&
++                @current_member_can_manage_members?
++            }
++          >
+             <.button
+               id="member-section-action-invite-member"
+               href={
+@@ -269,24 +288,19 @@
+           hidden={not active_member_section?(active_section, "members")}
+         >
+           <section id="club-members">
+-            <div
+-              :if={outside_admin?}
+-              id="member-group-outside-admin-notice"
+-              class="outside"
+-              role="region"
+-              aria-label="You're managing a group you're not in"
+-            >
+-              <.icon name="hero-user" class="size-5" aria-hidden="true" />
+-              <div class="outside__body">
+-                <h2 class="outside__title">
+-                  You're a club admin, but you're not in {@selected_group.name}
+-                </h2>
+-                <p class="outside__copy">
+-                  You can inspect who's in it. You can't read its conversations or get its emails
+-                  unless you're a member—being a club admin doesn't grant that on its own.
+-                </p>
+-              </div>
+-            </div>
++            <.outside_group_admin_notice
++              :if={outside_admin? && @can_add_self_to_custom_group?}
++              group_name={@selected_group.name}
++            />
++            <.custom_group_member_picker
++              :if={
++                @can_add_custom_group_members? && @custom_group_member_picker_open?
++              }
++              club_name={@selected_club.name}
++              group_name={@selected_group.name}
++              candidates={@custom_group_member_candidates}
++              query={@custom_group_member_picker_query}
++            />
+             <.member_list
+               rows={@members}
+               active_member_count={@active_member_count}
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index ecf2081..6980ba9 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -45,6 +45,8 @@ defmodule MembaWeb.MemberDashboardLive do
+          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
+          |> assign(:selected_group_route_id, selected_group_id)
+          |> assign(:active_section, "conversations")
++         |> assign(:custom_group_member_picker_open?, false)
++         |> assign(:custom_group_member_picker_query, "")
+          |> assign(dashboard_assigns)}
+ 
+       {:error, :forbidden} ->
+@@ -60,11 +62,47 @@ defmodule MembaWeb.MemberDashboardLive do
+     selected_group_id = Map.get(params, "group_id")
+ 
+     socket =
+-      refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
++      socket
++      |> assign(:custom_group_member_picker_open?, false)
++      |> assign(:custom_group_member_picker_query, "")
++      |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
+ 
+     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_event(
++        "open_custom_group_member_picker",
++        _params,
++        %{assigns: %{can_add_custom_group_members?: true}} = socket
++      ) do
++    {:noreply,
++     socket
++     |> assign(:custom_group_member_picker_open?, true)
++     |> assign(:custom_group_member_picker_query, "")}
++  end
++
++  def handle_event("open_custom_group_member_picker", _params, socket), do: {:noreply, socket}
++
++  def handle_event("close_custom_group_member_picker", _params, socket) do
++    {:noreply,
++     socket
++     |> assign(:custom_group_member_picker_open?, false)
++     |> assign(:custom_group_member_picker_query, "")}
++  end
++
++  def handle_event(
++        "filter_custom_group_member_candidates",
++        %{"value" => query},
++        %{assigns: %{custom_group_member_picker_open?: true}} = socket
++      )
++      when is_binary(query) do
++    {:noreply, assign(socket, :custom_group_member_picker_query, query)}
++  end
++
++  def handle_event("filter_custom_group_member_candidates", _params, socket),
++    do: {:noreply, socket}
++
+   @impl Phoenix.LiveView
+   def handle_event(
+         "restore_remembered_group",
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index 5e13953..3132077 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -94,6 +94,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+       load_selected_group(
+         selected_club,
+         current_member,
++        club_members,
+         groups,
+         participating_groups_by_id,
+         selected_group_id,
+@@ -113,42 +114,78 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   defp load_selected_group(
+          selected_club,
+          current_member,
++         club_members,
+          groups,
+          participating_groups_by_id,
+          selected_group_id,
+          current_member_can_manage_members?
+        ) do
+     with {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
+-      selected_group
+-      |> load_permitted_surface(
+-        Map.get(participating_groups_by_id, selected_group_id),
+-        selected_club,
+-        current_member_can_manage_members?
+-      )
+-      |> then(fn {selected_group, surface_assigns} ->
+-        {:ok,
+-         Map.merge(
+-           %{
+-             page_title: selected_club.name,
+-             selected_club: selected_club,
+-             groups: groups,
+-             selected_group: selected_group,
+-             current_member: current_member,
+-             current_member_can_manage_members?: current_member_can_manage_members?,
+-             club_admin_email_address:
+-               ClubInboundEmailAddress.address(
+-                 selected_club.slug,
+-                 SystemGroups.admin_email_slug()
+-               )
+-           },
+-           surface_assigns
+-         )}
+-      end)
++      {selected_group, surface_assigns} =
++        load_permitted_surface(
++          selected_group,
++          Map.get(participating_groups_by_id, selected_group_id),
++          selected_club,
++          current_member_can_manage_members?
++        )
++
++      admission_assigns =
++        custom_group_admission_assigns(
++          selected_group,
++          club_members,
++          surface_assigns
++        )
++
++      {:ok,
++       surface_assigns
++       |> Map.merge(admission_assigns)
++       |> Map.merge(%{
++         page_title: selected_club.name,
++         selected_club: selected_club,
++         groups: groups,
++         selected_group: selected_group,
++         current_member: current_member,
++         current_member_can_manage_members?: current_member_can_manage_members?,
++         club_admin_email_address:
++           ClubInboundEmailAddress.address(
++             selected_club.slug,
++             SystemGroups.admin_email_slug()
++           )
++       })}
+     else
+       _missing_or_unauthorized -> {:error, :not_found}
+     end
+   end
+ 
++  defp custom_group_admission_assigns(
++         selected_group,
++         club_members,
++         %{selected_group_access: selected_group_access, members: members}
++       ) do
++    can_add_members? =
++      SystemGroups.custom_group?(selected_group) and
++        selected_group_access in [:participating_member, :outside_admin]
++
++    can_add_self? = can_add_members? and selected_group_access == :outside_admin
++
++    candidates =
++      if can_add_members? do
++        active_group_member_ids = MapSet.new(members, & &1.id)
++
++        Enum.reject(club_members, fn candidate ->
++          MapSet.member?(active_group_member_ids, candidate.id)
++        end)
++      else
++        []
++      end
++
++    %{
++      can_add_custom_group_members?: can_add_members?,
++      can_add_self_to_custom_group?: can_add_self?,
++      custom_group_member_candidates: candidates
++    }
++  end
++
+   defp load_permitted_surface(
+          _discovered_group,
+          participating_group,
+diff --git a/web/test/memba_web/components/member_components_test.exs b/web/test/memba_web/components/member_components_test.exs
+index 6d5528b..9f034e3 100644
+--- a/web/test/memba_web/components/member_components_test.exs
++++ b/web/test/memba_web/components/member_components_test.exs
+@@ -87,6 +87,89 @@ defmodule MembaWeb.MemberComponentsTest do
+     end
+   end
+ 
++  describe "custom_group_member_picker/1" do
++    test "renders searchable active-club candidates with stable admission identities" do
++      dana_membership_id = Memba.ID.generate(:membership)
++      dana_person_id = Memba.ID.generate(:person)
++
++      html =
++        render_component(&MemberComponents.custom_group_member_picker/1, %{
++          club_name: "Alpine Club",
++          group_name: "Board",
++          candidates: [
++            %{
++              membership_id: dana_membership_id,
++              id: dana_person_id,
++              name: "Dana Diaz",
++              initials: "DD",
++              roles: ["Admin"]
++            }
++          ],
++          query: "dan"
++        })
++
++      assert_selector(
++        html,
++        "#custom-group-member-picker.picker[aria-labelledby='custom-group-member-picker-title']"
++      )
++
++      assert_text(html, "#custom-group-member-picker-title", "Add to Board")
++
++      assert_selector(
++        html,
++        "#custom-group-member-search[type='search'][name='query'][value='dan']" <>
++          "[phx-keyup='filter_custom_group_member_candidates']"
++      )
++
++      assert_selector(
++        html,
++        "#custom-group-member-candidate-#{dana_person_id}[role='listitem']" <>
++          "[data-membership-id='#{dana_membership_id}'][data-person-id='#{dana_person_id}']"
++      )
++
++      assert_text(
++        html,
++        "#custom-group-member-candidate-#{dana_person_id} .pick-row__name",
++        "Dana Diaz"
++      )
++
++      assert_text(
++        html,
++        "#custom-group-member-candidate-#{dana_person_id} .pick-row__meta",
++        "Club admin"
++      )
++
++      assert_selector(
++        html,
++        "#custom-group-member-candidate-add-#{dana_person_id}" <>
++          "[data-custom-group-member-action='add']"
++      )
++
++      assert_selector(
++        html,
++        "#custom-group-member-picker-close[phx-click='close_custom_group_member_picker']"
++      )
++    end
++
++    test "explains when no eligible club members remain" do
++      html =
++        render_component(&MemberComponents.custom_group_member_picker/1, %{
++          club_name: "Alpine Club",
++          group_name: "Board",
++          candidates: [],
++          query: ""
++        })
++
++      assert_text(
++        html,
++        "#custom-group-member-picker-empty",
++        "Everyone in Alpine Club is already in Board."
++      )
++
++      refute_selector(html, "[data-testid='custom-group-member-candidate']")
++    end
++  end
++
+   describe "conversation_row/1" do
+     test "renders the row link, subject, and sender information" do
+       message_id = Memba.ID.generate(:message)
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 00bb11b..d0c13bb 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -888,10 +888,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(
+              view,
+              "#member-section-tabs-action.section-tabs__action " <>
+-               "#member-section-action-invite-member" <>
+-               "[href='/members/invitations/new?group_id=#{trip_planning_group.group_id}']"
++               "#member-section-action-add-group-member" <>
++               "[data-section-action='members'][aria-controls='custom-group-member-picker']",
++             "Add member"
+            )
+ 
++    refute has_element?(view, "#member-section-action-invite-member")
+     refute has_element?(view, "#member-section-action-new-message")
+   end
+ 
+@@ -939,7 +941,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
+-  test "selected group members tab has no contextual action for ordinary members", %{
++  test "selected custom-group members can open the add-member picker", %{
+     conn: conn
+   } do
+     alice =
+@@ -957,6 +959,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+         club_id: alice.club_id
+       )
+ 
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Canoe",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
+     trip_planning_group =
+       create_group(
+         club_id: alice.club_id,
+@@ -989,8 +999,58 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+                "[aria-selected='true'][tabindex='0']"
+            )
+ 
+-    assert has_element?(view, "#member-section-tabs-action.section-tabs__action")
+-    assert tab_action_link_count(render(view)) == 0
++    assert has_element?(
++             view,
++             "#member-section-tabs-action.section-tabs__action " <>
++               "#member-section-action-add-group-member[aria-expanded='false']" <>
++               "[aria-controls='custom-group-member-picker']",
++             "Add member"
++           )
++
++    view
++    |> element("#member-section-action-add-group-member")
++    |> render_click()
++
++    assert has_element?(
++             view,
++             "#member-section-action-add-group-member[aria-expanded='true']"
++           )
++
++    refute has_element?(
++             view,
++             "#member-section-panel-members #custom-group-member-picker " <>
++               "#custom-group-member-candidate-#{bob.person_id}"
++           )
++
++    assert has_element?(
++             view,
++             "#custom-group-member-picker[aria-labelledby='custom-group-member-picker-title']"
++           )
++
++    assert has_element?(
++             view,
++             "#custom-group-member-candidate-#{carol.person_id}" <>
++               "[data-membership-id='#{carol.membership_id}'][data-person-id='#{carol.person_id}']",
++             "Carol Canoe"
++           )
++
++    view
++    |> element("#custom-group-member-search")
++    |> render_keyup(%{"value" => "nobody"})
++
++    assert has_element?(
++             view,
++             "#custom-group-member-picker-empty",
++             "No active club members match your search."
++           )
++
++    view
++    |> element("#custom-group-member-picker-close")
++    |> render_click()
++
++    refute has_element?(view, "#custom-group-member-picker")
++    assert has_element?(view, "#member-section-action-add-group-member[aria-expanded='false']")
++
+     refute has_element?(view, "#member-section-action-invite-member")
+     refute has_element?(view, "#member-section-action-new-message")
+ 
+@@ -1184,7 +1244,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+ 
+     assert has_element?(view, "#member-section-tabs-action.section-tabs__action")
+-    refute has_element?(view, "#member-section-tabs-action :is(a, button)")
++
++    assert has_element?(
++             view,
++             "#member-section-tabs-action #member-section-action-add-group-member",
++             "Add member"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-add-self[data-custom-group-member-action='add-self']",
++             "Add yourself to Private Planning"
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-add-self-help",
++             "You'll get Private Planning's emails from now on and can read its whole history."
++           )
++
+     assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
+ 
+     refute has_element?(view, "#member-section-panel-conversations")
+@@ -2917,6 +2995,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       selected_group_route_id: nil,
+       current_member: %{name: "Alice Adams"},
+       current_member_can_manage_members?: false,
++      can_add_custom_group_members?: false,
++      can_add_self_to_custom_group?: false,
++      custom_group_member_candidates: [],
++      custom_group_member_picker_open?: false,
++      custom_group_member_picker_query: "",
+       active_section: "conversations",
+       club_id_source: "host",
+       members: [],
+diff --git a/web/test/memba_web/live/member_ui_contract_test.exs b/web/test/memba_web/live/member_ui_contract_test.exs
+index 3355886..ecbd5f9 100644
+--- a/web/test/memba_web/live/member_ui_contract_test.exs
++++ b/web/test/memba_web/live/member_ui_contract_test.exs
+@@ -79,7 +79,7 @@ defmodule MembaWeb.MemberUIContractTest do
+     refute has_element?(composer, "#member-compose-inbound-email", "club-wide")
+   end
+ 
+-  test "switching a manager to group members shows the invite action without the compose action",
++  test "switching a manager to custom-group members shows add member without compose or invite",
+        %{
+          conn: conn
+        } do
+@@ -107,12 +107,16 @@ defmodule MembaWeb.MemberUIContractTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-section-action-invite-member" <>
+-               "[href='/members/invitations/new?group_id=#{trail_crew.group_id}']"
++             "#member-section-action-add-group-member" <>
++               "[data-section-action='members'][aria-controls='custom-group-member-picker']"
+            )
++
++    refute has_element?(view, "#member-section-action-invite-member")
+   end
+ 
+-  test "switching an ordinary member to group members leaves member actions hidden", %{conn: conn} do
++  test "switching an ordinary member to custom-group members exposes the add-member action", %{
++    conn: conn
++  } do
+     %{bob: bob, group: trail_crew} = club_with_trail_crew(group_member_count: 2)
+ 
+     {:ok, view, _html} =
+@@ -127,6 +131,11 @@ defmodule MembaWeb.MemberUIContractTest do
+     assert_patch(view, ~p"/groups/#{trail_crew.group_id}/members")
+     refute has_element?(view, "#member-section-action-new-message")
+     refute has_element?(view, "#member-section-action-invite-member")
++
++    assert has_element?(
++             view,
++             "#member-section-action-add-group-member[data-section-action='members']"
++           )
+   end
+ 
+   test "a one-member group members screen keeps the member row without a promotional empty banner",
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 76fc61c..f4387e4 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -350,6 +350,12 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert assigns.current_member_can_manage_members?
+     assert assigns.selected_group_access == :participating_member
+     assert assigns.selected_group_participating?
++    assert assigns.can_add_custom_group_members?
++    refute assigns.can_add_self_to_custom_group?
++
++    assert Enum.map(assigns.custom_group_member_candidates, &{&1.id, &1.name}) == [
++             {carol.person_id, "Carol Canoe"}
++           ]
+ 
+     assert Enum.map(assigns.messages, & &1.message_id) == [
+              trip_planning_conversation.message_id
+@@ -446,6 +452,9 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert assigns.members == []
+     assert assigns.active_member_count == 0
+     assert assigns.member_names_by_id == %{}
++    refute assigns.can_add_custom_group_members?
++    refute assigns.can_add_self_to_custom_group?
++    assert assigns.custom_group_member_candidates == []
+     assert assigns.messages == []
+     assert assigns.message_rows == []
+     refute Enum.any?(assigns.messages, &(&1.message_id == secret_conversation.message_id))
+@@ -507,6 +516,12 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert assigns.selected_group_access == :outside_admin
+     refute assigns.selected_group_participating?
+     assert assigns.current_member_can_manage_members?
++    assert assigns.can_add_custom_group_members?
++    assert assigns.can_add_self_to_custom_group?
++
++    assert Enum.map(assigns.custom_group_member_candidates, &{&1.id, &1.name}) == [
++             {admin.person_id, "Admin Adams"}
++           ]
+ 
+     assert assigns.selected_group.active_member_count == 2
+ 
