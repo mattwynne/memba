@@ -3,6 +3,8 @@ const { spawnSync } = require("node:child_process");
 
 const defaultServerNodeName = "memba_acceptance_server";
 const defaultCookie = "memba_acceptance_cookie";
+const resultStartMarker = "__MEMBA_ACCEPTANCE_RESULT_START__";
+const resultEndMarker = "__MEMBA_ACCEPTANCE_RESULT_END__";
 
 function ensureClub({ clubName, clubSlug }) {
   return runCommand(
@@ -587,7 +589,8 @@ payload = ${JSON.stringify(encodedPayload)} |> Base.decode64!() |> Jason.decode!
 result = (fn payload ->
 ${code}
 end).(payload)
-result |> Jason.encode!() |> IO.write()
+encoded_result = result |> Jason.encode!() |> Base.encode64()
+IO.write(${JSON.stringify(resultStartMarker)} <> encoded_result <> ${JSON.stringify(resultEndMarker)})
 `;
 
   const deadline = Date.now() + Number(process.env.ACCEPTANCE_SERVER_COMMAND_CONNECT_TIMEOUT_MS || 5000);
@@ -615,10 +618,24 @@ result |> Jason.encode!() |> IO.write()
     );
   }
 
+  return parseCommandResult(result.stdout);
+}
+
+function parseCommandResult(stdout) {
+  const output = String(stdout || "");
+  const resultStart = output.lastIndexOf(resultStartMarker);
+  const encodedStart = resultStart + resultStartMarker.length;
+  const resultEnd = output.indexOf(resultEndMarker, encodedStart);
+
+  if (resultStart === -1 || resultEnd === -1) {
+    throw new Error(`Acceptance server command returned an unframed result: ${output}`);
+  }
+
   try {
-    return JSON.parse(result.stdout);
+    const encodedResult = output.slice(encodedStart, resultEnd);
+    return JSON.parse(Buffer.from(encodedResult, "base64").toString("utf8"));
   } catch (error) {
-    throw new Error(`Acceptance server command returned invalid JSON: ${result.stdout}`, { cause: error });
+    throw new Error(`Acceptance server command returned invalid JSON: ${output}`, { cause: error });
   }
 }
 
@@ -657,6 +674,7 @@ module.exports = {
   ensurePersonEmailAddresses,
   ensureSmokeTestClub,
   listLocalDeliveryFacts,
+  parseCommandResult,
   recordAuthEmailProviderAccepted,
   runCommand,
   sendClubMessage,
