@@ -253,7 +253,12 @@ defmodule Memba.Membership.RoleProjectionTest do
       name: "Custom Membership Manager"
     )
 
-    insert_role_permission_projection!(permission_club_id, role_id, Permissions.club_manage_members())
+    insert_role_permission_projection!(
+      permission_club_id,
+      role_id,
+      Permissions.club_manage_members()
+    )
+
     insert_role_assignment_projection!(assignment_club_id, membership_id, person_id, role_id)
 
     append_role_events!("#{assignment_club_id}-mismatched-role-assignment-club", [

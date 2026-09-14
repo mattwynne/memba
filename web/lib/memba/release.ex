@@ -39,6 +39,17 @@ defmodule Memba.Release do
     report
   end
 
+  def verify_source_backed_admin_invariant! do
+    run_release_step(:load_app, &load_app/0)
+    run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
+
+    report =
+      Memba.Membership.SourceBackedAdminInvariant.check!(source_backed_admin_invariant_env_opts())
+
+    IO.puts(Jason.encode!(report))
+    report
+  end
+
   def verify_repo_schema!(repo) do
     missing_tables = missing_tables(repo)
     missing_columns = missing_columns(repo)
@@ -265,6 +276,11 @@ defmodule Memba.Release do
         |> Enum.map(&String.trim/1)
         |> Enum.reject(&(&1 == ""))
     end
+  end
+
+  defp source_backed_admin_invariant_env_opts do
+    []
+    |> maybe_put_env_opt(:phase, System.get_env("MEMBA_ADMIN_INVARIANT_PHASE"))
   end
 
   defp maybe_put_env_opt(opts, _key, nil), do: opts

@@ -326,7 +326,8 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  def execute(%__MODULE__{club_id: nil}, %ReconcileLegacyAdminHistory{}), do: {:error, :not_created}
+  def execute(%__MODULE__{club_id: nil}, %ReconcileLegacyAdminHistory{}),
+    do: {:error, :not_created}
 
   def execute(%__MODULE__{} = club, %ReconcileLegacyAdminHistory{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
@@ -941,7 +942,13 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp append_missing_legacy_admin_permission(events, %__MODULE__{} = club, command, role_id, permission) do
+  defp append_missing_legacy_admin_permission(
+         events,
+         %__MODULE__{} = club,
+         command,
+         role_id,
+         permission
+       ) do
     granted_permissions = Map.get(club.role_permissions, role_id, MapSet.new())
 
     if MapSet.member?(granted_permissions, permission) do
