@@ -6,7 +6,7 @@
 - [x] 004 Reuse `GroupMemberAdded` and the existing projection.
 - [x] 005 Make duplicate addition an idempotent no-op and carry sufficient actor/new-transition information for the welcome use case.
 - [x] 006 Respect the departure/rejoin cleanup introduced in 062; no projection-only mutation or restoration shortcut.
-- [ ] 007 Extend `MemberDashboardPresentation`, shared member components and the group Members surface with the picker and admin self-add.
+- [x] 007 Extend `MemberDashboardPresentation`, shared member components and the group Members surface with the picker and admin self-add.
 - [ ] 008 Use explicit component attributes/slots, not a copied full-page template.
 - [ ] 009 Query candidates through Membership's public API, reauthorize on submit and render fresh membership after a successful transition.
 - [ ] 010 Add a small provider-neutral group-welcome composer using `Memba.EmailTemplates` and the existing `Memba.Mailer` handoff conventions.
