@@ -84,7 +84,10 @@ defmodule Memba.Messaging do
   Unlike inbound email posting, browser composition requires the sender to
   retain active membership in the selected audience group. The Membership
   aggregate is rechecked at a stable event-store checkpoint before dispatch, so
-  a committed departure cannot be accepted through stale projections.
+  a committed departure cannot be accepted through stale projections. That
+  successful stable check is the action's membership-ordering point: a departure
+  committed before it is observed and denies the action; one committed after it
+  races with an action already authorized for dispatch.
   """
   def send_club_message_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -106,7 +109,9 @@ defmodule Memba.Messaging do
   The caller supplies the reply `:message_id`, root `:conversation_id`, replying
   `:sender_id`, and non-blank `:body`. The reply inherits the root message's
   club and subject. Reply authorization requires the sender to hold active
-  membership in a group that has write access to the root conversation.
+  membership in a group that has write access to the root conversation. The
+  successful stable authorization check is the membership-ordering point, with
+  a later concurrent departure racing an action already authorized for dispatch.
   """
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -321,7 +326,7 @@ defmodule Memba.Messaging do
       if completed_duplicate_inbound_email_receipt?(receive_result) do
         duplicate_inbound_email_response(receive_command, receive_result)
       else
-        post_first_inbound_club_email(receive_command, dispatch_opts)
+        recover_or_post_first_inbound_club_email(receive_command, dispatch_opts)
       end
     end
   end
@@ -1295,6 +1300,22 @@ defmodule Memba.Messaging do
      }}
   end
 
+  defp recover_or_post_first_inbound_club_email(receive_command, dispatch_opts) do
+    message_id = inbound_message_id(receive_command)
+
+    case App.aggregate_state(Message, message_id) do
+      %Message{message_id: ^message_id} = message ->
+        recover_committed_inbound_message(
+          message,
+          receive_command,
+          dispatch_opts
+        )
+
+      _missing_message ->
+        post_first_inbound_club_email(receive_command, dispatch_opts)
+    end
+  end
+
   defp post_first_inbound_club_email(receive_command, dispatch_opts) do
     case resolve_inbound_club_email_destination(receive_command.inbound_email) do
       {:ok, %InboundClubDestination{} = destination} ->
@@ -1341,26 +1362,12 @@ defmodule Memba.Messaging do
          %InboundClubSender{} = sender,
          dispatch_opts
        ) do
-    case recover_committed_inbound_message(
-           receive_command,
-           destination,
-           sender,
-           dispatch_opts
-         ) do
-      {:ok, response} ->
-        {:ok, response}
-
-      :not_found ->
-        authorize_and_post_first_inbound_club_email(
-          receive_command,
-          destination,
-          sender,
-          dispatch_opts
-        )
-
-      {:error, _reason} = error ->
-        error
-    end
+    authorize_and_post_first_inbound_club_email(
+      receive_command,
+      destination,
+      sender,
+      dispatch_opts
+    )
   end
 
   defp authorize_and_post_first_inbound_club_email(
@@ -1393,56 +1400,60 @@ defmodule Memba.Messaging do
   end
 
   defp recover_committed_inbound_message(
+         %Message{} = message,
          receive_command,
-         %InboundClubDestination{} = destination,
-         %InboundClubSender{} = sender,
          dispatch_opts
        ) do
-    message_id = inbound_message_id(receive_command)
-
-    case App.aggregate_state(Message, message_id) do
-      %Message{message_id: ^message_id} = message ->
-        with :ok <-
-               confirm_matching_committed_inbound_message(
-                 message,
-                 receive_command,
-                 destination,
-                 sender
-               ),
-             :ok <-
-               record_inbound_club_email_accepted(
-                 receive_command.inbound_email,
-                 destination,
-                 sender,
-                 message_id,
-                 dispatch_opts
-               ) do
-          {:ok,
-           accepted_inbound_email_response(
+    with :ok <- confirm_matching_committed_inbound_message_content(message, receive_command),
+         {:ok, %InboundClubDestination{} = destination} <-
+           resolve_inbound_club_email_destination(receive_command.inbound_email),
+         {:ok, %InboundClubSender{} = sender} <-
+           resolve_inbound_club_email_sender(receive_command.inbound_email),
+         :ok <-
+           confirm_matching_committed_inbound_message_context(
+             message,
              receive_command,
              destination,
+             sender
+           ),
+         :ok <-
+           record_inbound_club_email_accepted(
+             receive_command.inbound_email,
+             destination,
              sender,
-             message
-           )}
-        end
-
-      _missing_message ->
-        :not_found
+             message.message_id,
+             dispatch_opts
+           ) do
+      {:ok,
+       accepted_inbound_email_response(
+         receive_command,
+         destination,
+         sender,
+         message
+       )}
     end
   end
 
-  defp confirm_matching_committed_inbound_message(
+  defp confirm_matching_committed_inbound_message_content(%Message{} = message, receive_command) do
+    with {:ok, body} <- InboundEmailBody.normalize_text_body(receive_command.inbound_email),
+         true <- message.message_id == inbound_message_id(receive_command),
+         true <-
+           committed_inbound_message_subject_matches?(message, receive_command.inbound_email),
+         true <- message.body == body do
+      :ok
+    else
+      _mismatch -> {:error, :inbound_message_mismatch}
+    end
+  end
+
+  defp confirm_matching_committed_inbound_message_context(
          %Message{} = message,
          receive_command,
          destination,
          sender
        ) do
-    with {:ok, body} <- InboundEmailBody.normalize_text_body(receive_command.inbound_email),
-         true <- message.message_id == inbound_message_id(receive_command),
-         true <- message.club_id == destination.club_id,
+    with true <- message.club_id == destination.club_id,
          true <- message.sender_id == sender.person_id,
-         true <- message.subject == receive_command.inbound_email.subject,
-         true <- message.body == body,
          true <-
            committed_inbound_message_destination_matches?(
              message,
@@ -1454,6 +1465,36 @@ defmodule Memba.Messaging do
       _mismatch -> {:error, :inbound_message_mismatch}
     end
   end
+
+  defp committed_inbound_message_subject_matches?(
+         %Message{
+           message_id: message_id,
+           conversation_id: message_id,
+           subject: subject
+         },
+         %InboundEmail{subject: subject}
+       ),
+       do: true
+
+  defp committed_inbound_message_subject_matches?(
+         %Message{message_id: message_id, conversation_id: conversation_id, subject: subject},
+         %InboundEmail{}
+       )
+       when message_id != conversation_id do
+    case App.aggregate_state(Message, conversation_id) do
+      %Message{
+        message_id: ^conversation_id,
+        conversation_id: ^conversation_id,
+        subject: ^subject
+      } ->
+        true
+
+      _missing_or_different_root ->
+        false
+    end
+  end
+
+  defp committed_inbound_message_subject_matches?(%Message{}, %InboundEmail{}), do: false
 
   defp committed_inbound_message_destination_matches?(
          %Message{

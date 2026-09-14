@@ -756,11 +756,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
       SystemGroupMembership
     ])
 
-    restart_projector!(conversation_access_projector_child_id)
-
-    await_restarted_subscribers!([ConversationGroupAccessProjector])
-
-    assert Messaging.group_has_conversation_access?(conversation_id, board_group_id, :read)
     assert Messaging.following_conversation?(conversation_id, carol.person_id)
     assert Memba.Membership.active_member_of_club_authoritatively?(club_id, carol.person_id)
 
@@ -781,13 +776,16 @@ defmodule Memba.Messaging.SendClubMessageTest do
                  body: "Carol must not receive this after rejoining only Everyone."
                },
                returning: :execution_result,
-               consistency: :strong
+               consistency: [MessageProjector]
              )
 
     recipient_ids =
       for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
 
     refute carol.person_id in recipient_ids
+
+    restart_projector!(conversation_access_projector_child_id)
+    await_restarted_subscribers!([ConversationGroupAccessProjector])
   end
 
   test "rejects an unknown audience group before dispatching the message command" do

@@ -2103,6 +2103,89 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     refute_receive {:email, %Swoosh.Email{}}
   end
 
+  test "provider retry reconciles a committed reply with its canonical root subject before reauthorization" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Admin", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+
+    root_message_id =
+      send_club_message!(
+        club_id: kmc.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring route ideas."
+      )
+
+    bob_outbound_message_id =
+      outbound_message_id_for_recipient!(root_message_id, bob.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-reply-sent-before-accepted",
+      from_address: "bob@example.com",
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+      subject: "Re: Trip planning night",
+      text_body: "I can bring maps.",
+      in_reply_to_message_ids: [bob_outbound_message_id]
+    }
+
+    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
+
+    reply_message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: root_message_id,
+                 sender_id: bob.person_id,
+                 body: inbound_attrs.text_body
+               },
+               consistency: :strong
+             )
+
+    assert %{
+             message_id: ^reply_message_id,
+             conversation_id: ^root_message_id,
+             subject: "Trip planning night"
+           } = Messaging.get_message(reply_message_id)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: kmc.club_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob.person_id
+               },
+               consistency: :strong
+             )
+
+    refute Membership.active_member_of_club_authoritatively?(kmc.club_id, bob.person_id)
+    Application.put_env(:memba, :authorization_stability_timeout, 0)
+
+    assert {:ok,
+            %{
+              inbound_email_id: inbound_email_id,
+              message_id: ^reply_message_id,
+              conversation_id: ^root_message_id,
+              club_id: club_id,
+              sender_id: sender_id
+            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert inbound_email_id == receive_command.inbound_email_id
+    assert club_id == kmc.club_id
+    assert sender_id == bob.person_id
+    assert 1 == count_events(InboundEmailReceived)
+    assert 2 == count_events(MessageSent)
+    assert 1 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
+    refute_receive {:email, %Swoosh.Email{}}
+  end
+
   test "concurrent provider retries create and accept exactly one message" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
@@ -2171,6 +2254,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       |> Enum.map(fn {:ok, result} -> result end)
 
     assert Enum.all?(results, &match?({:ok, %{status: :rejected}}, &1))
+
+    assert 1 ==
+             Enum.count(results, fn {:ok, result} -> not Map.get(result, :duplicate?, false) end)
+
+    assert 7 == Enum.count(results, &match?({:ok, %{duplicate?: true}}, &1))
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(InboundClubEmailRejected)
 
