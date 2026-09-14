@@ -613,3 +613,56 @@ Source investigation found a concrete instruction-preservation weakness:
 Updated causal hypothesis: after encountering unresolved failures, the implementor sought available diagnostic help, while compaction had removed its original workflow contract from verbatim history and left constraint preservation to a summary. This explains a mechanism for the departure, not proof of the unseen summary's contents or the model's internal reason.
 
 Updated recommendation: investigate keeping the current node's execution rules separate from bulky historical context and preserving them across compaction before choosing tool prohibition as the main countermeasure. Enforcement could still be a backstop. A regression should cover the actual oversized-preamble/short-node-instruction boundary; merely making this one message smaller or raising the budget would not establish durable instruction preservation. Exact postcompaction context capture would also make future violations diagnosable. Decision remains pending.
+
+### Further investigation: task sizing and context preparation belong outside the worker
+
+Date: 2026-09-14
+
+Matt rejected treating agent compaction as normal operation. The intended standard is a small, defined task with reasonably sized context prepared outside the individual node. Investigation therefore moved upstream; no compaction, delegation-enforcement or timeout-continuation change was selected or implemented.
+
+#### Task formation
+
+Planning established iteration-level scope, not execution-sized tasks. Plan step 6 combined all tagged acceptance scenarios, several targeted test matrices and the final gate. The initial task generator turned that into task 021 (`8f607b51b`).
+
+Implementation nodes then performed semantic decomposition while also doing their own work:
+
+- `91b1b5b9f` split task 021 into targeted tests plus a remaining all-acceptance task.
+- `45d661b5a` split that acceptance task into creation/domain (022), creation/browser (023), conversations/both layers (024), and lifecycle/both layers plus final gate (025).
+- The validator accepted the current completed slice and preservation of future scope. The recorded rationale did not establish that every newly added future task fitted a bounded node.
+
+The active `scripts/sync_task_list.py` checks text length and punctuation, not execution workload: it splits long prose at sentence boundaries, rejects generated task text over 360 characters, and returns immediately for an existing todo file. The richer `prompts/sync_task_list.md` asks for semantic one-node sizing, but the graph does not invoke it. Implementors own further splitting; reviewers assess smallness after candidate implementation. No dedicated pre-execution semantic sizing check was found.
+
+Task 024's 1,725-line candidate stayed within its assigned acceptance scope. It covered 13 conversation instances across domain and browser infrastructure, including inbound email, recipient delivery, access and follow state. For comparison, successful task 022 added 593 lines for 13 domain creation examples; task 023 added 1,042 lines for 17 browser creation examples. This is evidence of differing dependency/work surfaces, not a rule that scenario or line counts predict duration. The split rationale did not explain why only creation was separated by layer.
+
+#### Incoming context is mechanically rendered, not curated
+
+The workflow uses `summary:high`. At the inspected Fabro release source, this is formatting logic, not an LLM-generated summary: `lib/components/fabro-workflow/src/handler/llm/preamble.rs` renders command scripts, up to 50 trailing output lines, full agent final responses and filtered context.
+
+There is a concrete loop-history mismatch. `lib/foundation/fabro-core/src/state.rs::ExecutionState::record` appends every completed node ID but overwrites that ID's stored outcome. `build_summary_preamble` iterates the historical IDs and looks up the latest outcome each time. The task-024 input confirms the effect: five byte-identical copies of task 023's implementation response, five copies of its review, five copies of its applied verdict, and six copies of the latest todo-sync output. These are repeated latest values, not distinct historical evidence.
+
+Each implementation visit started a fresh API session (`summary:high`, no full-fidelity reuse), yet its incoming message grew with the loop:
+
+| Selected task | Incoming message, UTF-8 bytes | First model-input tokens | Peak recorded model-input tokens | Compactions |
+| --- | ---: | ---: | ---: | ---: |
+| 019 | 26,951 | 10,888 | 149,872 | 0 |
+| 020 | 38,455 | 13,372 | 126,007 | 0 |
+| 021 | 46,122 | 15,469 | 148,729 | 0 |
+| 022 | 60,152 | 18,671 | 147,111 | 0 |
+| 023 | 72,650 | 21,683 | 158,872 | 0 |
+| 024 | 85,959 | 24,668 | 217,291 | 1 |
+
+The current implementation prompt was unchanged at 8,260 bytes; the preamble accounted for the incoming growth. Matching source/version and observed duplicate sections support the mechanism; exact deployed source identity remains unverified.
+
+#### Most growth happened inside the node, before editing
+
+Task 024 reached 160,566 recorded input tokens before its first edit, less than five minutes after starting. Seventy-one tool results had emitted about 845 KB, mostly broad source and documentation inspection. By domain tests passing, input context was about 200,000 tokens; browser dry-run completion brought it to about 209,000. Compaction followed the first real browser run at roughly 218,000 estimated tokens.
+
+Logged tool-output bytes are not a direct measure of what the provider retained; the model-input token figures come from recorded response usage. Together they show that trimming incoming history alone would not address the dominant within-node growth. The generic worker prompt requires plan/todo/history/ADR discovery; no task-specific curated dependency packet was identified in the inspected handoff. Whether reusable task-local knowledge already existed elsewhere in the sandbox remains open.
+
+#### Current understanding and unanswered questions
+
+The observed system assigns semantic decomposition, dependency discovery, implementation and validation to the same bounded worker, while delivering mechanically accumulated history as its starting context. Successful nodes also accumulated large contexts. Compaction was where this weakness became visible in task 024, not necessarily where it began.
+
+Before selecting a countermeasure, distinguish necessary domain/acceptance knowledge from avoidable rediscovery: which of task 024's reads were needed, which repeated known facts, and which existing helpers could have made the work smaller? Also establish what evidence should make a task ready for a worker and how the workflow currently communicates that evidence. No safe numerical task/context limit or replacement architecture has been established by this investigation.
+
+Evidence: failed-run events and meta artifacts; task-split commits above; current/run-revision task generation and validation contracts; release-source functions above. Derived measurements are retained at `/tmp/memba-062-context-metrics.json` and `/tmp/memba-062-context-output-categories.json`.
