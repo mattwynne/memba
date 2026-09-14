@@ -33,6 +33,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Messaging.Projectors.ConversationFollow,
     as: ConversationFollowProjector
 
+  alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
 
@@ -680,9 +681,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     ])
   end
 
-  test "does not create a reply delivery after departure and rejoin only Everyone when projections lag" do
-    Application.put_env(:memba, :authorization_stability_timeout, 25)
-
+  test "does not create a reply delivery when access projection lag makes departure follow cleanup miss the conversation" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
 
@@ -697,6 +696,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)
 
     conversation_id = Memba.ID.generate(:message)
+    conversation_access_projector_child_id = stop_projector!(ConversationGroupAccessProjector)
 
     assert :ok =
              Messaging.send_club_message(
@@ -708,7 +708,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                  subject: "Private Board topic",
                  body: "Carol initially has access."
                },
-               consistency: :strong
+               consistency: [MessageProjector]
              )
 
     assert :ok =
@@ -718,14 +718,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
                  conversation_id: conversation_id,
                  member_id: carol.person_id
                },
-               consistency: :strong
+               consistency: [ConversationFollowProjector]
              )
 
-    membership_projector_child_id = stop_projector!(MembershipProjector)
-    group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
-    conversation_follow_projector_child_id = stop_projector!(ConversationFollowProjector)
-    system_group_policy_child_id = stop_projector!(SystemGroupMembership)
-    clear_follows_policy_child_id = stop_projector!(ClearRemovedGroupMemberFollows)
+    assert [] = Messaging.list_conversations_for_group(board_group_id)
 
     assert :ok =
              MembershipApp.dispatch(
@@ -737,15 +733,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
-    assert :ok =
-             Messaging.unfollow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: conversation_id,
-                 member_id: carol.person_id
-               },
-               consistency: :eventual
-             )
+    await_restarted_subscribers!([
+      MembershipProjector,
+      GroupMembershipProjector,
+      SystemGroupMembership,
+      ClearRemovedGroupMemberFollows
+    ])
 
     assert :ok =
              MembershipApp.dispatch(
@@ -757,8 +750,19 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
-    assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    await_restarted_subscribers!([
+      MembershipProjector,
+      GroupMembershipProjector,
+      SystemGroupMembership
+    ])
+
+    restart_projector!(conversation_access_projector_child_id)
+
+    await_restarted_subscribers!([ConversationGroupAccessProjector])
+
+    assert Messaging.group_has_conversation_access?(conversation_id, board_group_id, :read)
     assert Messaging.following_conversation?(conversation_id, carol.person_id)
+    assert Memba.Membership.active_member_of_club_authoritatively?(club_id, carol.person_id)
 
     refute Memba.Membership.active_member_of_group_authoritatively?(
              club_id,
@@ -767,35 +771,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
            )
 
     reply_message_id = Memba.ID.generate(:message)
-
-    assert {:error, :authorization_stability_timeout} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: conversation_id,
-                 sender_id: alice.person_id,
-                 body: "Carol must not receive this after rejoining only Everyone."
-               },
-               consistency: :strong
-             )
-
-    refute Repo.get(MessageProjection, reply_message_id)
-
-    restart_projector!(membership_projector_child_id)
-    restart_projector!(group_membership_projector_child_id)
-    restart_projector!(conversation_follow_projector_child_id)
-    restart_projector!(system_group_policy_child_id)
-    restart_projector!(clear_follows_policy_child_id)
-
-    await_restarted_subscribers!([
-      MembershipProjector,
-      GroupMembershipProjector,
-      ConversationFollowProjector,
-      SystemGroupMembership,
-      ClearRemovedGroupMemberFollows
-    ])
-
-    Application.put_env(:memba, :authorization_stability_timeout, 5_000)
 
     assert {:ok, %ExecutionResult{events: events}} =
              Messaging.post_message_reply(

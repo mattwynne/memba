@@ -2034,9 +2034,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   test "provider retry accepts the same message after MessageSent committed before the receipt outcome" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
 
-    add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+    alice_membership_id = add_member!(kmc.club_id, alice.person_id)
 
     inbound_attrs = %{
       provider: "resend",
@@ -2066,8 +2068,20 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(MessageSent)
-    assert 1 == count_events(EmailDeliveryCreated)
+    assert 2 == count_events(EmailDeliveryCreated)
     assert 0 == count_events(InboundClubEmailAccepted)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: kmc.club_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    refute Membership.active_member_of_club_authoritatively?(kmc.club_id, alice.person_id)
 
     assert {:ok,
             %{
@@ -2082,9 +2096,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert sender_id == alice.person_id
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(MessageSent)
-    assert 1 == count_events(EmailDeliveryCreated)
+    assert 2 == count_events(EmailDeliveryCreated)
     assert 1 == count_events(InboundClubEmailAccepted)
+    assert 0 == count_events(InboundClubEmailRejected)
     assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+    refute_receive {:email, %Swoosh.Email{}}
   end
 
   test "concurrent provider retries create and accept exactly one message" do
@@ -2128,6 +2144,38 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 1 == count_events(EmailDeliveryCreated)
     assert 1 == count_events(InboundClubEmailAccepted)
     assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+  end
+
+  test "concurrent rejected provider retries send exactly one rejection email" do
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-019-concurrent-rejection",
+      from_address: "unknown@example.com",
+      recipient_addresses: ["everyone@unknown.clubs.memba.io"],
+      subject: "Unknown destination",
+      text_body: "A provider retry must not send another rejection."
+    }
+
+    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
+
+    results =
+      1..8
+      |> Task.async_stream(
+        fn _attempt ->
+          Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+        end,
+        max_concurrency: 8,
+        timeout: 10_000
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.all?(results, &match?({:ok, %{status: :rejected}}, &1))
+    assert 1 == count_events(InboundEmailReceived)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert_receive {:email, %Swoosh.Email{}}
+    refute_receive {:email, %Swoosh.Email{}}
   end
 
   test "the Admin route rejects inactive and other-club senders before private delivery" do
