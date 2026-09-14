@@ -274,11 +274,14 @@ defmodule Memba.Membership do
 
   The caller supplies the membership identity as `:membership_id` or
   `"membership_id"`. The command is routed to the Club aggregate, which decides
-  first-member authority, idempotency, and duplicate active membership.
+  first-member authority, idempotency, and duplicate active membership. The call
+  completes only after any earlier custom-group follow cleanup on the Club
+  stream, so a rapid re-add cannot restore access before stale follows are
+  cleared.
   """
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_member_command(attrs) do
-      dispatch_system_group_membership_command(command, dispatch_opts)
+      dispatch_member_lifecycle_command(command, dispatch_opts)
     end
   end
 
@@ -434,7 +437,7 @@ defmodule Memba.Membership do
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
-      dispatch_member_departure_command(command, dispatch_opts)
+      dispatch_member_lifecycle_command(command, dispatch_opts)
     end
   end
 
@@ -2341,11 +2344,11 @@ defmodule Memba.Membership do
     dispatch(command, system_group_membership_consistency(dispatch_opts))
   end
 
-  defp dispatch_member_departure_command(command, dispatch_opts) do
-    dispatch(command, member_departure_consistency(dispatch_opts))
+  defp dispatch_member_lifecycle_command(command, dispatch_opts) do
+    dispatch(command, member_lifecycle_consistency(dispatch_opts))
   end
 
-  defp member_departure_consistency(dispatch_opts) do
+  defp member_lifecycle_consistency(dispatch_opts) do
     dispatch_opts
     |> system_group_membership_consistency()
     |> Keyword.update!(

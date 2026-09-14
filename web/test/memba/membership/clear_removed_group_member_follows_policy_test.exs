@@ -107,29 +107,45 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
         })
       end)
 
-    try do
-      assert :ok =
-               Subscriptions.wait_for(
-                 MembershipApp,
-                 club_id,
-                 removal_target_version,
-                 [consistency: [SystemGroupMembership]],
-                 1_000
-               )
+    readdition =
+      try do
+        assert :ok =
+                 Subscriptions.wait_for(
+                   MembershipApp,
+                   club_id,
+                   removal_target_version,
+                   [consistency: [SystemGroupMembership]],
+                   1_000
+                 )
 
-      assert Task.yield(removal, 100) == nil
-    after
-      :ok = :sys.resume(clear_follows_handler)
-    end
+        assert Task.yield(removal, 100) == nil
+
+        readdition =
+          Task.async(fn ->
+            Membership.add_member(%{
+              club_id: club_id,
+              membership_id: rejoined_membership_id,
+              person_id: departing_person_id
+            })
+          end)
+
+        assert :ok =
+                 Subscriptions.wait_for(
+                   MembershipApp,
+                   club_id,
+                   removal_target_version + 1,
+                   [consistency: [SystemGroupMembership]],
+                   1_000
+                 )
+
+        assert Task.yield(readdition, 100) == nil
+        readdition
+      after
+        :ok = :sys.resume(clear_follows_handler)
+      end
 
     assert :ok = Task.await(removal)
-
-    assert :ok =
-             Membership.add_member(%{
-               club_id: club_id,
-               membership_id: rejoined_membership_id,
-               person_id: departing_person_id
-             })
+    assert :ok = Task.await(readdition)
 
     refute Messaging.following_conversation?(conversation_id, departing_person_id)
 
