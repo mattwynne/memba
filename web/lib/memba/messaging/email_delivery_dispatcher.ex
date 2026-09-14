@@ -3,10 +3,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   OTP process responsible for asynchronous email delivery dispatch.
 
   The dispatcher subscribes to committed read-model changes and treats new
-  `EmailDelivery` records and access-projector catch-up as nudges to look for
-  pending delivery work. Catch-up nudges let authorization-timeout deferrals
-  resume without a periodic sweep. The dispatcher also owns the provider
-  handoff request-building boundary and persisted dispatch outcomes so command
+  `EmailDelivery` records as nudges to look for pending delivery work. An
+  authorization-timeout deferral schedules one coalesced, bounded-delay catch-up
+  retry; repeated deferrals replace that timer until the required projections
+  catch up, including when they acknowledge only irrelevant events and publish
+  no read-model change. The dispatcher also owns the provider handoff
+  request-building boundary and persisted dispatch outcomes so command
   application services do not call email providers directly. Failed deliveries
   can be retried through the explicit manual retry API; the dispatcher does not
   automatically retry failed deliveries.
@@ -18,8 +20,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   require Logger
 
   alias Memba.Membership
-  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
-  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.EmailDeliveryStatus
@@ -45,13 +45,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @sent_status EmailDeliveryStatus.sent()
   @failed_status EmailDeliveryStatus.failed()
   @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
-  @access_catch_up_projectors [
-    ConversationGroupAccessProjector,
-    MessageProjector,
-    GroupMembershipProjector,
-    MembershipProjector
-  ]
   @default_projection_timeout 5_000
+  @default_projection_catch_up_retry_interval 100
   @projection_timeout_errors [
     :delivery_context_projection_timeout,
     :recipient_access_projection_timeout
@@ -205,7 +200,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
     state = %{
       dispatch_enabled: Keyword.get(opts, :dispatch_enabled, true),
-      dispatch_observer: Keyword.get(opts, :dispatch_observer)
+      dispatch_observer: Keyword.get(opts, :dispatch_observer),
+      projection_catch_up_retry_interval:
+        positive_interval(
+          Keyword.get(
+            opts,
+            :projection_catch_up_retry_interval,
+            @default_projection_catch_up_retry_interval
+          ),
+          @default_projection_catch_up_retry_interval
+        ),
+      projection_catch_up_retry_timer: nil
     }
 
     {:ok, state}
@@ -230,26 +235,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     {:noreply, state}
   end
 
-  def handle_info(
-        {:read_model_changed, %{projector: projector} = payload},
-        state
-      )
-      when projector in @access_catch_up_projectors do
-    Logger.debug("email_delivery_access_catch_up_nudged",
-      projector: inspect(projector)
-    )
-
-    send(self(), {:dispatch_pending_email_deliveries, payload})
-
-    {:noreply, state}
-  end
-
   def handle_info({:read_model_changed, _payload}, state) do
     {:noreply, state}
   end
 
   def handle_info({:dispatch_pending_email_deliveries, payload}, state) do
+    state = consume_projection_catch_up_retry(state, payload)
     claimed_deliveries = dispatch_pending_email_deliveries(state)
+    state = maybe_schedule_projection_catch_up_retry(state, claimed_deliveries)
 
     notify_dispatch_observer(state, payload, claimed_deliveries)
 
@@ -272,12 +265,41 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
       observer,
       {:email_delivery_dispatch_requested,
        payload
-       |> Map.put(:source, :read_model_change)
+       |> Map.put_new(:source, :read_model_change)
        |> Map.put(:claimed_delivery_ids, Enum.map(claimed_deliveries, & &1.delivery_id))}
     )
 
     :ok
   end
+
+  defp maybe_schedule_projection_catch_up_retry(state, claimed_deliveries) do
+    if is_nil(state.projection_catch_up_retry_timer) and
+         state.dispatch_enabled and
+         Enum.any?(claimed_deliveries, &(&1.status == @pending_status)) do
+      timer =
+        Process.send_after(
+          self(),
+          {:dispatch_pending_email_deliveries, %{source: :projection_catch_up_retry}},
+          state.projection_catch_up_retry_interval
+        )
+
+      %{state | projection_catch_up_retry_timer: timer}
+    else
+      state
+    end
+  end
+
+  defp consume_projection_catch_up_retry(
+         state,
+         %{source: :projection_catch_up_retry}
+       ) do
+    %{state | projection_catch_up_retry_timer: nil}
+  end
+
+  defp consume_projection_catch_up_retry(state, _payload), do: state
+
+  defp positive_interval(value, _fallback) when is_integer(value) and value > 0, do: value
+  defp positive_interval(_value, fallback), do: fallback
 
   defp claim_failed_delivery(delivery_id) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)

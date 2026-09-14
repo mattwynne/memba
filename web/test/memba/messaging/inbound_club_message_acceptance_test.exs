@@ -4,6 +4,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
@@ -191,13 +193,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   test "authorization accepts an active club member outside the addressed group" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
     dana = create_person!(name: "Dana Example", email: "dana@example.com")
 
-    insert_active_membership_projection_without_group(kmc.club_id, dana.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+    add_member!(kmc.club_id, dana.person_id)
 
     assert {:ok, destination} =
              Messaging.resolve_inbound_club_email_destination([
-               "everyone@kmc.clubs.memba.io"
+               "admin@kmc.clubs.memba.io"
              ])
 
     assert {:ok, sender} = Messaging.resolve_inbound_club_email_sender("dana@example.com")
@@ -1922,6 +1926,62 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     )
   end
 
+  test "committed departure rejects a new inbound conversation while membership projection lags" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, bob.person_id)
+    alice_membership_id = add_member!(kmc.club_id, alice.person_id)
+    membership_projector_child_id = stop_projector!(MembershipProjector)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: kmc.club_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Membership.active_member_of_club?(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              status: :rejected,
+              rejection_reason: "sender_not_active_member",
+              from_address: "alice@example.com",
+              to_address: "everyone@kmc.clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-019-departed-projection-lag",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+                 subject: "Stale inbound authorization",
+                 text_body: "This must not create a conversation after departure."
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
+    )
+
+    restart_projector!(membership_projector_child_id)
+
+    assert {:ok, _result} =
+             Membership.await_group_access_projections(timeout: 1_000)
+  end
+
   test "the Admin route rejects inactive and other-club senders before private delivery" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
@@ -2269,6 +2329,30 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       person_id: person_id,
       active: true
     })
+  end
+
+  defp stop_projector!(projector) do
+    child_id =
+      Supervisor.which_children(Memba.Supervisor)
+      |> Enum.find_value(fn
+        {child_id, _pid, :worker, [^projector]} -> child_id
+        _child -> nil
+      end)
+
+    assert child_id
+    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+
+    on_exit(fn -> restart_projector!(child_id) end)
+
+    child_id
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+    end
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

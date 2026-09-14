@@ -1348,6 +1348,25 @@ defmodule Memba.Membership do
 
   @doc """
   Return whether the Club aggregate currently records a person as an active
+  club member.
+
+  This authoritative query is intended for privacy-sensitive action boundaries
+  where a just-committed departure may not yet be visible in Membership
+  projections. Invalid IDs and missing or inactive memberships return `false`.
+  """
+  def active_member_of_club_authoritatively?(club_id, person_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         %Memba.Membership.Club{club_id: ^club_id} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id) do
+      active_membership_ids_for_person(club, person_id) != []
+    else
+      _invalid_missing_or_inactive -> false
+    end
+  end
+
+  @doc """
+  Return whether the Club aggregate currently records a person as an active
   member of one of its groups.
 
   Privacy-sensitive action boundaries use this narrow authoritative query when
@@ -1381,12 +1400,7 @@ defmodule Memba.Membership do
   end
 
   defp authoritative_group_member?(club, group_id, person_id) do
-    active_membership_ids =
-      club.active_memberships
-      |> Enum.flat_map(fn
-        {membership_id, ^person_id} -> [membership_id]
-        {_membership_id, _other_person_id} -> []
-      end)
+    active_membership_ids = active_membership_ids_for_person(club, person_id)
 
     cond do
       group_id == SystemGroups.everyone_group_id(club.club_id) ->
@@ -1406,6 +1420,13 @@ defmodule Memba.Membership do
           end
         end)
     end
+  end
+
+  defp active_membership_ids_for_person(club, person_id) do
+    Enum.flat_map(club.active_memberships, fn
+      {membership_id, ^person_id} -> [membership_id]
+      {_membership_id, _other_person_id} -> []
+    end)
   end
 
   @doc """

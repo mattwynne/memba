@@ -354,7 +354,16 @@ defmodule Memba.Messaging do
   Membership of the addressed group is not required to start a conversation.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
-    GroupEmailPostingPolicy.authorize(sender, destination)
+    case authorize_at_stable_checkpoint(fn ->
+           case GroupEmailPostingPolicy.authorize(sender, destination) do
+             :ok -> {:ok, :authorized}
+             {:error, _reason, _details} = error -> error
+           end
+         end) do
+      {:ok, :authorized} -> :ok
+      {:error, _reason, _details} = error -> error
+      {:error, _reason} = error -> error
+    end
   end
 
   @doc """
@@ -1336,6 +1345,9 @@ defmodule Memba.Messaging do
           dispatch_opts,
           club_name: destination.club_name
         )
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -1471,32 +1483,45 @@ defmodule Memba.Messaging do
        ) do
     message_id = Memba.ID.generate(:message)
 
-    with :ok <-
-           send_inbound_club_message(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             body,
-             dispatch_opts
-           ),
-         :ok <-
-           record_inbound_club_email_accepted(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             dispatch_opts
-           ) do
-      {:ok,
-       %{
-         inbound_email_id: receive_command.inbound_email_id,
-         message_id: message_id,
-         club_id: destination.club_id,
-         sender_id: sender.person_id,
-         from_address: sender.from_address,
-         to_address: destination.to_address
-       }}
+    case send_inbound_club_message(
+           receive_command.inbound_email,
+           destination,
+           sender,
+           message_id,
+           body,
+           dispatch_opts
+         ) do
+      :ok ->
+        with :ok <-
+               record_inbound_club_email_accepted(
+                 receive_command.inbound_email,
+                 destination,
+                 sender,
+                 message_id,
+                 dispatch_opts
+               ) do
+          {:ok,
+           %{
+             inbound_email_id: receive_command.inbound_email_id,
+             message_id: message_id,
+             club_id: destination.club_id,
+             sender_id: sender.person_id,
+             from_address: sender.from_address,
+             to_address: destination.to_address
+           }}
+        end
+
+      {:error, :sender_not_active_member, _details} ->
+        reject_first_inbound_club_email(
+          receive_command,
+          destination.to_address,
+          "sender_not_active_member",
+          dispatch_opts,
+          club_name: destination.club_name
+        )
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -1545,19 +1570,23 @@ defmodule Memba.Messaging do
          body,
          dispatch_opts
        ) do
-    case send_club_message(
-           %{
-             message_id: message_id,
-             club_id: destination.club_id,
-             sender_id: sender.person_id,
-             audience_group_id: destination.group_id,
-             subject: inbound_email.subject,
-             body: body
-           },
-           dispatch_opts
-         ) do
-      {:error, _reason} = error -> error
-      _send_result -> :ok
+    attrs = %{
+      message_id: message_id,
+      club_id: destination.club_id,
+      sender_id: sender.person_id,
+      audience_group_id: destination.group_id,
+      subject: inbound_email.subject,
+      body: body
+    }
+
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             with :ok <- GroupEmailPostingPolicy.authorize(sender, destination),
+                  {:ok, command} <- send_club_message_command(attrs) do
+               {:ok, command}
+             end
+           end) do
+      dispatch_ok(command, dispatch_opts)
     end
   end
 
