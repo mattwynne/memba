@@ -1,0 +1,80 @@
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 7a70a58..5f2fda7 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -1090,10 +1090,10 @@ defmodule Memba.Membership.Club do
+         []
+ 
+       {:ok, %{active: false}} ->
+-        custom_group_member_added_event(command)
++        group_member_added_event(command)
+ 
+       :error ->
+-        custom_group_member_added_event(command)
++        group_member_added_event(command)
+     end
+   end
+ 
+@@ -1121,21 +1121,17 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
+-  defp group_member_added_event(%AddGroupMember{} = command) do
+-    %GroupMemberAdded{
+-      club_id: command.club_id,
+-      group_id: command.group_id,
+-      membership_id: command.membership_id,
+-      person_id: command.person_id
+-    }
+-  end
+-
+-  defp custom_group_member_added_event(%AddCustomGroupMember{} = command) do
++  defp group_member_added_event(%{
++         club_id: club_id,
++         group_id: group_id,
++         membership_id: membership_id,
++         person_id: person_id
++       }) do
+     %GroupMemberAdded{
+-      club_id: command.club_id,
+-      group_id: command.group_id,
+-      membership_id: command.membership_id,
+-      person_id: command.person_id
++      club_id: club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id
+     }
+   end
+ 
+diff --git a/web/test/memba/membership/add_custom_group_member_dispatch_test.exs b/web/test/memba/membership/add_custom_group_member_dispatch_test.exs
+index 8ae673e..62fd818 100644
+--- a/web/test/memba/membership/add_custom_group_member_dispatch_test.exs
++++ b/web/test/memba/membership/add_custom_group_member_dispatch_test.exs
+@@ -8,6 +8,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+ 
+@@ -77,6 +78,18 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
+                returning: :execution_result,
+                consistency: :strong
+              )
++
++    assert %GroupMembershipProjection{
++             club_id: ^club_id,
++             group_id: ^group_id,
++             membership_id: ^target_membership_id,
++             person_id: ^target_person_id,
++             active: true
++           } =
++             Repo.get_by(GroupMembershipProjection,
++               group_id: group_id,
++               membership_id: target_membership_id
++             )
+   end
+ 
+   test "add_custom_group_member/2 lets an active Admin outside the group admit another member without joining" do
