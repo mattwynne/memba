@@ -138,6 +138,22 @@ Projection handlers should usually be:
 - **rebuildable**: able to recreate the view from scratch,
 - **observable**: lag and failures should be visible.
 
+## Projection backfills and historical compatibility
+
+A projection backfill must not silently create facts that a write-side aggregate will later need to reconstruct.
+
+Before changing existing projection data:
+
+1. Classify each value as either a deterministic derivation from immutable source facts or a new domain fact.
+2. Identify every aggregate or command that currently uses, or may soon use, the value to make a decision.
+3. For a deterministic derivation, keep the derivation identical in migration, projector, and replay compatibility code, and test a representative historic event shape.
+4. For a domain fact, append it through an idempotent command or design explicit replay compatibility. Updating only the projection is not enough.
+5. Test the actual production-history shape: source events from before the change plus backfilled projection rows followed by the new command.
+6. When deployment depends on live historical state, provide an executable preflight with a blocking result and retained evidence. Do not leave a required invariant only in prose.
+7. Make any repair append-only, scoped, dry-run first, auditable, and safe to retry. Never rewrite event history to match a projection.
+
+The review question is: **Will an aggregate later need to reconstruct this backfilled projection value from source history?** If yes, the change is a production-history compatibility change, not only a database migration.
+
 ## When to use Event Sourcing
 
 Use it when the history is business-critical:
