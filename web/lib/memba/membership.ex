@@ -3,8 +3,11 @@ defmodule Memba.Membership do
   Public application service and query API for the Membership bounded context.
   """
 
+  require Logger
+
   import Ecto.Query
 
+  alias Memba.BuildInfo
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership.App
@@ -78,7 +81,9 @@ defmodule Memba.Membership do
   def create_custom_group(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- create_custom_group_command(attrs) do
-      dispatch(command, dispatch_opts)
+      command
+      |> dispatch(dispatch_opts)
+      |> diagnose_custom_group_authorization(command)
     end
   end
 
@@ -2582,6 +2587,64 @@ defmodule Memba.Membership do
       :ok -> :ok
       {:ok, _result} = ok -> ok
       {:error, _reason} = error -> error
+    end
+  end
+
+  defp diagnose_custom_group_authorization(
+         {:error, :unauthorized},
+         %CreateCustomGroup{} = command
+       ) do
+    case Authorization.authorize_manage_members(command.club_id, command.actor_person_id) do
+      :ok ->
+        log_custom_group_authorization_state_mismatch(command, true, :ok)
+        {:error, :authorization_state_mismatch}
+
+      {:error, :unauthorized} ->
+        {:error, :unauthorized}
+
+      other ->
+        log_custom_group_authorization_state_mismatch(command, false, other)
+        {:error, :authorization_state_mismatch}
+    end
+  end
+
+  defp diagnose_custom_group_authorization(result, %CreateCustomGroup{}), do: result
+
+  defp log_custom_group_authorization_state_mismatch(
+         %CreateCustomGroup{} = command,
+         projected_grant,
+         projection_authorization_result
+       ) do
+    event = %{
+      event: "custom_group_creation_authorization_state_mismatch",
+      club_id: command.club_id,
+      actor_person_id: command.actor_person_id,
+      group_id: command.group_id,
+      command_name: inspect(command.__struct__),
+      command_classification: "custom_group_creation",
+      projected_grant: projected_grant,
+      projection_authorization_result: inspect(projection_authorization_result),
+      aggregate_authorized: false,
+      git_sha: git_sha()
+    }
+
+    Logger.error("custom_group_creation_authorization_state_mismatch #{Jason.encode!(event)}",
+      event: "custom_group_creation_authorization_state_mismatch",
+      club_id: command.club_id,
+      actor_person_id: command.actor_person_id,
+      group_id: command.group_id,
+      command_name: inspect(command.__struct__),
+      command_classification: "custom_group_creation",
+      projected_grant: projected_grant,
+      aggregate_authorized: false,
+      git_sha: event.git_sha
+    )
+  end
+
+  defp git_sha do
+    case BuildInfo.git_sha() do
+      {:ok, sha} -> sha
+      :error -> nil
     end
   end
 

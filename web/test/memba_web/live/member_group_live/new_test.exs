@@ -4,17 +4,27 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Commanded.Event.Mapper
+  alias Commanded.EventStore
   alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Club, as: ClubAggregate
+  alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubRoleDefined
+  alias Memba.Membership.Events.ClubRolePermissionGranted
+  alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
+  alias Memba.ProjectionBarrier
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -451,6 +461,83 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     refute has_element?(view, "#member-group-create-button[disabled]")
   end
 
+  test "authorization state mismatch keeps the form alive with the same retry key", %{
+    conn: conn
+  } do
+    robin =
+      create_source_backed_member_with_projection_only_admin(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers",
+        club_slug: "wcp"
+      )
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+    %{socket: before_socket} = :sys.get_state(view.pid)
+    group_id = before_socket.assigns.group_id
+
+    view
+    |> form("#member-group-new-form", group: %{name: "Board"})
+    |> render_submit()
+
+    %{socket: after_socket} = :sys.get_state(view.pid)
+    assert after_socket.assigns.group_id == group_id
+
+    assert has_element?(
+             view,
+             "#flash-error",
+             "We couldn't create the group. Try again."
+           )
+
+    assert has_element?(view, "#member-group-name-input[value='Board']")
+
+    assert has_element?(
+             view,
+             "#member-group-email-preview[data-state='available']",
+             "board@wcp.clubs.memba.io"
+           )
+
+    refute has_element?(view, "#member-group-create-button[disabled]")
+
+    refute Repo.get(Group, group_id)
+    refute group_event?(robin.club_id, group_id)
+  end
+
+  test "submit-time permission loss redirects without crashing or appending a group", %{
+    conn: conn
+  } do
+    robin =
+      create_source_backed_member_with_projection_only_admin(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers",
+        club_slug: "wcp"
+      )
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+    %{socket: socket} = :sys.get_state(view.pid)
+    group_id = socket.assigns.group_id
+
+    view
+    |> form("#member-group-new-form", group: %{name: "Board"})
+    |> render_change()
+
+    revoke_projected_manage_members!(robin)
+
+    redirect =
+      view
+      |> form("#member-group-new-form", group: %{name: "Board"})
+      |> render_submit()
+
+    {:ok, _groups_view, html} = follow_redirect(redirect, conn, ~p"/conversations")
+    assert html =~ "You no longer have permission to create groups."
+
+    refute Repo.get(Group, group_id)
+    refute group_event?(robin.club_id, group_id)
+  end
+
   defp signed_in_club_host(conn, email, club) do
     conn
     |> club_host(club)
@@ -532,6 +619,87 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     %{club_id: club_id, membership_id: membership_id, person_id: person_id}
   end
 
+  defp create_source_backed_member_with_projection_only_admin(attrs) do
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
+    role_id = Roles.membership_administrator_role_id(club_id)
+    email = Keyword.fetch!(attrs, :email)
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: email
+               },
+               consistency: :strong
+             )
+
+    events =
+      [
+        %ClubCreated{
+          club_id: club_id,
+          name: Keyword.fetch!(attrs, :club_name),
+          slug: Keyword.fetch!(attrs, :club_slug)
+        },
+        %ClubRoleDefined{
+          club_id: club_id,
+          role_id: role_id,
+          role_key: Roles.membership_administrator_key(),
+          name: Roles.membership_administrator_name()
+        },
+        %ClubRolePermissionGranted{
+          club_id: club_id,
+          role_id: role_id,
+          permission: Permissions.club_manage_members()
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: SystemGroups.everyone_group_id(club_id),
+          group_key: SystemGroups.everyone_key(),
+          name: SystemGroups.everyone_name()
+        },
+        %GroupEmailSlugAssigned{
+          club_id: club_id,
+          group_id: SystemGroups.everyone_group_id(club_id),
+          email_slug: SystemGroups.everyone_email_slug()
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: SystemGroups.admin_group_id(club_id),
+          group_key: SystemGroups.admin_key(),
+          name: SystemGroups.admin_name()
+        },
+        %GroupEmailSlugAssigned{
+          club_id: club_id,
+          group_id: SystemGroups.admin_group_id(club_id),
+          email_slug: SystemGroups.admin_email_slug()
+        },
+        %ClubMemberAdded{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id
+        }
+      ]
+      |> Enum.map(&Mapper.map_to_event_data/1)
+
+    assert :ok = EventStore.append_to_stream(App, club_id, 0, events)
+
+    ProjectionBarrier.await!(
+      [
+        Memba.Membership.Projectors.Club,
+        Memba.Membership.Projectors.Group,
+        Memba.Membership.Projectors.Membership
+      ],
+      timeout: 5_000
+    )
+
+    member = %{club_id: club_id, membership_id: membership_id, person_id: person_id}
+    grant_manage_members!(member)
+    member
+  end
+
   defp insert_everyone_membership!(club_id, membership_id, person_id) do
     group_id = SystemGroups.everyone_group_id(club_id)
 
@@ -564,6 +732,25 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       permission: Permissions.club_manage_members(),
       grant_count: 1
     })
+  end
+
+  defp revoke_projected_manage_members!(member) do
+    Repo.delete_all(
+      from member_permission in MemberPermission,
+        where: member_permission.club_id == ^member.club_id,
+        where: member_permission.membership_id == ^member.membership_id,
+        where: member_permission.person_id == ^member.person_id,
+        where: member_permission.permission == ^Permissions.club_manage_members()
+    )
+  end
+
+  defp group_event?(club_id, group_id) do
+    App
+    |> EventStore.stream_forward(club_id)
+    |> Enum.any?(fn
+      %{data: %{group_id: ^group_id}} -> true
+      _event -> false
+    end)
   end
 
   defp insert_custom_group!(club_id, name, email_slug) do
