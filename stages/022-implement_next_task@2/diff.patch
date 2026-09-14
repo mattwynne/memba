@@ -1,0 +1,60 @@
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index ae6b096..c7bb6e0 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -253,9 +253,10 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
+-    test "rejects final-member removal before sole-Admin removal" do
++    test "rejects final-member removal before custom-group cleanup or sole-Admin removal" do
+       club_id = Memba.ID.generate(:club)
+       admin_role_id = Roles.membership_administrator_role_id(club_id)
++      custom_group_id = Memba.ID.generate(:group)
+       membership_id = Memba.ID.generate(:membership)
+       person_id = Memba.ID.generate(:person)
+ 
+@@ -264,6 +265,15 @@ defmodule Memba.Membership.ClubTest do
+         |> created_club()
+         |> activate_member(membership_id, person_id)
+         |> assign_member_role(membership_id, person_id, admin_role_id)
++        |> create_group(custom_group_id, nil, "Board")
++        |> add_group_member(custom_group_id, membership_id, person_id)
++
++      assert %{
++               {^custom_group_id, ^membership_id} => %{
++                 person_id: ^person_id,
++                 active: true
++               }
++             } = club.group_memberships
+ 
+       assert {:error, :last_active_member} =
+                Club.execute(club, %RemoveClubMember{
+@@ -273,9 +283,10 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
+-    test "rejects removing the sole active Admin while another member remains" do
++    test "rejects sole-Admin removal before custom-group cleanup while another member remains" do
+       club_id = Memba.ID.generate(:club)
+       admin_role_id = Roles.membership_administrator_role_id(club_id)
++      custom_group_id = Memba.ID.generate(:group)
+       admin_membership_id = Memba.ID.generate(:membership)
+       admin_person_id = Memba.ID.generate(:person)
+       ordinary_membership_id = Memba.ID.generate(:membership)
+@@ -287,6 +298,15 @@ defmodule Memba.Membership.ClubTest do
+         |> activate_member(admin_membership_id, admin_person_id)
+         |> assign_member_role(admin_membership_id, admin_person_id, admin_role_id)
+         |> activate_member(ordinary_membership_id, ordinary_person_id)
++        |> create_group(custom_group_id, nil, "Board")
++        |> add_group_member(custom_group_id, admin_membership_id, admin_person_id)
++
++      assert %{
++               {^custom_group_id, ^admin_membership_id} => %{
++                 person_id: ^admin_person_id,
++                 active: true
++               }
++             } = club.group_memberships
+ 
+       assert {:error, :last_membership_administrator} =
+                Club.execute(club, %RemoveClubMember{
