@@ -1,0 +1,49 @@
+diff --git a/docs/code-health.md b/docs/code-health.md
+index 64a3bd9..91a14cf 100644
+--- a/docs/code-health.md
++++ b/docs/code-health.md
+@@ -211,3 +211,44 @@ Note: the final review synthesis omitted the independent reviewers' code-health
+    - Evidence: `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh` compares snapshots with `cmp -s`, but the review sandbox did not provide `cmp`; the corresponding workflow stage still reported success. The review's product diff was independently checked and the full test suite passed, so this did not invalidate iteration 061's product result.
+    - Risk: a future review repair can appear independently verified even when the before/after comparison command never ran, weakening confidence that a requested repair produced a repository change.
+    - Suggested next action: replace `cmp` with a repository-supported Git comparison or add the utility to the review image, and add a workflow-script test proving a missing comparison tool or failed comparison cannot be reported as successful verification.
++
++## 2026-09-14 — Iteration 062: Admins create usable custom groups
++
++Plan: `docs/iterations/062-create-custom-groups/plan.md`
++
++Note: the final review synthesis omitted the independent reviewers' code-health
++findings by returning only routing JSON. The findings below consolidate the
++supported concerns from those reports and direct inspection of the merged state.
++They exclude already-tracked rename, archive and sender-copy product follow-ups,
++as well as speculative documentation and concurrency-test suggestions that the
++implementation already satisfies.
++
++1. **Follow cleanup can acknowledge a group-member removal before Messaging has projected every affected conversation.**
++   - Evidence: `web/lib/memba/membership/policies/clear_removed_group_member_follows.ex` ignores the `GroupMemberRemoved` event metadata, immediately enumerates `Messaging.list_conversations_for_group/1`, and returns success when that projection query is empty. `web/test/memba/messaging/send_club_message_test.exs` demonstrates this exact state by stopping `ConversationGroupAccess`, processing a club departure while the group query is empty, re-adding the club member, and asserting that the old conversation follow still exists. Authoritative access checks prevent delivery while the person remains outside the custom group, but the follow itself was not cleared.
++   - Risk: when custom-group re-addition arrives, a surviving follow can become effective again without an explicit refollow. The Membership policy checkpoint therefore does not always prove the cleanup that `Membership.Projectors.Membership` treats it as proving.
++   - Suggested next action: use the removal event checkpoint to wait for the Messaging conversation-access projection before discovering cleanup work, and make completion include durable processing by the conversation-follow projection even when a retry emits no new event. Add a stopped/lagging-access-projector regression that later re-adds the person to the custom group and proves the old follow cannot reactivate.
++
++2. **Origin replay of follow cleanup is idempotent only against current boolean follow state, not against the removal that caused it.**
++   - Evidence: `ClearRemovedGroupMemberFollows` starts from `:origin` but dispatches `UnfollowConversation` with only club, conversation and member IDs. `web/lib/memba/messaging/conversation_followers.ex` emits `ConversationUnfollowed` whenever the member follows at command time; neither the command nor aggregate records the originating removal event or membership period. The policy's duplicate-delivery test repeats a removal without an intervening refollow, so it does not cover remove → cleanup → re-add → legitimate refollow → policy replay.
++   - Risk: resetting or renaming the handler subscription can replay an old removal and clear a newer, legitimate follow, appending new Messaging facts as a side effect of replay.
++   - Suggested next action: give cleanup a stable causation identity or expected membership/follow generation that Messaging persists and checks, or move historical repair out of the replaying handler into an explicit current-state reconciliation. Add the remove/refollow/handler-replay sequence as a regression.
++
++3. **Membership projection progress is globally coupled to a cross-context Messaging cleanup handler.**
++   - Evidence: `web/lib/memba/membership/projectors/membership.ex` waits for `ClearRemovedGroupMemberFollows` to reach the global event number before exposing every modern or legacy member addition. The policy serially queries Messaging and dispatches one projector-consistent unfollow per conversation, while directly naming `Messaging.Projectors.ConversationFollow`; `web/lib/memba/application.ex` also has to start the policy before the Membership projector because of this dependency.
++   - Risk: one cleanup failure or Messaging projection outage can stop the handler's global subscription position and delay later Membership additions, including unrelated clubs. Cleanup latency also grows with a group's conversation history, broadening the operational blast radius of a departure side effect.
++   - Suggested next action: model cleanup as scoped, durable integration work keyed by the affected removal or membership period, and gate only the corresponding reactivation on explicit completion. Keep Messaging projector details behind a Messaging-owned cleanup/completion contract.
++
++4. **The Club aggregate is becoming the owner of an unbounded custom-group membership matrix.**
++   - Evidence: `web/lib/memba/membership/club.ex` retains every group and active or inactive group-membership pair in aggregate state; custom creation and all `AddGroupMember`/`RemoveGroupMember` commands route to the Club stream. `RemoveClubMember` scans the complete membership map and emits one custom removal per match. ADR 0024 explicitly says the Club is not intended to own an unbounded matrix of arbitrary group memberships and leaves that consistency boundary to a decision around individual-group invariants.
++   - Risk: iterations 063 and 064 can make one Club stream's state, replay cost and write contention grow with all historical group memberships. Moving the boundary later will also require permanent compatibility for facts already stored in Club streams.
++   - Suggested next action: decide and document the custom-group membership consistency boundary before general add/remove management expands it. Club can continue to own club-wide name/slug uniqueness while a Group aggregate or explicit process owns per-group membership if that better fits the new invariants.
++
++5. **Custom group email-slug allocation does full-set work per live preview and linear probing for collision families.**
++   - Evidence: every group-name `phx-change` in `web/lib/memba_web/live/member_group_live/new.ex` requests a preview without debounce. `Membership.available_custom_group_identity_preview/2` loads every occupied club group slug into a new `MapSet`; authoritative creation similarly copies all `Club.group_email_slugs` keys before calling `CustomGroupSlug.allocate/2`. The allocator probes suffixes sequentially from 2, and all names without an ASCII stem share the `group` collision family. It also exposes the club URL-oriented `Membership.Slug` module as the source of email local-part generation and length policy.
++   - Risk: preview cost is linear in total club groups per keystroke, and repeatedly creating one collision family trends toward quadratic total allocation work. URL/hostname slug policy and group-email local-part policy may also need to evolve independently later.
++   - Suggested next action: establish expected per-club group scale before optimizing. If needed, debounce preview, use indexed candidate-existence queries instead of loading the full set, retain a replay-derived allocation index for authoritative first-gap selection, and introduce a `GroupEmailSlug` value object while sharing only low-level normalization with club slugs.
++
++6. **Iteration 062's domain Cucumber scenarios execute twice.**
++   - Evidence: `web/test/features/domain_cucumber_acceptance_test.exs` already selects and runs every domain-intended scenario. `custom_group_creation_steps_test.exs`, `custom_group_conversation_steps_test.exs`, and `custom_group_lifecycle_steps_test.exs` independently select and run the same 13, 13 and 2 scenarios again. Every duplicate uses `EventSourcedCase`, whose setup stops subscribers, resets EventStore/projection state and restarts subscribers.
++   - Risk: the quality gate performs 28 redundant serial, database- and process-heavy scenario executions; failures can appear twice without adding coverage, and the duplicate resets increase suite duration and noise.
++   - Suggested next action: keep execution in `DomainCucumberAcceptanceTest`. Retain only lightweight feature/tag-selection assertions in the three feature-specific modules, preferably through one reusable selection helper.
