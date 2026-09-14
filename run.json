@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T00:13:34.240878361Z",
-  "last_event_at": "2026-09-14T02:21:45.253249126Z",
+  "last_event_at": "2026-09-14T02:26:54.665926511Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -17734,9 +17734,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 5808,
       "checkpoint": {
-        "timestamp": "2026-09-14T02:21:55.912725139Z",
+        "timestamp": "2026-09-14T02:21:59.729820333Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -17794,15 +17794,403 @@
         ],
         "node_retries": {},
         "context_values": {
+          "preferred_label": "accept",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.verify_source_head": 0,
           "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 017 Extend group queries/routing only where the existing generic paths need it.\",\"reason\":\"At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The checkpoint strengthens the PhoenixTest creation flow to prove the existing public group queries and opaque-ID routes immediately support the newly created custom group: creator membership/count, stored address, structural custom-group identity, canonical Members and Conversations URLs, selected rail/header state, ordinary member listing, and absence of the single-member promotion. No production query or route changes were needed, and no acceptance feature files were edited. Independent focused validation passed with 9 tests and 0 failures, and the generic named-group browser scenario passed with 1 scenario and 6 steps. The work preserves the LiveView, canonical-host, read-your-writes, URL-state, and Club-boundary constraints in ADRs 0015, 0019, 0022, 0023, and 0024.\"}",
           "output.validate_task": {
             "decision": "accept",
             "task": "- [ ] 017 Extend group queries/routing only where the existing generic paths need it.",
             "reason": "At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The checkpoint strengthens the PhoenixTest creation flow to prove the existing public group queries and opaque-ID routes immediately support the newly created custom group: creator membership/count, stored address, structural custom-group identity, canonical Members and Conversations URLs, selected rail/header state, ordinary member listing, and absence of the single-member promotion. No production query or route changes were needed, and no acceptance feature files were edited. Independent focused validation passed with 9 tests and 0 failures, and the generic named-group browser scenario passed with 1 scenario and 6 steps. The work preserves the LiveView, canonical-host, read-your-writes, URL-state, and Club-boundary constraints in ADRs 0015, 0019, 0022, 0023, and 0024."
           },
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.apply_task_verdict": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.resume_gate": 0,
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.validate_task": 0,
+          "response.revise_task": "Implemented the revision for task 012 and addressed the replay-safety verdict.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updated the [Membership projector](/workspace/memba/web/lib/memba/membership/projectors/membership.ex:42) to gate activation on the cleanup policy’s durable global EventStore checkpoint.\n   - Removed reliance on Commanded’s volatile acknowledgement cache and Club-stream versions.\n   - Legacy `MemberAdded` events now use their global event number, avoiding the invalid combination of a membership-stream version with a Club stream identity.\n   - An independently rebuilt Membership projection can reuse the cleanup policy’s persisted progress without replaying that policy.\n   - Strengthened the [lifecycle policy tests](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:53) to cover:\n     - volatile acknowledgement loss with legacy membership-ID stream metadata;\n     - an isolated Membership projector rebuild;\n     - synchronization on the exact persisted re-add event;\n     - proof that aggregate re-addition has committed while projected membership remains inactive;\n     - no private reply delivery while cleanup is suspended;\n     - activation only after cleanup completes, without restoring the old custom membership or follow.\n\n3. Validation\n\n   - TDD red run against the previous implementation: 5 tests, 1 failure with `:removed_group_member_follow_cleanup_restarted`.\n   - Race suite repeated consecutively: 6 runs, all passing.\n   - Focused lifecycle/replay/projection set: 21 tests, 0 failures.\n   - Full Membership test directory: 318 tests, 0 failures.\n   - Final focused policy suite: 6 tests, 0 failures.\n   - `mix format --check-formatted` for both changed files: passed.\n   - `git diff --check`: passed.\n   - `dev check --quick`: exited 0 with 1,321 tests and 0 failures.\n\n4. Todo state\n\n   The selected line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:14):\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002/0009: retains Commanded event sourcing and the standard Ecto projector, using persisted subscription progress for replay.\n   - ADR 0007: follow clearing remains in the Membership-to-Messaging policy through public Messaging APIs; the projector performs no cross-context side effects.\n   - ADR 0011: rapid rejoining continues to use a new caller-generated membership identity.\n   - ADR 0022: uses a durable checkpoint barrier and waits for a committed read-model notification in the race test.\n   - ADR 0024: preserves Club as the lifecycle consistency boundary and correctly handles historical events originating on membership-ID streams.",
+          "internal.retry_count.todo_readable": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.work_dir": "/workspace/memba",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.wip_gate": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.start": 0,
+          "internal.node_visit_count": 7,
+          "last_response": "Implemented task 018’s custom-group email and authorization proof. No production changes were necessary; the existing generic Membership and Messaging APIs already satisfy the behavior.\n\n1. Selected",
+          "thread.revise_task.current_node": "validate_task",
+          "failure_class": "",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "response.implement_next_task": "Implemented task 018’s custom-group email and authorization proof. No production changes were necessary; the existing generic Membership and Messaging APIs already satisfy the behavior.\n\n1. Selected task\n\n`- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.`\n\n2. Changes\n\nAdded an end-to-end integration test in [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:208) that:\n\n- Creates Board through the authenticated `Membership.create_custom_group/2` API.\n- Resolves `board@kmc.clubs.memba.io` to that custom group.\n- Lets an active club member outside Board start a Board conversation by email.\n- Routes the initial delivery only to Board’s active member.\n- Keeps the conversation out of Everyone.\n- Grants Board write/read access while giving the sender no membership, read access, delivery receipt, or follow.\n- Rejects the sender’s subsequent website reply.\n- Rejects a forged email reply using another recipient’s outbound message ID.\n- Confirms rejected attempts create no reply message and do not mutate follow state.\n\nAcceptance feature files were not changed; executing their tagged scenarios remains task 021.\n\n3. Validation\n\n- Focused new test: 1 selected test passed, 0 failures.\n- Inbound, group-send, and reply suites: 50 tests, 0 failures.\n- `mix format --check-formatted test/memba/messaging/inbound_club_message_acceptance_test.exs`: passed.\n- `git diff --check`: passed.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,331 tests, 0 failures.\n\n4. Todo state\n\nThe line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:20):\n\n`- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0003: external email delivery remains behind the configured fake/test adapter.\n- ADRs 0004 and 0005: the existing message aggregate records the resolved custom-group recipients and conversation access atomically.\n- ADR 0007: Messaging uses Membership’s public APIs; the test does not couple Messaging to Membership projection schemas.\n- ADR 0009: assertions exercise projected conversation, delivery, access, and follow state.\n- ADR 0022: strong-consistency dispatches provide deterministic read-after-write assertions.\n- ADR 0024: custom-group creation continues through the Club consistency boundary via the authenticated Membership API.",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.start.current_node": "verify_source_head",
+          "internal.retry_count.revise_task": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "failure_signature": "",
+          "internal.run_id": "01M2EM4RDNFFXJQEEP5ACBQTR8",
+          "graph.max_node_visits": "80",
+          "current_node": "implement_next_task",
+          "graph.rankdir": "LR",
+          "command.output": "blob://sha256/1dfb594e906453de4b85dc7d89ef46442c0c26cd6b9a0f096bd355d188ed6bbc",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.thread_id": "all_tasks_done",
+          "last_stage": "implement_next_task",
+          "thread.apply_task_verdict.current_node": "sync_task_list"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/34ad42be7e618049872a9d743f28d4b40b60d5883abc73fab94e40ecdcfbd04e"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93299,
+              "active_time_ms": 93299
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "accept",
+            "context_updates": {
+              "command.output": "blob://sha256/c1a7ba04c337da6b28630f83e9f6ba4e78764b4133866e9dc3fbee75c4ab8a03"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/062-create-custom-groups/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b5fa0ce95b1b367d040181c2107d8deb8857324f2d9b197d4b7334015b0f123d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Implemented task 018’s custom-group email and authorization proof. No production changes were necessary; the existing generic Membership and Messaging APIs already satisfy the behavior.\n\n1. Selected task\n\n`- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.`\n\n2. Changes\n\nAdded an end-to-end integration test in [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:208) that:\n\n- Creates Board through the authenticated `Membership.create_custom_group/2` API.\n- Resolves `board@kmc.clubs.memba.io` to that custom group.\n- Lets an active club member outside Board start a Board conversation by email.\n- Routes the initial delivery only to Board’s active member.\n- Keeps the conversation out of Everyone.\n- Grants Board write/read access while giving the sender no membership, read access, delivery receipt, or follow.\n- Rejects the sender’s subsequent website reply.\n- Rejects a forged email reply using another recipient’s outbound message ID.\n- Confirms rejected attempts create no reply message and do not mutate follow state.\n\nAcceptance feature files were not changed; executing their tagged scenarios remains task 021.\n\n3. Validation\n\n- Focused new test: 1 selected test passed, 0 failures.\n- Inbound, group-send, and reply suites: 50 tests, 0 failures.\n- `mix format --check-formatted test/memba/messaging/inbound_club_message_acceptance_test.exs`: passed.\n- `git diff --check`: passed.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,331 tests, 0 failures.\n\n4. Todo state\n\nThe line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:20):\n\n`- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0003: external email delivery remains behind the configured fake/test adapter.\n- ADRs 0004 and 0005: the existing message aggregate records the resolved custom-group recipients and conversation access atomically.\n- ADR 0007: Messaging uses Membership’s public APIs; the test does not couple Messaging to Membership projection schemas.\n- ADR 0009: assertions exercise projected conversation, delivery, access, and follow state.\n- ADR 0022: strong-consistency dispatches provide deterministic read-after-write assertions.\n- ADR 0024: custom-group creation continues through the Club consistency boundary via the authenticated Membership API.",
+              "last_response": "Implemented task 018’s custom-group email and authorization proof. No production changes were necessary; the existing generic Membership and Messaging APIs already satisfy the behavior.\n\n1. Selected"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 281817,
+                    "output_tokens": 8111,
+                    "reasoning_tokens": 3485,
+                    "cache_read_tokens": 2510464,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3012197
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 290905,
+              "tool_time_ms": 153377,
+              "active_time_ms": 444282
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72587b5829d04f26baf49e934e021e5ef79785c31f2c5649a04ba2abf020a7eb"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.revise_task": "Implemented the revision for task 012 and addressed the replay-safety verdict.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes made\n\n   - Updated the [Membership projector](/workspace/memba/web/lib/memba/membership/projectors/membership.ex:42) to gate activation on the cleanup policy’s durable global EventStore checkpoint.\n   - Removed reliance on Commanded’s volatile acknowledgement cache and Club-stream versions.\n   - Legacy `MemberAdded` events now use their global event number, avoiding the invalid combination of a membership-stream version with a Club stream identity.\n   - An independently rebuilt Membership projection can reuse the cleanup policy’s persisted progress without replaying that policy.\n   - Strengthened the [lifecycle policy tests](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:53) to cover:\n     - volatile acknowledgement loss with legacy membership-ID stream metadata;\n     - an isolated Membership projector rebuild;\n     - synchronization on the exact persisted re-add event;\n     - proof that aggregate re-addition has committed while projected membership remains inactive;\n     - no private reply delivery while cleanup is suspended;\n     - activation only after cleanup completes, without restoring the old custom membership or follow.\n\n3. Validation\n\n   - TDD red run against the previous implementation: 5 tests, 1 failure with `:removed_group_member_follow_cleanup_restarted`.\n   - Race suite repeated consecutively: 6 runs, all passing.\n   - Focused lifecycle/replay/projection set: 21 tests, 0 failures.\n   - Full Membership test directory: 318 tests, 0 failures.\n   - Final focused policy suite: 6 tests, 0 failures.\n   - `mix format --check-formatted` for both changed files: passed.\n   - `git diff --check`: passed.\n   - `dev check --quick`: exited 0 with 1,321 tests and 0 failures.\n\n4. Todo state\n\n   The selected line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:14):\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002/0009: retains Commanded event sourcing and the standard Ecto projector, using persisted subscription progress for replay.\n   - ADR 0007: follow clearing remains in the Membership-to-Messaging policy through public Messaging APIs; the projector performs no cross-context side effects.\n   - ADR 0011: rapid rejoining continues to use a new caller-generated membership identity.\n   - ADR 0022: uses a durable checkpoint barrier and waits for a committed read-model notification in the race test.\n   - ADR 0024: preserves Club as the lifecycle consistency boundary and correctly handles historical events originating on membership-ID streams.",
+              "last_stage": "revise_task",
+              "last_response": "Implemented the revision for task 012 and addressed the replay-safety verdict.\n\n1. Selected task\n\n   `- [ ] 012 Ensure removal completion/rapid re-add cannot reactivate stale follows.`\n\n2. Changes mad"
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 355080,
+                    "output_tokens": 12982,
+                    "reasoning_tokens": 11640,
+                    "cache_read_tokens": 5940224,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5484172
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 612189,
+              "tool_time_ms": 283653,
+              "active_time_ms": 895842
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1dfb594e906453de4b85dc7d89ef46442c0c26cd6b9a0f096bd355d188ed6bbc"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d02ae3fbcf009686d036f0f3c3931835e85e384c508c28e35fb843d5318f329e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4398f1538046a042a38a6c394be2535ea56e03c70f9de677b91797a189d4d74d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1732,
+              "active_time_ms": 1732
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/60a1817bdce7ee625fb3a0dabe9d669b825f4643873f96cd98e973967b3bbf17"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh 'd42be85e2364a81c0cb146f7ddd89d6215a9e6cd'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 190,
+              "active_time_ms": 190
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2c689d635cca514d7dea46648c9c158365c87f9f1786964d0e3c0f47dc1469d5"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 017 Extend group queries/routing only where the existing generic paths need it.\",\"reason\":\"At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The checkpoint strengthens the PhoenixTest creation flow to prove the existing public group queries and opaque-ID routes immediately support the newly created custom group: creator membership/count, stored address, structural custom-group identity, canonical Members and Conversations URLs, selected rail/header state, ordinary member listing, and absence of the single-member promotion. No production query or route changes were needed, and no acceptance feature files were edited. Independent focused validation passed with 9 tests and 0 failures, and the generic named-group browser scenario passed with 1 scenario and 6 steps. The work preserves the LiveView, canonical-host, read-your-writes, URL-state, and Club-boundary constraints in ADRs 0015, 0019, 0022, 0023, and 0024.\"}",
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 017 Extend group queries/routing only where the existing generic paths need it.\",\"reason\":\"At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The",
+              "output.validate_task": {
+                "decision": "accept",
+                "task": "- [ ] 017 Extend group queries/routing only where the existing generic paths need it.",
+                "reason": "At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The checkpoint strengthens the PhoenixTest creation flow to prove the existing public group queries and opaque-ID routes immediately support the newly created custom group: creator membership/count, stored address, structural custom-group identity, canonical Members and Conversations URLs, selected rail/header state, ordinary member listing, and absence of the single-member promotion. No production query or route changes were needed, and no acceptance feature files were edited. Independent focused validation passed with 9 tests and 0 failures, and the generic named-group browser scenario passed with 1 scenario and 6 steps. The work preserves the LiveView, canonical-host, read-your-writes, URL-state, and Club-boundary constraints in ADRs 0015, 0019, 0022, 0023, and 0024."
+              },
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 113668,
+                    "output_tokens": 2247,
+                    "reasoning_tokens": 1067,
+                    "cache_read_tokens": 196480,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 766000
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 84252,
+              "tool_time_ms": 28902,
+              "active_time_ms": 113154
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "9c61aa655dd048444d6e6882b42cfdfa50d40563",
+        "node_visits": {
+          "todo_readable": 7,
+          "start": 1,
+          "read_plan": 1,
+          "sync_task_list": 7,
+          "resume_gate": 1,
+          "validate_task": 8,
+          "verify_source_head": 1,
+          "preflight_sandbox": 1,
+          "wip_gate": 1,
+          "implement_next_task": 7,
+          "apply_task_verdict": 8,
+          "all_tasks_done": 7,
+          "revise_task": 2
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\nindex 454abd9..57e0308 100644\n--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n+++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n@@ -17,6 +17,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n   alias Memba.Messaging.Events.InboundClubEmailAccepted\n   alias Memba.Messaging.Events.InboundClubEmailRejected\n   alias Memba.Messaging.Events.MessageSent\n+  alias Memba.Messaging.InboundClubDestination\n   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector\n   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection\n   alias Memba.Membership.Projections.Membership, as: MembershipProjection\n@@ -204,6 +205,163 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     assert :ok = Messaging.authorize_inbound_club_email_sender(sender, destination)\n   end\n \n+  test \"a custom-group address lets an active club non-member start a private conversation without gaining access\" do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    alice = create_person!(name: \"Alice Admin\", email: \"alice@example.com\")\n+    eve = create_person!(name: \"Eve Member\", email: \"eve@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+    add_member!(kmc.club_id, eve.person_id)\n+\n+    board_group_id = Memba.ID.generate(:group)\n+\n+    assert :ok =\n+             Membership.create_custom_group(\n+               %{\n+                 club_id: kmc.club_id,\n+                 group_id: board_group_id,\n+                 actor_person_id: alice.person_id,\n+                 name: \"Board\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert %{\n+             club_id: club_id,\n+             group_id: ^board_group_id,\n+             email_slug: \"board\",\n+             group_key: nil,\n+             name: \"Board\"\n+           } = Membership.get_group_by_email_slug(kmc.club_id, \"board\")\n+\n+    assert club_id == kmc.club_id\n+    assert Membership.active_member_of_group?(board_group_id, alice.person_id)\n+    refute Membership.active_member_of_group?(board_group_id, eve.person_id)\n+\n+    assert {:ok,\n+            %InboundClubDestination{\n+              club_id: ^club_id,\n+              group_id: ^board_group_id,\n+              group_email_slug: \"board\",\n+              group_name: \"Board\",\n+              to_address: \"board@kmc.clubs.memba.io\"\n+            }} =\n+             Messaging.resolve_inbound_club_email_destination([\n+               \"board@kmc.clubs.memba.io\"\n+             ])\n+\n+    assert {:ok,\n+            %{\n+              message_id: conversation_id,\n+              club_id: ^club_id,\n+              sender_id: eve_id,\n+              to_address: \"board@kmc.clubs.memba.io\"\n+            }} =\n+             Messaging.receive_inbound_club_email(\n+               %{\n+                 provider: \"resend\",\n+                 provider_message_id: \"task-062-custom-group-root\",\n+                 provider_event_id: \"task-062-custom-group-root-event\",\n+                 from_address: \"eve@example.com\",\n+                 recipient_addresses: [\"board@kmc.clubs.memba.io\"],\n+                 subject: \"Could you fund new ropes?\",\n+                 text_body: \"The old ropes need replacing.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert eve_id == eve.person_id\n+    assert Messaging.group_has_conversation_access?(conversation_id, board_group_id, :write)\n+\n+    refute Messaging.group_has_conversation_access?(\n+             conversation_id,\n+             SystemGroups.everyone_group_id(kmc.club_id),\n+             :read\n+           )\n+\n+    assert Messaging.member_has_conversation_access?(\n+             conversation_id,\n+             kmc.club_id,\n+             alice.person_id,\n+             :write\n+           )\n+\n+    refute Messaging.member_has_conversation_access?(\n+             conversation_id,\n+             kmc.club_id,\n+             eve.person_id,\n+             :read\n+           )\n+\n+    assert [%{message_id: ^conversation_id, recipient_id: alice_id}] =\n+             Messaging.list_recipient_deliveries(conversation_id)\n+\n+    assert alice_id == alice.person_id\n+    assert is_nil(Messaging.get_member_email_delivery(conversation_id, eve.person_id))\n+    refute Messaging.following_conversation?(conversation_id, eve.person_id)\n+\n+    assert [%{message_id: ^conversation_id, subject: \"Could you fund new ropes?\"}] =\n+             Messaging.list_conversations_for_group(board_group_id)\n+\n+    assert [] =\n+             Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(kmc.club_id))\n+\n+    website_reply_id = Memba.ID.generate(:message)\n+\n+    assert {:error, :not_current_member} =\n+             Messaging.post_message_reply(\n+               %{\n+                 message_id: website_reply_id,\n+                 conversation_id: conversation_id,\n+                 sender_id: eve.person_id,\n+                 body: \"Here are the prices.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert is_nil(Messaging.get_message(website_reply_id))\n+\n+    alice_outbound_message_id =\n+      outbound_message_id_for_recipient!(conversation_id, alice.person_id)\n+\n+    assert {:ok,\n+            %{\n+              status: :rejected,\n+              rejection_reason: \"not_current_member\",\n+              to_address: \"board@kmc.clubs.memba.io\"\n+            }} =\n+             Messaging.receive_inbound_club_email(\n+               %{\n+                 provider: \"resend\",\n+                 provider_message_id: \"task-062-custom-group-reply\",\n+                 provider_event_id: \"task-062-custom-group-reply-event\",\n+                 from_address: \"eve@example.com\",\n+                 recipient_addresses: [\"board@kmc.clubs.memba.io\"],\n+                 subject: \"Re: Could you fund new ropes?\",\n+                 text_body: \"Here are the prices.\",\n+                 in_reply_to_message_ids: [alice_outbound_message_id]\n+               },\n+               consistency: :strong\n+             )\n+\n+    assert %InboundEmailSourceProjection{\n+             status: \"rejected\",\n+             message_id: nil,\n+             rejection_reason: \"not_current_member\",\n+             to_address: \"board@kmc.clubs.memba.io\"\n+           } =\n+             Messaging.get_inbound_email_source(\"resend\", \"task-062-custom-group-reply\")\n+\n+    assert [%{message_id: ^conversation_id}] =\n+             Messaging.list_conversation_messages_for_group(\n+               conversation_id,\n+               board_group_id\n+             )\n+\n+    refute Messaging.following_conversation?(conversation_id, eve.person_id)\n+    assert 1 == count_events(MessageSent)\n+  end\n+\n   test \"an inbound root message carries the resolved Admin audience group into SendMessage\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n     alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n",
+        "summary": {
+          "files_changed": 15,
+          "additions": 1548,
+          "deletions": 58
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T02:26:59.232932697Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "revise_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.\",\"reason\":\"At clean HEAD 9c61aa6, the candidate adds a focused end-to-end test that creates Board through Membership.create_custom_group/2, resolves its stored email address through Messaging, and proves an active club member outside Board can start a private conversation by email without gaining group membership, read access, delivery, follow, or website/email reply permission. It also verifies recipient scoping to Board, exclusion from Everyone, and no message/follow mutation after rejected replies. Production routing and authorization use Membership's public APIs, consistent with ADRs 0005 and 0007. No acceptance feature files were changed, the task remains first and unchecked, and independent focused validation on the exact HEAD passed with 1 selected test and 0 failures; git diff checks and worktree status are clean. Full dev check remains explicitly assigned to task 021.\"}",
+          "output.validate_task": {
+            "decision": "accept",
+            "task": "- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.",
+            "reason": "At clean HEAD 9c61aa6, the candidate adds a focused end-to-end test that creates Board through Membership.create_custom_group/2, resolves its stored email address through Messaging, and proves an active club member outside Board can start a private conversation by email without gaining group membership, read access, delivery, follow, or website/email reply permission. It also verifies recipient scoping to Board, exclusion from Everyone, and no message/follow mutation after rejected replies. Production routing and authorization use Membership's public APIs, consistent with ADRs 0005 and 0007. No acceptance feature files were changed, the task remains first and unchecked, and independent focused validation on the exact HEAD passed with 1 selected test and 0 failures; git diff checks and worktree status are clean. Full dev check remains explicitly assigned to task 021."
+          },
           "internal.run_id": "01M2EM4RDNFFXJQEEP5ACBQTR8",
           "response.implement_next_task": "Implemented task 018’s custom-group email and authorization proof. No production changes were necessary; the existing generic Membership and Messaging APIs already satisfy the behavior.\n\n1. Selected task\n\n`- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.`\n\n2. Changes\n\nAdded an end-to-end integration test in [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:208) that:\n\n- Creates Board through the authenticated `Membership.create_custom_group/2` API.\n- Resolves `board@kmc.clubs.memba.io` to that custom group.\n- Lets an active club member outside Board start a Board conversation by email.\n- Routes the initial delivery only to Board’s active member.\n- Keeps the conversation out of Everyone.\n- Grants Board write/read access while giving the sender no membership, read access, delivery receipt, or follow.\n- Rejects the sender’s subsequent website reply.\n- Rejects a forged email reply using another recipient’s outbound message ID.\n- Confirms rejected attempts create no reply message and do not mutate follow state.\n\nAcceptance feature files were not changed; executing their tagged scenarios remains task 021.\n\n3. Validation\n\n- Focused new test: 1 selected test passed, 0 failures.\n- Inbound, group-send, and reply suites: 50 tests, 0 failures.\n- `mix format --check-formatted test/memba/messaging/inbound_club_message_acceptance_test.exs`: passed.\n- `git diff --check`: passed.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick`: 1,331 tests, 0 failures.\n\n4. Todo state\n\nThe line remains unchanged and unchecked in [todo.md](/workspace/memba/docs/iterations/062-create-custom-groups/todo.md:20):\n\n`- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.`\n\n5. Todo changes\n\nNone. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n- ADR 0003: external email delivery remains behind the configured fake/test adapter.\n- ADRs 0004 and 0005: the existing message aggregate records the resolved custom-group recipients and conversation access atomically.\n- ADR 0007: Messaging uses Membership’s public APIs; the test does not couple Messaging to Membership projection schemas.\n- ADR 0009: assertions exercise projected conversation, delivery, access, and follow state.\n- ADR 0022: strong-consistency dispatches provide deterministic read-after-write assertions.\n- ADR 0024: custom-group creation continues through the Club consistency boundary via the authenticated Membership API.",
-          "last_response": "Implemented task 018’s custom-group email and authorization proof. No production changes were necessary; the existing generic Membership and Messaging APIs already satisfy the behavior.\n\n1. Selected",
+          "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.\",\"reason\":\"At clean HEAD 9c61aa6, the candidate ",
           "internal.retry_count.resume_gate": 0,
           "thread.revise_task.current_node": "validate_task",
           "thread.sync_task_list.current_node": "todo_readable",
@@ -17834,13 +18222,13 @@
           "thread.implement_next_task.current_node": "validate_task",
           "thread.validate_task.current_node": "apply_task_verdict",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "current_node": "implement_next_task",
+          "current_node": "validate_task",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "outcome": "succeeded",
-          "last_stage": "implement_next_task",
+          "last_stage": "validate_task",
           "internal.retry_count.sync_task_list": 0,
-          "internal.node_visit_count": 7,
+          "internal.node_visit_count": 9,
           "thread.wip_gate.current_node": "preflight_sandbox",
           "graph.max_node_visits": "80",
           "thread.read_plan.current_node": "wip_gate",
@@ -17997,13 +18385,13 @@
           "validate_task": {
             "status": "succeeded",
             "context_updates": {
-              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 017 Extend group queries/routing only where the existing generic paths need it.\",\"reason\":\"At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The checkpoint strengthens the PhoenixTest creation flow to prove the existing public group queries and opaque-ID routes immediately support the newly created custom group: creator membership/count, stored address, structural custom-group identity, canonical Members and Conversations URLs, selected rail/header state, ordinary member listing, and absence of the single-member promotion. No production query or route changes were needed, and no acceptance feature files were edited. Independent focused validation passed with 9 tests and 0 failures, and the generic named-group browser scenario passed with 1 scenario and 6 steps. The work preserves the LiveView, canonical-host, read-your-writes, URL-state, and Club-boundary constraints in ADRs 0015, 0019, 0022, 0023, and 0024.\"}",
-              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 017 Extend group queries/routing only where the existing generic paths need it.\",\"reason\":\"At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The",
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.\",\"reason\":\"At clean HEAD 9c61aa6, the candidate ",
               "output.validate_task": {
                 "decision": "accept",
-                "task": "- [ ] 017 Extend group queries/routing only where the existing generic paths need it.",
-                "reason": "At clean HEAD d8f3b2c, task 017 is the unambiguous first pending item. The checkpoint strengthens the PhoenixTest creation flow to prove the existing public group queries and opaque-ID routes immediately support the newly created custom group: creator membership/count, stored address, structural custom-group identity, canonical Members and Conversations URLs, selected rail/header state, ordinary member listing, and absence of the single-member promotion. No production query or route changes were needed, and no acceptance feature files were edited. Independent focused validation passed with 9 tests and 0 failures, and the generic named-group browser scenario passed with 1 scenario and 6 steps. The work preserves the LiveView, canonical-host, read-your-writes, URL-state, and Club-boundary constraints in ADRs 0015, 0019, 0022, 0023, and 0024."
+                "task": "- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.",
+                "reason": "At clean HEAD 9c61aa6, the candidate adds a focused end-to-end test that creates Board through Membership.create_custom_group/2, resolves its stored email address through Messaging, and proves an active club member outside Board can start a private conversation by email without gaining group membership, read access, delivery, follow, or website/email reply permission. It also verifies recipient scoping to Board, exclusion from Everyone, and no message/follow mutation after rejected replies. Production routing and authorization use Membership's public APIs, consistent with ADRs 0005 and 0007. No acceptance feature files were changed, the task remains first and unchecked, and independent focused validation on the exact HEAD passed with 1 selected test and 0 failures; git diff checks and worktree status are clean. Full dev check remains explicitly assigned to task 021."
               },
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 018 Prove custom-group email routing and conversation authorisation using existing public Membership/Messaging APIs.\",\"reason\":\"At clean HEAD 9c61aa6, the candidate adds a focused end-to-end test that creates Board through Membership.create_custom_group/2, resolves its stored email address through Messaging, and proves an active club member outside Board can start a private conversation by email without gaining group membership, read access, delivery, follow, or website/email reply permission. It also verifies recipient scoping to Board, exclusion from Everyone, and no message/follow mutation after rejected replies. Production routing and authorization use Membership's public APIs, consistent with ADRs 0005 and 0007. No acceptance feature files were changed, the task remains first and unchecked, and independent focused validation on the exact HEAD passed with 1 selected test and 0 failures; git diff checks and worktree status are clean. Full dev check remains explicitly assigned to task 021.\"}",
               "last_stage": "validate_task"
             },
             "notes": "Stage completed: validate_task",
@@ -18015,10 +18403,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 113668,
-                    "output_tokens": 2247,
-                    "reasoning_tokens": 1067,
-                    "cache_read_tokens": 196480,
+                    "input_tokens": 142020,
+                    "output_tokens": 2891,
+                    "reasoning_tokens": 1752,
+                    "cache_read_tokens": 498304,
                     "cache_write_tokens": 0
                   }
                 },
@@ -18026,13 +18414,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 766000
+              "total_usd_micros": 1098542
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 84252,
-              "tool_time_ms": 28902,
-              "active_time_ms": 113154
+              "inference_time_ms": 131285,
+              "tool_time_ms": 167852,
+              "active_time_ms": 299137
             }
           },
           "apply_task_verdict": {
@@ -18093,12 +18481,12 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "apply_task_verdict",
         "node_visits": {
           "implement_next_task": 7,
           "apply_task_verdict": 8,
           "preflight_sandbox": 1,
-          "validate_task": 8,
+          "validate_task": 9,
           "all_tasks_done": 7,
           "resume_gate": 1,
           "verify_source_head": 1,
@@ -21928,7 +22316,12 @@
       "first_event_seq": 5492,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T02:21:55.911806187Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -21943,16 +22336,20 @@
       "started_at": "2026-09-14T02:14:31.237343400Z",
       "handler": "agent",
       "graph_visit": 7,
-      "live_inference_ms": 271442,
-      "live_tool_ms": 153366,
+      "timing": {
+        "wall_time_ms": 444673,
+        "inference_time_ms": 290905,
+        "tool_time_ms": 153377,
+        "active_time_ms": 444282
+      },
       "usage": {
-        "input_tokens": 280175,
-        "output_tokens": 7537,
-        "total_tokens": 2663788,
-        "reasoning_tokens": 3212,
-        "cache_read_tokens": 2372864,
+        "input_tokens": 281817,
+        "output_tokens": 8111,
+        "total_tokens": 2803877,
+        "reasoning_tokens": 3485,
+        "cache_read_tokens": 2510464,
         "cache_write_tokens": 0,
-        "total_usd_micros": 2909777
+        "total_usd_micros": 3012197
       },
       "model": {
         "provider": "openai",
@@ -22067,54 +22464,43 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 139066,
-        "usage_percent": 51.12720588235294,
+        "input_tokens": 139242,
+        "usage_percent": 51.191911764705885,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-14T02:21:36.466943886Z",
-        "event_seq": 5794,
+        "generated_at": "2026-09-14T02:21:55.906689879Z",
+        "event_seq": 5801,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2832,
-            "usage_percent": 1.0411764705882354
+            "tokens": 2822,
+            "usage_percent": 1.0375
           },
           {
             "category": "tools",
-            "tokens": 868,
-            "usage_percent": 0.3191176470588235
+            "tokens": 865,
+            "usage_percent": 0.3180147058823529
           },
           {
             "category": "memory",
-            "tokens": 392,
-            "usage_percent": 0.14411764705882352
+            "tokens": 391,
+            "usage_percent": 0.14375
           },
           {
             "category": "conversation",
-            "tokens": 134967,
-            "usage_percent": 49.62022058823529
+            "tokens": 135158,
+            "usage_percent": 49.690441176470586
           },
           {
             "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "5331667c-bacd-43d7-a85b-963a99d2a84b",
-        "started_at": "2026-09-14T02:21:36.469335416Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-14T02:21:45.253249126Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "sync_task_list@6": {
       "first_event_seq": 5029,
@@ -22669,6 +23055,180 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "validate_task@9": {
+      "first_event_seq": 5811,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T02:21:59.740631251Z",
+      "handler": "agent",
+      "graph_visit": 9,
+      "live_inference_ms": 123061,
+      "live_tool_ms": 167857,
+      "usage": {
+        "input_tokens": 354013,
+        "output_tokens": 8830,
+        "total_tokens": 2043091,
+        "reasoning_tokens": 4216,
+        "cache_read_tokens": 1676032,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 2999461
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "subagents": [
+        {
+          "agent_id": "90729d46",
+          "depth": 1,
+          "task": "Independently review the live repository candidate for the first unchecked task in docs/iterations/062-create-custom-groups/todo.md. Do not edit. Inspect plan, todo, status/log, candidate checkpoint(s), relevant tests and production APIs, acceptance feature diffs, ADRs. Return recommended accept/revise/blocked with exact task and concise evidence.",
+          "status": {
+            "kind": "completed",
+            "success": true,
+            "turns_used": 46
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 108746,
+        "usage_percent": 39.980147058823526,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-14T02:26:51.013314040Z",
+        "event_seq": 6251,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 3059,
+            "usage_percent": 1.1246323529411764
+          },
+          {
+            "category": "tools",
+            "tokens": 524,
+            "usage_percent": 0.19264705882352942
+          },
+          {
+            "category": "memory",
+            "tokens": 424,
+            "usage_percent": 0.15588235294117647
+          },
+          {
+            "category": "conversation",
+            "tokens": 104733,
+            "usage_percent": 38.50477941176471
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "inference": {
+        "session_id": "5a3baeff-1407-4428-8253-c649dc894ec2",
+        "started_at": "2026-09-14T02:26:51.014985847Z",
+        "requested_model": {
+          "provider": "openai",
+          "model_id": "gpt-5.6-sol"
+        },
+        "first_output_at": "2026-09-14T02:26:54.665926511Z",
+        "first_output_kind": "text",
+        "retries": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "all_tasks_done@4": {
       "first_event_seq": 3752,
