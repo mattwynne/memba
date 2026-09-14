@@ -3,8 +3,9 @@ defmodule Memba.Membership.Projectors.Membership do
   Projects membership events into the Membership read model.
 
   An added membership is not exposed as active until the follow-cleanup policy
-  has handled all earlier facts on that Club stream. This keeps a rapid re-add
-  from making a departed member eligible for stale private-group follows.
+  has durably acknowledged that event's global EventStore position. This keeps
+  a rapid re-add from making a departed member eligible for stale private-group
+  follows while allowing this projector to rebuild independently.
   """
 
   use Commanded.Projections.Ecto,
@@ -13,16 +14,13 @@ defmodule Memba.Membership.Projectors.Membership do
     name: "Memba.Membership.Projectors.Membership",
     consistency: :strong
 
-  alias Commanded.Event.Handler
-  alias Commanded.Registration
-  alias Commanded.Subscriptions
-  alias Memba.Membership.App
   alias Memba.Membership.Events.ClubMemberAdded
   alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.ProjectionBarrier
 
   @impl Commanded.Event.Handler
   def handle(%ClubMemberAdded{} = event, metadata) do
@@ -42,33 +40,23 @@ defmodule Memba.Membership.Projectors.Membership do
   end)
 
   defp project_member_added_after_follow_cleanup(event, metadata) do
-    with :ok <- await_follow_cleanup(event.club_id, metadata.stream_version) do
+    with :ok <- await_follow_cleanup(metadata.event_number) do
       update_projection(event, metadata, fn multi ->
         project_member_added(multi, event)
       end)
     end
   end
 
-  defp await_follow_cleanup(club_id, stream_version) do
-    handler_name = Handler.name(App, inspect(ClearRemovedGroupMemberFollows))
+  defp await_follow_cleanup(event_number) do
+    case ProjectionBarrier.await(
+           [ClearRemovedGroupMemberFollows],
+           checkpoint: event_number,
+           timeout: 5_000
+         ) do
+      {:ok, _result} ->
+        :ok
 
-    case Registration.whereis_name(App, handler_name) do
-      pid when is_pid(pid) ->
-        with :ok <-
-               Subscriptions.wait_for(
-                 App,
-                 club_id,
-                 stream_version,
-                 consistency: [ClearRemovedGroupMemberFollows]
-               ),
-             ^pid <- Registration.whereis_name(App, handler_name) do
-          :ok
-        else
-          :undefined -> {:error, :removed_group_member_follow_cleanup_unavailable}
-          _replacement_pid -> {:error, :removed_group_member_follow_cleanup_restarted}
-        end
-
-      :undefined ->
+      {:error, :timeout, _result} ->
         {:error, :removed_group_member_follow_cleanup_unavailable}
     end
   end
