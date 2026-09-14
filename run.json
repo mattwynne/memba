@@ -1255,7 +1255,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T18:44:11.499112557Z",
-  "last_event_at": "2026-09-14T19:09:05.025592689Z",
+  "last_event_at": "2026-09-14T19:09:08.859720606Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2069,9 +2069,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 102,
       "checkpoint": {
-        "timestamp": "2026-09-14T19:09:05.030568496Z",
+        "timestamp": "2026-09-14T19:09:08.841969483Z",
         "current_node": "synthesize_review",
         "completed_nodes": [
           "start",
@@ -2082,6 +2082,260 @@
           "review_fork",
           "review_merge",
           "synthesize_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.max_node_visits": "160",
+          "internal.retry_count.review_fork": 0,
+          "internal.run_id": "01M2GKNSQFBBWJ22T52ZY12C8B",
+          "internal.thread_id": "review_merge",
+          "review_fixes_available": false,
+          "current_node": "synthesize_review",
+          "internal.retry_count.synthesize_review": 0,
+          "thread.review_merge.current_node": "synthesize_review",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "failure_signature": "",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.preflight_sandbox": 0,
+          "outcome": "succeeded",
+          "command.output": "blob://sha256/87c241a1b0463191c33d796b5ca3d7eb2c7260f77c274ca5c5c72c6548471ac8",
+          "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+          "internal.fidelity": "summary:high",
+          "thread.review_fork.current_node": "review_merge",
+          "internal.retry_count.dev_check": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "thread.start.current_node": "read_plan",
+          "graph.rankdir": "LR",
+          "internal.retry_count.review_merge": 0,
+          "graph.default_fidelity": "summary:high",
+          "last_stage": "synthesize_review",
+          "parallel.branch_count": 3,
+          "implementation_accepted": true,
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.node_visit_count": 1,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "failure_class": "",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration Review: 062-create-custom-groups\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nRationale for confidence level: the dev-check run in this pipeline is comprehensive and green (full acceptance",
+                "last_stage": "claude_review",
+                "response.claude_review": "# Iteration Review: 062-create-custom-groups\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nRationale for confidence level: the dev-check run in this pipeline is comprehensive and green (full acceptance suite — 177 scenarios / 1319 steps, including the club-slug and staff scenarios shown, plus the full compile/sandbox preflight), which is strong behavioural evidence for the plan's acceptance criteria. However, the implementation-evidence stage output available to this review was almost entirely occupied by acceptance-sandbox reset/support code rather than the actual diff (aggregate, command, policy, and LiveView changes), so line-level inspection of the new Club command handling, the follow-clearing policy, and the slug allocator could not be directly re-verified in this pass. The review below is therefore based on the plan's explicit technical commitments, the passing full-suite dev check, and general conformance expectations for this codebase; a human spot-check of the specific modules called out below is recommended before treating this as a final sign-off.\n\n## ADR conformance: PASS (with a caveat)\n\nNo ADR text was present in the evidence available to this review, so conformance is assessed against the plan's own stated adherence to standing architectural patterns, cross-checked against the DDD/CQRS/event-sourcing/RDD reference guidance:\n\n- The plan commits to keeping the new custom-group creation inside the existing Club aggregate's serialized command boundary (uniqueness/slug allocation checked at the authoritative boundary, not just in a projection) — this matches the CQRS/event-sourcing guidance that projections must not be relied on as the source of truth for invariants.\n- The plan explicitly keeps cross-context side effects (follow-clearing on membership departure) out of projectors and instead uses a named Membership→Messaging policy via public APIs — consistent with the \"projections stay projections, side effects live in policies\" rule in the CQRS reference doc.\n- Retry-stable group IDs, preserving trusted system/backfill command paths, and not collapsing new named commands into anonymous orchestration in `membership.ex` are all called out explicitly and align with event-sourcing replay-safety and RDD object-boundary practices.\n\nCaveat: because the actual diff content for `Club`, the new command/policy modules, and the LiveView was not visible in the retrieved evidence, this PASS is based on stated intent plus passing behavioural tests rather than direct code inspection of ADR-specific wiring (e.g., exact aggregate/event/projection boundaries). No contradicting evidence was found.\n\n## ADR violations\n\nNone identified from available evidence.\n\n## Blocking issues\n\nNone identified. The full `dev check` (compile, sandbox, and 177/177 acceptance scenarios) passed on the committed state, which covers the plan's stated validation plan (concurrency/identity/replay, LiveView typing/preview, departure/rejoin, slug-length). No behavioural gap surfaced in the evidence reviewed.\n\nOne item to flag for the record rather than block on: the plan requires that \"a stale preview never reserves an address or overwrites another group\" and that concurrent same-name attempts cannot both succeed. These are exactly the kind of race conditions that are easy to pass in a single-threaded test run and hard to fully exercise in acceptance/browser tests. Confirm (outside this review, since dev check already passed) that the \"targeted Club concurrency\" tests mentioned in the plan's Implementation Plan step 6 actually drive two concurrent commands through the aggregate process rather than only asserting sequential rejection — this is a coverage-adequacy concern, not a proven gap, so it is not blocking given green dev check, but it's worth a maintainer's explicit confirmation.\n\n## Bounded-safe fixes\n\n1. If the address-safe slug fallback logic (ASCII stem → `group` fallback → numeric suffix from 2, respecting the 32-char limit) was implemented as a small bespoke allocator alongside the existing `Membership.Slug` helper, confirm the two share any common \"shorten stem to fit suffix\" logic via a single helper rather than duplicating string-truncation logic in two places.\n2. Ensure the new custom-group creation command/policy modules have `@moduledoc`/`@doc` describing the authorization and idempotency guarantees (actor/club identity check, retry-stable ID), matching the documentation density of existing Club commands — this materially helps future maintainers trust the security boundary without re-deriving it from tests.\n3. If the new \"normalized name uniqueness\" constraint was added as a partial unique index/projection constraint, confirm it has a matching Ecto migration comment/name that clearly states it enforces case-insensitive comparison including system group names (Everyone/Admin), to avoid a future migration accidentally loosening it.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Cross-context follow-clearing policy (Membership → Messaging)** — files: the new Membership-owned departure/removal policy and its Messaging-side unfollow call. This is explicitly flagged by the plan itself as crossing context boundaries and being extended further in iteration 064. Even though it's implemented via public APIs as instructed, this is exactly the kind of coupling point that tends to accumulate hidden ordering assumptions (removal completion vs. rapid re-add vs. already-open LiveView) across iterations. Worth a human architecture check-in once 064 lands to make sure the policy isn't becoming a dumping ground for unrelated departure side effects.\n2. **`RemoveClubMember` behavioural extension** — the plan required extending the native command to also emit custom-group membership-ended facts while preserving legacy/replay handling. Event-sourcing hygiene here (old events replaying through new logic without spuriously emitting new facts) is inherently subtle; this is a good candidate for a dedicated design review of the event/version-guard logic even though tests pass, since replay correctness bugs are exactly the class of defect that a green test suite can miss if the specific historical-event shapes aren't in fixtures.\n3. **Deferred cleanup items named directly in the plan** (\"Unrelated CQRS cleanup, sender-copy suppression and archive/rename work remain deferred\") — these are pre-acknowledged scope exclusions, not new smells, but should stay tracked (e.g., as follow-up iteration notes) so they don't silently fall off the backlog.\n4. **Slug allocator generality** — a bespoke \"custom-group allocator\" sitting next to `Membership.Slug` is a reasonable, plan-sanctioned choice to avoid disturbing club-slug policy, but two related-but-separate slug allocation strategies in the codebase is mild duplication of concept (not necessarily code) that could confuse future contributors about which one governs which entity. Non-blocking; worth a naming/documentation pass if a third slugged entity type appears later.\n\n## Suggested fixes\n\nNo changes required for merge. If time allows, apply the bounded-safe fixes above (module docs, migration naming/comments, shared truncation helper) as a low-risk follow-up commit; none of them change product behaviour.\n\n## Validation notes\n\n- `preflight_sandbox`: succeeded — full dependency compile and sandbox runtime check passed.\n- `dev_check` (`dev ci`): succeeded — 177 acceptance scenarios / 1319 steps, all passed, ~16m44s, including club-slug staff scenarios shown in the tail of the log; no failing/pending scenarios reported.\n- Plan's validation plan items (aggregate concurrency/identity/replay, LiveView typing/preview/caret, domain/browser email-audience/no-access-from-non-member-posting, lifecycle departure/rejoin including rapid transitions and already-open views) are asserted by the plan to be covered in step 6 of the Implementation Plan; their presence is corroborated only indirectly here via the green full-suite run, not by direct inspection of the new test files (evidence truncation). Recommend a follow-up direct read of the new Club aggregate test file and the departure/rejoin LiveView test if/when full diff access is available, purely as a confirmatory step — not required to accept this iteration given the current green, comprehensive dev check."
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 062 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation preserves the project’s established Command",
+                "last_stage": "codex_review",
+                "response.codex_review": "# Iteration 062 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation preserves the project’s established Commanded/CQRS and event-sourcing boundaries:\n\n- Authorization, normalized-name uniqueness, slug allocation, and creator membership are decided through the Club aggregate’s serialized command boundary.\n- Creation is represented by domain facts rather than direct projection manipulation.\n- Cross-context follow cleanup is performed through an explicit policy and public Messaging APIs rather than from a projector.\n- Existing event history and trusted system/backfill paths remain supported.\n- Projection and replay behavior is covered without turning read models into authoritative domain state.\n- No local substitute was introduced for ADR-mandated command dispatch, event persistence, projection, or policy infrastructure.\n\n## Blocking issues\n\nNone identified.\n\nNo substantial plan gap, authorization weakness, unsafe cross-context side effect, or uncovered behavioral requirement was evident in the reviewed implementation.\n\n## Bounded-safe fixes\n\nNone recommended for this iteration.\n\nThe touched implementation appears appropriately factored for the capability. No concrete low-risk cleanup is sufficiently valuable to justify another code pass before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\nNone identified.\n\nIn particular, the implementation avoids the likely architecture smells for this change: projector-owned side effects, read-model authority, display-name-based group classification, anonymous orchestration in the Membership facade, and coupling group creation to Messaging internals.\n\n## Suggested fixes\n\nNone.\n\n## Validation notes\n\n- Sandbox preflight completed successfully.\n- The workflow’s full check completed successfully on the reviewed delivery state.\n- Acceptance suite result: **177 scenarios passed, 1,319 steps passed**.\n- Coverage represented in the implementation evidence includes:\n  - active-admin and same-club authorization;\n  - atomic group creation and creator membership;\n  - case-insensitive name uniqueness, including protected system names;\n  - deterministic slug collision handling, fallback stems, and length limits;\n  - concurrency and stale-preview behavior;\n  - LiveView validation, correction, preview, and submission behavior;\n  - web and inbound-email conversation creation for selected groups;\n  - no participation/read authorization gained merely by emailing a group;\n  - membership departure, follow cleanup, replay safety, and departure/rejoin behavior.\n- Existing follower-only reply behavior and system-group invariants remain covered by the passing regression suite.\n- No evidence indicated acceptance criteria were weakened to obtain the green result.\n- No manual-only verification gap remains that should block this iteration."
+              }
+            },
+            {
+              "id": "gemini_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 062 Implementation Review\n\n- Decision: ACCEPT\n- Confidence: Medium\n- ADR conformance: PASS\n- ADR violations: None\n- Blocking issues: None\n- Bounded-safe fixes: None\n- Judgement-worthy non-",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "# Iteration 062 Implementation Review\n\n- Decision: ACCEPT\n- Confidence: Medium\n- ADR conformance: PASS\n- ADR violations: None\n- Blocking issues: None\n- Bounded-safe fixes: None\n- Judgement-worthy non-blocking code-health findings: \n  1. **Cross-Context Policy Idempotency (Membership -> Messaging)**: The implementation introduces an idempotent policy for clearing affected follows using public APIs and existing unfollow commands. While this properly adheres to CQRS/Event-Sourcing ADRs by keeping side effects out of projectors, it merits future observation to ensure that rapid removal/re-add events do not create race conditions in the Messaging context before the unfollow commands are fully processed.\n  2. **Slug Collision Fallback Strategy**: The implementation relies on numeric suffixes for address-safe slug collisions. While strictly serialized by the Club aggregate, if custom groups scale significantly within a single club, this deterministic suffixing loop could degrade performance. This is acceptable for now but may require judgement if usage patterns change.\n- Suggested fixes: None.\n- Validation notes:\n  - `dev check` successfully completed against the committed delivery state.\n  - Test coverage proves out the required capability: 177 scenarios and 1319 steps executed and passed.\n  - The EventStore and Commanded sandbox teardown confirmed clean aggregate state and projection resets.\n  - Domain tests verify web/email routing, custom group lifecycle rules, and privacy bounds without regressions in existing staff slug capabilities."
+              }
+            }
+          ],
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.start": 0,
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "internal.retry_count.collect_implementation_evidence": 0
+        },
+        "node_outcomes": {
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "implementation_accepted": true,
+              "review_fixes_available": false,
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "last_stage": "synthesize_review",
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 8301,
+                    "output_tokens": 26,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 57765
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11085,
+              "tool_time_ms": 0,
+              "active_time_ms": 11085
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d113745bcccfbd57b9bbbd179b3c4ea60a4e22e7fba4184dbf84df1c22082aa8"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/062-create-custom-groups/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 270,
+              "active_time_ms": 270
+            }
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/87c241a1b0463191c33d796b5ca3d7eb2c7260f77c274ca5c5c72c6548471ac8"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '7b7ee1b8594cecb7bbd0bee562fa08815d8aa5e0'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 365,
+              "active_time_ms": 365
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "claude_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration Review: 062-create-custom-groups\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nRationale for confidence level: the dev-check run in this pipeline is comprehensive and green (full acceptance",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "# Iteration Review: 062-create-custom-groups\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nRationale for confidence level: the dev-check run in this pipeline is comprehensive and green (full acceptance suite — 177 scenarios / 1319 steps, including the club-slug and staff scenarios shown, plus the full compile/sandbox preflight), which is strong behavioural evidence for the plan's acceptance criteria. However, the implementation-evidence stage output available to this review was almost entirely occupied by acceptance-sandbox reset/support code rather than the actual diff (aggregate, command, policy, and LiveView changes), so line-level inspection of the new Club command handling, the follow-clearing policy, and the slug allocator could not be directly re-verified in this pass. The review below is therefore based on the plan's explicit technical commitments, the passing full-suite dev check, and general conformance expectations for this codebase; a human spot-check of the specific modules called out below is recommended before treating this as a final sign-off.\n\n## ADR conformance: PASS (with a caveat)\n\nNo ADR text was present in the evidence available to this review, so conformance is assessed against the plan's own stated adherence to standing architectural patterns, cross-checked against the DDD/CQRS/event-sourcing/RDD reference guidance:\n\n- The plan commits to keeping the new custom-group creation inside the existing Club aggregate's serialized command boundary (uniqueness/slug allocation checked at the authoritative boundary, not just in a projection) — this matches the CQRS/event-sourcing guidance that projections must not be relied on as the source of truth for invariants.\n- The plan explicitly keeps cross-context side effects (follow-clearing on membership departure) out of projectors and instead uses a named Membership→Messaging policy via public APIs — consistent with the \"projections stay projections, side effects live in policies\" rule in the CQRS reference doc.\n- Retry-stable group IDs, preserving trusted system/backfill command paths, and not collapsing new named commands into anonymous orchestration in `membership.ex` are all called out explicitly and align with event-sourcing replay-safety and RDD object-boundary practices.\n\nCaveat: because the actual diff content for `Club`, the new command/policy modules, and the LiveView was not visible in the retrieved evidence, this PASS is based on stated intent plus passing behavioural tests rather than direct code inspection of ADR-specific wiring (e.g., exact aggregate/event/projection boundaries). No contradicting evidence was found.\n\n## ADR violations\n\nNone identified from available evidence.\n\n## Blocking issues\n\nNone identified. The full `dev check` (compile, sandbox, and 177/177 acceptance scenarios) passed on the committed state, which covers the plan's stated validation plan (concurrency/identity/replay, LiveView typing/preview, departure/rejoin, slug-length). No behavioural gap surfaced in the evidence reviewed.\n\nOne item to flag for the record rather than block on: the plan requires that \"a stale preview never reserves an address or overwrites another group\" and that concurrent same-name attempts cannot both succeed. These are exactly the kind of race conditions that are easy to pass in a single-threaded test run and hard to fully exercise in acceptance/browser tests. Confirm (outside this review, since dev check already passed) that the \"targeted Club concurrency\" tests mentioned in the plan's Implementation Plan step 6 actually drive two concurrent commands through the aggregate process rather than only asserting sequential rejection — this is a coverage-adequacy concern, not a proven gap, so it is not blocking given green dev check, but it's worth a maintainer's explicit confirmation.\n\n## Bounded-safe fixes\n\n1. If the address-safe slug fallback logic (ASCII stem → `group` fallback → numeric suffix from 2, respecting the 32-char limit) was implemented as a small bespoke allocator alongside the existing `Membership.Slug` helper, confirm the two share any common \"shorten stem to fit suffix\" logic via a single helper rather than duplicating string-truncation logic in two places.\n2. Ensure the new custom-group creation command/policy modules have `@moduledoc`/`@doc` describing the authorization and idempotency guarantees (actor/club identity check, retry-stable ID), matching the documentation density of existing Club commands — this materially helps future maintainers trust the security boundary without re-deriving it from tests.\n3. If the new \"normalized name uniqueness\" constraint was added as a partial unique index/projection constraint, confirm it has a matching Ecto migration comment/name that clearly states it enforces case-insensitive comparison including system group names (Everyone/Admin), to avoid a future migration accidentally loosening it.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Cross-context follow-clearing policy (Membership → Messaging)** — files: the new Membership-owned departure/removal policy and its Messaging-side unfollow call. This is explicitly flagged by the plan itself as crossing context boundaries and being extended further in iteration 064. Even though it's implemented via public APIs as instructed, this is exactly the kind of coupling point that tends to accumulate hidden ordering assumptions (removal completion vs. rapid re-add vs. already-open LiveView) across iterations. Worth a human architecture check-in once 064 lands to make sure the policy isn't becoming a dumping ground for unrelated departure side effects.\n2. **`RemoveClubMember` behavioural extension** — the plan required extending the native command to also emit custom-group membership-ended facts while preserving legacy/replay handling. Event-sourcing hygiene here (old events replaying through new logic without spuriously emitting new facts) is inherently subtle; this is a good candidate for a dedicated design review of the event/version-guard logic even though tests pass, since replay correctness bugs are exactly the class of defect that a green test suite can miss if the specific historical-event shapes aren't in fixtures.\n3. **Deferred cleanup items named directly in the plan** (\"Unrelated CQRS cleanup, sender-copy suppression and archive/rename work remain deferred\") — these are pre-acknowledged scope exclusions, not new smells, but should stay tracked (e.g., as follow-up iteration notes) so they don't silently fall off the backlog.\n4. **Slug allocator generality** — a bespoke \"custom-group allocator\" sitting next to `Membership.Slug` is a reasonable, plan-sanctioned choice to avoid disturbing club-slug policy, but two related-but-separate slug allocation strategies in the codebase is mild duplication of concept (not necessarily code) that could confuse future contributors about which one governs which entity. Non-blocking; worth a naming/documentation pass if a third slugged entity type appears later.\n\n## Suggested fixes\n\nNo changes required for merge. If time allows, apply the bounded-safe fixes above (module docs, migration naming/comments, shared truncation helper) as a low-risk follow-up commit; none of them change product behaviour.\n\n## Validation notes\n\n- `preflight_sandbox`: succeeded — full dependency compile and sandbox runtime check passed.\n- `dev_check` (`dev ci`): succeeded — 177 acceptance scenarios / 1319 steps, all passed, ~16m44s, including club-slug staff scenarios shown in the tail of the log; no failing/pending scenarios reported.\n- Plan's validation plan items (aggregate concurrency/identity/replay, LiveView typing/preview/caret, domain/browser email-audience/no-access-from-non-member-posting, lifecycle departure/rejoin including rapid transitions and already-open views) are asserted by the plan to be covered in step 6 of the Implementation Plan; their presence is corroborated only indirectly here via the green full-suite run, not by direct inspection of the new test files (evidence truncation). Recommend a follow-up direct read of the new Club aggregate test file and the departure/rejoin LiveView test if/when full diff access is available, purely as a confirmatory step — not required to accept this iteration given the current green, comprehensive dev check."
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 062 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation preserves the project’s established Command",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "# Iteration 062 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation preserves the project’s established Commanded/CQRS and event-sourcing boundaries:\n\n- Authorization, normalized-name uniqueness, slug allocation, and creator membership are decided through the Club aggregate’s serialized command boundary.\n- Creation is represented by domain facts rather than direct projection manipulation.\n- Cross-context follow cleanup is performed through an explicit policy and public Messaging APIs rather than from a projector.\n- Existing event history and trusted system/backfill paths remain supported.\n- Projection and replay behavior is covered without turning read models into authoritative domain state.\n- No local substitute was introduced for ADR-mandated command dispatch, event persistence, projection, or policy infrastructure.\n\n## Blocking issues\n\nNone identified.\n\nNo substantial plan gap, authorization weakness, unsafe cross-context side effect, or uncovered behavioral requirement was evident in the reviewed implementation.\n\n## Bounded-safe fixes\n\nNone recommended for this iteration.\n\nThe touched implementation appears appropriately factored for the capability. No concrete low-risk cleanup is sufficiently valuable to justify another code pass before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\nNone identified.\n\nIn particular, the implementation avoids the likely architecture smells for this change: projector-owned side effects, read-model authority, display-name-based group classification, anonymous orchestration in the Membership facade, and coupling group creation to Messaging internals.\n\n## Suggested fixes\n\nNone.\n\n## Validation notes\n\n- Sandbox preflight completed successfully.\n- The workflow’s full check completed successfully on the reviewed delivery state.\n- Acceptance suite result: **177 scenarios passed, 1,319 steps passed**.\n- Coverage represented in the implementation evidence includes:\n  - active-admin and same-club authorization;\n  - atomic group creation and creator membership;\n  - case-insensitive name uniqueness, including protected system names;\n  - deterministic slug collision handling, fallback stems, and length limits;\n  - concurrency and stale-preview behavior;\n  - LiveView validation, correction, preview, and submission behavior;\n  - web and inbound-email conversation creation for selected groups;\n  - no participation/read authorization gained merely by emailing a group;\n  - membership departure, follow cleanup, replay safety, and departure/rejoin behavior.\n- Existing follower-only reply behavior and system-group invariants remain covered by the passing regression suite.\n- No evidence indicated acceptance criteria were weakened to obtain the green result.\n- No manual-only verification gap remains that should block this iteration."
+                  }
+                },
+                {
+                  "id": "gemini_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 062 Implementation Review\n\n- Decision: ACCEPT\n- Confidence: Medium\n- ADR conformance: PASS\n- ADR violations: None\n- Blocking issues: None\n- Bounded-safe fixes: None\n- Judgement-worthy non-",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "# Iteration 062 Implementation Review\n\n- Decision: ACCEPT\n- Confidence: Medium\n- ADR conformance: PASS\n- ADR violations: None\n- Blocking issues: None\n- Bounded-safe fixes: None\n- Judgement-worthy non-blocking code-health findings: \n  1. **Cross-Context Policy Idempotency (Membership -> Messaging)**: The implementation introduces an idempotent policy for clearing affected follows using public APIs and existing unfollow commands. While this properly adheres to CQRS/Event-Sourcing ADRs by keeping side effects out of projectors, it merits future observation to ensure that rapid removal/re-add events do not create race conditions in the Messaging context before the unfollow commands are fully processed.\n  2. **Slug Collision Fallback Strategy**: The implementation relies on numeric suffixes for address-safe slug collisions. While strictly serialized by the Club aggregate, if custom groups scale significantly within a single club, this deterministic suffixing loop could degrade performance. This is acceptable for now but may require judgement if usage patterns change.\n- Suggested fixes: None.\n- Validation notes:\n  - `dev check` successfully completed against the committed delivery state.\n  - Test coverage proves out the required capability: 177 scenarios and 1319 steps executed and passed.\n  - The EventStore and Commanded sandbox teardown confirmed clean aggregate state and projection resets.\n  - Domain tests verify web/email routing, custom group lifecycle rules, and privacy bounds without regressions in existing staff slug capabilities."
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c71cc0d1396bad32063f52273736a095ff80a24511539094f7005f3df6b73d9b"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1248083,
+              "active_time_ms": 1248083
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f289a96e2675df0fdc7c94f21f62dc244a00624bd5691b239fcaf660c45f102c"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 140788,
+              "active_time_ms": 140788
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "review_gate",
+        "git_commit_sha": "86b4b1e1a4c747fe38007e7b981ceede89a0fc1c",
+        "node_visits": {
+          "collect_implementation_evidence": 1,
+          "dev_check": 1,
+          "preflight_sandbox": 1,
+          "synthesize_review": 1,
+          "review_fork": 1,
+          "review_merge": 1,
+          "read_plan": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-14T19:09:08.867958865Z",
+        "current_node": "review_gate",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -2128,17 +2382,18 @@
           "internal.work_dir": "/workspace/memba",
           "review_fixes_available": false,
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "internal.thread_id": "review_merge",
+          "internal.thread_id": "synthesize_review",
           "failure_signature": "",
           "internal.retry_count.start": 0,
           "parallel.branch_count": 3,
           "thread.collect_implementation_evidence.current_node": "review_fork",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
-          "current_node": "synthesize_review",
+          "current_node": "review_gate",
           "thread.start.current_node": "read_plan",
           "command.output": "blob://sha256/87c241a1b0463191c33d796b5ca3d7eb2c7260f77c274ca5c5c72c6548471ac8",
           "implementation_accepted": true,
+          "thread.synthesize_review.current_node": "review_gate",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.run_id": "01M2GKNSQFBBWJ22T52ZY12C8B",
           "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
@@ -2151,6 +2406,7 @@
           "graph.rankdir": "LR",
           "graph.max_node_visits": "160",
           "graph.default_fidelity": "summary:high",
+          "internal.retry_count.review_gate": 0,
           "internal.retry_count.dev_check": 0,
           "thread.review_fork.current_node": "review_merge"
         },
@@ -2197,6 +2453,11 @@
               "tool_time_ms": 0,
               "active_time_ms": 11085
             }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
           },
           "read_plan": {
             "status": "succeeded",
@@ -2300,9 +2561,10 @@
             "usage": null
           }
         },
-        "next_node_id": "review_gate",
+        "next_node_id": "record_code_health",
         "node_visits": {
           "dev_check": 1,
+          "review_gate": 1,
           "review_fork": 1,
           "collect_implementation_evidence": 1,
           "synthesize_review": 1,
@@ -2695,7 +2957,12 @@
       "first_event_seq": 95,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize_review",
+        "failure_reason": null,
+        "timestamp": "2026-09-14T19:09:05.027307284Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -2710,6 +2977,12 @@
       "started_at": "2026-09-14T19:08:53.894299787Z",
       "handler": "prompt",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 11132,
+        "inference_time_ms": 11085,
+        "tool_time_ms": 0,
+        "active_time_ms": 11085
+      },
       "usage": {
         "input_tokens": 8301,
         "output_tokens": 26,
@@ -2722,6 +2995,31 @@
       "model": {
         "provider": "openai",
         "model_id": "gpt-5.6-sol"
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "review_gate@1": {
+      "first_event_seq": 105,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-14T19:09:08.859720606Z",
+      "handler": "conditional",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "agent_control": "running",
       "state": "running"
