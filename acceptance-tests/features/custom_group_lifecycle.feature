@@ -1,4 +1,3 @@
-@todo-ui
 Feature: Joining and leaving custom groups
   Membership grants the whole conversation history.
   Losing membership ends access and future emails, not ownership of delivered copies.
@@ -11,7 +10,7 @@ Feature: Joining and leaving custom groups
     And Board's email address is "board@kmc.clubs.memba.io"
     And Board has the conversation "September agenda" with the reply "Include the hut budget"
 
-  @iteration-062 @todo-domain @todo-ui
+  @iteration-062
   Rule: Leaving the club ends custom-group memberships and their follows
 
     Scenario: Carol's club departure ends Board and Trips membership

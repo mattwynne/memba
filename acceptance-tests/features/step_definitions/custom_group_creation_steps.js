@@ -134,8 +134,8 @@ When(/^(\w+) creates the group$/, async function (_personName) {
   await submitEnteredCustomGroup(this);
 });
 
-Then(/^(\w+) should belong to (.+)$/, function (groupName, clubName) {
-  assertGroupBelongsToClub(this, groupName, clubName);
+Then(/^Board should belong to (.+)$/, function (clubName) {
+  assertGroupBelongsToClub(this, "Board", clubName);
 });
 
 Then(/^(\w+) should be its only member$/, function (personName) {
