@@ -666,3 +666,13 @@ The observed system assigns semantic decomposition, dependency discovery, implem
 Before selecting a countermeasure, distinguish necessary domain/acceptance knowledge from avoidable rediscovery: which of task 024's reads were needed, which repeated known facts, and which existing helpers could have made the work smaller? Also establish what evidence should make a task ready for a worker and how the workflow currently communicates that evidence. No safe numerical task/context limit or replacement architecture has been established by this investigation.
 
 Evidence: failed-run events and meta artifacts; task-split commits above; current/run-revision task generation and validation contracts; release-source functions above. Derived measurements are retained at `/tmp/memba-062-context-metrics.json` and `/tmp/memba-062-context-output-categories.json`.
+
+### Bounded preparation exercise: one rule at one layer
+
+Matt agreed to work through one concrete case before choosing a new workflow. The [task-024 preparation exercise](experiments/062-task-024/README.md) and [sample worker handoff](experiments/062-task-024/worker-handoff.md) use the pre-attempt checkpoint `3ec928f3e`.
+
+The packet covers only Board web composition at the domain layer: one existing scenario with its full positive/negative audience assertions. An external coverage ledger retains the other twelve domain scenarios and all thirteen browser scenarios, plus the separate lifecycle/final-gate obligations. This is not a live todo split or a proposal that every scenario must be its own node.
+
+Preparation identified existing fixture, send, access, provider-observation and runner code; it supplied context shapes and highlighted private-helper and wording adaptations. This separates real integration work from the broad subsystem discovery that the original worker performed. No implementation was attempted. A temporary tag-only selection check confirmed that the proposed scope can enable exactly one domain scenario without enabling browser coverage or changing scenario text.
+
+The artifacts are for the next design conversation. They do not prove a worker can finish within a particular token/time budget, and no new workflow architecture has been selected.
