@@ -1,0 +1,59 @@
+diff --git a/acceptance-tests/features/support/custom_group_conversations.js b/acceptance-tests/features/support/custom_group_conversations.js
+index 31375c0..b397b30 100644
+--- a/acceptance-tests/features/support/custom_group_conversations.js
++++ b/acceptance-tests/features/support/custom_group_conversations.js
+@@ -324,7 +324,12 @@ function assertFollowingLastConversation(world, personName) {
+ }
+ 
+ async function assertReplyDelivered(world, recipientName, senderName) {
+-  await assertReplyEmailDeliveredToMembers(world, senderName, [recipientName], boardName);
++  await assertReplyEmailDeliveredToMembers(
++    world,
++    senderName,
++    [recipientName],
++    kootenayClubName
++  );
+ }
+ 
+ async function assertReplyNotDelivered(world, personNames) {
+diff --git a/web/test/features/step_definitions/custom_group_conversation_steps.exs b/web/test/features/step_definitions/custom_group_conversation_steps.exs
+index 6386d2b..e4919e8 100644
+--- a/web/test/features/step_definitions/custom_group_conversation_steps.exs
++++ b/web/test/features/step_definitions/custom_group_conversation_steps.exs
+@@ -316,7 +316,10 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
+     board_id = group_id!(context, @club_name, @board_name)
+ 
+     assert_member_access(context, person_name, subject, :read, true)
+-    assert length(Messaging.list_conversation_messages_for_group(message.message_id, board_id)) >= 2
++
++    assert length(Messaging.list_conversation_messages_for_group(message.message_id, board_id)) >=
++             2
++
+     context
+   end
+ 
+@@ -438,8 +441,11 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
+ 
+     result =
+       case mode do
+-        :current_member -> Messaging.send_club_message_as_current_member(attrs, consistency: :strong)
+-        :fixture -> Messaging.send_club_message(attrs, consistency: :strong)
++        :current_member ->
++          Messaging.send_club_message_as_current_member(attrs, consistency: :strong)
++
++        :fixture ->
++          Messaging.send_club_message(attrs, consistency: :strong)
+       end
+ 
+     assert :ok = result
+@@ -728,7 +734,9 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
+   end
+ 
+   defp email_address?({_name, address}, expected), do: same_email?(address, expected)
+-  defp email_address?(address, expected) when is_binary(address), do: same_email?(address, expected)
++
++  defp email_address?(address, expected) when is_binary(address),
++    do: same_email?(address, expected)
+ 
+   defp same_email?(left, right), do: String.downcase(left) == String.downcase(right)
+ 
