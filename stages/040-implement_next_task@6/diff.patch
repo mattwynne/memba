@@ -1,0 +1,47 @@
+diff --git a/web/test/memba_web/live/member_dashboard_admission_live_test.exs b/web/test/memba_web/live/member_dashboard_admission_live_test.exs
+index e77d9b2..4f3d635 100644
+--- a/web/test/memba_web/live/member_dashboard_admission_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_admission_live_test.exs
+@@ -105,6 +105,42 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
+     refute_received {:email, %Swoosh.Email{}}
+   end
+ 
++  test "a provider delivery failure does not roll back or hide the committed admission",
++       %{conn: conn} do
++    original_mailer_config = Application.fetch_env!(:memba, Memba.Mailer)
++
++    on_exit(fn ->
++      Application.put_env(:memba, Memba.Mailer, original_mailer_config)
++    end)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Memba.TestSupport.FailingSwooshAdapter,
++      test_owner: self(),
++      test_delivery_result: {:error, :timeout}
++    )
++
++    club = create_club!("Alpine Club", "alpine")
++    alice = create_member!(club, "Alice Adams", "alice@example.com")
++    carol = create_member!(club, "Carol Canoe", "carol@example.com")
++    group = create_custom_group!(club, alice, "Trip Planning")
++
++    session =
++      conn
++      |> signed_in_club_host("alice@example.com", club)
++      |> visit(~p"/groups/#{group.group_id}/members")
++      |> click_button("Add member")
++      |> click_button("#custom-group-member-candidate-add-#{carol.person_id}", "Add")
++
++    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
++
++    session
++    |> assert_has("#club-member-#{carol.person_id}", "Carol Canoe")
++    |> refute_has("#custom-group-member-candidate-#{carol.person_id}")
++    |> refute_has("#flash-error")
++
++    assert Membership.active_member_of_group?(group.group_id, carol.person_id)
++  end
++
+   test "submit reauthorizes in the Club aggregate when projected group access is stale",
+        %{conn: conn} do
+     club = create_club!("Alpine Club", "alpine")
