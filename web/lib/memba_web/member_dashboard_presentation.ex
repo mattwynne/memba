@@ -94,6 +94,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
       load_selected_group(
         selected_club,
         current_member,
+        club_members,
         groups,
         participating_groups_by_id,
         selected_group_id,
@@ -113,40 +114,76 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp load_selected_group(
          selected_club,
          current_member,
+         club_members,
          groups,
          participating_groups_by_id,
          selected_group_id,
          current_member_can_manage_members?
        ) do
     with {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
-      selected_group
-      |> load_permitted_surface(
-        Map.get(participating_groups_by_id, selected_group_id),
-        selected_club,
-        current_member_can_manage_members?
-      )
-      |> then(fn {selected_group, surface_assigns} ->
-        {:ok,
-         Map.merge(
-           %{
-             page_title: selected_club.name,
-             selected_club: selected_club,
-             groups: groups,
-             selected_group: selected_group,
-             current_member: current_member,
-             current_member_can_manage_members?: current_member_can_manage_members?,
-             club_admin_email_address:
-               ClubInboundEmailAddress.address(
-                 selected_club.slug,
-                 SystemGroups.admin_email_slug()
-               )
-           },
-           surface_assigns
-         )}
-      end)
+      {selected_group, surface_assigns} =
+        load_permitted_surface(
+          selected_group,
+          Map.get(participating_groups_by_id, selected_group_id),
+          selected_club,
+          current_member_can_manage_members?
+        )
+
+      admission_assigns =
+        custom_group_admission_assigns(
+          selected_group,
+          club_members,
+          surface_assigns
+        )
+
+      {:ok,
+       surface_assigns
+       |> Map.merge(admission_assigns)
+       |> Map.merge(%{
+         page_title: selected_club.name,
+         selected_club: selected_club,
+         groups: groups,
+         selected_group: selected_group,
+         current_member: current_member,
+         current_member_can_manage_members?: current_member_can_manage_members?,
+         club_admin_email_address:
+           ClubInboundEmailAddress.address(
+             selected_club.slug,
+             SystemGroups.admin_email_slug()
+           )
+       })}
     else
       _missing_or_unauthorized -> {:error, :not_found}
     end
+  end
+
+  defp custom_group_admission_assigns(
+         selected_group,
+         club_members,
+         %{selected_group_access: selected_group_access, members: members}
+       ) do
+    can_add_members? =
+      SystemGroups.custom_group?(selected_group) and
+        selected_group_access in [:participating_member, :outside_admin]
+
+    can_add_self? = can_add_members? and selected_group_access == :outside_admin
+
+    candidates =
+      if can_add_members? do
+        active_group_member_ids = MapSet.new(members, & &1.id)
+
+        Enum.reject(club_members, fn candidate ->
+          MapSet.member?(active_group_member_ids, candidate.id)
+        end)
+      else
+        []
+      end
+
+    %{
+      can_add_custom_group_members?: can_add_members?,
+      can_add_self_to_custom_group?: can_add_self?,
+      custom_group_member_candidates: candidates
+    }
   end
 
   defp load_permitted_surface(

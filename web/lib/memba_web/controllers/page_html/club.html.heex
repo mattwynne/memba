@@ -171,7 +171,24 @@
               New message
             </.button>
           </:conversations_action>
-          <:members_action :if={participating_group? && @current_member_can_manage_members?}>
+          <:members_action :if={@can_add_custom_group_members?}>
+            <.button
+              id="member-section-action-add-group-member"
+              type="button"
+              variant="primary"
+              size="sm"
+              data-section-action="members"
+              phx-click="open_custom_group_member_picker"
+              aria-expanded={to_string(@custom_group_member_picker_open?)}
+              aria-controls="custom-group-member-picker"
+            >
+              Add member
+            </.button>
+          </:members_action>
+          <:members_action :if={
+            not @can_add_custom_group_members? && participating_group? &&
+              @current_member_can_manage_members?
+          }>
             <.button
               id="member-section-action-invite-member"
               href={
@@ -269,28 +286,63 @@
           hidden={not active_member_section?(active_section, "members")}
         >
           <section id="club-members">
-            <div
-              :if={outside_admin?}
-              id="member-group-outside-admin-notice"
-              class="outside"
-              role="region"
-              aria-label="You're managing a group you're not in"
+            <.outside_group_admin_notice
+              :if={outside_admin? && @can_add_self_to_custom_group?}
+              group_name={@selected_group.name}
             >
-              <.icon name="hero-user" class="size-5" aria-hidden="true" />
-              <div class="outside__body">
-                <h2 class="outside__title">
-                  You're a club admin, but you're not in {@selected_group.name}
-                </h2>
-                <p class="outside__copy">
-                  You can inspect who's in it. You can't read its conversations or get its emails
-                  unless you're a member—being a club admin doesn't grant that on its own.
-                </p>
-              </div>
-            </div>
+              <:add_self_action>
+                <.button
+                  id="member-group-add-self"
+                  type="button"
+                  size="sm"
+                  phx-click="add_custom_group_member"
+                  phx-value-membership_id={@current_member.membership_id}
+                  phx-value-person_id={@current_member.id}
+                  phx-disable-with="Adding you…"
+                  data-custom-group-member-action="add-self"
+                >
+                  Add yourself to {@selected_group.name}
+                </.button>
+              </:add_self_action>
+            </.outside_group_admin_notice>
+            <.custom_group_member_picker
+              :if={@can_add_custom_group_members? && @custom_group_member_picker_open?}
+              club_name={@selected_club.name}
+              group_name={@selected_group.name}
+              candidates={@custom_group_member_candidates}
+              query={@custom_group_member_picker_query}
+              search_form={@custom_group_member_picker_form}
+            >
+              <:candidate_action :let={candidate}>
+                <.button
+                  id={"custom-group-member-candidate-add-#{candidate.id}"}
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  class="btn-outline"
+                  phx-click="add_custom_group_member"
+                  phx-value-membership_id={candidate.membership_id}
+                  phx-value-person_id={candidate.id}
+                  phx-disable-with="Adding…"
+                  data-custom-group-member-action="add"
+                  data-membership-id={candidate.membership_id}
+                  data-person-id={candidate.id}
+                >
+                  Add
+                </.button>
+              </:candidate_action>
+            </.custom_group_member_picker>
+            <.custom_group_membership_guidance
+              :if={@can_add_custom_group_members?}
+              club_name={@selected_club.name}
+              group_name={@selected_group.name}
+              viewer_access={selected_group_access}
+            />
             <.member_list
               rows={@members}
               active_member_count={@active_member_count}
               current_member={@current_member}
+              group_name={@selected_group.name}
             />
           </section>
         </div>

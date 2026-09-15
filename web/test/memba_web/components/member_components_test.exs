@@ -7,6 +7,31 @@ defmodule MembaWeb.MemberComponentsTest do
   alias MembaWeb.MemberComponents
 
   describe "member_list/1" do
+    test "renders the designed empty custom-group state for zero members" do
+      html =
+        render_member_list(
+          rows: [],
+          active_member_count: 0,
+          current_member: %{id: Memba.ID.generate(:person), name: "Dana Diaz"},
+          group_name: "Board"
+        )
+
+      assert_selector(
+        html,
+        "#active-members-list[data-active-member-count='0'][data-active-members-state='empty']"
+      )
+
+      assert_text(html, "#active-members-empty-state", "Board has no members.")
+
+      assert_text(
+        html,
+        "#active-members-empty-state",
+        "Its conversations and emails are kept; whoever you add next will see them all."
+      )
+
+      refute_selector(html, "[data-testid='club-member-row']")
+    end
+
     test "renders a single current member row with roles and no first-member banner" do
       member_id = Memba.ID.generate(:person)
 
@@ -84,6 +109,234 @@ defmodule MembaWeb.MemberComponentsTest do
       )
 
       refute_selector(html, "#active-members-empty-state")
+    end
+  end
+
+  describe "custom_group_membership_guidance/1" do
+    test "explains a group member's admission authority without implying club authority" do
+      html =
+        render_component(&MemberComponents.custom_group_membership_guidance/1, %{
+          club_name: "Alpine Club",
+          group_name: "Board",
+          viewer_access: :participating_member
+        })
+
+      assert_selector(
+        html,
+        "#member-group-membership-guidance.members-note" <>
+          "[data-viewer-access='participating_member']"
+      )
+
+      assert_text(html, "#member-group-membership-guidance", "Board members can read every")
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "Anyone in Board can add other"
+      )
+
+      assert_text(html, "#member-group-membership-guidance strong", "Alpine Club")
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "that never changes their club membership"
+      )
+    end
+
+    test "explains an outside admin's admission authority without implying group access" do
+      html =
+        render_component(&MemberComponents.custom_group_membership_guidance/1, %{
+          club_name: "Alpine Club",
+          group_name: "Board",
+          viewer_access: :outside_admin
+        })
+
+      assert_selector(
+        html,
+        "#member-group-membership-guidance.members-note[data-viewer-access='outside_admin']"
+      )
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "As a club admin you can too"
+      )
+
+      assert_text(html, "#member-group-membership-guidance strong", "Alpine Club")
+
+      assert_text(
+        html,
+        "#member-group-membership-guidance",
+        "that never changes anyone's club membership"
+      )
+    end
+  end
+
+  describe "custom_group_member_picker/1" do
+    test "renders searchable active-club candidates with stable admission identities" do
+      dana_membership_id = Memba.ID.generate(:membership)
+      dana_person_id = Memba.ID.generate(:person)
+
+      assigns = %{
+        club_name: "Alpine Club",
+        group_name: "Board",
+        candidates: [
+          %{
+            membership_id: dana_membership_id,
+            id: dana_person_id,
+            name: "Dana Diaz",
+            initials: "DD",
+            roles: ["Admin"]
+          }
+        ],
+        query: "dan",
+        search_form: to_form(%{"query" => "dan"}, as: :member_search)
+      }
+
+      html =
+        rendered_to_string(~H"""
+        <MemberComponents.custom_group_member_picker
+          club_name={@club_name}
+          group_name={@group_name}
+          candidates={@candidates}
+          query={@query}
+          search_form={@search_form}
+        >
+          <:candidate_action :let={candidate}>
+            <button
+              id={"custom-group-member-candidate-add-#{candidate.id}"}
+              type="button"
+              class="btn btn-primary btn-sm btn-outline"
+              data-component-slot="candidate-action"
+              data-custom-group-member-action="add"
+              data-membership-id={candidate.membership_id}
+              data-person-id={candidate.id}
+            >
+              Add
+            </button>
+          </:candidate_action>
+        </MemberComponents.custom_group_member_picker>
+        """)
+
+      assert_selector(
+        html,
+        "#custom-group-member-picker.picker[aria-labelledby='custom-group-member-picker-title']"
+      )
+
+      assert_text(html, "#custom-group-member-picker-title", "Add to Board")
+
+      assert_selector(
+        html,
+        "#custom-group-member-search-form[phx-change='filter_custom_group_member_candidates'] " <>
+          "#custom-group-member-search[type='search'][name='member_search[query]'][value='dan']"
+      )
+
+      refute_selector(html, "#custom-group-member-search[phx-keyup]")
+
+      assert_selector(
+        html,
+        "#custom-group-member-picker[phx-window-keydown][phx-key='Escape']"
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-candidate-#{dana_person_id}[role='listitem']" <>
+          "[data-membership-id='#{dana_membership_id}'][data-person-id='#{dana_person_id}']"
+      )
+
+      assert_text(
+        html,
+        "#custom-group-member-candidate-#{dana_person_id} .pick-row__name",
+        "Dana Diaz"
+      )
+
+      assert_text(
+        html,
+        "#custom-group-member-candidate-#{dana_person_id} .pick-row__meta",
+        "Club admin"
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-candidate-add-#{dana_person_id}" <>
+          ".btn-outline.btn-primary[data-component-slot='candidate-action']" <>
+          "[data-custom-group-member-action='add']"
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-picker-close[phx-click]"
+      )
+    end
+
+    test "explains when no eligible club members remain" do
+      assigns = %{
+        club_name: "Alpine Club",
+        group_name: "Board",
+        candidates: [],
+        query: "",
+        search_form: to_form(%{"query" => ""}, as: :member_search)
+      }
+
+      html =
+        rendered_to_string(~H"""
+        <MemberComponents.custom_group_member_picker
+          club_name={@club_name}
+          group_name={@group_name}
+          candidates={@candidates}
+          query={@query}
+          search_form={@search_form}
+        >
+          <:candidate_action :let={candidate}>
+            <button id={"unused-candidate-action-#{candidate.id}"}>Add</button>
+          </:candidate_action>
+        </MemberComponents.custom_group_member_picker>
+        """)
+
+      assert_text(
+        html,
+        "#custom-group-member-picker-empty",
+        "Everyone in Alpine Club is already in Board."
+      )
+
+      refute_selector(html, "[data-testid='custom-group-member-candidate']")
+    end
+  end
+
+  describe "outside_group_admin_notice/1" do
+    test "renders its caller-supplied self-admission action" do
+      assigns = %{group_name: "Board"}
+
+      html =
+        rendered_to_string(~H"""
+        <MemberComponents.outside_group_admin_notice group_name={@group_name}>
+          <:add_self_action>
+            <button
+              id="member-group-add-self"
+              type="button"
+              data-component-slot="add-self-action"
+              data-custom-group-member-action="add-self"
+            >
+              Add yourself to {@group_name}
+            </button>
+          </:add_self_action>
+        </MemberComponents.outside_group_admin_notice>
+        """)
+
+      assert_selector(
+        html,
+        "#member-group-outside-admin-notice[aria-label=\"You're managing a group you're not in\"]"
+      )
+
+      assert_selector(
+        html,
+        "#member-group-add-self[data-component-slot='add-self-action']" <>
+          "[data-custom-group-member-action='add-self']"
+      )
+
+      assert_text(html, "#member-group-add-self", "Add yourself to Board")
+      assert_text(html, "#member-group-add-self-help", "read its whole history")
     end
   end
 
@@ -210,7 +463,10 @@ defmodule MembaWeb.MemberComponentsTest do
   end
 
   defp render_member_list(assigns) do
-    assigns = Map.new(assigns)
+    assigns =
+      assigns
+      |> Map.new()
+      |> Map.put_new(:group_name, "Board")
 
     render_component(&MemberComponents.member_list/1, assigns)
   end

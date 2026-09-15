@@ -7,8 +7,14 @@ defmodule MembaWeb.MemberDashboardLive do
   """
   use MembaWeb, :live_view
 
+  require Logger
+
   alias Memba.Accounts
+  alias Memba.Membership
+  alias Memba.Membership.CustomGroupAdmission
+  alias Memba.Membership.GroupWelcomeEmail
   alias Memba.ReadModelChanges
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
   alias MembaWeb.MemberDashboardPresentation
 
@@ -45,6 +51,8 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
          |> assign(:selected_group_route_id, selected_group_id)
          |> assign(:active_section, "conversations")
+         |> assign(:custom_group_member_picker_open?, false)
+         |> assign_custom_group_member_picker_query("")
          |> assign(dashboard_assigns)}
 
       {:error, :forbidden} ->
@@ -60,9 +68,81 @@ defmodule MembaWeb.MemberDashboardLive do
     selected_group_id = Map.get(params, "group_id")
 
     socket =
-      refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
+      socket
+      |> assign(:custom_group_member_picker_open?, false)
+      |> assign_custom_group_member_picker_query("")
+      |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
 
     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event(
+        "open_custom_group_member_picker",
+        _params,
+        %{assigns: %{can_add_custom_group_members?: true}} = socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:custom_group_member_picker_open?, true)
+     |> assign_custom_group_member_picker_query("")}
+  end
+
+  def handle_event("open_custom_group_member_picker", _params, socket), do: {:noreply, socket}
+
+  def handle_event("close_custom_group_member_picker", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:custom_group_member_picker_open?, false)
+     |> assign_custom_group_member_picker_query("")}
+  end
+
+  def handle_event(
+        "filter_custom_group_member_candidates",
+        %{"member_search" => %{"query" => query}},
+        %{assigns: %{custom_group_member_picker_open?: true}} = socket
+      )
+      when is_binary(query) do
+    {:noreply, assign_custom_group_member_picker_query(socket, query)}
+  end
+
+  def handle_event("filter_custom_group_member_candidates", _params, socket),
+    do: {:noreply, socket}
+
+  def handle_event(
+        "add_custom_group_member",
+        %{"membership_id" => membership_id, "person_id" => person_id},
+        socket
+      ) do
+    attrs = %{
+      club_id: socket.assigns.selected_club.club_id,
+      group_id: socket.assigns.selected_group.group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      actor_person_id: socket.assigns.current_member.id
+    }
+
+    case Membership.add_custom_group_member(attrs, consistency: :strong) do
+      {:ok, %CustomGroupAdmission{} = admission} ->
+        admission
+        |> deliver_group_welcome(socket)
+        |> log_group_welcome_delivery_failure(admission)
+
+        {:noreply,
+         refresh_dashboard(
+           socket,
+           socket.assigns.selected_club.club_id,
+           socket.assigns.selected_group_route_id
+         )}
+
+      {:error, _reason} ->
+        {:noreply,
+         put_flash(socket, :error, "We couldn't add that member. Refresh and try again.")}
+    end
+  end
+
+  def handle_event("add_custom_group_member", _params, socket) do
+    {:noreply, put_flash(socket, :error, "We couldn't add that member. Refresh and try again.")}
   end
 
   @impl Phoenix.LiveView
@@ -135,8 +215,66 @@ defmodule MembaWeb.MemberDashboardLive do
   defp active_section(:members), do: "members"
   defp active_section(_live_action), do: "conversations"
 
+  defp assign_custom_group_member_picker_query(socket, query) do
+    socket
+    |> assign(:custom_group_member_picker_query, query)
+    |> assign(:custom_group_member_picker_form, to_form(%{"query" => query}, as: :member_search))
+  end
+
   defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
   defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"
+
+  defp deliver_group_welcome(
+         %CustomGroupAdmission{transition: :member_added} = admission,
+         socket
+       ) do
+    recipient = Membership.get_person(admission.person_id)
+    added_by = Membership.get_person(admission.actor_person_id)
+
+    GroupWelcomeEmail.deliver(%{
+      club: socket.assigns.selected_club,
+      group: socket.assigns.selected_group,
+      recipient: %{
+        person_id: admission.person_id,
+        name: person_name(recipient),
+        email: Membership.get_person_primary_email(admission.person_id)
+      },
+      added_by: %{
+        person_id: admission.actor_person_id,
+        name: person_name(added_by)
+      },
+      group_url:
+        ClubSite.url(
+          socket.assigns.selected_club,
+          ~p"/groups/#{admission.group_id}"
+        )
+    })
+  end
+
+  defp deliver_group_welcome(
+         %CustomGroupAdmission{transition: :already_member},
+         _socket
+       ),
+       do: :ok
+
+  defp log_group_welcome_delivery_failure(:ok, _admission), do: :ok
+
+  defp log_group_welcome_delivery_failure(
+         {:error, reason},
+         %CustomGroupAdmission{} = admission
+       ) do
+    Logger.warning(
+      "Could not deliver custom-group welcome email: #{inspect(reason)}",
+      club_id: admission.club_id,
+      group_id: admission.group_id,
+      membership_id: admission.membership_id,
+      person_id: admission.person_id,
+      actor_person_id: admission.actor_person_id
+    )
+  end
+
+  defp person_name(%{name: name}), do: name
+  defp person_name(_person), do: nil
 
   defp reply_with_selected_group(socket) do
     {:reply, %{selected_group_id: socket.assigns.selected_group.group_id}, socket}

@@ -6,7 +6,14 @@ defmodule MembaWeb.PageHTML do
   """
   use MembaWeb, :html
 
-  import MembaWeb.MemberComponents, only: [conversation_list: 1, member_list: 1]
+  import MembaWeb.MemberComponents,
+    only: [
+      conversation_list: 1,
+      custom_group_membership_guidance: 1,
+      custom_group_member_picker: 1,
+      member_list: 1,
+      outside_group_admin_notice: 1
+    ]
 
   alias Memba.Membership.SystemGroups
   alias MembaWeb.ClubSite

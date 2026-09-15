@@ -44,7 +44,10 @@ defmodule Memba.ReleaseTest do
     assert Agent.get(log, & &1) == @release_steps
 
     assert Enum.find_index(@release_steps, &(&1 == :verify_source_backed_admin_invariant)) <
-             Enum.find_index(@release_steps, &(&1 == :await_system_group_backfill_source_projections))
+             Enum.find_index(
+               @release_steps,
+               &(&1 == :await_system_group_backfill_source_projections)
+             )
   end
 
   test "release migration aborts projection waits, backfill, and smoke fixtures when source-backed Admin invariant fails" do
@@ -64,7 +67,9 @@ defmodule Memba.ReleaseTest do
         flunk("release must abort before system group backfill when the Admin invariant fails")
       end)
       |> Keyword.put(:ensure_production_smoke_fixtures, fn ->
-        flunk("release must abort before production smoke fixtures when the Admin invariant fails")
+        flunk(
+          "release must abort before production smoke fixtures when the Admin invariant fails"
+        )
       end)
 
     Application.put_env(:memba, :release_step_overrides, overrides)
