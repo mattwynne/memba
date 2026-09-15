@@ -1,0 +1,130 @@
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 88caebf..9c51b4f 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -9,7 +9,10 @@ defmodule MembaWeb.MemberDashboardLive do
+ 
+   alias Memba.Accounts
+   alias Memba.Membership
++  alias Memba.Membership.CustomGroupAdmission
++  alias Memba.Membership.GroupWelcomeEmail
+   alias Memba.ReadModelChanges
++  alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+   alias MembaWeb.MemberDashboardPresentation
+ 
+@@ -118,7 +121,9 @@ defmodule MembaWeb.MemberDashboardLive do
+     }
+ 
+     case Membership.add_custom_group_member(attrs, consistency: :strong) do
+-      {:ok, _admission} ->
++      {:ok, %CustomGroupAdmission{} = admission} ->
++        _welcome_email_result = deliver_group_welcome(admission, socket)
++
+         {:noreply,
+          refresh_dashboard(
+            socket,
+@@ -215,6 +220,42 @@ defmodule MembaWeb.MemberDashboardLive do
+   defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
+   defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"
+ 
++  defp deliver_group_welcome(
++         %CustomGroupAdmission{transition: :member_added} = admission,
++         socket
++       ) do
++    recipient = Membership.get_person(admission.person_id)
++    added_by = Membership.get_person(admission.actor_person_id)
++
++    GroupWelcomeEmail.deliver(%{
++      club: socket.assigns.selected_club,
++      group: socket.assigns.selected_group,
++      recipient: %{
++        person_id: admission.person_id,
++        name: person_name(recipient),
++        email: Membership.get_person_primary_email(admission.person_id)
++      },
++      added_by: %{
++        person_id: admission.actor_person_id,
++        name: person_name(added_by)
++      },
++      group_url:
++        ClubSite.url(
++          socket.assigns.selected_club,
++          ~p"/groups/#{admission.group_id}"
++        )
++    })
++  end
++
++  defp deliver_group_welcome(
++         %CustomGroupAdmission{transition: :already_member},
++         _socket
++       ),
++       do: :ok
++
++  defp person_name(%{name: name}), do: name
++  defp person_name(_person), do: nil
++
+   defp reply_with_selected_group(socket) do
+     {:reply, %{selected_group_id: socket.assigns.selected_group.group_id}, socket}
+   end
+diff --git a/web/test/memba_web/live/member_dashboard_admission_live_test.exs b/web/test/memba_web/live/member_dashboard_admission_live_test.exs
+index ed7329f..e77d9b2 100644
+--- a/web/test/memba_web/live/member_dashboard_admission_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_admission_live_test.exs
+@@ -1,6 +1,8 @@
+ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
+   use MembaWeb.FeatureCase, async: false
+ 
++  import Phoenix.LiveViewTest, only: [live: 2, render_click: 3]
++
+   alias Memba.Membership
+   alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Repo
+@@ -62,6 +64,47 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
+     assert Membership.active_member_of_group?(group.group_id, admin.person_id)
+   end
+ 
++  test "a confirmed new admission sends one welcome and an idempotent retry sends none",
++       %{conn: conn} do
++    club = create_club!("Alpine Club", "alpine")
++    alice = create_member!(club, "Alice Adams", "alice@example.com")
++    carol = create_member!(club, "Carol Canoe", "carol@example.com")
++    group = create_custom_group!(club, alice, "Trip Planning")
++
++    conn = signed_in_club_host(conn, "alice@example.com", club)
++    {:ok, view, _html} = live(conn, ~p"/groups/#{group.group_id}/members")
++
++    refute_received {:email, %Swoosh.Email{}}
++
++    admission_params = %{
++      "membership_id" => carol.membership_id,
++      "person_id" => carol.person_id
++    }
++
++    _html =
++      render_click(
++        view,
++        "add_custom_group_member",
++        admission_params
++      )
++
++    assert_received {:email, %Swoosh.Email{} = email}
++    assert email.to == [{"Carol Canoe", "carol@example.com"}]
++    assert email.subject == "[alpine] You've been added to Trip Planning"
++
++    assert email.text_body =~
++             ClubSite.url(club, ~p"/groups/#{group.group_id}")
++
++    _html =
++      render_click(
++        view,
++        "add_custom_group_member",
++        admission_params
++      )
++
++    refute_received {:email, %Swoosh.Email{}}
++  end
++
+   test "submit reauthorizes in the Club aggregate when projected group access is stale",
+        %{conn: conn} do
+     club = create_club!("Alpine Club", "alpine")
