@@ -14,5 +14,5 @@
 - [x] 012 Keep provider side effects out of aggregates/projectors; committed membership must not be represented as rolled back if delivery fails.
 - [x] 013 Reuse default operational/error handling; do not build a notification framework, bespoke retry UI or delivery-status feature.
 - [x] 014 Implement the tagged admission/history scenarios, including outside-admin self-add, duplicate additions, inactive/cross-club targets and system-group bypass attempts.
-- [ ] 015 Test replay does not resend welcomes, already-open views update, and existing invitation/role behaviour is unchanged.
+- [x] 015 Test replay does not resend welcomes, already-open views update, and existing invitation/role behaviour is unchanged.
 - [ ] 016 Run `dev check` on the exact delivery state.
