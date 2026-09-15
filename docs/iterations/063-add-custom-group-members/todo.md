@@ -11,7 +11,7 @@
 - [x] 009 Query candidates through Membership's public API, reauthorize on submit and render fresh membership after a successful transition.
 - [x] 010 Add a small provider-neutral group-welcome composer using `Memba.EmailTemplates` and the existing `Memba.Mailer` handoff conventions.
 - [x] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.
-- [ ] 012 Keep provider side effects out of aggregates/projectors; committed membership must not be represented as rolled back if delivery fails.
+- [x] 012 Keep provider side effects out of aggregates/projectors; committed membership must not be represented as rolled back if delivery fails.
 - [ ] 013 Reuse default operational/error handling; do not build a notification framework, bespoke retry UI or delivery-status feature.
 - [ ] 014 Implement the tagged admission/history scenarios, including outside-admin self-add, duplicate additions, inactive/cross-club targets and system-group bypass attempts.
 - [ ] 015 Test replay does not resend welcomes, already-open views update, and existing invitation/role behaviour is unchanged.
