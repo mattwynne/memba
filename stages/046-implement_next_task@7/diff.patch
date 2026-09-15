@@ -1,0 +1,101 @@
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 9c51b4f..10c1f69 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -7,6 +7,8 @@ defmodule MembaWeb.MemberDashboardLive do
+   """
+   use MembaWeb, :live_view
+ 
++  require Logger
++
+   alias Memba.Accounts
+   alias Memba.Membership
+   alias Memba.Membership.CustomGroupAdmission
+@@ -122,7 +124,9 @@ defmodule MembaWeb.MemberDashboardLive do
+ 
+     case Membership.add_custom_group_member(attrs, consistency: :strong) do
+       {:ok, %CustomGroupAdmission{} = admission} ->
+-        _welcome_email_result = deliver_group_welcome(admission, socket)
++        admission
++        |> deliver_group_welcome(socket)
++        |> log_group_welcome_delivery_failure(admission)
+ 
+         {:noreply,
+          refresh_dashboard(
+@@ -253,6 +257,22 @@ defmodule MembaWeb.MemberDashboardLive do
+        ),
+        do: :ok
+ 
++  defp log_group_welcome_delivery_failure(:ok, _admission), do: :ok
++
++  defp log_group_welcome_delivery_failure(
++         {:error, reason},
++         %CustomGroupAdmission{} = admission
++       ) do
++    Logger.warning(
++      "Could not deliver custom-group welcome email: #{inspect(reason)}",
++      club_id: admission.club_id,
++      group_id: admission.group_id,
++      membership_id: admission.membership_id,
++      person_id: admission.person_id,
++      actor_person_id: admission.actor_person_id
++    )
++  end
++
+   defp person_name(%{name: name}), do: name
+   defp person_name(_person), do: nil
+ 
+diff --git a/web/test/memba_web/live/member_dashboard_admission_live_test.exs b/web/test/memba_web/live/member_dashboard_admission_live_test.exs
+index 4f3d635..a3cbf88 100644
+--- a/web/test/memba_web/live/member_dashboard_admission_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_admission_live_test.exs
+@@ -1,6 +1,7 @@
+ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
+   use MembaWeb.FeatureCase, async: false
+ 
++  import ExUnit.CaptureLog
+   import Phoenix.LiveViewTest, only: [live: 2, render_click: 3]
+ 
+   alias Memba.Membership
+@@ -105,7 +106,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
+     refute_received {:email, %Swoosh.Email{}}
+   end
+ 
+-  test "a provider delivery failure does not roll back or hide the committed admission",
++  test "a provider failure is logged without adding delivery UI or hiding the admission",
+        %{conn: conn} do
+     original_mailer_config = Application.fetch_env!(:memba, Memba.Mailer)
+ 
+@@ -124,19 +125,26 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
+     carol = create_member!(club, "Carol Canoe", "carol@example.com")
+     group = create_custom_group!(club, alice, "Trip Planning")
+ 
+-    session =
+-      conn
+-      |> signed_in_club_host("alice@example.com", club)
+-      |> visit(~p"/groups/#{group.group_id}/members")
+-      |> click_button("Add member")
+-      |> click_button("#custom-group-member-candidate-add-#{carol.person_id}", "Add")
++    {session, log} =
++      with_log(fn ->
++        conn
++        |> signed_in_club_host("alice@example.com", club)
++        |> visit(~p"/groups/#{group.group_id}/members")
++        |> click_button("Add member")
++        |> click_button("#custom-group-member-candidate-add-#{carol.person_id}", "Add")
++      end)
+ 
+     assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
+ 
++    assert log =~ "Could not deliver custom-group welcome email"
++    assert log =~ "group_welcome_email_delivery_error"
++    assert log =~ ":timeout"
++
+     session
+     |> assert_has("#club-member-#{carol.person_id}", "Carol Canoe")
+     |> refute_has("#custom-group-member-candidate-#{carol.person_id}")
+     |> refute_has("#flash-error")
++    |> refute_has("[data-testid='delivery-status']")
+ 
+     assert Membership.active_member_of_group?(group.group_id, carol.person_id)
+   end
