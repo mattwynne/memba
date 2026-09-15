@@ -1,6 +1,7 @@
 defmodule Memba.Membership.AdminHistoryReconciliationTest do
   use Memba.EventSourcedCase, async: false
 
+  import Ecto.Query
   import ExUnit.CaptureIO
 
   alias Commanded.Event.Mapper
@@ -66,6 +67,26 @@ defmodule Memba.Membership.AdminHistoryReconciliationTest do
              ]
 
       assert planned_by_club[permission_granted.club_id] == ["club_role_assigned_to_member"]
+    end
+
+    test "canonical projections with historic aggregate role facts are already reconciled" do
+      candidate =
+        legacy_admin_candidate!(
+          history_facts: [:historic_role_defined, :permission_granted, :role_assigned]
+        )
+
+      canonicalize_admin_role_projection!(candidate.club_id, candidate.role_id)
+      before_events = recorded_events(candidate.club_id)
+
+      report = AdminHistoryReconciliation.plan(club_ids: [candidate.club_id])
+
+      assert report.totals.already_reconciled == 1
+      assert report.totals.manual_review == 0
+      assert report.totals.events_planned == 0
+      assert [planned] = candidates(report)
+      assert planned.status == :already_reconciled
+      assert planned.missing_facts == []
+      assert recorded_events(candidate.club_id) == before_events
     end
 
     test "two admins in one club are planned sequentially" do
@@ -194,6 +215,26 @@ defmodule Memba.Membership.AdminHistoryReconciliationTest do
       assert [planned] = candidates(retry_report)
       assert planned.status == :already_reconciled
       assert length(recorded_events(candidate.club_id)) == after_first_apply
+    end
+
+    test "apply treats canonical projections with historic aggregate role facts as already reconciled" do
+      candidate =
+        legacy_admin_candidate!(
+          history_facts: [:historic_role_defined, :permission_granted, :role_assigned]
+        )
+
+      canonicalize_admin_role_projection!(candidate.club_id, candidate.role_id)
+      before_count = length(recorded_events(candidate.club_id))
+
+      assert {:ok, report} = apply_reconciliation(candidate.club_id)
+
+      assert report.totals.already_reconciled == 1
+      assert report.totals.manual_review == 0
+      assert report.totals.events_planned == 0
+      assert report.totals.events_appended == 0
+      assert [planned] = candidates(report)
+      assert planned.status == :already_reconciled
+      assert length(recorded_events(candidate.club_id)) == before_count
     end
 
     test "post-apply verification reports initial target that disappears from post plan" do
@@ -491,6 +532,16 @@ defmodule Memba.Membership.AdminHistoryReconciliationTest do
           }
         ]
 
+      :historic_role_defined ->
+        [
+          %ClubRoleDefined{
+            club_id: club_id,
+            role_id: role_id,
+            role_key: Roles.historic_membership_administrator_key(),
+            name: Roles.historic_membership_administrator_name()
+          }
+        ]
+
       :permission_granted ->
         [
           %ClubRolePermissionGranted{
@@ -548,6 +599,21 @@ defmodule Memba.Membership.AdminHistoryReconciliationTest do
     )
 
     attrs
+  end
+
+  defp canonicalize_admin_role_projection!(club_id, role_id) do
+    assert {1, _rows} =
+             Repo.update_all(
+               from(role in RoleProjection,
+                 where: role.club_id == ^club_id and role.role_id == ^role_id
+               ),
+               set: [
+                 role_key: Roles.membership_administrator_key(),
+                 name: Roles.membership_administrator_name()
+               ]
+             )
+
+    :ok
   end
 
   defp insert_custom_permission_grant!(club_id, membership_id, person_id) do

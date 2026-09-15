@@ -914,6 +914,62 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
+    test "returns no events when the complete historic Admin role definition already exists" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_historic_membership_administrator_role(role_id)
+        |> grant_manage_members_permission(role_id)
+        |> assign_member_role(membership_id, person_id, role_id)
+
+      assert [] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "appends permission and assignment when only the historic Admin role definition exists" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_historic_membership_administrator_role(role_id)
+
+      assert [
+               %ClubRolePermissionGranted{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 permission: "club.manage_members"
+               },
+               %ClubRoleAssignedToMember{
+                 club_id: ^club_id,
+                 membership_id: ^membership_id,
+                 person_id: ^person_id,
+                 role_id: ^role_id,
+                 assigned_by_person_id: nil,
+                 assignment_source: "legacy_projection_reconciliation"
+               }
+             ] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
     test "rejects a conflicting deterministic Admin role definition before appending missing facts" do
       club_id = Memba.ID.generate(:club)
       role_id = Roles.membership_administrator_role_id(club_id)
@@ -948,6 +1004,34 @@ defmodule Memba.Membership.ClubTest do
         |> created_club()
         |> activate_member(membership_id, person_id)
         |> define_role(other_role_id, Roles.membership_administrator_key(), "Custom Admin")
+
+      assert {:error, :legacy_admin_role_key_conflict} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      refute Map.has_key?(club.roles, Roles.membership_administrator_role_id(club_id))
+      assert %{} = club.role_permissions
+      assert %{} = club.role_assignments
+    end
+
+    test "rejects a historic Admin role key mapped to another role before appending missing facts" do
+      club_id = Memba.ID.generate(:club)
+      other_role_id = Memba.ID.generate(:role)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_role(
+          other_role_id,
+          Roles.historic_membership_administrator_key(),
+          Roles.historic_membership_administrator_name()
+        )
 
       assert {:error, :legacy_admin_role_key_conflict} =
                Club.execute(club, %ReconcileLegacyAdminHistory{
@@ -1812,6 +1896,15 @@ defmodule Memba.Membership.ClubTest do
       role_id,
       Roles.membership_administrator_key(),
       Roles.membership_administrator_name()
+    )
+  end
+
+  defp define_historic_membership_administrator_role(%Club{} = club, role_id) do
+    define_role(
+      club,
+      role_id,
+      Roles.historic_membership_administrator_key(),
+      Roles.historic_membership_administrator_name()
     )
   end
 

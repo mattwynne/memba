@@ -710,25 +710,47 @@ defmodule Memba.Membership.Club do
 
   defp ensure_legacy_admin_role_definition_reconcilable(%__MODULE__{} = club) do
     role_id = Roles.membership_administrator_role_id(club.club_id)
-    role_key = Roles.membership_administrator_key()
-    name = Roles.membership_administrator_name()
 
     case Map.fetch(club.roles, role_id) do
-      {:ok, %{role_key: ^role_key, name: ^name}} -> :ok
-      {:ok, %{}} -> {:error, :conflicting_legacy_admin_role_definition}
-      :error -> :ok
+      {:ok, role} ->
+        if legacy_admin_role_definition?(role) do
+          :ok
+        else
+          {:error, :conflicting_legacy_admin_role_definition}
+        end
+
+      :error ->
+        :ok
     end
   end
 
+  defp legacy_admin_role_definition?(%{role_key: role_key, name: name}) do
+    {role_key, name} in [
+      {Roles.membership_administrator_key(), Roles.membership_administrator_name()},
+      {Roles.historic_membership_administrator_key(),
+       Roles.historic_membership_administrator_name()}
+    ]
+  end
+
+  defp legacy_admin_role_definition?(_role), do: false
+
   defp ensure_legacy_admin_role_key_reconcilable(%__MODULE__{} = club) do
     role_id = Roles.membership_administrator_role_id(club.club_id)
-    role_key = Roles.membership_administrator_key()
 
-    case Map.fetch(club.role_keys, role_key) do
-      {:ok, ^role_id} -> :ok
-      {:ok, _other_role_id} -> {:error, :legacy_admin_role_key_conflict}
-      :error -> :ok
-    end
+    Enum.reduce_while(legacy_admin_role_keys(), :ok, fn role_key, :ok ->
+      case Map.fetch(club.role_keys, role_key) do
+        {:ok, ^role_id} -> {:cont, :ok}
+        {:ok, _other_role_id} -> {:halt, {:error, :legacy_admin_role_key_conflict}}
+        :error -> {:cont, :ok}
+      end
+    end)
+  end
+
+  defp legacy_admin_role_keys do
+    [
+      Roles.membership_administrator_key(),
+      Roles.historic_membership_administrator_key()
+    ]
   end
 
   defp ensure_legacy_admin_assignment_reconcilable(

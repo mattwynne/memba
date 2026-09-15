@@ -8,12 +8,20 @@ defmodule Memba.Membership.Roles do
   @membership_administrator_key "admin"
   @membership_administrator_role_id_seed "membership_administrator"
   @membership_administrator_name "Admin"
+  @historic_membership_administrator_key "membership_administrator"
+  @historic_membership_administrator_name "Membership Administrator"
 
   @doc "Stable role key for the built-in Admin role."
   def membership_administrator_key, do: @membership_administrator_key
 
   @doc "Display name for the built-in Admin role."
   def membership_administrator_name, do: @membership_administrator_name
+
+  @doc "Historic built-in Admin role key accepted only for legacy history compatibility."
+  def historic_membership_administrator_key, do: @historic_membership_administrator_key
+
+  @doc "Historic built-in Admin role name accepted only for legacy history compatibility."
+  def historic_membership_administrator_name, do: @historic_membership_administrator_name
 
   @doc """
   Deterministic role ID for a club's built-in Admin role.
