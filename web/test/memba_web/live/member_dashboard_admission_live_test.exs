@@ -1,6 +1,8 @@
 defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
   use MembaWeb.FeatureCase, async: false
 
+  import Phoenix.LiveViewTest, only: [live: 2, render_click: 3]
+
   alias Memba.Membership
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Repo
@@ -60,6 +62,47 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> assert_has("#member-group-member-count", "2 members")
 
     assert Membership.active_member_of_group?(group.group_id, admin.person_id)
+  end
+
+  test "a confirmed new admission sends one welcome and an idempotent retry sends none",
+       %{conn: conn} do
+    club = create_club!("Alpine Club", "alpine")
+    alice = create_member!(club, "Alice Adams", "alice@example.com")
+    carol = create_member!(club, "Carol Canoe", "carol@example.com")
+    group = create_custom_group!(club, alice, "Trip Planning")
+
+    conn = signed_in_club_host(conn, "alice@example.com", club)
+    {:ok, view, _html} = live(conn, ~p"/groups/#{group.group_id}/members")
+
+    refute_received {:email, %Swoosh.Email{}}
+
+    admission_params = %{
+      "membership_id" => carol.membership_id,
+      "person_id" => carol.person_id
+    }
+
+    _html =
+      render_click(
+        view,
+        "add_custom_group_member",
+        admission_params
+      )
+
+    assert_received {:email, %Swoosh.Email{} = email}
+    assert email.to == [{"Carol Canoe", "carol@example.com"}]
+    assert email.subject == "[alpine] You've been added to Trip Planning"
+
+    assert email.text_body =~
+             ClubSite.url(club, ~p"/groups/#{group.group_id}")
+
+    _html =
+      render_click(
+        view,
+        "add_custom_group_member",
+        admission_params
+      )
+
+    refute_received {:email, %Swoosh.Email{}}
   end
 
   test "submit reauthorizes in the Club aggregate when projected group access is stale",

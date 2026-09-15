@@ -9,7 +9,10 @@ defmodule MembaWeb.MemberDashboardLive do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Membership.CustomGroupAdmission
+  alias Memba.Membership.GroupWelcomeEmail
   alias Memba.ReadModelChanges
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
   alias MembaWeb.MemberDashboardPresentation
 
@@ -118,7 +121,9 @@ defmodule MembaWeb.MemberDashboardLive do
     }
 
     case Membership.add_custom_group_member(attrs, consistency: :strong) do
-      {:ok, _admission} ->
+      {:ok, %CustomGroupAdmission{} = admission} ->
+        _welcome_email_result = deliver_group_welcome(admission, socket)
+
         {:noreply,
          refresh_dashboard(
            socket,
@@ -214,6 +219,42 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
   defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"
+
+  defp deliver_group_welcome(
+         %CustomGroupAdmission{transition: :member_added} = admission,
+         socket
+       ) do
+    recipient = Membership.get_person(admission.person_id)
+    added_by = Membership.get_person(admission.actor_person_id)
+
+    GroupWelcomeEmail.deliver(%{
+      club: socket.assigns.selected_club,
+      group: socket.assigns.selected_group,
+      recipient: %{
+        person_id: admission.person_id,
+        name: person_name(recipient),
+        email: Membership.get_person_primary_email(admission.person_id)
+      },
+      added_by: %{
+        person_id: admission.actor_person_id,
+        name: person_name(added_by)
+      },
+      group_url:
+        ClubSite.url(
+          socket.assigns.selected_club,
+          ~p"/groups/#{admission.group_id}"
+        )
+    })
+  end
+
+  defp deliver_group_welcome(
+         %CustomGroupAdmission{transition: :already_member},
+         _socket
+       ),
+       do: :ok
+
+  defp person_name(%{name: name}), do: name
+  defp person_name(_person), do: nil
 
   defp reply_with_selected_group(socket) do
     {:reply, %{selected_group_id: socket.assigns.selected_group.group_id}, socket}
