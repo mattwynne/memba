@@ -232,7 +232,11 @@ defmodule Memba.Release do
   end
 
   defp verify_source_backed_admin_invariant_for_release! do
-    verify_source_backed_admin_invariant!(phase: "release-command")
+    verify_source_backed_admin_invariant!(
+      phase: "release-command",
+      execution_attempts: 3,
+      retry_delay_ms: 5_000
+    )
   end
 
   defp verify_source_backed_admin_invariant!(opts) do

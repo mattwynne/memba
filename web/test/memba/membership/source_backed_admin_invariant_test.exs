@@ -222,6 +222,54 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
     end
   end
 
+  test "check! retries execution errors but not invariant violations" do
+    attempts = start_supervised!({Agent, fn -> 0 end})
+    passing_report = passing_report()
+
+    transient_runner = fn _phase ->
+      attempt = Agent.get_and_update(attempts, &{&1 + 1, &1 + 1})
+
+      if attempt == 1 do
+        {:error, %{type: DBConnection.ConnectionError, message: "tcp recv: closed"}}
+      else
+        {:ok, passing_report}
+      end
+    end
+
+    assert ^passing_report =
+             SourceBackedAdminInvariant.check!(
+               execution_attempts: 2,
+               retry_delay_ms: 0,
+               transaction_runner: transient_runner
+             )
+
+    assert Agent.get(attempts, & &1) == 2
+
+    Agent.update(attempts, fn _attempts -> 0 end)
+
+    violation_report =
+      put_in(
+        passing_report,
+        ["checks", @admin_check],
+        %{"violation_count" => 1, "violations" => [%{"club_id" => "clb_example"}]}
+      )
+
+    violation_runner = fn _phase ->
+      Agent.update(attempts, &(&1 + 1))
+      {:ok, violation_report}
+    end
+
+    assert_raise RuntimeError, ~r/source-backed Admin invariant violations detected/, fn ->
+      SourceBackedAdminInvariant.check!(
+        execution_attempts: 3,
+        retry_delay_ms: 0,
+        transaction_runner: violation_runner
+      )
+    end
+
+    assert Agent.get(attempts, & &1) == 1
+  end
+
   test "report includes metadata and optional phase" do
     previous_sha = System.get_env("MEMBA_GIT_SHA")
     sha = String.duplicate("a", 40)
@@ -250,6 +298,21 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
 
     assert report["git_sha"] == sha
     assert report["phase"] == "pre"
+  end
+
+  defp passing_report do
+    %{
+      "pass" => true,
+      "transaction_read_only" => "on",
+      "event_store_columns" => [
+        %{"column_name" => "data", "data_type" => "bytea"},
+        %{"column_name" => "metadata", "data_type" => "bytea"}
+      ],
+      "checks" => %{
+        "active_membership_source_facts" => %{"violation_count" => 0, "violations" => []},
+        @admin_check => %{"violation_count" => 0, "violations" => []}
+      }
+    }
   end
 
   defp healthy_club!(opts \\ []) do

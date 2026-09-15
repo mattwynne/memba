@@ -3,16 +3,20 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
   Read-only source-backed Admin invariant check for the iteration 059 cutover.
   """
 
+  require Logger
+
   alias Memba.BuildInfo
   alias Memba.Repo
 
+  @query_timeout 60_000
   @type report :: map()
 
   @spec check(keyword()) :: report()
   def check(opts \\ []) when is_list(opts) do
     phase = opts[:phase]
+    transaction_runner = Keyword.get(opts, :transaction_runner, &run_transaction/1)
 
-    case run_transaction(phase) do
+    case transaction_runner.(phase) do
       {:ok, report} ->
         report
 
@@ -26,8 +30,28 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
 
   @spec check!(keyword()) :: report()
   def check!(opts \\ []) when is_list(opts) do
+    execution_attempts = positive_integer_opt!(opts, :execution_attempts, 1)
+    retry_delay_ms = non_negative_integer_opt!(opts, :retry_delay_ms, 0)
+
+    check_with_execution_retries!(opts, execution_attempts, retry_delay_ms)
+  end
+
+  defp check_with_execution_retries!(opts, attempts_remaining, retry_delay_ms) do
     report = check(opts)
 
+    if Map.has_key?(report, "error") and attempts_remaining > 1 do
+      Logger.warning(
+        "source_backed_admin_invariant execution failed; retrying attempts_remaining=#{attempts_remaining - 1} error=#{Jason.encode!(report["error"])}"
+      )
+
+      Process.sleep(retry_delay_ms)
+      check_with_execution_retries!(opts, attempts_remaining - 1, retry_delay_ms)
+    else
+      validate_report!(report)
+    end
+  end
+
+  defp validate_report!(report) do
     cond do
       Map.has_key?(report, "error") ->
         raise RuntimeError,
@@ -53,7 +77,9 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
   defp run_transaction(phase) do
     Repo.transaction(
       fn ->
-        Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [])
+        Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [],
+          timeout: @query_timeout
+        )
 
         preflight = one_row!(preflight_sql())
         columns = columns!()
@@ -113,7 +139,8 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
         AND column_name IN ('data', 'metadata')
       ORDER BY column_name
       """,
-      []
+      [],
+      timeout: @query_timeout
     ).rows
     |> Enum.map(fn [column_name, data_type] ->
       %{"column_name" => column_name, "data_type" => data_type}
@@ -431,7 +458,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
 
   defp one_row!(sql) do
     sql
-    |> Repo.query!([])
+    |> Repo.query!([], timeout: @query_timeout)
     |> Map.fetch!(:rows)
     |> case do
       [row] -> row
@@ -513,4 +540,21 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
 
   defp normalize_jsonb(value) when is_binary(value), do: Jason.decode!(value)
   defp normalize_jsonb(value), do: value
+
+  defp positive_integer_opt!(opts, key, default) do
+    case Keyword.get(opts, key, default) do
+      value when is_integer(value) and value > 0 -> value
+      value -> raise ArgumentError, "#{key} must be a positive integer, got: #{inspect(value)}"
+    end
+  end
+
+  defp non_negative_integer_opt!(opts, key, default) do
+    case Keyword.get(opts, key, default) do
+      value when is_integer(value) and value >= 0 ->
+        value
+
+      value ->
+        raise ArgumentError, "#{key} must be a non-negative integer, got: #{inspect(value)}"
+    end
+  end
 end
