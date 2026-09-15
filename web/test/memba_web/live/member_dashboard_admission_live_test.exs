@@ -2,7 +2,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
   use MembaWeb.FeatureCase, async: false
 
   import ExUnit.CaptureLog
-  import Phoenix.LiveViewTest, only: [live: 2, render_click: 3]
+  import Phoenix.LiveViewTest, only: [has_element?: 2, has_element?: 3, live: 2, render_click: 3]
 
   alias Memba.Membership
   alias Memba.Membership.Projections.GroupMembership
@@ -104,6 +104,97 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
       )
 
     refute_received {:email, %Swoosh.Email{}}
+  end
+
+  test "replaying the admission rebuilds membership without resending its welcome", %{conn: conn} do
+    club = create_club!("Alpine Club", "alpine")
+    alice = create_member!(club, "Alice Adams", "alice@example.com")
+    carol = create_member!(club, "Carol Canoe", "carol@example.com")
+    group = create_custom_group!(club, alice, "Trip Planning")
+
+    conn = signed_in_club_host(conn, "alice@example.com", club)
+    {:ok, view, _html} = live(conn, ~p"/groups/#{group.group_id}/members")
+
+    _html =
+      render_click(
+        view,
+        "add_custom_group_member",
+        %{"membership_id" => carol.membership_id, "person_id" => carol.person_id}
+      )
+
+    assert_received {:email, %Swoosh.Email{} = welcome}
+    assert welcome.to == [{"Carol Canoe", "carol@example.com"}]
+
+    view_ref = Process.monitor(view.pid)
+    :ok = GenServer.stop(view.pid)
+    assert_receive {:DOWN, ^view_ref, :process, _, :normal}
+
+    replay_projectors = [
+      Memba.Membership.Projectors.Club,
+      Memba.Membership.Projectors.Group,
+      Memba.Membership.Projectors.GroupMembership,
+      Memba.Membership.Projectors.Membership,
+      Memba.Membership.Projectors.Person,
+      Memba.Membership.Projectors.Role
+    ]
+
+    projection_positions =
+      Memba.EventSourcedCase.event_sourced_projection_positions(replay_projectors)
+
+    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
+
+    Memba.EventSourcedCase.await_event_sourced_projection_positions!(projection_positions)
+
+    assert Membership.active_member_of_group?(group.group_id, carol.person_id)
+    refute_received {:email, %Swoosh.Email{}}
+  end
+
+  test "an admission refreshes permissions in the admitted member's already-open view",
+       %{conn: conn} do
+    club = create_club!("Alpine Club", "alpine")
+    alice = create_member!(club, "Alice Adams", "alice@example.com")
+    carol = create_member!(club, "Carol Canoe", "carol@example.com")
+    group = create_custom_group!(club, alice, "Trip Planning")
+
+    {:ok, carol_view, _html} =
+      conn
+      |> signed_in_club_host("carol@example.com", club)
+      |> live(~p"/groups/#{group.group_id}")
+
+    assert has_element?(
+             carol_view,
+             "#member-group-access-title",
+             "Trip Planning is a private group"
+           )
+
+    refute has_element?(carol_view, "#member-section-tabs")
+
+    {:ok, alice_view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", club)
+      |> live(~p"/groups/#{group.group_id}/members")
+
+    _html =
+      render_click(
+        alice_view,
+        "add_custom_group_member",
+        %{"membership_id" => carol.membership_id, "person_id" => carol.person_id}
+      )
+
+    assert_received {:email, %Swoosh.Email{}}
+
+    _state = :sys.get_state(carol_view.pid)
+
+    refute has_element?(carol_view, "#member-group-access-guidance")
+
+    assert has_element?(
+             carol_view,
+             "#member-section-tab-conversations[href='/groups/#{group.group_id}']",
+             "Conversations"
+           )
+
+    assert has_element?(carol_view, "#club-member-#{carol.person_id}", "Carol Canoe")
+    assert has_element?(carol_view, "#member-group-member-count", "2 members")
   end
 
   test "a provider failure is logged without adding delivery UI or hiding the admission",

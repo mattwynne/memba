@@ -9,6 +9,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -339,6 +340,61 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                membership_id: Memba.ID.generate(:membership),
                person_id: Memba.ID.generate(:person)
              })
+  end
+
+  test "custom-group admission leaves club invitations and club roles unchanged" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+    pending_email = "pending-member@example.com"
+
+    create_club!(club_id)
+    create_member!(club_id, actor_membership_id, actor_person_id)
+    create_member!(club_id, target_membership_id, target_person_id)
+    create_custom_group!(club_id, group_id, actor_person_id)
+
+    assert {:ok, %{invitation_id: invitation_id}} =
+             Membership.invite_club_member(
+               %{club_id: club_id, email: pending_email},
+               consistency: :strong
+             )
+
+    invitation_before = Membership.get_club_member_invitation(invitation_id)
+    club_members_before = Membership.list_active_members_of_club(club_id)
+
+    assert %{roles: []} =
+             Enum.find(club_members_before, &(&1.id == target_person_id))
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             target_person_id,
+             Permissions.club_manage_members()
+           )
+
+    assert {:ok, %CustomGroupAdmission{transition: :member_added}} =
+             add_custom_group_member(
+               club_id,
+               group_id,
+               target_membership_id,
+               target_person_id,
+               actor_person_id
+             )
+
+    assert Membership.get_club_member_invitation(invitation_id) == invitation_before
+
+    assert Membership.get_pending_club_member_invitation_by_email(club_id, pending_email) ==
+             invitation_before
+
+    assert Membership.list_active_members_of_club(club_id) == club_members_before
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             target_person_id,
+             Permissions.club_manage_members()
+           )
   end
 
   defp create_club!(club_id) do
