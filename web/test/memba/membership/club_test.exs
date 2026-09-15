@@ -11,6 +11,7 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
+  alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -751,6 +752,386 @@ defmodule Memba.Membership.ClubTest do
                  club_id: club_id,
                  role_id: role_id,
                  permission: Permissions.club_manage_members()
+               })
+    end
+  end
+
+  describe "execute/2 ReconcileLegacyAdminHistory" do
+    test "appends all missing canonical Admin facts in dependency order and is then a no-op" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+
+      command = %ReconcileLegacyAdminHistory{
+        club_id: club_id,
+        membership_id: membership_id,
+        person_id: person_id
+      }
+
+      assert [
+               %ClubRoleDefined{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 role_key: "admin",
+                 name: "Admin"
+               },
+               %ClubRolePermissionGranted{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 permission: "club.manage_members"
+               },
+               %ClubRoleAssignedToMember{
+                 club_id: ^club_id,
+                 membership_id: ^membership_id,
+                 person_id: ^person_id,
+                 role_id: ^role_id,
+                 assigned_by_person_id: nil,
+                 assignment_source: "legacy_projection_reconciliation"
+               }
+             ] = events = Club.execute(club, command)
+
+      assert [] =
+               club
+               |> apply_events(events)
+               |> Club.execute(command)
+    end
+
+    test "appends only permission and assignment when the canonical Admin role exists" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_membership_administrator_role(role_id)
+
+      assert [
+               %ClubRolePermissionGranted{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 permission: "club.manage_members"
+               },
+               %ClubRoleAssignedToMember{
+                 club_id: ^club_id,
+                 membership_id: ^membership_id,
+                 person_id: ^person_id,
+                 role_id: ^role_id,
+                 assigned_by_person_id: nil,
+                 assignment_source: "legacy_projection_reconciliation"
+               }
+             ] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "appends only assignment when role and permission exist" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_membership_administrator_role(role_id)
+        |> grant_manage_members_permission(role_id)
+
+      assert [
+               %ClubRoleAssignedToMember{
+                 club_id: ^club_id,
+                 membership_id: ^membership_id,
+                 person_id: ^person_id,
+                 role_id: ^role_id,
+                 assigned_by_person_id: nil,
+                 assignment_source: "legacy_projection_reconciliation"
+               }
+             ] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "appends a missing permission when role and equivalent assignment already exist" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_membership_administrator_role(role_id)
+        |> assign_member_role(membership_id, person_id, role_id)
+
+      assert [
+               %ClubRolePermissionGranted{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 permission: "club.manage_members"
+               }
+             ] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "returns no events when all canonical Admin facts already exist" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_membership_administrator_role(role_id)
+        |> grant_manage_members_permission(role_id)
+        |> assign_member_role(membership_id, person_id, role_id)
+
+      assert [] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "returns no events when the complete historic Admin role definition already exists" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_historic_membership_administrator_role(role_id)
+        |> grant_manage_members_permission(role_id)
+        |> assign_member_role(membership_id, person_id, role_id)
+
+      assert [] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "appends permission and assignment when only the historic Admin role definition exists" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_historic_membership_administrator_role(role_id)
+
+      assert [
+               %ClubRolePermissionGranted{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 permission: "club.manage_members"
+               },
+               %ClubRoleAssignedToMember{
+                 club_id: ^club_id,
+                 membership_id: ^membership_id,
+                 person_id: ^person_id,
+                 role_id: ^role_id,
+                 assigned_by_person_id: nil,
+                 assignment_source: "legacy_projection_reconciliation"
+               }
+             ] =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "rejects a conflicting deterministic Admin role definition before appending missing facts" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_role(role_id, Roles.membership_administrator_key(), "Administrator")
+
+      assert {:error, :conflicting_legacy_admin_role_definition} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      assert %{} = club.role_permissions
+      assert %{} = club.role_assignments
+    end
+
+    test "rejects an Admin role key mapped to another role before appending missing facts" do
+      club_id = Memba.ID.generate(:club)
+      other_role_id = Memba.ID.generate(:role)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_role(other_role_id, Roles.membership_administrator_key(), "Custom Admin")
+
+      assert {:error, :legacy_admin_role_key_conflict} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      refute Map.has_key?(club.roles, Roles.membership_administrator_role_id(club_id))
+      assert %{} = club.role_permissions
+      assert %{} = club.role_assignments
+    end
+
+    test "rejects a historic Admin role key mapped to another role before appending missing facts" do
+      club_id = Memba.ID.generate(:club)
+      other_role_id = Memba.ID.generate(:role)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_role(
+          other_role_id,
+          Roles.historic_membership_administrator_key(),
+          Roles.historic_membership_administrator_name()
+        )
+
+      assert {:error, :legacy_admin_role_key_conflict} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      refute Map.has_key?(club.roles, Roles.membership_administrator_role_id(club_id))
+      assert %{} = club.role_permissions
+      assert %{} = club.role_assignments
+    end
+
+    test "rejects an existing Admin assignment for the membership when it names another person" do
+      club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+      other_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+        |> define_membership_administrator_role(role_id)
+        |> assign_member_role(membership_id, other_person_id, role_id)
+
+      assert {:error, :legacy_admin_assignment_person_mismatch} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      assert %{} = club.role_permissions
+    end
+
+    test "requires the target membership and person to be the active pair" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+      other_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+
+      assert {:error, :membership_person_mismatch} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: other_person_id
+               })
+
+      assert {:error, :not_found} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: Memba.ID.generate(:membership),
+                 person_id: person_id
+               })
+    end
+
+    test "requires an existing club and valid typed IDs" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      assert {:error, :not_created} =
+               Club.execute(%Club{}, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      club =
+        club_id
+        |> created_club()
+        |> activate_member(membership_id, person_id)
+
+      assert {:error, :invalid_club_id} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: Memba.ID.generate(:club),
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      assert {:error, :invalid_membership_id} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: "not-a-uuid",
+                 person_id: person_id
+               })
+
+      assert {:error, :invalid_person_id} =
+               Club.execute(club, %ReconcileLegacyAdminHistory{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: "not-a-uuid"
                })
     end
   end
@@ -1669,6 +2050,10 @@ defmodule Memba.Membership.ClubTest do
              })
   end
 
+  defp apply_events(%Club{} = club, events) do
+    Enum.reduce(List.wrap(events), club, fn event, club -> Club.apply(club, event) end)
+  end
+
   defp created_club(club_id) do
     Club.apply(%Club{}, %ClubCreated{
       club_id: club_id,
@@ -1683,6 +2068,15 @@ defmodule Memba.Membership.ClubTest do
       role_id,
       Roles.membership_administrator_key(),
       Roles.membership_administrator_name()
+    )
+  end
+
+  defp define_historic_membership_administrator_role(%Club{} = club, role_id) do
+    define_role(
+      club,
+      role_id,
+      Roles.historic_membership_administrator_key(),
+      Roles.historic_membership_administrator_name()
     )
   end
 

@@ -718,6 +718,7 @@ async function viewMembersAndAssertPresence(
   const personId = personIdFor(world, memberName);
 
   await withMemberHarness(world, viewerName, async (member) => {
+    await waitForLiveViewConnected(member);
     const conversationsTab = member.page.locator("#member-section-tab-conversations");
     const membersTab = member.page.locator("#member-section-tab-members");
     const action = member.page.locator("#member-section-tabs-action");

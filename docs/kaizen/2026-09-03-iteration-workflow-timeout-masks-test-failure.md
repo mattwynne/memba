@@ -472,3 +472,225 @@ The failed browser scenario was `Pat cannot remove Robin while Robin is the only
 A focused Node regression in `acceptance-tests/test/membership_administration.test.js` models the page as initially disconnected and rejects a click before the connection wait. It failed before the change, then passed after the helper began calling the existing `waitForLiveViewConnected` before Remove. This proves the missing synchronization in the helper; the original run did not capture connection state, so it is not proof of that run's precise socket timing.
 
 The named browser scenario then passed (one scenario, seven steps) with the same database/node settings. No application code, Gherkin, business assertion, or timeout was changed. This bounded helper repair follows the existing LiveView-readiness convention rather than rerunning a known unsynchronized click or extending assertion timeouts.
+
+### Additional observation: 2026-09-14 — iteration 062 stopped after 23 of 25 tasks
+
+#### Context and workflow step
+
+Iteration 062, Create custom groups (`docs/iterations/062-create-custom-groups/plan.md`), was progressing through implementation toward acceptance testing and publication. Matt supplied this status when requesting the note:
+
+> 062: progressed through 23 of 25 tasks, including the difficult email-access fixes. The latest run then hit a 40-minute timeout. Two acceptance-testing tasks remain; it is not merged.
+
+This is reported run evidence, not an independent inspection of its logs. The run ID, active node/task, and checkpoint were not supplied. The remaining tasks do not establish which task was active when the timeout fired.
+
+#### Expected standard
+
+The workflow should complete acceptance testing and the required quality gates before merging. If a time budget prevents completion, it should preserve completed and pending work separately and provide a clear, safe recovery handoff rather than leave a nearly finished iteration stopped without an obvious next step.
+
+The current standard in `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md` requires focused per-task checks, awareness of the 600-second command and 2,400-second node budgets, and blocker/recovery evidence when validation cannot finish. Explicit final-validation tasks still require successful validation; progress counts are not a substitute.
+
+#### Actual abnormality and impact
+
+The latest run stopped at a reported 40-minute timeout after progress through 23 of 25 tasks, including the difficult email-access fixes. Two acceptance-testing tasks remain and the iteration is not merged. Delivery is blocked pending recovery and completion of acceptance testing. There is no evidence here that completed work was lost, that the 23 tasks were independently accepted, or that a product assertion failed.
+
+This repeats the late-delivery timeout symptom recorded above. It does not establish that the earlier full-suite duplication, child-agent waits, or teardown defect caused this run's failure.
+
+#### What allowed it to happen — suspected system weakness
+
+The suspected weakness is the boundary between bounded task execution and recovery: useful progress can still end in a hard stop before acceptance work finishes, while a prompt-level instruction to report a blocker cannot guarantee a handoff after cancellation.
+
+Local inspection at `7b7ee1b85` confirms that `implement_next_task` still has a 2,400-second timeout. Its failure edge now leads to `task_stopped`, whose static message asks the operator to inspect the preceding stage and latest verdict; it does not itself produce a timeout-specific task/checkpoint handoff. The earlier `task_not_ready` wording in this note is historical, not the current graph. The failed run's workflow revision and actual terminal output remain unverified.
+
+The observation warrants checking whether acceptance work fits the execution budget and whether stopping preserves enough evidence to resume safely. It does not justify concluding that 25 tasks exceeded a run limit or that the timeout should simply be raised.
+
+#### Relationship to the recent failure-handling fix
+
+The [2026-09-13 task-verdict fix](2026-09-13-task-retry-verdict-terminates-iteration.md#resolution) separates a completed review requesting revision from failure to execute a node. Its strict `accept / revise / blocked` verdict and deterministic application step keep repairable candidates pending, route them through bounded in-place revision, and check off only accepted tasks. Execution failures still stop deliberately; automatic timeout recovery was not part of that fix.
+
+The earlier focused-validation and single-owner changes in this note reduce avoidable work inside the deadline. They do not guarantee completion or a handoff after hard cancellation. Iteration 062 therefore adds evidence of the remaining timeout symptom, not proof that the new revision routing regressed. Confirm the run's workflow revision and failing node before attributing it to either mechanism; old run branches may retain the earlier workflow and check-off rules.
+
+#### Open questions
+
+- Which run, workflow revision, node, and selected task timed out, and what command or activity consumed the budget?
+- Which checkpoint preserves the 23 tasks, what independent acceptance evidence exists, and what partial work remains for the two unchecked tasks?
+- Did the run provide a usable recovery handoff, and did it follow the current focused-validation and budget rules?
+
+#### Possible prevention ideas
+
+- Make timeout handoff deterministic: record the active task, last command/result, accepted versus pending work, checkpoint, and supported recovery path even when the agent cannot return a summary.
+- Check acceptance-task scope and expected command duration against the available budget before execution; preserve all required tests and final quality gates.
+
+## Iteration 062 investigation and partial resolution: focused browser selection
+
+Date: 2026-09-14
+
+### Verified run and failure boundary
+
+The reported run is `01M2F8XHWAHNSG7M6S0MXC3WA5`. Its source was recovery checkpoint `b44cc1c2b1e3d5c3a9271c8d37302f6a42bbb4e8`; the implementation workflow directory at that commit is identical to the task-verdict fix in `ced78e9ca`. This was not an old-workflow rollout failure.
+
+The run accepted tasks 019–023 through `validate_task` and `apply_task_verdict`. Task 024 remained pending. Its sixth `implement_next_task` visit began at 07:54:07.823 UTC and failed at 08:34:07.956 with `handler timed out after 2400000ms`. No task-024 review or acceptance followed. The failure edge went to `task_stopped`, not the old retry-bypassing `task_not_ready` route. There was no node-visit-limit failure.
+
+The failed candidate checkpoint `f8e5a6407b8301632ed7cfb75f5e33cd73412066` preserves eight changed/new acceptance files (1,725 additions), without checking off task 024. Final checkpoint `72c2a652b678ccf59c944bc94cf62724ac0e4c29` preserves 23 checked and two unchecked tasks:
+
+- 024: custom-group conversation scenarios at both domain and browser layers.
+- 025: custom-group lifecycle scenarios at both layers, then exact-state `dev check`.
+
+A separate recovery run, `01M2G3K7JZ4VTQFH9W99AVPBRS`, had already been launched by another session. This investigation did not launch, steer, stop, or modify it. The failure status above describes the captured run, not that recovery's eventual outcome.
+
+### Where the time went
+
+- The task combined two acceptance layers. Domain coverage reached 14 tests passing by 08:04:31, about ten minutes into the node.
+- Three browser commands supplied `features/custom_group_conversations.feature` and iteration-062 tags, but each ran 30 scenarios rather than the requested file's 13. They took 250.119, 258.027 and 252.652 seconds: about 12m41s total, including both necessary scenario work and unrelated creation scenarios. This is not a measurement of time saved by narrowing them.
+- The browser runs exposed real unfinished acceptance plumbing: an unexported helper, undefined message context, and email assertions. This was not an otherwise green task merely awaiting check-off. The agent repaired some issues but did not establish final passing browser evidence.
+- After context compaction at 08:12–08:13, the parent spawned browser and domain reviewers at 08:22:52 and 08:22:55, despite its loaded prompt forbidding subagents and duplicate independent review. Compaction preceded the violation; the evidence does not prove it erased or caused disregard of that instruction.
+- Parent and children then ran tests against the shared sandbox. Parent commands bypassed the `bin/dev` quality-gate lock through direct `acceptance-test` calls, while children invoked `dev test` and `dev acceptance`. Logs show overlapping command intervals and subsequent database-in-use, connection and server-readiness errors. The exact process holding each failed database operation is not established.
+- At 08:29:58.742 the parent called `wait` for reviewer `74fd6fe5`. It never received completion before cancellation about 4m09s later. Both child reviews lacked a completion event before the outer timeout.
+
+No full `dev check` was run by the task-024 parent. The previous full-suite-duplication diagnosis must not be copied onto this run: the demonstrated widening happened inside supposedly focused browser commands.
+
+### Cause analysis: occurrence and escape
+
+| Boundary | Evidence-supported mechanism |
+| --- | --- |
+| Why did task 024 stop before review? | Its composite implementation handler exhausted its 40-minute budget, with an outstanding child-review wait. |
+| Why was focused browser feedback broader than requested? | `acceptance-tests/cucumber.js` configured `paths: ["features/**/*.feature"]`. Installed Cucumber merges configuration paths with CLI paths; a positional filename adds to the suite glob rather than replacing it. Its warning and the 30-scenario output confirm this in the failed run. |
+| Why did the selection defect escape tests? | Existing configuration tests asserted that the explicit suite glob was present and enumerated tags. They did not exercise Cucumber's actual configuration/source resolution with a requested file or line. The focused-validation prompt therefore relied on an untested command contract. |
+| Why could duplicate review consume the deadline? | Single-owner execution was a prompt rule, not an enforced capability boundary. Fabro still exposed `spawn_agent` and `wait`; native subagents have no default turn limit. No deterministic reserve stopped the parent from waiting across its deadline. |
+| Why was recovery still manual? | The new verdict contract safely keeps unaccepted work pending, but deliberately treats execution failure as terminal. `task_stopped` points to earlier logs rather than creating a timeout-specific handoff or bounded continuation. |
+
+The smallest proven tooling defect addressed here is path widening. It contributed waste but is not established as the sole or sufficient cause of the timeout. Extra review, shared-environment interference, and the size of the dual-layer task remain separate contributors or follow-up questions.
+
+### Countermeasure applied
+
+Remove the explicit default `paths` setting and use Cucumber's native no-argument feature discovery. Explicit paths then select only the requested files/lines; ordinary `dev check` still runs the default suite. No feature tags, scenarios, assertions, timeouts, retry bounds, or publication gates change.
+
+Files:
+
+- `acceptance-tests/cucumber.js`: removes the glob that broadened explicit selections.
+- `acceptance-tests/test/cucumber_selection.test.js`: exercises the installed Cucumber configuration and source APIs for one file, multiple files, one file/line, and no-argument full-suite equivalence.
+- `acceptance-tests/test/cucumber_config.test.js`: removes assertions requiring the faulty raw setting; retains tag and feature-inventory coverage.
+
+Prediction: a file-targeted acceptance invocation will no longer spend time on other features, while no-argument delivery validation retains the same scenario inventory. This is occurrence prevention for selection widening, not automatic recovery or proof that future 40-minute nodes will finish.
+
+### Validation and evidence
+
+- New native Cucumber selection tests before the fix: three focused-selection cases failed; full-suite equivalence passed.
+- After the fix: selection and existing configuration tests passed, 14/14.
+- Compared actual default source plans before and after the configuration change: identical 145 scenario instances. This is source-selection evidence, not a claim that browser execution passed.
+- Existing isolated Fabro runtime regressions passed 7/7 before the change. They establish verdict routing and fail-closed behaviour, not hard-timeout recovery or agent adherence.
+- First staged full `dev check`: exit 1 after 1,100 seconds. All 1,292 unit tests passed; browser acceptance had 141/145 passing scenarios. The config suite passed 71/71. Logs: `/tmp/memba-062-dev-check.log` and `/tmp/memba-062-config-suite.log`.
+- File/line-targeted rerun selected exactly the four failed scenarios: three passed unchanged, while the Admin-group keyboard-tab failure reproduced. The other failures were two email-address interaction timeouts and `ERR_NETWORK_CHANGED`; their causes are not claimed fixed.
+- A baseline with the original Cucumber config also reproduced the tab failure. Passive instrumentation proved that ArrowRight arrived before the tab hook installed its handler. The small supporting readiness repair and its red/green evidence are recorded in [Acceptance inputs raced LiveView root join](2026-09-12-acceptance-inputs-race-liveview-join.md#additional-observation-and-repair-2026-09-14--group-tab-keyboard-input).
+- Full `dev check` is required on the final staged candidate before committing. Its final result and final Node suite counts are recorded in the fix commit message; logs are retained separately at `/tmp/memba-062-dev-check-final.log` and `/tmp/memba-062-config-suite-final.log`.
+
+Run evidence is retained in `/tmp/memba-kaizen-062-failed-run/` (`events.jsonl`, `graph.fabro`, stage artifacts and run log). Important event sequences: 3761 (node start), 4129 (domain green), 4166/4197/4239 (broadened browser results), 4244/4254 (child spawns), 4854 (database-in-use failure), 5028 (parent wait), 5113 (timeout), 5123 (terminal fallback). Durable references are `origin/fabro/run/01M2F8XHWAHNSG7M6S0MXC3WA5` and its matching `origin/fabro/meta/` branch, especially `stages/040-implement_next_task@6/`.
+
+### Remaining resolution options — decision pending
+
+1. Enforce single-owner implementation/revision nodes in tool configuration rather than adding another prose reminder. This targets duplicate waits and shared-sandbox concurrency, but available per-node controls in deployed Fabro need verification; its ordinary permission levels always permit subagents.
+2. Add a deterministic timeout handoff while retaining terminal failure. This makes preserved candidate work easier to recover safely, but does not make unattended delivery continue.
+3. Add bounded timeout continuation for the same pending candidate, with independent acceptance and final gates retained. This could recover productive interrupted work, but can also repeat a stuck approach, spend more, or encounter surviving child/process state. It requires an explicit budget and cleanup policy, not an unconditional retry edge.
+
+Recommendation: retain the narrow selection fix; decide whether the next improvement should prevent forbidden delegation or make hard-timeout recovery explicit before changing execution policy. Review the next file-targeted Fabro invocation for the requested scenario inventory and absence of the path-merge warning. A later real timeout is the effectiveness check for whichever recovery policy is chosen. These follow-ups remain open; the kaizen note is not fully resolved.
+
+### Resolution interview: investigate lost instructions before enforcing delegation policy
+
+Date: 2026-09-14
+
+Matt asked why the implementor sought extra reviewers before agreeing to enforcement: a fence should not substitute for understanding the behaviour. No delegation or timeout-policy change was selected.
+
+The immediate purpose is visible in the child requests: after browser validation still reported five failures, the parent requested concrete browser-helper diagnosis and a separate domain correctness review. Both requests prohibited edits, but neither prohibited running tests. No explanatory message accompanied the spawn calls, so the model's reason for departing from the single-owner rule is not directly recorded.
+
+Source investigation found a concrete instruction-preservation weakness:
+
+- Event 3768 contains one user input of 85,959 UTF-8 bytes: 77,699 bytes of workflow preamble followed by 8,260 bytes of current node instructions, including the no-subagent and no-extra-review rules.
+- The run records server and client version `0.316.0-nightly.0`. Source was inspected at release commit `0abf2297c00a90013a93ae01c6c139b7b85b1b1f`; matching version supports correspondence, but the deployed server's exact commit/modification state is not proven.
+- At that revision, `lib/components/fabro-agent/src/history.rs`, `compact_from` and `extract_recent_user_messages`, reinsert whole discarded user messages only within an 80,000-byte budget. An oversized message causes the extraction loop to stop. It is excluded wholesale, not truncated from the end.
+- Event 4191 records 85 original turns and six preserved recent turns. Under that implementation, the oversized initial request cannot survive verbatim after compaction. The essential node instructions fit comfortably on their own; combining them with historical stage output puts the whole message above the preservation limit.
+- `lib/components/fabro-agent/src/compaction.rs` gives the summarizer the original user text without truncation and asks it to retain constraints. But the resulting summary is lossy; only file operations receive an explicit verbatim-copy requirement. The actual summary text is not present in the exported events/checkpoints, so omission or weakening of the no-delegation rules cannot be verified directly.
+- The workflow passes the node prompt as ordinary `Message::User` content, not persistent session `user_instructions`. Delegation tools and their encouragement to use independent work/context isolation remain available in subsequent requests. The native OpenAI static system template at this revision does not itself contain explicit pro-delegation guidance; do not attribute Anthropic's delegation instructions to this run.
+
+Updated causal hypothesis: after encountering unresolved failures, the implementor sought available diagnostic help, while compaction had removed its original workflow contract from verbatim history and left constraint preservation to a summary. This explains a mechanism for the departure, not proof of the unseen summary's contents or the model's internal reason.
+
+Updated recommendation: investigate keeping the current node's execution rules separate from bulky historical context and preserving them across compaction before choosing tool prohibition as the main countermeasure. Enforcement could still be a backstop. A regression should cover the actual oversized-preamble/short-node-instruction boundary; merely making this one message smaller or raising the budget would not establish durable instruction preservation. Exact postcompaction context capture would also make future violations diagnosable. Decision remains pending.
+
+### Further investigation: task sizing and context preparation belong outside the worker
+
+Date: 2026-09-14
+
+Matt rejected treating agent compaction as normal operation. The intended standard is a small, defined task with reasonably sized context prepared outside the individual node. Investigation therefore moved upstream; no compaction, delegation-enforcement or timeout-continuation change was selected or implemented.
+
+#### Task formation
+
+Planning established iteration-level scope, not execution-sized tasks. Plan step 6 combined all tagged acceptance scenarios, several targeted test matrices and the final gate. The initial task generator turned that into task 021 (`8f607b51b`).
+
+Implementation nodes then performed semantic decomposition while also doing their own work:
+
+- `91b1b5b9f` split task 021 into targeted tests plus a remaining all-acceptance task.
+- `45d661b5a` split that acceptance task into creation/domain (022), creation/browser (023), conversations/both layers (024), and lifecycle/both layers plus final gate (025).
+- The validator accepted the current completed slice and preservation of future scope. The recorded rationale did not establish that every newly added future task fitted a bounded node.
+
+The active `scripts/sync_task_list.py` checks text length and punctuation, not execution workload: it splits long prose at sentence boundaries, rejects generated task text over 360 characters, and returns immediately for an existing todo file. The richer `prompts/sync_task_list.md` asks for semantic one-node sizing, but the graph does not invoke it. Implementors own further splitting; reviewers assess smallness after candidate implementation. No dedicated pre-execution semantic sizing check was found.
+
+Task 024's 1,725-line candidate stayed within its assigned acceptance scope. It covered 13 conversation instances across domain and browser infrastructure, including inbound email, recipient delivery, access and follow state. For comparison, successful task 022 added 593 lines for 13 domain creation examples; task 023 added 1,042 lines for 17 browser creation examples. This is evidence of differing dependency/work surfaces, not a rule that scenario or line counts predict duration. The split rationale did not explain why only creation was separated by layer.
+
+#### Incoming context is mechanically rendered, not curated
+
+The workflow uses `summary:high`. At the inspected Fabro release source, this is formatting logic, not an LLM-generated summary: `lib/components/fabro-workflow/src/handler/llm/preamble.rs` renders command scripts, up to 50 trailing output lines, full agent final responses and filtered context.
+
+There is a concrete loop-history mismatch. `lib/foundation/fabro-core/src/state.rs::ExecutionState::record` appends every completed node ID but overwrites that ID's stored outcome. `build_summary_preamble` iterates the historical IDs and looks up the latest outcome each time. The task-024 input confirms the effect: five byte-identical copies of task 023's implementation response, five copies of its review, five copies of its applied verdict, and six copies of the latest todo-sync output. These are repeated latest values, not distinct historical evidence.
+
+Each implementation visit started a fresh API session (`summary:high`, no full-fidelity reuse), yet its incoming message grew with the loop:
+
+| Selected task | Incoming message, UTF-8 bytes | First model-input tokens | Peak recorded model-input tokens | Compactions |
+| --- | ---: | ---: | ---: | ---: |
+| 019 | 26,951 | 10,888 | 149,872 | 0 |
+| 020 | 38,455 | 13,372 | 126,007 | 0 |
+| 021 | 46,122 | 15,469 | 148,729 | 0 |
+| 022 | 60,152 | 18,671 | 147,111 | 0 |
+| 023 | 72,650 | 21,683 | 158,872 | 0 |
+| 024 | 85,959 | 24,668 | 217,291 | 1 |
+
+The current implementation prompt was unchanged at 8,260 bytes; the preamble accounted for the incoming growth. Matching source/version and observed duplicate sections support the mechanism; exact deployed source identity remains unverified.
+
+#### Most growth happened inside the node, before editing
+
+Task 024 reached 160,566 recorded input tokens before its first edit, less than five minutes after starting. Seventy-one tool results had emitted about 845 KB, mostly broad source and documentation inspection. By domain tests passing, input context was about 200,000 tokens; browser dry-run completion brought it to about 209,000. Compaction followed the first real browser run at roughly 218,000 estimated tokens.
+
+Logged tool-output bytes are not a direct measure of what the provider retained; the model-input token figures come from recorded response usage. Together they show that trimming incoming history alone would not address the dominant within-node growth. The generic worker prompt requires plan/todo/history/ADR discovery; no task-specific curated dependency packet was identified in the inspected handoff. Whether reusable task-local knowledge already existed elsewhere in the sandbox remains open.
+
+#### Current understanding and unanswered questions
+
+The observed system assigns semantic decomposition, dependency discovery, implementation and validation to the same bounded worker, while delivering mechanically accumulated history as its starting context. Successful nodes also accumulated large contexts. Compaction was where this weakness became visible in task 024, not necessarily where it began.
+
+Before selecting a countermeasure, distinguish necessary domain/acceptance knowledge from avoidable rediscovery: which of task 024's reads were needed, which repeated known facts, and which existing helpers could have made the work smaller? Also establish what evidence should make a task ready for a worker and how the workflow currently communicates that evidence. No safe numerical task/context limit or replacement architecture has been established by this investigation.
+
+Evidence: failed-run events and meta artifacts; task-split commits above; current/run-revision task generation and validation contracts; release-source functions above. Derived measurements are retained at `/tmp/memba-062-context-metrics.json` and `/tmp/memba-062-context-output-categories.json`.
+
+### Bounded preparation exercise: one rule at one layer
+
+Matt agreed to work through one concrete case before choosing a new workflow. The [task-024 preparation exercise](experiments/062-task-024/README.md) and [sample worker handoff](experiments/062-task-024/worker-handoff.md) use the pre-attempt checkpoint `3ec928f3e`.
+
+The packet covers only Board web composition at the domain layer: one existing scenario with its full positive/negative audience assertions. An external coverage ledger retains the other twelve domain scenarios and all thirteen browser scenarios, plus the separate lifecycle/final-gate obligations. This is not a live todo split or a proposal that every scenario must be its own node.
+
+Preparation identified existing fixture, send, access, provider-observation and runner code; it supplied context shapes and highlighted private-helper and wording adaptations. This separates real integration work from the broad subsystem discovery that the original worker performed. No implementation was attempted. A temporary tag-only selection check confirmed that the proposed scope can enable exactly one domain scenario without enabling browser coverage or changing scenario text.
+
+The artifacts are for the next design conversation. They do not prove a worker can finish within a particular token/time budget, and no new workflow architecture has been selected.
+
+### Resolution selected: just-in-time delivery planner
+
+Matt subsequently approved a capable delivery planner that can split, combine and reorder pending implementation work, prepare one bounded handoff against current code, and incorporate worker notes and existing review results. It may change the execution plan, not the approved scope or acceptance contract. Workers return early when missing preparation or excessive scope requires replanning; incomplete work remains unaccepted.
+
+Matt explicitly rejected a separate readiness-review loop. The existing independent implementation review and final gates remain. Use Sol for the initial planner; no new compaction policy, tool-capability fence or hard-timeout retry policy is selected.
+
+The approved [implementation design](2026-09-14-just-in-time-delivery-planner.md) records responsibilities, durable artifacts, code targets and validation requirements. Matt requested that this be written up and dispatched to a Sol implementation subagent. Status: authorized for implementation, not yet validated; operational effectiveness remains to be demonstrated by a later authorized delivery.
+
+### Follow-up implementation: 2026-09-14 — just-in-time delivery planner
+
+Implemented the approved delivery-planner loop on branch `kaizen/delivery-planner` in an isolated worktree. The task loop now routes through a Sol delivery planner before every worker packet, records durable `.delivery/` artifacts beside each iteration plan, and sends worker `ready_for_review`, `replan`, and `human_blocked` outcomes through deterministic routing. Workers no longer choose, split or reorder tasks; semantic sizing belongs to the planner. Existing independent review, deterministic check-off, bounded revision worker visits, final `dev ci`, plan-conformance, final artifact and publish gates remain in place.
+
+Validation added/updated deterministic helper tests and native Fabro runtime fixtures for initial/existing/resumed state, artifact provenance, worker replan without acceptance, revision through planner with the existing visit guard, fail-closed malformed/stale/mismatched artifacts, artifact-only checkpoint tolerance, and minimal task-loop fidelity. Full effectiveness remains pending until a later authorized real delivery run demonstrates useful early replanning and bounded worker context in practice.
+
+### Follow-up correction: 2026-09-14 — deterministic planner guard tightened
+
+Implementation review of the first delivery-planner commit found reproduced invalid success routes in the planner helper: forged task check-off, deletion of pending work, incomplete packets, tampered guard baselines, and implementation routing after a revise verdict. The correction keeps the same approved planner/worker/review architecture but moves guard authority out of planner-writable artifacts, restricts planner writes to declared outputs, validates full state/packet/result schemas, requires pending-obligation lineage and coverage mapping, preserves unaccepted candidate origins through replan/revision/resume, and makes planner human-blocked output explicit. Effectiveness in a real delivery remains pending.

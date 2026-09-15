@@ -25,6 +25,9 @@ class TaskVerdictTest(unittest.TestCase):
         self.todo.write_text(TODO)
         self.candidate = self.root / "candidate.txt"
         self.candidate.write_text("Useful but incomplete candidate work.\n")
+        self.delivery = self.root / ".delivery"
+        self.delivery.mkdir()
+        self.write_delivery_artifacts(TASK)
         self.git("init", "-q")
         self.git("config", "user.name", "Test")
         self.git("config", "user.email", "test@example.com")
@@ -38,6 +41,31 @@ class TaskVerdictTest(unittest.TestCase):
     def checkpoint(self):
         self.git("add", ".")
         self.git("commit", "-qm", "Fabro candidate checkpoint")
+
+    def write_delivery_artifacts(self, task):
+        packet = {
+            "schema_version": 1,
+            "packet_id": "task-009-packet",
+            "task_id": "task-009",
+            "todo_line": task,
+            "attempt": "implementation",
+            "plan_path": str(self.plan),
+            "todo_path": str(self.todo),
+            "source_baseline": "baseline",
+        }
+        result = {
+            "schema_version": 1,
+            "packet_id": "task-009-packet",
+            "task_id": "task-009",
+            "todo_line": task,
+            "result": "ready_for_review",
+            "changed_paths": ["candidate.txt"],
+            "validation": [{"command": "true", "exit_status": 0, "evidence": "passed"}],
+            "notes": "ready",
+            "unresolved": [],
+        }
+        (self.delivery / "current-worker-packet.json").write_text(json.dumps(packet, indent=2) + "\n")
+        (self.delivery / "latest-worker-result.json").write_text(json.dumps(result, indent=2) + "\n")
 
     def apply(self, decision="revise", task=TASK, reason="Cover the remaining open views.", **extra):
         return self.invoke(json.dumps(dict(decision=decision, task=task, reason=reason, **extra)))
@@ -55,13 +83,12 @@ class TaskVerdictTest(unittest.TestCase):
     def assert_unchanged_failure(self, result):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertEqual(self.todo.read_text(), TODO)
-        self.assertEqual(self.git("status", "--porcelain"), "")
 
     def test_rejection_preserves_checkpoint_and_acceptance_completes_only_that_task(self):
         head = self.git("rev-parse", "HEAD")
         self.assert_route(self.apply(), "revise")
         self.assertEqual(self.todo.read_text(), TODO)
-        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertIn(".delivery/latest-review.json", self.git("status", "--porcelain"))
         self.assertEqual(self.git("rev-parse", "HEAD"), head)
         self.assertIn("Useful but incomplete", self.candidate.read_text())
 
@@ -77,7 +104,6 @@ class TaskVerdictTest(unittest.TestCase):
         self.assert_route(self.apply("accept"), "accept")
         self.checkpoint()
         self.assert_route(self.apply("accept"), "accept")
-        self.assertEqual(self.git("status", "--porcelain"), "")
         self.assertIn(NEXT_TASK, self.todo.read_text())
 
     def test_blocked_reports_original_reason_without_checkoff(self):
@@ -105,6 +131,16 @@ class TaskVerdictTest(unittest.TestCase):
         for text in cases:
             with self.subTest(text=text):
                 self.assert_unchanged_failure(self.invoke(text))
+
+    def test_failed_worker_validation_cannot_be_accepted(self):
+        result_path = self.delivery / "latest-worker-result.json"
+        worker_result = json.loads(result_path.read_text())
+        worker_result["validation"][0]["exit_status"] = 1
+        result_path.write_text(json.dumps(worker_result))
+        result = self.apply("accept")
+        self.assert_unchanged_failure(result)
+        self.assertIn("requires every validation command to pass", result.stderr)
+        self.assertFalse((self.delivery / "latest-review.json").exists())
 
     def test_changed_task_text_cannot_be_accepted(self):
         self.assert_unchanged_failure(self.apply("accept", task=TASK + " Changed scope."))

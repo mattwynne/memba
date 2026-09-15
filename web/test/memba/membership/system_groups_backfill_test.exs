@@ -564,6 +564,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
       :init_event_stores,
       :migrate_repos,
       :ensure_release_services_started,
+      :verify_source_backed_admin_invariant,
       :await_system_group_backfill_source_projections,
       :ensure_production_smoke_fixtures
     ]

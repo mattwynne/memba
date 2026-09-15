@@ -12,6 +12,11 @@ defmodule Memba.Release do
     run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
 
     run_release_step(
+      :verify_source_backed_admin_invariant,
+      &verify_source_backed_admin_invariant_for_release!/0
+    )
+
+    run_release_step(
       :await_system_group_backfill_source_projections,
       &await_system_group_backfill_source_projections!/0
     )
@@ -26,6 +31,24 @@ defmodule Memba.Release do
     for repo <- repos() do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &verify_repo_schema!/1)
     end
+  end
+
+  def reconcile_legacy_admin_history! do
+    run_release_step(:load_app, &load_app/0)
+    run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
+
+    report =
+      Memba.Membership.AdminHistoryReconciliation.run!(admin_history_reconciliation_env_opts())
+
+    IO.puts(Jason.encode!(report))
+    report
+  end
+
+  def verify_source_backed_admin_invariant! do
+    run_release_step(:load_app, &load_app/0)
+    run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
+
+    verify_source_backed_admin_invariant!(source_backed_admin_invariant_env_opts())
   end
 
   def verify_repo_schema!(repo) do
@@ -208,6 +231,21 @@ defmodule Memba.Release do
     :ok
   end
 
+  defp verify_source_backed_admin_invariant_for_release! do
+    verify_source_backed_admin_invariant!(
+      phase: "release-command",
+      execution_attempts: 3,
+      retry_delay_ms: 5_000
+    )
+  end
+
+  defp verify_source_backed_admin_invariant!(opts) do
+    report = Memba.Membership.SourceBackedAdminInvariant.check!(opts)
+
+    IO.puts(Jason.encode!(report))
+    report
+  end
+
   defp await_system_group_backfill_source_projections! do
     timeout =
       Application.get_env(:memba, :system_groups_backfill_projection_barrier_timeout, 60_000)
@@ -225,6 +263,45 @@ defmodule Memba.Release do
     Memba.ProductionSmokeFixtures.ensure!()
     :ok
   end
+
+  defp admin_history_reconciliation_env_opts do
+    mode = admin_history_mode(System.get_env("MEMBA_ADMIN_HISTORY_MODE"))
+
+    [mode: mode]
+    |> maybe_put_env_opt(:club_ids, admin_history_club_ids())
+    |> maybe_put_env_opt(:operation_id, System.get_env("MEMBA_ADMIN_HISTORY_OPERATION_ID"))
+    |> maybe_put_env_opt(
+      :approval_reference,
+      System.get_env("MEMBA_ADMIN_HISTORY_APPROVAL_REFERENCE")
+    )
+    |> maybe_put_env_opt(:acknowledgement, System.get_env("MEMBA_ADMIN_HISTORY_ACKNOWLEDGEMENT"))
+  end
+
+  defp admin_history_mode("apply"), do: :apply
+  defp admin_history_mode("APPLY"), do: :apply
+  defp admin_history_mode(_mode), do: :dry_run
+
+  defp admin_history_club_ids do
+    case System.get_env("MEMBA_ADMIN_HISTORY_CLUB_IDS") do
+      nil ->
+        []
+
+      value ->
+        value
+        |> String.split([",", "\n"], trim: true)
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+    end
+  end
+
+  defp source_backed_admin_invariant_env_opts do
+    []
+    |> maybe_put_env_opt(:phase, System.get_env("MEMBA_ADMIN_INVARIANT_PHASE"))
+  end
+
+  defp maybe_put_env_opt(opts, _key, nil), do: opts
+  defp maybe_put_env_opt(opts, _key, []), do: opts
+  defp maybe_put_env_opt(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp load_app do
     # Many platforms require SSL when connecting to the database.

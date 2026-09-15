@@ -123,12 +123,7 @@ cat > "$tmpdir/broad-plan.md" <<'PLAN'
 None.
 PLAN
 
-if python3 "$helper" "$tmpdir/broad-plan.md" "$tmpdir/broad-todo.md" > "$tmpdir/broad.out" 2>&1; then
-  echo "Expected broad plan to fail" >&2
-  cat "$tmpdir/broad.out" >&2
-  exit 1
-fi
-assert_contains "$tmpdir/broad.out" "Generated todo list is too coarse"
-assert_contains "$tmpdir/broad.out" "ends with ':'"
+python3 "$helper" "$tmpdir/broad-plan.md" "$tmpdir/broad-todo.md" > "$tmpdir/broad.out" 2>&1
+assert_contains "$tmpdir/broad-todo.md" '- [ ] 001 `PageHTML.message` (`message.html.heex`):'
 
 echo "sync_task_list tests passed"

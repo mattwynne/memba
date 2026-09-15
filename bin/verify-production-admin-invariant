@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Run the read-only source-backed Admin invariant against the current Fly release.
+
+set -euo pipefail
+
+phase="${1:-}"
+
+if [ -z "$phase" ]; then
+  echo "Usage: $0 <phase> [artifact-directory]" >&2
+  exit 2
+fi
+
+artifact_dir="${2:-${TMPDIR:-/tmp}/memba-admin-invariant}"
+app="${MEMBA_FLY_APP:-memba}"
+attempts="${MEMBA_ADMIN_INVARIANT_ATTEMPTS:-3}"
+
+if ! [[ "$attempts" =~ ^[1-9][0-9]*$ ]]; then
+  echo "MEMBA_ADMIN_INVARIANT_ATTEMPTS must be a positive integer: $attempts" >&2
+  exit 2
+fi
+
+mkdir -p "$artifact_dir"
+
+for ((attempt = 1; attempt <= attempts; attempt++)); do
+  output="$artifact_dir/${phase}-attempt-${attempt}.txt"
+
+  echo "Source-backed Admin invariant phase=$phase attempt=$attempt/$attempts"
+
+  if flyctl ssh console \
+    --app "$app" \
+    --command "/app/bin/memba rpc 'report = Memba.Membership.SourceBackedAdminInvariant.check!(phase: \"$phase\"); IO.puts(Jason.encode!(report))'" \
+    2>&1 | tee "$output"; then
+    exit 0
+  fi
+
+  if [ "$attempt" -lt "$attempts" ]; then
+    delay=$((attempt * 5))
+    echo "Invariant attempt failed; retrying in ${delay}s." >&2
+    sleep "$delay"
+  fi
+done
+
+echo "Source-backed Admin invariant failed after $attempts attempts." >&2
+exit 1
