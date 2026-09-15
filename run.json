@@ -1255,7 +1255,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-15T04:00:36.353796338Z",
-  "last_event_at": "2026-09-15T05:08:54.964243221Z",
+  "last_event_at": "2026-09-15T05:08:59.615211654Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2918,9 +2918,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 826,
       "checkpoint": {
-        "timestamp": "2026-09-15T05:08:54.982912452Z",
+        "timestamp": "2026-09-15T05:08:59.544853922Z",
         "current_node": "apply_review_fixes",
         "completed_nodes": [
           "start",
@@ -2937,8 +2937,321 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.retry_count.synthesize_review": 0,
+          "internal.retry_count.read_plan": 0,
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"strengthen-membership-command-boundary-test\",\n        \"title\": \"Strengthen web membership command-boundary enforcement\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "thread.review_merge.current_node": "synthesize_review",
+          "current_node": "apply_review_fixes",
+          "internal.retry_count.apply_review_fixes": 0,
+          "internal.retry_count.review_fork": 0,
+          "command.output": "blob://sha256/a72a2969d57a2cc3905104793b09872c7db82553ec78086ac960c8e8005a381b",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration Review Report — 063 Add Custom Group Members\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n*(Confidence is capped at Medium because the implementation-evidence collection stage truncated ",
+                "last_stage": "claude_review",
+                "response.claude_review": "# Iteration Review Report — 063 Add Custom Group Members\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n*(Confidence is capped at Medium because the implementation-evidence collection stage truncated the vast majority of the diff — 6,149 lines omitted — leaving only tail fragments of two test files visible to this review. The decision below is grounded in what evidence is available: the plan text, the full `dev check` transcript, and the visible test fragments. Areas not directly observable are flagged as judgement-worthy rather than asserted as clean.)*\n\n## ADR conformance: PASS (evidence-limited)\n\nThe plan's central architectural constraint — \"Preserve trusted system-group commands rather than exposing them directly to web callers\" — is exactly the kind of decision an ADR on CQRS/command boundaries would mandate (public bounded-context API vs. internal aggregate commands). This is directly and concretely verified by `web/test/memba_web/membership_command_boundary_test.exs`, which statically scans all of `lib/memba_web` and fails the build if any web source references `Memba.Membership.Commands.AddGroupMember`, `CreateGroup`, or `RemoveGroupMember` directly. This is a strong, durable, convention-enforcing test rather than a one-off assertion, and it matches the plan's Risk note verbatim (\"Do not expose them unchanged\").\n\nThe presentation-layer test fragment (`create_active_member`/group selection authorization test) is consistent with the plan's item 3 requirement to \"reauthorize on submit and render fresh membership after a successful transition\" and to query candidates through Membership's public API rather than duplicating a full-page template.\n\nI did not have direct sight of the aggregate/command-handler code, the mailer composer, or the specific ADR file(s) under `docs/adr/` this iteration is bound by (none were quoted in the plan or evidence excerpts), so I cannot literally cite ADR numbers/text here. Given the boundary test is authoritative and passing, and `dev check` is green end-to-end, I'm treating ADR conformance as PASS on the evidence available, not as a fully audited certainty.\n\n## ADR violations\n\nNone identified in the available evidence.\n\n## Blocking issues\n\nNone identified. `dev check` passed on the committed state (189 scenarios / 1415 steps, all green), including the full acceptance suite, and the plan's core architectural guardrail (no raw command exposure to web) has a dedicated regression test. No behavioural gap is visible in the evidence that would warrant rejection.\n\n## Bounded-safe fixes\n\nNone identified from the visible evidence. (No refactoring opportunities could be concretely pinpointed without sight of the full diff — see Validation notes.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** Welcome-email composer / mailer integration (not directly visible in evidence excerpts).\n   **Smell:** The plan explicitly calls out the risk \"Welcome delivery cannot undo membership: avoid conflating domain success and provider outcome.\" This is a subtle failure-mode boundary (domain commit vs. mailer side-effect) that's easy to get right in the happy path but easy to silently regress later (e.g., a future refactor wrapping mailer + projection in one transaction). Worth a human spot-check that the welcome send is fired-and-forgotten after commit (e.g., via a process/handler outside the aggregate/projector transaction) rather than inline in the command pipeline, since I could not directly inspect this code path.\n\n2. **Files:** `Membership.Club` idempotency handling for `GroupMemberAdded` on duplicate/replay.\n   **Smell:** The plan requires \"explicit per-use-case command results or new-event metadata to distinguish a new addition from an idempotent no-op; never infer that distinction by racing a projection preflight.\" This is exactly the kind of race-prone pattern that's easy to accidentally reintroduce (checking projection state before deciding to emit an event). Given only test-file tails were visible, this should get a targeted read of the aggregate's `add_member`/duplicate-handling code by a human or a follow-up focused pass, even though `dev check`'s green acceptance run is reassuring behaviourally.\n\n3. **Files:** Web-layer authorization/query boundary generally.\n   **Smell:** The boundary test is a good static guardrail, but it only catches direct fully-qualified references to the three named internal commands. If the actual implementation introduces a *new* internal-only command/module later for a related purpose, the allowlist-style test won't catch it automatically — it's an enumerated blacklist, not a structural boundary (e.g., a context `@moduledoc` visibility contract or `mix xref` check). Not a defect now, but worth noting as a maintenance risk for future iterations extending this area.\n\n4. **Scope discipline:** The plan explicitly defers leave/removal controls to iteration 064. Confirm (not verified directly here) that no incidental removal/leave UI or backend surfaced during this work — the evidence didn't show any such addition, and acceptance criteria don't mention it, so this is very likely fine, but flagged for completeness given it's an explicit scope boundary called out twice in the plan (Notes and Risks sections).\n\n## Suggested fixes\n\nNone required to accept. If maintainers want to close the residual uncertainty from limited evidence visibility, a short follow-up spot-check of (a) the aggregate's duplicate-add branch and (b) the welcome-mailer trigger point relative to the commit boundary would fully retire items 1–2 above.\n\n## Validation notes\n\n- `dev check` (`dev ci`) ran to completion on the committed state: 189 scenarios / 1415 steps, all passed, including staff/club-slug and other regression suites — no failures, no skips reported in the visible tail.\n- Preflight sandbox compiled cleanly (dependency graph including Commanded/EventStore adapter, Phoenix, Swoosh, etc.) with no errors.\n- Direct evidence reviewed: `membership_command_boundary_test.exs` (verifies the ADR-relevant \"no raw command exposure to web\" constraint via static source scan) and a presentation-layer authorization test fragment for member/conversation row filtering.\n- **Material limitation:** the `collect_implementation_evidence` stage output was truncated (6,149 lines omitted) so the full diff, aggregate code, mailer composer, LiveView/HEEx picker component, and migrations were not directly visible to this review. The ACCEPT decision rests on (a) the plan-conformance gate already having passed per the task framing, (b) a fully green `dev check` including the full Cucumber/acceptance suite, and (c) the one directly-visible architectural guardrail test matching the plan's stated central risk. Confidence is set to Medium specifically because of this visibility gap, not because of any observed defect."
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 063 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the project’s",
+                "last_stage": "codex_review",
+                "response.codex_review": "# Iteration 063 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the project’s accepted domain, CQRS, and event-sourcing boundaries:\n\n- Admission is exposed through the public `Memba.Membership` API rather than exposing internal commands to web delivery.\n- Authorization and idempotency remain command/aggregate concerns rather than projection preflight checks.\n- Existing membership events and projections are reused instead of introducing projection-only state changes.\n- Welcome-email delivery remains outside aggregates and projectors and uses the existing mailer abstraction.\n- No ADR-mandated infrastructure appears to have been replaced by a simpler local substitute.\n- `MembaWeb.MembershipCommandBoundaryTest` supplies an explicit regression check against direct web use of the known internal membership commands.\n\n## Blocking issues\n\nNone identified.\n\nThe supplied implementation and validation evidence covers the central behavioural risks: actor and target authorization, club and group boundaries, duplicate additions, system-group protection, outside-admin behaviour, welcome delivery, replay safety, and presentation refreshes. No substantial plan gap or unsafe coverage omission is apparent.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Source-text architecture boundary test is intentionally lightweight but bypassable**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - **Smell:** The test searches production `.ex` files for a fixed list of fully qualified command-module strings. Namespace aliases such as `alias Memba.Membership.Commands` followed by `Commands.AddGroupMember` would evade it. The denylist also needs manual updates whenever another internal command is introduced, while comments or documentation containing the complete module name could cause a false positive.\n   - **Why this needs human judgement:** The current test is small, understandable, and catches the most likely accidental violation. Replacing it with AST-aware checking or a broader architectural dependency rule would improve enforcement but would establish a project-wide policy and maintenance burden beyond this iteration. This does not indicate that the current implementation actually bypasses the boundary.\n\n## Suggested fixes\n\nNo merge-blocking changes are recommended.\n\nIf stronger architectural enforcement is desired later:\n\n1. Parse the web source with `Code.string_to_quoted/2` and detect both fully qualified references and namespace aliases to `Memba.Membership.Commands`.\n2. Prefer enforcing the forbidden namespace generally rather than maintaining a list of individual commands, while documenting any deliberate exceptions.\n3. Consider extracting that check into a reusable architecture-test helper if similar context-boundary tests exist elsewhere.\n\n## Validation notes\n\n- Sandbox runtime preflight passed.\n- `dev ci` completed successfully for the reviewed run.\n- The full acceptance suite passed:\n  - **189 scenarios**\n  - **1,415 steps**\n  - **0 failures**\n- Compilation completed successfully across the relevant applications and dependencies.\n- The implementation evidence includes an automated web-layer boundary test preventing direct references to the known internal membership commands.\n- No evidence indicates out-of-scope removal/leave controls, replacement notification infrastructure, projection-side mail delivery, or creation/restoration of club memberships through the custom-group flow.\n"
+              }
+            },
+            {
+              "id": "gemini_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "## Code Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n### ADR violations\nNone. The implementation follows the architectural directives outlined in the itera",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "## Code Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n### ADR violations\nNone. The implementation follows the architectural directives outlined in the iteration plan and Memba's domain guidelines:\n- Side effects (welcome emails) are correctly kept out of aggregates and projectors.\n- The web boundary is protected from direct usage of trusted system-group commands (e.g., `AddGroupMember`), delegating authorization to the public `Memba.Membership` context API.\n\n### Blocking issues\nNone. \n- All 189 acceptance scenarios and 1415 steps passed in the `dev check`.\n- Browser acceptance lifecycle and domain boundaries execute properly.\n\n### Bounded-safe fixes\nNone necessary based on the provided implementation evidence. The code appears clean and strictly aligned with the plan.\n\n### Judgement-worthy non-blocking code-health findings\n1. **`web/test/memba_web/membership_command_boundary_test.exs` (Architectural Enforcement Method):** The test enforces the web-to-domain command boundary by reading raw Elixir files as strings (`File.read!(path)`) and checking for substrings (`=~ internal_reference`). While pragmatic and functional for immediate validation, this approach is brittle (e.g., it could be foiled by aliases, multi-line formatting, or string literals in comments). \n   *Why it needs human judgement:* In the future, the team might want to migrate this structural enforcement to a static analysis tool like the `boundary` hex package or a custom Credo architecture rule, which natively understands Elixir AST and module aliases.\n2. **Idempotency in Welcome Email Delivery:** The plan relies on event metadata or distinct command results to prevent re-sending welcome emails on projection replays or idempotent no-ops. \n   *Why it needs human judgement:* The project should ensure that any `Commanded.Event.Handler` responsible for the mailer uses Commanded's native idempotency tracking correctly, guaranteeing that if the event store ever replays the exact same transition event to the handler, the email is not dispatched a second time.\n\n### Suggested fixes\nNo immediate code changes are requested to merge this iteration.\n\n### Validation notes\n- Verified `dev check` completion on the exact delivery state (189 scenarios passed, 19m runtime).\n- Validated that the web boundary test asserts the absence of raw trusted commands (`Memba.Membership.Commands.AddGroupMember`, etc.) in the Phoenix layer, satisfying the plan's requirement to preserve trusted system-group commands inside the domain boundary.\n- Preflight sandbox runtime checks compiled successfully without warnings."
+              }
+            }
+          ],
+          "thread.review_fork.current_node": "review_merge",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.synthesize_review.current_node": "review_gate",
+          "graph.rankdir": "LR",
           "internal.thread_id": "snapshot_before_review_repair",
+          "review_fixes_available": true,
+          "graph.max_node_visits": "160",
+          "failure_class": "transient_infra",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "implementation_accepted": false,
+          "internal.fidelity": "summary:high",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "thread.start.current_node": "read_plan",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "internal.retry_count.review_merge": 0,
+          "parallel.branch_count": 3,
+          "review_blockers": [
+            {
+              "id": "strengthen-membership-command-boundary-test",
+              "title": "Strengthen web membership command-boundary enforcement",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "failure_signature": "apply_review_fixes|transient_infra|handler timed out after 2400000ms",
+          "internal.retry_count.review_gate": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.retry_count.synthesize_review": 0,
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "last_stage": "synthesize_review",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.run_id": "01M2HKG92Q13FYYVXTN083WF97",
+          "graph.default_fidelity": "summary:high",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.start": 0,
+          "outcome": "failed",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"strengthen-membership-command-boundary-test\",\n       ",
+          "internal.retry_count.dev_check": 0
+        },
+        "node_outcomes": {
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/277da8cac4aa22c5c2d4160e1f4d689444fb9a87a95006d1f6cda49bec4dd815"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1407453,
+              "active_time_ms": 1407453
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/06b1d8d5a73d17c5a4f5d6b0c8db1329c84a6ff7cf0221f63af1418f53456007"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '91edff41b9732c09f3d37ed00d8414696ddc5565'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 255,
+              "active_time_ms": 255
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "claude_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration Review Report — 063 Add Custom Group Members\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n*(Confidence is capped at Medium because the implementation-evidence collection stage truncated ",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "# Iteration Review Report — 063 Add Custom Group Members\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n*(Confidence is capped at Medium because the implementation-evidence collection stage truncated the vast majority of the diff — 6,149 lines omitted — leaving only tail fragments of two test files visible to this review. The decision below is grounded in what evidence is available: the plan text, the full `dev check` transcript, and the visible test fragments. Areas not directly observable are flagged as judgement-worthy rather than asserted as clean.)*\n\n## ADR conformance: PASS (evidence-limited)\n\nThe plan's central architectural constraint — \"Preserve trusted system-group commands rather than exposing them directly to web callers\" — is exactly the kind of decision an ADR on CQRS/command boundaries would mandate (public bounded-context API vs. internal aggregate commands). This is directly and concretely verified by `web/test/memba_web/membership_command_boundary_test.exs`, which statically scans all of `lib/memba_web` and fails the build if any web source references `Memba.Membership.Commands.AddGroupMember`, `CreateGroup`, or `RemoveGroupMember` directly. This is a strong, durable, convention-enforcing test rather than a one-off assertion, and it matches the plan's Risk note verbatim (\"Do not expose them unchanged\").\n\nThe presentation-layer test fragment (`create_active_member`/group selection authorization test) is consistent with the plan's item 3 requirement to \"reauthorize on submit and render fresh membership after a successful transition\" and to query candidates through Membership's public API rather than duplicating a full-page template.\n\nI did not have direct sight of the aggregate/command-handler code, the mailer composer, or the specific ADR file(s) under `docs/adr/` this iteration is bound by (none were quoted in the plan or evidence excerpts), so I cannot literally cite ADR numbers/text here. Given the boundary test is authoritative and passing, and `dev check` is green end-to-end, I'm treating ADR conformance as PASS on the evidence available, not as a fully audited certainty.\n\n## ADR violations\n\nNone identified in the available evidence.\n\n## Blocking issues\n\nNone identified. `dev check` passed on the committed state (189 scenarios / 1415 steps, all green), including the full acceptance suite, and the plan's core architectural guardrail (no raw command exposure to web) has a dedicated regression test. No behavioural gap is visible in the evidence that would warrant rejection.\n\n## Bounded-safe fixes\n\nNone identified from the visible evidence. (No refactoring opportunities could be concretely pinpointed without sight of the full diff — see Validation notes.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** Welcome-email composer / mailer integration (not directly visible in evidence excerpts).\n   **Smell:** The plan explicitly calls out the risk \"Welcome delivery cannot undo membership: avoid conflating domain success and provider outcome.\" This is a subtle failure-mode boundary (domain commit vs. mailer side-effect) that's easy to get right in the happy path but easy to silently regress later (e.g., a future refactor wrapping mailer + projection in one transaction). Worth a human spot-check that the welcome send is fired-and-forgotten after commit (e.g., via a process/handler outside the aggregate/projector transaction) rather than inline in the command pipeline, since I could not directly inspect this code path.\n\n2. **Files:** `Membership.Club` idempotency handling for `GroupMemberAdded` on duplicate/replay.\n   **Smell:** The plan requires \"explicit per-use-case command results or new-event metadata to distinguish a new addition from an idempotent no-op; never infer that distinction by racing a projection preflight.\" This is exactly the kind of race-prone pattern that's easy to accidentally reintroduce (checking projection state before deciding to emit an event). Given only test-file tails were visible, this should get a targeted read of the aggregate's `add_member`/duplicate-handling code by a human or a follow-up focused pass, even though `dev check`'s green acceptance run is reassuring behaviourally.\n\n3. **Files:** Web-layer authorization/query boundary generally.\n   **Smell:** The boundary test is a good static guardrail, but it only catches direct fully-qualified references to the three named internal commands. If the actual implementation introduces a *new* internal-only command/module later for a related purpose, the allowlist-style test won't catch it automatically — it's an enumerated blacklist, not a structural boundary (e.g., a context `@moduledoc` visibility contract or `mix xref` check). Not a defect now, but worth noting as a maintenance risk for future iterations extending this area.\n\n4. **Scope discipline:** The plan explicitly defers leave/removal controls to iteration 064. Confirm (not verified directly here) that no incidental removal/leave UI or backend surfaced during this work — the evidence didn't show any such addition, and acceptance criteria don't mention it, so this is very likely fine, but flagged for completeness given it's an explicit scope boundary called out twice in the plan (Notes and Risks sections).\n\n## Suggested fixes\n\nNone required to accept. If maintainers want to close the residual uncertainty from limited evidence visibility, a short follow-up spot-check of (a) the aggregate's duplicate-add branch and (b) the welcome-mailer trigger point relative to the commit boundary would fully retire items 1–2 above.\n\n## Validation notes\n\n- `dev check` (`dev ci`) ran to completion on the committed state: 189 scenarios / 1415 steps, all passed, including staff/club-slug and other regression suites — no failures, no skips reported in the visible tail.\n- Preflight sandbox compiled cleanly (dependency graph including Commanded/EventStore adapter, Phoenix, Swoosh, etc.) with no errors.\n- Direct evidence reviewed: `membership_command_boundary_test.exs` (verifies the ADR-relevant \"no raw command exposure to web\" constraint via static source scan) and a presentation-layer authorization test fragment for member/conversation row filtering.\n- **Material limitation:** the `collect_implementation_evidence` stage output was truncated (6,149 lines omitted) so the full diff, aggregate code, mailer composer, LiveView/HEEx picker component, and migrations were not directly visible to this review. The ACCEPT decision rests on (a) the plan-conformance gate already having passed per the task framing, (b) a fully green `dev check` including the full Cucumber/acceptance suite, and (c) the one directly-visible architectural guardrail test matching the plan's stated central risk. Confidence is set to Medium specifically because of this visibility gap, not because of any observed defect."
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 063 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the project’s",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "# Iteration 063 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the project’s accepted domain, CQRS, and event-sourcing boundaries:\n\n- Admission is exposed through the public `Memba.Membership` API rather than exposing internal commands to web delivery.\n- Authorization and idempotency remain command/aggregate concerns rather than projection preflight checks.\n- Existing membership events and projections are reused instead of introducing projection-only state changes.\n- Welcome-email delivery remains outside aggregates and projectors and uses the existing mailer abstraction.\n- No ADR-mandated infrastructure appears to have been replaced by a simpler local substitute.\n- `MembaWeb.MembershipCommandBoundaryTest` supplies an explicit regression check against direct web use of the known internal membership commands.\n\n## Blocking issues\n\nNone identified.\n\nThe supplied implementation and validation evidence covers the central behavioural risks: actor and target authorization, club and group boundaries, duplicate additions, system-group protection, outside-admin behaviour, welcome delivery, replay safety, and presentation refreshes. No substantial plan gap or unsafe coverage omission is apparent.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Source-text architecture boundary test is intentionally lightweight but bypassable**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - **Smell:** The test searches production `.ex` files for a fixed list of fully qualified command-module strings. Namespace aliases such as `alias Memba.Membership.Commands` followed by `Commands.AddGroupMember` would evade it. The denylist also needs manual updates whenever another internal command is introduced, while comments or documentation containing the complete module name could cause a false positive.\n   - **Why this needs human judgement:** The current test is small, understandable, and catches the most likely accidental violation. Replacing it with AST-aware checking or a broader architectural dependency rule would improve enforcement but would establish a project-wide policy and maintenance burden beyond this iteration. This does not indicate that the current implementation actually bypasses the boundary.\n\n## Suggested fixes\n\nNo merge-blocking changes are recommended.\n\nIf stronger architectural enforcement is desired later:\n\n1. Parse the web source with `Code.string_to_quoted/2` and detect both fully qualified references and namespace aliases to `Memba.Membership.Commands`.\n2. Prefer enforcing the forbidden namespace generally rather than maintaining a list of individual commands, while documenting any deliberate exceptions.\n3. Consider extracting that check into a reusable architecture-test helper if similar context-boundary tests exist elsewhere.\n\n## Validation notes\n\n- Sandbox runtime preflight passed.\n- `dev ci` completed successfully for the reviewed run.\n- The full acceptance suite passed:\n  - **189 scenarios**\n  - **1,415 steps**\n  - **0 failures**\n- Compilation completed successfully across the relevant applications and dependencies.\n- The implementation evidence includes an automated web-layer boundary test preventing direct references to the known internal membership commands.\n- No evidence indicates out-of-scope removal/leave controls, replacement notification infrastructure, projection-side mail delivery, or creation/restoration of club memberships through the custom-group flow.\n"
+                  }
+                },
+                {
+                  "id": "gemini_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "## Code Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n### ADR violations\nNone. The implementation follows the architectural directives outlined in the itera",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "## Code Review Report\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n### ADR violations\nNone. The implementation follows the architectural directives outlined in the iteration plan and Memba's domain guidelines:\n- Side effects (welcome emails) are correctly kept out of aggregates and projectors.\n- The web boundary is protected from direct usage of trusted system-group commands (e.g., `AddGroupMember`), delegating authorization to the public `Memba.Membership` context API.\n\n### Blocking issues\nNone. \n- All 189 acceptance scenarios and 1415 steps passed in the `dev check`.\n- Browser acceptance lifecycle and domain boundaries execute properly.\n\n### Bounded-safe fixes\nNone necessary based on the provided implementation evidence. The code appears clean and strictly aligned with the plan.\n\n### Judgement-worthy non-blocking code-health findings\n1. **`web/test/memba_web/membership_command_boundary_test.exs` (Architectural Enforcement Method):** The test enforces the web-to-domain command boundary by reading raw Elixir files as strings (`File.read!(path)`) and checking for substrings (`=~ internal_reference`). While pragmatic and functional for immediate validation, this approach is brittle (e.g., it could be foiled by aliases, multi-line formatting, or string literals in comments). \n   *Why it needs human judgement:* In the future, the team might want to migrate this structural enforcement to a static analysis tool like the `boundary` hex package or a custom Credo architecture rule, which natively understands Elixir AST and module aliases.\n2. **Idempotency in Welcome Email Delivery:** The plan relies on event metadata or distinct command results to prevent re-sending welcome emails on projection replays or idempotent no-ops. \n   *Why it needs human judgement:* The project should ensure that any `Commanded.Event.Handler` responsible for the mailer uses Commanded's native idempotency tracking correctly, guaranteeing that if the event store ever replays the exact same transition event to the handler, the email is not dispatched a second time.\n\n### Suggested fixes\nNo immediate code changes are requested to merge this iteration.\n\n### Validation notes\n- Verified `dev check` completion on the exact delivery state (189 scenarios passed, 19m runtime).\n- Validated that the web boundary test asserts the absence of raw trusted commands (`Memba.Membership.Commands.AddGroupMember`, etc.) in the Phoenix layer, satisfying the plan's requirement to preserve trusted system-group commands inside the domain boundary.\n- Preflight sandbox runtime checks compiled successfully without warnings."
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19d6c272969deb6b4d9dc609f997173520b14b61ca8fbb3d142989a5fe8b6190"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 139692,
+              "active_time_ms": 139692
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3aaf85c3326402f338804f81603cef89962993651ad59e3a6a7da72337c4b6c4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 206,
+              "active_time_ms": 206
+            }
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a72a2969d57a2cc3905104793b09872c7db82553ec78086ac960c8e8005a381b"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "synthesize_review",
+              "implementation_accepted": false,
+              "review_fixes_available": true,
+              "review_blockers": [
+                {
+                  "id": "strengthen-membership-command-boundary-test",
+                  "title": "Strengthen web membership command-boundary enforcement",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"strengthen-membership-command-boundary-test\",\n       ",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"strengthen-membership-command-boundary-test\",\n        \"title\": \"Strengthen web membership command-boundary enforcement\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 8268,
+                    "output_tokens": 104,
+                    "reasoning_tokens": 1835,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 99510
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 44726,
+              "tool_time_ms": 0,
+              "active_time_ms": 44726
+            }
+          },
+          "apply_review_fixes": {
+            "status": "failed",
+            "failure": {
+              "message": "handler timed out after 2400000ms",
+              "category": "transient_infra",
+              "system_actor": "timeout"
+            },
+            "usage": null
+          }
+        },
+        "next_node_id": "verify_review_repair",
+        "git_commit_sha": "6a59bae8bb6dbf65bb43a60636e628f18bf96742",
+        "node_visits": {
+          "read_plan": 1,
+          "collect_implementation_evidence": 1,
+          "review_fork": 1,
+          "review_merge": 1,
+          "review_gate": 1,
+          "start": 1,
+          "preflight_sandbox": 1,
+          "apply_review_fixes": 1,
+          "snapshot_before_review_repair": 1,
+          "synthesize_review": 1,
+          "dev_check": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/test/memba_web/membership_command_boundary_test.exs b/web/test/memba_web/membership_command_boundary_test.exs\nindex 63601f4..735ffe8 100644\n--- a/web/test/memba_web/membership_command_boundary_test.exs\n+++ b/web/test/memba_web/membership_command_boundary_test.exs\n@@ -1,27 +1,50 @@\n defmodule MembaWeb.MembershipCommandBoundaryTest do\n   use ExUnit.Case, async: true\n \n-  @web_source_root Path.expand(\"../../lib/memba_web\", __DIR__)\n+  require Mix.Compilers.Elixir, as: ElixirCompiler\n \n-  @internal_membership_references [\n-    \"Memba.Membership.Commands.AddGroupMember\",\n-    \"Memba.Membership.Commands.CreateGroup\",\n-    \"Memba.Membership.Commands.RemoveGroupMember\"\n-  ]\n+  @internal_membership_namespace [\"Memba\", \"Membership\", \"Commands\"]\n \n   test \"web delivery does not bypass the public Membership command boundary\" do\n-    @web_source_root\n-    |> Path.join(\"**/*.ex\")\n-    |> Path.wildcard()\n-    |> Enum.each(fn path ->\n-      source = File.read!(path)\n-      relative_path = Path.relative_to(path, @web_source_root)\n-\n-      Enum.each(@internal_membership_references, fn internal_reference ->\n-        refute source =~ internal_reference,\n-               \"#{relative_path} must use the public Memba.Membership API, \" <>\n-                 \"not #{internal_reference}\"\n-      end)\n+    manifest = Path.join(Mix.Project.manifest_path(), \"compile.elixir\")\n+    {_modules, sources} = ElixirCompiler.read_manifest(manifest)\n+\n+    assert Enum.any?(sources, fn {source_path, _source} -> source_path == \"lib/memba_web.ex\" end),\n+           \"expected the compiler manifest to include lib/memba_web.ex\"\n+\n+    violations =\n+      for {source_path, source} <- sources,\n+          web_delivery_source?(source_path),\n+          dependency <- source_dependencies(source),\n+          internal_membership_command?(dependency),\n+          do: {source_path, dependency}\n+\n+    assert violations == [],\n+           \"\"\"\n+           web delivery must use the public Memba.Membership API, not internal commands:\n+           #{format_violations(violations)}\n+           \"\"\"\n+  end\n+\n+  defp web_delivery_source?(\"lib/memba_web.ex\"), do: true\n+  defp web_delivery_source?(path), do: String.starts_with?(path, \"lib/memba_web/\")\n+\n+  defp source_dependencies(source) do\n+    ElixirCompiler.source(source, :compile_references) ++\n+      ElixirCompiler.source(source, :export_references) ++\n+      ElixirCompiler.source(source, :runtime_references)\n+  end\n+\n+  defp internal_membership_command?(module) when is_atom(module) do\n+    module_name = Atom.to_string(module)\n+\n+    String.starts_with?(module_name, \"Elixir.\") and\n+      List.starts_with?(Module.split(module), @internal_membership_namespace)\n+  end\n+\n+  defp format_violations(violations) do\n+    Enum.map_join(violations, \"\\n\", fn {source_path, dependency} ->\n+      \"  * #{source_path} references #{inspect(dependency)}\"\n     end)\n   end\n end\n",
+        "summary": {
+          "files_changed": 1,
+          "additions": 41,
+          "deletions": 18
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-15T05:08:59.937682776Z",
+        "current_node": "verify_review_repair",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.retry_count.synthesize_review": 0,
+          "internal.thread_id": "apply_review_fixes",
           "thread.review_merge.current_node": "synthesize_review",
           "implementation_accepted": false,
           "internal.retry_count.review_gate": 0,
@@ -2954,10 +3267,12 @@
           "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"strengthen-membership-command-boundary-test\",\n        \"title\": \"Strengthen web membership command-boundary enforcement\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
           "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
           "internal.retry_count.apply_review_fixes": 0,
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "last_stage": "synthesize_review",
-          "failure_signature": "apply_review_fixes|transient_infra|handler timed out after 2400000ms",
-          "command.output": "blob://sha256/a72a2969d57a2cc3905104793b09872c7db82553ec78086ac960c8e8005a381b",
+          "internal.retry_count.verify_review_repair": 0,
+          "failure_signature": "",
+          "command.output": "blob://sha256/3250a8e61073767088377d6f690b67d33f26dee8e15fad69101b0df7f7b08fe1",
           "review_blockers": [
             {
               "id": "strengthen-membership-command-boundary-test",
@@ -2978,8 +3293,8 @@
           "review_fixes_available": true,
           "internal.run_id": "01M2HKG92Q13FYYVXTN083WF97",
           "graph.max_node_visits": "160",
-          "current_node": "apply_review_fixes",
-          "failure_class": "transient_infra",
+          "current_node": "verify_review_repair",
+          "failure_class": "",
           "thread.start.current_node": "read_plan",
           "thread.review_fork.current_node": "review_merge",
           "parallel.results": [
@@ -3017,11 +3332,25 @@
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.preflight_sandbox.current_node": "dev_check",
           "internal.fidelity": "summary:high",
-          "outcome": "failed",
+          "outcome": "succeeded",
           "graph.default_fidelity": "summary:high",
           "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"strengthen-membership-command-boundary-test\",\n       "
         },
         "node_outcomes": {
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3250a8e61073767088377d6f690b67d33f26dee8e15fad69101b0df7f7b08fe1"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 310,
+              "active_time_ms": 310
+            }
+          },
           "preflight_sandbox": {
             "status": "succeeded",
             "context_updates": {
@@ -3204,7 +3533,7 @@
             }
           }
         },
-        "next_node_id": "verify_review_repair",
+        "next_node_id": "dev_check",
         "node_visits": {
           "review_fork": 1,
           "review_merge": 1,
@@ -3216,6 +3545,7 @@
           "read_plan": 1,
           "apply_review_fixes": 1,
           "synthesize_review": 1,
+          "verify_review_repair": 1,
           "start": 1
         }
       },
@@ -3459,93 +3789,24 @@
       "agent_control": "running",
       "state": "failed"
     },
-    "gemini_review@1": {
-      "first_event_seq": 67,
+    "verify_review_repair@1": {
+      "first_event_seq": 829,
       "prompt": null,
       "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-09-15T04:27:03.887932967Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openrouter",
-        "model": "gemini-3.1-pro-preview",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "parallel_branch_id": "review_fork@1:2",
-      "output": null,
-      "started_at": "2026-09-15T04:26:41.500215402Z",
-      "handler": "prompt",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 22388,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 5397,
-        "output_tokens": 566,
-        "total_tokens": 7682,
-        "reasoning_tokens": 1719,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 38214
-      },
-      "model": {
-        "provider": "openrouter",
-        "model_id": "gemini-3.1-pro-preview"
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "preflight_sandbox@1": {
-      "first_event_seq": 35,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
-        "failure_reason": null,
-        "timestamp": "2026-09-15T04:03:02.624309874Z"
-      },
+      "completion": null,
       "provider_used": null,
       "diff": null,
       "script_invocation": {
-        "script": "bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
-        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
-        "language": "shell",
-        "timeout_ms": 600000
+        "script": "bash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh",
+        "language": "shell"
       },
-      "script_timing": {
-        "output": "blob://sha256/19d6c272969deb6b4d9dc609f997173520b14b61ca8fbb3d142989a5fe8b6190",
-        "exit_code": 0,
-        "duration_ms": 139692,
-        "termination": "exited",
-        "output_bytes": 13802,
-        "live_streaming": true
-      },
+      "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "output_bytes": 13802,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-15T04:00:42.924637469Z",
+      "started_at": "2026-09-15T05:08:59.612977217Z",
       "handler": "command",
       "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 139697,
-        "inference_time_ms": 0,
-        "tool_time_ms": 139692,
-        "active_time_ms": 139692
-      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -3555,7 +3816,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "succeeded"
+      "state": "running"
     },
     "start@1": {
       "first_event_seq": 21,
@@ -3722,44 +3983,44 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "read_plan@1": {
-      "first_event_seq": 25,
+    "snapshot_before_review_repair@1": {
+      "first_event_seq": 113,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
         "failure_reason": null,
-        "timestamp": "2026-09-15T04:00:39.246683696Z"
+        "timestamp": "2026-09-15T04:28:51.274433835Z"
       },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
-        "script": "PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "script": "set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
+        "command": "exec 2>&1\nset -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
         "language": "shell"
       },
       "script_timing": {
-        "output": "blob://sha256/3aaf85c3326402f338804f81603cef89962993651ad59e3a6a7da72337c4b6c4",
+        "output": "blob://sha256/a72a2969d57a2cc3905104793b09872c7db82553ec78086ac960c8e8005a381b",
         "exit_code": 0,
-        "duration_ms": 206,
+        "duration_ms": 154,
         "termination": "exited",
-        "output_bytes": 9777,
+        "output_bytes": 84,
         "live_streaming": true
       },
       "parallel_results": null,
       "output": null,
-      "output_bytes": 9777,
+      "output_bytes": 84,
       "live_streaming": true,
       "termination": "exited",
-      "started_at": "2026-09-15T04:00:39.033231092Z",
+      "started_at": "2026-09-15T04:28:51.112199516Z",
       "handler": "command",
       "graph_visit": 1,
       "timing": {
-        "wall_time_ms": 212,
+        "wall_time_ms": 161,
         "inference_time_ms": 0,
-        "tool_time_ms": 206,
-        "active_time_ms": 206
+        "tool_time_ms": 154,
+        "active_time_ms": 154
       },
       "usage": {
         "input_tokens": 0,
@@ -3910,44 +4171,189 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "snapshot_before_review_repair@1": {
-      "first_event_seq": 113,
+    "claude_review@1": {
+      "first_event_seq": 68,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
+        "notes": null,
         "failure_reason": null,
-        "timestamp": "2026-09-15T04:28:51.274433835Z"
+        "timestamp": "2026-09-15T04:27:33.645413805Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openrouter",
+        "model": "claude-sonnet-5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "parallel_branch_id": "review_fork@1:0",
+      "output": null,
+      "started_at": "2026-09-15T04:26:41.500652162Z",
+      "handler": "prompt",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 52145,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 6999,
+        "output_tokens": 2293,
+        "total_tokens": 12772,
+        "reasoning_tokens": 2242,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 1238,
+        "total_usd_micros": 62443
+      },
+      "model": {
+        "provider": "openrouter",
+        "model_id": "claude-sonnet-5"
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "gemini_review@1": {
+      "first_event_seq": 67,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-15T04:27:03.887932967Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openrouter",
+        "model": "gemini-3.1-pro-preview",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "parallel_branch_id": "review_fork@1:2",
+      "output": null,
+      "started_at": "2026-09-15T04:26:41.500215402Z",
+      "handler": "prompt",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 22388,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 5397,
+        "output_tokens": 566,
+        "total_tokens": 7682,
+        "reasoning_tokens": 1719,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 38214
+      },
+      "model": {
+        "provider": "openrouter",
+        "model_id": "gemini-3.1-pro-preview"
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "preflight_sandbox@1": {
+      "first_event_seq": 35,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+        "failure_reason": null,
+        "timestamp": "2026-09-15T04:03:02.624309874Z"
       },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
-        "script": "set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
-        "command": "exec 2>&1\nset -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\"",
-        "language": "shell"
+        "script": "bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+        "language": "shell",
+        "timeout_ms": 600000
       },
       "script_timing": {
-        "output": "blob://sha256/a72a2969d57a2cc3905104793b09872c7db82553ec78086ac960c8e8005a381b",
+        "output": "blob://sha256/19d6c272969deb6b4d9dc609f997173520b14b61ca8fbb3d142989a5fe8b6190",
         "exit_code": 0,
-        "duration_ms": 154,
+        "duration_ms": 139692,
         "termination": "exited",
-        "output_bytes": 84,
+        "output_bytes": 13802,
         "live_streaming": true
       },
       "parallel_results": null,
       "output": null,
-      "output_bytes": 84,
+      "output_bytes": 13802,
       "live_streaming": true,
       "termination": "exited",
-      "started_at": "2026-09-15T04:28:51.112199516Z",
+      "started_at": "2026-09-15T04:00:42.924637469Z",
       "handler": "command",
       "graph_visit": 1,
       "timing": {
-        "wall_time_ms": 161,
+        "wall_time_ms": 139697,
         "inference_time_ms": 0,
-        "tool_time_ms": 154,
-        "active_time_ms": 154
+        "tool_time_ms": 139692,
+        "active_time_ms": 139692
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "read_plan@1": {
+      "first_event_seq": 25,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-09-15T04:00:39.246683696Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/3aaf85c3326402f338804f81603cef89962993651ad59e3a6a7da72337c4b6c4",
+        "exit_code": 0,
+        "duration_ms": 206,
+        "termination": "exited",
+        "output_bytes": 9777,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 9777,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-15T04:00:39.033231092Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 212,
+        "inference_time_ms": 0,
+        "tool_time_ms": 206,
+        "active_time_ms": 206
       },
       "usage": {
         "input_tokens": 0,
@@ -4023,53 +4429,6 @@
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "claude_review@1": {
-      "first_event_seq": 68,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-09-15T04:27:33.645413805Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openrouter",
-        "model": "claude-sonnet-5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "parallel_branch_id": "review_fork@1:0",
-      "output": null,
-      "started_at": "2026-09-15T04:26:41.500652162Z",
-      "handler": "prompt",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 52145,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 6999,
-        "output_tokens": 2293,
-        "total_tokens": 12772,
-        "reasoning_tokens": 2242,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 1238,
-        "total_usd_micros": 62443
-      },
-      "model": {
-        "provider": "openrouter",
-        "model_id": "claude-sonnet-5"
       },
       "agent_control": "running",
       "state": "succeeded"
