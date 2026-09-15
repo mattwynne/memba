@@ -89,13 +89,17 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
             %{
               "active_membership_source_facts" => check_result!(active_membership_source_sql()),
               "populated_club_complete_admin_source_backing" =>
-                check_result!(populated_club_admin_sql())
+                check_result!(populated_club_admin_sql()),
+              "projected_admin_assignment_source_backing" =>
+                check_result!(projected_admin_assignment_source_sql())
             }
           else
             %{
               "active_membership_source_facts" =>
                 skipped_check("event_store_payload_columns_not_bytea"),
               "populated_club_complete_admin_source_backing" =>
+                skipped_check("event_store_payload_columns_not_bytea"),
+              "projected_admin_assignment_source_backing" =>
                 skipped_check("event_store_payload_columns_not_bytea")
             }
           end
@@ -453,6 +457,190 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
         '[]'::jsonb
       ) AS violations
     FROM admin_invariant_violations AS violation
+    """
+  end
+
+  defp projected_admin_assignment_source_sql do
+    ~S"""
+    WITH populated_club_hashes AS (
+      SELECT
+        membership.club_id,
+        md5(
+          convert_to('membership_administrator', 'UTF8')
+          || decode('00', 'hex')
+          || convert_to(membership.club_id, 'UTF8')
+        ) AS admin_role_hash
+      FROM membership_memberships AS membership
+      WHERE membership.active
+      GROUP BY membership.club_id
+    ),
+    populated_clubs AS (
+      SELECT
+        club_id,
+        'rol_'
+          || substr(admin_role_hash, 1, 8)
+          || '-'
+          || substr(admin_role_hash, 9, 4)
+          || '-'
+          || substr(admin_role_hash, 13, 4)
+          || '-'
+          || substr(admin_role_hash, 17, 4)
+          || '-'
+          || substr(admin_role_hash, 21, 12)
+          AS expected_admin_role_id
+      FROM populated_club_hashes
+    ),
+    projected_admin_assignments AS (
+      SELECT
+        assignment.club_id,
+        assignment.membership_id,
+        assignment.person_id,
+        assignment.role_id
+      FROM populated_clubs AS club
+      JOIN membership_role_assignments AS assignment
+        ON assignment.club_id = club.club_id
+        AND assignment.role_id = club.expected_admin_role_id
+        AND assignment.active
+    ),
+    club_admin_source_facts AS (
+      SELECT
+        stream.stream_uuid AS club_id,
+        stream_event.stream_version,
+        event.event_type,
+        convert_from(event.data, 'UTF8')::jsonb AS event_data
+      FROM event_store.events AS event
+      JOIN event_store.stream_events AS stream_event
+        ON stream_event.event_id = event.event_id
+      JOIN event_store.streams AS stream
+        ON stream.stream_id = stream_event.stream_id
+      WHERE stream.stream_uuid LIKE 'clb\_%' ESCAPE '\'
+        AND event.event_type IN (
+          'Elixir.Memba.Membership.Events.ClubRoleDefined',
+          'Elixir.Memba.Membership.Events.ClubRolePermissionGranted',
+          'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
+          'Elixir.Memba.Membership.Events.ClubRoleRemovedFromMember',
+          'Elixir.Memba.Membership.Events.MemberRoleAssigned',
+          'Elixir.Memba.Membership.Events.MemberRoleRemoved'
+        )
+    ),
+    projected_admin_assignment_evidence AS (
+      SELECT
+        assignment.club_id,
+        assignment.membership_id,
+        assignment.person_id,
+        assignment.role_id,
+        membership.membership_id IS NOT NULL AS has_active_membership,
+        role.role_id IS NOT NULL AS has_admin_role_projection,
+        role_permission.role_id IS NOT NULL AS has_admin_permission_projection,
+        member_permission.grant_count AS flattened_grant_count,
+        (
+          SELECT count(DISTINCT exact_assignment.role_id)
+          FROM membership_role_assignments AS exact_assignment
+          JOIN membership_role_permissions AS exact_permission
+            ON exact_permission.club_id = exact_assignment.club_id
+            AND exact_permission.role_id = exact_assignment.role_id
+            AND exact_permission.permission = 'club.manage_members'
+          WHERE exact_assignment.club_id = assignment.club_id
+            AND exact_assignment.membership_id = assignment.membership_id
+            AND exact_assignment.person_id = assignment.person_id
+            AND exact_assignment.active
+        ) AS exact_active_grant_count
+      FROM projected_admin_assignments AS assignment
+      LEFT JOIN membership_memberships AS membership
+        ON membership.club_id = assignment.club_id
+        AND membership.membership_id = assignment.membership_id
+        AND membership.person_id = assignment.person_id
+        AND membership.active
+      LEFT JOIN membership_roles AS role
+        ON role.club_id = assignment.club_id
+        AND role.role_id = assignment.role_id
+        AND role.role_key = 'admin'
+        AND role.name = 'Admin'
+      LEFT JOIN membership_role_permissions AS role_permission
+        ON role_permission.club_id = assignment.club_id
+        AND role_permission.role_id = assignment.role_id
+        AND role_permission.permission = 'club.manage_members'
+      LEFT JOIN membership_member_permissions AS member_permission
+        ON member_permission.club_id = assignment.club_id
+        AND member_permission.membership_id = assignment.membership_id
+        AND member_permission.person_id = assignment.person_id
+        AND member_permission.permission = 'club.manage_members'
+    ),
+    unmatched_projected_admin_assignments AS (
+      SELECT assignment.*
+      FROM projected_admin_assignment_evidence AS assignment
+      WHERE (
+        assignment.has_active_membership
+        AND assignment.has_admin_role_projection
+        AND assignment.has_admin_permission_projection
+        AND assignment.flattened_grant_count = assignment.exact_active_grant_count
+        AND assignment.exact_active_grant_count > 0
+        AND EXISTS (
+          SELECT 1
+          FROM club_admin_source_facts AS fact
+          WHERE fact.club_id = assignment.club_id
+            AND fact.event_type =
+              'Elixir.Memba.Membership.Events.ClubRoleDefined'
+            AND fact.event_data ->> 'club_id' = assignment.club_id
+            AND fact.event_data ->> 'role_id' = assignment.role_id
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM club_admin_source_facts AS fact
+          WHERE fact.club_id = assignment.club_id
+            AND fact.event_type =
+              'Elixir.Memba.Membership.Events.ClubRolePermissionGranted'
+            AND fact.event_data ->> 'club_id' = assignment.club_id
+            AND fact.event_data ->> 'role_id' = assignment.role_id
+            AND fact.event_data ->> 'permission' = 'club.manage_members'
+        )
+        AND COALESCE(
+          (
+            SELECT
+              (
+                fact.event_type IN (
+                  'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
+                  'Elixir.Memba.Membership.Events.MemberRoleAssigned'
+                )
+                AND fact.event_data ->> 'club_id' = assignment.club_id
+                AND fact.event_data ->> 'person_id' = assignment.person_id
+              ) IS TRUE
+            FROM club_admin_source_facts AS fact
+            WHERE fact.club_id = assignment.club_id
+              AND fact.event_type IN (
+                'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
+                'Elixir.Memba.Membership.Events.ClubRoleRemovedFromMember',
+                'Elixir.Memba.Membership.Events.MemberRoleAssigned',
+                'Elixir.Memba.Membership.Events.MemberRoleRemoved'
+              )
+              AND fact.event_data ->> 'membership_id' = assignment.membership_id
+              AND fact.event_data ->> 'role_id' = assignment.role_id
+            ORDER BY fact.stream_version DESC
+            LIMIT 1
+          ),
+          false
+        )
+      ) IS NOT TRUE
+    )
+    SELECT
+      count(*) AS violation_count,
+      COALESCE(
+        jsonb_agg(
+          jsonb_build_object(
+            'club_id', violation.club_id,
+            'membership_id', violation.membership_id,
+            'person_id', violation.person_id,
+            'role_id', violation.role_id
+          )
+          ORDER BY
+            violation.club_id,
+            violation.membership_id,
+            violation.person_id,
+            violation.role_id
+        ),
+        '[]'::jsonb
+      ) AS violations
+    FROM unmatched_projected_admin_assignments AS violation
     """
   end
 
