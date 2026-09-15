@@ -30,7 +30,7 @@ Feature: Joining and leaving custom groups
       And Carol should have no access to their conversations or future group emails
       And Carol should see their access guidance
 
-  @iteration-063 @todo-domain @todo-ui
+  @iteration-063
   Rule: Being added grants history and a welcome, not a replay of old emails
 
     Scenario: Carol joins after the agenda discussion has begun

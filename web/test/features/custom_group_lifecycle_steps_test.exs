@@ -19,12 +19,14 @@ defmodule Memba.CustomGroupLifecycleStepsTest do
     end
   end
 
-  test "only iteration-062 lifecycle scenarios are selected" do
+  test "implemented iteration-062 and iteration-063 lifecycle scenarios are selected" do
     selected_names = Enum.map(@selected_scenarios, & &1.scenario.name)
 
     assert selected_names == [
              "Carol's club departure ends Board and Trips membership",
-             "Returning to KMC does not put Carol back into Board or Trips"
+             "Returning to KMC does not put Carol back into Board or Trips",
+             "Carol joins after the agenda discussion has begun",
+             "Bob explicitly restores Carol's Board membership after she returns to KMC"
            ]
   end
 end
