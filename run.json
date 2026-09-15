@@ -1556,7 +1556,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-14T22:49:18.338998714Z",
-  "last_event_at": "2026-09-15T00:09:50.111852538Z",
+  "last_event_at": "2026-09-15T00:12:15.411246777Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -11764,9 +11764,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2887,
       "checkpoint": {
-        "timestamp": "2026-09-15T00:09:50.115444688Z",
+        "timestamp": "2026-09-15T00:09:53.740519426Z",
         "current_node": "all_tasks_done",
         "completed_nodes": [
           "start",
@@ -11811,8 +11811,342 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.preflight_sandbox": 0,
           "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.\",\"reason\":\"The task is unambiguous a",
+          "thread.implement_next_task.current_node": "validate_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "outcome": "succeeded",
+          "graph.max_node_visits": "80",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.resume_gate": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.implement_next_task": 0,
+          "preferred_label": "accept",
+          "response.implement_next_task": "Implemented task 011. Welcome emails are now sent only when the authenticated admission command reports a new `:member_added` transition.\n\n1. Selected task\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n2. Changes\n\n   - Updated [member_dashboard_live.ex](/workspace/memba/web/lib/memba_web/live/member_dashboard_live.ex:121) to:\n     - inspect the authoritative `CustomGroupAdmission.transition`;\n     - deliver the welcome only for `:member_added`;\n     - treat `:already_member` as an email no-op;\n     - resolve the recipient’s primary email and actor through Membership’s public APIs;\n     - generate the normal authenticated group URL through `ClubSite`.\n   - Added focused coverage in [member_dashboard_admission_live_test.exs](/workspace/memba/web/test/memba_web/live/member_dashboard_admission_live_test.exs:67), proving:\n     - opening/reading the group sends no welcome;\n     - a confirmed admission sends exactly one welcome to the target’s primary address;\n     - the email contains the authenticated group link;\n     - replaying the same admission request produces no second welcome.\n   - No aggregate, event, projector, acceptance feature, or todo changes were made.\n\n3. Validation\n\n   - TDD red phase confirmed the welcome was initially absent.\n   - `dev test test/memba_web/live/member_dashboard_admission_live_test.exs test/memba/membership/group_welcome_email_test.exs`\n     - 7 tests, 0 failures.\n   - `bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - passed.\n   - `dev check --quick`\n     - 1,437 tests, 0 failures.\n   - `git diff --check`\n     - passed.\n\n4. Task remains unchecked for independent review\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002/0024: the Club aggregate remains the admission consistency boundary; delivery is gated by its committed transition result.\n   - ADR 0007: no Messaging aggregate or projection is accessed or mutated.\n   - ADR 0016: delivery continues through the switchable, provider-neutral `Memba.Mailer` composer.\n   - ADR 0021/0022: the code uses the explicit command result with strong consistency and does not infer a new transition from a projection preflight.",
+          "command.output": "blob://sha256/17d51c0a0284bf45706063c775c442dd4c5fbb227248d9a075de664d6e91d50c",
+          "failure_signature": "",
+          "graph.rankdir": "LR",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.wip_gate": 0,
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "internal.run_id": "01M2H1PWC939T3JM4T2TQ1TBHB",
+          "output.validate_task": {
+            "decision": "accept",
+            "task": "- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.",
+            "reason": "The task is unambiguous and remains the first unchecked todo. Checkpoint c1d13e0 gates GroupWelcomeEmail delivery on the authoritative CustomGroupAdmission transition returned by Membership.add_custom_group_member/2 with strong consistency: only :member_added delivers, while :already_member is a no-op. Delivery is invoked only from the successful admission event handler, outside aggregates and projectors, so ordinary reads and projection replay cannot trigger it. The focused LiveView test proves opening the group sends nothing, a confirmed admission sends one welcome to the primary address with the authenticated group URL, and an idempotent retry sends no second email. Independent focused validation passed 7 tests with 0 failures; the worktree is clean, diff checks pass, and this checkpoint does not edit acceptance feature files."
+          },
+          "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.\",\"reason\":\"The task is unambiguous and remains the first unchecked todo. Checkpoint c1d13e0 gates GroupWelcomeEmail delivery on the authoritative CustomGroupAdmission transition returned by Membership.add_custom_group_member/2 with strong consistency: only :member_added delivers, while :already_member is a no-op. Delivery is invoked only from the successful admission event handler, outside aggregates and projectors, so ordinary reads and projection replay cannot trigger it. The focused LiveView test proves opening the group sends nothing, a confirmed admission sends one welcome to the primary address with the authenticated group URL, and an idempotent retry sends no second email. Independent focused validation passed 7 tests with 0 failures; the worktree is clean, diff checks pass, and this checkpoint does not edit acceptance feature files.\"}",
+          "internal.retry_count.apply_task_verdict": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.apply_task_verdict.current_node": "sync_task_list",
+          "thread.start.current_node": "verify_source_head",
+          "internal.thread_id": "todo_readable",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.retry_count.todo_readable": 0,
+          "internal.node_visit_count": 6,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "failure_class": "",
+          "thread.verify_source_head.current_node": "read_plan",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "current_node": "all_tasks_done",
+          "internal.retry_count.start": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "last_stage": "validate_task",
+          "internal.retry_count.read_plan": 0
+        },
+        "node_outcomes": {
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2944e51777e29444e92da1e9091f6ec9fe37002d4082fdee44b4d8c6a5e4ebdf"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh 'afeb464f30eb1d0bfd6b5f24a2bf747f8702981e'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 218,
+              "active_time_ms": 218
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "accept",
+            "context_updates": {
+              "command.output": "blob://sha256/c8fdbafae15ce7115b76cb4628afa8281502af2df9afaa90f04c322a7b746b6d"
+            },
+            "notes": "Script completed: python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/063-add-custom-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f53e9ca539438d182f1d3cbca157e69af7e8358a07857ed4aa145040da923f37"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 103051,
+              "active_time_ms": 103051
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented task 011. Welcome emails are now sent only when the authenticated admission command reports a new `:member_added` transition.\n\n1. Selected task\n\n   `- [ ] 011 Send only after a confirmed n",
+              "response.implement_next_task": "Implemented task 011. Welcome emails are now sent only when the authenticated admission command reports a new `:member_added` transition.\n\n1. Selected task\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n2. Changes\n\n   - Updated [member_dashboard_live.ex](/workspace/memba/web/lib/memba_web/live/member_dashboard_live.ex:121) to:\n     - inspect the authoritative `CustomGroupAdmission.transition`;\n     - deliver the welcome only for `:member_added`;\n     - treat `:already_member` as an email no-op;\n     - resolve the recipient’s primary email and actor through Membership’s public APIs;\n     - generate the normal authenticated group URL through `ClubSite`.\n   - Added focused coverage in [member_dashboard_admission_live_test.exs](/workspace/memba/web/test/memba_web/live/member_dashboard_admission_live_test.exs:67), proving:\n     - opening/reading the group sends no welcome;\n     - a confirmed admission sends exactly one welcome to the target’s primary address;\n     - the email contains the authenticated group link;\n     - replaying the same admission request produces no second welcome.\n   - No aggregate, event, projector, acceptance feature, or todo changes were made.\n\n3. Validation\n\n   - TDD red phase confirmed the welcome was initially absent.\n   - `dev test test/memba_web/live/member_dashboard_admission_live_test.exs test/memba/membership/group_welcome_email_test.exs`\n     - 7 tests, 0 failures.\n   - `bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - passed.\n   - `dev check --quick`\n     - 1,437 tests, 0 failures.\n   - `git diff --check`\n     - passed.\n\n4. Task remains unchecked for independent review\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002/0024: the Club aggregate remains the admission consistency boundary; delivery is gated by its committed transition result.\n   - ADR 0007: no Messaging aggregate or projection is accessed or mutated.\n   - ADR 0016: delivery continues through the switchable, provider-neutral `Memba.Mailer` composer.\n   - ADR 0021/0022: the code uses the explicit command result with strong consistency and does not infer a new transition from a projection preflight."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 255305,
+                    "output_tokens": 6158,
+                    "reasoning_tokens": 5068,
+                    "cache_read_tokens": 2167040,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2696825
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 273912,
+              "tool_time_ms": 189158,
+              "active_time_ms": 463070
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/17d51c0a0284bf45706063c775c442dd4c5fbb227248d9a075de664d6e91d50c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4a3315d760adf872d6122818ad67d0b9f9e41dd73d30367987b67dc3ba3c78fd"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2043,
+              "active_time_ms": 2043
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9d07d19927c2a1bda24f1ce60568bf13187caa22254e1e64a3ecb969c360ee76"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161,
+              "active_time_ms": 161
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a5e3da4fb595b78c08280e5a8d35f5f8d52d5f98e716c9ba0bf9fa278775aae4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72ada29455cffac5ff846d165cd0299ac9f09ec438c44a8a06c555ac0dd293a3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "{\"decision\":\"accept\",\"task\":\"- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.\",\"reason\":\"The task is unambiguous and remains the first unchecked todo. Checkpoint c1d13e0 gates GroupWelcomeEmail delivery on the authoritative CustomGroupAdmission transition returned by Membership.add_custom_group_member/2 with strong consistency: only :member_added delivers, while :already_member is a no-op. Delivery is invoked only from the successful admission event handler, outside aggregates and projectors, so ordinary reads and projection replay cannot trigger it. The focused LiveView test proves opening the group sends nothing, a confirmed admission sends one welcome to the primary address with the authenticated group URL, and an idempotent retry sends no second email. Independent focused validation passed 7 tests with 0 failures; the worktree is clean, diff checks pass, and this checkpoint does not edit acceptance feature files.\"}",
+              "last_stage": "validate_task",
+              "last_response": "{\"decision\":\"accept\",\"task\":\"- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.\",\"reason\":\"The task is unambiguous a",
+              "output.validate_task": {
+                "decision": "accept",
+                "task": "- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.",
+                "reason": "The task is unambiguous and remains the first unchecked todo. Checkpoint c1d13e0 gates GroupWelcomeEmail delivery on the authoritative CustomGroupAdmission transition returned by Membership.add_custom_group_member/2 with strong consistency: only :member_added delivers, while :already_member is a no-op. Delivery is invoked only from the successful admission event handler, outside aggregates and projectors, so ordinary reads and projection replay cannot trigger it. The focused LiveView test proves opening the group sends nothing, a confirmed admission sends one welcome to the primary address with the authenticated group URL, and an idempotent retry sends no second email. Independent focused validation passed 7 tests with 0 failures; the worktree is clean, diff checks pass, and this checkpoint does not edit acceptance feature files."
+              }
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 132731,
+                    "output_tokens": 2874,
+                    "reasoning_tokens": 843,
+                    "cache_read_tokens": 429056,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 989693
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 90763,
+              "tool_time_ms": 13009,
+              "active_time_ms": 103772
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/96e503abeff577af9391cedd2420cb68a2aad92929af74ab95089d39fde4c130"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          }
+        },
+        "next_node_id": "implement_next_task",
+        "git_commit_sha": "9fb460e9200b9cc291c8f2dcd22beaabba768dbb",
+        "node_visits": {
+          "read_plan": 1,
+          "resume_gate": 1,
+          "sync_task_list": 6,
+          "all_tasks_done": 6,
+          "validate_task": 5,
+          "verify_source_head": 1,
+          "apply_task_verdict": 5,
+          "wip_gate": 1,
+          "start": 1,
+          "preflight_sandbox": 1,
+          "todo_readable": 6,
+          "implement_next_task": 5
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 15,
+          "additions": 1159,
+          "deletions": 236
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-15T00:12:15.418134328Z",
+        "current_node": "implement_next_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "validate_task",
+          "apply_task_verdict",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.retry_count.resume_gate": 0,
+          "last_response": "Implemented task 012 by adding regression coverage for provider failure after a committed admission.\n\n1. Selected task\n\n   `- [ ] 012 Keep provider side effects out of aggregates/projectors; committed",
           "internal.node_visit_count": 6,
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "outcome": "succeeded",
@@ -11824,11 +12158,11 @@
           "thread.verify_source_head.current_node": "read_plan",
           "thread.todo_readable.current_node": "all_tasks_done",
           "internal.retry_count.all_tasks_done": 0,
-          "response.implement_next_task": "Implemented task 011. Welcome emails are now sent only when the authenticated admission command reports a new `:member_added` transition.\n\n1. Selected task\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n2. Changes\n\n   - Updated [member_dashboard_live.ex](/workspace/memba/web/lib/memba_web/live/member_dashboard_live.ex:121) to:\n     - inspect the authoritative `CustomGroupAdmission.transition`;\n     - deliver the welcome only for `:member_added`;\n     - treat `:already_member` as an email no-op;\n     - resolve the recipient’s primary email and actor through Membership’s public APIs;\n     - generate the normal authenticated group URL through `ClubSite`.\n   - Added focused coverage in [member_dashboard_admission_live_test.exs](/workspace/memba/web/test/memba_web/live/member_dashboard_admission_live_test.exs:67), proving:\n     - opening/reading the group sends no welcome;\n     - a confirmed admission sends exactly one welcome to the target’s primary address;\n     - the email contains the authenticated group link;\n     - replaying the same admission request produces no second welcome.\n   - No aggregate, event, projector, acceptance feature, or todo changes were made.\n\n3. Validation\n\n   - TDD red phase confirmed the welcome was initially absent.\n   - `dev test test/memba_web/live/member_dashboard_admission_live_test.exs test/memba/membership/group_welcome_email_test.exs`\n     - 7 tests, 0 failures.\n   - `bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - passed.\n   - `dev check --quick`\n     - 1,437 tests, 0 failures.\n   - `git diff --check`\n     - passed.\n\n4. Task remains unchecked for independent review\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002/0024: the Club aggregate remains the admission consistency boundary; delivery is gated by its committed transition result.\n   - ADR 0007: no Messaging aggregate or projection is accessed or mutated.\n   - ADR 0016: delivery continues through the switchable, provider-neutral `Memba.Mailer` composer.\n   - ADR 0021/0022: the code uses the explicit command result with strong consistency and does not infer a new transition from a projection preflight.",
-          "current_node": "all_tasks_done",
+          "response.implement_next_task": "Implemented task 012 by adding regression coverage for provider failure after a committed admission.\n\n1. Selected task\n\n   `- [ ] 012 Keep provider side effects out of aggregates/projectors; committed membership must not be represented as rolled back if delivery fails.`\n\n2. Changes\n\n   Added a browser-facing integration test in [member_dashboard_admission_live_test.exs](/workspace/memba/web/test/memba_web/live/member_dashboard_admission_live_test.exs:108) that forces the configured Swoosh adapter to return `{:error, :timeout}` and proves:\n\n   - the provider handoff was attempted;\n   - the admitted member remains active;\n   - the refreshed Members view displays the new member;\n   - the member is removed from the candidate picker;\n   - the successful admission is not presented as an error.\n\n   No production change was needed: the existing flow commits the aggregate command before invoking `GroupWelcomeEmail`, and its delivery result cannot alter membership state. No aggregate or projector references the mailer.\n\n3. Focused validation\n\n   - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - 5 tests, 0 failures.\n   - `bin/mix format --check-formatted test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - passed.\n   - `git diff --check`\n     - passed.\n   - Focused PhoenixTest browser harness covered the visible post-failure state.\n\n4. Ready for independent review\n\n   `- [ ] 012 Keep provider side effects out of aggregates/projectors; committed membership must not be represented as rolled back if delivery fails.`\n\n5. Todo changes\n\n   None. The selected task remains unchecked, and no tasks were split, added, or reordered.\n\n6. ADR conformance\n\n   - ADR 0002/0024: admission remains an authoritative Club aggregate command committed before email delivery.\n   - ADR 0007: email handoff does not mutate Messaging or Membership aggregate state.\n   - ADR 0009: projectors remain replay-safe and contain no provider calls.\n   - ADR 0016: the failure test uses the existing switchable `Memba.Mailer` boundary.",
+          "current_node": "implement_next_task",
           "thread.apply_task_verdict.current_node": "sync_task_list",
           "internal.retry_count.read_plan": 0,
-          "last_stage": "validate_task",
+          "last_stage": "implement_next_task",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.start": 0,
           "failure_signature": "",
@@ -11858,7 +12192,7 @@
           "thread.start.current_node": "verify_source_head",
           "internal.run_id": "01M2H1PWC939T3JM4T2TQ1TBHB",
           "internal.retry_count.implement_next_task": 0,
-          "internal.thread_id": "todo_readable",
+          "internal.thread_id": "all_tasks_done",
           "internal.retry_count.validate_task": 0
         },
         "node_outcomes": {
@@ -11963,9 +12297,9 @@
           "implement_next_task": {
             "status": "succeeded",
             "context_updates": {
+              "response.implement_next_task": "Implemented task 012 by adding regression coverage for provider failure after a committed admission.\n\n1. Selected task\n\n   `- [ ] 012 Keep provider side effects out of aggregates/projectors; committed membership must not be represented as rolled back if delivery fails.`\n\n2. Changes\n\n   Added a browser-facing integration test in [member_dashboard_admission_live_test.exs](/workspace/memba/web/test/memba_web/live/member_dashboard_admission_live_test.exs:108) that forces the configured Swoosh adapter to return `{:error, :timeout}` and proves:\n\n   - the provider handoff was attempted;\n   - the admitted member remains active;\n   - the refreshed Members view displays the new member;\n   - the member is removed from the candidate picker;\n   - the successful admission is not presented as an error.\n\n   No production change was needed: the existing flow commits the aggregate command before invoking `GroupWelcomeEmail`, and its delivery result cannot alter membership state. No aggregate or projector references the mailer.\n\n3. Focused validation\n\n   - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - 5 tests, 0 failures.\n   - `bin/mix format --check-formatted test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - passed.\n   - `git diff --check`\n     - passed.\n   - Focused PhoenixTest browser harness covered the visible post-failure state.\n\n4. Ready for independent review\n\n   `- [ ] 012 Keep provider side effects out of aggregates/projectors; committed membership must not be represented as rolled back if delivery fails.`\n\n5. Todo changes\n\n   None. The selected task remains unchecked, and no tasks were split, added, or reordered.\n\n6. ADR conformance\n\n   - ADR 0002/0024: admission remains an authoritative Club aggregate command committed before email delivery.\n   - ADR 0007: email handoff does not mutate Messaging or Membership aggregate state.\n   - ADR 0009: projectors remain replay-safe and contain no provider calls.\n   - ADR 0016: the failure test uses the existing switchable `Memba.Mailer` boundary.",
               "last_stage": "implement_next_task",
-              "last_response": "Implemented task 011. Welcome emails are now sent only when the authenticated admission command reports a new `:member_added` transition.\n\n1. Selected task\n\n   `- [ ] 011 Send only after a confirmed n",
-              "response.implement_next_task": "Implemented task 011. Welcome emails are now sent only when the authenticated admission command reports a new `:member_added` transition.\n\n1. Selected task\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n2. Changes\n\n   - Updated [member_dashboard_live.ex](/workspace/memba/web/lib/memba_web/live/member_dashboard_live.ex:121) to:\n     - inspect the authoritative `CustomGroupAdmission.transition`;\n     - deliver the welcome only for `:member_added`;\n     - treat `:already_member` as an email no-op;\n     - resolve the recipient’s primary email and actor through Membership’s public APIs;\n     - generate the normal authenticated group URL through `ClubSite`.\n   - Added focused coverage in [member_dashboard_admission_live_test.exs](/workspace/memba/web/test/memba_web/live/member_dashboard_admission_live_test.exs:67), proving:\n     - opening/reading the group sends no welcome;\n     - a confirmed admission sends exactly one welcome to the target’s primary address;\n     - the email contains the authenticated group link;\n     - replaying the same admission request produces no second welcome.\n   - No aggregate, event, projector, acceptance feature, or todo changes were made.\n\n3. Validation\n\n   - TDD red phase confirmed the welcome was initially absent.\n   - `dev test test/memba_web/live/member_dashboard_admission_live_test.exs test/memba/membership/group_welcome_email_test.exs`\n     - 7 tests, 0 failures.\n   - `bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex test/memba_web/live/member_dashboard_admission_live_test.exs`\n     - passed.\n   - `dev check --quick`\n     - 1,437 tests, 0 failures.\n   - `git diff --check`\n     - passed.\n\n4. Task remains unchecked for independent review\n\n   `- [ ] 011 Send only after a confirmed new membership transition, not on projection replay, duplicate requests or ordinary group reads.`\n\n5. Todo changes\n\n   None. No tasks were split, added, reordered, or checked off.\n\n6. ADR conformance\n\n   - ADR 0002/0024: the Club aggregate remains the admission consistency boundary; delivery is gated by its committed transition result.\n   - ADR 0007: no Messaging aggregate or projection is accessed or mutated.\n   - ADR 0016: delivery continues through the switchable, provider-neutral `Memba.Mailer` composer.\n   - ADR 0021/0022: the code uses the explicit command result with strong consistency and does not infer a new transition from a projection preflight."
+              "last_response": "Implemented task 012 by adding regression coverage for provider failure after a committed admission.\n\n1. Selected task\n\n   `- [ ] 012 Keep provider side effects out of aggregates/projectors; committed"
             },
             "notes": "Stage completed: implement_next_task",
             "usage": {
@@ -11976,10 +12310,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 255305,
-                    "output_tokens": 6158,
-                    "reasoning_tokens": 5068,
-                    "cache_read_tokens": 2167040,
+                    "input_tokens": 149321,
+                    "output_tokens": 3553,
+                    "reasoning_tokens": 2399,
+                    "cache_read_tokens": 494720,
                     "cache_write_tokens": 0
                   }
                 },
@@ -11987,13 +12321,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 2696825
+              "total_usd_micros": 1172525
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 273912,
-              "tool_time_ms": 189158,
-              "active_time_ms": 463070
+              "inference_time_ms": 129803,
+              "tool_time_ms": 11501,
+              "active_time_ms": 141304
             }
           },
           "validate_task": {
@@ -12071,7 +12405,7 @@
             }
           }
         },
-        "next_node_id": "implement_next_task",
+        "next_node_id": "validate_task",
         "node_visits": {
           "all_tasks_done": 6,
           "read_plan": 1,
@@ -12080,7 +12414,7 @@
           "preflight_sandbox": 1,
           "apply_task_verdict": 5,
           "sync_task_list": 6,
-          "implement_next_task": 5,
+          "implement_next_task": 6,
           "validate_task": 5,
           "verify_source_head": 1,
           "resume_gate": 1,
@@ -12688,7 +13022,12 @@
       "first_event_seq": 2880,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+        "failure_reason": null,
+        "timestamp": "2026-09-15T00:09:50.114427006Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -12713,6 +13052,12 @@
       "started_at": "2026-09-15T00:09:49.944784551Z",
       "handler": "command",
       "graph_visit": 6,
+      "timing": {
+        "wall_time_ms": 167,
+        "inference_time_ms": 0,
+        "tool_time_ms": 163,
+        "active_time_ms": 163
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -12722,7 +13067,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "verify_source_head@1": {
       "first_event_seq": 25,
@@ -15066,6 +15411,157 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "implement_next_task@6": {
+      "first_event_seq": 2890,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-15T00:09:53.748906107Z",
+      "handler": "agent",
+      "graph_visit": 6,
+      "live_inference_ms": 129793,
+      "live_tool_ms": 11498,
+      "usage": {
+        "input_tokens": 149321,
+        "output_tokens": 3553,
+        "total_tokens": 649993,
+        "reasoning_tokens": 2399,
+        "cache_read_tokens": 494720,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 1172525
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 74624,
+        "usage_percent": 27.435294117647057,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-15T00:12:15.411051329Z",
+        "event_seq": 3029,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 3009,
+            "usage_percent": 1.10625
+          },
+          {
+            "category": "tools",
+            "tokens": 922,
+            "usage_percent": 0.33897058823529413
+          },
+          {
+            "category": "memory",
+            "tokens": 417,
+            "usage_percent": 0.15330882352941178
+          },
+          {
+            "category": "conversation",
+            "tokens": 70270,
+            "usage_percent": 25.834558823529413
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "start@1": {
       "first_event_seq": 21,
