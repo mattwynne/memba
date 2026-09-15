@@ -16,12 +16,15 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -299,6 +302,94 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                {^everyone_group_id, ^rejoined_membership_id} => %{active: true}
              }
            } = MembershipApp.aggregate_state(Club, club_id)
+  end
+
+  test "explicit custom-group admission after club rejoin does not restore cleared follows" do
+    club_id = Memba.ID.generate(:club)
+    departing_membership_id = Memba.ID.generate(:membership)
+    rejoined_membership_id = Memba.ID.generate(:membership)
+    returning_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    actor_person_id = Memba.ID.generate(:person)
+    custom_group_id = Memba.ID.generate(:group)
+    conversation_id = Memba.ID.generate(:message)
+
+    create_person(returning_person_id, "Returning Member", "returning@example.com")
+    create_person(actor_person_id, "Group Member", "group-member@example.com")
+    create_club(club_id)
+    add_member(club_id, departing_membership_id, returning_person_id)
+    add_member(club_id, actor_membership_id, actor_person_id)
+    assign_admin(club_id, actor_membership_id, actor_person_id)
+    create_custom_group(club_id, custom_group_id)
+    add_group_member(club_id, custom_group_id, departing_membership_id, returning_person_id)
+    add_group_member(club_id, custom_group_id, actor_membership_id, actor_person_id)
+    create_followed_conversation(club_id, custom_group_id, conversation_id, returning_person_id)
+
+    assert Messaging.following_conversation?(conversation_id, returning_person_id)
+
+    assert :ok =
+             Membership.remove_member(%{
+               club_id: club_id,
+               membership_id: departing_membership_id,
+               person_id: returning_person_id
+             })
+
+    refute Messaging.following_conversation?(conversation_id, returning_person_id)
+
+    assert :ok =
+             Membership.add_member(%{
+               club_id: club_id,
+               membership_id: rejoined_membership_id,
+               person_id: returning_person_id
+             })
+
+    assert {:ok,
+            %CustomGroupAdmission{
+              membership_id: ^rejoined_membership_id,
+              person_id: ^returning_person_id,
+              transition: :member_added
+            }} =
+             Membership.add_custom_group_member(
+               %{
+                 club_id: club_id,
+                 group_id: custom_group_id,
+                 membership_id: rejoined_membership_id,
+                 person_id: returning_person_id,
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(conversation_id, returning_person_id)
+
+    assert %GroupMembershipProjection{active: false} =
+             Repo.get_by(GroupMembershipProjection,
+               group_id: custom_group_id,
+               membership_id: departing_membership_id
+             )
+
+    assert %GroupMembershipProjection{active: true} =
+             Repo.get_by(GroupMembershipProjection,
+               group_id: custom_group_id,
+               membership_id: rejoined_membership_id
+             )
+
+    assert [
+             %GroupMemberAdded{membership_id: ^departing_membership_id},
+             %GroupMemberRemoved{membership_id: ^departing_membership_id},
+             %GroupMemberAdded{membership_id: ^rejoined_membership_id}
+           ] =
+             club_id
+             |> then(&EventStore.stream_forward(MembershipApp, &1))
+             |> Enum.map(& &1.data)
+             |> Enum.filter(fn
+               %event_module{group_id: ^custom_group_id, person_id: ^returning_person_id}
+               when event_module in [GroupMemberAdded, GroupMemberRemoved] ->
+                 true
+
+               _event ->
+                 false
+             end)
   end
 
   test "handling the same custom-group removal repeatedly is idempotent" do

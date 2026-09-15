@@ -43,6 +43,17 @@ defmodule MembaWeb.AppCssTest do
     assert css =~ "text-overflow: ellipsis;"
   end
 
+  test "add-member picker uses the reviewed 700px responsive breakpoint" do
+    css = File.read!(@app_css_path)
+    [_, after_640_breakpoint] = String.split(css, "@media (max-width: 640px)", parts: 2)
+
+    [mobile_640_css, mobile_700_css] =
+      String.split(after_640_breakpoint, "@media (max-width: 700px)", parts: 2)
+
+    refute mobile_640_css =~ ".picker__head"
+    assert mobile_700_css =~ ~r/^\s*\{\s*\.picker__head\s*\{\s*flex-direction: column;/s
+  end
+
   test "app css includes the club-home conversation row and avatar-stack rules" do
     css = File.read!(@app_css_path)
 

@@ -350,6 +350,12 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.current_member_can_manage_members?
     assert assigns.selected_group_access == :participating_member
     assert assigns.selected_group_participating?
+    assert assigns.can_add_custom_group_members?
+    refute assigns.can_add_self_to_custom_group?
+
+    assert Enum.map(assigns.custom_group_member_candidates, &{&1.id, &1.name}) == [
+             {carol.person_id, "Carol Canoe"}
+           ]
 
     assert Enum.map(assigns.messages, & &1.message_id) == [
              trip_planning_conversation.message_id
@@ -446,6 +452,9 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.members == []
     assert assigns.active_member_count == 0
     assert assigns.member_names_by_id == %{}
+    refute assigns.can_add_custom_group_members?
+    refute assigns.can_add_self_to_custom_group?
+    assert assigns.custom_group_member_candidates == []
     assert assigns.messages == []
     assert assigns.message_rows == []
     refute Enum.any?(assigns.messages, &(&1.message_id == secret_conversation.message_id))
@@ -507,6 +516,12 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.selected_group_access == :outside_admin
     refute assigns.selected_group_participating?
     assert assigns.current_member_can_manage_members?
+    assert assigns.can_add_custom_group_members?
+    assert assigns.can_add_self_to_custom_group?
+
+    assert Enum.map(assigns.custom_group_member_candidates, &{&1.id, &1.name}) == [
+             {admin.person_id, "Admin Adams"}
+           ]
 
     assert assigns.selected_group.active_member_count == 2
 

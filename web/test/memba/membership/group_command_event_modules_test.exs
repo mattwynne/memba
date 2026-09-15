@@ -2,6 +2,7 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
   use ExUnit.Case, async: true
 
   alias Memba.ID
+  alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateGroup
@@ -69,6 +70,17 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
            } == struct!(AddGroupMember, ids)
 
     refute Map.has_key?(AddGroupMember.__struct__(), :actor_person_id)
+
+    actor_person_id = ID.generate(:person)
+
+    assert %AddCustomGroupMember{
+             club_id: ids.club_id,
+             group_id: ids.group_id,
+             membership_id: ids.membership_id,
+             person_id: ids.person_id,
+             actor_person_id: actor_person_id
+           } ==
+             struct!(AddCustomGroupMember, Map.put(ids, :actor_person_id, actor_person_id))
 
     assert %RemoveGroupMember{
              club_id: ids.club_id,

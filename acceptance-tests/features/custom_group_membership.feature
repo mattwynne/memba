@@ -1,4 +1,3 @@
-@todo-ui
 Feature: Managing custom group membership
   Group members and club admins manage custom-group membership.
   Joining a group is different from joining the club or becoming a club admin.
@@ -9,7 +8,7 @@ Feature: Managing custom group membership
     And Bob, Carol, and Eve are its ordinary active club members
     And Alice and Bob are the only members of its custom group Board
 
-  @iteration-063 @todo-domain @todo-ui
+  @iteration-063
   Rule: Group members and club admins may add active club members
 
     Scenario: Bob adds Carol without becoming a club admin
@@ -35,7 +34,7 @@ Feature: Managing custom group membership
       Then Carol should have one active Board membership
       And Carol should have received one Board welcome email
 
-  @iteration-063 @todo-domain @todo-ui
+  @iteration-063
   Rule: Ordinary non-members cannot add themselves or anyone else
 
     Scenario Outline: Eve cannot change Board's membership
@@ -47,7 +46,7 @@ Feature: Managing custom group membership
         | add herself to Board |
         | add Carol to Board   |
 
-  @iteration-063 @todo-domain @todo-ui
+  @iteration-063
   Rule: Only existing active members of the same club may be added
 
     Scenario Outline: Bob cannot add someone who is not an active KMC member

@@ -27,6 +27,7 @@ test("default browser Cucumber profile selects all web-backed shared features", 
     "custom_group_conversations.feature",
     "custom_group_creation.feature",
     "custom_group_lifecycle.feature",
+    "custom_group_membership.feature",
     "email_branding.feature",
     "group_conversations.feature",
     "homepage.feature",
@@ -235,6 +236,33 @@ test("iteration 062 custom-group lifecycle scenarios run in both acceptance laye
     .map((scenario) => scenario.name);
 
   assert.equal(iterationScenarios.length, 2);
+  assert.deepEqual(domainScenarioNames, iterationScenarios.map((scenario) => scenario.name));
+  assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
+  assert.deepEqual(
+    iterationScenarios.filter(
+      (scenario) =>
+        scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
+    ),
+    []
+  );
+});
+
+test("iteration 063 custom-group membership and lifecycle scenarios run in both acceptance layers", () => {
+  const iterationScenarios = browserFeatures()
+    .filter(({ name }) =>
+      ["custom_group_lifecycle.feature", "custom_group_membership.feature"].includes(name)
+    )
+    .flatMap((feature) =>
+      feature.scenarios.filter((scenario) => scenario.tags.includes("@iteration-063"))
+    );
+  const domainScenarioNames = iterationScenarios
+    .filter((scenario) => !scenario.tags.includes("@not-domain"))
+    .map((scenario) => scenario.name);
+  const browserScenarioNames = iterationScenarios
+    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+    .map((scenario) => scenario.name);
+
+  assert.equal(iterationScenarios.length, 9);
   assert.deepEqual(domainScenarioNames, iterationScenarios.map((scenario) => scenario.name));
   assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
   assert.deepEqual(
