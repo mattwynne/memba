@@ -1,8 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Add an actor-bearing custom-group removal use case/command, using the same Club-owned authorization as 063.
-- [ ] 002 Validate custom-group identity and actor/target club identities; permit self-removal and last-member removal.
-- [ ] 003 Reuse `GroupMemberRemoved`; do not route this operation through club-member or role-removal commands.
+- [ ] 001 Implement the actor-bearing custom-group removal use case through the 063 Club-owned authorization boundary, validating custom-group and actor/target club identities, permitting self/last-member removal, and emitting the existing `GroupMemberRemoved` without changing club membership or roles.
 - [ ] 004 Extend the 062 follow-cleanup collaboration to explicit group removal.
 - [ ] 005 Use public Messaging APIs and idempotent `UnfollowConversation` facts; include auto-followed roots/replies, not only manually followed rows.
 - [ ] 006 A late cleanup event must not erase a newly established follow after a genuine re-add.
