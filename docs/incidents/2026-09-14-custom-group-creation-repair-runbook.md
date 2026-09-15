@@ -47,8 +47,10 @@ Run the release function with no apply mode or acknowledgement:
 
 ```sh
 fly ssh console --app memba -C \
-  "env MEMBA_ADMIN_HISTORY_MODE=dry-run /app/bin/memba eval 'Memba.Release.reconcile_legacy_admin_history!()'"
+  "/app/bin/memba rpc 'Memba.Release.reconcile_legacy_admin_history!()'"
 ```
+
+Use `rpc`, not `eval`, on a running app machine. `eval` starts another application instance and its HTTP endpoint conflicts with the live process on port 8080.
 
 Expected incident-specific result:
 
@@ -84,15 +86,19 @@ Obtain explicit approval before running the next command.
 Replace `<CLUB_ID_1>`, `<CLUB_ID_2>`, and `<APPROVAL_REFERENCE>` with the approved values. Keep the acknowledgement exact.
 
 ```sh
-fly ssh console --app memba -C \
-  "env \
-    MEMBA_ADMIN_HISTORY_MODE=apply \
-    MEMBA_ADMIN_HISTORY_CLUB_IDS='<CLUB_ID_1>,<CLUB_ID_2>' \
-    MEMBA_ADMIN_HISTORY_OPERATION_ID='incident-2026-09-14-admin-history-01' \
-    MEMBA_ADMIN_HISTORY_APPROVAL_REFERENCE='<APPROVAL_REFERENCE>' \
-    MEMBA_ADMIN_HISTORY_ACKNOWLEDGEMENT='YES_APPEND_MISSING_ADMIN_FACTS' \
-    /app/bin/memba eval 'Memba.Release.reconcile_legacy_admin_history!()'"
+fly ssh console --app memba -C "/app/bin/memba rpc '
+  report = Memba.Membership.AdminHistoryReconciliation.run!(
+    mode: :apply,
+    club_ids: [\"<CLUB_ID_1>\", \"<CLUB_ID_2>\"],
+    operation_id: \"incident-2026-09-14-admin-history-01\",
+    approval_reference: \"<APPROVAL_REFERENCE>\",
+    acknowledgement: \"YES_APPEND_MISSING_ADMIN_FACTS\"
+  )
+  IO.puts(Jason.encode!(report))
+'"
 ```
+
+Environment variables set on the short-lived `rpc` client are not inherited by the running BEAM node, so pass the reviewed values directly to the guarded runner.
 
 Expected result:
 
@@ -109,11 +115,12 @@ Stop and preserve evidence if the observed report differs. Do not compensate by 
 Rerun the scoped operation in dry-run mode:
 
 ```sh
-fly ssh console --app memba -C \
-  "env \
-    MEMBA_ADMIN_HISTORY_MODE=dry-run \
-    MEMBA_ADMIN_HISTORY_CLUB_IDS='<CLUB_ID_1>,<CLUB_ID_2>' \
-    /app/bin/memba eval 'Memba.Release.reconcile_legacy_admin_history!()'"
+fly ssh console --app memba -C "/app/bin/memba rpc '
+  report = Memba.Membership.AdminHistoryReconciliation.run!(
+    club_ids: [\"<CLUB_ID_1>\", \"<CLUB_ID_2>\"]
+  )
+  IO.puts(Jason.encode!(report))
+'"
 ```
 
 Both candidates must report `already_reconciled`, with zero planned/appended events and grant count 1.
@@ -121,9 +128,10 @@ Both candidates must report `already_reconciled`, with zero planned/appended eve
 Then run the full read-only invariant:
 
 ```sh
-fly ssh console --app memba -C \
-  "env MEMBA_ADMIN_INVARIANT_PHASE=post-repair \
-    /app/bin/memba eval 'Memba.Release.verify_source_backed_admin_invariant!()'"
+fly ssh console --app memba -C "/app/bin/memba rpc '
+  report = Memba.Membership.SourceBackedAdminInvariant.check!(phase: \"post-repair\")
+  IO.puts(Jason.encode!(report))
+'"
 ```
 
 Required result:
