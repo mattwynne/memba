@@ -9,6 +9,7 @@ defmodule Memba.ReleaseTest do
     :init_event_stores,
     :migrate_repos,
     :ensure_release_services_started,
+    :verify_source_backed_admin_invariant,
     :await_system_group_backfill_source_projections,
     :run_system_groups_backfill,
     :ensure_production_smoke_fixtures
@@ -34,14 +35,51 @@ defmodule Memba.ReleaseTest do
     assert Agent.get(log, & &1) == @release_steps
   end
 
-  test "source-backed Admin invariant wrapper is not part of the migrate sequence" do
+  test "release migration checks source-backed Admin invariant before projection-backed mutation" do
     log = start_supervised!({Agent, fn -> [] end})
     Application.put_env(:memba, :release_step_overrides, recording_overrides(log))
 
     assert :ok = Release.migrate()
 
     assert Agent.get(log, & &1) == @release_steps
-    refute :verify_source_backed_admin_invariant in @release_steps
+
+    assert Enum.find_index(@release_steps, &(&1 == :verify_source_backed_admin_invariant)) <
+             Enum.find_index(@release_steps, &(&1 == :await_system_group_backfill_source_projections))
+  end
+
+  test "release migration aborts projection waits, backfill, and smoke fixtures when source-backed Admin invariant fails" do
+    log = start_supervised!({Agent, fn -> [] end})
+
+    overrides =
+      log
+      |> recording_overrides()
+      |> Keyword.put(:verify_source_backed_admin_invariant, fn ->
+        record(log, :verify_source_backed_admin_invariant)
+        raise "source-backed Admin invariant failed"
+      end)
+      |> Keyword.put(:await_system_group_backfill_source_projections, fn ->
+        flunk("release must abort before projection waits when the Admin invariant fails")
+      end)
+      |> Keyword.put(:run_system_groups_backfill, fn ->
+        flunk("release must abort before system group backfill when the Admin invariant fails")
+      end)
+      |> Keyword.put(:ensure_production_smoke_fixtures, fn ->
+        flunk("release must abort before production smoke fixtures when the Admin invariant fails")
+      end)
+
+    Application.put_env(:memba, :release_step_overrides, overrides)
+
+    assert_raise RuntimeError, "source-backed Admin invariant failed", fn ->
+      Release.migrate()
+    end
+
+    assert Agent.get(log, & &1) == [
+             :load_app,
+             :init_event_stores,
+             :migrate_repos,
+             :ensure_release_services_started,
+             :verify_source_backed_admin_invariant
+           ]
   end
 
   test "release migration propagates system-group backfill failures and aborts remaining release work" do
@@ -69,6 +107,7 @@ defmodule Memba.ReleaseTest do
              :init_event_stores,
              :migrate_repos,
              :ensure_release_services_started,
+             :verify_source_backed_admin_invariant,
              :await_system_group_backfill_source_projections,
              :run_system_groups_backfill
            ]

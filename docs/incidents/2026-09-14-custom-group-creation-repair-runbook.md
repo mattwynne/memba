@@ -165,7 +165,7 @@ Verify read-only that:
 
 ## 7. Install the permanent gate
 
-Only after the production invariant passes, deliver the follow-up release that wires `SourceBackedAdminInvariant.check!/1` into the deployment/release path and retains pre/post-deploy evidence. Do not add a permanent bypass environment variable.
+The follow-up change now wires `SourceBackedAdminInvariant.check!/1` into the release command and continuous-delivery pre/post-deploy checks, with retained pre/post evidence artifacts and no permanent bypass environment variable. This permanent gate is implemented in source pending deployment; it is not yet complete in production until the gate release itself has deployed and its post-deploy evidence is retained.
 
 ## 8. Close the incident
 

@@ -12,6 +12,11 @@ defmodule Memba.Release do
     run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
 
     run_release_step(
+      :verify_source_backed_admin_invariant,
+      &verify_source_backed_admin_invariant_for_release!/0
+    )
+
+    run_release_step(
       :await_system_group_backfill_source_projections,
       &await_system_group_backfill_source_projections!/0
     )
@@ -43,11 +48,7 @@ defmodule Memba.Release do
     run_release_step(:load_app, &load_app/0)
     run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
 
-    report =
-      Memba.Membership.SourceBackedAdminInvariant.check!(source_backed_admin_invariant_env_opts())
-
-    IO.puts(Jason.encode!(report))
-    report
+    verify_source_backed_admin_invariant!(source_backed_admin_invariant_env_opts())
   end
 
   def verify_repo_schema!(repo) do
@@ -228,6 +229,17 @@ defmodule Memba.Release do
   defp ensure_release_services_started! do
     {:ok, _started} = Application.ensure_all_started(@app)
     :ok
+  end
+
+  defp verify_source_backed_admin_invariant_for_release! do
+    verify_source_backed_admin_invariant!(phase: "release-command")
+  end
+
+  defp verify_source_backed_admin_invariant!(opts) do
+    report = Memba.Membership.SourceBackedAdminInvariant.check!(opts)
+
+    IO.puts(Jason.encode!(report))
+    report
   end
 
   defp await_system_group_backfill_source_projections! do

@@ -71,8 +71,40 @@ jobs:
       - name: Set up flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Prepare Admin invariant artifact directory
+        run: mkdir -p deployment-artifacts/admin-invariant
+
+      - name: Verify source-backed Admin invariant before deploy
+        run: |
+          set -euo pipefail
+          flyctl ssh console \
+            --app "${MEMBA_FLY_APP:-memba}" \
+            --command '/app/bin/memba rpc "report = Memba.Membership.SourceBackedAdminInvariant.check!(phase: \"pre-deploy\"); IO.puts(Jason.encode!(report))"' \
+            2>&1 | tee deployment-artifacts/admin-invariant/pre-deploy.txt
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Deploy
         run: ./bin/deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           MEMBA_GIT_SHA: ${{ github.sha }}
+
+      - name: Verify source-backed Admin invariant after deploy
+        run: |
+          set -euo pipefail
+          flyctl ssh console \
+            --app "${MEMBA_FLY_APP:-memba}" \
+            --command '/app/bin/memba rpc "report = Memba.Membership.SourceBackedAdminInvariant.check!(phase: \"post-deploy\"); IO.puts(Jason.encode!(report))"' \
+            2>&1 | tee deployment-artifacts/admin-invariant/post-deploy.txt
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Upload Admin invariant evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-invariant-evidence-${{ github.run_id }}-${{ github.sha }}
+          path: deployment-artifacts/admin-invariant/
+          if-no-files-found: warn
+          retention-days: 30

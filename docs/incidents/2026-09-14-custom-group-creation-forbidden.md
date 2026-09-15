@@ -231,9 +231,9 @@ These are recommendations from the initial review. They require Matt's decision 
 | --- | --- | --- | --- | --- | --- |
 | Correct | P0 | Keep iteration 063 planning and implementation isolated in its branch/worktree; do not merge it to `main` or deploy it to production until the Admin-history invariant is repaired and custom-group creation is verified. | Matt | In effect | Iteration 063 may continue off `main`, but no merge or production deploy occurs before the P0 repair and verified custom-group creation. |
 | Correct | P0 | Implement an auditable, retry-safe reconciliation command/runbook for legacy projection-only Admins: include regression and partial-state fixtures, preserve legitimate distinct-role `grant_count` semantics, support dry-run scope, append only missing deterministic event facts, and prove event/projection convergence. | Engineering + operator | Implemented and locally tested; deployment pending | Dry run identifies exactly `lean` and `wynne-family`; complete and partial-state fixtures converge correctly; repeated execution is a no-op; the legacy Admin grant remains 1 while two distinct roles still produce `grant_count = 2`; event history and projections agree afterward. |
-| Correct | P0 | Deploy the tested repair support through CI, obtain explicit approval for the production mutation, execute it with captured output, then rerun the iteration-059 check. | Operator | Pending support deployment and explicit apply approval | Check 1 remains zero; check 2 changes from two violations to zero. |
-| Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Pending production repair | One group, stable slug, and creator membership exist; no exception is logged. |
-| Detect | P1 | Turn the source-backed Admin invariant into an executable release/preflight check with a blocking exit status and retained CI/deployment evidence. | Engineering | Executable check implemented; permanent release gate pending repair | A deliberately inconsistent production-like fixture blocks release; successful output is attached to the deployment. |
+| Correct | P0 | Deploy the tested repair support through CI, obtain explicit approval for the production mutation, execute it with captured output, then rerun the iteration-059 check. | Operator | Completed | Check 1 remains zero; check 2 changed from two violations to zero. |
+| Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Pending post-repair customer-path verification | One group, stable slug, and creator membership exist; no exception is logged. |
+| Detect | P1 | Turn the source-backed Admin invariant into an executable release/preflight check with a blocking exit status and retained CI/deployment evidence. | Engineering | Permanent gate implemented; deployment pending, not yet complete in production | A deliberately inconsistent production-like fixture blocks release; pre/post output is retained as deployment evidence. |
 | Detect | P1 | Make custom-group submit handle an unexpected projection/aggregate authority disagreement as an observable technical failure, with structured club/actor/command context, without weakening aggregate authorization. | Engineering | Implemented and locally tested; deployment pending | User sees a stable failure state; logs distinguish invariant drift from an ordinary forbidden request. |
 | Prevent | P1 | Add a production-history compatibility test for projection-only migrations followed by aggregate-owned commands, and require this analysis when moving a consistency boundary. | Engineering | Admin-history regression implemented; standard documented | Iteration-027-shaped history fails before repair and passes afterward. |
 | Prevent | P1 | Audit other direct projection/data migrations and flows that authorize reads from projections but writes from aggregates. | Engineering | Initial repository audit complete; legacy bare-UUID replay proof remains open | Findings list each mismatch risk, production blast radius, and required repair or proof of safety. |
@@ -259,13 +259,13 @@ These are recommendations from the initial review. They require Matt's decision 
 
 ## Resolution
 
-Not resolved. The affected production state has not been repaired, and custom-group creation in `lean` and `wynne-family` should not be retried as a recovery step until an approved repair has been deployed, executed, and verified in production.
+Not resolved. The affected production state has been repaired and the source-backed invariant now reports zero violations, but the permanent release/deployment gate is only implemented pending deployment and the customer path still needs post-repair verification.
 
 ## Follow-up
 
 - Diagnosis: complete with high confidence.
 - Blast-radius assessment: complete for populated production clubs.
-- Evidence preservation: complete; only read-only production commands have been run during this review.
-- Immediate mitigation: not yet applied.
-- Production mutation: none performed.
-- Incident resolution: pending action decision, implementation, approved repair, and production verification.
+- Evidence preservation: repair output and invariant evidence retained; deployment gate evidence pending the gate release.
+- Immediate mitigation: production repair completed; source-backed invariant checks now pass with zero violations.
+- Production mutation: approved repair performed.
+- Incident resolution: pending permanent-gate deployment and post-repair customer-path verification.
