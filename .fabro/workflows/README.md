@@ -57,8 +57,8 @@ Prepare steps should reference files through `/workspace/memba/...` or run from 
 The implementation task loop is planner-owned:
 
 1. `sync_task_list` mechanically bootstraps `todo.md` only when it is absent, then preserves it. It is not authoritative semantic sizing.
-2. `delivery_planner` reads the approved plan, current todo, accepted code, latest worker result/replan and latest review evidence, then writes durable artifacts under the iteration's `.delivery/` directory.
-3. `guard_delivery_packet` deterministically enforces the planner boundary: the planner may change only `todo.md` and `.delivery/` artifacts, must preserve accepted task records, and must produce a packet tied to the first unchecked todo line. Artifact-only checkpoints do not stale the packet; code/test/plan changes or mismatched task identities fail closed.
+2. `before_delivery_planner` records a trusted guard baseline under `.delivery/_guard/`; this is not planner-writable output. `delivery_planner` reads the approved plan, current todo, accepted code, latest worker result/replan and latest review evidence, then writes only the declared planner outputs: `todo.md`, `.delivery/execution-state.json`, `.delivery/planner-result.json`, and `.delivery/current-worker-packet.json`.
+3. `guard_delivery_packet` deterministically enforces the planner boundary: the planner may not alter accepted task records, guard/review/worker/history evidence, application code, tests, the approved plan, or undeclared files. It validates complete state/packet schemas, pending-obligation lineage, coverage mappings, candidate provenance and packet identity. Artifact-only checkpoints do not stale the packet; code/test/plan changes, forged baselines, missing handoff fields, deleted pending work or mismatched task identities fail closed.
 4. The worker implements the prepared packet and writes `.delivery/latest-worker-result.json` with `ready_for_review`, `replan`, or `human_blocked`.
 5. `route_worker_result` sends ready candidates to the existing independent review, sends `replan` back to the planner without review/check-off, and stops human-blocked work.
 

@@ -6,8 +6,8 @@ Use your file-reading tools. Do not edit application code, tests, feature files,
 
 - `{{ inputs.plan_path }}` in full.
 - The sibling `todo.md`.
-- The durable planner baseline at `.delivery/planner-guard-baseline.json` in the same iteration directory.
-- Existing `.delivery/execution-state.json`, `.delivery/current-worker-packet.json`, `.delivery/latest-worker-result.json`, `.delivery/latest-review.json`, and `.delivery/history.jsonl` when present.
+- The durable planner baseline at `.delivery/_guard/planner-guard-baseline.json` in the same iteration directory, plus `git rev-parse HEAD` for the binding checkpoint created immediately before this planner visit.
+- Existing `.delivery/execution-state.json`, `.delivery/current-worker-packet.json`, `.delivery/latest-worker-result.json`, and `.delivery/latest-review.json` when present. Read `.delivery/history.jsonl` only for targeted investigation/resume, not as routine growing input.
 - Relevant accepted code and tests in the repository. Inspect files directly; do not trust notes as ground truth.
 - ADRs and reference docs explicitly cited by the plan or needed for the selected work.
 
@@ -33,22 +33,27 @@ If the plan/acceptance contract needs a business decision, produce an execution 
 Use JSON with `schema_version: 1`.
 
 1. `.delivery/execution-state.json`
-   - `plan_path`, `todo_path`, `source_baseline` from `planner-guard-baseline.json`'s `baseline_head`.
-   - `accepted_tasks`: all checked lines from `todo.md`.
-   - `pending_obligations`: objects with `task_id`, `todo_line`, `origin`, `status`, `coverage`, and `replaces`.
-   - `coverage_map`: explicit mapping from approved scope/acceptance layers to pending task IDs or accepted task lines.
+   - `plan_path`, `todo_path`, `source_baseline` set to the binding checkpoint (`git rev-parse HEAD` at planner start, matching the guard's trusted before-planner checkpoint).
+   - `accepted_tasks`: all checked lines from `todo.md`; do not add or remove checked lines.
+   - `pending_obligations`: objects with `task_id`, `todo_line`, `origin`, `status`, `coverage`, `replaces`, and `candidate_origins`.
+   - `candidate_origins`: cumulative unaccepted candidate origins from prior worker replans/revisions that remain unresolved.
+   - `coverage_map`: explicit mapping from approved scope/acceptance layers to `pending_task_ids` and `accepted_task_lines`; every pending task id and accepted task line must be referenced.
    - `planner_note`: concise rationale for any split/combine/reorder and latest review/replan handling.
 
-2. `.delivery/current-worker-packet.json` when work remains
+2. `.delivery/planner-result.json`
+   - `schema_version`, `plan_path`, `todo_path`, `source_baseline`.
+   - `decision`: `ready`, `all_done`, or `human_blocked`.
+   - `actionable_reason` for `human_blocked`; leave any stale worker packet irrelevant.
+
+3. `.delivery/current-worker-packet.json` when work remains and `planner-result.json` is `ready`
    - `packet_id`: stable unique id for this preparation, e.g. task id plus source baseline short SHA and attempt number.
    - `task_id`, `todo_line`: exactly the first unchecked todo line after your planning changes.
    - `attempt`: `implementation` for normal/new work, `revision` when responding to a revise verdict for the same pending obligation.
-   - `plan_path`, `todo_path`, `source_baseline` equal to `planner-guard-baseline.json`'s `baseline_head`.
+   - `plan_path`, `todo_path`, `source_baseline` equal to the same binding checkpoint used in `planner-result.json` and `execution-state.json`.
    - `outcome`: one bounded outcome.
    - `scope`, `scope_exclusions`, `references`, `constraints`, `focused_validation`, `completion_evidence_required`.
+   - `candidate_origins` for this selected obligation.
    - `latest_review` and `latest_worker_result` summaries when relevant.
-
-3. Append a compact line to `.delivery/history.jsonl` describing this planner event.
 
 If no unchecked tasks remain, update `execution-state.json` with empty `pending_obligations`; no worker packet is required.
 

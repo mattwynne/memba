@@ -124,3 +124,11 @@ Validation performed for this branch:
 - Final full gate on the final staged diff: `env -u DEVENV_RUNTIME MEMBA_POSTGRES_PORT=15461 ACCEPTANCE_SERVER_NODE=memba_delivery_planner@localhost ./bin/dev check` — passed with 1292 tests / 0 failures and 145 acceptance scenarios / 1052 steps passing.
 
 Operational effectiveness remains pending: no live delivery run was started or modified for this implementation.
+
+### Review corrections — 2026-09-14
+
+After implementation review, tightened the deterministic boundary. The guard baseline moved to trusted `.delivery/_guard/` state and is no longer a planner-writable artifact. The planner may only write `todo.md`, `execution-state.json`, `planner-result.json`, and `current-worker-packet.json`; attempts to alter guard, worker, review, history or source files now fail closed. The guard now validates complete state/packet/result schemas, exact accepted-task preservation, every current pending obligation, lineage for split/replaced tasks, coverage-map references, explicit human-blocked planner decisions, unaccepted candidate origins across replans/revisions/resume, and bounded revision routing after a revise verdict.
+
+`apply_task_verdict.py` now validates packet/result/todo identity before writing review evidence, then writes review artifacts only after the exact-task application is known safe (with replay-safe acceptance). Focused regression tests cover the previously reproduced invalid success routes: forged check-off, deleted pending work, incomplete packet, tampered guard baseline, and implementation routing after a revise verdict.
+
+Focused correction validation passed after the review fixes, including all iteration-implementation shell/Python helper tests and the native Fabro runtime fixture. Final full gate on the final staged correction diff used a scrubbed inherited devenv/Postgres environment: `env -u DEVENV_RUNTIME -u MEMBA_DEVENV_SHELL -u DEVENV_ROOT -u DEVENV_STATE -u DEVENV_PROFILE -u DEVENV_DOTFILE -u PGHOST -u PGPORT -u PGDATA MEMBA_POSTGRES_PORT=15432 ACCEPTANCE_SERVER_NODE=memba_delivery_planner5@localhost ./bin/dev check` — exit 0, with 1292 tests / 0 failures and 145 acceptance scenarios / 1052 steps passing.
