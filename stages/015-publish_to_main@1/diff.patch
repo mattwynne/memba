@@ -1,0 +1,812 @@
+diff --git a/docs/incidents/2026-09-14-custom-group-creation-forbidden.md b/docs/incidents/2026-09-14-custom-group-creation-forbidden.md
+index 51a1736..bf42f95 100644
+--- a/docs/incidents/2026-09-14-custom-group-creation-forbidden.md
++++ b/docs/incidents/2026-09-14-custom-group-creation-forbidden.md
+@@ -2,16 +2,21 @@
+ 
+ Date: 2026-09-14
+ 
+-Status: Investigating — diagnosis high-confidence; production repair pending
++Status: Resolved — production repaired, permanent deployment gate active, and customer path verified
+ 
+-Current production state: No repair or other production mutation has been performed. The affected clubs still need an approved repair before their projected Admins can create custom groups.
++Resolved: 2026-09-15 02:49 UTC
+ 
+-Production release: Fly release `v283`, deployed at 2026-09-14 17:53 UTC from Git commit `03978b3a4d2d6d32966b33a36d92fe8ef75f0f7b`
++Current production state: All populated clubs have complete source-backed Admin state. The intended `Parents` group was created successfully in `wynne-family`.
++
++Incident release: Fly release `v283`, deployed at 2026-09-14 17:53 UTC from Git commit `03978b3a4d2d6d32966b33a36d92fe8ef75f0f7b`
++
++Resolution release: Fly release `v290`, deployed at 2026-09-15 02:29 UTC from Git commit `cf39b4582368157934d7ec703bca69a4b7787074`
+ 
+ Related work:
+ 
+-- [Proposed repair runbook](2026-09-14-custom-group-creation-repair-runbook.md)
++- [Completed repair runbook](2026-09-14-custom-group-creation-repair-runbook.md)
+ - [Projection-only migration compatibility audit](2026-09-14-projection-only-migration-audit.md)
++- [Follow-up incident: database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md)
+ - [Iteration 027: Membership Administrator role foundation](../iterations/027-membership-administrator-role/plan.md)
+ - [Iteration 059: Populated clubs always have an Admin](../iterations/059-populated-clubs-always-have-an-admin/plan.md)
+ - [Iteration 059 production cutover check](../iterations/059-populated-clubs-always-have-an-admin/cutover-check.md)
+@@ -25,15 +30,15 @@ Shortly after iteration 062 reached production, an active member shown as an Adm
+ 
+ The page and preview authorize against the `membership_member_permissions` read model. The authoritative create command authorizes against state reconstructed from the Club event stream. For two older production clubs, those sources disagree: the read model says an active member has `club.manage_members`, while the Club stream contains no Admin role-assignment fact. The aggregate therefore reconstructs zero active Admins and correctly rejects the command according to the history it owns.
+ 
+-This is a production-history compatibility failure, not expected iteration-062 behaviour. Iteration 062 explicitly promises that an active club Admin can create a custom group.
++This was a production-history compatibility failure, not expected iteration-062 behaviour. Iteration 062 explicitly promises that an active club Admin can create a custom group. We restored the missing source facts through an approved append-only repair, verified the invariant, installed a blocking deployment gate, and confirmed the original customer path.
+ 
+ ## Impact
+ 
+-- Admin custom-group creation is unavailable to the projected Admins in 2 of 5 populated production clubs: `lean` and `wynne-family`.
+-- The observed `Parents` group was not created. No partial group, membership, or email-address facts were appended.
+-- The other 3 populated clubs have event-backed active Admin state and are not affected by this specific mismatch.
+-- No data loss, unauthorized access, email delivery, or privacy breach has been observed.
+-- The user experience is poor: a form that appeared authorized crashed into reconnection/error behaviour rather than explaining that creation failed.
++- Admin custom-group creation was unavailable to the projected Admins in 2 of 5 populated production clubs: `lean` and `wynne-family`.
++- The two failed attempts appended no partial group, membership, or email-address facts.
++- The other 3 populated clubs had event-backed active Admin state and were not affected by this mismatch.
++- No data loss, unauthorized access, email delivery, or privacy breach was observed.
++- The user experience was poor: a form that appeared authorized crashed into reconnection/error behaviour rather than explaining that creation failed.
+ - There was no automated alert. Detection depended on a user noticing the failed action and asking for log inspection.
+ 
+ ## Detection
+@@ -69,10 +74,15 @@ All times are UTC on 2026-09-14 unless stated otherwise.
+ | approx. 18:28 | Read-only inspection confirmed that `wynne-family` had one projected Admin but zero aggregate active Admins and no aggregate role assignments. |
+ | approx. 18:39 | A production-wide read-only comparison found the same mismatch in 2 of 5 populated clubs. No custom-group events from either failed attempt were found. |
+ | 18:40 | The documented iteration-059 cutover transaction was run read-only against production. Membership-history check 1 returned zero violations; source-backed Admin check 2 returned two violations. |
++| 2026-09-15 00:18 | Release `v287` dry-run found exactly two repairable clubs, six missing source facts, three already-reconciled clubs, and zero manual-review candidates. |
++| 2026-09-15 00:34 | Matt approved the exact two-club allow-list. Operation `incident-2026-09-14-admin-history-01` appended six canonical events with approval metadata. |
++| 2026-09-15 00:34 | Scoped dry-run returned zero planned events; the full read-only invariant returned zero violations. Both repaired grants remained at count 1. |
++| 2026-09-15 02:29 | Release `v290` deployed the permanent CI/CD gate. Pre-deploy and post-deploy checks passed and evidence was retained in [CI artifact 10378625528](https://github.com/mattwynne/memba/actions/runs/34920034105/artifacts/10378625528). |
++| 2026-09-15 02:49 | Matt created `Parents` successfully. Read-only verification found one group, slug `parents`, its creator membership, and exactly three atomic group-creation events with no related error log. |
+ 
+ ## Technical analysis
+ 
+-Confirmed facts in this section come from the linked source, tests, docs, and the read-only production inspection recorded above. Hypotheses and unknowns are labelled explicitly. No production write, deploy, or repair command has been run during this review.
++Confirmed facts in this section come from the linked source, tests, docs, captured CI evidence, and production inspection recorded above. Hypotheses and unknowns are labelled explicitly. Production mutations were limited to the explicitly approved append-only repair described in the resolution.
+ 
+ Evidence checked for this review:
+ 
+@@ -136,15 +146,13 @@ The projection rows already exist. In the current projector:
+ - projecting `ClubRolePermissionGranted` increments permissions for every existing active assignment; and
+ - projecting `ClubRoleAssignedToMember` increments the member permission again.
+ 
+-For a legacy projected grant currently at `grant_count = 1`, a naive three-command repair can over-count the permission instead of remaining at one. The repair must first make equivalent projections idempotent, or use another explicitly designed and tested reconciliation path. Directly editing the projection alone is not a repair because the projection is already the side that claims the Admin exists.
++For a legacy projected grant at `grant_count = 1`, a naive three-command repair could over-count the permission instead of remaining at one. Before repair, the projector was changed to derive the exact count from distinct active normalized role grants. The production repair then left both affected grants at 1. Directly editing the projection alone would not have repaired the authoritative history.
+ 
+-### Unknowns and hypotheses
++### Remaining unknowns
+ 
+-- Confirmed: the failed `wynne-family` create attempts appended no custom-group facts, and the populated-club mismatch is limited to `lean` and `wynne-family` in the inspected production state.
+-- Confirmed: no approved production mutation or repair was performed during this review.
+-- Hypothesis: the production mismatch began when the iteration-027 projection backfill ran for pre-existing clubs. This fits the migration source and current stream/projection shape; the exact production migration timestamp has not been reconstructed here.
+-- Unknown: whether a similar cutover check was ever run outside the searched session history and notes. The current production state proves only that a zero-violation result was not established and retained.
+-- Unknown: which reconciliation design Matt wants to approve for production repair.
++- The production mismatch fits the iteration-027 projection backfill and observed stream/projection shape, but the exact original production migration timestamp was not reconstructed.
++- We found no captured iteration-059 cutover execution in the searched session history, repository, or local notes. We cannot prove that no similar check ran elsewhere.
++- The separate audit still needs a focused compatibility proof for historic bare-UUID event identities.
+ 
+ ## Five Whys
+ 
+@@ -223,18 +231,18 @@ A known live-data compatibility condition was expressed as a manual, one-time cu
+ - Only two small production clubs have the legacy mismatch.
+ - The intended `Parents` group can be retried after repair without reconciling a partial creation.
+ 
+-## Proposed actions
++## Actions
+ 
+-These are recommendations from the initial review. They require Matt's decision before implementation or production mutation.
++Production mutations below were performed only after Matt approved the exact repair scope and expected event count.
+ 
+ | Type | Priority | Action | Owner | Status | Verification |
+ | --- | --- | --- | --- | --- | --- |
+-| Correct | P0 | Keep iteration 063 planning and implementation isolated in its branch/worktree; do not merge it to `main` or deploy it to production until the Admin-history invariant is repaired and custom-group creation is verified. | Matt | In effect | Iteration 063 may continue off `main`, but no merge or production deploy occurs before the P0 repair and verified custom-group creation. |
+-| Correct | P0 | Implement an auditable, retry-safe reconciliation command/runbook for legacy projection-only Admins: include regression and partial-state fixtures, preserve legitimate distinct-role `grant_count` semantics, support dry-run scope, append only missing deterministic event facts, and prove event/projection convergence. | Engineering + operator | Implemented and locally tested; deployment pending | Dry run identifies exactly `lean` and `wynne-family`; complete and partial-state fixtures converge correctly; repeated execution is a no-op; the legacy Admin grant remains 1 while two distinct roles still produce `grant_count = 2`; event history and projections agree afterward. |
++| Correct | P0 | Keep iteration 063 planning and implementation isolated in its branch/worktree; do not merge it to `main` or deploy it to production until the Admin-history invariant is repaired and custom-group creation is verified. | Matt | Completed; hold lifted | Iteration 063 remained off `main` until repair and customer-path verification completed. |
++| Correct | P0 | Implement an auditable, retry-safe reconciliation command/runbook for legacy projection-only Admins: include regression and partial-state fixtures, preserve legitimate distinct-role `grant_count` semantics, support dry-run scope, append only missing deterministic event facts, and prove event/projection convergence. | Engineering + operator | Completed and deployed | Dry-run identified exactly `lean` and `wynne-family`; repeated execution is a no-op; grants remained 1; event history and projections now agree. |
+ | Correct | P0 | Deploy the tested repair support through CI, obtain explicit approval for the production mutation, execute it with captured output, then rerun the iteration-059 check. | Operator | Completed | Check 1 remains zero; check 2 changed from two violations to zero. |
+-| Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Pending post-repair customer-path verification | One group, stable slug, and creator membership exist; no exception is logged. |
+-| Detect | P1 | Turn the source-backed Admin invariant into an executable release/preflight check with a blocking exit status and retained CI/deployment evidence. | Engineering | Permanent gate implemented; deployment pending, not yet complete in production | A deliberately inconsistent production-like fixture blocks release; pre/post output is retained as deployment evidence. |
+-| Detect | P1 | Make custom-group submit handle an unexpected projection/aggregate authority disagreement as an observable technical failure, with structured club/actor/command context, without weakening aggregate authorization. | Engineering | Implemented and locally tested; deployment pending | User sees a stable failure state; logs distinguish invariant drift from an ordinary forbidden request. |
++| Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Completed | One group, stable slug, and creator membership exist; no exception was logged. |
++| Detect | P1 | Turn the source-backed Admin invariant into executable deployment preflight and post-deploy checks with a blocking exit status and retained evidence; include both the populated-club floor and every projected deterministic Admin assignment. | Engineering | Original gate active; assignment-level extension implemented pending deployment | Release `v290` passed the original gate; the late safety-review gap now has focused invariant tests and an assignment-level check. |
++| Detect | P1 | Make custom-group submit handle an unexpected projection/aggregate authority disagreement as an observable technical failure, with structured club/actor/command context, without weakening aggregate authorization. | Engineering | Completed and deployed | Authorization drift now returns a stable technical failure and structured log rather than terminating the LiveView. |
+ | Prevent | P1 | Add a production-history compatibility test for projection-only migrations followed by aggregate-owned commands, and require this analysis when moving a consistency boundary. | Engineering | Admin-history regression implemented; standard documented | Iteration-027-shaped history fails before repair and passes afterward. |
+ | Prevent | P1 | Audit other direct projection/data migrations and flows that authorize reads from projections but writes from aggregates. | Engineering | Initial repository audit complete; legacy bare-UUID replay proof remains open | Findings list each mismatch risk, production blast radius, and required repair or proof of safety. |
+ | Detect | P2 | Add exception tracking/alerting for production LiveView and command failures. | Engineering | Proposed | A controlled error generates an operator notification with release and request context. |
+@@ -250,22 +258,26 @@ These are recommendations from the initial review. They require Matt's decision
+ 
+ ## Open questions
+ 
+-- Should the invariant check block every release permanently, or should a more general aggregate/read-model parity framework replace this specific query?
+-- Should reconciliation append the three existing role facts or introduce one explicit legacy-history repair command with deterministic, retry-safe semantics?
+-- What is the smallest reconciliation design that preserves legitimate multiple-role permission counts while making equivalent replay/backfill facts idempotent?
+-- Which other projection-only migrations created state that newer aggregates now expect in event history?
+-- Should production repair evidence live in a private operations log, a protected CI artifact, or both?
+-- What alerting service is proportionate for the current production scale?
++- Should a future general aggregate/read-model parity framework replace this specific permanent invariant?
++- What does the remaining legacy bare-UUID replay audit reveal?
++- What exception-alerting service is proportionate for the current production scale?
+ 
+ ## Resolution
+ 
+-Not resolved. The affected production state has been repaired and the source-backed invariant now reports zero violations, but the permanent release/deployment gate is only implemented pending deployment and the customer path still needs post-repair verification.
++Resolved at 2026-09-15 02:49 UTC.
++
++- Release `v287` supplied idempotent exact-count projection handling, the guarded reconciliation command, production-history tests, invariant tooling, and stable authorization-drift diagnostics.
++- Matt approved operation `incident-2026-09-14-admin-history-01` for the exact `lean` and `wynne-family` Club IDs and six expected events.
++- The operation appended `ClubRoleDefined`, `ClubRolePermissionGranted`, and `ClubRoleAssignedToMember` to each affected Club stream with operation and approval metadata.
++- Post-repair dry-run planned zero events. Both aggregates reconstructed one active Admin and both projected grants remained 1.
++- The read-only invariant reported zero membership-source and complete-Admin-source violations.
++- Release `v290` activated blocking pre-deploy and post-deploy invariant checks. Both passed, and CI retained their output. A later safety review identified that the club-level floor could let one backed Admin mask another unbacked projected Admin in the same club; the assignment-level extension is implemented pending deployment.
++- Matt then created `Parents` successfully. Projection and aggregate state contain one group with slug `parents`, the intended creator membership, and exactly three atomic creation events. No related production error was logged.
+ 
+ ## Follow-up
+ 
+-- Diagnosis: complete with high confidence.
+-- Blast-radius assessment: complete for populated production clubs.
+-- Evidence preservation: repair output and invariant evidence retained; deployment gate evidence pending the gate release.
+-- Immediate mitigation: production repair completed; source-backed invariant checks now pass with zero violations.
+-- Production mutation: approved repair performed.
+-- Incident resolution: pending permanent-gate deployment and post-repair customer-path verification.
++Remaining non-blocking work:
++
++- Complete the legacy bare-UUID replay compatibility proof recorded in the projection-migration audit.
++- Choose and install proportionate production exception alerting.
++- Revisit whether a general aggregate/read-model parity framework should supersede the specific Admin invariant as more write-side decisions move into aggregates.
+diff --git a/docs/incidents/2026-09-14-custom-group-creation-repair-runbook.md b/docs/incidents/2026-09-14-custom-group-creation-repair-runbook.md
+index 6d9875d..ce3db1a 100644
+--- a/docs/incidents/2026-09-14-custom-group-creation-repair-runbook.md
++++ b/docs/incidents/2026-09-14-custom-group-creation-repair-runbook.md
+@@ -2,7 +2,7 @@
+ 
+ Incident: [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md)
+ 
+-Status: Awaiting support-release validation and deployment
++Status: Completed and verified on 2026-09-15
+ 
+ This runbook restores canonical Admin facts to legacy Club streams. It does not rewrite events or treat projections as authoritative. The operation is append-only, explicitly scoped, dry-run first, and designed to be safe to retry. Each Club aggregate command is atomic, but a multi-candidate or multi-club run is not globally transactional; it appends one candidate at a time and can be resumed from the retained report.
+ 
+@@ -165,7 +165,11 @@ Verify read-only that:
+ 
+ ## 7. Install the permanent gate
+ 
+-The follow-up change now wires `SourceBackedAdminInvariant.check!/1` into the release command and continuous-delivery pre/post-deploy checks, with retained pre/post evidence artifacts and no permanent bypass environment variable. This permanent gate is implemented in source pending deployment; it is not yet complete in production until the gate release itself has deployed and its post-deploy evidence is retained.
++The follow-up change now wires `SourceBackedAdminInvariant.check!/1` into continuous-delivery pre-deploy and post-deploy checks, with retained evidence artifacts and no permanent bypass environment variable. The pre-deploy check blocks before `./bin/deploy`; the post-deploy check verifies the running release.
++
++The invariant is deliberately not run inside Fly's release-command machine. Two attempted gate releases passed the external preflight but encountered production database restart/recovery while the second application instance was starting and running the invariant. Keeping the check external avoids adding that load to the migration/backfill process while preserving a blocking gate and post-deploy proof.
++
++Release `v290` completed this step. Its pre-deploy and post-deploy checks both passed, and CI retained [artifact 10378625528](https://github.com/mattwynne/memba/actions/runs/34920034105/artifacts/10378625528).
+ 
+ ## 8. Close the incident
+ 
+diff --git a/docs/incidents/2026-09-15-release-invariant-database-restarts.md b/docs/incidents/2026-09-15-release-invariant-database-restarts.md
+new file mode 100644
+index 0000000..13dddb9
+--- /dev/null
++++ b/docs/incidents/2026-09-15-release-invariant-database-restarts.md
+@@ -0,0 +1,115 @@
++# Incident: database restarted during release-command invariant checks
++
++Date: 2026-09-15
++
++Status: Mitigated — unsafe gate placement removed; infrastructure cause remains under investigation
++
++## Summary
++
++Two attempts to deploy the permanent Admin-history invariant gate failed while Fly's temporary release-command application was running the new read-only invariant. In both attempts, production PostgreSQL connections closed and the single database node entered automatic recovery. The second recovery lasted approximately 36 seconds.
++
++The deployment gate failed closed: releases `v288` and `v289` did not replace the running application. We removed the invariant from the temporary release-command process and retained blocking pre-deploy and post-deploy checks against the running app. Release `v290` then deployed successfully with both external checks passing.
++
++The exact PostgreSQL crash trigger is not confirmed. The timing repeated at the same release step, and removing that step stopped the failure, so the release-machine connection/query load is the leading hypothesis rather than a proven root cause.
++
++## Impact
++
++- Production database connections failed during two recovery windows.
++- Application requests requiring the database may have failed or stalled during those windows; no customer report was received.
++- Releases `v288` and `v289` failed before updating the production app, leaving the already healthy `v287` app release in place.
++- PostgreSQL replayed WAL and returned healthy after each restart.
++- No data loss or corruption has been observed. The repaired Admin invariant and the later `v290` pre/post checks both returned zero violations.
++
++## Timeline
++
++All times UTC on 2026-09-15.
++
++| Time | Event |
++| --- | --- |
++| 01:19 | An external pre-deploy invariant passed. Deployment then stopped safely because its retained artifact had made the Git checkout dirty; no release command ran. |
++| 01:41 | A corrected deployment passed preflight and started the `v288` release-command machine. |
++| 01:42 | The release-command invariant lost its database connection. PostgreSQL entered automatic recovery, the release command exited non-zero, and deployment was aborted. |
++| 02:03 | A second deployment passed preflight and started the `v289` release-command machine with longer query timeouts and bounded execution retries. |
++| 02:04 | PostgreSQL again entered recovery while that invariant was running. All retries failed; deployment was aborted. |
++| 02:05 | PostgreSQL reported ready and repmgr reconnected after approximately 36 seconds. |
++| 02:08 | The invariant was removed from the temporary release-command application. External CI pre/post checks remained blocking. |
++| 02:24 | The `v290` pre-deploy invariant passed with both violation counts zero. |
++| 02:29 | The ordinary release command completed without the invariant. `v290` started successfully, and the post-deploy invariant passed. |
++
++## What happened
++
++Fly's release command starts a second Memba application instance. That instance starts the endpoint, Repo pool, EventStore pools, notifications, projectors, and backfill services before running release work. Adding the invariant there introduced a repeatable-read query over projections and EventStore tables while both the production app and temporary release app were connected.
++
++On two attempts, production PostgreSQL terminated a server process and entered recovery while this step was active. Application and release-machine logs reported `tcp recv: closed`, connection handshakes timing out, `FATAL 57P03` recovery responses, and unavailable Repo connections. The release gate correctly treated missing evidence as failure.
++
++A manual invariant against the running app and each CI pre-deploy invariant passed quickly. After removing the release-machine check, the same migration/backfill release process and external invariant checks completed successfully.
++
++Evidence:
++
++- Failed release-command runs: [34916857181](https://github.com/mattwynne/memba/actions/runs/34916857181) and [34918604051](https://github.com/mattwynne/memba/actions/runs/34918604051).
++- Successful gate release: [34920034105](https://github.com/mattwynne/memba/actions/runs/34920034105).
++- Retained successful evidence: [artifact 10378625528](https://github.com/mattwynne/memba/actions/runs/34920034105/artifacts/10378625528).
++- Fly releases: `v288` and `v289` failed; `v290` completed.
++
++Unknowns:
++
++- Which PostgreSQL server process failed first and why.
++- Whether query memory, connection pressure, a PostgreSQL/Fly image defect, or another resource limit triggered the restart.
++- Whether any customer request failed during the recovery windows.
++
++## Five Whys
++
++### Why it happened
++
++1. **Why did the two deployments fail?**
++
++   Their temporary release-command processes could not complete the invariant and exited non-zero.
++
++2. **Why could the invariant not complete?**
++
++   Its database connection closed while the production PostgreSQL node was restarting and recovering.
++
++3. **Why did PostgreSQL restart?**
++
++   The exact server-process failure is unknown. Both restarts occurred while a second full application instance was running the invariant; removing that placement stopped the recurrence.
++
++4. **Why was the invariant running inside a second full application instance?**
++
++   We initially sought defense in depth by checking before backfill work inside `Memba.Release.migrate/0`, whose existing pattern starts the complete application.
++
++5. **Why was that production-resource interaction not caught earlier?**
++
++   Local and CI tests verify sequencing and SQL semantics, but they do not reproduce the capacity, network, Fly release-machine, and single-node database behavior of production.
++
++### Why detection and containment worked
++
++1. The release check treated every query/connection error as failure rather than silently passing.
++2. Fly aborted each deployment before replacing the healthy running app.
++3. CI retained invariant output even on failure.
++4. Database and app logs exposed recovery rather than only a generic deploy error.
++5. Removing the release-machine check while keeping external gates allowed a safe deployment without weakening the production invariant.
++
++## Contributing conditions
++
++- The release task starts more application services and database pools than this read-only check needs.
++- Production uses one PostgreSQL machine, so a restart has no failover node.
++- The database is on `flyio/postgres-flex:17.2 (v0.1.0)` while Fly reports a newer `17.7 (v0.2.1)` image available.
++- Initial retries handled transient client errors but could not help while the database itself remained in recovery.
++- The first artifact location was inside the Git checkout, which correctly triggered `bin/deploy`'s dirty-tree protection and added one failed attempt before the database issue appeared.
++
++## Actions
++
++| Type | Priority | Action | Owner | Status | Verification |
++| --- | --- | --- | --- | --- | --- |
++| Correct | P0 | Remove the invariant from the temporary release-command application while retaining external blocking checks. | Engineering | Completed | `v290` release command and pre/post checks all passed. |
++| Detect | P0 | Retain each pre/post attempt as a protected CI artifact and retry bounded transient check failures. | Engineering | Completed | CI artifact exists and failed attempts remain visible. |
++| Prevent | P1 | Keep release-command work limited to services actually required by migrations/backfills. | Engineering | Proposed | A release-task design shows which pools/processes can be omitted and passes deployment tests. |
++| Prevent | P1 | Investigate the PostgreSQL server-process failure using Fly diagnostics/support and resource history. | Operator | Proposed | A supported cause or bounded set of causes is recorded. |
++| Prevent | P1 | Plan and explicitly approve upgrading the Fly Postgres image from 17.2/v0.1.0 to the supported current image. | Matt + operator | Proposed | Backup/recovery plan reviewed; upgrade completes with health and invariant checks green. |
++| Detect | P2 | Add database restart/recovery alerting. | Engineering | Proposed | A controlled signal produces an operator notification. |
++
++## Resolution
++
++Customer-facing database availability recovered automatically after each restart. The risky release-machine gate placement was removed, and release `v290` deployed successfully with blocking pre-deploy and post-deploy invariant checks and retained evidence.
++
++This incident remains `Mitigated`, not `Resolved`, until the database-process failure is better understood or an approved infrastructure countermeasure is completed.
+diff --git a/docs/incidents/README.md b/docs/incidents/README.md
+index f9a7a6c..695d087 100644
+--- a/docs/incidents/README.md
++++ b/docs/incidents/README.md
+@@ -25,4 +25,5 @@ An incident may link to all three. The incident record remains the chronological
+ 
+ | Date | Incident | Impact | Status |
+ | --- | --- | --- | --- |
+-| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs cannot create custom groups; no data loss or privacy breach observed. | Investigating — diagnosis high-confidence; production repair pending |
++| 2026-09-15 | [Database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md) | Two short database recovery windows; two deployments safely aborted; no data loss observed. | Mitigated — unsafe gate placement removed; infrastructure cause open |
++| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs could not create custom groups; no data loss or privacy breach observed. | Resolved 2026-09-15 — repaired and customer path verified |
+diff --git a/docs/iterations/063-add-custom-group-members/plan.md b/docs/iterations/063-add-custom-group-members/plan.md
+index 1a4e9c3..006e81b 100644
+--- a/docs/iterations/063-add-custom-group-members/plan.md
++++ b/docs/iterations/063-add-custom-group-members/plan.md
+@@ -1,7 +1,7 @@
+ # Add active club members to custom groups
+ 
+ Date: 2026-09-13
+-Status: implementing
++Status: merged
+ 
+ Stakeholder review complete; Fabro plan validation pending.
+ 
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index c170f81..a58ec6d 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -70,7 +70,7 @@ green than before.
+ | 060 | 2026-09-12 | merged | Calm LiveView reconnection feedback | [plan](060-calm-liveview-reconnection-feedback/plan.md) — no acceptance feature changes |
+ | 061 | 2026-09-13 | merged | Discover club groups without joining them | [plan](061-discover-club-groups/plan.md) — `group_conversations.feature` |
+ | 062 | 2026-09-13 | merged | Admins create usable custom groups | [plan](062-create-custom-groups/plan.md) — `custom_group_creation.feature`, `custom_group_conversations.feature`, `custom_group_lifecycle.feature` |
+-| 063 | 2026-09-13 | implementing | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
++| 063 | 2026-09-13 | merged | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+ | 064 | 2026-09-13 | validated | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+ | 065 | 2026-09-13 | validated | Request custom-group access through an Admin message | [plan](065-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
+ | 066 | 2026-08-13 | validated | Members change their own name | [plan](066-member-name-editing/plan.md) — `member_profile.feature` |
+diff --git a/web/lib/memba/membership/source_backed_admin_invariant.ex b/web/lib/memba/membership/source_backed_admin_invariant.ex
+index be8d00f..cf5d487 100644
+--- a/web/lib/memba/membership/source_backed_admin_invariant.ex
++++ b/web/lib/memba/membership/source_backed_admin_invariant.ex
+@@ -89,13 +89,17 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
+             %{
+               "active_membership_source_facts" => check_result!(active_membership_source_sql()),
+               "populated_club_complete_admin_source_backing" =>
+-                check_result!(populated_club_admin_sql())
++                check_result!(populated_club_admin_sql()),
++              "projected_admin_assignment_source_backing" =>
++                check_result!(projected_admin_assignment_source_sql())
+             }
+           else
+             %{
+               "active_membership_source_facts" =>
+                 skipped_check("event_store_payload_columns_not_bytea"),
+               "populated_club_complete_admin_source_backing" =>
++                skipped_check("event_store_payload_columns_not_bytea"),
++              "projected_admin_assignment_source_backing" =>
+                 skipped_check("event_store_payload_columns_not_bytea")
+             }
+           end
+@@ -456,6 +460,190 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
+     """
+   end
+ 
++  defp projected_admin_assignment_source_sql do
++    ~S"""
++    WITH populated_club_hashes AS (
++      SELECT
++        membership.club_id,
++        md5(
++          convert_to('membership_administrator', 'UTF8')
++          || decode('00', 'hex')
++          || convert_to(membership.club_id, 'UTF8')
++        ) AS admin_role_hash
++      FROM membership_memberships AS membership
++      WHERE membership.active
++      GROUP BY membership.club_id
++    ),
++    populated_clubs AS (
++      SELECT
++        club_id,
++        'rol_'
++          || substr(admin_role_hash, 1, 8)
++          || '-'
++          || substr(admin_role_hash, 9, 4)
++          || '-'
++          || substr(admin_role_hash, 13, 4)
++          || '-'
++          || substr(admin_role_hash, 17, 4)
++          || '-'
++          || substr(admin_role_hash, 21, 12)
++          AS expected_admin_role_id
++      FROM populated_club_hashes
++    ),
++    projected_admin_assignments AS (
++      SELECT
++        assignment.club_id,
++        assignment.membership_id,
++        assignment.person_id,
++        assignment.role_id
++      FROM populated_clubs AS club
++      JOIN membership_role_assignments AS assignment
++        ON assignment.club_id = club.club_id
++        AND assignment.role_id = club.expected_admin_role_id
++        AND assignment.active
++    ),
++    club_admin_source_facts AS (
++      SELECT
++        stream.stream_uuid AS club_id,
++        stream_event.stream_version,
++        event.event_type,
++        convert_from(event.data, 'UTF8')::jsonb AS event_data
++      FROM event_store.events AS event
++      JOIN event_store.stream_events AS stream_event
++        ON stream_event.event_id = event.event_id
++      JOIN event_store.streams AS stream
++        ON stream.stream_id = stream_event.stream_id
++      WHERE stream.stream_uuid LIKE 'clb\_%' ESCAPE '\'
++        AND event.event_type IN (
++          'Elixir.Memba.Membership.Events.ClubRoleDefined',
++          'Elixir.Memba.Membership.Events.ClubRolePermissionGranted',
++          'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
++          'Elixir.Memba.Membership.Events.ClubRoleRemovedFromMember',
++          'Elixir.Memba.Membership.Events.MemberRoleAssigned',
++          'Elixir.Memba.Membership.Events.MemberRoleRemoved'
++        )
++    ),
++    projected_admin_assignment_evidence AS (
++      SELECT
++        assignment.club_id,
++        assignment.membership_id,
++        assignment.person_id,
++        assignment.role_id,
++        membership.membership_id IS NOT NULL AS has_active_membership,
++        role.role_id IS NOT NULL AS has_admin_role_projection,
++        role_permission.role_id IS NOT NULL AS has_admin_permission_projection,
++        member_permission.grant_count AS flattened_grant_count,
++        (
++          SELECT count(DISTINCT exact_assignment.role_id)
++          FROM membership_role_assignments AS exact_assignment
++          JOIN membership_role_permissions AS exact_permission
++            ON exact_permission.club_id = exact_assignment.club_id
++            AND exact_permission.role_id = exact_assignment.role_id
++            AND exact_permission.permission = 'club.manage_members'
++          WHERE exact_assignment.club_id = assignment.club_id
++            AND exact_assignment.membership_id = assignment.membership_id
++            AND exact_assignment.person_id = assignment.person_id
++            AND exact_assignment.active
++        ) AS exact_active_grant_count
++      FROM projected_admin_assignments AS assignment
++      LEFT JOIN membership_memberships AS membership
++        ON membership.club_id = assignment.club_id
++        AND membership.membership_id = assignment.membership_id
++        AND membership.person_id = assignment.person_id
++        AND membership.active
++      LEFT JOIN membership_roles AS role
++        ON role.club_id = assignment.club_id
++        AND role.role_id = assignment.role_id
++        AND role.role_key = 'admin'
++        AND role.name = 'Admin'
++      LEFT JOIN membership_role_permissions AS role_permission
++        ON role_permission.club_id = assignment.club_id
++        AND role_permission.role_id = assignment.role_id
++        AND role_permission.permission = 'club.manage_members'
++      LEFT JOIN membership_member_permissions AS member_permission
++        ON member_permission.club_id = assignment.club_id
++        AND member_permission.membership_id = assignment.membership_id
++        AND member_permission.person_id = assignment.person_id
++        AND member_permission.permission = 'club.manage_members'
++    ),
++    unmatched_projected_admin_assignments AS (
++      SELECT assignment.*
++      FROM projected_admin_assignment_evidence AS assignment
++      WHERE (
++        assignment.has_active_membership
++        AND assignment.has_admin_role_projection
++        AND assignment.has_admin_permission_projection
++        AND assignment.flattened_grant_count = assignment.exact_active_grant_count
++        AND assignment.exact_active_grant_count > 0
++        AND EXISTS (
++          SELECT 1
++          FROM club_admin_source_facts AS fact
++          WHERE fact.club_id = assignment.club_id
++            AND fact.event_type =
++              'Elixir.Memba.Membership.Events.ClubRoleDefined'
++            AND fact.event_data ->> 'club_id' = assignment.club_id
++            AND fact.event_data ->> 'role_id' = assignment.role_id
++        )
++        AND EXISTS (
++          SELECT 1
++          FROM club_admin_source_facts AS fact
++          WHERE fact.club_id = assignment.club_id
++            AND fact.event_type =
++              'Elixir.Memba.Membership.Events.ClubRolePermissionGranted'
++            AND fact.event_data ->> 'club_id' = assignment.club_id
++            AND fact.event_data ->> 'role_id' = assignment.role_id
++            AND fact.event_data ->> 'permission' = 'club.manage_members'
++        )
++        AND COALESCE(
++          (
++            SELECT
++              (
++                fact.event_type IN (
++                  'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
++                  'Elixir.Memba.Membership.Events.MemberRoleAssigned'
++                )
++                AND fact.event_data ->> 'club_id' = assignment.club_id
++                AND fact.event_data ->> 'person_id' = assignment.person_id
++              ) IS TRUE
++            FROM club_admin_source_facts AS fact
++            WHERE fact.club_id = assignment.club_id
++              AND fact.event_type IN (
++                'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
++                'Elixir.Memba.Membership.Events.ClubRoleRemovedFromMember',
++                'Elixir.Memba.Membership.Events.MemberRoleAssigned',
++                'Elixir.Memba.Membership.Events.MemberRoleRemoved'
++              )
++              AND fact.event_data ->> 'membership_id' = assignment.membership_id
++              AND fact.event_data ->> 'role_id' = assignment.role_id
++            ORDER BY fact.stream_version DESC
++            LIMIT 1
++          ),
++          false
++        )
++      ) IS NOT TRUE
++    )
++    SELECT
++      count(*) AS violation_count,
++      COALESCE(
++        jsonb_agg(
++          jsonb_build_object(
++            'club_id', violation.club_id,
++            'membership_id', violation.membership_id,
++            'person_id', violation.person_id,
++            'role_id', violation.role_id
++          )
++          ORDER BY
++            violation.club_id,
++            violation.membership_id,
++            violation.person_id,
++            violation.role_id
++        ),
++        '[]'::jsonb
++      ) AS violations
++    FROM unmatched_projected_admin_assignments AS violation
++    """
++  end
++
+   defp one_row!(sql) do
+     sql
+     |> Repo.query!([], timeout: @query_timeout)
+diff --git a/web/lib/memba/release.ex b/web/lib/memba/release.ex
+index 8d8592f..a8b8b9c 100644
+--- a/web/lib/memba/release.ex
++++ b/web/lib/memba/release.ex
+@@ -11,11 +11,6 @@ defmodule Memba.Release do
+     run_release_step(:migrate_repos, &migrate_repos!/0)
+     run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
+ 
+-    run_release_step(
+-      :verify_source_backed_admin_invariant,
+-      &verify_source_backed_admin_invariant_for_release!/0
+-    )
+-
+     run_release_step(
+       :await_system_group_backfill_source_projections,
+       &await_system_group_backfill_source_projections!/0
+@@ -231,14 +226,6 @@ defmodule Memba.Release do
+     :ok
+   end
+ 
+-  defp verify_source_backed_admin_invariant_for_release! do
+-    verify_source_backed_admin_invariant!(
+-      phase: "release-command",
+-      execution_attempts: 3,
+-      retry_delay_ms: 5_000
+-    )
+-  end
+-
+   defp verify_source_backed_admin_invariant!(opts) do
+     report = Memba.Membership.SourceBackedAdminInvariant.check!(opts)
+ 
+diff --git a/web/test/memba/membership/source_backed_admin_invariant_test.exs b/web/test/memba/membership/source_backed_admin_invariant_test.exs
+index 21de749..33bab88 100644
+--- a/web/test/memba/membership/source_backed_admin_invariant_test.exs
++++ b/web/test/memba/membership/source_backed_admin_invariant_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
+   alias Memba.Membership.SourceBackedAdminInvariant
+ 
+   @admin_check "populated_club_complete_admin_source_backing"
++  @admin_assignment_check "projected_admin_assignment_source_backing"
+   @club_manage_members "club.manage_members"
+   @club_member_added "Elixir.Memba.Membership.Events.ClubMemberAdded"
+   @club_role_defined "Elixir.Memba.Membership.Events.ClubRoleDefined"
+@@ -41,6 +42,92 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
+     assert ids.admin_role_id == deterministic_admin_role_id(ids.club_id)
+   end
+ 
++  test "two projected Admins with only one source-backed assignment fails only assignment check" do
++    source_backed_admin = healthy_club!()
++
++    projection_only_admin =
++      source_backed_admin
++      |> ids_in_same_club()
++      |> add_projected_admin_to_existing_club!()
++
++    report = run_check()
++
++    assert_check_count(report, "active_membership_source_facts", 0)
++    assert_check_count(report, @admin_check, 0)
++    assert_check_count(report, @admin_assignment_check, 1)
++    assert [violation] = report["checks"][@admin_assignment_check]["violations"]
++    assert violation == assignment_violation(projection_only_admin)
++    refute Map.has_key?(violation, "name")
++    refute Map.has_key?(violation, "email")
++
++    assert_raise RuntimeError, ~r/source-backed Admin invariant violations detected/, fn ->
++      run_check!(phase: "assignment-gap")
++    end
++
++    append_admin_assigned!(projection_only_admin)
++
++    assert_pass(run_check())
++  end
++
++  test "stale or partial supporting projections are reported per assignment" do
++    inactive_member_club = healthy_club!()
++
++    inactive_member_assignment =
++      inactive_member_club
++      |> ids_in_same_club()
++      |> add_projected_admin_to_existing_club!(membership_active: false, assignment_source?: true)
++
++    missing_permission_projection = healthy_club!()
++
++    delete_projection_row!("membership_role_permissions",
++      role_id: missing_permission_projection.admin_role_id
++    )
++
++    missing_flattened_projection = healthy_club!()
++
++    delete_projection_row!("membership_member_permissions",
++      membership_id: missing_flattened_projection.membership_id
++    )
++
++    stale_flattened_projection = healthy_club!()
++    set_member_permission_grant_count!(stale_flattened_projection, 2)
++
++    report = run_check()
++
++    expected_violations =
++      [
++        assignment_violation(inactive_member_assignment),
++        assignment_violation(missing_permission_projection),
++        assignment_violation(missing_flattened_projection),
++        assignment_violation(stale_flattened_projection)
++      ]
++      |> Enum.sort_by(&{&1["club_id"], &1["membership_id"], &1["person_id"], &1["role_id"]})
++
++    assert_check_count(report, @admin_assignment_check, 4)
++    assert report["checks"][@admin_assignment_check]["violations"] == expected_violations
++
++    assert Enum.all?(report["checks"][@admin_assignment_check]["violations"], fn violation ->
++             Map.keys(violation) |> Enum.sort() == [
++               "club_id",
++               "membership_id",
++               "person_id",
++               "role_id"
++             ]
++           end)
++  end
++
++  test "healthy single and multiple Admin clubs pass" do
++    healthy_club!()
++
++    source_backed_admin = healthy_club!()
++
++    source_backed_admin
++    |> ids_in_same_club()
++    |> add_projected_admin_to_existing_club!(assignment_source?: true)
++
++    assert_pass(run_check())
++  end
++
+   test "assignment-only Admin backing fails check 2" do
+     ids = populated_club!()
+     insert_admin_assignment!(ids, active: true)
+@@ -310,7 +397,8 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
+       ],
+       "checks" => %{
+         "active_membership_source_facts" => %{"violation_count" => 0, "violations" => []},
+-        @admin_check => %{"violation_count" => 0, "violations" => []}
++        @admin_check => %{"violation_count" => 0, "violations" => []},
++        @admin_assignment_check => %{"violation_count" => 0, "violations" => []}
+       }
+     }
+   end
+@@ -331,6 +419,29 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
+     ids
+   end
+ 
++  defp add_projected_admin_to_existing_club!(ids, opts \\ []) do
++    membership_active = Keyword.get(opts, :membership_active, true)
++
++    insert_membership!(ids, active: membership_active)
++
++    if membership_active do
++      append_member_added!(ids)
++    end
++
++    insert_admin_assignment!(ids, active: true)
++    insert_admin_member_permission!(ids, 1)
++
++    if Keyword.get(opts, :assignment_source?, false) do
++      append_admin_assigned!(ids)
++    end
++
++    ids
++  end
++
++  defp ids_in_same_club(ids) do
++    ids(club_id: ids.club_id)
++  end
++
+   defp ids(overrides \\ []) do
+     club_id = Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end)
+ 
+@@ -596,6 +707,15 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
+     end)
+   end
+ 
++  defp assignment_violation(ids) do
++    %{
++      "club_id" => ids.club_id,
++      "membership_id" => ids.membership_id,
++      "person_id" => ids.person_id,
++      "role_id" => ids.admin_role_id
++    }
++  end
++
+   defp violation_club_ids(report, check_name) do
+     report["checks"][check_name]["violations"]
+     |> Enum.map(& &1["club_id"])
+@@ -617,6 +737,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
+     assert report["pass"] == true
+     assert_check_count(report, "active_membership_source_facts", 0)
+     assert_check_count(report, @admin_check, 0)
++    assert_check_count(report, @admin_assignment_check, 0)
+   end
+ 
+   defp assert_check_count(report, check_name, expected_count) do
+diff --git a/web/test/memba/membership/system_groups_backfill_test.exs b/web/test/memba/membership/system_groups_backfill_test.exs
+index f15fedd..6244d8b 100644
+--- a/web/test/memba/membership/system_groups_backfill_test.exs
++++ b/web/test/memba/membership/system_groups_backfill_test.exs
+@@ -564,7 +564,6 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+       :init_event_stores,
+       :migrate_repos,
+       :ensure_release_services_started,
+-      :verify_source_backed_admin_invariant,
+       :await_system_group_backfill_source_projections,
+       :ensure_production_smoke_fixtures
+     ]
+diff --git a/web/test/memba/release_test.exs b/web/test/memba/release_test.exs
+index 8f571f0..8b5fe67 100644
+--- a/web/test/memba/release_test.exs
++++ b/web/test/memba/release_test.exs
+@@ -9,7 +9,6 @@ defmodule Memba.ReleaseTest do
+     :init_event_stores,
+     :migrate_repos,
+     :ensure_release_services_started,
+-    :verify_source_backed_admin_invariant,
+     :await_system_group_backfill_source_projections,
+     :run_system_groups_backfill,
+     :ensure_production_smoke_fixtures
+@@ -35,13 +34,14 @@ defmodule Memba.ReleaseTest do
+     assert Agent.get(log, & &1) == @release_steps
+   end
+ 
+-  test "release migration checks source-backed Admin invariant before projection-backed mutation" do
++  test "source-backed Admin invariant remains an external deployment gate" do
+     log = start_supervised!({Agent, fn -> [] end})
+     Application.put_env(:memba, :release_step_overrides, recording_overrides(log))
+ 
+     assert :ok = Release.migrate()
+ 
+     assert Agent.get(log, & &1) == @release_steps
++<<<<<<< HEAD
+ 
+     assert Enum.find_index(@release_steps, &(&1 == :verify_source_backed_admin_invariant)) <
+              Enum.find_index(
+@@ -85,6 +85,9 @@ defmodule Memba.ReleaseTest do
+              :ensure_release_services_started,
+              :verify_source_backed_admin_invariant
+            ]
++=======
++    refute :verify_source_backed_admin_invariant in @release_steps
++>>>>>>> origin/main
+   end
+ 
+   test "release migration propagates system-group backfill failures and aborts remaining release work" do
+@@ -112,7 +115,6 @@ defmodule Memba.ReleaseTest do
+              :init_event_stores,
+              :migrate_repos,
+              :ensure_release_services_started,
+-             :verify_source_backed_admin_invariant,
+              :await_system_group_backfill_source_projections,
+              :run_system_groups_backfill
+            ]
