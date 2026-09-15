@@ -1,6 +1,7 @@
 defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
   use MembaWeb.FeatureCase, async: false
 
+  import ExUnit.CaptureLog
   import Phoenix.LiveViewTest, only: [live: 2, render_click: 3]
 
   alias Memba.Membership
@@ -105,7 +106,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     refute_received {:email, %Swoosh.Email{}}
   end
 
-  test "a provider delivery failure does not roll back or hide the committed admission",
+  test "a provider failure is logged without adding delivery UI or hiding the admission",
        %{conn: conn} do
     original_mailer_config = Application.fetch_env!(:memba, Memba.Mailer)
 
@@ -124,19 +125,26 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     carol = create_member!(club, "Carol Canoe", "carol@example.com")
     group = create_custom_group!(club, alice, "Trip Planning")
 
-    session =
-      conn
-      |> signed_in_club_host("alice@example.com", club)
-      |> visit(~p"/groups/#{group.group_id}/members")
-      |> click_button("Add member")
-      |> click_button("#custom-group-member-candidate-add-#{carol.person_id}", "Add")
+    {session, log} =
+      with_log(fn ->
+        conn
+        |> signed_in_club_host("alice@example.com", club)
+        |> visit(~p"/groups/#{group.group_id}/members")
+        |> click_button("Add member")
+        |> click_button("#custom-group-member-candidate-add-#{carol.person_id}", "Add")
+      end)
 
     assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
+
+    assert log =~ "Could not deliver custom-group welcome email"
+    assert log =~ "group_welcome_email_delivery_error"
+    assert log =~ ":timeout"
 
     session
     |> assert_has("#club-member-#{carol.person_id}", "Carol Canoe")
     |> refute_has("#custom-group-member-candidate-#{carol.person_id}")
     |> refute_has("#flash-error")
+    |> refute_has("[data-testid='delivery-status']")
 
     assert Membership.active_member_of_group?(group.group_id, carol.person_id)
   end

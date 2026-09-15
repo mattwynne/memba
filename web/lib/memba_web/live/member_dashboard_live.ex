@@ -7,6 +7,8 @@ defmodule MembaWeb.MemberDashboardLive do
   """
   use MembaWeb, :live_view
 
+  require Logger
+
   alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Membership.CustomGroupAdmission
@@ -122,7 +124,9 @@ defmodule MembaWeb.MemberDashboardLive do
 
     case Membership.add_custom_group_member(attrs, consistency: :strong) do
       {:ok, %CustomGroupAdmission{} = admission} ->
-        _welcome_email_result = deliver_group_welcome(admission, socket)
+        admission
+        |> deliver_group_welcome(socket)
+        |> log_group_welcome_delivery_failure(admission)
 
         {:noreply,
          refresh_dashboard(
@@ -252,6 +256,22 @@ defmodule MembaWeb.MemberDashboardLive do
          _socket
        ),
        do: :ok
+
+  defp log_group_welcome_delivery_failure(:ok, _admission), do: :ok
+
+  defp log_group_welcome_delivery_failure(
+         {:error, reason},
+         %CustomGroupAdmission{} = admission
+       ) do
+    Logger.warning(
+      "Could not deliver custom-group welcome email: #{inspect(reason)}",
+      club_id: admission.club_id,
+      group_id: admission.group_id,
+      membership_id: admission.membership_id,
+      person_id: admission.person_id,
+      actor_person_id: admission.actor_person_id
+    )
+  end
 
   defp person_name(%{name: name}), do: name
   defp person_name(_person), do: nil
