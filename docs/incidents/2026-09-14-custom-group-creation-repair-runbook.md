@@ -165,7 +165,11 @@ Verify read-only that:
 
 ## 7. Install the permanent gate
 
-The follow-up change now wires `SourceBackedAdminInvariant.check!/1` into the release command and continuous-delivery pre/post-deploy checks, with retained pre/post evidence artifacts and no permanent bypass environment variable. This permanent gate is implemented in source pending deployment; it is not yet complete in production until the gate release itself has deployed and its post-deploy evidence is retained.
+The follow-up change now wires `SourceBackedAdminInvariant.check!/1` into continuous-delivery pre-deploy and post-deploy checks, with retained evidence artifacts and no permanent bypass environment variable. The pre-deploy check blocks before `./bin/deploy`; the post-deploy check verifies the running release.
+
+The invariant is deliberately not run inside Fly's release-command machine. Two attempted gate releases passed the external preflight but encountered production database restart/recovery while the second application instance was starting and running the invariant. Keeping the check external avoids adding that load to the migration/backfill process while preserving a blocking gate and post-deploy proof.
+
+This permanent gate is implemented in source pending deployment; it is not complete in production until the gate release itself has deployed and its post-deploy evidence is retained.
 
 ## 8. Close the incident
 
