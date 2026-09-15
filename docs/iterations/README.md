@@ -70,7 +70,7 @@ green than before.
 | 060 | 2026-09-12 | merged | Calm LiveView reconnection feedback | [plan](060-calm-liveview-reconnection-feedback/plan.md) — no acceptance feature changes |
 | 061 | 2026-09-13 | merged | Discover club groups without joining them | [plan](061-discover-club-groups/plan.md) — `group_conversations.feature` |
 | 062 | 2026-09-13 | merged | Admins create usable custom groups | [plan](062-create-custom-groups/plan.md) — `custom_group_creation.feature`, `custom_group_conversations.feature`, `custom_group_lifecycle.feature` |
-| 063 | 2026-09-13 | implementing | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+| 063 | 2026-09-13 | merged | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 064 | 2026-09-13 | validated | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 065 | 2026-09-13 | validated | Request custom-group access through an Admin message | [plan](065-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
 | 066 | 2026-08-13 | validated | Members change their own name | [plan](066-member-name-editing/plan.md) — `member_profile.feature` |
