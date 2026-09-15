@@ -5,6 +5,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
   alias Memba.Membership.SourceBackedAdminInvariant
 
   @admin_check "populated_club_complete_admin_source_backing"
+  @admin_assignment_check "projected_admin_assignment_source_backing"
   @club_manage_members "club.manage_members"
   @club_member_added "Elixir.Memba.Membership.Events.ClubMemberAdded"
   @club_role_defined "Elixir.Memba.Membership.Events.ClubRoleDefined"
@@ -39,6 +40,92 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
 
     assert_pass(run_check())
     assert ids.admin_role_id == deterministic_admin_role_id(ids.club_id)
+  end
+
+  test "two projected Admins with only one source-backed assignment fails only assignment check" do
+    source_backed_admin = healthy_club!()
+
+    projection_only_admin =
+      source_backed_admin
+      |> ids_in_same_club()
+      |> add_projected_admin_to_existing_club!()
+
+    report = run_check()
+
+    assert_check_count(report, "active_membership_source_facts", 0)
+    assert_check_count(report, @admin_check, 0)
+    assert_check_count(report, @admin_assignment_check, 1)
+    assert [violation] = report["checks"][@admin_assignment_check]["violations"]
+    assert violation == assignment_violation(projection_only_admin)
+    refute Map.has_key?(violation, "name")
+    refute Map.has_key?(violation, "email")
+
+    assert_raise RuntimeError, ~r/source-backed Admin invariant violations detected/, fn ->
+      run_check!(phase: "assignment-gap")
+    end
+
+    append_admin_assigned!(projection_only_admin)
+
+    assert_pass(run_check())
+  end
+
+  test "stale or partial supporting projections are reported per assignment" do
+    inactive_member_club = healthy_club!()
+
+    inactive_member_assignment =
+      inactive_member_club
+      |> ids_in_same_club()
+      |> add_projected_admin_to_existing_club!(membership_active: false, assignment_source?: true)
+
+    missing_permission_projection = healthy_club!()
+
+    delete_projection_row!("membership_role_permissions",
+      role_id: missing_permission_projection.admin_role_id
+    )
+
+    missing_flattened_projection = healthy_club!()
+
+    delete_projection_row!("membership_member_permissions",
+      membership_id: missing_flattened_projection.membership_id
+    )
+
+    stale_flattened_projection = healthy_club!()
+    set_member_permission_grant_count!(stale_flattened_projection, 2)
+
+    report = run_check()
+
+    expected_violations =
+      [
+        assignment_violation(inactive_member_assignment),
+        assignment_violation(missing_permission_projection),
+        assignment_violation(missing_flattened_projection),
+        assignment_violation(stale_flattened_projection)
+      ]
+      |> Enum.sort_by(&{&1["club_id"], &1["membership_id"], &1["person_id"], &1["role_id"]})
+
+    assert_check_count(report, @admin_assignment_check, 4)
+    assert report["checks"][@admin_assignment_check]["violations"] == expected_violations
+
+    assert Enum.all?(report["checks"][@admin_assignment_check]["violations"], fn violation ->
+             Map.keys(violation) |> Enum.sort() == [
+               "club_id",
+               "membership_id",
+               "person_id",
+               "role_id"
+             ]
+           end)
+  end
+
+  test "healthy single and multiple Admin clubs pass" do
+    healthy_club!()
+
+    source_backed_admin = healthy_club!()
+
+    source_backed_admin
+    |> ids_in_same_club()
+    |> add_projected_admin_to_existing_club!(assignment_source?: true)
+
+    assert_pass(run_check())
   end
 
   test "assignment-only Admin backing fails check 2" do
@@ -310,7 +397,8 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
       ],
       "checks" => %{
         "active_membership_source_facts" => %{"violation_count" => 0, "violations" => []},
-        @admin_check => %{"violation_count" => 0, "violations" => []}
+        @admin_check => %{"violation_count" => 0, "violations" => []},
+        @admin_assignment_check => %{"violation_count" => 0, "violations" => []}
       }
     }
   end
@@ -329,6 +417,29 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
     insert_membership!(ids, active: true)
     append_member_added!(ids)
     ids
+  end
+
+  defp add_projected_admin_to_existing_club!(ids, opts \\ []) do
+    membership_active = Keyword.get(opts, :membership_active, true)
+
+    insert_membership!(ids, active: membership_active)
+
+    if membership_active do
+      append_member_added!(ids)
+    end
+
+    insert_admin_assignment!(ids, active: true)
+    insert_admin_member_permission!(ids, 1)
+
+    if Keyword.get(opts, :assignment_source?, false) do
+      append_admin_assigned!(ids)
+    end
+
+    ids
+  end
+
+  defp ids_in_same_club(ids) do
+    ids(club_id: ids.club_id)
   end
 
   defp ids(overrides \\ []) do
@@ -596,6 +707,15 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
     end)
   end
 
+  defp assignment_violation(ids) do
+    %{
+      "club_id" => ids.club_id,
+      "membership_id" => ids.membership_id,
+      "person_id" => ids.person_id,
+      "role_id" => ids.admin_role_id
+    }
+  end
+
   defp violation_club_ids(report, check_name) do
     report["checks"][check_name]["violations"]
     |> Enum.map(& &1["club_id"])
@@ -617,6 +737,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariantTest do
     assert report["pass"] == true
     assert_check_count(report, "active_membership_source_facts", 0)
     assert_check_count(report, @admin_check, 0)
+    assert_check_count(report, @admin_assignment_check, 0)
   end
 
   defp assert_check_count(report, check_name, expected_count) do
