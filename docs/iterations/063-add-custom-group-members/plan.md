@@ -50,7 +50,10 @@ Matt reviewed the rules and HTML prototype during planning.
 
 ## Allowed acceptance feature changes
 
-- Only the two exact files above: implement the 063 examples and narrow/remove their runner-debt tags. Do not enable or erase 064 examples. Preserve all iteration tags and existing `club_member_invitations.feature` and `club_membership_administration.feature` semantics.
+- `acceptance-tests/features/custom_group_membership.feature`: implement the 063 examples and narrow/remove their runner-debt tags. Do not enable or erase 064 examples.
+- `acceptance-tests/features/custom_group_lifecycle.feature`: implement the 063 joining/history/welcome example and narrow/remove its runner-debt tags. Preserve existing departure and future 064 examples.
+
+Preserve all iteration tags and existing `club_member_invitations.feature` and `club_membership_administration.feature` semantics.
 
 ## Designs
 
