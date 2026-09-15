@@ -1,7 +1,7 @@
 # Leave custom groups and remove their members
 
 Date: 2026-09-13
-Status: implementing
+Status: validated
 
 Stakeholder review complete; Fabro plan validation pending.
 
