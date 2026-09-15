@@ -2,16 +2,21 @@
 
 Date: 2026-09-14
 
-Status: Investigating — diagnosis high-confidence; production repair pending
+Status: Resolved — production repaired, permanent deployment gate active, and customer path verified
 
-Current production state: No repair or other production mutation has been performed. The affected clubs still need an approved repair before their projected Admins can create custom groups.
+Resolved: 2026-09-15 02:49 UTC
 
-Production release: Fly release `v283`, deployed at 2026-09-14 17:53 UTC from Git commit `03978b3a4d2d6d32966b33a36d92fe8ef75f0f7b`
+Current production state: All populated clubs have complete source-backed Admin state. The intended `Parents` group was created successfully in `wynne-family`.
+
+Incident release: Fly release `v283`, deployed at 2026-09-14 17:53 UTC from Git commit `03978b3a4d2d6d32966b33a36d92fe8ef75f0f7b`
+
+Resolution release: Fly release `v290`, deployed at 2026-09-15 02:29 UTC from Git commit `cf39b4582368157934d7ec703bca69a4b7787074`
 
 Related work:
 
-- [Proposed repair runbook](2026-09-14-custom-group-creation-repair-runbook.md)
+- [Completed repair runbook](2026-09-14-custom-group-creation-repair-runbook.md)
 - [Projection-only migration compatibility audit](2026-09-14-projection-only-migration-audit.md)
+- [Follow-up incident: database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md)
 - [Iteration 027: Membership Administrator role foundation](../iterations/027-membership-administrator-role/plan.md)
 - [Iteration 059: Populated clubs always have an Admin](../iterations/059-populated-clubs-always-have-an-admin/plan.md)
 - [Iteration 059 production cutover check](../iterations/059-populated-clubs-always-have-an-admin/cutover-check.md)
@@ -25,15 +30,15 @@ Shortly after iteration 062 reached production, an active member shown as an Adm
 
 The page and preview authorize against the `membership_member_permissions` read model. The authoritative create command authorizes against state reconstructed from the Club event stream. For two older production clubs, those sources disagree: the read model says an active member has `club.manage_members`, while the Club stream contains no Admin role-assignment fact. The aggregate therefore reconstructs zero active Admins and correctly rejects the command according to the history it owns.
 
-This is a production-history compatibility failure, not expected iteration-062 behaviour. Iteration 062 explicitly promises that an active club Admin can create a custom group.
+This was a production-history compatibility failure, not expected iteration-062 behaviour. Iteration 062 explicitly promises that an active club Admin can create a custom group. We restored the missing source facts through an approved append-only repair, verified the invariant, installed a blocking deployment gate, and confirmed the original customer path.
 
 ## Impact
 
-- Admin custom-group creation is unavailable to the projected Admins in 2 of 5 populated production clubs: `lean` and `wynne-family`.
-- The observed `Parents` group was not created. No partial group, membership, or email-address facts were appended.
-- The other 3 populated clubs have event-backed active Admin state and are not affected by this specific mismatch.
-- No data loss, unauthorized access, email delivery, or privacy breach has been observed.
-- The user experience is poor: a form that appeared authorized crashed into reconnection/error behaviour rather than explaining that creation failed.
+- Admin custom-group creation was unavailable to the projected Admins in 2 of 5 populated production clubs: `lean` and `wynne-family`.
+- The two failed attempts appended no partial group, membership, or email-address facts.
+- The other 3 populated clubs had event-backed active Admin state and were not affected by this mismatch.
+- No data loss, unauthorized access, email delivery, or privacy breach was observed.
+- The user experience was poor: a form that appeared authorized crashed into reconnection/error behaviour rather than explaining that creation failed.
 - There was no automated alert. Detection depended on a user noticing the failed action and asking for log inspection.
 
 ## Detection
@@ -69,10 +74,15 @@ All times are UTC on 2026-09-14 unless stated otherwise.
 | approx. 18:28 | Read-only inspection confirmed that `wynne-family` had one projected Admin but zero aggregate active Admins and no aggregate role assignments. |
 | approx. 18:39 | A production-wide read-only comparison found the same mismatch in 2 of 5 populated clubs. No custom-group events from either failed attempt were found. |
 | 18:40 | The documented iteration-059 cutover transaction was run read-only against production. Membership-history check 1 returned zero violations; source-backed Admin check 2 returned two violations. |
+| 2026-09-15 00:18 | Release `v287` dry-run found exactly two repairable clubs, six missing source facts, three already-reconciled clubs, and zero manual-review candidates. |
+| 2026-09-15 00:34 | Matt approved the exact two-club allow-list. Operation `incident-2026-09-14-admin-history-01` appended six canonical events with approval metadata. |
+| 2026-09-15 00:34 | Scoped dry-run returned zero planned events; the full read-only invariant returned zero violations. Both repaired grants remained at count 1. |
+| 2026-09-15 02:29 | Release `v290` deployed the permanent CI/CD gate. Pre-deploy and post-deploy checks passed and evidence was retained in [CI artifact 10378625528](https://github.com/mattwynne/memba/actions/runs/34920034105/artifacts/10378625528). |
+| 2026-09-15 02:49 | Matt created `Parents` successfully. Read-only verification found one group, slug `parents`, its creator membership, and exactly three atomic group-creation events with no related error log. |
 
 ## Technical analysis
 
-Confirmed facts in this section come from the linked source, tests, docs, and the read-only production inspection recorded above. Hypotheses and unknowns are labelled explicitly. No production write, deploy, or repair command has been run during this review.
+Confirmed facts in this section come from the linked source, tests, docs, captured CI evidence, and production inspection recorded above. Hypotheses and unknowns are labelled explicitly. Production mutations were limited to the explicitly approved append-only repair described in the resolution.
 
 Evidence checked for this review:
 
@@ -136,15 +146,13 @@ The projection rows already exist. In the current projector:
 - projecting `ClubRolePermissionGranted` increments permissions for every existing active assignment; and
 - projecting `ClubRoleAssignedToMember` increments the member permission again.
 
-For a legacy projected grant currently at `grant_count = 1`, a naive three-command repair can over-count the permission instead of remaining at one. The repair must first make equivalent projections idempotent, or use another explicitly designed and tested reconciliation path. Directly editing the projection alone is not a repair because the projection is already the side that claims the Admin exists.
+For a legacy projected grant at `grant_count = 1`, a naive three-command repair could over-count the permission instead of remaining at one. Before repair, the projector was changed to derive the exact count from distinct active normalized role grants. The production repair then left both affected grants at 1. Directly editing the projection alone would not have repaired the authoritative history.
 
-### Unknowns and hypotheses
+### Remaining unknowns
 
-- Confirmed: the failed `wynne-family` create attempts appended no custom-group facts, and the populated-club mismatch is limited to `lean` and `wynne-family` in the inspected production state.
-- Confirmed: no approved production mutation or repair was performed during this review.
-- Hypothesis: the production mismatch began when the iteration-027 projection backfill ran for pre-existing clubs. This fits the migration source and current stream/projection shape; the exact production migration timestamp has not been reconstructed here.
-- Unknown: whether a similar cutover check was ever run outside the searched session history and notes. The current production state proves only that a zero-violation result was not established and retained.
-- Unknown: which reconciliation design Matt wants to approve for production repair.
+- The production mismatch fits the iteration-027 projection backfill and observed stream/projection shape, but the exact original production migration timestamp was not reconstructed.
+- We found no captured iteration-059 cutover execution in the searched session history, repository, or local notes. We cannot prove that no similar check ran elsewhere.
+- The separate audit still needs a focused compatibility proof for historic bare-UUID event identities.
 
 ## Five Whys
 
@@ -223,18 +231,18 @@ A known live-data compatibility condition was expressed as a manual, one-time cu
 - Only two small production clubs have the legacy mismatch.
 - The intended `Parents` group can be retried after repair without reconciling a partial creation.
 
-## Proposed actions
+## Actions
 
-These are recommendations from the initial review. They require Matt's decision before implementation or production mutation.
+Production mutations below were performed only after Matt approved the exact repair scope and expected event count.
 
 | Type | Priority | Action | Owner | Status | Verification |
 | --- | --- | --- | --- | --- | --- |
-| Correct | P0 | Keep iteration 063 planning and implementation isolated in its branch/worktree; do not merge it to `main` or deploy it to production until the Admin-history invariant is repaired and custom-group creation is verified. | Matt | In effect | Iteration 063 may continue off `main`, but no merge or production deploy occurs before the P0 repair and verified custom-group creation. |
-| Correct | P0 | Implement an auditable, retry-safe reconciliation command/runbook for legacy projection-only Admins: include regression and partial-state fixtures, preserve legitimate distinct-role `grant_count` semantics, support dry-run scope, append only missing deterministic event facts, and prove event/projection convergence. | Engineering + operator | Implemented and locally tested; deployment pending | Dry run identifies exactly `lean` and `wynne-family`; complete and partial-state fixtures converge correctly; repeated execution is a no-op; the legacy Admin grant remains 1 while two distinct roles still produce `grant_count = 2`; event history and projections agree afterward. |
+| Correct | P0 | Keep iteration 063 planning and implementation isolated in its branch/worktree; do not merge it to `main` or deploy it to production until the Admin-history invariant is repaired and custom-group creation is verified. | Matt | Completed; hold lifted | Iteration 063 remained off `main` until repair and customer-path verification completed. |
+| Correct | P0 | Implement an auditable, retry-safe reconciliation command/runbook for legacy projection-only Admins: include regression and partial-state fixtures, preserve legitimate distinct-role `grant_count` semantics, support dry-run scope, append only missing deterministic event facts, and prove event/projection convergence. | Engineering + operator | Completed and deployed | Dry-run identified exactly `lean` and `wynne-family`; repeated execution is a no-op; grants remained 1; event history and projections now agree. |
 | Correct | P0 | Deploy the tested repair support through CI, obtain explicit approval for the production mutation, execute it with captured output, then rerun the iteration-059 check. | Operator | Completed | Check 1 remains zero; check 2 changed from two violations to zero. |
-| Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Pending post-repair customer-path verification | One group, stable slug, and creator membership exist; no exception is logged. |
-| Detect | P1 | Turn the source-backed Admin invariant into an executable release/preflight check with a blocking exit status and retained CI/deployment evidence. | Engineering | Permanent gate implemented; deployment pending, not yet complete in production | A deliberately inconsistent production-like fixture blocks release; pre/post output is retained as deployment evidence. |
-| Detect | P1 | Make custom-group submit handle an unexpected projection/aggregate authority disagreement as an observable technical failure, with structured club/actor/command context, without weakening aggregate authorization. | Engineering | Implemented and locally tested; deployment pending | User sees a stable failure state; logs distinguish invariant drift from an ordinary forbidden request. |
+| Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Completed | One group, stable slug, and creator membership exist; no exception was logged. |
+| Detect | P1 | Turn the source-backed Admin invariant into executable deployment preflight and post-deploy checks with a blocking exit status and retained evidence; include both the populated-club floor and every projected deterministic Admin assignment. | Engineering | Original gate active; assignment-level extension implemented pending deployment | Release `v290` passed the original gate; the late safety-review gap now has focused invariant tests and an assignment-level check. |
+| Detect | P1 | Make custom-group submit handle an unexpected projection/aggregate authority disagreement as an observable technical failure, with structured club/actor/command context, without weakening aggregate authorization. | Engineering | Completed and deployed | Authorization drift now returns a stable technical failure and structured log rather than terminating the LiveView. |
 | Prevent | P1 | Add a production-history compatibility test for projection-only migrations followed by aggregate-owned commands, and require this analysis when moving a consistency boundary. | Engineering | Admin-history regression implemented; standard documented | Iteration-027-shaped history fails before repair and passes afterward. |
 | Prevent | P1 | Audit other direct projection/data migrations and flows that authorize reads from projections but writes from aggregates. | Engineering | Initial repository audit complete; legacy bare-UUID replay proof remains open | Findings list each mismatch risk, production blast radius, and required repair or proof of safety. |
 | Detect | P2 | Add exception tracking/alerting for production LiveView and command failures. | Engineering | Proposed | A controlled error generates an operator notification with release and request context. |
@@ -250,22 +258,26 @@ These are recommendations from the initial review. They require Matt's decision 
 
 ## Open questions
 
-- Should the invariant check block every release permanently, or should a more general aggregate/read-model parity framework replace this specific query?
-- Should reconciliation append the three existing role facts or introduce one explicit legacy-history repair command with deterministic, retry-safe semantics?
-- What is the smallest reconciliation design that preserves legitimate multiple-role permission counts while making equivalent replay/backfill facts idempotent?
-- Which other projection-only migrations created state that newer aggregates now expect in event history?
-- Should production repair evidence live in a private operations log, a protected CI artifact, or both?
-- What alerting service is proportionate for the current production scale?
+- Should a future general aggregate/read-model parity framework replace this specific permanent invariant?
+- What does the remaining legacy bare-UUID replay audit reveal?
+- What exception-alerting service is proportionate for the current production scale?
 
 ## Resolution
 
-Not resolved. The affected production state has been repaired and the source-backed invariant now reports zero violations, but the permanent release/deployment gate is only implemented pending deployment and the customer path still needs post-repair verification.
+Resolved at 2026-09-15 02:49 UTC.
+
+- Release `v287` supplied idempotent exact-count projection handling, the guarded reconciliation command, production-history tests, invariant tooling, and stable authorization-drift diagnostics.
+- Matt approved operation `incident-2026-09-14-admin-history-01` for the exact `lean` and `wynne-family` Club IDs and six expected events.
+- The operation appended `ClubRoleDefined`, `ClubRolePermissionGranted`, and `ClubRoleAssignedToMember` to each affected Club stream with operation and approval metadata.
+- Post-repair dry-run planned zero events. Both aggregates reconstructed one active Admin and both projected grants remained 1.
+- The read-only invariant reported zero membership-source and complete-Admin-source violations.
+- Release `v290` activated blocking pre-deploy and post-deploy invariant checks. Both passed, and CI retained their output. A later safety review identified that the club-level floor could let one backed Admin mask another unbacked projected Admin in the same club; the assignment-level extension is implemented pending deployment.
+- Matt then created `Parents` successfully. Projection and aggregate state contain one group with slug `parents`, the intended creator membership, and exactly three atomic creation events. No related production error was logged.
 
 ## Follow-up
 
-- Diagnosis: complete with high confidence.
-- Blast-radius assessment: complete for populated production clubs.
-- Evidence preservation: repair output and invariant evidence retained; deployment gate evidence pending the gate release.
-- Immediate mitigation: production repair completed; source-backed invariant checks now pass with zero violations.
-- Production mutation: approved repair performed.
-- Incident resolution: pending permanent-gate deployment and post-repair customer-path verification.
+Remaining non-blocking work:
+
+- Complete the legacy bare-UUID replay compatibility proof recorded in the projection-migration audit.
+- Choose and install proportionate production exception alerting.
+- Revisit whether a general aggregate/read-model parity framework should supersede the specific Admin invariant as more write-side decisions move into aggregates.
