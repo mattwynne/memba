@@ -1,0 +1,444 @@
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
+new file mode 100644
+index 0000000..d2e3b8b
+--- /dev/null
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
+@@ -0,0 +1,122 @@
++{
++  "schema_version": 1,
++  "packet_id": "001-2f608f1-attempt-1",
++  "task_id": "001",
++  "todo_line": "- [ ] 001 Implement the actor-bearing custom-group removal use case through the 063 Club-owned authorization boundary, validating custom-group and actor/target club identities, permitting self/last-member removal, and emitting the existing `GroupMemberRemoved` without changing club membership or roles.",
++  "attempt": "implementation",
++  "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
++  "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
++  "source_baseline": "2f608f10e31723ae0483d63df12481fc6b823475",
++  "outcome": "Provide one public, actor-authenticated custom-group removal write path that is authorized from current Club aggregate state, allows member/admin and self/last-member cases, and records only the existing GroupMemberRemoved fact while preserving club membership and roles.",
++  "scope": [
++    "Add a distinct actor-bearing custom-group removal command carrying club_id, group_id, target membership_id/person_id, and actor_person_id; keep the existing actor-free RemoveGroupMember command internal and unchanged.",
++    "Expose Memba.Membership.remove_custom_group_member/1 and /2 as a thin command-construction/dispatch boundary, and register the new command on the existing Club route in Membership.Router/App.",
++    "In Memba.Membership.Club, validate the loaded club identity and typed group, target membership/person, and actor person identities; reject unknown/system groups.",
++    "Authorize from current Club aggregate state using the 063 rule: the active actor is either an active member of that custom group or has active club.manage_members permission.",
++    "Validate that the target membership/person pair is an active membership of the same club and an active member of the selected custom group for a new transition; preserve safe exact-retry behavior without allowing an unauthorized actor to probe or mutate membership.",
++    "Permit removing another member, removing oneself, an outside club admin removing a member without joining, and removal of the last group member.",
++    "Reuse GroupMemberRemoved and existing aggregate apply/projector behavior. Do not emit ClubMemberRemoved or club-role events and do not archive/delete/change the group.",
++    "Add focused command-shape, router/app registration, aggregate authorization/identity/invariant, public API, dispatch/event, and projection tests."
++  ],
++  "scope_exclusions": [
++    "Do not change ClearRemovedGroupMemberFollows, Messaging follow commands/APIs, cleanup ordering/generation behavior, or claim TODO 004-008.",
++    "Do not change conversation/read/action authorization, queued delivery handoff, or LiveView refresh behavior from TODO 009-011.",
++    "Do not add Leave/Remove UI, confirmations, post-removal screens, component/design changes, or empty-state UI from TODO 012-014.",
++    "Do not edit acceptance feature files, browser step definitions, iteration plan/ADRs/reference docs, or runner-debt tags; TODO 015-016 remain pending.",
++    "Do not run or claim the final exact-state dev check obligation in TODO 017 as completed by this packet."
++  ],
++  "references": [
++    {
++      "path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
++      "symbols_or_sections": "Implementation Plan step 1; Acceptance Criteria actor/target, last-member, and system/club invariants",
++      "relevance": "Binding behavior and boundaries for this packet."
++    },
++    {
++      "path": "docs/iterations/063-add-custom-group-members/plan.md",
++      "symbols_or_sections": "Implementation Plan steps 1-2",
++      "relevance": "Defines the established actor-bearing admission pattern this removal path must mirror."
++    },
++    {
++      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
++      "symbols_or_sections": "Decision and Consequences",
++      "relevance": "Explains current Club-stream identity and authorization invariants; this bounded task follows the explicitly approved 063/064 Club boundary without redesigning it."
++    },
++    {
++      "path": "web/lib/memba/membership/commands/add_custom_group_member.ex",
++      "symbols_or_sections": "Memba.Membership.Commands.AddCustomGroupMember",
++      "relevance": "Command shape and actor/target identity precedent."
++    },
++    {
++      "path": "web/lib/memba/membership/commands/remove_group_member.ex",
++      "symbols_or_sections": "Memba.Membership.Commands.RemoveGroupMember",
++      "relevance": "Trusted actor-free system/policy command that must remain distinct and must not become the public API."
++    },
++    {
++      "path": "web/lib/memba/membership/club.ex",
++      "symbols_or_sections": "execute/2 for AddCustomGroupMember and RemoveGroupMember; authorize_custom_group_admission_actor/3; ensure_active_custom_group_target/3; remove_group_member_decision/2; apply/2 for GroupMemberRemoved",
++      "relevance": "Authoritative current-state authorization, target validation, existing removal decision, and invariant-preserving event application."
++    },
++    {
++      "path": "web/lib/memba/membership.ex",
++      "symbols_or_sections": "add_custom_group_member/2; add_custom_group_member_command/1; dispatch_custom_group_admission/2",
++      "relevance": "Thin public application-service and command-construction conventions. Removal does not require admission's welcome-specific result wrapper."
++    },
++    {
++      "path": "web/lib/memba/membership/events/group_member_removed.ex",
++      "symbols_or_sections": "Memba.Membership.Events.GroupMemberRemoved",
++      "relevance": "Existing stable actor-free event to reuse."
++    },
++    {
++      "path": "web/test/memba/membership/add_custom_group_member_dispatch_test.exs",
++      "symbols_or_sections": "actor, target, system-group, dispatch, and projection cases",
++      "relevance": "Closest public actor-bearing command test pattern."
++    },
++    {
++      "path": "web/test/memba/membership/club_test.exs",
++      "symbols_or_sections": "execute/2 AddCustomGroupMember authorization; existing RemoveGroupMember tests",
++      "relevance": "Place and style for authoritative aggregate cases."
++    },
++    {
++      "path": "web/test/memba/membership/group_command_event_modules_test.exs",
++      "symbols_or_sections": "group commands and actor-free GroupMemberRemoved contract",
++      "relevance": "Pin the new actor-bearing command while preserving the existing command/event contracts."
++    },
++    {
++      "path": "web/test/memba/membership/app_test.exs",
++      "symbols_or_sections": "Membership Commanded app includes the Membership router",
++      "relevance": "Registered-command contract."
++    },
++    {
++      "path": "web/test/memba/membership/public_api_test.exs",
++      "symbols_or_sections": "public Membership API exposes custom group creation and actor-authenticated admission",
++      "relevance": "Change the removal expectation to expose only the new actor-authenticated use case, never raw remove_group_member."
++    }
++  ],
++  "constraints": [
++    "Treat plan.md as authoritative and do not edit it.",
++    "Use the Club aggregate's current event-sourced state for authorization and identity decisions; do not authorize this command with projection preflight reads.",
++    "Preserve trusted raw AddGroupMember/RemoveGroupMember behavior for system-group policy, backfill, and fixture callers.",
++    "Keep GroupMemberRemoved actor-free and JSON-compatible; actor identity belongs on the command/use-case boundary, not the historical fact.",
++    "A custom-group removal must not alter active club membership, Admin/other roles, group identity, email address, history, or lifecycle status.",
++    "Everyone and Admin must remain inaccessible through the custom-group API, including forged direct dispatch.",
++    "Do not introduce a last-member floor. Applying the last removal leaves the group definition intact.",
++    "Pin removal idempotency explicitly. In particular, do not weaken current actor authorization merely to make a former ordinary member's self-removal retry return success.",
++    "Follow the repository Elixir/test guidance: one module per file, focused tests, no sleeps, and no new dependency."
++  ],
++  "focused_validation": [
++    "From web/, run the new custom-group removal dispatch test together with test/memba/membership/club_test.exs, test/memba/membership/group_command_event_modules_test.exs, test/memba/membership/app_test.exs, and test/memba/membership/public_api_test.exs.",
++    "Prove the public command dispatches to aggregate_uuid == club_id and a successful new removal contains exactly the existing GroupMemberRemoved identity tuple.",
++    "Prove current member, outside-admin, unauthorized outsider/inactive actor, target mismatch/inactive/cross-club, malformed identity, and Everyone/Admin cases.",
++    "Prove self-removal and last-member removal, then inspect aggregate/projected state to show the group remains and the target's active club membership and roles are unchanged.",
++    "Prove an exact repeat does not append a second GroupMemberRemoved while retaining the selected authorization semantics."
++  ],
++  "completion_evidence_required": [
++    "List every changed file and identify the new public function, actor-bearing command, router registration, and Club execute path.",
++    "Report the exact focused test command and pass/fail totals; do not report unavailable or setup-failed tests as passing.",
++    "Report the observed command result/event list for a new removal and for the idempotent repeat.",
++    "Report evidence that self/last-member removal succeeds while club membership, Admin role/permission, group definition, and trusted raw RemoveGroupMember behavior remain intact.",
++    "Confirm no excluded follow-cleanup, Messaging, delivery, LiveView/UI, acceptance-feature, ADR/reference, or plan work was changed.",
++    "Identify any unaccepted candidate changes by their originating commit/diff if work is returned incomplete or requires replan."
++  ],
++  "candidate_origins": []
++}
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
+new file mode 100644
+index 0000000..272fa17
+--- /dev/null
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
+@@ -0,0 +1,283 @@
++{
++  "schema_version": 1,
++  "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
++  "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
++  "source_baseline": "2f608f10e31723ae0483d63df12481fc6b823475",
++  "accepted_tasks": [],
++  "pending_obligations": [
++    {
++      "task_id": "001",
++      "todo_line": "- [ ] 001 Implement the actor-bearing custom-group removal use case through the 063 Club-owned authorization boundary, validating custom-group and actor/target club identities, permitting self/last-member removal, and emitting the existing `GroupMemberRemoved` without changing club membership or roles.",
++      "origin": "plan.md Implementation Plan step 1 and original TODO 001-003",
++      "status": "pending",
++      "coverage": [
++        "actor-bearing public custom-group removal command/use case",
++        "current Club aggregate authorization for group members and club admins",
++        "custom-group and actor/target club identity validation",
++        "self-removal and last-member removal",
++        "existing GroupMemberRemoved event with club membership and roles preserved"
++      ],
++      "replaces": [
++        "- [ ] 001 Add an actor-bearing custom-group removal use case/command, using the same Club-owned authorization as 063.",
++        "- [ ] 002 Validate custom-group identity and actor/target club identities; permit self-removal and last-member removal.",
++        "- [ ] 003 Reuse `GroupMemberRemoved`; do not route this operation through club-member or role-removal commands."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "004",
++      "todo_line": "- [ ] 004 Extend the 062 follow-cleanup collaboration to explicit group removal.",
++      "origin": "plan.md Implementation Plan step 2; original TODO 004",
++      "status": "pending",
++      "coverage": [
++        "explicit custom-group removal triggers the established Membership-to-Messaging follow cleanup"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "005",
++      "todo_line": "- [ ] 005 Use public Messaging APIs and idempotent `UnfollowConversation` facts; include auto-followed roots/replies, not only manually followed rows.",
++      "origin": "plan.md Implementation Plan step 2; original TODO 005",
++      "status": "pending",
++      "coverage": [
++        "public cross-context Messaging boundary",
++        "idempotent persisted unfollow facts",
++        "manual and automatic follow cleanup"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "006",
++      "todo_line": "- [ ] 006 A late cleanup event must not erase a newly established follow after a genuine re-add.",
++      "origin": "plan.md Implementation Plan step 2 and Open Technical Decisions; original TODO 006",
++      "status": "pending",
++      "coverage": [
++        "new follows established after genuine re-add survive stale cleanup"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "007",
++      "todo_line": "- [ ] 007 Order cleanup with removal completion or use event generation/version identity so stale work cannot act on a later membership.",
++      "origin": "plan.md Implementation Plan step 2 and Open Technical Decisions; original TODO 007",
++      "status": "pending",
++      "coverage": [
++        "removal/cleanup/re-add ordering or generation identity"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "008",
++      "todo_line": "- [ ] 008 Preserve unrelated groups' follows and existing system-group behaviour.",
++      "origin": "plan.md Implementation Plan step 2; original TODO 008",
++      "status": "pending",
++      "coverage": [
++        "group-scoped cleanup",
++        "Everyone and Admin behavior remains unchanged"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "009",
++      "todo_line": "- [ ] 009 Apply current authorization throughout group/conversation queries, actions and queued-delivery handoff.",
++      "origin": "plan.md Implementation Plan step 3; original TODO 009",
++      "status": "pending",
++      "coverage": [
++        "current membership authority at reads, writes, follows, replies, and private delivery handoff"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "010",
++      "todo_line": "- [ ] 010 Refresh `MemberDashboardLive`, conversation views and membership panels on relevant read-model events so content disappears after revocation; hiding tabs alone is insufficient.",
++      "origin": "plan.md Implementation Plan step 3; original TODO 010",
++      "status": "pending",
++      "coverage": [
++        "already-open LiveView and membership surfaces refresh after revocation"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "011",
++      "todo_line": "- [ ] 011 Avoid sending stale queued private content to removed recipients using existing delivery-status/error mechanisms rather than a new UI workflow.",
++      "origin": "plan.md Implementation Plan step 3; original TODO 011",
++      "status": "pending",
++      "coverage": [
++        "queued private deliveries recheck authority before provider handoff",
++        "existing delivery status and error mechanisms"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "012",
++      "todo_line": "- [ ] 012 Extend shared custom-group member rows with Remove/Leave confirmation and post-removal surfaces.",
++      "origin": "plan.md Implementation Plan step 4; original TODO 012",
++      "status": "pending",
++      "coverage": [
++        "group-specific Leave and Remove controls",
++        "confirmation and post-removal surfaces"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "013",
++      "todo_line": "- [ ] 013 Preserve ordinary member lists, actor role labels, route context, focus handling and the single tab action slot.",
++      "origin": "plan.md Implementation Plan step 4 and Designs; original TODO 013",
++      "status": "pending",
++      "coverage": [
++        "shared member-row fidelity",
++        "role labels, routing, accessibility focus, and tab-action layout"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "014",
++      "todo_line": "- [ ] 014 Empty groups use existing admin additions, with no new lifecycle status.",
++      "origin": "plan.md Implementation Plan step 4; original TODO 014",
++      "status": "pending",
++      "coverage": [
++        "empty group remains listed and repopulatable",
++        "no archive/delete/status behavior"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "015",
++      "todo_line": "- [ ] 015 Implement domain/browser examples and focused aggregate, follower-policy, queued-delivery, rapid remove/re-add and LiveView tests.",
++      "origin": "plan.md Implementation Plan step 5 and Validation Plan; original TODO 015",
++      "status": "pending",
++      "coverage": [
++        "064 acceptance scenarios in both approved feature files",
++        "focused domain, policy, delivery, race, and LiveView tests"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "016",
++      "todo_line": "- [ ] 016 Include replay/idempotency, preserved unrelated follows, delivered-copy limits and existing system/club invariants.",
++      "origin": "plan.md Implementation Plan step 5 and Validation Plan; original TODO 016",
++      "status": "pending",
++      "coverage": [
++        "replay and idempotency",
++        "unrelated follow preservation",
++        "already-delivered email limit",
++        "Everyone/Admin, last-Admin, and club-membership regressions"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "017",
++      "todo_line": "- [ ] 017 Run `dev check` on the exact final delivery state.",
++      "origin": "plan.md Implementation Plan step 5 and Validation Plan; original TODO 017",
++      "status": "pending",
++      "coverage": [
++        "full repository quality gate on the final delivery state"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    }
++  ],
++  "candidate_origins": [],
++  "coverage_map": [
++    {
++      "scope_or_acceptance_layer": "Authorized custom-group departure: a current group member or active club admin may remove a member; self-removal and last-member removal are allowed.",
++      "pending_task_ids": [
++        "001",
++        "015",
++        "016"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Removal changes only custom-group membership: removing a club admin preserves their Admin role and management power, and every target remains an active club member.",
++      "pending_task_ids": [
++        "001",
++        "015",
++        "016"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Follow cleanup: departure clears manual and automatic group-conversation follows through public Messaging facts without touching unrelated groups or system-group behavior.",
++      "pending_task_ids": [
++        "004",
++        "005",
++        "008",
++        "015",
++        "016"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Rapid remove/re-add safety: stale cleanup cannot erase a newly established follow, re-add restores history but not former follows, and explicit follow-again restores notifications.",
++      "pending_task_ids": [
++        "006",
++        "007",
++        "015",
++        "016"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Immediate effective revocation: current authorization gates group/conversation reads, replies, follow actions, direct links, and already-open LiveViews.",
++      "pending_task_ids": [
++        "009",
++        "010",
++        "015"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Email boundary: no new private handoff occurs after known access loss, while already provider-handed-off or delivered copies are not recalled.",
++      "pending_task_ids": [
++        "009",
++        "011",
++        "015",
++        "016"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Member experience: group-specific Leave/Remove confirmations and restricted post-removal surfaces preserve shared rows, role labels, route context, focus, and the single action slot.",
++      "pending_task_ids": [
++        "012",
++        "013",
++        "015"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Empty-group lifecycle: the group, address, and history remain unchanged and listed; existing admin admission can repopulate it without a new lifecycle status.",
++      "pending_task_ids": [
++        "001",
++        "014",
++        "015",
++        "016"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope_or_acceptance_layer": "Final verification: both approved acceptance surfaces, focused regressions, and the full repository check pass on the exact final state.",
++      "pending_task_ids": [
++        "015",
++        "016",
++        "017"
++      ],
++      "accepted_task_lines": []
++    }
++  ],
++  "planner_note": "No prior worker result or review exists, and no business decision is open. Original TODO 001-003 were combined because the public actor-bearing command, authoritative identity/permission checks, and reuse of GroupMemberRemoved are one atomic Club-boundary implementation. The remaining obligations retain their original order and identity. The current packet intentionally stops before follow-cleanup, authorization-refresh, delivery, UI, feature, and final-check work."
++}
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
+new file mode 100644
+index 0000000..75265ff
+--- /dev/null
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
+@@ -0,0 +1,7 @@
++{
++  "schema_version": 1,
++  "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
++  "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
++  "source_baseline": "2f608f10e31723ae0483d63df12481fc6b823475",
++  "decision": "ready"
++}
+diff --git a/docs/iterations/064-leave-and-remove-group-members/todo.md b/docs/iterations/064-leave-and-remove-group-members/todo.md
+index 18ce544..8947fe2 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/todo.md
++++ b/docs/iterations/064-leave-and-remove-group-members/todo.md
+@@ -1,8 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add an actor-bearing custom-group removal use case/command, using the same Club-owned authorization as 063.
+-- [ ] 002 Validate custom-group identity and actor/target club identities; permit self-removal and last-member removal.
+-- [ ] 003 Reuse `GroupMemberRemoved`; do not route this operation through club-member or role-removal commands.
++- [ ] 001 Implement the actor-bearing custom-group removal use case through the 063 Club-owned authorization boundary, validating custom-group and actor/target club identities, permitting self/last-member removal, and emitting the existing `GroupMemberRemoved` without changing club membership or roles.
+ - [ ] 004 Extend the 062 follow-cleanup collaboration to explicit group removal.
+ - [ ] 005 Use public Messaging APIs and idempotent `UnfollowConversation` facts; include auto-followed roots/replies, not only manually followed rows.
+ - [ ] 006 A late cleanup event must not erase a newly established follow after a genuine re-add.
