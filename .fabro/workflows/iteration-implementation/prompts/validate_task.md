@@ -14,6 +14,8 @@ Accept only if all are true:
 - The work satisfies the approved plan, packet constraints and relevant accepted ADRs.
 - Any planner todo splits/additions/reordering preserve required scope. No required work was deleted, weakened, checked off prematurely or silently deferred.
 - Relevant automated tests were added/updated and focused validation passed. A reported blocker is evidence for revision or escalation, not acceptance.
+- Do not rerun the worker's successful tests by default. Inspect the exact commands, exit statuses, and evidence in `.delivery/latest-worker-result.json` against the current candidate. Rerun a specific focused test only when that evidence is missing, stale, contradictory, or inadequate, and state the reason in the verdict.
+- Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command in ordinary validation.
 - Ordinary browser-facing tasks have focused browser/component/JS/CSS evidence appropriate to the change; do not require a duplicate full `dev check` solely because the task changes UI, routing, or acceptance support. The deterministic final gate still must pass before publication. If this task explicitly requires a full final-validation run, require its successful exit evidence before accepting the task; passing scenario counts without a final exit status do not prove the gate passed.
 - Acceptance feature files (`*.feature`, including under `acceptance-tests/`) were not edited unless the plan's `## Allowed acceptance feature changes` section names the exact file and allowed kind of change. Any permitted edit stays within that permission and preserves the promised coverage.
 - The task is a small, independently useful slice with a checkpoint evidence trail.

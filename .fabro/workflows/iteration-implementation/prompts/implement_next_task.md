@@ -30,10 +30,10 @@ The planner, not this worker, selected and bounded the task. Read the current pa
 - Add or update automated tests proving the packet's behaviour/configuration.
 - Run the packet's focused validation, or a narrower failing/passing loop plus the specified final focused check when appropriate, and capture commands/results.
 - For browser-facing tasks, run targeted browser scenarios or a focused browser harness proving the selected change, alongside relevant component/JS/CSS tests. Browser-facing behaviour, routing, LiveView/UI, and acceptance step changes do not by themselves require the full suite inside this node.
-- Do not run full `dev check` or `dev ci` in ordinary implementation tasks. The workflow's deterministic `dev_check` node runs the full `dev ci` gate before publication.
+- Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command in ordinary implementation tasks. The workflow's deterministic `dev_check` node runs the full `dev ci` gate before publication.
 - If the packet explicitly requires a full final-validation task, preserve that requirement: run it and capture a successful exit before requesting acceptance, or return a replan/human-blocked result explaining the missing final exit status.
 - Fabro agent shell commands have a documented 600-second maximum, regardless of a longer requested timeout. Do not launch detached/background full-suite retries to evade a timeout.
-- In the Fabro sandbox, prefer `PATH="$PWD/bin:$PATH" dev test ...` for focused Elixir tests and `PATH="$PWD/bin:$PATH" dev ...` for broader project checks. Do not use direct `bin/mix test ...` in the sandbox unless you have a specific, safe reason.
+- In the Fabro sandbox, prefer `PATH="$PWD/bin:$PATH" dev test ...` for focused Elixir tests and `PATH="$PWD/bin:$PATH" dev acceptance ...` for focused browser scenarios. Do not use direct `bin/mix test ...` in the sandbox unless you have a specific, safe reason.
 - Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. If a feature file appears wrong, stale, or insufficient without explicit permission, return `human_blocked`.
 - Add acceptance step definitions only where the approved plan explicitly requires executable plumbing for shared feature files.
 - Use Req for HTTP requests; do not introduce HTTPoison, Tesla, or `:httpc`.
