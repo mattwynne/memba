@@ -2,7 +2,7 @@
 
 Date: 2026-09-15
 
-Status: Mitigated — unsafe gate placement removed; infrastructure cause remains under investigation
+Status: Mitigated — unsafe gate placement removed; 4 follow-up actions remain open
 
 ## Summary
 
@@ -103,10 +103,10 @@ Unknowns:
 | --- | --- | --- | --- | --- | --- |
 | Correct | P0 | Remove the invariant from the temporary release-command application while retaining external blocking checks. | Engineering | Completed | `v290` release command and pre/post checks all passed. |
 | Detect | P0 | Retain each pre/post attempt as a protected CI artifact and retry bounded transient check failures. | Engineering | Completed | CI artifact exists and failed attempts remain visible. |
-| Prevent | P1 | Keep release-command work limited to services actually required by migrations/backfills. | Engineering | Proposed | A release-task design shows which pools/processes can be omitted and passes deployment tests. |
-| Prevent | P1 | Investigate the PostgreSQL server-process failure using Fly diagnostics/support and resource history. | Operator | Proposed | A supported cause or bounded set of causes is recorded. |
-| Prevent | P1 | Plan and explicitly approve upgrading the Fly Postgres image from 17.2/v0.1.0 to the supported current image. | Matt + operator | Proposed | Backup/recovery plan reviewed; upgrade completes with health and invariant checks green. |
-| Detect | P2 | Add database restart/recovery alerting. | Engineering | Proposed | A controlled signal produces an operator notification. |
+| Prevent | P1 | Keep release-command work limited to services actually required by migrations/backfills. | Engineering | In progress | A release-task design shows which pools/processes can be omitted and passes deployment tests. |
+| Prevent | P1 | Investigate the PostgreSQL server-process failure using Fly diagnostics/support and resource history. | Operator | In progress | A supported cause or bounded set of causes is recorded. |
+| Prevent | P1 | Plan and explicitly approve upgrading the Fly Postgres image from 17.2/v0.1.0 to the supported current image. | Matt + operator | In progress; production mutation still requires approval of the exact plan | Backup/recovery plan reviewed; upgrade completes with health and invariant checks green. |
+| Detect | P2 | Add database restart/recovery alerting. | Engineering | In progress | A controlled signal produces an operator notification. |
 
 ## Resolution
 

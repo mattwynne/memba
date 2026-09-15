@@ -2,7 +2,7 @@
 
 Date: 2026-09-14
 
-Status: Resolved — production repaired, permanent deployment gate active, and customer path verified
+Status: Resolved — production repaired, permanent deployment gate active, and customer path verified; 3 follow-up actions remain open
 
 Resolved: 2026-09-15 02:49 UTC
 
@@ -244,9 +244,10 @@ Production mutations below were performed only after Matt approved the exact rep
 | Correct | P0 | Retry the intended `Parents` creation in `wynne-family` and inspect logs/events/projections. | Matt + operator | Completed | One group, stable slug, and creator membership exist; no exception was logged. |
 | Detect | P1 | Turn the source-backed Admin invariant into executable deployment preflight and post-deploy checks with a blocking exit status and retained evidence; include both the populated-club floor and every projected deterministic Admin assignment. | Engineering | Completed and active | Release `v291` passed the membership-source, populated-club floor, and per-projected-Admin-assignment checks; [CI artifact 10379221758](https://github.com/mattwynne/memba/actions/runs/34923684890/artifacts/10379221758) retains the evidence. |
 | Detect | P1 | Make custom-group submit handle an unexpected projection/aggregate authority disagreement as an observable technical failure, with structured club/actor/command context, without weakening aggregate authorization. | Engineering | Completed and deployed | Authorization drift now returns a stable technical failure and structured log rather than terminating the LiveView. |
-| Prevent | P1 | Add a production-history compatibility test for projection-only migrations followed by aggregate-owned commands, and require this analysis when moving a consistency boundary. | Engineering | Admin-history regression implemented; standard documented | Iteration-027-shaped history fails before repair and passes afterward. |
-| Prevent | P1 | Audit other direct projection/data migrations and flows that authorize reads from projections but writes from aggregates. | Engineering | Initial repository audit complete; legacy bare-UUID replay proof remains open | Findings list each mismatch risk, production blast radius, and required repair or proof of safety. |
-| Detect | P2 | Add exception tracking/alerting for production LiveView and command failures. | Engineering | Proposed | A controlled error generates an operator notification with release and request context. |
+| Prevent | P1 | Add a production-history compatibility test for projection-only migrations followed by aggregate-owned commands, and require this analysis when moving a consistency boundary. | Engineering | Completed | Iteration-027-shaped history fails before repair and passes afterward; the compatibility standard is documented. |
+| Prevent | P1 | Audit other direct projection/data migrations and flows that authorize reads from projections but writes from aggregates. | Engineering | Initial audit complete; bare-UUID replay proof in progress | Findings list each mismatch risk, production blast radius, and required repair or proof of safety. |
+| Detect | P2 | Add exception tracking/alerting for production LiveView and command failures. | Engineering | In progress | A controlled error generates an operator notification with release and request context. |
+| Prevent | P2 | Decide whether a general aggregate/read-model parity framework should supersede the Admin-specific invariant as more write-side decisions move into aggregates. | Engineering | In progress | The decision and rationale are recorded; any accepted implementation is delivered or separately tracked. |
 | Prevent | P2 | Add a standard incident template and incident-review skill. Keep incident-action follow-up explicit until mitigations and prevention work are closed. | Engineering | Completed | Template and skill exist in `docs/incidents/` and `.pi/skills/incident-review/`; incident index and action statuses still need to remain current through resolution. |
 
 ## Actions not recommended

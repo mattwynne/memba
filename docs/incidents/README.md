@@ -10,6 +10,15 @@ Incidents differ from:
 
 An incident may link to all three. The incident record remains the chronological account of what production did, how we responded, and which follow-up actions were agreed.
 
+## Lifecycle
+
+- **Active** — customer or production impact is continuing and response work is under way.
+- **Mitigated** — immediate impact has stopped, but the underlying condition is not yet permanently resolved or sufficiently understood.
+- **Resolved** — service and the incident condition have been repaired and verified in production. Agreed follow-up actions may still be open.
+- **Closed** — the incident is resolved and every agreed follow-up action is completed or explicitly deferred with a recorded rationale.
+
+The index is the incident-status ledger. Its open-follow-up count must agree with the action table in each incident record. Closing an incident requires updating both the record and the index.
+
 ## Working agreement
 
 - Protect people and data first; preserve evidence before changing production.
@@ -19,11 +28,12 @@ An incident may link to all three. The incident record remains the chronological
 - Record impact, detection, response, contributing factors, a Five Whys analysis, what went well, and follow-up actions.
 - Give actions an owner, priority, status, and verification condition.
 - Do not mark an incident resolved until service is restored and the restoration has been verified in production.
+- Do not mark an incident closed while an agreed action remains proposed or in progress; an intentionally deferred action must record the decision and rationale.
 - Production mutations require explicit operator approval and an auditable runbook.
 
 ## Incident index
 
-| Date | Incident | Impact | Status |
-| --- | --- | --- | --- |
-| 2026-09-15 | [Database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md) | Two short database recovery windows; two deployments safely aborted; no data loss observed. | Mitigated — unsafe gate placement removed; infrastructure cause open |
-| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs could not create custom groups; no data loss or privacy breach observed. | Resolved 2026-09-15 — repaired and customer path verified |
+| Date | Incident | Impact | Status | Open follow-ups |
+| --- | --- | --- | --- | ---: |
+| 2026-09-15 | [Database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md) | Two short database recovery windows; two deployments safely aborted; no data loss observed. | Mitigated — unsafe gate placement removed; infrastructure cause open | 4 |
+| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs could not create custom groups; no data loss or privacy breach observed. | Resolved 2026-09-15 — repaired and customer path verified; follow-ups open | 3 |
