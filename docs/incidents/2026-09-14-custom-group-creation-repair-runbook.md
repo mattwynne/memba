@@ -2,7 +2,7 @@
 
 Incident: [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md)
 
-Status: Awaiting support-release validation and deployment
+Status: Completed and verified on 2026-09-15
 
 This runbook restores canonical Admin facts to legacy Club streams. It does not rewrite events or treat projections as authoritative. The operation is append-only, explicitly scoped, dry-run first, and designed to be safe to retry. Each Club aggregate command is atomic, but a multi-candidate or multi-club run is not globally transactional; it appends one candidate at a time and can be resumed from the retained report.
 
@@ -169,7 +169,7 @@ The follow-up change now wires `SourceBackedAdminInvariant.check!/1` into contin
 
 The invariant is deliberately not run inside Fly's release-command machine. Two attempted gate releases passed the external preflight but encountered production database restart/recovery while the second application instance was starting and running the invariant. Keeping the check external avoids adding that load to the migration/backfill process while preserving a blocking gate and post-deploy proof.
 
-This permanent gate is implemented in source pending deployment; it is not complete in production until the gate release itself has deployed and its post-deploy evidence is retained.
+Release `v290` completed this step. Its pre-deploy and post-deploy checks both passed, and CI retained [artifact 10378625528](https://github.com/mattwynne/memba/actions/runs/34920034105/artifacts/10378625528).
 
 ## 8. Close the incident
 

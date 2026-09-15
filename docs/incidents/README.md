@@ -25,4 +25,5 @@ An incident may link to all three. The incident record remains the chronological
 
 | Date | Incident | Impact | Status |
 | --- | --- | --- | --- |
-| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs cannot create custom groups; no data loss or privacy breach observed. | Investigating — diagnosis high-confidence; production repair pending |
+| 2026-09-15 | [Database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md) | Two short database recovery windows; two deployments safely aborted; no data loss observed. | Mitigated — unsafe gate placement removed; infrastructure cause open |
+| 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs could not create custom groups; no data loss or privacy breach observed. | Resolved 2026-09-15 — repaired and customer path verified |
