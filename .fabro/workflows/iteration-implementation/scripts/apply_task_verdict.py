@@ -12,7 +12,7 @@ import tempfile
 import time
 from typing import Any
 
-from delivery_planner_state import ContractError, delivery_paths, read_json, require_string, run_git
+from delivery_planner_state import ContractError, delivery_paths, run_git, validate_worker_result
 
 PENDING = re.compile(r"^[\t ]*- \[ \] \S[^\r\n]*$")
 SCHEMA_VERSION = 1
@@ -87,27 +87,16 @@ def check_off(todo: Path, lines: list[str], index: int) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def validate_review_artifacts(paths: dict[str, Path], task: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    packet = read_json(paths["packet"])
-    result = read_json(paths["worker_result"])
-    if packet.get("schema_version") != SCHEMA_VERSION or result.get("schema_version") != SCHEMA_VERSION:
-        raise ValueError("Delivery packet/result schema version mismatch")
-    for key in ("packet_id", "task_id", "todo_line"):
-        require_string(packet, key, paths["packet"])
-        if result.get(key) != packet.get(key):
-            raise ValueError(f"Worker result {key} does not match current packet")
+def validate_review_artifacts(
+    paths: dict[str, Path], task: str, *, allow_accepted_packet: bool = False
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    packet, result = validate_worker_result(
+        paths, paths["todo"], allow_accepted_packet=allow_accepted_packet
+    )
     if packet["todo_line"] != task:
         raise ValueError("Verdict task does not match the current worker packet")
-    if result.get("result") != "ready_for_review":
+    if result["result"] != "ready_for_review":
         raise ValueError("Only a worker result marked ready_for_review may be reviewed for acceptance")
-    validation = result.get("validation")
-    if not isinstance(validation, list) or not validation:
-        raise ValueError("ready_for_review worker result requires validation evidence")
-    for item in validation:
-        if not isinstance(item, dict) or not isinstance(item.get("command"), str) or not isinstance(item.get("exit_status"), int) or not isinstance(item.get("evidence"), str):
-            raise ValueError("Worker validation entries require command, integer exit_status and evidence")
-    if not isinstance(result.get("changed_paths"), list) or not isinstance(result.get("unresolved"), list) or not isinstance(result.get("notes"), str):
-        raise ValueError("Worker result requires changed_paths, notes and unresolved fields")
     return packet, result
 
 
@@ -119,7 +108,9 @@ def apply_verdict(plan: Path, verdict: object) -> None:
     paths = delivery_paths(plan)
     todo = paths["todo"]
     try:
-        packet, result = validate_review_artifacts(paths, task)
+        packet, result = validate_review_artifacts(
+            paths, task, allow_accepted_packet=decision == "accept"
+        )
     except ContractError as error:
         raise ValueError(str(error)) from error
 

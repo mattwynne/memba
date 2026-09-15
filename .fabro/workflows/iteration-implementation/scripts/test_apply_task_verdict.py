@@ -132,6 +132,16 @@ class TaskVerdictTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assert_unchanged_failure(self.invoke(text))
 
+    def test_failed_worker_validation_cannot_be_accepted(self):
+        result_path = self.delivery / "latest-worker-result.json"
+        worker_result = json.loads(result_path.read_text())
+        worker_result["validation"][0]["exit_status"] = 1
+        result_path.write_text(json.dumps(worker_result))
+        result = self.apply("accept")
+        self.assert_unchanged_failure(result)
+        self.assertIn("requires every validation command to pass", result.stderr)
+        self.assertFalse((self.delivery / "latest-review.json").exists())
+
     def test_changed_task_text_cannot_be_accepted(self):
         self.assert_unchanged_failure(self.apply("accept", task=TASK + " Changed scope."))
 

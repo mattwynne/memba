@@ -213,8 +213,35 @@ def collect_required_candidate_origins(paths: dict[str, Path]) -> list[dict[str,
     review = read_json_if_present(paths["review"])
     head = run_git("rev-parse", "HEAD")
 
+    worker_matches = bool(packet and worker and all(
+        worker.get(key) == packet.get(key) for key in ("packet_id", "task_id", "todo_line")
+    ))
+    review_matches = bool(packet and review and
+        review.get("packet_id") == packet.get("packet_id") and
+        review.get("task_id") == packet.get("task_id") and
+        review.get("task") == packet.get("todo_line"))
+    if review_matches and review.get("decision") == "accept" and (
+        review["task"].replace("- [ ] ", "- [x] ", 1) in checked_lines(paths["todo"])
+    ):
+        # Acceptance retires only the reviewed provenance, and never a range
+        # still assigned to another pending slice of the same candidate.
+        pending = set(pending_lines(paths["todo"]))
+        still_owned = {
+            origin_key(origin)
+            for obligation in (state or {}).get("pending_obligations", [])
+            if obligation.get("todo_line") in pending
+            for origin in obligation.get("candidate_origins", [])
+            if valid_origin(origin)
+        }
+        accepted_origins = {
+            origin_key(origin) for origin in review.get("candidate_origins", [])
+            if valid_origin(origin)
+        }
+        origins = [origin for origin in origins
+                   if origin_key(origin) not in accepted_origins or origin_key(origin) in still_owned]
+
     if packet and isinstance(packet.get("source_baseline"), str):
-        if worker and worker.get("result") == "replan":
+        if worker_matches and worker.get("result") == "replan":
             origins.append({
                 "packet_id": str(packet.get("packet_id", "")),
                 "task_id": str(packet.get("task_id", "")),
@@ -223,7 +250,7 @@ def collect_required_candidate_origins(paths: dict[str, Path]) -> list[dict[str,
                 "head_sha": head,
                 "reason": "worker_replan",
             })
-        if review and review.get("decision") == "revise":
+        if review_matches and review.get("decision") == "revise":
             origins.append({
                 "packet_id": str(packet.get("packet_id", "")),
                 "task_id": str(packet.get("task_id", "")),
@@ -253,6 +280,7 @@ def before_planner(plan: Path) -> None:
         "plan_sha256": file_sha(plan),
         "accepted_tasks": checked_lines(todo),
         "pending_before": pending_lines(todo),
+        "previous_packet_id": (read_json_if_present(paths["packet"]) or {}).get("packet_id"),
         "required_candidate_origins": collect_required_candidate_origins(paths),
         "created_by": "before_delivery_planner",
         "created_at": int(time.time()),
@@ -378,6 +406,19 @@ def validate_state(paths: dict[str, Path], plan: Path, todo: Path, baseline: dic
     state_origin_keys = {origin_key(origin) for origin in candidate_origins}
     if not required_origin_keys.issubset(state_origin_keys):
         raise ContractError("execution-state dropped unaccepted candidate provenance")
+    assigned_origins = {
+        origin_key(origin)
+        for obligation in pending_obligations
+        for origin in obligation.get("candidate_origins", [])
+    }
+    if state_origin_keys != assigned_origins:
+        raise ContractError("Unaccepted candidate provenance must be assigned to pending obligations exactly")
+    for obligation in pending_obligations:
+        for origin in obligation.get("candidate_origins", []):
+            if (origin["task_id"] != obligation["task_id"] and
+                origin["todo_line"] != obligation["todo_line"] and
+                origin["todo_line"] not in obligation["replaces"]):
+                raise ContractError("Candidate provenance assignment requires explicit task lineage")
 
     coverage = require_dict_list(state, "coverage_map", paths["state"])
     covered_task_ids: set[str] = set()
@@ -435,8 +476,8 @@ def validate_packet(paths: dict[str, Path], plan: Path, todo: Path, base: str, s
         raise ContractError("execution-state does not map the selected packet to exactly one pending obligation")
     obligation_origins = {origin_key(origin) for origin in matches[0].get("candidate_origins", [])}
     packet_origins = {origin_key(origin) for origin in origins}
-    if not obligation_origins.issubset(packet_origins):
-        raise ContractError("current-worker-packet dropped selected obligation candidate provenance")
+    if obligation_origins != packet_origins:
+        raise ContractError("current-worker-packet must match selected obligation candidate provenance exactly")
     return packet
 
 
@@ -477,6 +518,8 @@ def guard_planner(plan: Path) -> None:
         raise ContractError("Planner reported ready but no pending todo line remains")
 
     packet = validate_packet(paths, plan, todo, base, state, selected)
+    if packet["packet_id"] == baseline.get("previous_packet_id"):
+        raise ContractError("Each preparation requires a new packet_id; previous worker evidence cannot be reused")
     review = latest_unaccepted_revision(paths, baseline["accepted_tasks"])
     if review:
         if packet["attempt"] != "revision":
@@ -496,7 +539,9 @@ def guard_planner(plan: Path) -> None:
     route("revise" if packet["attempt"] == "revision" else "implement")
 
 
-def validate_worker_result(paths: dict[str, Path], todo: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def validate_worker_result(
+    paths: dict[str, Path], todo: Path, *, allow_accepted_packet: bool = False
+) -> tuple[dict[str, Any], dict[str, Any]]:
     packet = read_json(paths["packet"])
     ensure_schema_version(packet, paths["packet"])
     result = read_json(paths["worker_result"])
@@ -507,7 +552,9 @@ def validate_worker_result(paths: dict[str, Path], todo: Path) -> tuple[dict[str
         if result.get(key) != packet.get(key):
             raise ContractError(f"Worker result {key} does not match current packet")
     if first_pending(todo) != packet.get("todo_line"):
-        raise ContractError("Current todo first pending task no longer matches the worker packet")
+        accepted_line = str(packet.get("todo_line", "")).replace("- [ ] ", "- [x] ", 1)
+        if not allow_accepted_packet or accepted_line not in checked_lines(todo):
+            raise ContractError("Reviewed task is not the first pending task in the current todo")
     status = result.get("result")
     if status not in ("ready_for_review", "replan", "human_blocked"):
         raise ContractError("Worker result must be ready_for_review, replan or human_blocked")
@@ -524,6 +571,8 @@ def validate_worker_result(paths: dict[str, Path], todo: Path) -> tuple[dict[str
         if not isinstance(item.get("exit_status"), int):
             raise ContractError("Worker validation entries require integer exit_status")
         require_string(item, "evidence", paths["worker_result"])
+    if status == "ready_for_review" and any(item["exit_status"] != 0 for item in validation):
+        raise ContractError("ready_for_review requires every validation command to pass")
     if status == "replan":
         request = result.get("replan_request")
         if not isinstance(request, dict):

@@ -266,6 +266,76 @@ class DeliveryPlannerStateTest(unittest.TestCase):
         self.write_planner_artifacts(source=second_binding)
         self.assert_guard_fails("dropped unaccepted candidate provenance")
 
+    def prepare_replan_candidate(self) -> list[dict[str, object]]:
+        self.start_planner()
+        self.write_planner_artifacts()
+        self.write_worker_result("replan")
+        (self.root / "app.txt").write_text("partial candidate\n")
+        self.checkpoint("candidate requested replan")
+        self.start_planner()
+        baseline = json.loads((self.delivery / "_guard/planner-guard-baseline.json").read_text())
+        return baseline["required_candidate_origins"]
+
+    def test_global_provenance_must_be_assigned_to_pending_work_and_packet(self) -> None:
+        origins = self.prepare_replan_candidate()
+        self.write_planner_artifacts(state=self.state(candidate_origins=origins))
+        self.assert_guard_fails("candidate provenance must be assigned")
+
+    def test_accepted_candidate_provenance_retires_before_next_task(self) -> None:
+        origins = self.prepare_replan_candidate()
+        state = self.state(candidate_origins=origins)
+        state["pending_obligations"][0]["candidate_origins"] = origins
+        packet = self.packet(candidate_origins=origins)
+        packet["packet_id"] = "task-002-replanned-2"
+        self.write_planner_artifacts(state=state, packet=packet)
+        self.assert_guard_route("implement")
+        self.write_worker_result(packet_id="task-002-replanned-2")
+        self.checkpoint("completed candidate")
+        result = subprocess.run(
+            [sys.executable, str(HELPER.with_name("apply_task_verdict.py")), str(self.plan)],
+            input=json.dumps({"decision": "accept", "task": TASK, "reason": "Candidate verified"}),
+            cwd=self.root, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.checkpoint("applied acceptance")
+        self.start_planner()
+        baseline = json.loads((self.delivery / "_guard/planner-guard-baseline.json").read_text())
+        self.assertEqual(baseline["required_candidate_origins"], [])
+
+    def test_shared_candidate_origin_stays_pending_after_one_slice_accepted(self) -> None:
+        origins = self.prepare_replan_candidate()
+        state = self.state(candidate_origins=origins)
+        for obligation in state["pending_obligations"]:
+            obligation["candidate_origins"] = origins
+            obligation["replaces"] = [TASK]
+        packet = self.packet(candidate_origins=origins)
+        packet["packet_id"] = "task-002-shared-2"
+        self.write_planner_artifacts(state=state, packet=packet)
+        self.assert_guard_route("implement")
+        self.write_worker_result(packet_id="task-002-shared-2")
+        self.checkpoint("completed first slice")
+        result = subprocess.run(
+            [sys.executable, str(HELPER.with_name("apply_task_verdict.py")), str(self.plan)],
+            input=json.dumps({"decision": "accept", "task": TASK, "reason": "First slice verified"}),
+            cwd=self.root, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.checkpoint("applied first acceptance")
+        self.start_planner()
+        baseline = json.loads((self.delivery / "_guard/planner-guard-baseline.json").read_text())
+        self.assertEqual(baseline["required_candidate_origins"], origins)
+
+    def test_packet_identity_cannot_reuse_previous_preparation(self) -> None:
+        self.start_planner()
+        old_packet = self.packet()
+        self.write_planner_artifacts(packet=old_packet)
+        self.checkpoint("previous preparation")
+        self.start_planner()
+        packet = self.packet()
+        packet["packet_id"] = old_packet["packet_id"]
+        self.write_planner_artifacts(packet=packet)
+        self.assert_guard_fails("new packet_id")
+
     def test_route_worker_result_sends_replan_without_review_or_checkoff(self) -> None:
         self.start_planner()
         self.write_planner_artifacts()
@@ -274,6 +344,18 @@ class DeliveryPlannerStateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout.splitlines()[-1]), {"preferred_next_label": "replan"})
         self.assertIn(TASK, self.todo.read_text())
+
+    def test_ready_worker_result_rejects_failed_validation(self) -> None:
+        self.start_planner()
+        self.write_planner_artifacts()
+        self.write_worker_result()
+        result_path = self.delivery / "latest-worker-result.json"
+        result_data = json.loads(result_path.read_text())
+        result_data["validation"][0]["exit_status"] = 1
+        result_path.write_text(json.dumps(result_data))
+        result = self.invoke("route-worker")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires every validation command to pass", result.stderr)
 
     def test_route_worker_result_fails_closed_on_mismatched_or_incomplete_artifacts(self) -> None:
         self.start_planner()
