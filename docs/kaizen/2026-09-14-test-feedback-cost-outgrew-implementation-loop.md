@@ -184,3 +184,31 @@ Without cost telemetry and enforceable command boundaries, future improvements t
 - Evaluate preparing test infrastructure once per bounded task stage for repeated focused checks, while keeping a clean reset for the final gate.
 - Persist timing telemetry for every iteration: node durations, test command counts, ExUnit duration, browser scenario p50/p90, slowest features, final-gate wall time, and lock waits.
 - Begin with non-blocking budgets or warnings, such as zero broad checks in ordinary nodes, validation median below 2.5 minutes, and a browser-gate target below 10 minutes. Establish representative baselines before making them hard failures.
+
+## Resolution
+
+Date: 2026-09-14
+
+Root cause: the prompt boundary prohibited "full `dev check`" and "`dev ci`", which left `dev check --quick` and other unscoped full-suite commands as an available workaround. Independent validation could also rerun the worker's already-successful tests, duplicating focused-check cost inside the bounded task loop.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md`: ordinary implementation tasks now prohibit `dev check`, `dev check --quick`, `dev ci`, and any other unscoped full-suite command. Focused commands are named as `dev test ...` and `dev acceptance ...`.
+- `.fabro/workflows/iteration-implementation/prompts/validate_task.md`: validation consumes the worker's successful, current evidence in `.delivery/latest-worker-result.json` by default; it reruns a specific focused test only when that evidence is missing, stale, contradictory, or inadequate, and must state the reason. Broad gates are prohibited in ordinary validation.
+- `.fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh`: added deterministic regression checks for every broad-gate form in the worker and validator prompts, plus the validator consume-by-default and restrict-rerun rules.
+- `.fabro/workflows/README.md`: documents the tightened boundary.
+
+Validation:
+
+- `bash .fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh` — passed: 39 prompt/graph contract checks, 19 delivery-planner state tests, 12 verdict-helper tests.
+- All `.fabro/workflows/iteration-implementation/scripts/test_*.sh` helper suites — passed.
+- `python3 -B .fabro/workflows/iteration-implementation/scripts/test_apply_task_verdict.py` — passed (12 tests).
+- `python3 -B .fabro/workflows/iteration-implementation/scripts/test_delivery_planner_state.py` — passed (19 tests).
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` — OK (pre-existing `publish_to_main` goal-gate warning only).
+- Full `dev check` on the staged diff (`MEMBA_POSTGRES_PORT=15463`): exit 1. ExUnit passed; browser acceptance reported 187/189 scenarios. The two failures were pre-existing flaky scenarios: `club_message_replies.feature:24` (projection-timing timeout) and `custom_group_conversations.feature:83` (`:consistency_timeout`). Both passed when rerun in isolation. The diff contains no product, test, or feature-file changes, so these failures are unrelated to this fix.
+
+Remaining follow-up:
+
+- Agent adherence must be demonstrated by a later real delivery run; the contract tests prove the instructions and checks are present, not that agents obey them.
+- Browser-suite runtime growth, sharding, and per-scenario profiling remain open (see the observation above).
+- The native Fabro runtime harness (`test_task_workflow_runtime.py`) was not runnable in this sandbox for an unrelated local reason (git path resolved inside the sandbox; Xcode license). Its passing shell/Python siblings are the relevant command during a delivery-machinery text change.
