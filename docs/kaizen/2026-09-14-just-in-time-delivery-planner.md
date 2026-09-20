@@ -132,3 +132,13 @@ After implementation review, tightened the deterministic boundary. The guard bas
 `apply_task_verdict.py` now validates packet/result/todo identity before writing review evidence, then writes review artifacts only after the exact-task application is known safe (with replay-safe acceptance). Focused regression tests cover the previously reproduced invalid success routes: forged check-off, deleted pending work, incomplete packet, tampered guard baseline, and implementation routing after a revise verdict.
 
 Focused correction validation passed after the review fixes, including all iteration-implementation shell/Python helper tests and the native Fabro runtime fixture. Final full gate on the final staged correction diff used a scrubbed inherited devenv/Postgres environment: `env -u DEVENV_RUNTIME -u MEMBA_DEVENV_SHELL -u DEVENV_ROOT -u DEVENV_STATE -u DEVENV_PROFILE -u DEVENV_DOTFILE -u PGHOST -u PGPORT -u PGDATA MEMBA_POSTGRES_PORT=15432 ACCEPTANCE_SERVER_NODE=memba_delivery_planner5@localhost ./bin/dev check` — exit 0, with 1292 tests / 0 failures and 145 acceptance scenarios / 1052 steps passing.
+
+### Additional live observation — 2026-09-15
+
+The first inspected live iteration-implementation run after this change, `01M2HT2BA2C7765C0NHNJVPZ7C` for [iteration 064](../iterations/064-leave-and-remove-group-members/plan.md), failed before any worker task ran. `delivery_planner` completed and wrote its artifacts, but `guard_delivery_packet` rejected `.delivery/execution-state.json` with:
+
+```
+docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json requires non-empty string field scope
+```
+
+The workflow then reached the terminal `task_stopped` fallback. This is a fail-closed outcome as intended, but it shows that the planner prompt/artifact contract and deterministic guard were not aligned on the required top-level `scope` field in a live run. Operational effectiveness is therefore no longer only pending: the first observed run was blocked by a planner-packet schema mismatch.
