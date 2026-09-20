@@ -465,3 +465,24 @@ full quality gate pass on the exact committed state.
   invalidation, or test-harness cleanup?
 - Is it related to the known readiness/timing weaknesses recorded above, or a
   distinct authentication sign-out path?
+
+### Resolution
+
+Root cause: `signOut` clicked the club identity `<details>` summary and immediately
+checked whether its CSS-hidden sign-out control was visible. On the transition
+where the browser had not applied the open state yet, that check returned false.
+The helper then fell back to the generic `Sign out` button, which does not exist
+on the club page and therefore consumed the Cucumber 30-second step timeout.
+
+Fix applied:
+
+- `acceptance-tests/features/support/authentication.js`: wait for the club
+  sign-out button to become visible after opening the identity menu, then click
+  it; only use the generic button when the club identity menu is absent.
+- `acceptance-tests/test/authentication.test.js`: regression coverage proves
+  the club path waits for the menu transition instead of using the generic
+  fallback.
+
+Focused validation:
+
+- `MEMBA_POSTGRES_PORT=15445 ACCEPTANCE_SERVER_NODE=memba_signout_fix@localhost ./bin/dev acceptance --name '^Club member signs out from a club page$'` — passed: 1 scenario, 4 steps.

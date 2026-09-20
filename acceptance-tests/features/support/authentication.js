@@ -342,13 +342,11 @@ async function openClubPage(world, clubName) {
 async function signOut(world) {
   const clubIdentityMenuButton = world.page.locator("#club-site-identity-menu-button");
 
-  if ((await clubIdentityMenuButton.count()) > 0 && (await clubIdentityMenuButton.isVisible())) {
+  if (await clubIdentityMenuButton.isVisible()) {
     await clubIdentityMenuButton.click();
-  }
 
-  const clubSignOutButton = world.page.locator("#club-site-sign-out-button");
-
-  if ((await clubSignOutButton.count()) > 0 && (await clubSignOutButton.isVisible())) {
+    const clubSignOutButton = world.page.locator("#club-site-sign-out-button");
+    await clubSignOutButton.waitFor({ state: "visible" });
     await clubSignOutButton.click();
     return;
   }
