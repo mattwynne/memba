@@ -17,7 +17,6 @@ function acceptanceLog(message) {
 }
 
 const repoRoot = path.resolve(__dirname, "../../..");
-const binDevPath = path.join(repoRoot, "bin", "dev");
 const binMixPath = path.join(repoRoot, "bin", "mix");
 const defaultAcceptanceServerNode = "memba_acceptance_server";
 const defaultAcceptanceServerCookie = "memba_acceptance_cookie";
@@ -67,25 +66,19 @@ function buildCommandEnvironment(config) {
     PHX_SERVER: "true",
     PORT: String(config.phoenixPort),
     MEMBA_POSTGRES_PORT: String(config.postgresPort),
+    // Propagate the owner to every nested command, particularly bin/mix.
+    MEMBA_POSTGRES_OWNER: config.postgresOwner,
     MEMBA_ACCEPTANCE_LOCAL_EMAIL: "true"
   };
 }
 
-function buildDevCommand(config, subcommand) {
-  return {
-    command: config.binDevPath,
-    args: [subcommand],
-    cwd: config.repoRoot,
-    env: buildCommandEnvironment(config)
-  };
-}
 
 function buildPostgresReadinessCommand(config) {
   return {
     command: "bash",
     args: [
       "-lc",
-      'if devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes status postgres >/dev/null 2>&1; then exit 0; fi; DEVENV_TUI=false devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes up --no-strict-ports -d postgres; devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes wait --timeout 120'
+      'phase=$(devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes status postgres 2>/dev/null | awk -F": *" "/^Phase:/ {print $2; exit}"); case "$phase" in ready|running) exit 0 ;; esac; DEVENV_TUI=false devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes up --no-strict-ports -d postgres; devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes wait --timeout 120'
     ],
     cwd: config.repoRoot,
     env: buildCommandEnvironment(config)
@@ -153,6 +146,18 @@ function parseBoolean(value) {
   return value === "1" || value === "true" || value === "yes";
 }
 
+function postgresOwner(env) {
+  const owner = env.MEMBA_POSTGRES_OWNER || "acceptance";
+
+  if (owner !== "acceptance" && owner !== "dev") {
+    throw new Error(
+      `Invalid MEMBA_POSTGRES_OWNER=${owner}; expected "acceptance" or "dev".`
+    );
+  }
+
+  return owner;
+}
+
 async function buildLifecycleConfig(env = process.env, portFinder = findFreePort) {
   const phoenixPort = env.ACCEPTANCE_PORT || env.PORT || (await portFinder());
   let postgresPort = env.MEMBA_POSTGRES_PORT || env.PGPORT || (await portFinder());
@@ -162,20 +167,20 @@ async function buildLifecycleConfig(env = process.env, portFinder = findFreePort
   }
 
   const baseUrl = env.BASE_URL || `http://lvh.me:${phoenixPort}`;
+  const owner = postgresOwner(env);
 
   return {
     env,
     repoRoot,
-    binDevPath,
     binMixPath,
     baseUrl,
     phoenixPort,
     postgresPort,
+    postgresOwner: owner,
+    managePostgres: owner === "acceptance",
     inDevShell: env.MEMBA_DEVENV_SHELL === "1",
     skipAppStart: parseBoolean(env.ACCEPTANCE_SKIP_APP_START),
-    tearDownPostgres:
-      !parseBoolean(env.ACCEPTANCE_KEEP_POSTGRES) &&
-      (parseBoolean(env.ACCEPTANCE_MANAGE_POSTGRES) || env.MEMBA_DEVENV_SHELL !== "1"),
+    tearDownPostgres: owner === "acceptance" && !parseBoolean(env.ACCEPTANCE_KEEP_POSTGRES),
     commandTimeoutMs: Number(env.ACCEPTANCE_COMMAND_TIMEOUT_MS || 300000),
     httpReadyTimeoutMs: Number(env.ACCEPTANCE_HTTP_READY_TIMEOUT_MS || 60000),
     shutdownTimeoutMs: Number(env.ACCEPTANCE_SHUTDOWN_TIMEOUT_MS || 60000),
@@ -455,7 +460,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
     async start() {
       const currentConfig = await ensureConfig();
       acceptanceLog(
-        `lifecycle start: baseUrl=${currentConfig.baseUrl} phoenixPort=${currentConfig.phoenixPort} postgresPort=${currentConfig.postgresPort} inDevShell=${currentConfig.inDevShell}`
+        `lifecycle start: baseUrl=${currentConfig.baseUrl} phoenixPort=${currentConfig.phoenixPort} postgresPort=${currentConfig.postgresPort} postgresOwner=${currentConfig.postgresOwner} inDevShell=${currentConfig.inDevShell}`
       );
 
       if (currentConfig.skipAppStart) {
@@ -464,12 +469,14 @@ function createBrowserAcceptanceLifecycle(options = {}) {
       }
 
       try {
-        acceptanceLog("lifecycle phase: Postgres readiness");
-        await processRunner.run(buildPostgresReadinessCommand(currentConfig), {
-          label: "Postgres readiness",
-          timeoutMs: currentConfig.commandTimeoutMs,
-          logBuffer
-        });
+        if (currentConfig.managePostgres) {
+          acceptanceLog("lifecycle phase: Postgres readiness");
+          await processRunner.run(buildPostgresReadinessCommand(currentConfig), {
+            label: "Postgres readiness",
+            timeoutMs: currentConfig.commandTimeoutMs,
+            logBuffer
+          });
+        }
 
         for (const step of databaseSetupSteps) {
           try {
@@ -531,7 +538,6 @@ Cause: ${error.message}`, {
 module.exports = {
   LogBuffer,
   assetBuildStep,
-  buildDevCommand,
   buildLifecycleConfig,
   buildMixCommand,
   buildPhoenixCommand,

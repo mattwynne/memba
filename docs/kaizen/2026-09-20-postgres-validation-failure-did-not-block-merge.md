@@ -56,3 +56,30 @@ A quality gate that can be bypassed after an infrastructure failure cannot provi
 ## Deferred follow-up: Postgres lifecycle ownership
 
 Matt requested that a later agent take on a comprehensive overhaul rather than an ad hoc patch. Investigate and redesign the ownership contract across `bin/dev`, `bin/mix`, and `acceptance-tests/features/support/lifecycle.js`: nested phases must not independently stop, start, or clean up a service owned by their parent; separate check/worktree isolation also needs an explicit contract. This follow-up should establish the target design and regression coverage before changing lifecycle behaviour.
+
+## Resolution
+
+Date: 2026-09-20
+
+Root cause: Postgres ownership was implicit and conflicting. `bin/dev` treated the existence of a process status record as readiness, so it could pass a stopped or failed service downstream. Browser acceptance independently started and (outside a devenv shell) tore down the service, while its nested `bin/mix` commands could run `devenv processes down` and restart it. A failed nested readiness check could therefore reset the parent command's shared process manager and produce the observed stale `postmaster.pid`/restart loop.
+
+Fix applied:
+
+- `bin/dev`: explicitly exports `MEMBA_POSTGRES_OWNER=dev`, waits for a ready/running phase rather than merely a status record, and starts Postgres before direct `dev acceptance` runs.
+- `bin/mix`: is now a checkout-local Mix resolver only; it never starts, resets, or tears down the parent service.
+- `acceptance-tests/features/support/lifecycle.js`: makes the owner explicit. A `dev` parent supplies the ready service and browser acceptance only consumes it; a standalone lifecycle owns startup and optional teardown, passing that ownership to every nested Mix/Phoenix command. Readiness now checks the managed process phase rather than accepting any status record.
+- `acceptance-tests/test/lifecycle.test.js`: covers parent-owned and standalone ownership paths and prevents `bin/mix` from regaining process-manager commands.
+
+Validation:
+
+- `bash -n bin/dev bin/mix` — passed.
+- `cd acceptance-tests && node --test test/lifecycle.test.js` — passed, 11 tests.
+- `MEMBA_DEV_NGROK=0 ./bin/dev check` — passed with the staged executable fix: 1,529 ExUnit tests and 189 browser scenarios / 1,415 steps passed.
+- A repeat after committing was terminated by the 1,200-second command limit while browser acceptance was still running; it reported no assertion failure before termination. This is not a passing final-commit attestation.
+
+Expected versus observed: `dev check` was expected to serialize work for its selected Postgres port, start or reuse a ready service once, and leave acceptance/Mix unable to reset it. The staged executable gate passed end-to-end with that parent-owned lifecycle. This validates the mechanism once; it does not yet demonstrate long-term recurrence prevention.
+
+Remaining follow-up:
+
+- Confirm the workflow's publish path records and requires a successful full `dev check` for the exact candidate commit before merge/push; this lifecycle change prevents the infrastructure failure but does not itself enforce publication eligibility.
+- Review the next representative `dev check`/worktree run for a clean start, handoff, and teardown boundary.

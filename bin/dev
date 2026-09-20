@@ -440,6 +440,10 @@ if ! devenv_shell_matches_repo; then
 fi
 
 export PATH="$repo_root/bin:${PATH:-}"
+# `bin/dev` owns the Postgres service for every command it launches. Nested
+# wrappers and browser acceptance inherit this explicit contract and must not
+# start, stop, or reset the shared devenv service.
+export MEMBA_POSTGRES_OWNER=dev
 
 mix() {
   "$repo_root/bin/mix" "$@"
@@ -451,11 +455,16 @@ if ! command -v argc >/dev/null 2>&1; then
 fi
 
 start_postgres() {
-  if devenv_with_postgres_port processes status postgres >/dev/null 2>&1; then
-    return
-  fi
+  local phase
+  phase="$(process_phase postgres)"
 
-  DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
+  case "$phase" in
+    ready|running)
+      return 0
+      ;;
+  esac
+
+  start_managed_processes postgres
   wait_for_managed_processes 120 postgres
 }
 
@@ -961,7 +970,11 @@ acceptance() {
 }
 
 _acceptance() {
-  _setup
+  # Browser acceptance inherits MEMBA_POSTGRES_OWNER=dev and therefore only
+  # consumes this ready service; it never tears down the parent command's
+  # process-compose state.
+  start_postgres || return $?
+  _setup || return $?
 
   (
     cd "$repo_root/acceptance-tests"
