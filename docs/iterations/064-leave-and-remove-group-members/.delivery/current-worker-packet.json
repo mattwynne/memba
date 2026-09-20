@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "packet_id": "001-af147c6-01",
+  "task_id": "001",
+  "todo_line": "- [ ] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal.",
+  "attempt": "implementation",
+  "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+  "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+  "source_baseline": "af147c6426110ebf4368bf833f52720c316770a0",
+  "outcome": "Ship a tested public Membership operation that lets a current custom-group member or active club manager remove an exact active club member from that custom group—including self and the last group member—by making one authoritative Club-aggregate decision that emits only the existing GroupMemberRemoved fact.",
+  "scope": [
+    "Add a dedicated actor-bearing custom-group removal command and register it on the existing Membership Club route; keep the trusted actor-free RemoveGroupMember command available only for policies/backfills/fixtures.",
+    "Expose remove_custom_group_member/1 and /2 through Memba.Membership, requiring club_id, group_id, membership_id, person_id, and actor_person_id and translating those values into the dedicated command.",
+    "Decide authorization from current Club aggregate state: the actor must be an active member of the command club and either an active member of the target custom group or hold club.manage_members; an outside active admin may remove a member without joining.",
+    "Validate typed club/group/membership/person identities, require a real custom group, and require the target membership/person pair to be the exact active club member associated with the group-membership record.",
+    "Permit removing oneself and removing the final custom-group member. Treat an exact already-removed retry as an idempotent no-op while rejecting identity mismatches.",
+    "Emit/reuse GroupMemberRemoved for a real transition. Prove that removing a target who is a club Admin leaves their active club membership, Admin role, and club management authority unchanged and does not dispatch club-member or role-removal commands.",
+    "Add focused aggregate, dispatch/public API, command-shape/router, projection, idempotency, and invariant tests modeled on the accepted custom-group admission coverage."
+  ],
+  "scope_exclusions": [
+    "Do not change the ClearRemovedGroupMemberFollows policy, Messaging follow semantics, or stale cleanup/remove-re-add ordering; pending tasks 004-008 own that cross-context outcome.",
+    "Do not change conversation/query authorization, queued email delivery handoff, or open LiveView refresh behavior; pending tasks 009-011 own those boundaries.",
+    "Do not add Leave/Remove controls, confirmations, member-row changes, or post-removal UI surfaces.",
+    "Do not edit the iteration 064 acceptance feature files or remove their todo runner tags in this packet.",
+    "Do not change Everyone/Admin membership policy, club-member removal, club role removal, group archiving/deletion, or club invitation behavior."
+  ],
+  "references": [
+    {
+      "path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+      "facts": "Implementation Plan 1 requires the actor-bearing removal use case at the Club boundary; acceptance permits group members and active outside admins, self and last-member removal, rejects system groups/ordinary outsiders, and preserves club membership and roles."
+    },
+    {
+      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+      "facts": "Current Membership writes use Club-owned state for active membership and role decisions; custom-group work must protect invariants at an authoritative aggregate boundary rather than through projection preflight."
+    },
+    {
+      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
+      "facts": "Membership owns group membership state. This packet stays within Membership and leaves cross-context follow cleanup to the later policy obligation."
+    },
+    {
+      "path": "web/lib/memba/membership/commands/add_custom_group_member.ex",
+      "facts": "Accepted iteration 063 command shape carries club, group, target membership/person, and authenticated actor identities and routes by club_id."
+    },
+    {
+      "path": "web/lib/memba/membership.ex",
+      "facts": "add_custom_group_member/2 and add_custom_group_member_command/1 are the public-use-case pattern. remove_member/2 is club departure and must not be reused for custom-group removal. The current public API intentionally has no remove_custom_group_member function yet."
+    },
+    {
+      "path": "web/lib/memba/membership/club.ex",
+      "facts": "AddCustomGroupMember already validates current actor membership or club.manage_members permission, exact active targets, and custom-group identity. Trusted RemoveGroupMember already produces idempotent GroupMemberRemoved facts but has no actor authorization and must remain a separate internal path."
+    },
+    {
+      "path": "web/lib/memba/membership/commands/remove_group_member.ex",
+      "facts": "This actor-free command explicitly documents itself as trusted internal policy/backfill/fixture infrastructure, not the public custom-group removal path."
+    },
+    {
+      "path": "web/lib/memba/membership/events/group_member_removed.ex",
+      "facts": "The existing durable fact contains club, group, membership, and person identities and does not carry actor identity; reuse it without changing club or role state."
+    },
+    {
+      "path": "web/test/memba/membership/add_custom_group_member_dispatch_test.exs",
+      "facts": "Accepted dispatch-level examples cover member and outside-admin actors, current/forged identities, system-group guards, idempotency, projections, and unchanged invitations/roles; removal should receive analogous focused coverage."
+    },
+    {
+      "path": "web/test/memba/membership/club_test.exs",
+      "facts": "The AddCustomGroupMember authorization describe block and trusted RemoveGroupMember tests establish aggregate test conventions and the accepted current-state behavior to extend without weakening."
+    },
+    {
+      "path": "web/test/memba/membership/group_command_event_modules_test.exs",
+      "facts": "This test protects actor-bearing versus trusted actor-free command shapes and confirms GroupMemberRemoved remains actor-free and JSON encodable."
+    },
+    {
+      "path": "web/test/memba/membership/public_api_test.exs",
+      "facts": "The current test asserts remove_custom_group_member is absent; update it to expose only the new actor-authorized public path while keeping remove_group_member private."
+    },
+    {
+      "path": "docs/reference/elixir-mix-tests.md",
+      "facts": "Follow the project Elixir module and focused-test conventions; avoid timing sleeps and start test processes with start_supervised!/1 where applicable."
+    }
+  ],
+  "constraints": [
+    "Do not authorize from projections or web-supplied role claims; the Club aggregate's current event-sourced state owns the final actor, target, and group decision.",
+    "Do not broaden or replace the trusted RemoveGroupMember path used by system-group policies and replay/setup code.",
+    "Do not add actor_person_id to GroupMemberRemoved; actor identity belongs on the command, while the existing event remains the reusable membership fact.",
+    "A group member may remove any active member including themselves; an active club manager may remove any member while outside the group; an ordinary active club member outside the group is unauthorized.",
+    "System groups are rejected through the public custom-group use case. Existing Everyone/Admin rules and last-Admin protection remain governed by their current club/role operations.",
+    "No custom-group member floor exists: the last member may leave and the group/history/identity remain unchanged.",
+    "Keep a successful exact retry event-free and avoid projection races when deciding whether a transition is new.",
+    "Run the required full ./bin/dev check after code or behavior changes and return evidence from the exact handoff state."
+  ],
+  "focused_validation": [
+    "./bin/mix test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs",
+    "./bin/mix test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
+    "./bin/dev check"
+  ],
+  "completion_evidence_required": [
+    "List every changed path and identify the new public API, actor-bearing command, Club decision, and focused tests.",
+    "Report passing evidence for member removal, outside-admin removal without joining, ordinary outsider rejection, self-removal, last-member removal, exact retry idempotency, target/actor/group identity rejection, and system-group rejection.",
+    "Show that GroupMemberRemoved is the only domain event for a real custom-group removal and that the target's club membership and Admin role/management permission survive.",
+    "Report the exact focused test commands and exit statuses, including any newly named dispatch test path if it differs from the suggested path.",
+    "Report ./bin/dev check passing on the exact worker handoff state, or return a replan/human-blocked result with the concrete unresolved failure rather than claiming completion."
+  ],
+  "candidate_origins": []
+}
