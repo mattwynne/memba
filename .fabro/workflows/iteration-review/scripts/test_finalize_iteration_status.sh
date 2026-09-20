@@ -62,6 +62,7 @@ git add .
 git commit -q -m initial
 git remote add origin "$workdir/origin.git"
 git push -q origin main
+git -C "$workdir/origin.git" symbolic-ref HEAD refs/heads/main
 
 run_branch=fabro/run/FINALIZE-RUN
 git switch -q -c "$run_branch"

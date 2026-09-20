@@ -10,6 +10,9 @@ Rules:
 - Add or update automated tests whenever they are the safest bounded way to prove a reviewer concern about lifecycle reuse, authorization, duplicate handling, state transitions, or other already-planned behaviour.
 - Do not skip or weaken existing validation.
 - Do not commit changes.
+- Do not spawn subagents or delegate validation in this review-repair node. You own the bounded repair and hand back to the workflow-owned verifier and full dev-check gate.
+- Run only focused validation that directly proves the repair, such as a named test file, single targeted scenario, formatter, or static check. Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command here; the workflow runs the deterministic full gate after `verify_review_repair`.
+- Do not launch detached/background test or full-suite processes, use `nohup`, or keep polling a process beyond the node budget. If focused validation cannot finish within the node budget, stop and report the remaining validation rather than leaving work running for the next node.
 - Review must never push red. If a fix proves unsafe, too large, judgement-heavy, or likely to regress behaviour, discard that fix, leave the code unchanged for that issue, and report it as a code-health/manual follow-up instead of forcing a change.
 - Do not abandon a selected fix merely because it is a hardening or verification change. First try the smallest safe test/config/code change that addresses the concern within the existing design.
 - **Sandbox/runtime boundary**: If the requested fix or failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.

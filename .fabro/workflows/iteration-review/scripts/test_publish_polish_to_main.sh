@@ -32,6 +32,7 @@ git add .
 git commit -q -m initial
 git remote add origin "$workdir/origin.git"
 git push -q origin main
+git -C "$workdir/origin.git" symbolic-ref HEAD refs/heads/main
 start_sha=$(git rev-parse HEAD)
 printf '%s\n' "$start_sha" > .fabro/tmp/review-start-sha.txt
 

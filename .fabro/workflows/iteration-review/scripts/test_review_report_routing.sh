@@ -5,7 +5,9 @@ workflow_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 workflow_path=$workflow_dir/workflow.fabro
 review_prompt_path=$workflow_dir/prompts/review.md
 synthesis_prompt_path=$workflow_dir/prompts/synthesize_review.md
+repair_prompt_path=$workflow_dir/prompts/apply_review_fixes.md
 collector_path=$workflow_dir/scripts/collect_implementation_evidence.sh
+verifier_path=$workflow_dir/scripts/verify_review_repair.sh
 
 assert_contains() {
   local expected=$1
@@ -74,11 +76,11 @@ assert_file_contains "$synthesis_prompt_path" 'Fail closed if you cannot see usa
 assert_file_contains "$synthesis_prompt_path" '{"outcome":"failed","failure_reason":"parallel fan-in did not expose usable review evidence for every required reviewer"}'
 
 # Review repair verification must fail closed when comparing the before/after
-# patches. `cmp` is not available in all Fabro sandboxes and can fail open when
-# used directly in an `if` condition.
-assert_contains 'git diff --no-index --quiet \"$before\" \"$after\"'
-assert_contains 'Could not compare ${kind} repair patches.'
-assert_not_contains 'cmp -s \"$before\" \"$after\"'
+# patches. `cmp` is available in the Fabro review sandbox and the tested helper
+# owns this comparison; the graph must delegate verification to that helper.
+assert_contains 'script="bash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh"'
+assert_file_contains "$verifier_path" 'if cmp -s "$before" "$after"; then'
+assert_file_contains "$verifier_path" '${kind} repair produced no repository change since repair started.'
 
 # Reviewer prompts and collected evidence must keep Memba's chosen domain,
 # CQRS/event-sourcing, and responsibility-driven design references visible.
@@ -91,6 +93,13 @@ for reference_doc in \
   assert_file_contains "$synthesis_prompt_path" "$reference_doc"
   assert_file_contains "$collector_path" "$reference_doc"
 done
+
+# Review-repair agents must hand bounded fixes back to deterministic workflow
+# gates rather than launching duplicate full-suite/background checks that can
+# outlive the prompt node and starve the following dev_check stage.
+assert_file_contains "$repair_prompt_path" 'Do not spawn subagents or delegate validation in this review-repair node.'
+assert_file_contains "$repair_prompt_path" 'Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command here; the workflow runs the deterministic full gate after `verify_review_repair`.'
+assert_file_contains "$repair_prompt_path" 'Do not launch detached/background test or full-suite processes, use `nohup`, or keep polling a process beyond the node budget.'
 
 # Code-health recording must have live repository access and must not silently
 # continue to finalization when it reports or routes a recording failure.
