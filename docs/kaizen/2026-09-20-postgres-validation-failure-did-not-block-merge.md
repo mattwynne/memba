@@ -52,3 +52,7 @@ A quality gate that can be bypassed after an infrastructure failure cannot provi
 - Require an explicit successful exact-commit `dev check` attestation before the delivery workflow can merge or push.
 - Make `bin/dev check` report managed Postgres ownership, lock-holder/process details, and a safe recovery action when startup fails.
 - Ensure agents treat infrastructure-blocked validation as a hard publish stop rather than a partial pass.
+
+## Deferred follow-up: Postgres lifecycle ownership
+
+Matt requested that a later agent take on a comprehensive overhaul rather than an ad hoc patch. Investigate and redesign the ownership contract across `bin/dev`, `bin/mix`, and `acceptance-tests/features/support/lifecycle.js`: nested phases must not independently stop, start, or clean up a service owned by their parent; separate check/worktree isolation also needs an explicit contract. This follow-up should establish the target design and regression coverage before changing lifecycle behaviour.
