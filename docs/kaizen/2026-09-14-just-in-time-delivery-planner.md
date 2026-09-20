@@ -142,3 +142,27 @@ docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.jso
 ```
 
 The workflow then reached the terminal `task_stopped` fallback. This is a fail-closed outcome as intended, but it shows that the planner prompt/artifact contract and deterministic guard were not aligned on the required top-level `scope` field in a live run. Operational effectiveness is therefore no longer only pending: the first observed run was blocked by a planner-packet schema mismatch.
+
+## Resolution
+
+Date: 2026-09-20
+
+Root cause: The live planner produced `coverage_map` entries using `scope_or_acceptance_layer` while `guard_delivery_packet` requires each entry to have the exact non-empty key `scope`. The occurrence cause was an ambiguous prompt contract: it described the coverage map as a mapping from approved scope/acceptance layers to task ids, but did not explicitly name the required JSON field or show the execution-state shape. The escape cause was contained, not propagated: the deterministic guard correctly failed closed before any worker ran. The gap was prevention at the source; the existing regression coverage checked durable-state validation and broad prompt ownership but did not assert that the planner prompt taught the exact `coverage_map[].scope` key.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/prompts/delivery_planner.md`: made the execution-state contract explicit that every `coverage_map` item must use the exact `scope` key, warned against aliases such as `scope_or_acceptance_layer`, and added a minimal JSON skeleton with the required shape.
+- `.fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh`: added regression checks that the planner prompt contains the exact-key instruction and execution-state coverage-map skeleton.
+
+Validation:
+
+- `bash .fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh` — passed; includes delivery-planner state and task-verdict helper tests.
+- `python3 -B .fabro/workflows/iteration-implementation/scripts/test_delivery_planner_state.py` — passed.
+- `bash .fabro/workflows/iteration-implementation/scripts/test_workflow_routing.sh` — passed.
+- `python3 -B .fabro/workflows/iteration-implementation/scripts/test_task_workflow_runtime.py` — passed.
+- `python3 -B .fabro/workflows/iteration-implementation/scripts/test_apply_task_verdict.py` — passed.
+- `env -u DEVENV_RUNTIME -u MEMBA_DEVENV_SHELL -u DEVENV_ROOT -u DEVENV_STATE -u DEVENV_PROFILE -u DEVENV_DOTFILE -u PGHOST -u PGPORT -u PGDATA MEMBA_POSTGRES_PORT=15461 ACCEPTANCE_SERVER_NODE=memba_kaizen_planner_scope_final@localhost ./bin/dev check` — passed on the staged diff.
+
+Remaining follow-up:
+
+- This fix should prevent the same alias mismatch in future planner output, while the guard remains the fail-closed containment if another malformed artifact is produced. Operational effectiveness still needs a later authorized delivery/recovery run to demonstrate that a live planner now writes a valid packet and reaches the worker with bounded context. This resolution did not start, remove, or modify run `01M2HT2BA2C7765C0NHNJVPZ7C`.

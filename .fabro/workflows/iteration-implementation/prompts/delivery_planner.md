@@ -37,8 +37,36 @@ Use JSON with `schema_version: 1`.
    - `accepted_tasks`: all checked lines from `todo.md`; do not add or remove checked lines.
    - `pending_obligations`: objects with `task_id`, `todo_line`, `origin`, `status`, `coverage`, `replaces`, and `candidate_origins`.
    - `candidate_origins`: cumulative unaccepted candidate origins from prior worker replans/revisions that remain unresolved.
-   - `coverage_map`: explicit mapping from approved scope/acceptance layers to `pending_task_ids` and `accepted_task_lines`; every pending task id and accepted task line must be referenced.
+   - `coverage_map`: explicit mapping from approved scope/acceptance layers to `pending_task_ids` and `accepted_task_lines`; every pending task id and accepted task line must be referenced. Each `coverage_map` item must use the exact key `scope` for its non-empty scope/acceptance-layer description. Do not use aliases such as `scope_or_acceptance_layer`, `acceptance_layer`, or `description`; the deterministic guard rejects them.
    - `planner_note`: concise rationale for any split/combine/reorder and latest review/replan handling.
+
+   Minimal shape (include real values rather than these placeholders):
+
+   ```json
+   {
+     "schema_version": 1,
+     "plan_path": "docs/iterations/NNN-topic/plan.md",
+     "todo_path": "docs/iterations/NNN-topic/todo.md",
+     "source_baseline": "<binding checkpoint sha>",
+     "accepted_tasks": [],
+     "pending_obligations": [
+       {
+         "task_id": "001",
+         "todo_line": "- [ ] 001 ...",
+         "origin": "plan.md ...",
+         "status": "prepared",
+         "coverage": ["..."],
+         "replaces": [],
+         "candidate_origins": []
+       }
+     ],
+     "candidate_origins": [],
+     "coverage_map": [
+       {"scope": "approved scope or acceptance layer", "pending_task_ids": ["001"], "accepted_task_lines": []}
+     ],
+     "planner_note": "..."
+   }
+   ```
 
 2. `.delivery/planner-result.json`
    - `schema_version`, `plan_path`, `todo_path`, `source_baseline`.

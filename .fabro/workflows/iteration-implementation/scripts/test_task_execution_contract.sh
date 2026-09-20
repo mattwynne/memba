@@ -21,6 +21,8 @@ checks = [
     ("planner owns task selection", "You own task selection, semantic splitting/reordering" in planner),
     ("planner cannot edit code", "You may edit only this iteration's `todo.md` and files under the iteration's `.delivery/` directory." in planner),
     ("planner writes durable state", ".delivery/execution-state.json" in planner and ".delivery/current-worker-packet.json" in planner),
+    ("planner requires exact coverage key", "Each `coverage_map` item must use the exact key `scope`" in planner and "Do not use aliases such as `scope_or_acceptance_layer`" in planner),
+    ("planner shows execution-state coverage schema", '"coverage_map": [' in planner and '{"scope": "approved scope or acceptance layer", "pending_task_ids": ["001"], "accepted_task_lines": []}' in planner),
     ("worker reads packet", "Read the current packet" in implementation),
     ("worker does not split/select", "Do not choose a different todo line, split tasks, reorder `todo.md`" in implementation),
     ("single-owner task", "Do not spawn subagents in this per-task node." in implementation),
