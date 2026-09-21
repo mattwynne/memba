@@ -107,12 +107,16 @@ defmodule Memba.Membership do
   an already-applied retry. This lets follow-up work such as welcome delivery
   respond only to a confirmed new transition without consulting a potentially
   stale projection. Callers may explicitly select a Commanded `:returning`
-  mode when they need its lower-level dispatch result instead.
+  mode when they need its lower-level dispatch result instead. A genuine re-add
+  does not report success until earlier follow cleanup has been durably handled.
   """
   def add_custom_group_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_custom_group_member_command(attrs) do
-      dispatch_custom_group_admission(command, dispatch_opts)
+      dispatch_custom_group_admission(
+        command,
+        custom_group_membership_consistency(dispatch_opts)
+      )
     end
   end
 
@@ -125,11 +129,13 @@ defmodule Memba.Membership do
   the custom group or has its club's `club.manage_members` permission. The
   target must be the exact active club member recorded for the custom-group
   membership. System groups are not writable through this use case.
+  Successful dispatch does not complete before the required Messaging follow
+  cleanup is durable.
   """
   def remove_custom_group_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_custom_group_member_command(attrs) do
-      dispatch(command, dispatch_opts)
+      dispatch(command, custom_group_membership_consistency(dispatch_opts))
     end
   end
 
@@ -2601,6 +2607,15 @@ defmodule Memba.Membership do
 
   defp dispatch_member_lifecycle_command(command, dispatch_opts) do
     dispatch(command, member_lifecycle_consistency(dispatch_opts))
+  end
+
+  defp custom_group_membership_consistency(dispatch_opts) do
+    Keyword.update(
+      dispatch_opts,
+      :consistency,
+      [ClearRemovedGroupMemberFollows],
+      &include_removed_group_member_follows_consistency/1
+    )
   end
 
   defp dispatch_custom_group_admission(command, dispatch_opts) do

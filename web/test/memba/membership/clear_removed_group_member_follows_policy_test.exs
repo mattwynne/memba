@@ -30,9 +30,11 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Recipient
 
   test "is a strongly consistent Membership event handler that replays from origin" do
@@ -408,11 +410,261 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
       person_id: person_id
     }
 
-    assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
-    assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
+    metadata = %{event_id: Ecto.UUID.generate(), event_number: current_checkpoint()}
+
+    assert :ok = ClearRemovedGroupMemberFollows.handle(event, metadata)
+    assert :ok = ClearRemovedGroupMemberFollows.handle(event, metadata)
 
     refute Messaging.following_conversation?(conversation_id, person_id)
     assert count_unfollow_events(conversation_id, person_id) == 1
+  end
+
+  test "explicit custom-group removal durably clears manual, root, and reply auto-follows" do
+    fixture = explicit_removal_fixture!()
+    manual_conversation_id = Memba.ID.generate(:message)
+    root_conversation_id = Memba.ID.generate(:message)
+    reply_conversation_id = Memba.ID.generate(:message)
+
+    create_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      manual_conversation_id,
+      fixture.actor_person_id
+    )
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: manual_conversation_id,
+                 member_id: fixture.target_person_id
+               },
+               consistency: :strong
+             )
+
+    create_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      root_conversation_id,
+      fixture.target_person_id
+    )
+
+    create_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      reply_conversation_id,
+      fixture.actor_person_id
+    )
+
+    assert :ok =
+             MessagingApp.dispatch(
+               %PostMessageReply{
+                 message_id: Memba.ID.generate(:message),
+                 club_id: fixture.club_id,
+                 sender_id: fixture.target_person_id,
+                 conversation_id: reply_conversation_id,
+                 reply_to_message_id: reply_conversation_id,
+                 subject: "Board plans",
+                 body: "Reply auto-follow",
+                 recipients: []
+               },
+               consistency: :strong
+             )
+
+    for conversation_id <- [
+          manual_conversation_id,
+          root_conversation_id,
+          reply_conversation_id
+        ] do
+      assert Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+    end
+
+    assert {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}} =
+             remove_custom_group_member(fixture, returning: :execution_result)
+
+    for conversation_id <- [
+          manual_conversation_id,
+          root_conversation_id,
+          reply_conversation_id
+        ] do
+      refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+      assert [
+               %ConversationUnfollowed{
+                 member_id: target_person_id,
+                 cleanup_id: cleanup_id
+               }
+             ] = unfollow_events(conversation_id, fixture.target_person_id)
+
+      assert target_person_id == fixture.target_person_id
+      assert is_binary(cleanup_id)
+    end
+  end
+
+  test "cleanup preserves unrelated follows and shared conversations with surviving access" do
+    fixture = explicit_removal_fixture!()
+    retained_group_id = Memba.ID.generate(:group)
+    unrelated_conversation_id = Memba.ID.generate(:message)
+    shared_conversation_id = Memba.ID.generate(:message)
+
+    create_custom_group(fixture.club_id, retained_group_id, "Trips", "trips")
+
+    add_group_member(
+      fixture.club_id,
+      retained_group_id,
+      fixture.target_membership_id,
+      fixture.target_person_id
+    )
+
+    create_followed_conversation(
+      fixture.club_id,
+      retained_group_id,
+      unrelated_conversation_id,
+      fixture.target_person_id
+    )
+
+    create_followed_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      shared_conversation_id,
+      fixture.target_person_id
+    )
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(
+               %{
+                 conversation_id: shared_conversation_id,
+                 club_id: fixture.club_id,
+                 group_id: retained_group_id,
+                 access_level: :write
+               },
+               consistency: :strong
+             )
+
+    assert :ok = remove_custom_group_member(fixture)
+
+    assert Messaging.following_conversation?(
+             unrelated_conversation_id,
+             fixture.target_person_id
+           )
+
+    assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
+    assert count_unfollow_events(unrelated_conversation_id, fixture.target_person_id) == 0
+    assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 0
+  end
+
+  test "replayed removal cannot erase a follow established after a genuine re-add" do
+    fixture = explicit_removal_fixture!()
+    conversation_id = Memba.ID.generate(:message)
+
+    create_followed_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      conversation_id,
+      fixture.target_person_id
+    )
+
+    assert :ok = remove_custom_group_member(fixture)
+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+    assert {:ok, %CustomGroupAdmission{transition: :member_added}} =
+             Membership.add_custom_group_member(%{
+               club_id: fixture.club_id,
+               group_id: fixture.group_id,
+               membership_id: fixture.target_membership_id,
+               person_id: fixture.target_person_id,
+               actor_person_id: fixture.actor_person_id
+             })
+
+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: conversation_id,
+                 member_id: fixture.target_person_id
+               },
+               consistency: :strong
+             )
+
+    recorded_removal =
+      fixture.club_id
+      |> then(&EventStore.stream_forward(MembershipApp, &1))
+      |> Enum.find(fn recorded_event ->
+        match?(
+          %GroupMemberRemoved{
+            group_id: group_id,
+            membership_id: membership_id
+          }
+          when group_id == fixture.group_id and
+                 membership_id == fixture.target_membership_id,
+          recorded_event.data
+        )
+      end)
+
+    assert :ok =
+             ClearRemovedGroupMemberFollows.handle(recorded_removal.data, %{
+               event_id: recorded_removal.event_id,
+               event_number: recorded_removal.event_number
+             })
+
+    assert Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+    assert count_unfollow_events(conversation_id, fixture.target_person_id) == 1
+  end
+
+  test "explicit removal waits for lagging conversation access before acknowledging cleanup" do
+    fixture = explicit_removal_fixture!()
+    conversation_id = Memba.ID.generate(:message)
+    projector_child_id = stop_projector!(ConversationGroupAccessProjector)
+
+    create_followed_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      conversation_id,
+      fixture.target_person_id,
+      consistency: [
+        Memba.Messaging.Projectors.Message,
+        Memba.Messaging.Projectors.ConversationFollow
+      ]
+    )
+
+    assert [] = Messaging.list_conversations_for_group(fixture.group_id)
+
+    removal = Task.async(fn -> remove_custom_group_member(fixture) end)
+
+    try do
+      assert Task.yield(removal, 100) == nil
+      restart_projector!(projector_child_id)
+
+      assert :ok = Task.await(removal, 5_000)
+      refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+    after
+      if projector_child_id, do: restart_projector!(projector_child_id)
+    end
+  end
+
+  test "system-group removal facts do not clear follows" do
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
+    conversation_id = Memba.ID.generate(:message)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+    create_followed_conversation(club_id, everyone_group_id, conversation_id, person_id)
+
+    assert :ok =
+             ClearRemovedGroupMemberFollows.handle(
+               %GroupMemberRemoved{
+                 club_id: club_id,
+                 group_id: everyone_group_id,
+                 membership_id: Memba.ID.generate(:membership),
+                 person_id: person_id
+               },
+               %{event_id: Ecto.UUID.generate(), event_number: current_checkpoint()}
+             )
+
+    assert Messaging.following_conversation?(conversation_id, person_id)
+    assert count_unfollow_events(conversation_id, person_id) == 0
   end
 
   defp create_person(person_id, name, email) do
@@ -465,13 +717,17 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   end
 
   defp create_custom_group(club_id, group_id) do
+    create_custom_group(club_id, group_id, "Board", "board")
+  end
+
+  defp create_custom_group(club_id, group_id, name, email_slug) do
     assert :ok =
              MembershipApp.dispatch(
                %CreateGroup{
                  club_id: club_id,
                  group_id: group_id,
-                 email_slug: "board",
-                 name: "Board"
+                 email_slug: email_slug,
+                 name: name
                },
                consistency: :strong
              )
@@ -490,7 +746,27 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              )
   end
 
-  defp create_followed_conversation(club_id, group_id, conversation_id, person_id) do
+  defp create_followed_conversation(
+         club_id,
+         group_id,
+         conversation_id,
+         person_id,
+         opts \\ []
+       ) do
+    create_conversation(club_id, group_id, conversation_id, person_id, opts)
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: person_id
+               },
+               consistency: Keyword.get(opts, :consistency, :strong)
+             )
+  end
+
+  defp create_conversation(club_id, group_id, conversation_id, person_id, opts \\ []) do
     assert :ok =
              MessagingApp.dispatch(
                %SendMessage{
@@ -509,25 +785,61 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                    }
                  ]
                },
-               consistency: :strong
+               consistency: Keyword.get(opts, :consistency, :strong)
              )
+  end
 
-    assert :ok =
-             Messaging.follow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: conversation_id,
-                 member_id: person_id
-               },
-               consistency: :strong
-             )
+  defp explicit_removal_fixture! do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    actor_membership_id = Memba.ID.generate(:membership)
+    actor_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+
+    create_club(club_id)
+    add_member(club_id, actor_membership_id, actor_person_id)
+    add_member(club_id, target_membership_id, target_person_id)
+    create_custom_group(club_id, group_id)
+    add_group_member(club_id, group_id, actor_membership_id, actor_person_id)
+    add_group_member(club_id, group_id, target_membership_id, target_person_id)
+
+    %{
+      club_id: club_id,
+      group_id: group_id,
+      actor_person_id: actor_person_id,
+      target_person_id: target_person_id,
+      target_membership_id: target_membership_id
+    }
+  end
+
+  defp remove_custom_group_member(fixture, opts \\ []) do
+    Membership.remove_custom_group_member(
+      %{
+        club_id: fixture.club_id,
+        group_id: fixture.group_id,
+        membership_id: fixture.target_membership_id,
+        person_id: fixture.target_person_id,
+        actor_person_id: fixture.actor_person_id
+      },
+      opts
+    )
   end
 
   defp count_unfollow_events(conversation_id, person_id) do
     conversation_id
+    |> unfollow_events(person_id)
+    |> length()
+  end
+
+  defp unfollow_events(conversation_id, person_id) do
+    conversation_id
     |> then(&EventStore.stream_forward(MessagingApp, &1))
-    |> Enum.count(fn recorded_event ->
-      match?(%ConversationUnfollowed{member_id: ^person_id}, recorded_event.data)
+    |> Enum.flat_map(fn recorded_event ->
+      case recorded_event.data do
+        %ConversationUnfollowed{member_id: ^person_id} = event -> [event]
+        _event -> []
+      end
     end)
   end
 
@@ -567,6 +879,29 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
       {:error, :running} -> :ok
     end
   end
+
+  defp stop_projector!(projector) do
+    child_id =
+      Supervisor.which_children(Memba.Supervisor)
+      |> Enum.find_value(fn
+        {child_id, _pid, :worker, [^projector]} -> child_id
+        _child -> nil
+      end)
+
+    assert child_id
+    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+    child_id
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+    end
+  end
+
+  defp current_checkpoint, do: Memba.ProjectionBarrier.current_checkpoint()
 
   defp latest_club_stream_version(club_id) do
     MembershipApp

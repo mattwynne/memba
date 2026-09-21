@@ -3,9 +3,10 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
   Clears Messaging follows when a custom-group membership ends.
 
   The handler subscribes to Membership facts and coordinates the cross-context
-  consequence through Messaging's public query and command APIs. Starting from
-  origin makes a first deployment repair earlier removals, while the existing
-  idempotent unfollow command makes repeated delivery and replay safe.
+  consequence through Messaging's public API. Starting from origin repairs
+  earlier removals. Each removal's durable EventStore identity becomes the
+  Messaging cleanup key, making repeated delivery and replay safe even after a
+  genuine re-add and new follow.
   """
 
   use Commanded.Event.Handler,
@@ -17,12 +18,11 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
-  alias Memba.Messaging.Projectors.ConversationFollow
 
   @impl Commanded.Event.Handler
-  def handle(%GroupMemberRemoved{} = event, _metadata) do
+  def handle(%GroupMemberRemoved{} = event, metadata) do
     if SystemGroups.custom_group?(event) do
-      clear_conversation_follows(event)
+      clear_conversation_follows(event, metadata)
     else
       :ok
     end
@@ -30,25 +30,34 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
 
   def handle(_event, _metadata), do: :ok
 
-  defp clear_conversation_follows(event) do
-    event.group_id
-    |> Messaging.list_conversations_for_group()
-    |> Enum.reduce_while(:ok, fn conversation, :ok ->
-      case unfollow(event, conversation.conversation_id) do
-        :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
+  defp clear_conversation_follows(event, metadata) do
+    Messaging.clear_removed_group_member_follows(%{
+      club_id: event.club_id,
+      group_id: event.group_id,
+      member_id: event.person_id,
+      cleanup_id: cleanup_id(event, metadata),
+      checkpoint: cleanup_checkpoint(metadata)
+    })
   end
 
-  defp unfollow(event, conversation_id) do
-    Messaging.unfollow_conversation(
-      %{
-        club_id: event.club_id,
-        conversation_id: conversation_id,
-        member_id: event.person_id
-      },
-      consistency: [ConversationFollow]
-    )
+  defp cleanup_id(event, metadata) do
+    Map.get(metadata, :event_id) ||
+      Map.get(metadata, "event_id") ||
+      Enum.join(
+        [
+          "historic-group-member-removal",
+          event.club_id,
+          event.group_id,
+          event.membership_id,
+          event.person_id
+        ],
+        ":"
+      )
+  end
+
+  defp cleanup_checkpoint(metadata) do
+    Map.get(metadata, :event_number) ||
+      Map.get(metadata, "event_number") ||
+      Memba.ProjectionBarrier.current_checkpoint()
   end
 end

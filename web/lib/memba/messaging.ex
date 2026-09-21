@@ -44,6 +44,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projectors.ConversationFollow,
     as: ConversationFollowProjector
 
+  alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
@@ -58,6 +59,11 @@ defmodule Memba.Messaging do
   import Ecto.Query
 
   @default_authorization_stability_timeout 5_000
+  @removed_group_follow_cleanup_projectors [
+    MessageProjector,
+    ConversationGroupAccessProjector,
+    ConversationFollowProjector
+  ]
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -228,6 +234,47 @@ defmodule Memba.Messaging do
     with {:ok, command} <- unfollow_conversation_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
+    end
+  end
+
+  @doc """
+  Durably clear follows invalidated by one custom-group membership removal.
+
+  Conversation discovery waits for Messaging's read models to reach the
+  Membership removal checkpoint, so projection lag cannot turn cleanup into a
+  false success. Each unfollow carries the Membership event ID as an idempotency
+  key. Replaying that removal therefore cannot erase a follow established after
+  cleanup and a genuine re-add.
+
+  A conversation-wide follow is retained when another active group still gives
+  the person authoritative read access to the conversation.
+  """
+  def clear_removed_group_member_follows(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
+         {:ok, member_id} <- fetch_required_id(attrs, :member_id, :person),
+         {:ok, cleanup_id} <- fetch_cleanup_id(attrs),
+         {:ok, checkpoint} <- fetch_cleanup_checkpoint(attrs),
+         :ok <- await_removed_group_follow_cleanup_projections(checkpoint) do
+      group_id
+      |> list_conversations_for_group()
+      |> Enum.reduce_while(:ok, fn conversation, :ok ->
+        result =
+          clear_removed_group_member_follow(
+            conversation.conversation_id,
+            club_id,
+            group_id,
+            member_id,
+            cleanup_id,
+            dispatch_opts
+          )
+
+        case result do
+          :ok -> {:cont, :ok}
+          {:error, _reason} = error -> {:halt, error}
+        end
+      end)
     end
   end
 
@@ -2075,9 +2122,94 @@ defmodule Memba.Messaging do
        %UnfollowConversation{
          club_id: club_id,
          conversation_id: conversation_id,
-         member_id: member_id
+         member_id: member_id,
+         cleanup_id: optional_attribute(attrs, :cleanup_id)
        }}
     end
+  end
+
+  defp fetch_cleanup_id(attrs) do
+    case fetch_required(attrs, :cleanup_id) do
+      {:ok, cleanup_id} when is_binary(cleanup_id) and cleanup_id != "" ->
+        {:ok, cleanup_id}
+
+      _missing_or_invalid ->
+        {:error, :invalid_cleanup_id}
+    end
+  end
+
+  defp fetch_cleanup_checkpoint(attrs) do
+    case fetch_required(attrs, :checkpoint) do
+      {:ok, checkpoint} when is_integer(checkpoint) and checkpoint >= 0 ->
+        {:ok, checkpoint}
+
+      _missing_or_invalid ->
+        {:error, :invalid_cleanup_checkpoint}
+    end
+  end
+
+  defp await_removed_group_follow_cleanup_projections(checkpoint) do
+    case ProjectionBarrier.await(
+           @removed_group_follow_cleanup_projectors,
+           checkpoint: checkpoint,
+           timeout: authorization_stability_timeout()
+         ) do
+      {:ok, _result} -> :ok
+      {:error, :timeout, _result} -> {:error, :follow_cleanup_projection_timeout}
+    end
+  end
+
+  defp clear_removed_group_member_follow(
+         conversation_id,
+         club_id,
+         removed_group_id,
+         member_id,
+         cleanup_id,
+         dispatch_opts
+       ) do
+    if member_has_authoritative_conversation_access_excluding_group?(
+         conversation_id,
+         club_id,
+         member_id,
+         removed_group_id
+       ) do
+      :ok
+    else
+      unfollow_conversation(
+        %{
+          club_id: club_id,
+          conversation_id: conversation_id,
+          member_id: member_id,
+          cleanup_id: cleanup_id
+        },
+        include_conversation_follow_consistency(dispatch_opts)
+      )
+    end
+  end
+
+  defp include_conversation_follow_consistency(dispatch_opts) do
+    Keyword.update(
+      dispatch_opts,
+      :consistency,
+      [ConversationFollowProjector],
+      fn
+        :strong ->
+          :strong
+
+        :eventual ->
+          [ConversationFollowProjector]
+
+        handlers when is_list(handlers) ->
+          if ConversationFollowProjector in handlers do
+            handlers
+          else
+            [ConversationFollowProjector | handlers]
+          end
+
+        consistency ->
+          consistency
+      end
+    )
   end
 
   defp report_email_delivery_delivered_command(attrs) do
@@ -2133,6 +2265,13 @@ defmodule Memba.Messaging do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> {:error, {:missing_required_attribute, key}}
+    end
+  end
+
+  defp optional_attribute(attrs, key) do
+    case fetch_required(attrs, key) do
+      {:ok, value} -> value
+      {:error, {:missing_required_attribute, ^key}} -> nil
     end
   end
 
@@ -2283,6 +2422,28 @@ defmodule Memba.Messaging do
       end)
     else
       _invalid_missing_or_inaccessible -> false
+    end
+  end
+
+  defp member_has_authoritative_conversation_access_excluding_group?(
+         conversation_id,
+         club_id,
+         person_id,
+         excluded_group_id
+       ) do
+    with %Message{
+           message_id: ^conversation_id,
+           club_id: ^club_id,
+           group_access: group_access
+         } <- App.aggregate_state(Message, conversation_id) do
+      read_levels = ConversationAccess.grant_levels_including("read")
+
+      Enum.any?(group_access, fn {group_id, granted_access_level} ->
+        group_id != excluded_group_id and granted_access_level in read_levels and
+          Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id)
+      end)
+    else
+      _missing_or_wrong_club -> false
     end
   end
 

@@ -485,6 +485,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     membership_projector_child_id = stop_projector!(MembershipProjector)
     group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
     conversation_access_projector_child_id = stop_projector!(ConversationGroupAccessProjector)
+    follow_cleanup_child_id = stop_projector!(ClearRemovedGroupMemberFollows)
 
     assert :ok =
              MembershipApp.dispatch(
@@ -582,14 +583,21 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert :ok = stop_supervised(EmailDeliveryDispatcher)
     assert_receive {:DOWN, ^dispatcher_monitor, :process, ^dispatcher_pid, :shutdown}
 
+    Application.put_env(:memba, :authorization_stability_timeout, 1_000)
     restart_projector!(membership_projector_child_id)
     restart_projector!(group_membership_projector_child_id)
     restart_projector!(conversation_access_projector_child_id)
+    restart_projector!(follow_cleanup_child_id)
 
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
 
     Memba.ProjectionBarrier.await!(
-      [MembershipProjector, GroupMembershipProjector, ConversationGroupAccessProjector],
+      [
+        MembershipProjector,
+        GroupMembershipProjector,
+        ConversationGroupAccessProjector,
+        ClearRemovedGroupMemberFollows
+      ],
       checkpoint: checkpoint,
       timeout: 1_000
     )
@@ -681,7 +689,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     ])
   end
 
-  test "does not create a reply delivery when access projection lag makes departure follow cleanup miss the conversation" do
+  test "access projection lag cannot acknowledge cleanup and later resume a departed follow" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
 
@@ -733,7 +741,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
+    restart_projector!(conversation_access_projector_child_id)
+
     await_restarted_subscribers!([
+      ConversationGroupAccessProjector,
       MembershipProjector,
       GroupMembershipProjector,
       SystemGroupMembership,
@@ -756,7 +767,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
       SystemGroupMembership
     ])
 
-    assert Messaging.following_conversation?(conversation_id, carol.person_id)
+    refute Messaging.following_conversation?(conversation_id, carol.person_id)
     assert Memba.Membership.active_member_of_club_authoritatively?(club_id, carol.person_id)
 
     refute Memba.Membership.active_member_of_group_authoritatively?(
@@ -783,9 +794,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
       for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
 
     refute carol.person_id in recipient_ids
-
-    restart_projector!(conversation_access_projector_child_id)
-    await_restarted_subscribers!([ConversationGroupAccessProjector])
   end
 
   test "rejects an unknown audience group before dispatching the message command" do

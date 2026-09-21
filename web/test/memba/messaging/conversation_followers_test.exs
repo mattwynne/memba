@@ -104,6 +104,36 @@ defmodule Memba.Messaging.ConversationFollowersTest do
                  member_id: Memba.ID.generate(:person)
                })
     end
+
+    test "records cleanup even when an auto-follow exists only in the projection" do
+      club_id = Memba.ID.generate(:club)
+      conversation_id = Memba.ID.generate(:message)
+      member_id = Memba.ID.generate(:person)
+
+      command = %UnfollowConversation{
+        club_id: club_id,
+        conversation_id: conversation_id,
+        member_id: member_id,
+        cleanup_id: "membership-removal-1"
+      }
+
+      assert %ConversationUnfollowed{cleanup_id: "membership-removal-1"} =
+               event =
+               ConversationFollowers.execute(%ConversationFollowers{}, command)
+
+      cleaned = ConversationFollowers.apply(%ConversationFollowers{}, event)
+
+      followed_again =
+        ConversationFollowers.apply(cleaned, %ConversationFollowed{
+          follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
+          club_id: club_id,
+          conversation_id: conversation_id,
+          member_id: member_id
+        })
+
+      assert [] = ConversationFollowers.execute(followed_again, command)
+      assert MapSet.member?(followed_again.follower_ids, member_id)
+    end
   end
 
   test "apply/2 records follower state" do

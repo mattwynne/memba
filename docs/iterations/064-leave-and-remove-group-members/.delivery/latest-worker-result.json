@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "packet_id": "001-15d75fd-02",
-  "task_id": "001",
-  "todo_line": "- [ ] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal.",
+  "packet_id": "004-72f5ddc-01",
+  "task_id": "004",
+  "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "result": "ready_for_review",
   "changed_paths": [
     "web/lib/memba/membership.ex",
-    "web/lib/memba/membership/club.ex",
-    "web/lib/memba/membership/router.ex",
-    "web/lib/memba/membership/commands/remove_custom_group_member.ex",
-    "web/test/memba/membership/app_test.exs",
-    "web/test/memba/membership/club_test.exs",
-    "web/test/memba/membership/group_command_event_modules_test.exs",
-    "web/test/memba/membership/public_api_test.exs",
-    "web/test/memba/membership/remove_custom_group_member_dispatch_test.exs"
+    "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
+    "web/lib/memba/messaging.ex",
+    "web/lib/memba/messaging/commands/unfollow_conversation.ex",
+    "web/lib/memba/messaging/conversation_followers.ex",
+    "web/lib/memba/messaging/events/conversation_unfollowed.ex",
+    "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
+    "web/test/memba/messaging/conversation_followers_test.exs",
+    "web/test/memba/messaging/send_club_message_test.exs"
   ],
   "validation": [
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
       "exit_status": 0,
-      "evidence": "115 tests, 0 failures. Covers aggregate-state member and outside-manager authority, ordinary/inactive outsider refusal, typed/routed identities, self/final-member removal, exact retry idempotency, system-group guards, command/event shape, public API, routing, and projection behavior."
+      "evidence": "32 tests, 0 failures. Proves explicit removal completion and accepted return/event behavior, manual/root/reply follow cleanup facts, duplicate and replay idempotency, remove/re-add/follow safety, unrelated/shared-access preservation, lag blocking, and system-group no-ops."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs",
       "exit_status": 0,
-      "evidence": "15 tests, 0 failures. The existing admission boundary and the new removal boundary pass together."
+      "evidence": "36 tests, 0 failures. Proves aggregate cleanup tokens can clear projection-only reply auto-follows, preserve later follows, retain composed access, and prevent a lag-hidden old follow from resuming after club rejoin."
     },
     {
       "command": "git diff --check",
@@ -32,6 +32,6 @@
       "evidence": "No whitespace errors."
     }
   ],
-  "notes": "The carried task-001 candidate required no further code or test edits after inspection. RemoveCustomGroupMember is actor-bearing and Club-routed, while GroupMemberRemoved and the trusted RemoveGroupMember path remain actor-free. Focused assertions prove a real transition emits only GroupMemberRemoved, target and actor identities come from current aggregate state, member/self/final-member and outside-manager removal work, retries are event-free, outsiders/system groups are rejected, and club membership plus Admin role/club.manage_members authority remain intact. The custom group is unchanged because GroupMemberRemoved only deactivates its keyed group-membership entry; no club/role/invitation event is emitted. The earlier full-check timeout is superseded by this packet's focused-validation contract; the deterministic dev_check node owns the full gate.",
+  "notes": "The selected stale-ordering mechanism uses each durable Membership removal event ID as a cleanup token recorded by ConversationUnfollowed in the root conversation-follow aggregate. The token emits an authoritative unfollow even when a reply auto-follow exists only in the projection; replaying the old removal is then a no-op after a post-re-add follow. Public custom-group add/remove calls wait for the origin-replaying cleanup handler, and cleanup waits for Message/access/follow projections through the removal checkpoint before discovering conversations. It excludes the removed group when checking authoritative surviving access, preserving unrelated and genuinely shared follows. The initial TDD run failed on the absent cleanup_id contract; superseded diagnostic focused runs exposed and corrected the old projection-lag test's false-success expectation and its stopped-handler test setup.",
   "unresolved": []
 }

@@ -13,7 +13,12 @@ defmodule Memba.Messaging.ConversationFollowers do
 
   @behaviour Aggregate
 
-  defstruct [:conversation_id, :club_id, follower_ids: MapSet.new()]
+  defstruct [
+    :conversation_id,
+    :club_id,
+    follower_ids: MapSet.new(),
+    completed_cleanup_ids: MapSet.new()
+  ]
 
   @impl Aggregate
   def execute(%__MODULE__{} = conversation, %FollowConversation{} = command) do
@@ -37,15 +42,22 @@ defmodule Memba.Messaging.ConversationFollowers do
     with :ok <- validate_command(command),
          :ok <- validate_same_conversation(conversation, command),
          :ok <- validate_same_club(conversation, command) do
-      if MapSet.member?(conversation.follower_ids, command.member_id) do
-        %ConversationUnfollowed{
-          follow_id: follow_id(command.conversation_id, command.member_id),
-          club_id: command.club_id,
-          conversation_id: command.conversation_id,
-          member_id: command.member_id
-        }
-      else
-        []
+      cond do
+        cleanup_completed?(conversation, command.cleanup_id) ->
+          []
+
+        MapSet.member?(conversation.follower_ids, command.member_id) or
+            is_binary(command.cleanup_id) ->
+          %ConversationUnfollowed{
+            follow_id: follow_id(command.conversation_id, command.member_id),
+            club_id: command.club_id,
+            conversation_id: command.conversation_id,
+            member_id: command.member_id,
+            cleanup_id: command.cleanup_id
+          }
+
+        true ->
+          []
       end
     end
   end
@@ -81,7 +93,9 @@ defmodule Memba.Messaging.ConversationFollowers do
       conversation
       | conversation_id: event.conversation_id,
         club_id: event.club_id,
-        follower_ids: MapSet.delete(conversation.follower_ids, event.member_id)
+        follower_ids: MapSet.delete(conversation.follower_ids, event.member_id),
+        completed_cleanup_ids:
+          record_completed_cleanup(conversation.completed_cleanup_ids, event.cleanup_id)
     }
   end
 
@@ -112,6 +126,18 @@ defmodule Memba.Messaging.ConversationFollowers do
   defp validate_same_club(%__MODULE__{club_id: nil}, _command), do: :ok
   defp validate_same_club(%__MODULE__{club_id: club_id}, %{club_id: club_id}), do: :ok
   defp validate_same_club(%__MODULE__{}, _command), do: {:error, :club_id_mismatch}
+
+  defp cleanup_completed?(_conversation, nil), do: false
+
+  defp cleanup_completed?(conversation, cleanup_id) do
+    MapSet.member?(conversation.completed_cleanup_ids, cleanup_id)
+  end
+
+  defp record_completed_cleanup(cleanup_ids, cleanup_id) when is_binary(cleanup_id) do
+    MapSet.put(cleanup_ids, cleanup_id)
+  end
+
+  defp record_completed_cleanup(cleanup_ids, _cleanup_id), do: cleanup_ids
 
   defp validate_id(type, value, error) do
     case ID.cast(type, value) do
