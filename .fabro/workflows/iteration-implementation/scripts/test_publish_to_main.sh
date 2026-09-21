@@ -14,7 +14,14 @@ git init -q --bare origin.git
 cd repo
 git config user.name Test
 git config user.email test@example.com
-mkdir -p .fabro/workflows/scripts .fabro/workflows/iteration-implementation/scripts docs/iterations/001-example web/lib
+mkdir -p bin .fabro/workflows/scripts .fabro/workflows/iteration-implementation/scripts docs/iterations/001-example web/lib
+cat > bin/dev <<'DEV'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s %s\n' "$(git rev-parse HEAD)" "$*" >> "$FABRO_DEV_CHECK_LOG"
+DEV
+chmod +x bin/dev
+export FABRO_DEV_CHECK_LOG="$workdir/dev-check.log"
 cp "$iteration_status_source" .fabro/workflows/scripts/iteration_status.py
 chmod +x .fabro/workflows/scripts/iteration_status.py
 cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py.real
@@ -58,6 +65,7 @@ git add .
 git commit -q -m initial
 git remote add origin "$workdir/origin.git"
 git push -q origin main
+git -C "$workdir/origin.git" symbolic-ref HEAD refs/heads/main
 
 cat > web/lib/example.ex <<'CODE'
 defmodule Example do
@@ -103,6 +111,16 @@ fi
 if ! grep -q 'Fabro-Run-Id: TEST-RUN' <<<"$message"; then
   echo "Expected Fabro run id in commit message" >&2
   echo "$message" >&2
+  exit 1
+fi
+if ! git notes --ref=refs/notes/fabro-dev-check show "$published" | grep -Fxq "Validated-Commit: $published"; then
+  echo "Expected a dev-check attestation for the exact published implementation commit" >&2
+  git notes --ref=refs/notes/fabro-dev-check show "$published" >&2 || true
+  exit 1
+fi
+if ! grep -Fxq "$published check" "$FABRO_DEV_CHECK_LOG"; then
+  echo "Expected ./bin/dev check to run on the exact published implementation commit" >&2
+  cat "$FABRO_DEV_CHECK_LOG" >&2 || true
   exit 1
 fi
 identity=$(git log -1 --format='%an <%ae>|%cn <%ce>' origin/main)

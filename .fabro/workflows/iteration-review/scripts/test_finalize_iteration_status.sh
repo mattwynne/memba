@@ -33,7 +33,14 @@ git init -q --bare "$workdir/origin.git"
 cd "$workdir/repo"
 git config user.name Test
 git config user.email test@example.com
-mkdir -p .fabro/workflows/scripts docs/iterations/001-example docs
+mkdir -p bin .fabro/workflows/scripts docs/iterations/001-example docs
+cat > bin/dev <<'DEV'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s %s\n' "$(git rev-parse HEAD)" "$*" >> "$FABRO_DEV_CHECK_LOG"
+DEV
+chmod +x bin/dev
+export FABRO_DEV_CHECK_LOG="$workdir/dev-check.log"
 cp "$iteration_status_source" .fabro/workflows/scripts/iteration_status.py
 chmod +x .fabro/workflows/scripts/iteration_status.py
 cat > docs/iterations/README.md <<'README'
@@ -142,6 +149,16 @@ message=$(git log -1 --format=%B origin/main)
 if ! grep -q 'iteration 001: mark merged' <<<"$message"; then
   echo "Expected finalization commit subject on origin/main" >&2
   echo "$message" >&2
+  exit 1
+fi
+if ! git notes --ref=refs/notes/fabro-dev-check show "$published" | grep -Fxq "Validated-Commit: $published"; then
+  echo "Expected a dev-check attestation for the exact finalization commit" >&2
+  git notes --ref=refs/notes/fabro-dev-check show "$published" >&2 || true
+  exit 1
+fi
+if ! grep -Fxq "$published check" "$FABRO_DEV_CHECK_LOG"; then
+  echo "Expected ./bin/dev check to run on the exact finalization commit" >&2
+  cat "$FABRO_DEV_CHECK_LOG" >&2 || true
   exit 1
 fi
 identity=$(git log -1 --format='%an <%ae>|%cn <%ce>' origin/main)

@@ -50,4 +50,6 @@ fi
 # the validated status are visible in the canonical branch. Rebase first so we fail
 # loudly on real conflicts instead of overwriting newer main work.
 git pull --rebase origin main
+"$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
+git push origin refs/notes/fabro-dev-check
 git push origin HEAD:main

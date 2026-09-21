@@ -93,6 +93,8 @@ git worktree add -q --detach "$publish_worktree" origin/main
   # Rebase the finalization candidate in the disposable worktree so origin/main
   # can move during review without ever rewriting the active Fabro run branch.
   fabro_git_with_identity pull --rebase origin main
+  "$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
+  git push origin refs/notes/fabro-dev-check
   git push origin HEAD:main
 )
 

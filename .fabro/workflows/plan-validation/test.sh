@@ -18,6 +18,7 @@ VISIBLE_PATHS=(
   ".fabro/workflows/plan-validation/prompts/recheck.md"
   ".fabro/workflows/plan-validation/scripts/publish_ready.sh"
   ".fabro/workflows/scripts/git_identity.sh"
+  ".fabro/workflows/scripts/attest_dev_check.sh"
   "$PASS_PLAN"
   "$FAIL_PLAN"
 )
@@ -65,6 +66,15 @@ require_parallel_fan_in() {
 
   grep -Fq 'parallel.results' "$synthesis_prompt" || \
     fail "synthesis prompt does not instruct the model to inspect merged branch evidence"
+}
+
+require_publish_attestation_contract() {
+  local publish_script="$REPO_ROOT/.fabro/workflows/plan-validation/scripts/publish_ready.sh"
+
+  grep -Fq 'attest_dev_check.sh' "$publish_script" ||
+    fail 'plan publication does not require a dev-check attestation'
+  grep -Fq 'push origin refs/notes/fabro-dev-check' "$publish_script" ||
+    fail 'plan publication does not record its dev-check attestation before pushing main'
 }
 
 require_fabro_visible_inputs() {
@@ -148,6 +158,7 @@ command -v fabro >/dev/null 2>&1 || fail "fabro CLI not found"
 cd "$REPO_ROOT"
 fabro validate "$WORKFLOW" --no-upgrade-check
 require_parallel_fan_in
+require_publish_attestation_contract
 require_fabro_visible_inputs
 
 run_eval "unanimous-pass" "$PASS_PLAN" success

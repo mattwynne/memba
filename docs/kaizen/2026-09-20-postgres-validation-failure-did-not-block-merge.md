@@ -79,7 +79,26 @@ Validation:
 
 Expected versus observed: `dev check` was expected to serialize work for its selected Postgres port, start or reuse a ready service once, and leave acceptance/Mix unable to reset it. The staged executable gate passed end-to-end with that parent-owned lifecycle. This validates the mechanism once; it does not yet demonstrate long-term recurrence prevention.
 
-Remaining follow-up:
+Follow-up resolution — exact-commit publication attestation:
 
-- Confirm the workflow's publish path records and requires a successful full `dev check` for the exact candidate commit before merge/push; this lifecycle change prevents the infrastructure failure but does not itself enforce publication eligibility.
+Root-cause evidence: all three Fabro paths that update `main` constructed or rebased the candidate after the graph's earlier `dev_check` node. `iteration-implementation/scripts/publish_to_main.sh` and `iteration-review/scripts/publish_polish_to_main.sh` then pushed that un-attested candidate directly; `iteration-review/scripts/finalize_iteration_status.sh` and `plan-validation/scripts/publish_ready.sh` had the same final `pull --rebase`/push gap. Thus even a prior successful gate was neither evidence for the final commit object nor a publish precondition.
+
+Fix applied:
+
+- `.fabro/workflows/scripts/attest_dev_check.sh` runs the full `./bin/dev check` in the clean, rebased publish worktree, rejects a changed or dirty candidate afterward, and records `Validated-Commit: <SHA>` plus the successful command in `refs/notes/fabro-dev-check`.
+- Every Fabro path that pushes `main` now invokes that helper after its final rebase and pushes the attestation ref before pushing `main`: implementation delivery, review polish, review finalization, and plan validation.
+- Publication-fixture tests now prove that each implementation/review/finalization commit was the SHA on which `./bin/dev check` ran and has its matching recorded note. The plan-validation workflow contract test prevents its attestation call or note publication from being removed.
+
+Validation:
+
+- `bash .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash -n` over the changed Fabro shell scripts — passed.
+- `./bin/dev check` — see this change's delivery validation.
+
+Limitations:
+
+- This is a guard on the Fabro delivery paths; a human or unrelated automation with direct permission to push `main` can still bypass it. Branch protection or server-side policy would be needed to make the requirement repository-wide.
+- A Git note is durable only when clients fetch `refs/notes/fabro-dev-check`; the delivery scripts push it before `main`, but ordinary Git fetches do not necessarily fetch notes automatically.
 - Review the next representative `dev check`/worktree run for a clean start, handoff, and teardown boundary.
