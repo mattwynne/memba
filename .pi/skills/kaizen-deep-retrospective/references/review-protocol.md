@@ -15,7 +15,7 @@ Anchor the configurable evidence window to review start (default 90 days). Inven
 
 Record unavailable sources and retention gaps explicitly. Do not translate a missing run, deploy, cost, or intervention record into success.
 
-Start exactly four BB research children in parallel, each with a distinct evidence domain: (1) iterations/Git/deploy/CI, (2) Fabro runs, (3) tests/incidents/kaizen, and (4) BB/human interventions/token cost. Require source paths, IDs, dates, and uncertainties in each report. A child with no accessible evidence reports the gap rather than borrowing another child's scope.
+Start up to four BB research children in parallel, sized to the available evidence, with distinct domains such as (1) iterations/Git/deploy/CI, (2) Fabro runs, (3) tests/incidents/kaizen, and (4) BB/human interventions/token cost. Require source paths, IDs, dates, and uncertainties in each report. A child with no accessible evidence reports the gap rather than borrowing another child's scope.
 
 ## 2. Search broad, then drill down
 
