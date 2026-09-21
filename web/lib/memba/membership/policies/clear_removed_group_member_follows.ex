@@ -6,8 +6,9 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
   consequence through Messaging's public API. Starting from origin repairs
   earlier removals. Each removal carries its Club-owned group-membership
   generation as the causal cutoff and its durable EventStore identity as a
-  retry key. Historic facts without a generation use generation zero, before
-  every generated follow fact.
+  retry key. Historic facts without a generation use generation zero; Messaging
+  compares immutable source positions for the exceptional historic
+  remove/re-add/follow ordering before persisting its cleanup decision.
   """
 
   use Commanded.Event.Handler,

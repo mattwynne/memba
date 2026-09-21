@@ -2,6 +2,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
+  alias Commanded.Event.Mapper
   alias Commanded.EventStore
   alias Commanded.Event.Handler
   alias Commanded.Registration
@@ -35,6 +36,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -677,7 +679,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              })
 
     assert :ok =
-             Messaging.follow_conversation(
+             Messaging.follow_conversation_as_current_member(
                %{
                  club_id: fixture.club_id,
                  conversation_id: shared_conversation_id,
@@ -913,6 +915,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     fixture = explicit_removal_fixture!()
     conversation_id = Memba.ID.generate(:message)
     forged_group_id = Memba.ID.generate(:group)
+    unrelated_group_id = Memba.ID.generate(:group)
 
     create_person(fixture.actor_person_id, "Group Manager", "manager@example.com")
     create_person(fixture.target_person_id, "Departing Member", "departing@example.com")
@@ -926,6 +929,15 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
 
     assert :ok = remove_custom_group_member(fixture)
     initial_follow_count = length(follow_events(conversation_id, fixture.target_person_id))
+
+    create_custom_group(fixture.club_id, unrelated_group_id, "Trips", "trips")
+
+    add_group_member(
+      fixture.club_id,
+      unrelated_group_id,
+      fixture.actor_membership_id,
+      fixture.actor_person_id
+    )
 
     assert {:ok, %ExecutionResult{events: []}} =
              Messaging.follow_conversation(
@@ -999,6 +1011,211 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     assert delivery_created_for?(restored_follow_reply_events, fixture.target_person_id)
   end
 
+  test "origin cleanup removes generation-less manual and root follows recorded before removal" do
+    fixture = explicit_removal_fixture!()
+    manual_conversation_id = Memba.ID.generate(:message)
+    root_conversation_id = Memba.ID.generate(:message)
+    clear_follows_handler = clear_follows_handler_pid()
+
+    create_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      manual_conversation_id,
+      fixture.actor_person_id
+    )
+
+    append_messaging_events!(manual_conversation_id, [
+      %ConversationFollowed{
+        follow_id:
+          Memba.Messaging.ConversationFollowers.follow_id(
+            manual_conversation_id,
+            fixture.target_person_id
+          ),
+        club_id: fixture.club_id,
+        conversation_id: manual_conversation_id,
+        member_id: fixture.target_person_id
+      }
+    ])
+
+    append_historic_root!(
+      fixture.club_id,
+      fixture.group_id,
+      root_conversation_id,
+      fixture.target_person_id
+    )
+
+    :ok = :sys.suspend(clear_follows_handler)
+
+    try do
+      append_historic_group_membership_events!(fixture, [
+        %GroupMemberRemoved{
+          club_id: fixture.club_id,
+          group_id: fixture.group_id,
+          membership_id: fixture.target_membership_id,
+          person_id: fixture.target_person_id
+        }
+      ])
+
+      recorded_removal = recorded_historic_removal!(fixture)
+      stop_event_sourced_aggregate_instances!()
+
+      assert :ok =
+               ClearRemovedGroupMemberFollows.handle(
+                 recorded_removal.data,
+                 recorded_event_metadata(recorded_removal)
+               )
+
+      for conversation_id <- [manual_conversation_id, root_conversation_id] do
+        refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+        assert [
+                 %ConversationUnfollowed{
+                   membership_generation: 0,
+                   follow_retained: false
+                 }
+               ] = unfollow_events(conversation_id, fixture.target_person_id)
+      end
+    after
+      :ok = :sys.resume(clear_follows_handler)
+
+      Memba.ProjectionBarrier.await!(
+        [ClearRemovedGroupMemberFollows],
+        checkpoint: current_checkpoint()
+      )
+    end
+  end
+
+  test "origin cleanup preserves generation-less manual and root follows recorded after re-add" do
+    fixture = explicit_removal_fixture!()
+    manual_conversation_id = Memba.ID.generate(:message)
+    root_conversation_id = Memba.ID.generate(:message)
+    clear_follows_handler = clear_follows_handler_pid()
+
+    create_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      manual_conversation_id,
+      fixture.actor_person_id
+    )
+
+    :ok = :sys.suspend(clear_follows_handler)
+
+    try do
+      append_historic_group_membership_events!(fixture, [
+        %GroupMemberRemoved{
+          club_id: fixture.club_id,
+          group_id: fixture.group_id,
+          membership_id: fixture.target_membership_id,
+          person_id: fixture.target_person_id
+        },
+        %GroupMemberAdded{
+          club_id: fixture.club_id,
+          group_id: fixture.group_id,
+          membership_id: fixture.target_membership_id,
+          person_id: fixture.target_person_id
+        }
+      ])
+
+      recorded_removal = recorded_historic_removal!(fixture)
+
+      append_messaging_events!(manual_conversation_id, [
+        %ConversationFollowed{
+          follow_id:
+            Memba.Messaging.ConversationFollowers.follow_id(
+              manual_conversation_id,
+              fixture.target_person_id
+            ),
+          club_id: fixture.club_id,
+          conversation_id: manual_conversation_id,
+          member_id: fixture.target_person_id
+        }
+      ])
+
+      append_historic_root!(
+        fixture.club_id,
+        fixture.group_id,
+        root_conversation_id,
+        fixture.target_person_id
+      )
+
+      recorded_readd =
+        MembershipApp
+        |> EventStore.stream_forward("$all")
+        |> Enum.find(fn
+          %{
+            stream_id: club_id,
+            event_number: event_number,
+            data: %GroupMemberAdded{group_id: group_id, person_id: person_id}
+          } ->
+            club_id == fixture.club_id and event_number > recorded_removal.event_number and
+              group_id == fixture.group_id and person_id == fixture.target_person_id
+
+          _event ->
+            false
+        end)
+
+      manual_follow =
+        MessagingApp
+        |> EventStore.stream_forward("$all")
+        |> Enum.find(fn
+          %{
+            stream_id: conversation_id,
+            data: %ConversationFollowed{member_id: person_id, membership_generation: nil}
+          } ->
+            conversation_id == manual_conversation_id and person_id == fixture.target_person_id
+
+          _event ->
+            false
+        end)
+
+      assert recorded_removal.event_number < recorded_readd.event_number
+      assert recorded_readd.event_number < manual_follow.event_number
+
+      assert Membership.group_member_added_between_checkpoints?(
+               fixture.club_id,
+               fixture.group_id,
+               fixture.target_person_id,
+               recorded_removal.event_number,
+               manual_follow.event_number
+             )
+
+      stop_event_sourced_aggregate_instances!()
+
+      assert :ok =
+               ClearRemovedGroupMemberFollows.handle(
+                 recorded_removal.data,
+                 recorded_event_metadata(recorded_removal)
+               )
+
+      for conversation_id <- [manual_conversation_id, root_conversation_id] do
+        assert [
+                 %ConversationUnfollowed{
+                   membership_generation: 0,
+                   follow_retained: true
+                 }
+               ] = unfollow_events(conversation_id, fixture.target_person_id)
+
+        assert Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+      end
+
+      stop_event_sourced_aggregate_instances!()
+
+      for conversation_id <- [manual_conversation_id, root_conversation_id] do
+        assert fixture.target_person_id in MessagingApp.aggregate_state(
+                 Memba.Messaging.ConversationFollowers,
+                 conversation_id
+               ).follower_ids
+      end
+    after
+      :ok = :sys.resume(clear_follows_handler)
+
+      Memba.ProjectionBarrier.await!(
+        [ClearRemovedGroupMemberFollows],
+        checkpoint: current_checkpoint()
+      )
+    end
+  end
+
   test "first delayed removal delivery cannot erase newer follows after a genuine re-add" do
     fixture = explicit_removal_fixture!()
     conversation_id = Memba.ID.generate(:message)
@@ -1066,7 +1283,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                  )
 
         assert :ok =
-                 Messaging.follow_conversation(
+                 Messaging.follow_conversation_as_current_member(
                    %{
                      club_id: fixture.club_id,
                      conversation_id: conversation_id,
@@ -1303,7 +1520,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
         assert Task.yield(readdition, 100) == nil
 
         assert :ok =
-                 Messaging.follow_conversation(
+                 Messaging.follow_conversation_as_current_member(
                    %{
                      club_id: fixture.club_id,
                      conversation_id: conversation_id,
@@ -1508,6 +1725,73 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              )
   end
 
+  defp append_historic_group_membership_events!(fixture, events) do
+    append_events!(
+      MembershipApp,
+      fixture.club_id,
+      latest_club_stream_version(fixture.club_id),
+      events
+    )
+  end
+
+  defp append_historic_root!(club_id, group_id, conversation_id, sender_id) do
+    append_events!(MessagingApp, conversation_id, 0, [
+      %MessageSent{
+        message_id: conversation_id,
+        club_id: club_id,
+        sender_id: sender_id,
+        audience_group_id: group_id,
+        subject: "Historic Board plans",
+        body: "A generation-less historic root."
+      },
+      %ConversationAccessGrantedToGroup{
+        conversation_id: conversation_id,
+        club_id: club_id,
+        group_id: group_id,
+        access_level: "write"
+      }
+    ])
+  end
+
+  defp append_messaging_events!(conversation_id, events) do
+    expected_version =
+      MessagingApp
+      |> EventStore.stream_forward(conversation_id)
+      |> Enum.to_list()
+      |> length()
+
+    append_events!(MessagingApp, conversation_id, expected_version, events)
+  end
+
+  defp append_events!(app, stream_id, expected_version, events) do
+    event_data = Enum.map(events, &Mapper.map_to_event_data/1)
+    assert :ok = EventStore.append_to_stream(app, stream_id, expected_version, event_data)
+  end
+
+  defp recorded_historic_removal!(fixture) do
+    MembershipApp
+    |> EventStore.stream_forward("$all")
+    |> Enum.find(fn
+      %{
+        stream_id: club_id,
+        data: %GroupMemberRemoved{group_id: group_id, membership_id: membership_id}
+      } ->
+        club_id == fixture.club_id and group_id == fixture.group_id and
+          membership_id == fixture.target_membership_id
+
+      _event ->
+        false
+    end)
+  end
+
+  defp recorded_event_metadata(recorded_event) do
+    %{
+      event_id: recorded_event.event_id,
+      event_number: recorded_event.event_number,
+      stream_version: recorded_event.stream_version
+    }
+  end
+
   defp explicit_removal_fixture! do
     club_id = Memba.ID.generate(:club)
     group_id = Memba.ID.generate(:group)
@@ -1526,6 +1810,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     %{
       club_id: club_id,
       group_id: group_id,
+      actor_membership_id: actor_membership_id,
       actor_person_id: actor_person_id,
       target_person_id: target_person_id,
       target_membership_id: target_membership_id

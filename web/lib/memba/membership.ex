@@ -7,6 +7,7 @@ defmodule Memba.Membership do
 
   import Ecto.Query
 
+  alias Commanded.EventStore
   alias Memba.BuildInfo
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
@@ -1454,8 +1455,9 @@ defmodule Memba.Membership do
 
   The generation advances for every group membership add or removal and is
   reconstructed from historic facts whose generation field predates this
-  contract. Messaging attaches it to follow-establishing facts so a delayed
-  cleanup can be ordered against a genuine later re-add.
+  contract. Messaging attaches it to follow-establishing facts captured at
+  authoritative member or committed-message boundaries so a delayed cleanup
+  can be ordered against a genuine later re-add.
   """
   def current_group_membership_generation(club_id) do
     with {:ok, club_id} <- ID.cast(:club, club_id),
@@ -1466,6 +1468,56 @@ defmodule Memba.Membership do
       _invalid_or_missing -> 0
     end
   end
+
+  @doc """
+  Return whether immutable Club history records a matching group re-add between
+  two global EventStore checkpoints.
+
+  Messaging uses this narrow source-backed compatibility query only to order
+  generation-less historic follow facts against a generation-less removal.
+  Current authorization continues to use the Club aggregate APIs.
+  """
+  def group_member_added_between_checkpoints?(
+        club_id,
+        group_id,
+        person_id,
+        after_checkpoint,
+        before_checkpoint
+      )
+      when is_integer(after_checkpoint) and is_integer(before_checkpoint) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         true <- after_checkpoint < before_checkpoint do
+      App
+      |> EventStore.stream_forward("$all")
+      |> Enum.any?(fn
+        %{
+          stream_id: ^club_id,
+          event_number: event_number,
+          data: %GroupMemberAdded{
+            group_id: ^group_id,
+            person_id: ^person_id
+          }
+        } ->
+          event_number > after_checkpoint and event_number < before_checkpoint
+
+        _other_event ->
+          false
+      end)
+    else
+      _invalid_or_empty_range -> false
+    end
+  end
+
+  def group_member_added_between_checkpoints?(
+        _club_id,
+        _group_id,
+        _person_id,
+        _after_checkpoint,
+        _before_checkpoint
+      ),
+      do: false
 
   @doc """
   Wait until the Membership read models used by `active_member_of_group?/2`

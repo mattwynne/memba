@@ -517,6 +517,54 @@ defmodule Memba.Messaging.ConversationFollowersTest do
     assert cleaned.cleanup_generations[{member_id, nil}] == 1
   end
 
+  test "persists an equal-generation legacy ordering decision for manual and root follows" do
+    club_id = Memba.ID.generate(:club)
+    manual_conversation_id = Memba.ID.generate(:message)
+    root_conversation_id = Memba.ID.generate(:message)
+    member_id = Memba.ID.generate(:person)
+
+    manual_follow =
+      ConversationFollowers.apply(%ConversationFollowers{}, %ConversationFollowed{
+        follow_id: ConversationFollowers.follow_id(manual_conversation_id, member_id),
+        club_id: club_id,
+        conversation_id: manual_conversation_id,
+        member_id: member_id
+      })
+
+    root_follow =
+      ConversationFollowers.apply(%ConversationFollowers{}, %MessageSent{
+        message_id: root_conversation_id,
+        club_id: club_id,
+        sender_id: member_id,
+        subject: "Historic root",
+        body: "Generation-less root."
+      })
+
+    for {conversation, retain_follow} <- [
+          {manual_follow, false},
+          {root_follow, true}
+        ] do
+      assert %ConversationUnfollowed{
+               membership_generation: 0,
+               follow_retained: ^retain_follow
+             } =
+               cleanup =
+               ConversationFollowers.execute(conversation, %UnfollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id,
+                 cleanup_id: "legacy-ordering-#{conversation.conversation_id}",
+                 membership_generation: 0,
+                 retain_follow: retain_follow
+               })
+
+      replayed = ConversationFollowers.apply(conversation, cleanup)
+
+      assert MapSet.member?(replayed.follower_ids, member_id) == retain_follow
+      assert replayed.cleanup_generations[{member_id, nil}] == 0
+    end
+  end
+
   defp cleanup_command(%ConversationUnfollowed{} = event) do
     %UnfollowConversation{
       club_id: event.club_id,

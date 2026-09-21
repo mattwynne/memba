@@ -1,23 +1,26 @@
 {
   "schema_version": 1,
-  "packet_id": "004-0bc4306-06",
+  "packet_id": "004-34d71d9-07",
   "task_id": "004",
   "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "result": "ready_for_review",
   "changed_paths": [
+    "web/lib/memba/membership.ex",
+    "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
     "web/lib/memba/messaging.ex",
-    "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs"
+    "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
+    "web/test/memba/messaging/conversation_followers_test.exs"
   ],
   "validation": [
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
       "exit_status": 0,
-      "evidence": "42 tests, 0 failures. Covers forged raw source rejection, initially-unfollowed cleanup, surviving-group manual/root/reply causality, post-re-add following, unrelated follows, cleanup retry/checkpoint ordering, task-001 removal semantics, and system-group guards."
+      "evidence": "44 tests, 0 failures. Covers source-less raw rejection after an unrelated generation advance, generation-less pre-removal and post-re-add ordering for manual and root auto-follows, ordinary cleanup/retry/checkpoint paths, accepted task-001 removal semantics, and system-group guards."
     },
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/message_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs",
       "exit_status": 0,
-      "evidence": "82 tests, 0 failures. Aggregate, projection, root-send, reply, group-access, replay compatibility, and source-aware cutoff behavior remain green."
+      "evidence": "83 tests, 0 failures. Aggregate, projection, root-send, reply, group-access, replay/idempotency, source-aware cutoff, unrelated-follow, and ordinary-unfollow behavior remain green."
     },
     {
       "command": "git diff --check",
@@ -25,6 +28,6 @@
       "evidence": "No whitespace errors on the final handoff diff."
     }
   ],
-  "notes": "Raw follow_conversation/2 now ignores caller-supplied authorizing_group_ids, keeping raw/system follows conservatively ordered while current-member manual follows and committed root/reply events retain authoritative source capture. The new removal/forged-B/re-add regression proves no new ConversationFollowed or projected follow and no notification resumption until an authorized post-re-add follow. The surviving-group root regression now uses send_club_message_as_current_member/2 and verifies group B on both MessageSent and ConversationFollowed at the unchanged generation. The superseded TDD run exposed the forged-source event and showed that the aggregate-focused fixture needed projected people before exercising recipient resolution through the production send boundary.",
+  "notes": "Superseded TDD runs reproduced both review gaps: a raw source-less follow inherited an unrelated club generation and equal-generation legacy cleanup removed a genuine post-re-add follow. Raw follow_conversation/2 now carries neither caller groups nor a membership generation, while follow_conversation_as_current_member/2 stamps authoritative readable groups and the current generation inside the stable checkpoint; committed root/reply paths retain their trusted source capture. For generation-less history, cleanup compares immutable Membership and Messaging all-stream positions, requires a matching re-add between removal and follow, and persists the decision in Messaging-owned ConversationUnfollowed.follow_retained. Integration regressions cover actual generation-less ConversationFollowed and MessageSent shapes before removal and after re-add, plus handler retry and aggregate replay. Existing task-001 behavior is unchanged: explicit removal still reuses GroupMemberRemoved, exact retries emit no new Membership fact, and club membership/roles and system-group guards remain preserved.",
   "unresolved": []
 }

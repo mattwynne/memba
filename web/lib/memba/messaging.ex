@@ -4,6 +4,7 @@ defmodule Memba.Messaging do
   """
 
   alias Commanded.Commands.ExecutionResult
+  alias Commanded.EventStore
   alias Memba.ID
   alias Memba.Membership
   alias Memba.Membership.SystemGroups
@@ -201,8 +202,9 @@ defmodule Memba.Messaging do
   This command records follow state only. Caller-facing authorization, such as
   ensuring a person is a current club member before opting in from the app, is
   applied by the surfaces that expose this capability. Raw callers cannot
-  attribute the follow to an authorizing group; trusted group causality is
-  captured only by the current-member and message-sender boundaries.
+  attribute the follow to an authorizing group or membership generation;
+  trusted group causality is captured only by the current-member and
+  message-sender boundaries.
   """
   def follow_conversation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -227,7 +229,13 @@ defmodule Memba.Messaging do
              with {:ok, command} <- follow_conversation_command(attrs),
                   {:ok, authorizing_group_ids} <-
                     authorize_current_member_conversation_action_with_groups(command) do
-               {:ok, %{command | authorizing_group_ids: authorizing_group_ids}}
+               {:ok,
+                %{
+                  command
+                  | membership_generation:
+                      Membership.current_group_membership_generation(command.club_id),
+                    authorizing_group_ids: authorizing_group_ids
+                }}
              end
            end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
@@ -291,6 +299,7 @@ defmodule Memba.Messaging do
             member_id,
             cleanup_id,
             membership_generation,
+            checkpoint,
             dispatch_opts
           )
 
@@ -2168,7 +2177,7 @@ defmodule Memba.Messaging do
          club_id: club_id,
          conversation_id: conversation_id,
          member_id: member_id,
-         membership_generation: Membership.current_group_membership_generation(club_id),
+         membership_generation: nil,
          authorizing_group_ids: []
        }}
     end
@@ -2315,6 +2324,7 @@ defmodule Memba.Messaging do
          member_id,
          cleanup_id,
          membership_generation,
+         cleanup_checkpoint,
          dispatch_opts
        ) do
     retain_follow =
@@ -2323,7 +2333,15 @@ defmodule Memba.Messaging do
         club_id,
         member_id,
         removed_group_id
-      )
+      ) or
+        legacy_follow_established_after_readd?(
+          conversation_id,
+          club_id,
+          removed_group_id,
+          member_id,
+          membership_generation,
+          cleanup_checkpoint
+        )
 
     unfollow_conversation(
       %{
@@ -2338,6 +2356,89 @@ defmodule Memba.Messaging do
       include_conversation_follow_consistency(dispatch_opts)
     )
   end
+
+  # Generation-less facts predate the current causal clock. Their immutable
+  # EventStore positions are the compatibility clock: preserve one only when a
+  # durable Membership re-add lies between the removed fact and that follow.
+  # The resulting decision is persisted on ConversationUnfollowed.follow_retained,
+  # so retries and aggregate replay never need transient projection timing.
+  defp legacy_follow_established_after_readd?(
+         conversation_id,
+         club_id,
+         removed_group_id,
+         member_id,
+         0,
+         cleanup_checkpoint
+       ) do
+    case latest_generationless_follow_checkpoint(conversation_id, member_id) do
+      follow_checkpoint
+      when is_integer(follow_checkpoint) and follow_checkpoint > cleanup_checkpoint ->
+        Membership.group_member_added_between_checkpoints?(
+          club_id,
+          removed_group_id,
+          member_id,
+          cleanup_checkpoint,
+          follow_checkpoint
+        )
+
+      _pre_removal_or_absent ->
+        false
+    end
+  end
+
+  defp legacy_follow_established_after_readd?(
+         _conversation_id,
+         _club_id,
+         _removed_group_id,
+         _member_id,
+         _membership_generation,
+         _cleanup_checkpoint
+       ),
+       do: false
+
+  defp latest_generationless_follow_checkpoint(conversation_id, member_id) do
+    App
+    |> EventStore.stream_forward("$all")
+    |> Enum.reduce(nil, fn recorded_event, latest ->
+      if recorded_event.stream_id == conversation_id and
+           generationless_follow_fact?(recorded_event.data, conversation_id, member_id) do
+        max_checkpoint(latest, recorded_event.event_number)
+      else
+        latest
+      end
+    end)
+  end
+
+  defp generationless_follow_fact?(
+         %Memba.Messaging.Events.ConversationFollowed{
+           member_id: member_id,
+           membership_generation: membership_generation
+         },
+         _conversation_id,
+         member_id
+       ),
+       do: not is_integer(membership_generation)
+
+  defp generationless_follow_fact?(
+         %Memba.Messaging.Events.MessageSent{
+           message_id: message_id,
+           conversation_id: event_conversation_id,
+           sender_id: member_id,
+           sender_membership_generation: membership_generation
+         } = event,
+         conversation_id,
+         member_id
+       ) do
+    message_id == conversation_id and
+      (is_nil(event_conversation_id) or event_conversation_id == conversation_id) and
+      not is_integer(membership_generation) and
+      Memba.Messaging.Events.MessageSent.sender_follows_conversation?(event)
+  end
+
+  defp generationless_follow_fact?(_event, _conversation_id, _member_id), do: false
+
+  defp max_checkpoint(nil, checkpoint), do: checkpoint
+  defp max_checkpoint(current, checkpoint), do: max(current, checkpoint)
 
   defp include_conversation_follow_consistency(dispatch_opts) do
     Keyword.update(
