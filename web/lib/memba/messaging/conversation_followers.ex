@@ -70,8 +70,9 @@ defmodule Memba.Messaging.ConversationFollowers do
             membership_generation: command.membership_generation,
             follow_retained:
               is_binary(command.cleanup_id) and
-                normalize_generation(command.membership_generation) <
-                  follower_generation(conversation, command.member_id)
+                (command.retain_follow == true or
+                   normalize_generation(command.membership_generation) <
+                     follower_generation(conversation, command.member_id))
           }
 
         true ->
@@ -192,10 +193,11 @@ defmodule Memba.Messaging.ConversationFollowers do
             )
       }
 
-    if membership_generation >= follower_generation(conversation, event.member_id) do
-      delete_follower(conversation, event.member_id)
-    else
+    if event.follow_retained == true or
+         membership_generation < follower_generation(conversation, event.member_id) do
       conversation
+    else
+      delete_follower(conversation, event.member_id)
     end
   end
 

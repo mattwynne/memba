@@ -32,12 +32,17 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
+  alias Memba.Messaging.Commands.FollowConversation
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.Events.MemberFollowCleanupRecorded
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
+  alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
+  alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias Memba.Messaging.Recipient
 
   test "is a strongly consistent Membership event handler that replays from origin" do
@@ -586,7 +591,14 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
 
     assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
     assert count_unfollow_events(unrelated_conversation_id, fixture.target_person_id) == 0
-    assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 0
+
+    assert [
+             %ConversationUnfollowed{
+               member_id: target_person_id,
+               membership_generation: removal_generation,
+               follow_retained: true
+             }
+           ] = unfollow_events(shared_conversation_id, fixture.target_person_id)
 
     recorded_removal =
       fixture.club_id
@@ -598,6 +610,58 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
         _event ->
           false
       end)
+
+    assert target_person_id == fixture.target_person_id
+    assert removal_generation == recorded_removal.data.membership_generation
+
+    assert :ok =
+             Messaging.unfollow_conversation(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: shared_conversation_id,
+                 member_id: fixture.target_person_id
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
+
+    assert :ok =
+             MessagingApp.dispatch(
+               %FollowConversation{
+                 club_id: fixture.club_id,
+                 conversation_id: shared_conversation_id,
+                 member_id: fixture.target_person_id,
+                 membership_generation: removal_generation - 1
+               },
+               consistency: :strong
+             )
+
+    stale_reply_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             MessagingApp.dispatch(
+               %PostMessageReply{
+                 message_id: stale_reply_id,
+                 club_id: fixture.club_id,
+                 sender_id: fixture.target_person_id,
+                 conversation_id: shared_conversation_id,
+                 reply_to_message_id: shared_conversation_id,
+                 subject: "Re: Board plans",
+                 body: "Prepared before the Board removal.",
+                 recipients: [],
+                 sender_membership_generation: removal_generation - 1
+               },
+               consistency: :strong
+             )
+
+    assert [%MessageSent{message_id: ^stale_reply_id}] =
+             stale_reply_id
+             |> then(&EventStore.stream_forward(MessagingApp, &1))
+             |> Enum.map(& &1.data)
+
+    refute Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
+    assert follow_events(shared_conversation_id, fixture.target_person_id) |> length() == 1
 
     assert {:ok, %CustomGroupAdmission{transition: :member_added}} =
              Membership.add_custom_group_member(%{
@@ -619,31 +683,13 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              )
 
     assert :ok =
-             Messaging.revoke_conversation_access_from_group(
-               %{
-                 club_id: fixture.club_id,
-                 conversation_id: shared_conversation_id,
-                 group_id: retained_group_id
-               },
-               consistency: :strong
-             )
-
-    assert :ok =
              ClearRemovedGroupMemberFollows.handle(recorded_removal.data, %{
                event_id: recorded_removal.event_id,
                event_number: recorded_removal.event_number
              })
 
     assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
-
-    assert [
-             %ConversationUnfollowed{
-               member_id: target_person_id,
-               follow_retained: true
-             }
-           ] = unfollow_events(shared_conversation_id, fixture.target_person_id)
-
-    assert target_person_id == fixture.target_person_id
+    assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 2
   end
 
   test "first delayed removal delivery cannot erase newer follows after a genuine re-add" do
@@ -795,6 +841,105 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
 
     assert [] = follow_events(conversation_id, fixture.target_person_id)
     refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+  end
+
+  test "cleanup waits through its Messaging checkpoint and discovers an interleaved stale root" do
+    fixture = explicit_removal_fixture!()
+    conversation_id = Memba.ID.generate(:message)
+    prepared_generation = Membership.current_group_membership_generation(fixture.club_id)
+    clear_follows_handler = clear_follows_handler_pid()
+
+    assert :ok = EventStore.subscribe(MembershipApp, fixture.club_id)
+    :ok = :sys.suspend(clear_follows_handler)
+
+    removal =
+      Task.async(fn ->
+        remove_custom_group_member(fixture)
+      end)
+
+    removed_generation = await_group_member_removed!(fixture.target_membership_id)
+
+    recorded_removal =
+      fixture.club_id
+      |> then(&EventStore.stream_forward(MembershipApp, &1))
+      |> Enum.find(fn
+        %{data: %GroupMemberRemoved{group_id: group_id, membership_id: membership_id}} ->
+          group_id == fixture.group_id and membership_id == fixture.target_membership_id
+
+        _event ->
+          false
+      end)
+
+    assert removed_generation == recorded_removal.data.membership_generation
+    assert Task.yield(removal, 100) == nil
+    removal_checkpoint = current_checkpoint()
+
+    projector_child_ids =
+      Enum.map(
+        [MessageProjector, ConversationGroupAccessProjector, ConversationFollowProjector],
+        &stop_projector!/1
+      )
+
+    assert :ok = EventStore.subscribe(MessagingApp, :all)
+
+    prepared_send = %SendMessage{
+      message_id: conversation_id,
+      club_id: fixture.club_id,
+      sender_id: fixture.target_person_id,
+      audience_group_id: fixture.group_id,
+      subject: "Interleaved stale root",
+      body: "Committed after removal but before cleanup.",
+      sender_membership_generation: prepared_generation,
+      recipients: [
+        %Recipient{
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: fixture.target_person_id,
+          name: "Departing Member",
+          email: "departing@example.com"
+        }
+      ]
+    }
+
+    try do
+      assert :ok = MessagingApp.dispatch(prepared_send)
+
+      recorded_follow =
+        await_recorded_event!(ConversationFollowed, fn event ->
+          event.conversation_id == conversation_id and
+            event.member_id == fixture.target_person_id
+        end)
+
+      interleaved_checkpoint = current_checkpoint()
+      assert interleaved_checkpoint > removal_checkpoint
+      assert [] = Messaging.list_conversations_for_group(fixture.group_id)
+
+      :ok = :sys.resume(clear_follows_handler)
+
+      recorded_cleanup =
+        await_recorded_event!(MemberFollowCleanupRecorded, fn event ->
+          event.cleanup_id == recorded_removal.event_id
+        end)
+
+      assert recorded_cleanup.event_number > recorded_follow.event_number
+      assert current_checkpoint() > interleaved_checkpoint
+      assert Task.yield(removal, 100) == nil
+      assert [] = Messaging.list_conversations_for_group(fixture.group_id)
+
+      Enum.each(projector_child_ids, &restart_projector!/1)
+
+      assert :ok = Task.await(removal, 5_000)
+      refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+      assert [
+               %ConversationUnfollowed{
+                 membership_generation: ^removed_generation,
+                 follow_retained: false
+               }
+             ] = unfollow_events(conversation_id, fixture.target_person_id)
+    after
+      :ok = :sys.resume(clear_follows_handler)
+      Enum.each(projector_child_ids, &restart_projector!/1)
+    end
   end
 
   test "public eventual removal, re-add, and exact retry await durable cleanup progress" do
@@ -1223,6 +1368,29 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     after
       timeout ->
         flunk("#{inspect(event_module)} was not persisted for membership #{membership_id}")
+    end
+  end
+
+  defp await_recorded_event!(event_module, predicate) do
+    deadline = System.monotonic_time(:millisecond) + 1_000
+    await_recorded_event!(event_module, predicate, deadline)
+  end
+
+  defp await_recorded_event!(event_module, predicate, deadline) do
+    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {:events, events} ->
+        case Enum.find(events, fn
+               %{data: %{__struct__: ^event_module} = event} -> predicate.(event)
+               _event -> false
+             end) do
+          nil -> await_recorded_event!(event_module, predicate, deadline)
+          recorded_event -> recorded_event
+        end
+    after
+      timeout ->
+        flunk("timed out waiting for #{inspect(event_module)}")
     end
   end
 

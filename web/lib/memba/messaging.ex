@@ -246,11 +246,12 @@ defmodule Memba.Messaging do
   @doc """
   Durably clear follows invalidated by one custom-group membership removal.
 
-  Conversation discovery waits for Messaging's read models to reach the
-  Membership removal checkpoint, so projection lag cannot turn cleanup into a
-  false success. Each unfollow carries the Membership event ID as an idempotency
-  key and its Club-owned membership generation as a causal cutoff. A cleanup
-  older than the current follow is a no-op even on first delivery.
+  Conversation discovery waits for Messaging's read models to reach the durable
+  `MemberFollowCleanupRecorded` checkpoint, so work committed between the
+  Membership removal and Messaging cleanup cannot be missed. Each unfollow
+  carries the Membership event ID as an idempotency key and its Club-owned
+  membership generation as a causal cutoff. A cleanup older than the current
+  follow is a no-op even on first delivery.
 
   A conversation-wide follow is retained when another active group still gives
   the person authoritative read access to the conversation.
@@ -263,7 +264,7 @@ defmodule Memba.Messaging do
          {:ok, cleanup_id} <- fetch_cleanup_id(attrs),
          {:ok, membership_generation} <- fetch_membership_generation(attrs),
          {:ok, checkpoint} <- fetch_cleanup_checkpoint(attrs),
-         :ok <-
+         {:ok, messaging_cleanup_checkpoint} <-
            record_member_follow_cleanup(
              club_id,
              group_id,
@@ -272,7 +273,10 @@ defmodule Memba.Messaging do
              membership_generation,
              dispatch_opts
            ),
-         :ok <- await_removed_group_follow_cleanup_projections(checkpoint) do
+         :ok <-
+           await_removed_group_follow_cleanup_projections(
+             max(checkpoint, messaging_cleanup_checkpoint)
+           ) do
       group_id
       |> list_conversations_for_group()
       |> Enum.reduce_while(:ok, fn conversation, :ok ->
@@ -2174,7 +2178,8 @@ defmodule Memba.Messaging do
          conversation_id: conversation_id,
          member_id: member_id,
          cleanup_id: optional_attribute(attrs, :cleanup_id),
-         membership_generation: optional_attribute(attrs, :membership_generation)
+         membership_generation: optional_attribute(attrs, :membership_generation),
+         retain_follow: optional_attribute(attrs, :retain_follow)
        }}
     end
   end
@@ -2229,7 +2234,7 @@ defmodule Memba.Messaging do
          membership_generation,
          dispatch_opts
        ) do
-    %RecordMemberFollowCleanup{
+    command = %RecordMemberFollowCleanup{
       eligibility_id: MemberFollowEligibility.identity(member_id),
       club_id: club_id,
       group_id: group_id,
@@ -2237,7 +2242,16 @@ defmodule Memba.Messaging do
       cleanup_id: cleanup_id,
       membership_generation: membership_generation
     }
-    |> dispatch_ok(dispatch_opts)
+
+    dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
+
+    case App.dispatch(command, dispatch_opts) do
+      {:ok, %ExecutionResult{}} ->
+        {:ok, ProjectionBarrier.current_checkpoint()}
+
+      {:error, _reason} = error ->
+        error
+    end
   end
 
   defp sender_follow_group_ids(%{message_id: message_id, conversation_id: message_id} = event) do
@@ -2293,25 +2307,25 @@ defmodule Memba.Messaging do
          membership_generation,
          dispatch_opts
        ) do
-    if member_has_authoritative_conversation_access_excluding_group?(
-         conversation_id,
-         club_id,
-         member_id,
-         removed_group_id
-       ) do
-      :ok
-    else
-      unfollow_conversation(
-        %{
-          club_id: club_id,
-          conversation_id: conversation_id,
-          member_id: member_id,
-          cleanup_id: cleanup_id,
-          membership_generation: membership_generation
-        },
-        include_conversation_follow_consistency(dispatch_opts)
+    retain_follow =
+      member_has_authoritative_conversation_access_excluding_group?(
+        conversation_id,
+        club_id,
+        member_id,
+        removed_group_id
       )
-    end
+
+    unfollow_conversation(
+      %{
+        club_id: club_id,
+        conversation_id: conversation_id,
+        member_id: member_id,
+        cleanup_id: cleanup_id,
+        membership_generation: membership_generation,
+        retain_follow: retain_follow
+      },
+      include_conversation_follow_consistency(dispatch_opts)
+    )
   end
 
   defp include_conversation_follow_consistency(dispatch_opts) do

@@ -9,6 +9,7 @@ defmodule Memba.Messaging.Commands.UnfollowConversation do
     :conversation_id,
     :member_id,
     :cleanup_id,
-    :membership_generation
+    :membership_generation,
+    :retain_follow
   ]
 end

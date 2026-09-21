@@ -207,6 +207,50 @@ defmodule Memba.Messaging.ConversationFollowersTest do
       refute MapSet.member?(stale_root.follower_ids, member_id)
     end
 
+    test "explicitly retains an equal-generation shared follow while recording its cutoff" do
+      conversation = followed_conversation(5)
+      member_id = hd(MapSet.to_list(conversation.follower_ids))
+
+      assert %ConversationUnfollowed{
+               cleanup_id: "shared-access-removal",
+               membership_generation: 5,
+               follow_retained: true
+             } =
+               cleanup =
+               ConversationFollowers.execute(conversation, %UnfollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id,
+                 cleanup_id: "shared-access-removal",
+                 membership_generation: 5,
+                 retain_follow: true
+               })
+
+      retained = ConversationFollowers.apply(conversation, cleanup)
+      assert MapSet.member?(retained.follower_ids, member_id)
+      assert retained.cleanup_generations[member_id] == 5
+
+      assert %ConversationUnfollowed{cleanup_id: nil} =
+               ordinary_unfollow =
+               ConversationFollowers.execute(retained, %UnfollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id
+               })
+
+      unfollowed = ConversationFollowers.apply(retained, ordinary_unfollow)
+      refute MapSet.member?(unfollowed.follower_ids, member_id)
+      assert unfollowed.cleanup_generations[member_id] == 5
+
+      assert [] =
+               ConversationFollowers.execute(unfollowed, %FollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id,
+                 membership_generation: 5
+               })
+    end
+
     test "records a cleanup cutoff that rejects delayed stale follow work" do
       club_id = Memba.ID.generate(:club)
       conversation_id = Memba.ID.generate(:message)
