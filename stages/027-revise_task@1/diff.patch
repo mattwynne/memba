@@ -1,0 +1,1630 @@
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+index 0466d47..aa8fffc 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+@@ -1,30 +1,40 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "004-72f5ddc-01",
++  "packet_id": "004-4774dd4-02",
+   "task_id": "004",
+   "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
+   "result": "ready_for_review",
+   "changed_paths": [
+     "web/lib/memba/membership.ex",
++    "web/lib/memba/membership/club.ex",
++    "web/lib/memba/membership/events/group_member_added.ex",
++    "web/lib/memba/membership/events/group_member_removed.ex",
+     "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
+     "web/lib/memba/messaging.ex",
++    "web/lib/memba/messaging/commands/follow_conversation.ex",
++    "web/lib/memba/messaging/commands/post_message_reply.ex",
++    "web/lib/memba/messaging/commands/send_message.ex",
+     "web/lib/memba/messaging/commands/unfollow_conversation.ex",
+     "web/lib/memba/messaging/conversation_followers.ex",
++    "web/lib/memba/messaging/events/conversation_followed.ex",
+     "web/lib/memba/messaging/events/conversation_unfollowed.ex",
++    "web/lib/memba/messaging/events/message_sent.ex",
++    "web/lib/memba/messaging/message.ex",
++    "web/lib/memba/messaging/projectors/conversation_follow.ex",
+     "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
+-    "web/test/memba/messaging/conversation_followers_test.exs",
+-    "web/test/memba/messaging/send_club_message_test.exs"
++    "web/test/memba/membership/remove_custom_group_member_dispatch_test.exs",
++    "web/test/memba/messaging/conversation_followers_test.exs"
+   ],
+   "validation": [
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
+       "exit_status": 0,
+-      "evidence": "32 tests, 0 failures. Proves explicit removal completion and accepted return/event behavior, manual/root/reply follow cleanup facts, duplicate and replay idempotency, remove/re-add/follow safety, unrelated/shared-access preservation, lag blocking, and system-group no-ops."
++      "evidence": "35 tests, 0 failures. Proves generated and historic membership ordering, manual/root/reply follow cleanup facts, first-delivery and later-conversation safety, a suspended-handler remove/re-add/follow race, shared-skip replay, eventual and exact-retry completion, successful execution-result unfollows, lag blocking, and Everyone/Admin no-ops."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs",
+       "exit_status": 0,
+-      "evidence": "36 tests, 0 failures. Proves aggregate cleanup tokens can clear projection-only reply auto-follows, preserve later follows, retain composed access, and prevent a lag-hidden old follow from resuming after club rejoin."
++      "evidence": "41 tests, 0 failures. Proves aggregate generation refresh/cutoffs, delayed stale manual and root-auto follow rejection, absent-field replay, legacy-cleaned first delivery, deterministic follow projections, composed access, and existing send/lag behavior."
+     },
+     {
+       "command": "git diff --check",
+@@ -32,6 +42,6 @@
+       "evidence": "No whitespace errors."
+     }
+   ],
+-  "notes": "The selected stale-ordering mechanism uses each durable Membership removal event ID as a cleanup token recorded by ConversationUnfollowed in the root conversation-follow aggregate. The token emits an authoritative unfollow even when a reply auto-follow exists only in the projection; replaying the old removal is then a no-op after a post-re-add follow. Public custom-group add/remove calls wait for the origin-replaying cleanup handler, and cleanup waits for Message/access/follow projections through the removal checkpoint before discovering conversations. It excludes the removed group when checking authoritative surviving access, preserving unrelated and genuinely shared follows. The initial TDD run failed on the absent cleanup_id contract; superseded diagnostic focused runs exposed and corrected the old projection-lag test's false-success expectation and its stopped-handler test setup.",
++  "notes": "Club now assigns a monotonically increasing group-membership generation to add/remove facts; historic absent fields replay by incrementing Club state, while historic Messaging facts normalize to generation zero. Manual follows, root MessageSent auto-follows, and authoritative root-stream reply follows carry the current generation. ConversationFollowers stores per-person follow generations and cleanup cutoffs, refreshes an already-following member after re-add, ignores older first-delivery cleanup, and blocks delayed stale follow work; cleanup IDs remain retry deduplication only. Public custom-group add/remove calls additionally await the cleanup handler's durable EventStore subscription checkpoint after every successful dispatch, including :eventual and event-free retries, while preserving return modes. Focused races cover first delayed delivery, later-created and shared-skipped conversations, legacy cleanup, projection lag, unrelated follows, both system groups, and successful {:ok, result} unfollows. The initial TDD run failed because generation fields were absent; subsequent diagnostic runs exposed one legacy token test whose follow needed an explicitly newer generation. The repository formatter was also checked successfully for every changed Elixir file.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 032a7da..58b2770 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -57,6 +57,7 @@ defmodule Memba.Membership do
+   alias Memba.Repo
+ 
+   @person_email_address_verification_token_ttl_seconds 15 * 60
++  @follow_cleanup_completion_timeout 5_000
+   @group_access_projectors [GroupMembershipProjector, MembershipProjector]
+ 
+   @doc """
+@@ -135,7 +136,10 @@ defmodule Memba.Membership do
+   def remove_custom_group_member(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- remove_custom_group_member_command(attrs) do
+-      dispatch(command, custom_group_membership_consistency(dispatch_opts))
++      dispatch_custom_group_membership(
++        command,
++        custom_group_membership_consistency(dispatch_opts)
++      )
+     end
+   end
+ 
+@@ -1445,6 +1449,24 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Return the latest Club-owned group-membership generation.
++
++  The generation advances for every group membership add or removal and is
++  reconstructed from historic facts whose generation field predates this
++  contract. Messaging attaches it to follow-establishing facts so a delayed
++  cleanup can be ordered against a genuine later re-add.
++  """
++  def current_group_membership_generation(club_id) do
++    with {:ok, club_id} <- ID.cast(:club, club_id),
++         %Memba.Membership.Club{club_id: ^club_id} = club <-
++           App.aggregate_state(Memba.Membership.Club, club_id) do
++      club.group_membership_generation
++    else
++      _invalid_or_missing -> 0
++    end
++  end
++
+   @doc """
+   Wait until the Membership read models used by `active_member_of_group?/2`
+   have processed every event committed before this call.
+@@ -2620,11 +2642,11 @@ defmodule Memba.Membership do
+ 
+   defp dispatch_custom_group_admission(command, dispatch_opts) do
+     if explicit_commanded_returning_mode?(dispatch_opts) do
+-      dispatch(command, dispatch_opts)
++      dispatch_custom_group_membership(command, dispatch_opts)
+     else
+       dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
+ 
+-      case dispatch(command, dispatch_opts) do
++      case dispatch_custom_group_membership(command, dispatch_opts) do
+         {:ok, %Commanded.Commands.ExecutionResult{} = result} ->
+           {:ok, custom_group_admission(command, result)}
+ 
+@@ -2634,6 +2656,32 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp dispatch_custom_group_membership(command, dispatch_opts) do
++    case dispatch(command, dispatch_opts) do
++      :ok = result ->
++        await_removed_group_member_follows(result)
++
++      {:ok, _dispatch_result} = result ->
++        await_removed_group_member_follows(result)
++
++      {:error, _reason} = error ->
++        error
++    end
++  end
++
++  defp await_removed_group_member_follows(dispatch_result) do
++    checkpoint = ProjectionBarrier.current_checkpoint()
++
++    case ProjectionBarrier.await(
++           [ClearRemovedGroupMemberFollows],
++           checkpoint: checkpoint,
++           timeout: @follow_cleanup_completion_timeout
++         ) do
++      {:ok, _result} -> dispatch_result
++      {:error, :timeout, _result} -> {:error, :follow_cleanup_timeout}
++    end
++  end
++
+   defp explicit_commanded_returning_mode?(dispatch_opts) do
+     Keyword.has_key?(dispatch_opts, :returning) or
+       Keyword.get(dispatch_opts, :include_execution_result) == true or
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index d221f33..1c48e92 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -56,6 +56,7 @@ defmodule Memba.Membership.Club do
+     group_email_slugs: %{},
+     group_keys: %{},
+     group_name_keys: %{},
++    group_membership_generation: 0,
+     group_memberships: %{},
+     native_membership_ids: MapSet.new(),
+     roles: %{},
+@@ -472,13 +473,18 @@ defmodule Memba.Membership.Club do
+   end
+ 
+   def apply(%__MODULE__{} = club, %GroupMemberAdded{} = event) do
++    membership_generation = event_membership_generation(club, event)
++
+     group_membership = %{person_id: event.person_id, active: true}
++
+     group_membership_key = group_membership_key(event.group_id, event.membership_id)
+ 
+     club =
+       %__MODULE__{
+         club
+-        | group_memberships:
++        | group_membership_generation:
++            max(club.group_membership_generation, membership_generation),
++          group_memberships:
+             Map.put(club.group_memberships, group_membership_key, group_membership)
+       }
+ 
+@@ -486,13 +492,18 @@ defmodule Memba.Membership.Club do
+   end
+ 
+   def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
++    membership_generation = event_membership_generation(club, event)
++
+     group_membership = %{person_id: event.person_id, active: false}
++
+     group_membership_key = group_membership_key(event.group_id, event.membership_id)
+ 
+     club =
+       %__MODULE__{
+         club
+-        | group_memberships:
++        | group_membership_generation:
++            max(club.group_membership_generation, membership_generation),
++          group_memberships:
+             Map.put(club.group_memberships, group_membership_key, group_membership)
+       }
+ 
+@@ -861,7 +872,7 @@ defmodule Memba.Membership.Club do
+ 
+         if SystemGroups.custom_group?(group) do
+           [
+-            %GroupMemberRemoved{
++            %{
+               club_id: club.club_id,
+               group_id: group_id,
+               membership_id: departing_membership_id,
+@@ -876,6 +887,10 @@ defmodule Memba.Membership.Club do
+         []
+     end)
+     |> Enum.sort_by(& &1.group_id)
++    |> Enum.with_index(club.group_membership_generation + 1)
++    |> Enum.map(fn {attrs, membership_generation} ->
++      struct!(GroupMemberRemoved, Map.put(attrs, :membership_generation, membership_generation))
++    end)
+   end
+ 
+   defp create_group_decision(
+@@ -945,7 +960,8 @@ defmodule Memba.Membership.Club do
+             club_id: command.club_id,
+             group_id: command.group_id,
+             membership_id: creator_membership_id,
+-            person_id: command.actor_person_id
++            person_id: command.actor_person_id,
++            membership_generation: next_group_membership_generation(club)
+           }
+         ]
+     end
+@@ -1308,10 +1324,10 @@ defmodule Memba.Membership.Club do
+         []
+ 
+       {:ok, %{active: false}} ->
+-        group_member_added_event(command)
++        group_member_added_event(club, command)
+ 
+       :error ->
+-        group_member_added_event(command)
++        group_member_added_event(club, command)
+     end
+   end
+ 
+@@ -1330,10 +1346,10 @@ defmodule Memba.Membership.Club do
+         []
+ 
+       {:ok, %{active: false}} ->
+-        group_member_added_event(command)
++        group_member_added_event(club, command)
+ 
+       :error ->
+-        group_member_added_event(command)
++        group_member_added_event(club, command)
+     end
+   end
+ 
+@@ -1350,7 +1366,8 @@ defmodule Memba.Membership.Club do
+           club_id: command.club_id,
+           group_id: command.group_id,
+           membership_id: command.membership_id,
+-          person_id: command.person_id
++          person_id: command.person_id,
++          membership_generation: next_group_membership_generation(club)
+         }
+ 
+       {:ok, %{active: false}} ->
+@@ -1377,7 +1394,8 @@ defmodule Memba.Membership.Club do
+           club_id: command.club_id,
+           group_id: command.group_id,
+           membership_id: command.membership_id,
+-          person_id: command.person_id
++          person_id: command.person_id,
++          membership_generation: next_group_membership_generation(club)
+         }
+ 
+       {:ok, %{active: false}} ->
+@@ -1388,7 +1406,7 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
+-  defp group_member_added_event(%{
++  defp group_member_added_event(%__MODULE__{} = club, %{
+          club_id: club_id,
+          group_id: group_id,
+          membership_id: membership_id,
+@@ -1398,10 +1416,26 @@ defmodule Memba.Membership.Club do
+       club_id: club_id,
+       group_id: group_id,
+       membership_id: membership_id,
+-      person_id: person_id
++      person_id: person_id,
++      membership_generation: next_group_membership_generation(club)
+     }
+   end
+ 
++  defp next_group_membership_generation(%__MODULE__{} = club) do
++    club.group_membership_generation + 1
++  end
++
++  defp event_membership_generation(%__MODULE__{} = club, event) do
++    case event.membership_generation do
++      membership_generation
++      when is_integer(membership_generation) and membership_generation > 0 ->
++        membership_generation
++
++      _historic_event ->
++        next_group_membership_generation(club)
++    end
++  end
++
+   defp put_role_key(role_keys, nil, _role_id), do: role_keys
+   defp put_role_key(role_keys, role_key, role_id), do: Map.put(role_keys, role_key, role_id)
+ 
+diff --git a/web/lib/memba/membership/events/group_member_added.ex b/web/lib/memba/membership/events/group_member_added.ex
+index 9cf7905..d0df6fe 100644
+--- a/web/lib/memba/membership/events/group_member_added.ex
++++ b/web/lib/memba/membership/events/group_member_added.ex
+@@ -5,5 +5,5 @@ defmodule Memba.Membership.Events.GroupMemberAdded do
+ 
+   @derive Jason.Encoder
+   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
+-  defstruct [:club_id, :group_id, :membership_id, :person_id]
++  defstruct [:club_id, :group_id, :membership_id, :person_id, :membership_generation]
+ end
+diff --git a/web/lib/memba/membership/events/group_member_removed.ex b/web/lib/memba/membership/events/group_member_removed.ex
+index 32c9c76..b636c78 100644
+--- a/web/lib/memba/membership/events/group_member_removed.ex
++++ b/web/lib/memba/membership/events/group_member_removed.ex
+@@ -5,5 +5,5 @@ defmodule Memba.Membership.Events.GroupMemberRemoved do
+ 
+   @derive Jason.Encoder
+   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
+-  defstruct [:club_id, :group_id, :membership_id, :person_id]
++  defstruct [:club_id, :group_id, :membership_id, :person_id, :membership_generation]
+ end
+diff --git a/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex b/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex
+index 07b3d6b..ab50110 100644
+--- a/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex
++++ b/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex
+@@ -4,9 +4,10 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
+ 
+   The handler subscribes to Membership facts and coordinates the cross-context
+   consequence through Messaging's public API. Starting from origin repairs
+-  earlier removals. Each removal's durable EventStore identity becomes the
+-  Messaging cleanup key, making repeated delivery and replay safe even after a
+-  genuine re-add and new follow.
++  earlier removals. Each removal carries its Club-owned group-membership
++  generation as the causal cutoff and its durable EventStore identity as a
++  retry key. Historic facts without a generation use generation zero, before
++  every generated follow fact.
+   """
+ 
+   use Commanded.Event.Handler,
+@@ -36,10 +37,19 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
+       group_id: event.group_id,
+       member_id: event.person_id,
+       cleanup_id: cleanup_id(event, metadata),
++      membership_generation: membership_generation(event),
+       checkpoint: cleanup_checkpoint(metadata)
+     })
+   end
+ 
++  defp membership_generation(%GroupMemberRemoved{
++         membership_generation: membership_generation
++       })
++       when is_integer(membership_generation) and membership_generation > 0,
++       do: membership_generation
++
++  defp membership_generation(%GroupMemberRemoved{}), do: 0
++
+   defp cleanup_id(event, metadata) do
+     Map.get(metadata, :event_id) ||
+       Map.get(metadata, "event_id") ||
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index cbb41e5..38df139 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -131,6 +131,7 @@ defmodule Memba.Messaging do
+              end,
+              projections: [ConversationFollowProjector]
+            ),
++         :ok <- establish_reply_follow(command, dispatch_opts),
+          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+       dispatch_result
+     end
+@@ -243,8 +244,8 @@ defmodule Memba.Messaging do
+   Conversation discovery waits for Messaging's read models to reach the
+   Membership removal checkpoint, so projection lag cannot turn cleanup into a
+   false success. Each unfollow carries the Membership event ID as an idempotency
+-  key. Replaying that removal therefore cannot erase a follow established after
+-  cleanup and a genuine re-add.
++  key and its Club-owned membership generation as a causal cutoff. A cleanup
++  older than the current follow is a no-op even on first delivery.
+ 
+   A conversation-wide follow is retained when another active group still gives
+   the person authoritative read access to the conversation.
+@@ -255,6 +256,7 @@ defmodule Memba.Messaging do
+          {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
+          {:ok, member_id} <- fetch_required_id(attrs, :member_id, :person),
+          {:ok, cleanup_id} <- fetch_cleanup_id(attrs),
++         {:ok, membership_generation} <- fetch_membership_generation(attrs),
+          {:ok, checkpoint} <- fetch_cleanup_checkpoint(attrs),
+          :ok <- await_removed_group_follow_cleanup_projections(checkpoint) do
+       group_id
+@@ -267,11 +269,13 @@ defmodule Memba.Messaging do
+             group_id,
+             member_id,
+             cleanup_id,
++            membership_generation,
+             dispatch_opts
+           )
+ 
+         case result do
+           :ok -> {:cont, :ok}
++          {:ok, _dispatch_result} -> {:cont, :ok}
+           {:error, _reason} = error -> {:halt, error}
+         end
+       end)
+@@ -1852,7 +1856,8 @@ defmodule Memba.Messaging do
+                end
+              end,
+              projections: [ConversationFollowProjector]
+-           ) do
++           ),
++         :ok <- establish_reply_follow(command, dispatch_opts) do
+       dispatch_inbound_message_once(command, dispatch_opts)
+     end
+   end
+@@ -2052,7 +2057,8 @@ defmodule Memba.Messaging do
+          audience_group_id: audience_group_id,
+          subject: subject,
+          body: body,
+-         recipients: resolve_group_recipients(club_id, audience_group_id)
++         recipients: resolve_group_recipients(club_id, audience_group_id),
++         sender_membership_generation: Membership.current_group_membership_generation(club_id)
+        }}
+     end
+   end
+@@ -2096,7 +2102,9 @@ defmodule Memba.Messaging do
+          recipients:
+            resolve_reply_recipients(root_message.club_id, conversation_id,
+              except_person_id: sender_id
+-           )
++           ),
++         sender_membership_generation:
++           Membership.current_group_membership_generation(root_message.club_id)
+        }}
+     end
+   end
+@@ -2109,7 +2117,8 @@ defmodule Memba.Messaging do
+        %FollowConversation{
+          club_id: club_id,
+          conversation_id: conversation_id,
+-         member_id: member_id
++         member_id: member_id,
++         membership_generation: Membership.current_group_membership_generation(club_id)
+        }}
+     end
+   end
+@@ -2123,7 +2132,8 @@ defmodule Memba.Messaging do
+          club_id: club_id,
+          conversation_id: conversation_id,
+          member_id: member_id,
+-         cleanup_id: optional_attribute(attrs, :cleanup_id)
++         cleanup_id: optional_attribute(attrs, :cleanup_id),
++         membership_generation: optional_attribute(attrs, :membership_generation)
+        }}
+     end
+   end
+@@ -2148,6 +2158,17 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp fetch_membership_generation(attrs) do
++    case fetch_required(attrs, :membership_generation) do
++      {:ok, membership_generation}
++      when is_integer(membership_generation) and membership_generation >= 0 ->
++        {:ok, membership_generation}
++
++      _missing_or_invalid ->
++        {:error, :invalid_membership_generation}
++    end
++  end
++
+   defp await_removed_group_follow_cleanup_projections(checkpoint) do
+     case ProjectionBarrier.await(
+            @removed_group_follow_cleanup_projectors,
+@@ -2165,6 +2186,7 @@ defmodule Memba.Messaging do
+          removed_group_id,
+          member_id,
+          cleanup_id,
++         membership_generation,
+          dispatch_opts
+        ) do
+     if member_has_authoritative_conversation_access_excluding_group?(
+@@ -2180,7 +2202,8 @@ defmodule Memba.Messaging do
+           club_id: club_id,
+           conversation_id: conversation_id,
+           member_id: member_id,
+-          cleanup_id: cleanup_id
++          cleanup_id: cleanup_id,
++          membership_generation: membership_generation
+         },
+         include_conversation_follow_consistency(dispatch_opts)
+       )
+@@ -2212,6 +2235,16 @@ defmodule Memba.Messaging do
+     )
+   end
+ 
++  defp establish_reply_follow(%PostMessageReply{} = command, dispatch_opts) do
++    %FollowConversation{
++      club_id: command.club_id,
++      conversation_id: command.conversation_id,
++      member_id: command.sender_id,
++      membership_generation: command.sender_membership_generation
++    }
++    |> dispatch_ok(dispatch_opts)
++  end
++
+   defp report_email_delivery_delivered_command(attrs) do
+     with {:ok, message_id} <- fetch_required(attrs, :message_id),
+          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
+diff --git a/web/lib/memba/messaging/commands/follow_conversation.ex b/web/lib/memba/messaging/commands/follow_conversation.ex
+index 0797c06..56707e1 100644
+--- a/web/lib/memba/messaging/commands/follow_conversation.ex
++++ b/web/lib/memba/messaging/commands/follow_conversation.ex
+@@ -4,5 +4,5 @@ defmodule Memba.Messaging.Commands.FollowConversation do
+   """
+ 
+   @enforce_keys [:club_id, :conversation_id, :member_id]
+-  defstruct [:club_id, :conversation_id, :member_id]
++  defstruct [:club_id, :conversation_id, :member_id, :membership_generation]
+ end
+diff --git a/web/lib/memba/messaging/commands/post_message_reply.ex b/web/lib/memba/messaging/commands/post_message_reply.ex
+index 45f49fd..e74dfd7 100644
+--- a/web/lib/memba/messaging/commands/post_message_reply.ex
++++ b/web/lib/memba/messaging/commands/post_message_reply.ex
+@@ -27,6 +27,7 @@ defmodule Memba.Messaging.Commands.PostMessageReply do
+     :reply_to_message_id,
+     :subject,
+     :body,
+-    :recipients
++    :recipients,
++    :sender_membership_generation
+   ]
+ end
+diff --git a/web/lib/memba/messaging/commands/send_message.ex b/web/lib/memba/messaging/commands/send_message.ex
+index c67839e..43cbbb2 100644
+--- a/web/lib/memba/messaging/commands/send_message.ex
++++ b/web/lib/memba/messaging/commands/send_message.ex
+@@ -24,6 +24,7 @@ defmodule Memba.Messaging.Commands.SendMessage do
+     :reply_to_message_id,
+     :subject,
+     :body,
+-    :recipients
++    :recipients,
++    :sender_membership_generation
+   ]
+ end
+diff --git a/web/lib/memba/messaging/commands/unfollow_conversation.ex b/web/lib/memba/messaging/commands/unfollow_conversation.ex
+index 5f9098a..5e13602 100644
+--- a/web/lib/memba/messaging/commands/unfollow_conversation.ex
++++ b/web/lib/memba/messaging/commands/unfollow_conversation.ex
+@@ -4,5 +4,11 @@ defmodule Memba.Messaging.Commands.UnfollowConversation do
+   """
+ 
+   @enforce_keys [:club_id, :conversation_id, :member_id]
+-  defstruct [:club_id, :conversation_id, :member_id, :cleanup_id]
++  defstruct [
++    :club_id,
++    :conversation_id,
++    :member_id,
++    :cleanup_id,
++    :membership_generation
++  ]
+ end
+diff --git a/web/lib/memba/messaging/conversation_followers.ex b/web/lib/memba/messaging/conversation_followers.ex
+index 7fac518..07db7f5 100644
+--- a/web/lib/memba/messaging/conversation_followers.ex
++++ b/web/lib/memba/messaging/conversation_followers.ex
+@@ -17,6 +17,8 @@ defmodule Memba.Messaging.ConversationFollowers do
+     :conversation_id,
+     :club_id,
+     follower_ids: MapSet.new(),
++    follower_generations: %{},
++    cleanup_generations: %{},
+     completed_cleanup_ids: MapSet.new()
+   ]
+ 
+@@ -25,15 +27,26 @@ defmodule Memba.Messaging.ConversationFollowers do
+     with :ok <- validate_command(command),
+          :ok <- validate_same_conversation(conversation, command),
+          :ok <- validate_same_club(conversation, command) do
+-      if MapSet.member?(conversation.follower_ids, command.member_id) do
+-        []
+-      else
+-        %ConversationFollowed{
+-          follow_id: follow_id(command.conversation_id, command.member_id),
+-          club_id: command.club_id,
+-          conversation_id: command.conversation_id,
+-          member_id: command.member_id
+-        }
++      membership_generation = normalize_generation(command.membership_generation)
++      current_generation = follower_generation(conversation, command.member_id)
++      cleanup_generation = cleanup_generation(conversation, command.member_id)
++
++      cond do
++        membership_generation <= cleanup_generation ->
++          []
++
++        MapSet.member?(conversation.follower_ids, command.member_id) and
++            membership_generation <= current_generation ->
++          []
++
++        true ->
++          %ConversationFollowed{
++            follow_id: follow_id(command.conversation_id, command.member_id),
++            club_id: command.club_id,
++            conversation_id: command.conversation_id,
++            member_id: command.member_id,
++            membership_generation: command.membership_generation
++          }
+       end
+     end
+   end
+@@ -42,10 +55,16 @@ defmodule Memba.Messaging.ConversationFollowers do
+     with :ok <- validate_command(command),
+          :ok <- validate_same_conversation(conversation, command),
+          :ok <- validate_same_club(conversation, command) do
++      cleanup_generation = normalize_generation(command.membership_generation)
++
+       cond do
+         cleanup_completed?(conversation, command.cleanup_id) ->
+           []
+ 
++        is_binary(command.cleanup_id) and
++            cleanup_generation < follower_generation(conversation, command.member_id) ->
++          []
++
+         MapSet.member?(conversation.follower_ids, command.member_id) or
+             is_binary(command.cleanup_id) ->
+           %ConversationUnfollowed{
+@@ -53,7 +72,8 @@ defmodule Memba.Messaging.ConversationFollowers do
+             club_id: command.club_id,
+             conversation_id: command.conversation_id,
+             member_id: command.member_id,
+-            cleanup_id: command.cleanup_id
++            cleanup_id: command.cleanup_id,
++            membership_generation: command.membership_generation
+           }
+ 
+         true ->
+@@ -64,39 +84,43 @@ defmodule Memba.Messaging.ConversationFollowers do
+ 
+   @impl Aggregate
+   def apply(%__MODULE__{} = conversation, %MessageSent{} = event) do
+-    follower_ids =
+-      if MessageSent.sender_follows_conversation?(event) do
+-        MapSet.put(conversation.follower_ids, event.sender_id)
+-      else
+-        conversation.follower_ids
+-      end
+-
+-    %__MODULE__{
++    conversation = %__MODULE__{
+       conversation
+       | conversation_id: event.conversation_id || event.message_id,
+-        club_id: event.club_id,
+-        follower_ids: follower_ids
++        club_id: event.club_id
+     }
++
++    if MessageSent.sender_follows_conversation?(event) do
++      apply_follow(
++        conversation,
++        event.sender_id,
++        event.sender_membership_generation
++      )
++    else
++      conversation
++    end
+   end
+ 
+   def apply(%__MODULE__{} = conversation, %ConversationFollowed{} = event) do
+-    %__MODULE__{
++    conversation = %__MODULE__{
+       conversation
+       | conversation_id: event.conversation_id,
+-        club_id: event.club_id,
+-        follower_ids: MapSet.put(conversation.follower_ids, event.member_id)
++        club_id: event.club_id
+     }
++
++    apply_follow(conversation, event.member_id, event.membership_generation)
+   end
+ 
+   def apply(%__MODULE__{} = conversation, %ConversationUnfollowed{} = event) do
+-    %__MODULE__{
++    conversation = %__MODULE__{
+       conversation
+       | conversation_id: event.conversation_id,
+         club_id: event.club_id,
+-        follower_ids: MapSet.delete(conversation.follower_ids, event.member_id),
+         completed_cleanup_ids:
+           record_completed_cleanup(conversation.completed_cleanup_ids, event.cleanup_id)
+     }
++
++    apply_unfollow(conversation, event)
+   end
+ 
+   def apply(%__MODULE__{} = conversation, _event), do: conversation
+@@ -139,6 +163,70 @@ defmodule Memba.Messaging.ConversationFollowers do
+ 
+   defp record_completed_cleanup(cleanup_ids, _cleanup_id), do: cleanup_ids
+ 
++  defp apply_follow(conversation, member_id, membership_generation) do
++    membership_generation = normalize_generation(membership_generation)
++
++    if membership_generation > cleanup_generation(conversation, member_id) do
++      %__MODULE__{
++        conversation
++        | follower_ids: MapSet.put(conversation.follower_ids, member_id),
++          follower_generations:
++            Map.put(conversation.follower_generations, member_id, membership_generation)
++      }
++    else
++      conversation
++    end
++  end
++
++  defp apply_unfollow(conversation, %ConversationUnfollowed{cleanup_id: cleanup_id} = event)
++       when is_binary(cleanup_id) do
++    membership_generation = normalize_generation(event.membership_generation)
++
++    conversation =
++      %__MODULE__{
++        conversation
++        | cleanup_generations:
++            Map.update(
++              conversation.cleanup_generations,
++              event.member_id,
++              membership_generation,
++              &max(&1, membership_generation)
++            )
++      }
++
++    if membership_generation >= follower_generation(conversation, event.member_id) do
++      delete_follower(conversation, event.member_id)
++    else
++      conversation
++    end
++  end
++
++  defp apply_unfollow(conversation, %ConversationUnfollowed{} = event) do
++    delete_follower(conversation, event.member_id)
++  end
++
++  defp delete_follower(conversation, member_id) do
++    %__MODULE__{
++      conversation
++      | follower_ids: MapSet.delete(conversation.follower_ids, member_id),
++        follower_generations: Map.delete(conversation.follower_generations, member_id)
++    }
++  end
++
++  defp follower_generation(conversation, member_id) do
++    Map.get(conversation.follower_generations, member_id, 0)
++  end
++
++  defp cleanup_generation(conversation, member_id) do
++    Map.get(conversation.cleanup_generations, member_id, -1)
++  end
++
++  defp normalize_generation(generation)
++       when is_integer(generation) and generation >= 0,
++       do: generation
++
++  defp normalize_generation(_historic_or_invalid), do: 0
++
+   defp validate_id(type, value, error) do
+     case ID.cast(type, value) do
+       {:ok, ^value} -> :ok
+diff --git a/web/lib/memba/messaging/events/conversation_followed.ex b/web/lib/memba/messaging/events/conversation_followed.ex
+index 7b56d06..fc68082 100644
+--- a/web/lib/memba/messaging/events/conversation_followed.ex
++++ b/web/lib/memba/messaging/events/conversation_followed.ex
+@@ -5,5 +5,5 @@ defmodule Memba.Messaging.Events.ConversationFollowed do
+ 
+   @derive Jason.Encoder
+   @enforce_keys [:follow_id, :club_id, :conversation_id, :member_id]
+-  defstruct [:follow_id, :club_id, :conversation_id, :member_id]
++  defstruct [:follow_id, :club_id, :conversation_id, :member_id, :membership_generation]
+ end
+diff --git a/web/lib/memba/messaging/events/conversation_unfollowed.ex b/web/lib/memba/messaging/events/conversation_unfollowed.ex
+index 41e9cf2..23d1bb6 100644
+--- a/web/lib/memba/messaging/events/conversation_unfollowed.ex
++++ b/web/lib/memba/messaging/events/conversation_unfollowed.ex
+@@ -5,5 +5,12 @@ defmodule Memba.Messaging.Events.ConversationUnfollowed do
+ 
+   @derive Jason.Encoder
+   @enforce_keys [:follow_id, :club_id, :conversation_id, :member_id]
+-  defstruct [:follow_id, :club_id, :conversation_id, :member_id, :cleanup_id]
++  defstruct [
++    :follow_id,
++    :club_id,
++    :conversation_id,
++    :member_id,
++    :cleanup_id,
++    :membership_generation
++  ]
+ end
+diff --git a/web/lib/memba/messaging/events/message_sent.ex b/web/lib/memba/messaging/events/message_sent.ex
+index 961599e..8b59b26 100644
+--- a/web/lib/memba/messaging/events/message_sent.ex
++++ b/web/lib/memba/messaging/events/message_sent.ex
+@@ -5,6 +5,11 @@ defmodule Memba.Messaging.Events.MessageSent do
+   `sender_follows_conversation` records whether this send establishes a follower
+   relationship for the sender. Historic events predate the field and are
+   interpreted as following so replay preserves their original projection.
++
++  `sender_membership_generation` causally orders generated sender follows
++  against group-membership cleanup. Historic facts without it use generation
++  zero. New reply sends establish the authoritative root-stream follow with a
++  `ConversationFollowed` fact before this event is dispatched.
+   """
+ 
+   @derive Jason.Encoder
+@@ -17,6 +22,7 @@ defmodule Memba.Messaging.Events.MessageSent do
+     :reply_to_message_id,
+     :subject,
+     :body,
++    :sender_membership_generation,
+     sender_follows_conversation: true
+   ]
+ 
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index 16d493f..75d79fc 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -313,6 +313,7 @@ defmodule Memba.Messaging.Message do
+         reply_to_message_id: reply_to_message_id,
+         subject: subject,
+         body: body,
++        sender_membership_generation: command.sender_membership_generation,
+         sender_follows_conversation: sender_follows_conversation?(command, recipients)
+       }
+ 
+diff --git a/web/lib/memba/messaging/projectors/conversation_follow.ex b/web/lib/memba/messaging/projectors/conversation_follow.ex
+index 1b42d28..953a3ba 100644
+--- a/web/lib/memba/messaging/projectors/conversation_follow.ex
++++ b/web/lib/memba/messaging/projectors/conversation_follow.ex
+@@ -17,7 +17,7 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do
+   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
+ 
+   project(%MessageSent{} = event, fn multi ->
+-    if MessageSent.sender_follows_conversation?(event) do
++    if project_message_sender_follow?(event) do
+       conversation_id =
+         event.conversation_id || ConversationReference.root_conversation_id(event.message_id)
+ 
+@@ -27,6 +27,12 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do
+     end
+   end)
+ 
++  defp project_message_sender_follow?(%MessageSent{} = event) do
++    MessageSent.sender_follows_conversation?(event) and
++      (event.message_id == event.conversation_id or
++         is_nil(event.sender_membership_generation))
++  end
++
+   project(%ConversationFollowed{} = event, fn multi ->
+     upsert_follow(multi, event.club_id, event.conversation_id, event.member_id, true)
+   end)
+diff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+index 828e5c3..e0d80ae 100644
+--- a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
++++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs
+@@ -10,12 +10,14 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   alias Memba.Membership.App, as: MembershipApp
+   alias Memba.Membership.Club
+   alias Memba.Membership.Commands.AddClubMember
++  alias Memba.Membership.Commands.AddCustomGroupMember
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.RemoveClubMember
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.CustomGroupAdmission
+   alias Memba.Membership.Events.ClubMemberAdded
+   alias Memba.Membership.Events.GroupMemberAdded
+@@ -30,10 +32,11 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.App, as: MessagingApp
+-  alias Memba.Messaging.Commands.PostMessageReply
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.ConversationFollowed
+   alias Memba.Messaging.Events.ConversationUnfollowed
+   alias Memba.Messaging.Events.EmailDeliveryCreated
++  alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
+   alias Memba.Messaging.Recipient
+ 
+@@ -419,6 +422,31 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     assert count_unfollow_events(conversation_id, person_id) == 1
+   end
+ 
++  test "cleanup accepts execution-result returns from public Messaging unfollows" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    person_id = Memba.ID.generate(:person)
++    conversation_id = Memba.ID.generate(:message)
++
++    create_followed_conversation(club_id, group_id, conversation_id, person_id)
++
++    assert :ok =
++             Messaging.clear_removed_group_member_follows(
++               %{
++                 club_id: club_id,
++                 group_id: group_id,
++                 member_id: person_id,
++                 cleanup_id: Ecto.UUID.generate(),
++                 membership_generation: 0,
++                 checkpoint: current_checkpoint()
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    refute Messaging.following_conversation?(conversation_id, person_id)
++  end
++
+   test "explicit custom-group removal durably clears manual, root, and reply auto-follows" do
+     fixture = explicit_removal_fixture!()
+     manual_conversation_id = Memba.ID.generate(:message)
+@@ -456,21 +484,29 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+       fixture.actor_person_id
+     )
+ 
+-    assert :ok =
+-             MessagingApp.dispatch(
+-               %PostMessageReply{
++    assert {:ok, %ExecutionResult{events: [%MessageSent{}]}} =
++             Messaging.post_message_reply(
++               %{
+                  message_id: Memba.ID.generate(:message),
+-                 club_id: fixture.club_id,
+                  sender_id: fixture.target_person_id,
+                  conversation_id: reply_conversation_id,
+-                 reply_to_message_id: reply_conversation_id,
+-                 subject: "Board plans",
+-                 body: "Reply auto-follow",
+-                 recipients: []
++                 body: "Reply auto-follow"
+                },
++               returning: :execution_result,
+                consistency: :strong
+              )
+ 
++    assert [
++             %ConversationFollowed{
++               member_id: target_person_id,
++               membership_generation: reply_generation
++             }
++           ] = follow_events(reply_conversation_id, fixture.target_person_id)
++
++    assert target_person_id == fixture.target_person_id
++    assert is_integer(reply_generation)
++    assert reply_generation > 0
++
+     for conversation_id <- [
+           manual_conversation_id,
+           root_conversation_id,
+@@ -551,21 +587,17 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
+     assert count_unfollow_events(unrelated_conversation_id, fixture.target_person_id) == 0
+     assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 0
+-  end
+-
+-  test "replayed removal cannot erase a follow established after a genuine re-add" do
+-    fixture = explicit_removal_fixture!()
+-    conversation_id = Memba.ID.generate(:message)
+ 
+-    create_followed_conversation(
+-      fixture.club_id,
+-      fixture.group_id,
+-      conversation_id,
+-      fixture.target_person_id
+-    )
++    recorded_removal =
++      fixture.club_id
++      |> then(&EventStore.stream_forward(MembershipApp, &1))
++      |> Enum.find(fn
++        %{data: %GroupMemberRemoved{group_id: group_id, membership_id: membership_id}} ->
++          group_id == fixture.group_id and membership_id == fixture.target_membership_id
+ 
+-    assert :ok = remove_custom_group_member(fixture)
+-    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
++        _event ->
++          false
++      end)
+ 
+     assert {:ok, %CustomGroupAdmission{transition: :member_added}} =
+              Membership.add_custom_group_member(%{
+@@ -576,32 +608,25 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+                actor_person_id: fixture.actor_person_id
+              })
+ 
+-    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+-
+     assert :ok =
+              Messaging.follow_conversation(
+                %{
+                  club_id: fixture.club_id,
+-                 conversation_id: conversation_id,
++                 conversation_id: shared_conversation_id,
+                  member_id: fixture.target_person_id
+                },
+                consistency: :strong
+              )
+ 
+-    recorded_removal =
+-      fixture.club_id
+-      |> then(&EventStore.stream_forward(MembershipApp, &1))
+-      |> Enum.find(fn recorded_event ->
+-        match?(
+-          %GroupMemberRemoved{
+-            group_id: group_id,
+-            membership_id: membership_id
+-          }
+-          when group_id == fixture.group_id and
+-                 membership_id == fixture.target_membership_id,
+-          recorded_event.data
+-        )
+-      end)
++    assert :ok =
++             Messaging.revoke_conversation_access_from_group(
++               %{
++                 club_id: fixture.club_id,
++                 conversation_id: shared_conversation_id,
++                 group_id: retained_group_id
++               },
++               consistency: :strong
++             )
+ 
+     assert :ok =
+              ClearRemovedGroupMemberFollows.handle(recorded_removal.data, %{
+@@ -609,8 +634,202 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+                event_number: recorded_removal.event_number
+              })
+ 
++    assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
++    assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 0
++  end
++
++  test "first delayed removal delivery cannot erase newer follows after a genuine re-add" do
++    fixture = explicit_removal_fixture!()
++    conversation_id = Memba.ID.generate(:message)
++    later_conversation_id = Memba.ID.generate(:message)
++
++    create_followed_conversation(
++      fixture.club_id,
++      fixture.group_id,
++      conversation_id,
++      fixture.target_person_id
++    )
++
++    clear_follows_handler = clear_follows_handler_pid()
++    :ok = :sys.suspend(clear_follows_handler)
++
++    recorded_removal =
++      try do
++        assert {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}} =
++                 MembershipApp.dispatch(
++                   %RemoveCustomGroupMember{
++                     club_id: fixture.club_id,
++                     group_id: fixture.group_id,
++                     membership_id: fixture.target_membership_id,
++                     person_id: fixture.target_person_id,
++                     actor_person_id: fixture.actor_person_id
++                   },
++                   returning: :execution_result
++                 )
++
++        recorded_removal =
++          fixture.club_id
++          |> then(&EventStore.stream_forward(MembershipApp, &1))
++          |> Enum.find(fn recorded_event ->
++            match?(
++              %GroupMemberRemoved{
++                group_id: group_id,
++                membership_id: membership_id
++              }
++              when group_id == fixture.group_id and
++                     membership_id == fixture.target_membership_id,
++              recorded_event.data
++            )
++          end)
++
++        assert %GroupMemberRemoved{
++                 club_id: _club_id,
++                 group_id: _group_id,
++                 membership_id: _membership_id,
++                 person_id: _person_id,
++                 membership_generation: removed_generation
++               } = recorded_removal.data
++
++        assert is_integer(removed_generation)
++
++        assert {:ok, %ExecutionResult{events: [%GroupMemberAdded{}]}} =
++                 MembershipApp.dispatch(
++                   %AddCustomGroupMember{
++                     club_id: fixture.club_id,
++                     group_id: fixture.group_id,
++                     membership_id: fixture.target_membership_id,
++                     person_id: fixture.target_person_id,
++                     actor_person_id: fixture.actor_person_id
++                   },
++                   returning: :execution_result
++                 )
++
++        assert :ok =
++                 Messaging.follow_conversation(
++                   %{
++                     club_id: fixture.club_id,
++                     conversation_id: conversation_id,
++                     member_id: fixture.target_person_id
++                   },
++                   consistency: :strong
++                 )
++
++        create_followed_conversation(
++          fixture.club_id,
++          fixture.group_id,
++          later_conversation_id,
++          fixture.target_person_id
++        )
++
++        assert :ok =
++                 ClearRemovedGroupMemberFollows.handle(recorded_removal.data, %{
++                   event_id: recorded_removal.event_id,
++                   event_number: recorded_removal.event_number,
++                   stream_version: recorded_removal.stream_version
++                 })
++
++        recorded_removal
++      after
++        :ok = :sys.resume(clear_follows_handler)
++      end
++
++    assert is_binary(recorded_removal.event_id)
++
++    for current_conversation_id <- [conversation_id, later_conversation_id] do
++      assert Messaging.following_conversation?(
++               current_conversation_id,
++               fixture.target_person_id
++             )
++
++      assert count_unfollow_events(current_conversation_id, fixture.target_person_id) == 0
++    end
++
++    assert [%ConversationFollowed{membership_generation: refreshed_generation}] =
++             follow_events(conversation_id, fixture.target_person_id)
++
++    assert [%MessageSent{sender_membership_generation: initial_generation} | _events] =
++             conversation_id
++             |> then(&EventStore.stream_forward(MessagingApp, &1))
++             |> Enum.map(& &1.data)
++
++    assert refreshed_generation > initial_generation
++  end
++
++  test "public eventual removal, re-add, and exact retry await durable cleanup progress" do
++    fixture = explicit_removal_fixture!()
++    conversation_id = Memba.ID.generate(:message)
++
++    create_followed_conversation(
++      fixture.club_id,
++      fixture.group_id,
++      conversation_id,
++      fixture.target_person_id
++    )
++
++    clear_follows_handler = clear_follows_handler_pid()
++    assert :ok = EventStore.subscribe(MembershipApp, fixture.club_id)
++    :ok = :sys.suspend(clear_follows_handler)
++
++    removal =
++      Task.async(fn ->
++        remove_custom_group_member(fixture, consistency: :eventual)
++      end)
++
++    {readdition, retry} =
++      try do
++        removed_generation = await_group_member_removed!(fixture.target_membership_id)
++        assert Task.yield(removal, 100) == nil
++
++        retry =
++          Task.async(fn ->
++            remove_custom_group_member(fixture,
++              consistency: :eventual,
++              returning: :execution_result
++            )
++          end)
++
++        assert Task.yield(retry, 100) == nil
++
++        readdition =
++          Task.async(fn ->
++            Membership.add_custom_group_member(
++              %{
++                club_id: fixture.club_id,
++                group_id: fixture.group_id,
++                membership_id: fixture.target_membership_id,
++                person_id: fixture.target_person_id,
++                actor_person_id: fixture.actor_person_id
++              },
++              consistency: :eventual
++            )
++          end)
++
++        added_generation = await_group_member_added_generation!(fixture.target_membership_id)
++        assert added_generation > removed_generation
++        assert Task.yield(readdition, 100) == nil
++
++        assert :ok =
++                 Messaging.follow_conversation(
++                   %{
++                     club_id: fixture.club_id,
++                     conversation_id: conversation_id,
++                     member_id: fixture.target_person_id
++                   },
++                   consistency: :strong
++                 )
++
++        {readdition, retry}
++      after
++        :ok = :sys.resume(clear_follows_handler)
++      end
++
++    assert :ok = Task.await(removal, 5_000)
++
++    assert {:ok, %CustomGroupAdmission{transition: :member_added}} =
++             Task.await(readdition, 5_000)
++
++    assert {:ok, %ExecutionResult{events: []}} = Task.await(retry, 5_000)
+     assert Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+-    assert count_unfollow_events(conversation_id, fixture.target_person_id) == 1
+   end
+ 
+   test "explicit removal waits for lagging conversation access before acknowledging cleanup" do
+@@ -647,24 +866,28 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+   test "system-group removal facts do not clear follows" do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
+-    conversation_id = Memba.ID.generate(:message)
+-    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+-
+-    create_followed_conversation(club_id, everyone_group_id, conversation_id, person_id)
+ 
+-    assert :ok =
+-             ClearRemovedGroupMemberFollows.handle(
+-               %GroupMemberRemoved{
+-                 club_id: club_id,
+-                 group_id: everyone_group_id,
+-                 membership_id: Memba.ID.generate(:membership),
+-                 person_id: person_id
+-               },
+-               %{event_id: Ecto.UUID.generate(), event_number: current_checkpoint()}
+-             )
+-
+-    assert Messaging.following_conversation?(conversation_id, person_id)
+-    assert count_unfollow_events(conversation_id, person_id) == 0
++    for group_id <- [
++          SystemGroups.everyone_group_id(club_id),
++          SystemGroups.admin_group_id(club_id)
++        ] do
++      conversation_id = Memba.ID.generate(:message)
++      create_followed_conversation(club_id, group_id, conversation_id, person_id)
++
++      assert :ok =
++               ClearRemovedGroupMemberFollows.handle(
++                 %GroupMemberRemoved{
++                   club_id: club_id,
++                   group_id: group_id,
++                   membership_id: Memba.ID.generate(:membership),
++                   person_id: person_id
++                 },
++                 %{event_id: Ecto.UUID.generate(), event_number: current_checkpoint()}
++               )
++
++      assert Messaging.following_conversation?(conversation_id, person_id)
++      assert count_unfollow_events(conversation_id, person_id) == 0
++    end
+   end
+ 
+   defp create_person(person_id, name, email) do
+@@ -776,6 +999,8 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+                  audience_group_id: group_id,
+                  subject: "Board plans",
+                  body: "Private plans for the board.",
++                 sender_membership_generation:
++                   Membership.current_group_membership_generation(club_id),
+                  recipients: [
+                    %Recipient{
+                      delivery_id: Memba.ID.generate(:delivery),
+@@ -832,6 +1057,17 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     |> length()
+   end
+ 
++  defp follow_events(conversation_id, person_id) do
++    conversation_id
++    |> then(&EventStore.stream_forward(MessagingApp, &1))
++    |> Enum.flat_map(fn recorded_event ->
++      case recorded_event.data do
++        %ConversationFollowed{member_id: ^person_id} = event -> [event]
++        _event -> []
++      end
++    end)
++  end
++
+   defp unfollow_events(conversation_id, person_id) do
+     conversation_id
+     |> then(&EventStore.stream_forward(MessagingApp, &1))
+@@ -916,6 +1152,38 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
+     await_club_member_added!(membership_id, deadline)
+   end
+ 
++  defp await_group_member_removed!(membership_id) do
++    deadline = System.monotonic_time(:millisecond) + 1_000
++    await_group_membership_generation!(GroupMemberRemoved, membership_id, deadline)
++  end
++
++  defp await_group_member_added_generation!(membership_id) do
++    deadline = System.monotonic_time(:millisecond) + 1_000
++    await_group_membership_generation!(GroupMemberAdded, membership_id, deadline)
++  end
++
++  defp await_group_membership_generation!(event_module, membership_id, deadline) do
++    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
++
++    receive do
++      {:events, events} ->
++        case Enum.find(events, fn
++               %{data: %{__struct__: ^event_module, membership_id: ^membership_id}} -> true
++               _event -> false
++             end) do
++          %{data: %{membership_generation: membership_generation}}
++          when is_integer(membership_generation) ->
++            membership_generation
++
++          nil ->
++            await_group_membership_generation!(event_module, membership_id, deadline)
++        end
++    after
++      timeout ->
++        flunk("#{inspect(event_module)} was not persisted for membership #{membership_id}")
++    end
++  end
++
+   defp await_club_member_added!(membership_id, deadline) do
+     timeout = max(deadline - System.monotonic_time(:millisecond), 0)
+ 
+diff --git a/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs b/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs
+index 099f1da..ec01b9e 100644
+--- a/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs
++++ b/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs
+@@ -4,10 +4,12 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership
+   alias Memba.Membership.App
++  alias Memba.Membership.Club
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+   alias Memba.Membership.Roles
+@@ -44,12 +46,16 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
+                   club_id: ^club_id,
+                   group_id: ^group_id,
+                   membership_id: ^target_membership_id,
+-                  person_id: ^target_person_id
++                  person_id: ^target_person_id,
++                  membership_generation: membership_generation
+                 }
+               ]
+             }} =
+              remove_custom_group_member(fixture, returning: :execution_result)
+ 
++    assert is_integer(membership_generation)
++    assert membership_generation > 0
++
+     assert %GroupMembershipProjection{
+              club_id: ^club_id,
+              group_id: ^group_id,
+@@ -63,6 +69,33 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
+              )
+   end
+ 
++  test "historic group membership facts without generations rebuild a causal sequence" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    added =
++      Club.apply(%Club{}, %GroupMemberAdded{
++        club_id: club_id,
++        group_id: group_id,
++        membership_id: membership_id,
++        person_id: person_id
++      })
++
++    assert added.group_membership_generation == 1
++
++    removed =
++      Club.apply(added, %GroupMemberRemoved{
++        club_id: club_id,
++        group_id: group_id,
++        membership_id: membership_id,
++        person_id: person_id
++      })
++
++    assert removed.group_membership_generation == 2
++  end
++
+   test "an exact retry is event-free while identity mismatches are rejected" do
+     fixture = custom_group_with_target!()
+ 
+diff --git a/web/test/memba/messaging/conversation_followers_test.exs b/web/test/memba/messaging/conversation_followers_test.exs
+index 0b0fd9a..dfc3ad7 100644
+--- a/web/test/memba/messaging/conversation_followers_test.exs
++++ b/web/test/memba/messaging/conversation_followers_test.exs
+@@ -40,6 +40,19 @@ defmodule Memba.Messaging.ConversationFollowersTest do
+                })
+     end
+ 
++    test "refreshes an existing follow when membership generation advances" do
++      conversation = followed_conversation(3)
++      member_id = hd(MapSet.to_list(conversation.follower_ids))
++
++      assert %ConversationFollowed{membership_generation: 5} =
++               ConversationFollowers.execute(conversation, %FollowConversation{
++                 club_id: conversation.club_id,
++                 conversation_id: conversation.conversation_id,
++                 member_id: member_id,
++                 membership_generation: 5
++               })
++    end
++
+     test "rejects malformed identifiers and mismatched club context" do
+       conversation = followed_conversation()
+       member_id = hd(MapSet.to_list(conversation.follower_ids))
+@@ -128,12 +141,74 @@ defmodule Memba.Messaging.ConversationFollowersTest do
+           follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
+           club_id: club_id,
+           conversation_id: conversation_id,
+-          member_id: member_id
++          member_id: member_id,
++          membership_generation: 1
+         })
+ 
+       assert [] = ConversationFollowers.execute(followed_again, command)
+       assert MapSet.member?(followed_again.follower_ids, member_id)
+     end
++
++    test "orders first cleanup delivery against a newer follow generation" do
++      conversation = followed_conversation(5)
++      member_id = hd(MapSet.to_list(conversation.follower_ids))
++
++      assert [] =
++               ConversationFollowers.execute(conversation, %UnfollowConversation{
++                 club_id: conversation.club_id,
++                 conversation_id: conversation.conversation_id,
++                 member_id: member_id,
++                 cleanup_id: "older-removal",
++                 membership_generation: 4
++               })
++
++      assert MapSet.member?(conversation.follower_ids, member_id)
++    end
++
++    test "records a cleanup cutoff that rejects delayed stale follow work" do
++      club_id = Memba.ID.generate(:club)
++      conversation_id = Memba.ID.generate(:message)
++      member_id = Memba.ID.generate(:person)
++
++      cleanup =
++        ConversationFollowers.execute(%ConversationFollowers{}, %UnfollowConversation{
++          club_id: club_id,
++          conversation_id: conversation_id,
++          member_id: member_id,
++          cleanup_id: "removal-5",
++          membership_generation: 5
++        })
++
++      cleaned = ConversationFollowers.apply(%ConversationFollowers{}, cleanup)
++
++      assert [] =
++               ConversationFollowers.execute(cleaned, %FollowConversation{
++                 club_id: club_id,
++                 conversation_id: conversation_id,
++                 member_id: member_id,
++                 membership_generation: 4
++               })
++
++      stale_auto_follow =
++        ConversationFollowers.apply(cleaned, %MessageSent{
++          message_id: conversation_id,
++          club_id: club_id,
++          sender_id: member_id,
++          subject: "Delayed root",
++          body: "This send was prepared before removal.",
++          sender_membership_generation: 4
++        })
++
++      refute MapSet.member?(stale_auto_follow.follower_ids, member_id)
++
++      assert %ConversationFollowed{membership_generation: 6} =
++               ConversationFollowers.execute(cleaned, %FollowConversation{
++                 club_id: club_id,
++                 conversation_id: conversation_id,
++                 member_id: member_id,
++                 membership_generation: 6
++               })
++    end
+   end
+ 
+   test "apply/2 records follower state" do
+@@ -193,7 +268,78 @@ defmodule Memba.Messaging.ConversationFollowersTest do
+              })
+   end
+ 
+-  defp followed_conversation do
++  test "historic facts without generation remain replayable and precede generated facts" do
++    club_id = Memba.ID.generate(:club)
++    conversation_id = Memba.ID.generate(:message)
++    member_id = Memba.ID.generate(:person)
++
++    legacy_follow =
++      ConversationFollowers.apply(%ConversationFollowers{}, %ConversationFollowed{
++        follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
++        club_id: club_id,
++        conversation_id: conversation_id,
++        member_id: member_id
++      })
++
++    assert %ConversationUnfollowed{membership_generation: 1} =
++             cleanup =
++             ConversationFollowers.execute(legacy_follow, %UnfollowConversation{
++               club_id: club_id,
++               conversation_id: conversation_id,
++               member_id: member_id,
++               cleanup_id: "generated-removal",
++               membership_generation: 1
++             })
++
++    cleaned = ConversationFollowers.apply(legacy_follow, cleanup)
++    refute MapSet.member?(cleaned.follower_ids, member_id)
++
++    replayed_legacy_message =
++      ConversationFollowers.apply(cleaned, %MessageSent{
++        message_id: conversation_id,
++        club_id: club_id,
++        sender_id: member_id,
++        subject: "Historic root",
++        body: "Historic body"
++      })
++
++    refute MapSet.member?(replayed_legacy_message.follower_ids, member_id)
++  end
++
++  test "first generated cleanup delivery preserves a follow after legacy cleanup and re-add" do
++    conversation = followed_conversation()
++    member_id = hd(MapSet.to_list(conversation.follower_ids))
++
++    legacy_cleaned =
++      ConversationFollowers.apply(conversation, %ConversationUnfollowed{
++        follow_id: ConversationFollowers.follow_id(conversation.conversation_id, member_id),
++        club_id: conversation.club_id,
++        conversation_id: conversation.conversation_id,
++        member_id: member_id
++      })
++
++    followed_after_readd =
++      ConversationFollowers.apply(legacy_cleaned, %ConversationFollowed{
++        follow_id: ConversationFollowers.follow_id(conversation.conversation_id, member_id),
++        club_id: conversation.club_id,
++        conversation_id: conversation.conversation_id,
++        member_id: member_id,
++        membership_generation: 2
++      })
++
++    assert [] =
++             ConversationFollowers.execute(followed_after_readd, %UnfollowConversation{
++               club_id: conversation.club_id,
++               conversation_id: conversation.conversation_id,
++               member_id: member_id,
++               cleanup_id: "historic-removal-first-token-delivery",
++               membership_generation: 1
++             })
++
++    assert MapSet.member?(followed_after_readd.follower_ids, member_id)
++  end
++
++  defp followed_conversation(generation \\ nil) do
+     club_id = Memba.ID.generate(:club)
+     conversation_id = Memba.ID.generate(:message)
+     member_id = Memba.ID.generate(:person)
+@@ -202,7 +348,8 @@ defmodule Memba.Messaging.ConversationFollowersTest do
+       follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
+       club_id: club_id,
+       conversation_id: conversation_id,
+-      member_id: member_id
++      member_id: member_id,
++      membership_generation: generation
+     })
+   end
+ end
