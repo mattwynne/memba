@@ -1,87 +1,104 @@
 {
   "schema_version": 1,
-  "packet_id": "004-0bc4306-06",
+  "packet_id": "004-34d71d9-07",
   "task_id": "004",
   "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "attempt": "revision",
   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
-  "source_baseline": "0bc43067626f7163f1b7066f55fd7ca2c285a225",
-  "outcome": "Finish task 004 by ensuring only authoritative action boundaries can attach source-group causality to a follow, and prove the surviving-group root path captures that causality through the production current-member send API.",
+  "source_baseline": "34d71d978d6509683dc999308f1f60d2ca297956",
+  "outcome": "Finish task 004 by closing the source-less raw-follow generation escape and giving generation-less historical removals and follows durable pre-removal versus post-re-add ordering.",
   "scope": [
-    "Revise the existing unaccepted task-004 candidate in place. Preserve its current structure while addressing the latest review gap: group-specific cleanup cutoffs, no phantom follow for an initially unfollowed shared conversation, historic replay compatibility, cleanup checkpoint barrier, idempotency, and source-aware manual/root/reply follow ordering.",
-    "Remove the trust boundary violation in `Memba.Messaging.follow_conversation/2` and its private command builder. Raw public callers must not be able to supply `authorizing_group_ids` as trusted causal provenance. Keep raw/system follows conservative, while `follow_conversation_as_current_member/2` continues to derive current readable groups authoritatively.",
-    "Preserve trusted source capture for sender auto-follow: root sends derive the selected audience at the service boundary, replies derive current writable conversation groups, and `establish_message_sender_follow/1` carries the committed source groups into `FollowConversation`.",
-    "Add a regression for removal from group A at generation G followed by a raw public follow attempt that claims arbitrary/non-authorizing group B. Prove the attempt emits no `ConversationFollowed`, creates no projected follow, and does not resume notifications when A is later re-added; a new authorized post-re-add follow must still restore normal following.",
-    "Replace the direct `Messaging.App.dispatch(%SendMessage{})` proof in the same-generation surviving-group root case with `Memba.Messaging.send_club_message_as_current_member/2`. Prove the production boundary authorizes active group B and records B in both `MessageSent.sender_follow_group_ids` and the resulting `ConversationFollowed.authorizing_group_ids` at the unchanged club generation.",
-    "Rerun the focused task-004 suites to preserve stale removed-group rejection, surviving-group manual/reply behavior, genuine post-re-add following, unrelated-follow preservation, cleanup retry, replay/idempotency, system-group no-ops, and accepted task-001 removal behavior."
+    "Revise the existing unaccepted task-004 candidate in place. Preserve its public Membership-to-Messaging cleanup collaboration, idempotent cleanup facts, source-aware manual/root/reply ordering, surviving-group behavior, and historic replay support while addressing only the latest two review gaps.",
+    "Make raw `Memba.Messaging.follow_conversation/2` conservative after cleanup: a source-less raw follow must not escape a removed-group cutoff merely because an unrelated club membership transition advanced the club-wide generation. Keep caller-provided `authorizing_group_ids` untrusted and continue deriving non-empty source groups only at authoritative current-member or committed message boundaries.",
+    "Keep `follow_conversation_as_current_member/2` as the authorized user-facing opt-in path. Ensure it captures both authoritative readable conversation groups and the current membership generation within the stable authorization boundary, so a genuine explicit follow after re-add remains the operation that restores notifications.",
+    "Add an integration regression for remove member M from group A at generation G, advance the club generation through an unrelated group-membership transition while M remains absent from A, attempt a source-less raw follow, then re-add M to A. Prove the raw attempt emits no `ConversationFollowed`, creates no projected follow, and does not resume reply delivery; a later authorized current-member follow must still restore normal delivery.",
+    "Replace the generation-zero ambiguity for historical facts with a minimal durable, append-only ordering mechanism. First/origin cleanup replay must remove a generation-less `ConversationFollowed` or auto-following root `MessageSent` established before the historical `GroupMemberRemoved`, while retaining equivalent generation-less follow state genuinely established after a historical re-add.",
+    "Add focused historical integration and aggregate regressions that exercise actual generation-less event shapes, including both pre-removal cleanup and post-re-add preservation on first cleanup delivery or origin replay. Persist any cleanup decision through Messaging-owned facts and keep the collaboration through public Messaging APIs.",
+    "Rerun the focused task-004 suites to preserve initially-unfollowed cleanup, manual/root/reply auto-follow cleanup, surviving-group same-generation causality, genuine generated post-re-add follows, unrelated-follow preservation, cleanup retry/checkpoint ordering, replay/idempotency, accepted task-001 removal behavior, and system-group no-ops."
   ],
   "scope_exclusions": [
-    "Do not change task identity 004 or discard any of its five cumulative candidate origins.",
-    "Do not redesign `FollowConversation`, `ConversationFollowed`, `ConversationFollowers`, member follow eligibility, cleanup facts, projections, or historic absent-field replay unless a focused regression demonstrates that a minimal compatibility adjustment is required.",
-    "Do not make arbitrary raw callers trusted by validating only UUID shape. Non-empty causal source groups must come from an authoritative application boundary or an explicitly isolated trusted internal path.",
-    "Do not weaken the effective-access union: a genuine follow through surviving group B remains valid at group A's removal generation, while work sourced only from removed A remains rejected.",
-    "Do not change accepted task-001 custom-group removal authorization, transition/idempotency semantics, club roles or membership, or system-group guards.",
-    "Do not implement the broader query/action authorization, LiveView refresh, or queued provider-handoff work assigned to tasks 009-011.",
+    "Do not change task identity 004, reset the bounded revision count, or discard any of its six cumulative candidate origins.",
+    "Do not restore trust in caller-supplied raw `authorizing_group_ids`, and do not let source-less raw follows inherit an unrelated club generation as proof of renewed authorization.",
+    "Do not rewrite historical Membership or Messaging events, mutate foreign-context projections directly, or introduce a broad event-store/projection redesign; use the smallest durable compatibility mechanism that distinguishes the required historical orderings.",
+    "Do not weaken the effective-access union: a genuine follow or sender auto-follow authorized through surviving group B remains valid at group A's removal generation, while work sourced only from removed A remains rejected.",
+    "Do not change accepted task-001 custom-group removal authorization, transition/idempotency semantics, club roles or membership, last-member behavior, or system-group guards.",
+    "Do not implement current query/action authorization, LiveView refresh, or queued provider-handoff work assigned to tasks 009-011.",
     "Do not implement Leave/Remove UI, shared member-row changes, confirmations, post-removal surfaces, or empty-group presentation assigned to tasks 012-014.",
-    "Do not edit iteration-064 feature files or implement the remaining browser/domain acceptance layer assigned to tasks 015-016.",
+    "Do not edit iteration-064 feature files or implement the remaining browser/domain acceptance and invariant layer assigned to tasks 015-016.",
     "Do not run `dev check`, `dev check --quick`, `dev ci`, browser acceptance, or another unscoped full-suite command; task 017 and the deterministic `dev_check` node own the final repository gate."
   ],
   "references": [
     {
       "path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
-      "facts": "Implementation Plan 2 and the acceptance/open-technical-decision text require public Messaging APIs, all follow sources, stale remove/re-add safety, explicit re-follow after re-add, and durable cross-context ordering."
+      "facts": "Implementation Plan 2, the acceptance criteria, and Open Technical Decisions require public Messaging APIs, cleanup of every follow source, explicit re-follow after re-add, unrelated-follow preservation, and durable stale-safe ordering."
     },
     {
       "path": "docs/iterations/062-create-custom-groups/plan.md",
-      "facts": "Iteration 062 established the replay-safe Membership-to-Messaging cleanup collaboration that explicit removal extends."
+      "facts": "Iteration 062 established the replay-safe Membership-to-Messaging cleanup collaboration that explicit custom-group removal extends."
     },
     {
       "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
-      "facts": "Membership owns group membership, Messaging owns follow state, and collaboration crosses public context APIs rather than projection storage or foreign aggregate internals."
+      "facts": "Membership owns membership facts, Messaging owns follow state, and collaboration must cross public context APIs rather than foreign aggregate or projection storage."
     },
     {
       "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
-      "facts": "The Club stream is authoritative for membership lifecycle and preserves historic facts; system-group membership remains a policy-maintained consequence."
-    },
-    {
-      "path": "web/lib/memba/messaging.ex",
-      "facts": "`follow_conversation_command/1` currently copies caller-provided `authorizing_group_ids`, while `follow_conversation_as_current_member/2`, `send_club_message_as_current_member/2`, `post_message_reply/2`, and `establish_message_sender_follow/1` are the existing authoritative source-capture paths."
-    },
-    {
-      "path": "web/lib/memba/messaging/conversation_followers.ex",
-      "facts": "`follow_allowed?/4` trusts any supplied uncut source group after validating only UUID shape, so an arbitrary source supplied through the raw builder bypasses the removed-group cutoff."
-    },
-    {
-      "path": "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
-      "facts": "The current same-generation test covers authoritative manual/reply paths but proves the root case by direct `Messaging.App.dispatch/2`; extend it with the forged-source regression and route the root through the production current-member send API."
-    },
-    {
-      "path": "web/test/memba/messaging/send_club_message_test.exs",
-      "facts": "Existing current-member send tests establish the production authorization contract and should remain passing."
+      "facts": "The Club stream is authoritative for membership lifecycle and must keep historical facts replayable; system-group membership remains a policy-maintained consequence."
     },
     {
       "path": "docs/reference/cqrs.md",
-      "facts": "Commands and events are write authority; projections must not decide or manufacture trusted follow causality."
+      "facts": "Command-side facts carry authority; query projections must not manufacture causal follow authorization."
     },
     {
       "path": "docs/reference/event-sourcing.md",
-      "facts": "Ordering and replay behavior must remain represented in durable backward-compatible facts."
+      "facts": "Historical compatibility must be append-only, replayable, based on immutable source facts, and tested with the actual historical event shape."
     },
     {
       "path": "docs/reference/elixir-mix-tests.md",
-      "facts": "Use deterministic synchronization and state/barrier assertions rather than timing sleeps."
+      "facts": "Use deterministic process/checkpoint synchronization and avoid timing sleeps in the ordering regressions."
+    },
+    {
+      "path": "web/lib/memba/messaging.ex",
+      "facts": "`follow_conversation_command/1` strips source groups but currently stamps every raw follow with `Membership.current_group_membership_generation/1`; `follow_conversation_as_current_member/2`, root send, reply, and `establish_message_sender_follow/1` are the authoritative source-capture paths."
+    },
+    {
+      "path": "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
+      "facts": "`membership_generation/1` maps generation-less `GroupMemberRemoved` events to zero and forwards event identity/checkpoint metadata through the public cleanup API during origin replay."
+    },
+    {
+      "path": "web/lib/memba/membership/club.ex",
+      "facts": "`event_membership_generation/2` reconstructs monotonic aggregate state for generation-less historical group membership events, while new facts carry explicit generations."
+    },
+    {
+      "path": "web/lib/memba/messaging/conversation_followers.ex",
+      "facts": "`normalize_generation/1`, `follow_allowed?/4`, and `apply_unfollow/2` currently compare generation-less follows and historical cleanup at zero, so equal-generation cleanup deletes a genuinely later legacy follow."
+    },
+    {
+      "path": "web/lib/memba/messaging/member_follow_eligibility.ex",
+      "facts": "Member-scoped cleanup cutoffs protect delayed sender auto-follows for conversations created after cleanup and must stay consistent with the selected compatibility ordering."
+    },
+    {
+      "path": "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
+      "facts": "The existing raw-forged-source and production surviving-group root tests cover the prior review; extend focused integration coverage for an unrelated generation advance and actual generation-less pre-removal/post-re-add histories."
+    },
+    {
+      "path": "web/test/memba/messaging/conversation_followers_test.exs",
+      "facts": "Current replay tests normalize legacy facts but the post-re-add preservation example uses generated generations 1 and 2 rather than truly generation-less historical facts."
+    },
+    {
+      "path": "docs/iterations/064-leave-and-remove-group-members/.delivery/latest-review.json",
+      "facts": "The current revise verdict identifies exactly two uncovered branches: source-less raw follow escape after an unrelated generation advance, and ambiguous ordering among generation-less historical removal/re-add/follow facts."
     }
   ],
   "constraints": [
-    "Keep the same pending obligation and revision identity; this is attempt six for task 004.",
-    "Raw `follow_conversation/2` must not map untrusted caller attributes into `FollowConversation.authorizing_group_ids`. Ignoring the unsupported key is preferred over broadening the public error contract unless existing repository behavior requires explicit rejection.",
-    "Non-empty source attribution must be derived from authoritative current read/write membership or from a committed message event whose source was captured at that authoritative boundary.",
-    "After remove A at generation G, a raw attempt claiming B must remain blocked by conservative conversation-wide ordering; re-adding A must not make that rejected attempt effective.",
-    "After a genuine re-add advances membership generation, an explicit authorized current-member follow remains allowed and is the operation that restores notification eligibility.",
-    "The surviving-B root regression must call `send_club_message_as_current_member/2`, not build or dispatch `SendMessage` directly.",
-    "Preserve cleanup checkpoint synchronization, per-group cutoffs, ordinary-unfollow cutoff history, completed cleanup IDs, public add/remove return modes, and historic event replay.",
-    "Keep edits narrowly limited to the trusted source-attribution boundary, focused tests, and any directly necessary documentation comments."
+    "Keep this as revision attempt seven for the same pending obligation and build on the current candidate rather than replacing its accepted behavior.",
+    "A source-less raw follow after any applicable cleanup cutoff must remain unable to create effective follow state regardless of later unrelated changes to the club-wide membership generation.",
+    "An authorized current-member follow after a genuine re-add must derive current source groups and current generation at the stable authorization checkpoint and must restore ordinary future notification eligibility.",
+    "Non-empty source attribution must come from authoritative current read/write membership or from a committed message event whose source was captured at that authoritative boundary.",
+    "The historical compatibility mechanism must distinguish immutable pre-removal from genuinely post-re-add generation-less follow facts durably on first delivery and replay; do not rely on transient timing or projection state alone.",
+    "Cover both manual `ConversationFollowed` and sender auto-follow `MessageSent` historical shapes unless direct inspection proves they share one fully exercised ordering path and the returned evidence explains that equivalence.",
+    "Preserve cleanup checkpoint synchronization, per-group cutoffs, conversation-wide historic cutoffs, ordinary-unfollow history, completed cleanup IDs, public add/remove return modes, and system-group behavior.",
+    "Keep edits limited to the raw/current-member stamping boundary, historical cleanup ordering collaboration, directly affected command/event compatibility, focused tests, and necessary code comments."
   ],
   "focused_validation": [
     "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
@@ -89,12 +106,13 @@
     "git diff --check"
   ],
   "completion_evidence_required": [
-    "List changed paths and identify the builder/boundary change that prevents raw caller attributes from becoming trusted `authorizing_group_ids` while preserving authoritative manual/root/reply source capture.",
-    "Identify the regression proving remove A, forged raw source B, and re-add A produce no `ConversationFollowed`, projected follow, or reply delivery until a new authorized post-re-add follow.",
-    "Identify the production-path root test proving `send_club_message_as_current_member/2` records surviving group B in `MessageSent.sender_follow_group_ids` and `ConversationFollowed.authorizing_group_ids` at the unchanged removal generation.",
-    "Confirm the prior initially-unfollowed shared cleanup, retained shared follow, stale A versus surviving B manual/reply paths, genuine post-re-add follow, unrelated follow, cleanup retry, checkpoint interleaving, replay/idempotency, and Everyone/Admin regressions remain passing.",
+    "List changed paths and identify how raw source-less follows are prevented from inheriting unrelated club-generation authority while authorized current-member, root, and reply paths retain trusted source and generation capture.",
+    "Identify the regression proving remove A, unrelated membership-generation advance, source-less raw follow while absent, and re-add A produce no `ConversationFollowed`, projected follow, or reply delivery until a new authorized current-member follow.",
+    "Describe the durable compatibility fact or ordering evidence used for generation-less history and why it remains correct on first cleanup delivery, retry, handler restart, and replay without rewriting old events.",
+    "Identify regressions proving both removal of a generation-less pre-removal manual/auto follow and preservation of generation-less follow state genuinely established after a historical re-add.",
+    "Confirm prior initially-unfollowed cleanup, manual/root/reply cleanup, surviving-group manual/root/reply causality, genuine generated post-re-add follow, unrelated follow, cleanup retry/checkpoint interleaving, replay/idempotency, and Everyone/Admin regressions remain passing.",
     "Report exact exit statuses and test counts for both focused test commands, plus `git diff --check`, on the handoff state.",
-    "Confirm accepted task-001 behavior remains unchanged: a real explicit removal emits only the reusable Membership removal fact, an exact retry emits no new Membership fact, and club roles/membership plus system-group guards are preserved."
+    "Confirm accepted task-001 behavior remains unchanged: explicit custom-group removal reuses the Membership removal fact, exact retry emits no new Membership fact, and club roles/membership plus system-group guards are preserved."
   ],
   "candidate_origins": [
     {
@@ -136,16 +154,24 @@
       "reason": "review_revise",
       "task_id": "004",
       "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
+    },
+    {
+      "base_sha": "0bc43067626f7163f1b7066f55fd7ca2c285a225",
+      "head_sha": "6d4491e9c649a50872de9dc3292201ac363ce35f",
+      "packet_id": "004-0bc4306-06",
+      "reason": "review_revise",
+      "task_id": "004",
+      "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
     }
   ],
   "latest_review": {
-    "packet_id": "004-a7f2851-05",
+    "packet_id": "004-0bc4306-06",
     "decision": "revise",
-    "summary": "The source-aware cutoff model passes its reported focused suites, but raw `follow_conversation/2` trusts caller-provided source groups and permits forged same-generation causality. Add the absent-follow/re-add regression and prove the surviving-group root through `send_club_message_as_current_member/2`."
+    "summary": "Raw source-less follows still inherit the club-wide current generation and can escape a removed-group cutoff after an unrelated membership transition; generation-zero normalization also cannot distinguish legacy pre-removal follows from genuinely post-re-add generation-less facts during origin cleanup replay."
   },
   "latest_worker_result": {
-    "packet_id": "004-a7f2851-05",
+    "packet_id": "004-0bc4306-06",
     "result": "ready_for_review",
-    "summary": "The candidate added per-group cleanup cutoffs and durable manual/root/reply source attribution, reporting 41 and 82 focused tests passing; review found one remaining untrusted raw-builder bypass and one production-path coverage gap."
+    "summary": "The candidate stopped trusting raw caller source groups and proved the surviving-group root through the production send boundary, reporting 42 and 82 focused tests passing; review found the unrelated-generation and legacy-ordering branches still uncovered."
   }
 }
