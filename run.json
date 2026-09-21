@@ -1791,7 +1791,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-21T10:43:44.340397579Z",
-  "last_event_at": "2026-09-21T12:33:12.240243182Z",
+  "last_event_at": "2026-09-21T12:33:16.731091814Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -11404,9 +11404,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 6092,
       "checkpoint": {
-        "timestamp": "2026-09-21T12:33:12.246123999Z",
+        "timestamp": "2026-09-21T12:33:16.452121413Z",
         "current_node": "delivery_planner",
         "completed_nodes": [
           "start",
@@ -11444,6 +11444,467 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.apply_task_verdict": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "failure_signature": "",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.before_delivery_planner": 0,
+          "response.delivery_planner": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing newer follows.\n- Protecting conversations created after cleanup acknowledgment from stale auto-follows.\n- Establishing reply auto-follows only after successful reply acceptance.\n- Completing explicit consistency-list and Commanded return-mode coverage.\n- Preserving both prior candidate origins and keeping tasks 009–017 out of scope.\n\nUpdated:\n\n- [current-worker-packet.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json)\n- [execution-state.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json)\n- [planner-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json)\n\nThe approved plan and todo were unchanged. All three JSON artifacts parse successfully, semantic artifact checks passed, and `git diff --check` passed. `dev check` was not run because this was a planner-only handoff and task 017 owns the final repository-wide gate.",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.max_node_visits": "80",
+          "internal.node_visit_count": 4,
+          "internal.fidelity": "truncate",
+          "internal.retry_count.sync_task_list": 0,
+          "last_stage": "delivery_planner",
+          "thread.delivery_planner.current_node": "guard_delivery_packet",
+          "thread.guard_delivery_packet.current_node": "revise_task",
+          "internal.retry_count.start": 0,
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.verify_source_head.current_node": "read_plan",
+          "current_node": "delivery_planner",
+          "internal.retry_count.wip_gate": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "outcome": "succeeded",
+          "thread.read_plan.current_node": "wip_gate",
+          "graph.rankdir": "LR",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.delivery_planner": 0,
+          "internal.retry_count.todo_readable": 0,
+          "response.implement_next_task": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded return modes in [membership.ex](/workspace/memba/web/lib/memba/membership.ex:94).\n- The existing origin-replaying policy delegates through a public Messaging cleanup API using the Membership removal event ID as a durable idempotency token in [clear_removed_group_member_follows.ex](/workspace/memba/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex:22).\n- Cleanup waits for relevant Messaging projections, preserves follows backed by another active group, and cannot falsely complete from a lagging access projection in [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:240).\n- `ConversationUnfollowed` records cleanup identity even for reply-author auto-follows that exist only in the projection. Replaying old cleanup cannot erase a newer post-re-add follow in [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:41).\n- Focused tests cover manual, root-sender, and reply-author follows; replay/idempotency; remove/re-add/follow ordering; unrelated/shared access; projection lag; and system-group no-ops in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:422).\n\nValidation passed:\n\n- Membership-focused suite: 32 tests, 0 failures.\n- Messaging-focused suite: 36 tests, 0 failures.\n- `git diff --check`: passed.\n- Worker-result JSON parsed successfully.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). There are no unresolved items. `todo.md` remains untouched and task 004 remains unchecked for the workflow verdict. Per the packet exclusion, I did not run `dev check`; the deterministic workflow node owns that final gate.",
+          "internal.run_id": "01M31RZ6Z1Y1E3W5EK3YKGN8VW",
+          "thread.route_worker_result.current_node": "validate_task",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.resume_gate": 0,
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\",\"reason\":\"Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects.\"}",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "thread.start.current_node": "verify_source_head",
+          "internal.work_dir": "/workspace/memba",
+          "failure_class": "",
+          "last_response": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing n",
+          "thread.all_tasks_done.current_node": "before_delivery_planner",
+          "internal.retry_count.revise_task": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: low; }\n            #resume_gate { reasoning_effort: low; }\n            #delivery_planner { reasoning_effort: high; }\n            #implement_next_task { reasoning_effort: high; }\n            #revise_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "command.output": "blob://sha256/9cb0d2c9d8b93a8600604df66065b6590ac23f74a0c37a13bf0821a87e321fe3",
+          "thread.before_delivery_planner.current_node": "delivery_planner",
+          "thread.apply_task_verdict.current_node": "before_delivery_planner",
+          "internal.retry_count.guard_delivery_packet": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.thread_id": "before_delivery_planner",
+          "output.validate_task": {
+            "decision": "revise",
+            "task": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
+            "reason": "Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects."
+          },
+          "internal.retry_count.route_worker_result": 0,
+          "thread.implement_next_task.current_node": "route_worker_result",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.revise_task.current_node": "route_worker_result",
+          "preferred_label": "revise",
+          "response.revise_task": "Packet `004-4774dd4-02` is implemented and marked `ready_for_review`.\n\nKey changes:\n\n- Added Club-owned, monotonically increasing membership generations to custom-group add/remove facts, with backward-compatible replay for historical events.\n- Carried membership generations through manual follows, root auto-follows, reply-author auto-follows, and cleanup commands/facts.\n- Made the root conversation aggregate authoritative for reply-only follows.\n- Added cleanup cutoffs so delayed removal work cannot erase post-re-add follows or allow stale follow work to resurrect.\n- Made successful custom-group add/remove calls await the cleanup handler’s durable EventStore checkpoint, including `consistency: :eventual` and event-free exact retries.\n- Preserved unrelated/shared-access follows and made Everyone/Admin removals explicit no-ops.\n- Left `todo.md` unchanged.\n\nValidation passed:\n\n- Membership-focused suite: 35 tests, 0 failures.\n- Messaging-focused suite: 41 tests, 0 failures.\n- Changed Elixir files are formatted.\n- `git diff --check`: passed.\n- Worker-result JSON validated against the current packet.\n\nThe result artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json). No unresolved items remain. Per packet scope, `dev check` was not run; task 017 and the workflow’s deterministic gate own that final validation."
+        },
+        "node_outcomes": {
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\",\"reason\":\"Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects.\"}",
+              "output.validate_task": {
+                "decision": "revise",
+                "task": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
+                "reason": "Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects."
+              },
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe re"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1697142,
+                    "output_tokens": 5553,
+                    "reasoning_tokens": 7459,
+                    "cache_read_tokens": 382848,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 9067494
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 436764,
+              "tool_time_ms": 285959,
+              "active_time_ms": 722723
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b6e5bbb572ad8e46f20012bacb44c51cb48d4f9f7d42a4be867457ccbd6b30f4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 169,
+              "active_time_ms": 169
+            }
+          },
+          "route_worker_result": {
+            "status": "succeeded",
+            "preferred_label": "review",
+            "context_updates": {
+              "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "delivery_planner": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing n",
+              "last_stage": "delivery_planner",
+              "response.delivery_planner": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing newer follows.\n- Protecting conversations created after cleanup acknowledgment from stale auto-follows.\n- Establishing reply auto-follows only after successful reply acceptance.\n- Completing explicit consistency-list and Commanded return-mode coverage.\n- Preserving both prior candidate origins and keeping tasks 009–017 out of scope.\n\nUpdated:\n\n- [current-worker-packet.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json)\n- [execution-state.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json)\n- [planner-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json)\n\nThe approved plan and todo were unchanged. All three JSON artifacts parse successfully, semantic artifact checks passed, and `git diff --check` passed. `dev check` was not run because this was a planner-only handoff and task 017 owns the final repository-wide gate."
+            },
+            "notes": "Stage completed: delivery_planner",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 818722,
+                    "output_tokens": 9450,
+                    "reasoning_tokens": 2708,
+                    "cache_read_tokens": 215552,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4566126
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 304690,
+              "tool_time_ms": 270914,
+              "active_time_ms": 575604
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c989a96829ea5738ccd8524dbc9b8ea7d14cbc7296306cbba8011115f4ad0f05"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2042,
+              "active_time_ms": 2042
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b8b6834066f7022882c4ce7b7ea258242c0ee2643d622ca27da1c144bffd15f6"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/43430d0f2743680deefcf7268e0a2f96b6a131d6a737bd913848d92f0728707d"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '9e57a3aacbfb6f50b7e03e2c877c8c734dd66c2d'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 183,
+              "active_time_ms": 183
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9f3b070bea16392137c87415aead76ddc156e383d5ca054526dfc7ae92e511f8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167,
+              "active_time_ms": 167
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cad4b3b42349cfb75cfbb06a438a82e2dbf2d039c5ce5a8f7cb606c5708bdac0"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "guard_delivery_packet": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 286,
+              "active_time_ms": 286
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6ec42f1cc2d36bd32f217201ff2c71113b064e9f1d49c5e31223bc9a1480d1c8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 -B .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "before_delivery_planner": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9cb0d2c9d8b93a8600604df66065b6590ac23f74a0c37a13bf0821a87e321fe3"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded return modes in [membership.ex](/workspace/memba/web/lib/memba/membership.ex:94).\n- The existing origin-replaying policy delegates through a public Messaging cleanup API using the Membership removal event ID as a durable idempotency token in [clear_removed_group_member_follows.ex](/workspace/memba/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex:22).\n- Cleanup waits for relevant Messaging projections, preserves follows backed by another active group, and cannot falsely complete from a lagging access projection in [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:240).\n- `ConversationUnfollowed` records cleanup identity even for reply-author auto-follows that exist only in the projection. Replaying old cleanup cannot erase a newer post-re-add follow in [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:41).\n- Focused tests cover manual, root-sender, and reply-author follows; replay/idempotency; remove/re-add/follow ordering; unrelated/shared access; projection lag; and system-group no-ops in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:422).\n\nValidation passed:\n\n- Membership-focused suite: 32 tests, 0 failures.\n- Messaging-focused suite: 36 tests, 0 failures.\n- `git diff --check`: passed.\n- Worker-result JSON parsed successfully.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). There are no unresolved items. `todo.md` remains untouched and task 004 remains unchecked for the workflow verdict. Per the packet exclusion, I did not run `dev check`; the deterministic workflow node owns that final gate.",
+              "last_stage": "implement_next_task",
+              "last_response": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded retur"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 3433115,
+                    "output_tokens": 17826,
+                    "reasoning_tokens": 9866,
+                    "cache_read_tokens": 1949312,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 18970991
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 707973,
+              "tool_time_ms": 251954,
+              "active_time_ms": 959927
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/33bf93a552fbb37efe278e93dfe63bdf6dc13f196042bc625984b28f53e2b22f"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 110182,
+              "active_time_ms": 110182
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.revise_task": "Packet `004-4774dd4-02` is implemented and marked `ready_for_review`.\n\nKey changes:\n\n- Added Club-owned, monotonically increasing membership generations to custom-group add/remove facts, with backward-compatible replay for historical events.\n- Carried membership generations through manual follows, root auto-follows, reply-author auto-follows, and cleanup commands/facts.\n- Made the root conversation aggregate authoritative for reply-only follows.\n- Added cleanup cutoffs so delayed removal work cannot erase post-re-add follows or allow stale follow work to resurrect.\n- Made successful custom-group add/remove calls await the cleanup handler’s durable EventStore checkpoint, including `consistency: :eventual` and event-free exact retries.\n- Preserved unrelated/shared-access follows and made Everyone/Admin removals explicit no-ops.\n- Left `todo.md` unchanged.\n\nValidation passed:\n\n- Membership-focused suite: 35 tests, 0 failures.\n- Messaging-focused suite: 41 tests, 0 failures.\n- Changed Elixir files are formatted.\n- `git diff --check`: passed.\n- Worker-result JSON validated against the current packet.\n\nThe result artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json). No unresolved items remain. Per packet scope, `dev check` was not run; task 017 and the workflow’s deterministic gate own that final validation.",
+              "last_stage": "revise_task",
+              "last_response": "Packet `004-4774dd4-02` is implemented and marked `ready_for_review`.\n\nKey changes:\n\n- Added Club-owned, monotonically increasing membership generations to custom-group add/remove facts, with backward"
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 4982673,
+                    "output_tokens": 24490,
+                    "reasoning_tokens": 16279,
+                    "cache_read_tokens": 3161984,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 27717427
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 1158288,
+              "tool_time_ms": 176622,
+              "active_time_ms": 1334910
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/e6696910c6a85260f67f10b25c00c0ab1b9e67c2433fb8ad0a4376de997c830c"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          }
+        },
+        "next_node_id": "guard_delivery_packet",
+        "git_commit_sha": "b4c6e576c6cd4a8d89003652b9b5aeea4b37fc19",
+        "node_visits": {
+          "sync_task_list": 1,
+          "validate_task": 3,
+          "preflight_sandbox": 1,
+          "wip_gate": 1,
+          "implement_next_task": 2,
+          "delivery_planner": 4,
+          "all_tasks_done": 1,
+          "before_delivery_planner": 4,
+          "todo_readable": 1,
+          "apply_task_verdict": 3,
+          "read_plan": 1,
+          "resume_gate": 1,
+          "revise_task": 1,
+          "route_worker_result": 3,
+          "start": 1,
+          "verify_source_head": 1,
+          "guard_delivery_packet": 3
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json\nindex 9bfccd9..0376e9a 100644\n--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json\n+++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json\n@@ -1,125 +1,123 @@\n {\n   \"schema_version\": 1,\n-  \"packet_id\": \"004-4774dd4-02\",\n+  \"packet_id\": \"004-7859157-03\",\n   \"task_id\": \"004\",\n   \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\",\n   \"attempt\": \"revision\",\n   \"plan_path\": \"docs/iterations/064-leave-and-remove-group-members/plan.md\",\n   \"todo_path\": \"docs/iterations/064-leave-and-remove-group-members/todo.md\",\n-  \"source_baseline\": \"4774dd4fe49163505f2af34d89de0dbc1331c671\",\n-  \"outcome\": \"Complete task 004 with causal membership-generation ordering and durable use-case completion so every pre-removal manual or auto-follow is cleared, while first-delivered or replayed old cleanup can never erase a follow established after a genuine re-add.\",\n+  \"source_baseline\": \"78591570e55f275bc64b956712588903784b5126\",\n+  \"outcome\": \"Finish task 004 by making removal ordering durable even when an older cleanup preserves a newer follow or a pre-removal send creates its conversation after cleanup acknowledgement, and by making reply auto-follow contingent on successful reply acceptance.\",\n   \"scope\": [\n-    \"Revise the current task-004 candidate in place. Retain its existing public `Memba.Membership.Policies.ClearRemovedGroupMemberFollows` to `Memba.Messaging` collaboration, projection-lag barrier, effective-access-union check, and authoritative unfollow fact; do not create a second cleanup process.\",\n-    \"Replace per-conversation cleanup-ID-only ordering with a durable generation/version contract derived from the Club-owned custom-group membership history. Messaging must distinguish a pre-removal follow from a genuinely newer post-re-add follow even when the old removal reaches that conversation for the first time.\",\n-    \"Carry the causal membership generation through public Messaging commands/facts for all follow-establishing sources used by this obligation: explicit manual follow, root-sender auto-follow, and reply-author auto-follow. Ensure the root `ConversationFollowers` write model can authoritatively order reply-only auto-follow state rather than relying only on the follow projection.\",\n-    \"Define replay-compatible semantics for historic `GroupMemberAdded`, `GroupMemberRemoved`, `MessageSent`, `ConversationFollowed`, and `ConversationUnfollowed` facts whose new ordering fields are absent. Preserve old event readability and the existing Club aggregate decision/event vocabulary.\",\n-    \"Make cleanup safe on first delayed delivery and historical replay for conversations created after the removal, conversations previously cleaned before cleanup tokens existed, and conversations originally skipped because another active group supplied access. A cleanup older than the current follow must be a no-op; cleanup at or after the followed generation must clear it; delayed stale follow work must not resurrect state past a recorded cleanup cutoff.\",\n-    \"Close the controlled remove/re-add/follow race: if `GroupMemberAdded` has committed and another process establishes a valid new follow while old cleanup is delayed, the old removal must not erase that newer follow, and pre-removal follows must not silently resume.\",\n-    \"Make successful custom-group add/remove application-service calls await the cleanup handler through a durable EventStore checkpoint independently of whether the dispatch emitted an event. Preserve `:ok` and caller-selected Commanded return modes, make `consistency: :eventual` honor the documented completion promise, and make an event-free exact removal retry wait for the original pending cleanup.\",\n-    \"Normalize both `:ok` and `{:ok, result}` from per-conversation public Messaging unfollow dispatches as successful cleanup outcomes; propagate typed errors without a case-clause crash.\",\n-    \"Keep unrelated-conversation follows and shared-conversation follows with surviving effective access intact. Keep Everyone and Admin removal facts as direct cleanup no-ops, and add explicit proof for both system groups.\",\n-    \"Correct and extend focused aggregate/integration tests to prove generation ordering, first delayed delivery, historical/legacy replay, later-created and shared-access-skipped conversations, completion for `:eventual` and exact retries, all return modes, all follow sources, projection lag, and system-group no-ops.\"\n+    \"Revise the current task-004 candidate in place and retain its Club-owned membership generations, public `Memba.Membership.Policies.ClearRemovedGroupMemberFollows` to `Memba.Messaging` boundary, projection checkpoint barrier, effective-access-union check, idempotent Messaging facts, and custom-group add/remove completion contract.\",\n+    \"Correct `Memba.Messaging.ConversationFollowers.execute/2` for cleanup generation 5 against current follow generation 6: preserve the newer follow while durably recording cleanup ID/cutoff 5. After an ordinary user unfollow removes generation 6, delayed manual, root-sender, or reply-author follow work at generation 4 must still be rejected rather than restoring pre-removal state.\",\n+    \"Make an acknowledged removal cutoff apply to relevant conversation streams created later. A root send authorized/prepared at an older generation and dispatched only after `clear_removed_group_member_follows/2` completes must not create a fresh stale auto-follow merely because the cleanup's one-time conversation enumeration could not see that stream. Use a durable person/removal cutoff or an equivalent event-sourced ordering mechanism through public Messaging APIs; do not rely on a transient process cache or direct projection mutation.\",\n+    \"Change `Memba.Messaging.post_message_reply/2` orchestration so reply-author auto-follow is established only if the `PostMessageReply` command is accepted. Blank, duplicate-message-id, or otherwise rejected replies must emit neither `ConversationFollowed` nor effective follow state. Audit `post_inbound_club_message_reply/5`, which uses the same pre-dispatch helper, and keep all reply entry points on the same success-only rule. Preserve successful reply dispatch return values, generation ordering, recipient behavior, and deterministic projection replay.\",\n+    \"Add focused deterministic tests for both ordering holes and reply rejection. Cover cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed generation-4 manual/root/reply work rejected; a pre-removal root send dispatched after cleanup acknowledgement; and rejected blank plus duplicate (or equivalent aggregate-rejected) replies leaving no follow fact/state.\",\n+    \"Complete the packet-required dispatch-option matrix with explicit list-based consistency and every supported caller-selected Commanded return shape used by these APIs: `returning: :aggregate_state`, `:aggregate_version`, `:events`, `:execution_result`, and `false`, plus `include_execution_result` and `include_aggregate_version`. Prove public custom-group add/remove calls still wait for durable cleanup where promised and return the selected shape. Retain existing default, `:strong`, `:eventual`, event-free exact-retry, and `{:ok, result}` unfollow coverage.\",\n+    \"Keep and rerun the existing focused proof for manual/root/reply follow sources, historic absent-generation replay, delayed first cleanup, shared/unrelated access, projection lag, idempotency, and direct Everyone/Admin no-ops; adjust only where the corrected event contract requires it.\"\n   ],\n   \"scope_exclusions\": [\n-    \"Do not change task 001's accepted custom-group removal authorization, actor/target validation, self/last-member behavior, role preservation, system-group rejection, or `GroupMemberRemoved`-only transition semantics except for backward-compatible generation/version data required by task 004.\",\n-    \"Do not implement the broader group/conversation query and action authorization, provider-handoff reauthorization, queued-delivery cancellation, or open-LiveView refresh assigned to tasks 009-011.\",\n-    \"Do not add Leave/Remove controls, confirmation dialogs, member-row changes, former-member surfaces, or empty-group UI behavior assigned to tasks 012-014.\",\n-    \"Do not edit iteration-064 acceptance feature files or implement the browser/domain acceptance layer assigned to tasks 015-016.\",\n-    \"Do not write Membership state directly from Messaging or Messaging projections directly from Membership; keep cross-context effects behind the existing public APIs and event-sourced commands/facts.\",\n-    \"Do not redesign unrelated delivery, multi-group conversation editing, projection infrastructure, or the Club membership/role lifecycle.\",\n+    \"Do not replace task 004 with a new task or reset its revision identity. Both prior candidate origins remain cumulative and unresolved until review accepts this obligation.\",\n+    \"Do not change task 001's accepted removal authorization, actor/target validation, self/last-member behavior, club role/membership preservation, system-group rejection, or `GroupMemberRemoved`-only transition semantics except for backward-compatible task-004 ordering data.\",\n+    \"Do not implement broader group/conversation read or action authorization, queued-delivery/provider-handoff reauthorization, or open-LiveView refresh assigned to tasks 009-011.\",\n+    \"Do not add Leave/Remove UI, confirmations, shared member-row changes, post-removal screens, or empty-group UI behavior assigned to tasks 012-014.\",\n+    \"Do not edit iteration-064 feature files or implement the browser/domain acceptance layer assigned to tasks 015-016.\",\n+    \"Do not mutate Membership projections from Messaging or Messaging projections from Membership. Preserve the separate bounded contexts and coordinate through public APIs and durable commands/facts.\",\n+    \"Do not redesign unrelated delivery, conversation authorization, multi-group editing, projection infrastructure, or club role lifecycle.\",\n     \"Do not run `dev check`, `dev check --quick`, `dev ci`, browser acceptance, or another unscoped full-suite command; task 017 and the deterministic `dev_check` node own the final repository gate.\"\n   ],\n   \"references\": [\n     {\n       \"path\": \"docs/iterations/064-leave-and-remove-group-members/plan.md\",\n-      \"facts\": \"Implementation Plan 2 and the acceptance/open-technical-decision text require public Messaging APIs, idempotent facts, manual and root/reply auto-follow cleanup, stale remove/re-add safety, unrelated-follow preservation, and unchanged system-group behavior.\"\n+      \"facts\": \"Implementation Plan 2 and the acceptance/open-technical-decision text require public Messaging APIs, idempotent facts, all manual/root/reply follow sources, stale remove/re-add safety, unrelated-follow preservation, and unchanged system-group behavior.\"\n     },\n     {\n       \"path\": \"docs/iterations/062-create-custom-groups/plan.md\",\n-      \"facts\": \"Iteration 062 established the origin-replaying Membership-to-Messaging cleanup boundary and requires departure/rejoin ordering; iteration 064 extends that same collaboration to explicit custom-group removal.\"\n+      \"facts\": \"Iteration 062 established the origin-replaying Membership-to-Messaging cleanup collaboration and requires departure/rejoin ordering; task 004 extends that same collaboration to explicit custom-group removal.\"\n     },\n     {\n       \"path\": \"docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md\",\n-      \"facts\": \"Membership owns group membership and Messaging owns follow state. Cross-context coordination must use public context APIs, not another context's aggregates or projection storage.\"\n+      \"facts\": \"Membership owns group membership and Messaging owns follow state. Coordination uses public context APIs rather than another context's aggregates or projection storage.\"\n     },\n     {\n       \"path\": \"docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md\",\n-      \"facts\": \"The Club stream is the authoritative membership lifecycle and identity boundary. Derive causal group-membership generation/version data from this history while preserving historic events and system-group policy consequences.\"\n+      \"facts\": \"The Club stream is authoritative for membership lifecycle and preserves historic facts; system-group membership remains a downstream policy consequence.\"\n     },\n     {\n-      \"path\": \"web/lib/memba/membership.ex\",\n-      \"facts\": \"`add_custom_group_member/2` and `remove_custom_group_member/2` currently add the cleanup handler only through dispatch consistency. `include_removed_group_member_follows_consistency/1` leaves `:eventual` unchanged, and an exact event-free retry gives Commanded no new event to wait on.\"\n+      \"path\": \"web/lib/memba/messaging/conversation_followers.ex\",\n+      \"facts\": \"`execute/2` currently returns `[]` when cleanup generation is older than the current follow, so no `ConversationUnfollowed` records that cleanup ID/cutoff. An ordinary unfollow later deletes the newer follower generation, allowing delayed older follow work to apply.\"\n     },\n     {\n-      \"path\": \"web/lib/memba/membership/club.ex\",\n-      \"facts\": \"The Club aggregate serializes `GroupMemberAdded`/`GroupMemberRemoved`; an exact inactive-member removal returns no events, while a re-add is authoritative as soon as its event appends.\"\n+      \"path\": \"web/lib/memba/messaging.ex\",\n+      \"facts\": \"`clear_removed_group_member_follows/2` currently enumerates `list_conversations_for_group/1` only once, leaving later-created streams without the removal cutoff. `post_message_reply/2` and `post_inbound_club_message_reply/5` call `establish_reply_follow/2` before dispatching `PostMessageReply`, so aggregate rejection can leave a follow.\"\n     },\n     {\n-      \"path\": \"web/lib/memba/membership/policies/clear_removed_group_member_follows.ex\",\n-      \"facts\": \"The strong origin-replaying handler currently derives a cleanup ID from the removal event and delegates to public Messaging cleanup. Preserve this boundary, but supply sufficient causal generation/version information for first-delivery safety.\"\n+      \"path\": \"web/lib/memba/messaging/message.ex\",\n+      \"facts\": \"`Message.execute/2` is the authoritative acceptance boundary for `PostMessageReply`, including blank-body and duplicate-message rejection. Follow establishment must be causally downstream of successful acceptance.\"\n     },\n     {\n-      \"path\": \"web/lib/memba/messaging.ex\",\n-      \"facts\": \"`clear_removed_group_member_follows/2` waits for Message/access/follow projections, discovers conversations by removed group, preserves surviving authoritative access, and dispatches public unfollows. Its reducer currently accepts only `:ok`, although returning modes can produce `{:ok, result}`.\"\n+      \"path\": \"web/lib/memba/membership.ex\",\n+      \"facts\": \"The public custom-group add/remove paths preserve Commanded consistency and returning options while waiting on durable cleanup progress. Extend tests without regressing default, eventual, event-free retry, or selected return shapes.\"\n     },\n     {\n-      \"path\": \"web/lib/memba/messaging/conversation_followers.ex\",\n-      \"facts\": \"The current candidate stores completed cleanup IDs only after a `ConversationUnfollowed` is emitted. It therefore cannot order first delivery of an old removal against a newer follow, and the root aggregate still cannot see reply-only `MessageSent` auto-follow state.\"\n+      \"path\": \"web/lib/memba/membership/policies/clear_removed_group_member_follows.ex\",\n+      \"facts\": \"The strong origin-replaying handler carries Club-owned membership generation, event identity, and checkpoint into the public Messaging cleanup API. Preserve origin replay and system-group no-op behavior.\"\n     },\n     {\n-      \"path\": \"web/lib/memba/messaging/projectors/conversation_follow.ex\",\n-      \"facts\": \"The projection combines manual follow/unfollow and both root and reply `MessageSent` auto-follow facts. The revised write-side contract must retain deterministic projection behavior without making projection rows the authority.\"\n+      \"path\": \"web/test/memba/messaging/conversation_followers_test.exs\",\n+      \"facts\": \"The existing older-cleanup test asserts only `[]` and preservation of generation 5; it does not apply a durable cutoff, ordinarily unfollow the newer state, then prove delayed generation-4 manual/root/reply work remains rejected.\"\n     },\n     {\n       \"path\": \"web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\",\n-      \"facts\": \"The current replay test first records the new cleanup token before re-add/follow and therefore proves duplicate-token handling only. Add controlled first-delivery, historical/legacy, later-conversation, shared-skip, suspended-handler race, completion-mode, exact-retry, and direct Admin no-op cases.\"\n+      \"facts\": \"Existing generation and suspended-handler tests create known conversations before manual cleanup handling. Add a send whose conversation stream is first created after cleanup acknowledgement, plus explicit-list consistency and caller-returning coverage.\"\n     },\n     {\n-      \"path\": \"web/test/memba/messaging/conversation_followers_test.exs\",\n-      \"facts\": \"Current aggregate coverage proves cleanup-token idempotency after the token exists. Extend it with older/newer follow-vs-cleanup generations, delayed stale follow work, already-following generation refresh, and absent-field replay semantics.\"\n+      \"path\": \"web/test/memba/messaging/post_message_reply_test.exs\",\n+      \"facts\": \"Current rejection tests assert no reply projection but do not assert absence of `ConversationFollowed` facts/effective follow state. Add negative assertions for blank and duplicate or another aggregate-rejected reply.\"\n     },\n     {\n       \"path\": \"web/test/memba/messaging/conversation_follow_projection_test.exs\",\n-      \"facts\": \"Existing focused coverage establishes root and reply `MessageSent` auto-follow projection behavior; retain it while introducing authoritative generation ordering.\"\n+      \"facts\": \"Successful root and reply `MessageSent` auto-follow projection behavior must remain deterministic after reply orchestration changes.\"\n     },\n     {\n-      \"path\": \"web/test/memba/messaging/conversation_group_access_projection_test.exs\",\n-      \"facts\": \"Existing tests establish effective access composed across group grants; cleanup must preserve a global conversation/person follow while another active group still supplies access.\"\n+      \"path\": \"docs/reference/cqrs.md\",\n+      \"facts\": \"Commands and aggregate events remain the write authority; read projections may lag and must not become the source of the ordering invariant.\"\n     },\n     {\n-      \"path\": \"web/test/memba/messaging/send_club_message_test.exs\",\n-      \"facts\": \"The current lag regression expects cleanup to wait for access projection visibility. Preserve that behavior while making ordering safe across delayed and replayed removal work.\"\n+      \"path\": \"docs/reference/event-sourcing.md\",\n+      \"facts\": \"Ordering and replay behavior must be represented by durable, backward-compatible facts rather than ephemeral workflow memory.\"\n     },\n     {\n       \"path\": \"docs/reference/elixir-mix-tests.md\",\n-      \"facts\": \"Use focused tests, `start_supervised!/1`, monitors, `Task.yield/2`, handler suspension, or deterministic synchronization primitives rather than sleeps for race coverage.\"\n+      \"facts\": \"Use focused tests and deterministic synchronization such as supervised processes, monitors, `Task.yield/2`, handler suspension, or state barriers rather than sleeps.\"\n     }\n   ],\n   \"constraints\": [\n-    \"Keep task identity 004 and revise the existing candidate; do not reset the bounded revision visit by inventing another task for the same rejected work.\",\n-    \"Use the accepted actor-bearing custom-group add/remove paths and existing `GroupMemberAdded`/`GroupMemberRemoved` facts. Any added event fields must be backward compatible with stored facts and preserve task-001 event meaning.\",\n-    \"Use Club-owned membership history as the causal source and Messaging-owned facts as the follow authority. Do not directly mutate another bounded context's projection or query its aggregate internals.\",\n-    \"Per-removal cleanup ID deduplication may remain as a retry aid, but it is not sufficient ordering. Prove first delivery of stale work cannot erase a newer post-re-add follow.\",\n-    \"The follow is conversation/person scoped rather than group scoped. Preserve it whenever another active group still grants effective read access, and ensure a previously skipped old cleanup cannot later invalidate a newer follow.\",\n-    \"Cover true manual follow, root-sender auto-follow, and reply-author auto-follow. Projection-only false state is not sufficient evidence that write-side cleanup is authoritative.\",\n-    \"Successful public add/remove return values and caller-selected Commanded modes must remain intact while the documented cleanup completion contract holds for default, `:strong`, `:eventual`, list-based consistency, and event-free exact retries.\",\n-    \"Preserve `ClearRemovedGroupMemberFollows` origin replay and independent projection rebuilds. Ordinary projector reset/replay must not itself dispatch external cleanup side effects.\",\n-    \"Keep new fields and aggregate replay tolerant of historic facts lacking generation/version data; add direct legacy-shape tests.\",\n-    \"Limit edits to the membership-generation, cleanup/follow ordering, completion orchestration, and focused test seam. Leave tasks 009-017 untouched.\"\n+    \"Keep task identity 004 and revise the existing candidate; do not invent another task for the same rejected obligation.\",\n+    \"Use Club-owned membership history as the causal source and Messaging-owned event-sourced state as the follow authority. Do not query another context's aggregate internals or directly write projection tables.\",\n+    \"Recording an older cleanup must not hide or unfollow a genuinely newer follow. It must only preserve the cutoff needed to reject work at or before that removal generation.\",\n+    \"The late-conversation solution must survive process restart/replay and apply before stale root/reply/manual follow establishment can become authoritative; a post-enumeration projection sweep alone is insufficient.\",\n+    \"Ordinary user unfollow semantics remain distinct from membership-removal cleanup. A later valid follow above the durable cleanup cutoff must still be possible.\",\n+    \"Reply auto-follow must reflect a successfully accepted reply and remain authoritative for reply-only authors; do not solve rejection leakage by dropping reply auto-follow coverage.\",\n+    \"Preserve backward replay of historic `GroupMemberAdded`, `GroupMemberRemoved`, `MessageSent`, `ConversationFollowed`, and `ConversationUnfollowed` shapes with absent generation/order fields.\",\n+    \"Preserve `ClearRemovedGroupMemberFollows` origin replay while ensuring ordinary projector reset/replay does not dispatch cross-context side effects.\",\n+    \"Preserve successful application-service return semantics for default and all supported caller-selected Commanded return options while honoring cleanup completion for `:strong`, `:eventual`, and explicit handler lists.\",\n+    \"Limit edits to durable cleanup/follow ordering, reply-follow success orchestration, completion-option coverage, and their focused tests. Leave tasks 009-017 untouched.\"\n   ],\n   \"focused_validation\": [\n     \"PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs\",\n-    \"PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs\",\n+    \"PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/message_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs\",\n     \"git diff --check\"\n   ],\n   \"completion_evidence_required\": [\n-    \"List changed paths and describe the selected causal membership generation/version and durable completion mechanisms, including historical absent-field semantics.\",\n+    \"List changed paths and describe the durable ordering facts/state used both for per-conversation cutoffs and conversations first created after cleanup acknowledgement, including replay and historic absent-field semantics.\",\n     \"Report exit statuses and test counts for both focused test commands on the exact handoff state, plus `git diff --check`.\",\n-    \"Identify tests where an old removal reaches a conversation for the first time after genuine re-add/follow and where the conversation was created later, previously legacy-cleaned, or previously skipped for shared access; show the newer follow survives.\",\n-    \"Show a deterministically controlled suspended-handler remove/re-add/follow race in which pre-removal follows do not resume and a valid newer follow is not erased.\",\n-    \"Identify write-side facts/tests proving authoritative cleanup and generation ordering for manual follow, root auto-follow, and reply-only auto-follow, including delayed stale follow work and replay/idempotency.\",\n-    \"Show default and `consistency: :eventual` add/remove completion, an event-free exact retry after the original cleanup is delayed or timed out, preservation of caller-selected return modes, and successful `{:ok, result}` cleanup handling.\",\n-    \"Show unrelated and shared-access follows remain intact, access-projection lag cannot falsely acknowledge cleanup, and direct Everyone and Admin removal facts both remain no-ops.\",\n+    \"Identify a test proving cleanup generation 5 preserves current follow generation 6, records its cutoff, survives an ordinary unfollow, and rejects delayed generation-4 manual, root-auto, and reply-auto follow work.\",\n+    \"Identify a deterministic test where cleanup is acknowledged before an older authorized/prepared root send first creates its conversation stream, and show the stale sender auto-follow never becomes effective.\",\n+    \"Identify tests proving blank and duplicate or otherwise aggregate-rejected replies emit no reply and no follow fact/state, while successful reply auto-follow and caller-selected return values still work.\",\n+    \"Show explicit handler-list consistency and all supported caller-selected return shapes (`:aggregate_state`, `:aggregate_version`, `:events`, `:execution_result`, `false`, `include_execution_result`, and `include_aggregate_version`) for public add/remove, alongside retained default, `:strong`, `:eventual`, event-free exact-retry, and successful `{:ok, result}` unfollow handling.\",\n+    \"Show existing manual/root/reply source cleanup, first delayed removal, shared/unrelated access, projection-lag, idempotency, legacy replay, and Everyone/Admin no-op tests still pass.\",\n     \"Confirm accepted task-001 behavior remains unchanged: explicit removal emits only the reusable Membership removal fact for a transition, exact retry emits no new fact, and club membership/roles plus system-group guards are preserved.\"\n   ],\n   \"candidate_origins\": [\n@@ -130,16 +128,24 @@\n       \"reason\": \"review_revise\",\n       \"task_id\": \"004\",\n       \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\"\n+    },\n+    {\n+      \"base_sha\": \"4774dd4fe49163505f2af34d89de0dbc1331c671\",\n+      \"head_sha\": \"514733f8f0d87348e60df8280c2139de9073e2e2\",\n+      \"packet_id\": \"004-4774dd4-02\",\n+      \"reason\": \"review_revise\",\n+      \"task_id\": \"004\",\n+      \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\"\n     }\n   ],\n   \"latest_review\": {\n-    \"packet_id\": \"004-72f5ddc-01\",\n+    \"packet_id\": \"004-4774dd4-02\",\n     \"decision\": \"revise\",\n-    \"summary\": \"Per-conversation cleanup IDs are insufficient because first delayed or historical cleanup can erase a newer follow for later-created, legacy-cleaned, or shared-access-skipped conversations. Close the remove/re-add/follow race with generation/version ordering; make `:eventual` and event-free exact retries await durable cleanup; accept `{:ok, result}` cleanup returns; and add direct Admin system-group no-op coverage.\"\n+    \"summary\": \"Durably record an older cleanup cutoff without hiding a newer follow; protect conversation streams created only after cleanup acknowledgement; establish reply auto-follow only after successful reply acceptance; and add explicit-list consistency plus caller-selected return-mode coverage.\"\n   },\n   \"latest_worker_result\": {\n-    \"packet_id\": \"004-72f5ddc-01\",\n+    \"packet_id\": \"004-4774dd4-02\",\n     \"result\": \"ready_for_review\",\n-    \"summary\": \"The candidate introduced cleanup IDs, projection barriers, authoritative access preservation, and focused tests with reported 32- and 36-test passing suites, but those tests do not cover the review's first-delivery generation, controlled re-add race, event-free retry, return-mode, or Admin no-op gaps.\"\n+    \"summary\": \"The candidate added Club membership generations, generation-bearing manual/root/reply follow facts, cleanup cutoffs, durable handler checkpoint waiting, successful Messaging return normalization, system-group no-op coverage, and reported 35- and 41-test focused suites passing; the latest review found the remaining ordering and reply-rejection gaps described above.\"\n   }\n }\ndiff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json\nindex 9ed845a..0b6bf1e 100644\n--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json\n+++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json\n@@ -2,7 +2,7 @@\n   \"schema_version\": 1,\n   \"plan_path\": \"docs/iterations/064-leave-and-remove-group-members/plan.md\",\n   \"todo_path\": \"docs/iterations/064-leave-and-remove-group-members/todo.md\",\n-  \"source_baseline\": \"4774dd4fe49163505f2af34d89de0dbc1331c671\",\n+  \"source_baseline\": \"78591570e55f275bc64b956712588903784b5126\",\n   \"accepted_tasks\": [\n     \"- [x] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal.\"\n   ],\n@@ -33,6 +33,14 @@\n           \"reason\": \"review_revise\",\n           \"task_id\": \"004\",\n           \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\"\n+        },\n+        {\n+          \"base_sha\": \"4774dd4fe49163505f2af34d89de0dbc1331c671\",\n+          \"head_sha\": \"514733f8f0d87348e60df8280c2139de9073e2e2\",\n+          \"packet_id\": \"004-4774dd4-02\",\n+          \"reason\": \"review_revise\",\n+          \"task_id\": \"004\",\n+          \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\"\n         }\n       ]\n     },\n@@ -144,6 +152,14 @@\n       \"reason\": \"review_revise\",\n       \"task_id\": \"004\",\n       \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\"\n+    },\n+    {\n+      \"base_sha\": \"4774dd4fe49163505f2af34d89de0dbc1331c671\",\n+      \"head_sha\": \"514733f8f0d87348e60df8280c2139de9073e2e2\",\n+      \"packet_id\": \"004-4774dd4-02\",\n+      \"reason\": \"review_revise\",\n+      \"task_id\": \"004\",\n+      \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\"\n     }\n   ],\n   \"coverage_map\": [\n@@ -189,5 +205,5 @@\n       \"accepted_task_lines\": []\n     }\n   ],\n-  \"planner_note\": \"Task 004 remains the first unchecked obligation and is prepared as a bounded revision with the required candidate origin retained. The latest review found that per-conversation cleanup IDs prove only duplicate delivery after a cleanup fact exists: first delayed delivery, historical cleanup, later-created or shared-access-skipped conversations, and a remove/re-add/follow race can still erase a newer follow. The revision also closes `:eventual` and event-free exact-retry completion gaps, accepts all successful Messaging return modes, and adds the missing direct Admin no-op proof. Tasks 009-017 remain unchanged and out of scope.\"\n+  \"planner_note\": \"Task 004 remains the first unchecked obligation and is prepared as a third bounded revision with both required candidate origins retained. The latest candidate added generation ordering and completion handling, but the latest review found three remaining semantic gaps: an older cleanup skipped for a newer follow does not durably record its cutoff, cleanup does not protect conversations created after its one-time enumeration, and reply auto-follow is persisted before reply acceptance. The revision also adds the still-missing explicit-list consistency and caller-selected return-mode coverage. Tasks 009-017 remain unchanged and out of scope.\"\n }\ndiff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json\nindex 0294644..b7c4754 100644\n--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json\n+++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json\n@@ -2,6 +2,6 @@\n   \"schema_version\": 1,\n   \"plan_path\": \"docs/iterations/064-leave-and-remove-group-members/plan.md\",\n   \"todo_path\": \"docs/iterations/064-leave-and-remove-group-members/todo.md\",\n-  \"source_baseline\": \"4774dd4fe49163505f2af34d89de0dbc1331c671\",\n+  \"source_baseline\": \"78591570e55f275bc64b956712588903784b5126\",\n   \"decision\": \"ready\"\n }\n",
+        "summary": {
+          "files_changed": 28,
+          "additions": 1638,
+          "deletions": 314
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-21T12:33:16.734788647Z",
+        "current_node": "guard_delivery_packet",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "implement_next_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "implement_next_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "revise_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.read_plan.current_node": "wip_gate",
           "internal.retry_count.resume_gate": 0,
           "last_response": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing n",
@@ -11456,7 +11917,7 @@
           "internal.retry_count.all_tasks_done": 0,
           "thread.verify_source_head.current_node": "read_plan",
           "internal.work_dir": "/workspace/memba",
-          "internal.thread_id": "before_delivery_planner",
+          "internal.thread_id": "delivery_planner",
           "thread.revise_task.current_node": "route_worker_result",
           "internal.retry_count.guard_delivery_packet": 0,
           "response.implement_next_task": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded return modes in [membership.ex](/workspace/memba/web/lib/memba/membership.ex:94).\n- The existing origin-replaying policy delegates through a public Messaging cleanup API using the Membership removal event ID as a durable idempotency token in [clear_removed_group_member_follows.ex](/workspace/memba/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex:22).\n- Cleanup waits for relevant Messaging projections, preserves follows backed by another active group, and cannot falsely complete from a lagging access projection in [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:240).\n- `ConversationUnfollowed` records cleanup identity even for reply-author auto-follows that exist only in the projection. Replaying old cleanup cannot erase a newer post-re-add follow in [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:41).\n- Focused tests cover manual, root-sender, and reply-author follows; replay/idempotency; remove/re-add/follow ordering; unrelated/shared access; projection lag; and system-group no-ops in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:422).\n\nValidation passed:\n\n- Membership-focused suite: 32 tests, 0 failures.\n- Messaging-focused suite: 36 tests, 0 failures.\n- `git diff --check`: passed.\n- Worker-result JSON parsed successfully.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). There are no unresolved items. `todo.md` remains untouched and task 004 remains unchecked for the workflow verdict. Per the packet exclusion, I did not run `dev check`; the deterministic workflow node owns that final gate.",
@@ -11467,7 +11928,7 @@
           "internal.retry_count.apply_task_verdict": 0,
           "internal.run_id": "01M31RZ6Z1Y1E3W5EK3YKGN8VW",
           "thread.route_worker_result.current_node": "validate_task",
-          "current_node": "delivery_planner",
+          "current_node": "guard_delivery_packet",
           "graph.max_node_visits": "80",
           "graph.rankdir": "LR",
           "internal.retry_count.route_worker_result": 0,
@@ -11478,8 +11939,8 @@
           "thread.sync_task_list.current_node": "todo_readable",
           "failure_class": "",
           "outcome": "succeeded",
-          "command.output": "blob://sha256/9cb0d2c9d8b93a8600604df66065b6590ac23f74a0c37a13bf0821a87e321fe3",
-          "internal.fidelity": "truncate",
+          "command.output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733",
+          "internal.fidelity": "summary:high",
           "preferred_label": "revise",
           "thread.wip_gate.current_node": "preflight_sandbox",
           "thread.validate_task.current_node": "apply_task_verdict",
@@ -11704,8 +12165,8 @@
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 286,
-              "active_time_ms": 286
+              "tool_time_ms": 264,
+              "active_time_ms": 264
             }
           },
           "start": {
@@ -11832,7 +12293,7 @@
             }
           }
         },
-        "next_node_id": "guard_delivery_packet",
+        "next_node_id": "revise_task",
         "node_visits": {
           "before_delivery_planner": 4,
           "wip_gate": 1,
@@ -11844,7 +12305,7 @@
           "apply_task_verdict": 3,
           "verify_source_head": 1,
           "read_plan": 1,
-          "guard_delivery_packet": 3,
+          "guard_delivery_packet": 4,
           "all_tasks_done": 1,
           "preflight_sandbox": 1,
           "start": 1,
@@ -12345,6 +12806,46 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "guard_delivery_packet@4": {
+      "first_event_seq": 6095,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733",
+        "exit_code": 0,
+        "duration_ms": 264,
+        "termination": "exited",
+        "output_bytes": 35,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 35,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-21T12:33:16.464051034Z",
+      "handler": "command",
+      "graph_visit": 4,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "wip_gate@1": {
       "first_event_seq": 45,
@@ -13381,7 +13882,12 @@
       "first_event_seq": 5193,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: delivery_planner",
+        "failure_reason": null,
+        "timestamp": "2026-09-21T12:33:12.244983578Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -13396,16 +13902,20 @@
       "started_at": "2026-09-21T12:23:36.204872463Z",
       "handler": "agent",
       "graph_visit": 4,
-      "live_inference_ms": 292222,
-      "live_tool_ms": 270911,
+      "timing": {
+        "wall_time_ms": 576039,
+        "inference_time_ms": 304690,
+        "tool_time_ms": 270914,
+        "active_time_ms": 575604
+      },
       "usage": {
-        "input_tokens": 4400213,
-        "output_tokens": 26372,
-        "total_tokens": 5819591,
-        "reasoning_tokens": 16238,
-        "cache_read_tokens": 1376768,
+        "input_tokens": 818722,
+        "output_tokens": 9450,
+        "total_tokens": 1046432,
+        "reasoning_tokens": 2708,
+        "cache_read_tokens": 215552,
         "cache_write_tokens": 0,
-        "total_usd_micros": 23967749
+        "total_usd_micros": 4566126
       },
       "model": {
         "provider": "openai",
@@ -13508,54 +14018,43 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 85892,
-        "usage_percent": 31.57794117647059,
+        "input_tokens": 85988,
+        "usage_percent": 31.613235294117647,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-21T12:32:59.786794654Z",
-        "event_seq": 6075,
+        "generated_at": "2026-09-21T12:33:12.240196092Z",
+        "event_seq": 6085,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2567,
-            "usage_percent": 0.94375
+            "tokens": 2558,
+            "usage_percent": 0.9404411764705882
           },
           {
             "category": "tools",
-            "tokens": 785,
-            "usage_percent": 0.28860294117647056
+            "tokens": 783,
+            "usage_percent": 0.2878676470588235
           },
           {
             "category": "memory",
-            "tokens": 355,
-            "usage_percent": 0.13051470588235295
+            "tokens": 354,
+            "usage_percent": 0.13014705882352942
           },
           {
             "category": "conversation",
-            "tokens": 82178,
-            "usage_percent": 30.2125
+            "tokens": 82288,
+            "usage_percent": 30.25294117647059
           },
           {
             "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
+            "tokens": 5,
+            "usage_percent": 0.001838235294117647
           }
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "df6305e4-c0c5-43b3-8ad3-65d448808c6c",
-        "started_at": "2026-09-21T12:32:59.791778597Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-21T12:33:07.445870263Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "resume_gate@1": {
       "first_event_seq": 65,
