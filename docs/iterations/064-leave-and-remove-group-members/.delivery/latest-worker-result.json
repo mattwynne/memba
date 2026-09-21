@@ -1,48 +1,30 @@
 {
   "schema_version": 1,
-  "packet_id": "004-a7f2851-05",
+  "packet_id": "004-0bc4306-06",
   "task_id": "004",
   "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "result": "ready_for_review",
   "changed_paths": [
     "web/lib/memba/messaging.ex",
-    "web/lib/memba/messaging/commands/follow_conversation.ex",
-    "web/lib/memba/messaging/commands/post_message_reply.ex",
-    "web/lib/memba/messaging/commands/send_message.ex",
-    "web/lib/memba/messaging/commands/unfollow_conversation.ex",
-    "web/lib/memba/messaging/conversation_followers.ex",
-    "web/lib/memba/messaging/events/conversation_followed.ex",
-    "web/lib/memba/messaging/events/conversation_unfollowed.ex",
-    "web/lib/memba/messaging/events/message_sent.ex",
-    "web/lib/memba/messaging/message.ex",
-    "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
-    "web/test/memba/messaging/conversation_follow_projection_test.exs",
-    "web/test/memba/messaging/conversation_followers_test.exs",
-    "web/test/memba/messaging/message_test.exs",
-    "web/test/memba/messaging/post_message_reply_test.exs"
+    "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs"
   ],
   "validation": [
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
       "exit_status": 0,
-      "evidence": "41 tests, 0 failures. Coverage includes initially-unfollowed shared cleanup without notification eligibility, retained shared follows, same-generation surviving-group manual/root/reply follows, stale removed-group work, newer post-re-add work, unrelated follows, cleanup retry, the deterministic interleaved-root checkpoint regression, public add/remove completion modes, accepted task-001 removal semantics, and Everyone/Admin no-ops."
+      "evidence": "42 tests, 0 failures. Covers forged raw source rejection, initially-unfollowed cleanup, surviving-group manual/root/reply causality, post-re-add following, unrelated follows, cleanup retry/checkpoint ordering, task-001 removal semantics, and system-group guards."
     },
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/message_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs",
       "exit_status": 0,
-      "evidence": "82 tests, 0 failures. Aggregate, projection, message, reply, access-union, and send coverage proves removed-group cutoffs, source-aware equality, historic absent-field replay, no phantom projected follow, and preserved ordinary behavior."
-    },
-    {
-      "command": "PATH=\"$PWD/bin:$PATH\" mix format --check-formatted lib/memba/messaging.ex lib/memba/messaging/commands/follow_conversation.ex lib/memba/messaging/commands/post_message_reply.ex lib/memba/messaging/commands/send_message.ex lib/memba/messaging/commands/unfollow_conversation.ex lib/memba/messaging/conversation_followers.ex lib/memba/messaging/events/conversation_followed.ex lib/memba/messaging/events/conversation_unfollowed.ex lib/memba/messaging/events/message_sent.ex lib/memba/messaging/message.ex test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_followers_test.exs test/memba/messaging/message_test.exs test/memba/messaging/post_message_reply_test.exs",
-      "exit_status": 0,
-      "evidence": "All changed Elixir source and test files are formatted."
+      "evidence": "82 tests, 0 failures. Aggregate, projection, root-send, reply, group-access, replay compatibility, and source-aware cutoff behavior remain green."
     },
     {
       "command": "git diff --check",
       "exit_status": 0,
-      "evidence": "No whitespace errors."
+      "evidence": "No whitespace errors on the final handoff diff."
     }
   ],
-  "notes": "ConversationUnfollowed now durably attributes each new cleanup cutoff to removed_group_id, while follow_retained is true only for a follow that exists in ConversationFollowers; an initially unfollowed shared member therefore gets one idempotent cutoff fact, remains absent from aggregate/projected effective followers, and receives no reply delivery. FollowConversation/ConversationFollowed carry canonical authorizing_group_ids, and MessageSent carries sender_follow_group_ids captured from the root audience or the authoritative writable groups used for a reply; current-member manual follows capture authoritative readable groups. ConversationFollowers allows generation G when any captured source group is uncut at G, rejects work sourced only from the removed group, and treats historic absent source/group fields as conservative conversation-wide ordering. Ordinary unfollow preserves cutoffs and completed cleanup IDs. Existing policy tests retain the durable MemberFollowCleanupRecorded checkpoint barrier, unrelated-follow preservation, newer post-re-add safety, system-group no-ops, and accepted task-001 GroupMemberRemoved-only/idempotent role-preserving behavior. Superseded TDD runs first failed on missing struct fields and later exposed an incorrect EmailDeliveryCreated field name plus an empty-recipient fixture; those diagnostics were corrected before the successful final runs.",
+  "notes": "Raw follow_conversation/2 now ignores caller-supplied authorizing_group_ids, keeping raw/system follows conservatively ordered while current-member manual follows and committed root/reply events retain authoritative source capture. The new removal/forged-B/re-add regression proves no new ConversationFollowed or projected follow and no notification resumption until an authorized post-re-add follow. The surviving-group root regression now uses send_club_message_as_current_member/2 and verifies group B on both MessageSent and ConversationFollowed at the unchanged generation. The superseded TDD run exposed the forged-source event and showed that the aggregate-focused fixture needed projected people before exercising recipient resolution through the production send boundary.",
   "unresolved": []
 }

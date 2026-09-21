@@ -200,7 +200,9 @@ defmodule Memba.Messaging do
 
   This command records follow state only. Caller-facing authorization, such as
   ensuring a person is a current club member before opting in from the app, is
-  applied by the surfaces that expose this capability.
+  applied by the surfaces that expose this capability. Raw callers cannot
+  attribute the follow to an authorizing group; trusted group causality is
+  captured only by the current-member and message-sender boundaries.
   """
   def follow_conversation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -2167,7 +2169,7 @@ defmodule Memba.Messaging do
          conversation_id: conversation_id,
          member_id: member_id,
          membership_generation: Membership.current_group_membership_generation(club_id),
-         authorizing_group_ids: optional_attribute(attrs, :authorizing_group_ids) || []
+         authorizing_group_ids: []
        }}
     end
   end

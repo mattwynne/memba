@@ -774,6 +774,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     shared_conversation_id = Memba.ID.generate(:message)
     retained_root_id = Memba.ID.generate(:message)
 
+    create_person(fixture.target_person_id, "Departing Member", "departing@example.com")
     create_custom_group(fixture.club_id, retained_group_id, "Trips", "trips")
 
     add_group_member(
@@ -872,26 +873,26 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
            } =
              List.last(follow_events(shared_conversation_id, fixture.target_person_id))
 
-    assert :ok =
-             MessagingApp.dispatch(
-               %SendMessage{
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %MessageSent{
+                  sender_membership_generation: ^removal_generation,
+                  sender_follow_group_ids: [^retained_group_id]
+                }
+                | _delivery_events
+              ]
+            }} =
+             Messaging.send_club_message_as_current_member(
+               %{
                  message_id: retained_root_id,
                  club_id: fixture.club_id,
                  sender_id: fixture.target_person_id,
                  audience_group_id: retained_group_id,
                  subject: "Trips plans",
-                 body: "This root is authorized through the surviving group.",
-                 recipients: [
-                   %Recipient{
-                     delivery_id: Memba.ID.generate(:delivery),
-                     person_id: fixture.target_person_id,
-                     name: "Departing Member",
-                     email: "departing@example.com"
-                   }
-                 ],
-                 sender_membership_generation: removal_generation,
-                 sender_follow_group_ids: [retained_group_id]
+                 body: "This root is authorized through the surviving group."
                },
+               returning: :execution_result,
                consistency: :strong
              )
 
@@ -906,6 +907,96 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              retained_root_id
              |> then(&EventStore.stream_forward(MessagingApp, &1))
              |> Enum.map(& &1.data)
+  end
+
+  test "raw follow cannot forge surviving-group causality after removal" do
+    fixture = explicit_removal_fixture!()
+    conversation_id = Memba.ID.generate(:message)
+    forged_group_id = Memba.ID.generate(:group)
+
+    create_person(fixture.actor_person_id, "Group Manager", "manager@example.com")
+    create_person(fixture.target_person_id, "Departing Member", "departing@example.com")
+
+    create_followed_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      conversation_id,
+      fixture.target_person_id
+    )
+
+    assert :ok = remove_custom_group_member(fixture)
+    initial_follow_count = length(follow_events(conversation_id, fixture.target_person_id))
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             Messaging.follow_conversation(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: conversation_id,
+                 member_id: fixture.target_person_id,
+                 authorizing_group_ids: [forged_group_id]
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert length(follow_events(conversation_id, fixture.target_person_id)) ==
+             initial_follow_count
+
+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+    assert {:ok, %CustomGroupAdmission{transition: :member_added}} =
+             Membership.add_custom_group_member(
+               %{
+                 club_id: fixture.club_id,
+                 group_id: fixture.group_id,
+                 membership_id: fixture.target_membership_id,
+                 person_id: fixture.target_person_id,
+                 actor_person_id: fixture.actor_person_id
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+    assert {:ok, %ExecutionResult{events: absent_follow_reply_events}} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: Memba.ID.generate(:message),
+                 sender_id: fixture.actor_person_id,
+                 conversation_id: conversation_id,
+                 body: "Re-add alone must not restore the old follow."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    refute delivery_created_for?(absent_follow_reply_events, fixture.target_person_id)
+
+    assert :ok =
+             Messaging.follow_conversation_as_current_member(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: conversation_id,
+                 member_id: fixture.target_person_id
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+    assert {:ok, %ExecutionResult{events: restored_follow_reply_events}} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: Memba.ID.generate(:message),
+                 sender_id: fixture.actor_person_id,
+                 conversation_id: conversation_id,
+                 body: "A new authorized follow restores notifications."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert delivery_created_for?(restored_follow_reply_events, fixture.target_person_id)
   end
 
   test "first delayed removal delivery cannot erase newer follows after a genuine re-add" do
@@ -1458,6 +1549,13 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     conversation_id
     |> unfollow_events(person_id)
     |> length()
+  end
+
+  defp delivery_created_for?(events, person_id) do
+    Enum.any?(events, fn
+      %EmailDeliveryCreated{recipient_id: ^person_id} -> true
+      _event -> false
+    end)
   end
 
   defp follow_events(conversation_id, person_id) do
