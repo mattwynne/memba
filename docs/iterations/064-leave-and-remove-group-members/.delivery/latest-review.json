@@ -7,13 +7,21 @@
       "reason": "review_revise",
       "task_id": "004",
       "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
+    },
+    {
+      "base_sha": "4774dd4fe49163505f2af34d89de0dbc1331c671",
+      "head_sha": "514733f8f0d87348e60df8280c2139de9073e2e2",
+      "packet_id": "004-4774dd4-02",
+      "reason": "review_revise",
+      "task_id": "004",
+      "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
     }
   ],
   "decision": "revise",
-  "packet_id": "004-4774dd4-02",
-  "reason": "Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects.",
-  "recorded_at": 1789993407,
-  "reviewed_head": "174af18a83f13aef6eb19b9172a805de67e1097d",
+  "packet_id": "004-7859157-03",
+  "reason": "Packet 004-7859157-03 is current, matches the first unchecked todo, retains both prior candidate origins, and has a matching ready_for_review result reporting 38 and 79 focused tests passing plus git diff --check. I did not rerun those current, adequate commands. Two ordering gaps remain. First, clear_removed_group_member_follow/7 skips the ConversationFollowers cleanup command when another group preserves access, so no per-conversation cutoff is recorded; after an ordinary unfollow, delayed pre-removal manual or reply-auto work can restore the follow because MemberFollowEligibility allows any access group without a cutoff. Record the removal cutoff while explicitly retaining the valid shared follow, and test shared access -> ordinary unfollow -> delayed older work rejected. Second, cleanup records MemberFollowCleanupRecorded but waits Messaging projectors only through the earlier Membership removal checkpoint. A prepared root MessageSent committed between those events can have its sender policy read the old eligibility state while the one-time scan misses its unprojected conversation, allowing the later FollowConversation to succeed without either cutoff. Synchronize enumeration through the durable member-cleanup checkpoint or use an equivalent event-sourced ordering mechanism, and add a deterministic interleaving test proving that concurrent late-created stale roots cannot restore a follow.",
+  "recorded_at": 1789996022,
+  "reviewed_head": "56ca039941b6db40b1fa5eb92cbef575f9276be1",
   "schema_version": 1,
   "task": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "task_id": "004",
