@@ -19,10 +19,12 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-09-14 | [Problem: Test feedback cost outgrew the implementation loop](2026-09-14-test-feedback-cost-outgrew-implementation-loop.md) | Open | — |
 | 2026-09-14 | [Just-in-time delivery planner](2026-09-14-just-in-time-delivery-planner.md) | Open | — |
 | 2026-09-03 | [Problem: iteration workflow timeout masks the actionable test failure](2026-09-03-iteration-workflow-timeout-masks-test-failure.md) | Open | — |
+| 2026-06-21 | [Problem: Fabro-published commits are attributed to the GitHub user `fabro`](2026-06-21-fabro-commit-attribution.md) | Open | — |
 | 2026-06-17 | [Problem: Handoff claimed `dev check` passed while current main fails in ExUnit](2026-06-17-dev-check-false-green-handoff.md) | Open | — |
 | 2026-06-05 | [Problem: Fabro publish conflict left a manual merge to recover](2026-06-05-fabro-publish-conflict-leaves-manual-merge.md) | Open | — |
 | 2026-06-04 | [Problem: Browser acceptance tests are slow, and shared global state blocks the parallelism that should speed them up](2026-06-04-acceptance-parallelization-blocked-by-global-state.md) | Open | — |
 | 2026-06-04 | [Problem: Acceptance tests flake while waiting for projected member rows](2026-06-04-acceptance-projection-timing-flake.md) | Open | — |
+| 2026-06-04 | [Problem: Domain Cucumber coverage is manual and incomplete](2026-06-04-domain-cucumber-coverage-is-manual-and-incomplete.md) | Open | — |
 | 2026-05-30 | [Problem: Fabro implementation run required manual rescue after publish failure](2026-05-30-fabro-run-rescue-after-publish-failure.md) | Open | — |
 | 2026-08-12 | [Problem: Fabro workflow model routing inferred the wrong provider after upgrade](2026-08-12-fabro-model-provider-inference-after-upgrade.md) | New | — |
 | 2026-07-13 | [Problem: implementation timeout left only partial artifacts and weak diagnostics](2026-07-13-implementation-timeout-lacks-progress-diagnostics.md) | New | — |
@@ -56,7 +58,6 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-06-23 | [Problem: Fabro focused tests can use stale PGHOST and fail despite Postgres being ready](2026-06-23-fabro-focused-tests-stale-pghost.md) | Closed | — |
 | 2026-06-23 | [Problem: Fabro read-guard can block routine todo.md check-off late in a task](2026-06-23-fabro-read-guard-todo-checkoff-friction.md) | Closed | — |
 | 2026-06-23 | [Problem: Fabro sandbox files can be root-owned and block formatting](2026-06-23-fabro-sandbox-root-owned-files-block-format.md) | Closed | — |
-| 2026-06-21 | [Problem: Fabro-published commits are attributed to the GitHub user `fabro`](2026-06-21-fabro-commit-attribution.md) | Closed | — |
 | 2026-06-18 | [Problem: Domain architecture guidance was implicit and not visible enough to reviewers](2026-06-18-domain-pattern-reference-guidance.md) | Closed | — |
 | 2026-06-09 | [Problem: Iteration review accepted despite failing to record code-health findings](2026-06-09-iteration-review-code-health-recording-failure.md) | Closed | — |
 | 2026-06-06 | [Problem: implementation workflow left completed iteration marked implementing](2026-06-06-implementation-workflow-does-not-mark-merged.md) | Closed | — |
@@ -65,7 +66,6 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-06-05 | [Problem: IterationReview dev check cannot find cucumber-js](2026-06-05-iteration-review-missing-cucumber-js.md) | Closed | — |
 | 2026-06-05 | [Problem: Plan validation failed because chunked plan reads were still summarized](2026-06-05-plan-validation-chunked-read-still-summarized.md) | Closed | — |
 | 2026-06-04 | [Problem: Concurrent `dev check` runs race over shared test resources](2026-06-04-dev-check-concurrent-runs-race.md) | Closed | — |
-| 2026-06-04 | [Problem: Domain Cucumber coverage is manual and incomplete](2026-06-04-domain-cucumber-coverage-is-manual-and-incomplete.md) | Closed | — |
 | 2026-06-03 | [Problem: Fabro implementation loop wedged the remote server after rate limits](2026-06-03-fabro-rate-limit-loop-wedges-server.md) | Closed | — |
 | 2026-06-03 | [Problem: Inbound email release lacks an end-to-end smoke-test spec](2026-06-03-inbound-email-smoke-tests-missing-from-release-handoff.md) | Closed | — |
 | 2026-06-02 | [Problem: Fabro outage forced local iteration fallback](2026-06-02-fabro-outage-forced-local-iteration-fallback.md) | Closed | — |
