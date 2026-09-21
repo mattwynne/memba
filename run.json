@@ -1791,7 +1791,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-21T10:43:44.340397579Z",
-  "last_event_at": "2026-09-21T12:53:19.837188883Z",
+  "last_event_at": "2026-09-21T12:53:24.083329553Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -12325,9 +12325,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 6623,
       "checkpoint": {
-        "timestamp": "2026-09-21T12:53:19.844031984Z",
+        "timestamp": "2026-09-21T12:53:24.065654605Z",
         "current_node": "revise_task",
         "completed_nodes": [
           "start",
@@ -12367,6 +12367,469 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.delivery_planner": 0,
+          "response.implement_next_task": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded return modes in [membership.ex](/workspace/memba/web/lib/memba/membership.ex:94).\n- The existing origin-replaying policy delegates through a public Messaging cleanup API using the Membership removal event ID as a durable idempotency token in [clear_removed_group_member_follows.ex](/workspace/memba/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex:22).\n- Cleanup waits for relevant Messaging projections, preserves follows backed by another active group, and cannot falsely complete from a lagging access projection in [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:240).\n- `ConversationUnfollowed` records cleanup identity even for reply-author auto-follows that exist only in the projection. Replaying old cleanup cannot erase a newer post-re-add follow in [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:41).\n- Focused tests cover manual, root-sender, and reply-author follows; replay/idempotency; remove/re-add/follow ordering; unrelated/shared access; projection lag; and system-group no-ops in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:422).\n\nValidation passed:\n\n- Membership-focused suite: 32 tests, 0 failures.\n- Messaging-focused suite: 36 tests, 0 failures.\n- `git diff --check`: passed.\n- Worker-result JSON parsed successfully.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). There are no unresolved items. `todo.md` remains untouched and task 004 remains unchecked for the workflow verdict. Per the packet exclusion, I did not run `dev check`; the deterministic workflow node owns that final gate.",
+          "internal.run_id": "01M31RZ6Z1Y1E3W5EK3YKGN8VW",
+          "last_response": "Implemented packet `004-7859157-03` with result `ready_for_review`.\n\nKey changes:\n\n- Added durable, Messaging-owned member/group cleanup cutoffs that survive replay and protect conversations created a",
+          "internal.retry_count.sync_task_list": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.all_tasks_done.current_node": "before_delivery_planner",
+          "preferred_label": "revise",
+          "internal.retry_count.before_delivery_planner": 0,
+          "thread.route_worker_result.current_node": "validate_task",
+          "thread.start.current_node": "verify_source_head",
+          "last_stage": "revise_task",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.start": 0,
+          "response.delivery_planner": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing newer follows.\n- Protecting conversations created after cleanup acknowledgment from stale auto-follows.\n- Establishing reply auto-follows only after successful reply acceptance.\n- Completing explicit consistency-list and Commanded return-mode coverage.\n- Preserving both prior candidate origins and keeping tasks 009–017 out of scope.\n\nUpdated:\n\n- [current-worker-packet.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json)\n- [execution-state.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json)\n- [planner-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json)\n\nThe approved plan and todo were unchanged. All three JSON artifacts parse successfully, semantic artifact checks passed, and `git diff --check` passed. `dev check` was not run because this was a planner-only handoff and task 017 owns the final repository-wide gate.",
+          "thread.before_delivery_planner.current_node": "delivery_planner",
+          "thread.implement_next_task.current_node": "route_worker_result",
+          "internal.retry_count.implement_next_task": 0,
+          "graph.max_node_visits": "80",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.node_visit_count": 2,
+          "internal.retry_count.apply_task_verdict": 0,
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\",\"reason\":\"Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects.\"}",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "output.validate_task": {
+            "decision": "revise",
+            "task": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
+            "reason": "Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects."
+          },
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.route_worker_result": 0,
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.validate_task": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.apply_task_verdict.current_node": "before_delivery_planner",
+          "current_node": "revise_task",
+          "internal.retry_count.guard_delivery_packet": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "graph.rankdir": "LR",
+          "failure_signature": "",
+          "thread.delivery_planner.current_node": "guard_delivery_packet",
+          "thread.revise_task.current_node": "route_worker_result",
+          "response.revise_task": "Implemented packet `004-7859157-03` with result `ready_for_review`.\n\nKey changes:\n\n- Added durable, Messaging-owned member/group cleanup cutoffs that survive replay and protect conversations created after cleanup acknowledgement.\n- Older cleanup now records its ID and cutoff while preserving newer follows; a later ordinary unfollow cannot permit stale generation work to restore them.\n- Root and reply sender follows are now established by a strong post-acceptance policy. Blank and duplicate replies create neither follow facts nor effective follow state.\n- Preserved historic event replay, unrelated/shared-group access, system-group behavior, and public API return values.\n- Added explicit-list consistency coverage and all Commanded return modes for custom-group add/remove.\n- Left `todo.md` unchanged.\n\nValidation:\n\n- Membership-focused suite: `38 tests, 0 failures`\n- Messaging-focused suite: `79 tests, 0 failures`\n- Changed-file formatting check passed.\n- `git diff --check` passed.\n- No unresolved items.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json). Per packet constraints, I did not run `dev check`; the workflow’s deterministic `dev_check` node owns that full gate.",
+          "internal.retry_count.verify_source_head": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.read_plan": 0,
+          "internal.thread_id": "guard_delivery_packet",
+          "graph.default_fidelity": "summary:high",
+          "outcome": "succeeded",
+          "thread.guard_delivery_packet.current_node": "revise_task",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.todo_readable": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "failure_class": "",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: low; }\n            #resume_gate { reasoning_effort: low; }\n            #delivery_planner { reasoning_effort: high; }\n            #implement_next_task { reasoning_effort: high; }\n            #revise_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.fidelity": "truncate",
+          "internal.retry_count.revise_task": 0,
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "command.output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733"
+        },
+        "node_outcomes": {
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.revise_task": "Implemented packet `004-7859157-03` with result `ready_for_review`.\n\nKey changes:\n\n- Added durable, Messaging-owned member/group cleanup cutoffs that survive replay and protect conversations created after cleanup acknowledgement.\n- Older cleanup now records its ID and cutoff while preserving newer follows; a later ordinary unfollow cannot permit stale generation work to restore them.\n- Root and reply sender follows are now established by a strong post-acceptance policy. Blank and duplicate replies create neither follow facts nor effective follow state.\n- Preserved historic event replay, unrelated/shared-group access, system-group behavior, and public API return values.\n- Added explicit-list consistency coverage and all Commanded return modes for custom-group add/remove.\n- Left `todo.md` unchanged.\n\nValidation:\n\n- Membership-focused suite: `38 tests, 0 failures`\n- Messaging-focused suite: `79 tests, 0 failures`\n- Changed-file formatting check passed.\n- `git diff --check` passed.\n- No unresolved items.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json). Per packet constraints, I did not run `dev check`; the workflow’s deterministic `dev_check` node owns that full gate.",
+              "last_stage": "revise_task",
+              "last_response": "Implemented packet `004-7859157-03` with result `ready_for_review`.\n\nKey changes:\n\n- Added durable, Messaging-owned member/group cleanup cutoffs that survive replay and protect conversations created a"
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 5106091,
+                    "output_tokens": 19412,
+                    "reasoning_tokens": 13159,
+                    "cache_read_tokens": 2441856,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 27728513
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 978044,
+              "tool_time_ms": 219961,
+              "active_time_ms": 1198005
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b8b6834066f7022882c4ce7b7ea258242c0ee2643d622ca27da1c144bffd15f6"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded return modes in [membership.ex](/workspace/memba/web/lib/memba/membership.ex:94).\n- The existing origin-replaying policy delegates through a public Messaging cleanup API using the Membership removal event ID as a durable idempotency token in [clear_removed_group_member_follows.ex](/workspace/memba/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex:22).\n- Cleanup waits for relevant Messaging projections, preserves follows backed by another active group, and cannot falsely complete from a lagging access projection in [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:240).\n- `ConversationUnfollowed` records cleanup identity even for reply-author auto-follows that exist only in the projection. Replaying old cleanup cannot erase a newer post-re-add follow in [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:41).\n- Focused tests cover manual, root-sender, and reply-author follows; replay/idempotency; remove/re-add/follow ordering; unrelated/shared access; projection lag; and system-group no-ops in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:422).\n\nValidation passed:\n\n- Membership-focused suite: 32 tests, 0 failures.\n- Messaging-focused suite: 36 tests, 0 failures.\n- `git diff --check`: passed.\n- Worker-result JSON parsed successfully.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). There are no unresolved items. `todo.md` remains untouched and task 004 remains unchecked for the workflow verdict. Per the packet exclusion, I did not run `dev check`; the deterministic workflow node owns that final gate.",
+              "last_stage": "implement_next_task",
+              "last_response": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded retur"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 3433115,
+                    "output_tokens": 17826,
+                    "reasoning_tokens": 9866,
+                    "cache_read_tokens": 1949312,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 18970991
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 707973,
+              "tool_time_ms": 251954,
+              "active_time_ms": 959927
+            }
+          },
+          "route_worker_result": {
+            "status": "succeeded",
+            "preferred_label": "review",
+            "context_updates": {
+              "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "guard_delivery_packet": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 264,
+              "active_time_ms": 264
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\",\"reason\":\"Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects.\"}",
+              "output.validate_task": {
+                "decision": "revise",
+                "task": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
+                "reason": "Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects."
+              },
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe re"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1697142,
+                    "output_tokens": 5553,
+                    "reasoning_tokens": 7459,
+                    "cache_read_tokens": 382848,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 9067494
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 436764,
+              "tool_time_ms": 285959,
+              "active_time_ms": 722723
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/33bf93a552fbb37efe278e93dfe63bdf6dc13f196042bc625984b28f53e2b22f"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 110182,
+              "active_time_ms": 110182
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b6e5bbb572ad8e46f20012bacb44c51cb48d4f9f7d42a4be867457ccbd6b30f4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 169,
+              "active_time_ms": 169
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9f3b070bea16392137c87415aead76ddc156e383d5ca054526dfc7ae92e511f8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167,
+              "active_time_ms": 167
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/43430d0f2743680deefcf7268e0a2f96b6a131d6a737bd913848d92f0728707d"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '9e57a3aacbfb6f50b7e03e2c877c8c734dd66c2d'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 183,
+              "active_time_ms": 183
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/e6696910c6a85260f67f10b25c00c0ab1b9e67c2433fb8ad0a4376de997c830c"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cad4b3b42349cfb75cfbb06a438a82e2dbf2d039c5ce5a8f7cb606c5708bdac0"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "delivery_planner": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing n",
+              "last_stage": "delivery_planner",
+              "response.delivery_planner": "Prepared revision packet `004-7859157-03` for task 004 at binding checkpoint `78591570e55f275bc64b956712588903784b5126`.\n\nThe packet focuses on:\n\n- Durably recording cleanup cutoffs without removing newer follows.\n- Protecting conversations created after cleanup acknowledgment from stale auto-follows.\n- Establishing reply auto-follows only after successful reply acceptance.\n- Completing explicit consistency-list and Commanded return-mode coverage.\n- Preserving both prior candidate origins and keeping tasks 009–017 out of scope.\n\nUpdated:\n\n- [current-worker-packet.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json)\n- [execution-state.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json)\n- [planner-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json)\n\nThe approved plan and todo were unchanged. All three JSON artifacts parse successfully, semantic artifact checks passed, and `git diff --check` passed. `dev check` was not run because this was a planner-only handoff and task 017 owns the final repository-wide gate."
+            },
+            "notes": "Stage completed: delivery_planner",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 818722,
+                    "output_tokens": 9450,
+                    "reasoning_tokens": 2708,
+                    "cache_read_tokens": 215552,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4566126
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 304690,
+              "tool_time_ms": 270914,
+              "active_time_ms": 575604
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c989a96829ea5738ccd8524dbc9b8ea7d14cbc7296306cbba8011115f4ad0f05"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2042,
+              "active_time_ms": 2042
+            }
+          },
+          "before_delivery_planner": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9cb0d2c9d8b93a8600604df66065b6590ac23f74a0c37a13bf0821a87e321fe3"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6ec42f1cc2d36bd32f217201ff2c71113b064e9f1d49c5e31223bc9a1480d1c8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 -B .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          }
+        },
+        "next_node_id": "route_worker_result",
+        "git_commit_sha": "83ab6c88918de6cbc4ac08aa58140639348c325d",
+        "node_visits": {
+          "guard_delivery_packet": 4,
+          "revise_task": 2,
+          "implement_next_task": 2,
+          "delivery_planner": 4,
+          "resume_gate": 1,
+          "all_tasks_done": 1,
+          "before_delivery_planner": 4,
+          "preflight_sandbox": 1,
+          "sync_task_list": 1,
+          "validate_task": 3,
+          "start": 1,
+          "apply_task_verdict": 3,
+          "verify_source_head": 1,
+          "route_worker_result": 3,
+          "wip_gate": 1,
+          "todo_readable": 1,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json\nindex aa8fffc..e46d8eb 100644\n--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json\n+++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json\n@@ -1,40 +1,39 @@\n {\n   \"schema_version\": 1,\n-  \"packet_id\": \"004-4774dd4-02\",\n+  \"packet_id\": \"004-7859157-03\",\n   \"task_id\": \"004\",\n   \"todo_line\": \"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\",\n   \"result\": \"ready_for_review\",\n   \"changed_paths\": [\n-    \"web/lib/memba/membership.ex\",\n-    \"web/lib/memba/membership/club.ex\",\n-    \"web/lib/memba/membership/events/group_member_added.ex\",\n-    \"web/lib/memba/membership/events/group_member_removed.ex\",\n-    \"web/lib/memba/membership/policies/clear_removed_group_member_follows.ex\",\n+    \"web/lib/memba/application.ex\",\n     \"web/lib/memba/messaging.ex\",\n-    \"web/lib/memba/messaging/commands/follow_conversation.ex\",\n-    \"web/lib/memba/messaging/commands/post_message_reply.ex\",\n-    \"web/lib/memba/messaging/commands/send_message.ex\",\n-    \"web/lib/memba/messaging/commands/unfollow_conversation.ex\",\n+    \"web/lib/memba/messaging/commands/record_member_follow_cleanup.ex\",\n     \"web/lib/memba/messaging/conversation_followers.ex\",\n-    \"web/lib/memba/messaging/events/conversation_followed.ex\",\n     \"web/lib/memba/messaging/events/conversation_unfollowed.ex\",\n+    \"web/lib/memba/messaging/events/member_follow_cleanup_recorded.ex\",\n     \"web/lib/memba/messaging/events/message_sent.ex\",\n+    \"web/lib/memba/messaging/member_follow_eligibility.ex\",\n     \"web/lib/memba/messaging/message.ex\",\n+    \"web/lib/memba/messaging/policies/establish_message_sender_follow.ex\",\n     \"web/lib/memba/messaging/projectors/conversation_follow.ex\",\n+    \"web/lib/memba/messaging/router.ex\",\n+    \"web/test/memba/membership/add_custom_group_member_dispatch_test.exs\",\n     \"web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\",\n     \"web/test/memba/membership/remove_custom_group_member_dispatch_test.exs\",\n-    \"web/test/memba/messaging/conversation_followers_test.exs\"\n+    \"web/test/memba/messaging/conversation_followers_test.exs\",\n+    \"web/test/memba/messaging/post_message_reply_test.exs\",\n+    \"web/test/support/event_sourced_case.ex\"\n   ],\n   \"validation\": [\n     {\n       \"command\": \"PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs\",\n       \"exit_status\": 0,\n-      \"evidence\": \"35 tests, 0 failures. Proves generated and historic membership ordering, manual/root/reply follow cleanup facts, first-delivery and later-conversation safety, a suspended-handler remove/re-add/follow race, shared-skip replay, eventual and exact-retry completion, successful execution-result unfollows, lag blocking, and Everyone/Admin no-ops.\"\n+      \"evidence\": \"38 tests, 0 failures. Covers cleanup durability and replay, manual/root/reply sources, late first stream creation, remove/re-add races, projection lag, unrelated/shared access, exact retries, explicit handler-list consistency, all supported add/remove return shapes, and Everyone/Admin no-ops.\"\n     },\n     {\n-      \"command\": \"PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs\",\n+      \"command\": \"PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/message_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs\",\n       \"exit_status\": 0,\n-      \"evidence\": \"41 tests, 0 failures. Proves aggregate generation refresh/cutoffs, delayed stale manual and root-auto follow rejection, absent-field replay, legacy-cleaned first delivery, deterministic follow projections, composed access, and existing send/lag behavior.\"\n+      \"evidence\": \"79 tests, 0 failures. Covers retained newer follows with durable older cutoffs, stale manual/root/reply rejection after ordinary unfollow, blank and duplicate reply rejection without follow facts/state, success-only sender follow policy, historic event replay, deterministic projections, access composition, and send behavior.\"\n     },\n     {\n       \"command\": \"git diff --check\",\n@@ -42,6 +41,6 @@\n       \"evidence\": \"No whitespace errors.\"\n     }\n   ],\n-  \"notes\": \"Club now assigns a monotonically increasing group-membership generation to add/remove facts; historic absent fields replay by incrementing Club state, while historic Messaging facts normalize to generation zero. Manual follows, root MessageSent auto-follows, and authoritative root-stream reply follows carry the current generation. ConversationFollowers stores per-person follow generations and cleanup cutoffs, refreshes an already-following member after re-add, ignores older first-delivery cleanup, and blocks delayed stale follow work; cleanup IDs remain retry deduplication only. Public custom-group add/remove calls additionally await the cleanup handler's durable EventStore subscription checkpoint after every successful dispatch, including :eventual and event-free retries, while preserving return modes. Focused races cover first delayed delivery, later-created and shared-skipped conversations, legacy cleanup, projection lag, unrelated follows, both system groups, and successful {:ok, result} unfollows. The initial TDD run failed because generation fields were absent; subsequent diagnostic runs exposed one legacy token test whose follow needed an explicitly newer generation. The repository formatter was also checked successfully for every changed Elixir file.\",\n+  \"notes\": \"Messaging now records each custom-group removal in an idempotent member-scoped event stream keyed separately from Membership person streams, with group-specific generation cutoffs that survive aggregate restart and protect conversations created after cleanup acknowledgement. ConversationUnfollowed records older cleanup IDs/cutoffs with follow_retained=true, so projection replay preserves a newer follow while an ordinary unfollow cannot erase the cutoff. New MessageSent facts request sender follow establishment from a strong Messaging policy only after message acceptance; historic facts retain their prior direct-follow semantics, while blank and duplicate replies emit no follow. Public sends wait for the policy's durable progress, and custom-group add/remove preserve default, strong, eventual, explicit-list, and every supported Commanded return mode. Initial TDD runs reproduced all three review gaps (6 failures); intermediate diagnostics exposed the need for a non-person stream identity and retained-follow projection semantics before the final focused suites passed.\",\n   \"unresolved\": []\n }\ndiff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex\nindex 0e9b748..fb1974a 100644\n--- a/web/lib/memba/application.ex\n+++ b/web/lib/memba/application.ex\n@@ -25,6 +25,7 @@ defmodule Memba.Application do\n       Memba.Messaging.Projectors.MemberEmailDelivery,\n       Memba.Messaging.Projectors.MembaStaffEmailDelivery,\n       Memba.Messaging.Projectors.InboundEmailSource,\n+      Memba.Messaging.Policies.EstablishMessageSenderFollow,\n       # Membership activation waits for this policy's prior Club-stream work.\n       Memba.Membership.Policies.ClearRemovedGroupMemberFollows,\n       Memba.Membership.Projectors.Club,\ndiff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex 38df139..cd98627 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -20,6 +20,7 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.ReceiveInboundEmail\n+  alias Memba.Messaging.Commands.RecordMemberFollowCleanup\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Commands.UnfollowConversation\n   alias Memba.Messaging.ConversationAccess\n@@ -36,7 +37,9 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.InboundEmailBody\n   alias Memba.Messaging.InboundEmailReceipt\n   alias Memba.Messaging.Message\n+  alias Memba.Messaging.MemberFollowEligibility\n   alias Memba.Messaging.OutboundMessageID\n+  alias Memba.Messaging.Policies.EstablishMessageSenderFollow\n \n   alias Memba.Messaging.Projectors.ConversationGroupAccess,\n     as: ConversationGroupAccessProjector\n@@ -79,7 +82,8 @@ defmodule Memba.Messaging do\n   def send_club_message(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n     with {:ok, command} <- send_club_message_command(attrs),\n-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n+         {:ok, dispatch_result} <-\n+           dispatch_command(command, message_sender_follow_consistency(dispatch_opts)) do\n       dispatch_result\n     end\n   end\n@@ -104,7 +108,8 @@ defmodule Memba.Messaging do\n                {:ok, command}\n              end\n            end),\n-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n+         {:ok, dispatch_result} <-\n+           dispatch_command(command, message_sender_follow_consistency(dispatch_opts)) do\n       dispatch_result\n     end\n   end\n@@ -131,8 +136,8 @@ defmodule Memba.Messaging do\n              end,\n              projections: [ConversationFollowProjector]\n            ),\n-         :ok <- establish_reply_follow(command, dispatch_opts),\n-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n+         {:ok, dispatch_result} <-\n+           dispatch_command(command, message_sender_follow_consistency(dispatch_opts)) do\n       dispatch_result\n     end\n   end\n@@ -258,6 +263,15 @@ defmodule Memba.Messaging do\n          {:ok, cleanup_id} <- fetch_cleanup_id(attrs),\n          {:ok, membership_generation} <- fetch_membership_generation(attrs),\n          {:ok, checkpoint} <- fetch_cleanup_checkpoint(attrs),\n+         :ok <-\n+           record_member_follow_cleanup(\n+             club_id,\n+             group_id,\n+             member_id,\n+             cleanup_id,\n+             membership_generation,\n+             dispatch_opts\n+           ),\n          :ok <- await_removed_group_follow_cleanup_projections(checkpoint) do\n       group_id\n       |> list_conversations_for_group()\n@@ -282,6 +296,34 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  @doc false\n+  def establish_message_sender_follow(%Memba.Messaging.Events.MessageSent{} = event) do\n+    eligibility =\n+      App.aggregate_state(\n+        MemberFollowEligibility,\n+        MemberFollowEligibility.identity(event.sender_id)\n+      )\n+\n+    group_ids = sender_follow_group_ids(event)\n+\n+    if MemberFollowEligibility.follow_allowed?(\n+         eligibility,\n+         event.club_id,\n+         group_ids,\n+         event.sender_membership_generation\n+       ) do\n+      %FollowConversation{\n+        club_id: event.club_id,\n+        conversation_id: event.conversation_id || event.message_id,\n+        member_id: event.sender_id,\n+        membership_generation: event.sender_membership_generation\n+      }\n+      |> dispatch_ok(consistency: [ConversationFollowProjector])\n+    else\n+      :ok\n+    end\n+  end\n+\n   @doc \"\"\"\n   Stop following a conversation from an in-app current-member surface.\n \n@@ -1856,8 +1898,7 @@ defmodule Memba.Messaging do\n                end\n              end,\n              projections: [ConversationFollowProjector]\n-           ),\n-         :ok <- establish_reply_follow(command, dispatch_opts) do\n+           ) do\n       dispatch_inbound_message_once(command, dispatch_opts)\n     end\n   end\n@@ -1867,7 +1908,7 @@ defmodule Memba.Messaging do\n   end\n \n   defp dispatch_inbound_message_once(command, dispatch_opts) do\n-    case dispatch_ok(command, dispatch_opts) do\n+    case dispatch_ok(command, message_sender_follow_consistency(dispatch_opts)) do\n       :ok -> :ok\n       {:error, :already_sent} -> confirm_matching_inbound_message(command)\n       {:error, _reason} = error -> error\n@@ -2180,6 +2221,69 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  defp record_member_follow_cleanup(\n+         club_id,\n+         group_id,\n+         member_id,\n+         cleanup_id,\n+         membership_generation,\n+         dispatch_opts\n+       ) do\n+    %RecordMemberFollowCleanup{\n+      eligibility_id: MemberFollowEligibility.identity(member_id),\n+      club_id: club_id,\n+      group_id: group_id,\n+      member_id: member_id,\n+      cleanup_id: cleanup_id,\n+      membership_generation: membership_generation\n+    }\n+    |> dispatch_ok(dispatch_opts)\n+  end\n+\n+  defp sender_follow_group_ids(%{message_id: message_id, conversation_id: message_id} = event) do\n+    List.wrap(event.audience_group_id)\n+  end\n+\n+  defp sender_follow_group_ids(%{conversation_id: conversation_id}) do\n+    case App.aggregate_state(Message, conversation_id) do\n+      %Message{group_access: group_access} -> Map.keys(group_access)\n+      _missing_conversation -> []\n+    end\n+  end\n+\n+  defp message_sender_follow_consistency(dispatch_opts) do\n+    Keyword.update(\n+      dispatch_opts,\n+      :consistency,\n+      [EstablishMessageSenderFollow],\n+      fn\n+        :strong ->\n+          :strong\n+\n+        :eventual ->\n+          [EstablishMessageSenderFollow]\n+\n+        handlers when is_list(handlers) ->\n+          if Enum.any?(handlers, &message_sender_follow_handler?/1) do\n+            handlers\n+          else\n+            [EstablishMessageSenderFollow | handlers]\n+          end\n+\n+        consistency ->\n+          consistency\n+      end\n+    )\n+  end\n+\n+  defp message_sender_follow_handler?(EstablishMessageSenderFollow), do: true\n+\n+  defp message_sender_follow_handler?(handler) when is_binary(handler) do\n+    handler == inspect(EstablishMessageSenderFollow)\n+  end\n+\n+  defp message_sender_follow_handler?(_handler), do: false\n+\n   defp clear_removed_group_member_follow(\n          conversation_id,\n          club_id,\n@@ -2235,16 +2339,6 @@ defmodule Memba.Messaging do\n     )\n   end\n \n-  defp establish_reply_follow(%PostMessageReply{} = command, dispatch_opts) do\n-    %FollowConversation{\n-      club_id: command.club_id,\n-      conversation_id: command.conversation_id,\n-      member_id: command.sender_id,\n-      membership_generation: command.sender_membership_generation\n-    }\n-    |> dispatch_ok(dispatch_opts)\n-  end\n-\n   defp report_email_delivery_delivered_command(attrs) do\n     with {:ok, message_id} <- fetch_required(attrs, :message_id),\n          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do\ndiff --git a/web/lib/memba/messaging/commands/record_member_follow_cleanup.ex b/web/lib/memba/messaging/commands/record_member_follow_cleanup.ex\nnew file mode 100644\nindex 0000000..77a5da7\n--- /dev/null\n+++ b/web/lib/memba/messaging/commands/record_member_follow_cleanup.ex\n@@ -0,0 +1,22 @@\n+defmodule Memba.Messaging.Commands.RecordMemberFollowCleanup do\n+  @moduledoc \"\"\"\n+  Records a custom-group removal cutoff for one member in Messaging.\n+  \"\"\"\n+\n+  @enforce_keys [\n+    :eligibility_id,\n+    :club_id,\n+    :group_id,\n+    :member_id,\n+    :cleanup_id,\n+    :membership_generation\n+  ]\n+  defstruct [\n+    :eligibility_id,\n+    :club_id,\n+    :group_id,\n+    :member_id,\n+    :cleanup_id,\n+    :membership_generation\n+  ]\n+end\ndiff --git a/web/lib/memba/messaging/conversation_followers.ex b/web/lib/memba/messaging/conversation_followers.ex\nindex 07db7f5..4216d0b 100644\n--- a/web/lib/memba/messaging/conversation_followers.ex\n+++ b/web/lib/memba/messaging/conversation_followers.ex\n@@ -55,16 +55,10 @@ defmodule Memba.Messaging.ConversationFollowers do\n     with :ok <- validate_command(command),\n          :ok <- validate_same_conversation(conversation, command),\n          :ok <- validate_same_club(conversation, command) do\n-      cleanup_generation = normalize_generation(command.membership_generation)\n-\n       cond do\n         cleanup_completed?(conversation, command.cleanup_id) ->\n           []\n \n-        is_binary(command.cleanup_id) and\n-            cleanup_generation < follower_generation(conversation, command.member_id) ->\n-          []\n-\n         MapSet.member?(conversation.follower_ids, command.member_id) or\n             is_binary(command.cleanup_id) ->\n           %ConversationUnfollowed{\n@@ -73,7 +67,11 @@ defmodule Memba.Messaging.ConversationFollowers do\n             conversation_id: command.conversation_id,\n             member_id: command.member_id,\n             cleanup_id: command.cleanup_id,\n-            membership_generation: command.membership_generation\n+            membership_generation: command.membership_generation,\n+            follow_retained:\n+              is_binary(command.cleanup_id) and\n+                normalize_generation(command.membership_generation) <\n+                  follower_generation(conversation, command.member_id)\n           }\n \n         true ->\ndiff --git a/web/lib/memba/messaging/events/conversation_unfollowed.ex b/web/lib/memba/messaging/events/conversation_unfollowed.ex\nindex 23d1bb6..c227453 100644\n--- a/web/lib/memba/messaging/events/conversation_unfollowed.ex\n+++ b/web/lib/memba/messaging/events/conversation_unfollowed.ex\n@@ -1,6 +1,11 @@\n defmodule Memba.Messaging.Events.ConversationUnfollowed do\n   @moduledoc \"\"\"\n-  Event raised when a member stops following a club-message conversation.\n+  Event raised when a member stops following a club-message conversation or a\n+  membership cleanup cutoff is recorded.\n+\n+  `follow_retained` is true when an older cleanup records its cutoff while\n+  preserving a follow established by a newer membership generation. Historic\n+  events predate the field and are interpreted as removing the follow.\n   \"\"\"\n \n   @derive Jason.Encoder\n@@ -11,6 +16,7 @@ defmodule Memba.Messaging.Events.ConversationUnfollowed do\n     :conversation_id,\n     :member_id,\n     :cleanup_id,\n-    :membership_generation\n+    :membership_generation,\n+    follow_retained: false\n   ]\n end\ndiff --git a/web/lib/memba/messaging/events/member_follow_cleanup_recorded.ex b/web/lib/memba/messaging/events/member_follow_cleanup_recorded.ex\nnew file mode 100644\nindex 0000000..b92e437\n--- /dev/null\n+++ b/web/lib/memba/messaging/events/member_follow_cleanup_recorded.ex\n@@ -0,0 +1,10 @@\n+defmodule Memba.Messaging.Events.MemberFollowCleanupRecorded do\n+  @moduledoc \"\"\"\n+  Durable Messaging fact recording the membership generation invalidated by a\n+  custom-group removal.\n+  \"\"\"\n+\n+  @derive Jason.Encoder\n+  @enforce_keys [:club_id, :group_id, :member_id, :cleanup_id, :membership_generation]\n+  defstruct [:club_id, :group_id, :member_id, :cleanup_id, :membership_generation]\n+end\ndiff --git a/web/lib/memba/messaging/events/message_sent.ex b/web/lib/memba/messaging/events/message_sent.ex\nindex 8b59b26..024cf2f 100644\n--- a/web/lib/memba/messaging/events/message_sent.ex\n+++ b/web/lib/memba/messaging/events/message_sent.ex\n@@ -8,8 +8,13 @@ defmodule Memba.Messaging.Events.MessageSent do\n \n   `sender_membership_generation` causally orders generated sender follows\n   against group-membership cleanup. Historic facts without it use generation\n-  zero. New reply sends establish the authoritative root-stream follow with a\n-  `ConversationFollowed` fact before this event is dispatched.\n+  zero.\n+\n+  New sends set `sender_follow_requested` when acceptance should establish the\n+  sender follow. A strong Messaging policy handles that request only after this\n+  fact is committed and checks durable member/group cleanup cutoffs first.\n+  Historic facts predate the field and retain their original direct\n+  `sender_follows_conversation` replay behavior.\n   \"\"\"\n \n   @derive Jason.Encoder\n@@ -20,12 +25,17 @@ defmodule Memba.Messaging.Events.MessageSent do\n     :sender_id,\n     :conversation_id,\n     :reply_to_message_id,\n+    :audience_group_id,\n     :subject,\n     :body,\n     :sender_membership_generation,\n+    sender_follow_requested: false,\n     sender_follows_conversation: true\n   ]\n \n   def sender_follows_conversation?(%__MODULE__{sender_follows_conversation: false}), do: false\n   def sender_follows_conversation?(%__MODULE__{}), do: true\n+\n+  def sender_follow_requested?(%__MODULE__{sender_follow_requested: true}), do: true\n+  def sender_follow_requested?(%__MODULE__{}), do: false\n end\ndiff --git a/web/lib/memba/messaging/member_follow_eligibility.ex b/web/lib/memba/messaging/member_follow_eligibility.ex\nnew file mode 100644\nindex 0000000..497d7aa\n--- /dev/null\n+++ b/web/lib/memba/messaging/member_follow_eligibility.ex\n@@ -0,0 +1,117 @@\n+defmodule Memba.Messaging.MemberFollowEligibility do\n+  @moduledoc \"\"\"\n+  Aggregate tracking group-removal cutoffs for one potential follower.\n+\n+  Conversation-specific cleanup remains on `ConversationFollowers`. This\n+  member-scoped stream protects conversations created only after cleanup was\n+  acknowledged, so delayed message work cannot establish a stale sender follow.\n+  \"\"\"\n+\n+  alias Commanded.Aggregates.Aggregate\n+  alias Memba.ID\n+  alias Memba.Messaging.Commands.RecordMemberFollowCleanup\n+  alias Memba.Messaging.Events.MemberFollowCleanupRecorded\n+\n+  @behaviour Aggregate\n+\n+  defstruct [\n+    :member_id,\n+    cleanup_generations: %{},\n+    completed_cleanup_ids: MapSet.new()\n+  ]\n+\n+  @impl Aggregate\n+  def execute(%__MODULE__{} = eligibility, %RecordMemberFollowCleanup{} = command) do\n+    with :ok <- validate_eligibility_id(command.eligibility_id, command.member_id),\n+         :ok <- validate_id(:club, command.club_id, :invalid_club_id),\n+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),\n+         :ok <- validate_id(:person, command.member_id, :invalid_member_id),\n+         :ok <- validate_cleanup_id(command.cleanup_id),\n+         :ok <- validate_generation(command.membership_generation) do\n+      if MapSet.member?(eligibility.completed_cleanup_ids, command.cleanup_id) do\n+        []\n+      else\n+        %MemberFollowCleanupRecorded{\n+          club_id: command.club_id,\n+          group_id: command.group_id,\n+          member_id: command.member_id,\n+          cleanup_id: command.cleanup_id,\n+          membership_generation: command.membership_generation\n+        }\n+      end\n+    end\n+  end\n+\n+  @impl Aggregate\n+  def apply(%__MODULE__{} = eligibility, %MemberFollowCleanupRecorded{} = event) do\n+    key = {event.club_id, event.group_id}\n+\n+    %__MODULE__{\n+      eligibility\n+      | member_id: event.member_id,\n+        cleanup_generations:\n+          Map.update(\n+            eligibility.cleanup_generations,\n+            key,\n+            event.membership_generation,\n+            &max(&1, event.membership_generation)\n+          ),\n+        completed_cleanup_ids: MapSet.put(eligibility.completed_cleanup_ids, event.cleanup_id)\n+    }\n+  end\n+\n+  def apply(%__MODULE__{} = eligibility, _event), do: eligibility\n+\n+  def identity(member_id) do\n+    ID.deterministic(:conversation_follow, [\"member-follow-eligibility\", member_id])\n+  end\n+\n+  @doc \"\"\"\n+  Return whether a follow from `membership_generation` remains eligible through\n+  at least one of the conversation's access groups.\n+\n+  An empty group list represents historic messages without an audience group and\n+  remains eligible for backward replay compatibility.\n+  \"\"\"\n+  def follow_allowed?(\n+        %__MODULE__{} = eligibility,\n+        club_id,\n+        group_ids,\n+        membership_generation\n+      )\n+      when is_list(group_ids) do\n+    generation = normalize_generation(membership_generation)\n+\n+    group_ids == [] or\n+      Enum.any?(group_ids, fn group_id ->\n+        generation > Map.get(eligibility.cleanup_generations, {club_id, group_id}, -1)\n+      end)\n+  end\n+\n+  defp validate_cleanup_id(cleanup_id) when is_binary(cleanup_id) do\n+    if String.trim(cleanup_id) == \"\", do: {:error, :invalid_cleanup_id}, else: :ok\n+  end\n+\n+  defp validate_cleanup_id(_cleanup_id), do: {:error, :invalid_cleanup_id}\n+\n+  defp validate_eligibility_id(eligibility_id, member_id) do\n+    if eligibility_id == identity(member_id),\n+      do: :ok,\n+      else: {:error, :invalid_member_follow_eligibility_id}\n+  end\n+\n+  defp validate_generation(generation) when is_integer(generation) and generation >= 0, do: :ok\n+  defp validate_generation(_generation), do: {:error, :invalid_membership_generation}\n+\n+  defp normalize_generation(generation) when is_integer(generation) and generation >= 0,\n+    do: generation\n+\n+  defp normalize_generation(_historic_or_invalid), do: 0\n+\n+  defp validate_id(type, value, error) do\n+    case ID.cast(type, value) do\n+      {:ok, ^value} -> :ok\n+      _other -> {:error, error}\n+    end\n+  end\n+end\ndiff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex\nindex 75d79fc..8c64ac2 100644\n--- a/web/lib/memba/messaging/message.ex\n+++ b/web/lib/memba/messaging/message.ex\n@@ -311,10 +311,12 @@ defmodule Memba.Messaging.Message do\n         sender_id: command.sender_id,\n         conversation_id: conversation_id,\n         reply_to_message_id: reply_to_message_id,\n+        audience_group_id: audience_group_id,\n         subject: subject,\n         body: body,\n         sender_membership_generation: command.sender_membership_generation,\n-        sender_follows_conversation: sender_follows_conversation?(command, recipients)\n+        sender_follow_requested: sender_follows_conversation?(command, recipients),\n+        sender_follows_conversation: false\n       }\n \n       [message_sent] ++\ndiff --git a/web/lib/memba/messaging/policies/establish_message_sender_follow.ex b/web/lib/memba/messaging/policies/establish_message_sender_follow.ex\nnew file mode 100644\nindex 0000000..f1450e2\n--- /dev/null\n+++ b/web/lib/memba/messaging/policies/establish_message_sender_follow.ex\n@@ -0,0 +1,29 @@\n+defmodule Memba.Messaging.Policies.EstablishMessageSenderFollow do\n+  @moduledoc \"\"\"\n+  Establishes sender follows only after a message or reply has been accepted.\n+\n+  The Messaging-owned member cutoff aggregate is checked before dispatching the\n+  conversation follow, including for conversations first created after a\n+  custom-group cleanup completed.\n+  \"\"\"\n+\n+  use Commanded.Event.Handler,\n+    application: Memba.Messaging.App,\n+    name: \"Memba.Messaging.Policies.EstablishMessageSenderFollow\",\n+    consistency: :strong,\n+    start_from: :origin\n+\n+  alias Memba.Messaging\n+  alias Memba.Messaging.Events.MessageSent\n+\n+  @impl Commanded.Event.Handler\n+  def handle(%MessageSent{} = event, _metadata) do\n+    if MessageSent.sender_follow_requested?(event) do\n+      Messaging.establish_message_sender_follow(event)\n+    else\n+      :ok\n+    end\n+  end\n+\n+  def handle(_event, _metadata), do: :ok\n+end\ndiff --git a/web/lib/memba/messaging/projectors/conversation_follow.ex b/web/lib/memba/messaging/projectors/conversation_follow.ex\nindex 953a3ba..e1ae255 100644\n--- a/web/lib/memba/messaging/projectors/conversation_follow.ex\n+++ b/web/lib/memba/messaging/projectors/conversation_follow.ex\n@@ -38,7 +38,13 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do\n   end)\n \n   project(%ConversationUnfollowed{} = event, fn multi ->\n-    upsert_follow(multi, event.club_id, event.conversation_id, event.member_id, false)\n+    upsert_follow(\n+      multi,\n+      event.club_id,\n+      event.conversation_id,\n+      event.member_id,\n+      event.follow_retained == true\n+    )\n   end)\n \n   @impl Commanded.Projections.Ecto\ndiff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex\nindex 811d00c..f8aac1c 100644\n--- a/web/lib/memba/messaging/router.ex\n+++ b/web/lib/memba/messaging/router.ex\n@@ -6,6 +6,7 @@ defmodule Memba.Messaging.Router do\n   use Commanded.Commands.Router\n \n   alias Memba.Messaging.InboundEmailReceipt\n+  alias Memba.Messaging.MemberFollowEligibility\n   alias Memba.Messaging.Message\n   alias Memba.Messaging.ConversationFollowers\n   alias Memba.Messaging.Commands.AcceptInboundClubEmail\n@@ -20,11 +21,13 @@ defmodule Memba.Messaging.Router do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.ReceiveInboundEmail\n+  alias Memba.Messaging.Commands.RecordMemberFollowCleanup\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Commands.UnfollowConversation\n \n   identify(InboundEmailReceipt, by: :inbound_email_id)\n   identify(ConversationFollowers, by: :conversation_id)\n+  identify(MemberFollowEligibility, by: :eligibility_id)\n \n   dispatch([ReceiveInboundEmail, AcceptInboundClubEmail, RejectInboundClubEmail],\n     to: InboundEmailReceipt\n@@ -54,4 +57,5 @@ defmodule Memba.Messaging.Router do\n   )\n \n   dispatch([FollowConversation, UnfollowConversation], to: ConversationFollowers)\n+  dispatch(RecordMemberFollowCleanup, to: MemberFollowEligibility)\n end\ndiff --git a/web/test/memba/membership/add_custom_group_member_dispatch_test.exs b/web/test/memba/membership/add_custom_group_member_dispatch_test.exs\nindex 61f746e..c676107 100644\n--- a/web/test/memba/membership/add_custom_group_member_dispatch_test.exs\n+++ b/web/test/memba/membership/add_custom_group_member_dispatch_test.exs\n@@ -4,6 +4,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do\n   alias Commanded.Commands.ExecutionResult\n   alias Memba.Membership\n   alias Memba.Membership.App\n+  alias Memba.Membership.Club\n   alias Memba.Membership.Commands.AddCustomGroupMember\n   alias Memba.Membership.Commands.AddGroupMember\n   alias Memba.Membership.Commands.AssignClubRoleToMember\n@@ -11,6 +12,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do\n   alias Memba.Membership.Events.GroupMemberAdded\n   alias Memba.Membership.Permissions\n   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection\n+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector\n   alias Memba.Membership.Roles\n   alias Memba.Membership.SystemGroups\n \n@@ -142,6 +144,38 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do\n              )\n   end\n \n+  test \"add_custom_group_member/2 preserves every supported Commanded return shape with list consistency\" do\n+    for return_mode <- [\n+          {:returning, :aggregate_state},\n+          {:returning, :aggregate_version},\n+          {:returning, :events},\n+          {:returning, :execution_result},\n+          {:returning, false},\n+          {:include_execution_result, true},\n+          {:include_aggregate_version, true}\n+        ] do\n+      fixture = custom_group_admission_fixture!()\n+\n+      result =\n+        add_custom_group_member(\n+          fixture.club_id,\n+          fixture.group_id,\n+          fixture.target_membership_id,\n+          fixture.target_person_id,\n+          fixture.actor_person_id,\n+          [return_mode, consistency: [MembershipProjector]]\n+        )\n+\n+      assert_add_return_shape(result, return_mode, fixture.club_id)\n+\n+      assert %GroupMembershipProjection{active: true} =\n+               Repo.get_by(GroupMembershipProjection,\n+                 group_id: fixture.group_id,\n+                 membership_id: fixture.target_membership_id\n+               )\n+    end\n+  end\n+\n   test \"add_custom_group_member/2 lets an active Admin outside the group admit another member without joining\" do\n     club_id = Memba.ID.generate(:club)\n     group_id = Memba.ID.generate(:group)\n@@ -405,6 +439,62 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do\n              )\n   end\n \n+  defp custom_group_admission_fixture! do\n+    club_id = Memba.ID.generate(:club)\n+    group_id = Memba.ID.generate(:group)\n+    actor_person_id = Memba.ID.generate(:person)\n+    actor_membership_id = Memba.ID.generate(:membership)\n+    target_person_id = Memba.ID.generate(:person)\n+    target_membership_id = Memba.ID.generate(:membership)\n+\n+    create_club!(club_id)\n+    create_member!(club_id, actor_membership_id, actor_person_id)\n+    create_member!(club_id, target_membership_id, target_person_id)\n+    create_custom_group!(club_id, group_id, actor_person_id)\n+\n+    %{\n+      club_id: club_id,\n+      group_id: group_id,\n+      actor_person_id: actor_person_id,\n+      target_person_id: target_person_id,\n+      target_membership_id: target_membership_id\n+    }\n+  end\n+\n+  defp assert_add_return_shape(\n+         {:ok, %Club{club_id: club_id}},\n+         {:returning, :aggregate_state},\n+         club_id\n+       ),\n+       do: :ok\n+\n+  defp assert_add_return_shape({:ok, version}, return_mode, _club_id)\n+       when return_mode in [\n+              {:returning, :aggregate_version},\n+              {:include_aggregate_version, true}\n+            ] and is_integer(version),\n+       do: :ok\n+\n+  defp assert_add_return_shape(\n+         {:ok, [%GroupMemberAdded{}]},\n+         {:returning, :events},\n+         _club_id\n+       ),\n+       do: :ok\n+\n+  defp assert_add_return_shape(\n+         {:ok, %ExecutionResult{events: [%GroupMemberAdded{}]}},\n+         return_mode,\n+         _club_id\n+       )\n+       when return_mode in [\n+              {:returning, :execution_result},\n+              {:include_execution_result, true}\n+            ],\n+       do: :ok\n+\n+  defp assert_add_return_shape(:ok, {:returning, false}, _club_id), do: :ok\n+\n   defp create_custom_group!(club_id, group_id, actor_person_id) do\n     assert :ok =\n              Membership.create_custom_group(\ndiff --git a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\nindex e0d80ae..fe16076 100644\n--- a/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\n+++ b/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs\n@@ -635,7 +635,15 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n              })\n \n     assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)\n-    assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 0\n+\n+    assert [\n+             %ConversationUnfollowed{\n+               member_id: target_person_id,\n+               follow_retained: true\n+             }\n+           ] = unfollow_events(shared_conversation_id, fixture.target_person_id)\n+\n+    assert target_person_id == fixture.target_person_id\n   end\n \n   test \"first delayed removal delivery cannot erase newer follows after a genuine re-add\" do\n@@ -741,13 +749,15 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n                fixture.target_person_id\n              )\n \n-      assert count_unfollow_events(current_conversation_id, fixture.target_person_id) == 0\n+      assert count_unfollow_events(current_conversation_id, fixture.target_person_id) == 1\n     end\n \n-    assert [%ConversationFollowed{membership_generation: refreshed_generation}] =\n-             follow_events(conversation_id, fixture.target_person_id)\n+    assert [\n+             %ConversationFollowed{membership_generation: initial_generation},\n+             %ConversationFollowed{membership_generation: refreshed_generation}\n+           ] = follow_events(conversation_id, fixture.target_person_id)\n \n-    assert [%MessageSent{sender_membership_generation: initial_generation} | _events] =\n+    assert [%MessageSent{sender_membership_generation: ^initial_generation} | _events] =\n              conversation_id\n              |> then(&EventStore.stream_forward(MessagingApp, &1))\n              |> Enum.map(& &1.data)\n@@ -755,6 +765,38 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do\n     assert refreshed_generation > initial_generation\n   end\n \n+  test \"cleanup acknowledged before a prepared root is dispatched blocks its stale auto-follow\" do\n+    fixture = explicit_removal_fixture!()\n+    conversation_id = Memba.ID.generate(:message)\n+    prepared_generation = Membership.current_group_membership_generation(fixture.club_id)\n+\n+    prepared_send = %SendMessage{\n+      message_id: conversation_id,\n+      club_id: fixture.club_id,\n+      sender_id: fixture.target_person_id,\n+      audience_group_id: fixture.group_id,\n+      subject: \"Prepared before removal\",\n+      body: \"Dispatched only after cleanup acknowledgement.\",\n+      sender_membership_generation: prepared_generation,\n+      recipients: [\n+        %Recipient{\n+          delivery_id: Memba.ID.generate(:delivery),\n+          person_id: fixture.target_person_id,\n+          name: \"Departing Member\",\n+          email: \"departing@example.com\"\n+        }\n+      ]\n+    }\n+\n+    assert :ok = remove_custom_group_member(fixture)\n+    stop_event_sourced_aggregate_instances!()\n+\n+    assert :ok = MessagingApp.dispatch(prepared_send, consistency: :strong)\n+\n+    assert [] = follow_events(conversation_id, fixture.target_person_id)\n+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)\n+  end\n+\n   test \"public eventual removal, re-add, and exact retry await durable cleanup progress\" do\n     fixture = explicit_removal_fixture!()\n     conversation_id = Memba.ID.generate(:message)\ndiff --git a/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs b/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs\nindex ec01b9e..ab3cb6f 100644\n--- a/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs\n+++ b/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs\n@@ -11,6 +11,7 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do\n   alias Memba.Membership.Events.GroupMemberRemoved\n   alias Memba.Membership.Events.GroupMemberAdded\n   alias Memba.Membership.Permissions\n+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector\n   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection\n   alias Memba.Membership.Roles\n   alias Memba.Membership.SystemGroups\n@@ -111,6 +112,34 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do\n              |> remove_custom_group_member()\n   end\n \n+  test \"remove_custom_group_member/2 preserves every supported Commanded return shape with list consistency\" do\n+    for return_mode <- [\n+          {:returning, :aggregate_state},\n+          {:returning, :aggregate_version},\n+          {:returning, :events},\n+          {:returning, :execution_result},\n+          {:returning, false},\n+          {:include_execution_result, true},\n+          {:include_aggregate_version, true}\n+        ] do\n+      fixture = custom_group_with_target!()\n+\n+      result =\n+        remove_custom_group_member(fixture, [\n+          return_mode,\n+          consistency: [MembershipProjector]\n+        ])\n+\n+      assert_remove_return_shape(result, return_mode, fixture.club_id)\n+\n+      assert %GroupMembershipProjection{active: false} =\n+               Repo.get_by(GroupMembershipProjection,\n+                 group_id: fixture.group_id,\n+                 membership_id: fixture.target_membership_id\n+               )\n+    end\n+  end\n+\n   test \"a member can remove themselves as the final custom-group member\" do\n     club_id = Memba.ID.generate(:club)\n     group_id = Memba.ID.generate(:group)\n@@ -361,4 +390,38 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do\n       Keyword.put_new(opts, :consistency, :strong)\n     )\n   end\n+\n+  defp assert_remove_return_shape(\n+         {:ok, %Club{club_id: club_id}},\n+         {:returning, :aggregate_state},\n+         club_id\n+       ),\n+       do: :ok\n+\n+  defp assert_remove_return_shape({:ok, version}, return_mode, _club_id)\n+       when return_mode in [\n+              {:returning, :aggregate_version},\n+              {:include_aggregate_version, true}\n+            ] and is_integer(version),\n+       do: :ok\n+\n+  defp assert_remove_return_shape(\n+         {:ok, [%GroupMemberRemoved{}]},\n+         {:returning, :events},\n+         _club_id\n+       ),\n+       do: :ok\n+\n+  defp assert_remove_return_shape(\n+         {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}},\n+         return_mode,\n+         _club_id\n+       )\n+       when return_mode in [\n+              {:returning, :execution_result},\n+              {:include_execution_result, true}\n+            ],\n+       do: :ok\n+\n+  defp assert_remove_return_shape(:ok, {:returning, false}, _club_id), do: :ok\n end\ndiff --git a/web/test/memba/messaging/conversation_followers_test.exs b/web/test/memba/messaging/conversation_followers_test.exs\nindex dfc3ad7..ce56448 100644\n--- a/web/test/memba/messaging/conversation_followers_test.exs\n+++ b/web/test/memba/messaging/conversation_followers_test.exs\n@@ -149,20 +149,62 @@ defmodule Memba.Messaging.ConversationFollowersTest do\n       assert MapSet.member?(followed_again.follower_ids, member_id)\n     end\n \n-    test \"orders first cleanup delivery against a newer follow generation\" do\n-      conversation = followed_conversation(5)\n+    test \"records an older cleanup while preserving a newer follow and later rejects stale work\" do\n+      conversation = followed_conversation(6)\n       member_id = hd(MapSet.to_list(conversation.follower_ids))\n \n-      assert [] =\n+      assert %ConversationUnfollowed{\n+               cleanup_id: \"older-removal\",\n+               membership_generation: 5,\n+               follow_retained: true\n+             } =\n+               cleanup =\n                ConversationFollowers.execute(conversation, %UnfollowConversation{\n                  club_id: conversation.club_id,\n                  conversation_id: conversation.conversation_id,\n                  member_id: member_id,\n                  cleanup_id: \"older-removal\",\n-                 membership_generation: 4\n+                 membership_generation: 5\n                })\n \n-      assert MapSet.member?(conversation.follower_ids, member_id)\n+      cleaned = ConversationFollowers.apply(conversation, cleanup)\n+      assert MapSet.member?(cleaned.follower_ids, member_id)\n+      assert cleaned.cleanup_generations[member_id] == 5\n+\n+      assert %ConversationUnfollowed{cleanup_id: nil} =\n+               ordinary_unfollow =\n+               ConversationFollowers.execute(cleaned, %UnfollowConversation{\n+                 club_id: conversation.club_id,\n+                 conversation_id: conversation.conversation_id,\n+                 member_id: member_id\n+               })\n+\n+      unfollowed = ConversationFollowers.apply(cleaned, ordinary_unfollow)\n+      refute MapSet.member?(unfollowed.follower_ids, member_id)\n+      assert unfollowed.cleanup_generations[member_id] == 5\n+\n+      for source <- [:manual, :reply] do\n+        assert [] =\n+                 ConversationFollowers.execute(unfollowed, %FollowConversation{\n+                   club_id: conversation.club_id,\n+                   conversation_id: conversation.conversation_id,\n+                   member_id: member_id,\n+                   membership_generation: 4\n+                 }),\n+               \"expected delayed #{source} follow work to remain rejected\"\n+      end\n+\n+      stale_root =\n+        ConversationFollowers.apply(unfollowed, %MessageSent{\n+          message_id: conversation.conversation_id,\n+          club_id: conversation.club_id,\n+          sender_id: member_id,\n+          subject: \"Delayed root\",\n+          body: \"Prepared before removal.\",\n+          sender_membership_generation: 4\n+        })\n+\n+      refute MapSet.member?(stale_root.follower_ids, member_id)\n     end\n \n     test \"records a cleanup cutoff that rejects delayed stale follow work\" do\n@@ -327,7 +369,8 @@ defmodule Memba.Messaging.ConversationFollowersTest do\n         membership_generation: 2\n       })\n \n-    assert [] =\n+    assert %ConversationUnfollowed{} =\n+             cleanup =\n              ConversationFollowers.execute(followed_after_readd, %UnfollowConversation{\n                club_id: conversation.club_id,\n                conversation_id: conversation.conversation_id,\n@@ -336,7 +379,9 @@ defmodule Memba.Messaging.ConversationFollowersTest do\n                membership_generation: 1\n              })\n \n-    assert MapSet.member?(followed_after_readd.follower_ids, member_id)\n+    cleaned = ConversationFollowers.apply(followed_after_readd, cleanup)\n+    assert MapSet.member?(cleaned.follower_ids, member_id)\n+    assert cleaned.cleanup_generations[member_id] == 1\n   end\n \n   defp followed_conversation(generation \\\\ nil) do\ndiff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs\nindex 768f09d..5d4f89b 100644\n--- a/web/test/memba/messaging/post_message_reply_test.exs\n+++ b/web/test/memba/messaging/post_message_reply_test.exs\n@@ -15,6 +15,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do\n   alias Memba.Messaging\n   alias Memba.Messaging.App, as: MessagingApp\n   alias Memba.Messaging.Commands.SendMessage\n+  alias Memba.Messaging.Events.ConversationFollowed\n   alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.Events.MessageSent\n   alias Memba.Messaging.Recipient\n@@ -307,6 +308,34 @@ defmodule Memba.Messaging.PostMessageReplyTest do\n              )\n \n     refute Repo.get(MessageProjection, reply_message_id)\n+    refute Messaging.following_conversation?(root_message_id, bob.person_id)\n+    assert follow_events(root_message_id, bob.person_id) == []\n+  end\n+\n+  test \"a duplicate reply message ID emits neither a reply nor an author follow\" do\n+    club_id = Memba.ID.generate(:club)\n+    alice = create_person(name: \"Alice\", email: \"alice@example.com\")\n+    bob = create_person(name: \"Bob\", email: \"bob@example.com\")\n+\n+    add_member(club_id, alice.person_id)\n+    add_member(club_id, bob.person_id)\n+\n+    root_message_id = send_root_message(club_id, alice.person_id)\n+    duplicate_message_id = send_root_message(club_id, alice.person_id)\n+\n+    assert {:error, :already_sent} =\n+             Messaging.post_message_reply(\n+               %{\n+                 message_id: duplicate_message_id,\n+                 conversation_id: root_message_id,\n+                 sender_id: bob.person_id,\n+                 body: \"This ID already belongs to another message.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    refute Messaging.following_conversation?(root_message_id, bob.person_id)\n+    assert follow_events(root_message_id, bob.person_id) == []\n   end\n \n   defp send_root_message(club_id, sender_id) do\n@@ -382,6 +411,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do\n     |> Repo.all()\n   end\n \n+  defp follow_events(conversation_id, member_id) do\n+    conversation_id\n+    |> then(&Commanded.EventStore.stream_forward(MessagingApp, &1))\n+    |> Enum.flat_map(fn recorded_event ->\n+      case recorded_event.data do\n+        %ConversationFollowed{member_id: ^member_id} = event -> [event]\n+        _event -> []\n+      end\n+    end)\n+  end\n+\n   defp create_person(attrs) do\n     person = %{\n       person_id: Memba.ID.generate(:person),\ndiff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex\nindex d1b8dc5..9db5cdc 100644\n--- a/web/test/support/event_sourced_case.ex\n+++ b/web/test/support/event_sourced_case.ex\n@@ -27,6 +27,7 @@ defmodule Memba.EventSourcedCase do\n     Memba.Messaging.Projectors.InboundEmailSource\n   ]\n   @event_handlers [\n+    Memba.Messaging.Policies.EstablishMessageSenderFollow,\n     Memba.Membership.Policies.SystemGroupMembership,\n     Memba.Membership.Policies.ClearRemovedGroupMemberFollows\n   ]\n",
+        "summary": {
+          "files_changed": 37,
+          "additions": 2226,
+          "deletions": 322
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-21T12:53:24.253690059Z",
+        "current_node": "route_worker_result",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "implement_next_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "implement_next_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "revise_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "revise_task",
+          "route_worker_result"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.read_plan.current_node": "wip_gate",
           "internal.retry_count.resume_gate": 0,
           "last_response": "Implemented packet `004-7859157-03` with result `ready_for_review`.\n\nKey changes:\n\n- Added durable, Messaging-owned member/group cleanup cutoffs that survive replay and protect conversations created a",
@@ -12379,7 +12842,7 @@
           "internal.retry_count.all_tasks_done": 0,
           "thread.verify_source_head.current_node": "read_plan",
           "internal.work_dir": "/workspace/memba",
-          "internal.thread_id": "guard_delivery_packet",
+          "internal.thread_id": "revise_task",
           "thread.revise_task.current_node": "route_worker_result",
           "internal.retry_count.guard_delivery_packet": 0,
           "response.implement_next_task": "Packet `004-72f5ddc-01` is implemented with result `ready_for_review`.\n\nKey changes:\n\n- Custom-group add/remove operations now wait for durable follow cleanup while preserving existing Commanded return modes in [membership.ex](/workspace/memba/web/lib/memba/membership.ex:94).\n- The existing origin-replaying policy delegates through a public Messaging cleanup API using the Membership removal event ID as a durable idempotency token in [clear_removed_group_member_follows.ex](/workspace/memba/web/lib/memba/membership/policies/clear_removed_group_member_follows.ex:22).\n- Cleanup waits for relevant Messaging projections, preserves follows backed by another active group, and cannot falsely complete from a lagging access projection in [messaging.ex](/workspace/memba/web/lib/memba/messaging.ex:240).\n- `ConversationUnfollowed` records cleanup identity even for reply-author auto-follows that exist only in the projection. Replaying old cleanup cannot erase a newer post-re-add follow in [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:41).\n- Focused tests cover manual, root-sender, and reply-author follows; replay/idempotency; remove/re-add/follow ordering; unrelated/shared access; projection lag; and system-group no-ops in [clear_removed_group_member_follows_policy_test.exs](/workspace/memba/web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs:422).\n\nValidation passed:\n\n- Membership-focused suite: 32 tests, 0 failures.\n- Messaging-focused suite: 36 tests, 0 failures.\n- `git diff --check`: passed.\n- Worker-result JSON parsed successfully.\n\nThe required artifact is at [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). There are no unresolved items. `todo.md` remains untouched and task 004 remains unchecked for the workflow verdict. Per the packet exclusion, I did not run `dev check`; the deterministic workflow node owns that final gate.",
@@ -12390,7 +12853,7 @@
           "internal.retry_count.apply_task_verdict": 0,
           "internal.run_id": "01M31RZ6Z1Y1E3W5EK3YKGN8VW",
           "thread.route_worker_result.current_node": "validate_task",
-          "current_node": "revise_task",
+          "current_node": "route_worker_result",
           "graph.max_node_visits": "80",
           "graph.rankdir": "LR",
           "internal.retry_count.route_worker_result": 0,
@@ -12401,9 +12864,9 @@
           "thread.sync_task_list.current_node": "todo_readable",
           "failure_class": "",
           "outcome": "succeeded",
-          "command.output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733",
-          "internal.fidelity": "truncate",
-          "preferred_label": "revise",
+          "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
+          "internal.fidelity": "summary:high",
+          "preferred_label": "review",
           "thread.wip_gate.current_node": "preflight_sandbox",
           "thread.validate_task.current_node": "apply_task_verdict",
           "internal.retry_count.read_plan": 0,
@@ -12423,7 +12886,7 @@
             "reason": "Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects."
           },
           "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.\",\"reason\":\"Packet 004-4774dd4-02 is current, matches the first unchecked todo and matching ready_for_review result, preserves prior-attempt provenance, and reports focused validation passing at 35 and 41 tests plus git diff --check. However, stale ordering is still incomplete: ConversationFollowers returns no event when cleanup generation 5 encounters newer follow generation 6, so it records neither the cleanup cutoff nor ID; after an ordinary unfollow deletes generation 6, delayed generation-4 manual/root/reply follow work is accepted and can restore the pre-removal follow. Durably record the older cleanup without hiding the newer follow, and test cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed follow 4 rejected. Cleanup also performs one enumeration only through the removal checkpoint, so a pre-removal root send dispatched after cleanup completes creates a fresh conversation with no cutoff and restores its stale auto-follow; add a durable person/removal cutoff applicable to subsequently created conversation streams, or equivalent ordering, and test conversation creation after cleanup acknowledgement. Additionally, post_message_reply/2 currently persists FollowConversation before the reply aggregate validates and accepts the reply, so blank, duplicate or otherwise rejected replies leave a follow; establish reply auto-follow only from successful reply acceptance and add negative assertions. Complete the packet-required explicit-list and caller-selected return-mode coverage. An independent focused rerun was used because these semantic gaps contradicted the worker evidence; the suites still passed, confirming the missing assertions rather than disproving the defects.\"}",
-          "internal.node_visit_count": 2,
+          "internal.node_visit_count": 4,
           "thread.guard_delivery_packet.current_node": "revise_task",
           "last_stage": "revise_task",
           "thread.preflight_sandbox.current_node": "resume_gate",
@@ -12505,8 +12968,8 @@
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 159,
-              "active_time_ms": 159
+              "tool_time_ms": 163,
+              "active_time_ms": 163
             }
           },
           "todo_readable": {
@@ -12755,7 +13218,7 @@
             }
           }
         },
-        "next_node_id": "route_worker_result",
+        "next_node_id": "validate_task",
         "node_visits": {
           "before_delivery_planner": 4,
           "wip_gate": 1,
@@ -12763,7 +13226,7 @@
           "resume_gate": 1,
           "delivery_planner": 4,
           "validate_task": 3,
-          "route_worker_result": 3,
+          "route_worker_result": 4,
           "apply_task_verdict": 3,
           "verify_source_head": 1,
           "read_plan": 1,
@@ -12912,7 +13375,12 @@
       "first_event_seq": 6105,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: revise_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-21T12:53:19.843294353Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -12927,16 +13395,20 @@
       "started_at": "2026-09-21T12:33:21.264493833Z",
       "handler": "agent",
       "graph_visit": 2,
-      "live_inference_ms": 961352,
-      "live_tool_ms": 219968,
+      "timing": {
+        "wall_time_ms": 1198578,
+        "inference_time_ms": 978044,
+        "tool_time_ms": 219961,
+        "active_time_ms": 1198005
+      },
       "usage": {
-        "input_tokens": 4938585,
-        "output_tokens": 19148,
-        "total_tokens": 7412592,
-        "reasoning_tokens": 13003,
+        "input_tokens": 5106091,
+        "output_tokens": 19412,
+        "total_tokens": 7580518,
+        "reasoning_tokens": 13159,
         "cache_read_tokens": 2441856,
         "cache_write_tokens": 0,
-        "total_usd_micros": 26878383
+        "total_usd_micros": 27728513
       },
       "model": {
         "provider": "openai",
@@ -13051,54 +13523,43 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 167244,
-        "usage_percent": 61.48676470588235,
+        "input_tokens": 167506,
+        "usage_percent": 61.58308823529412,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-21T12:53:03.186690857Z",
-        "event_seq": 6608,
+        "generated_at": "2026-09-21T12:53:19.837138344Z",
+        "event_seq": 6616,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2462,
-            "usage_percent": 0.9051470588235294
+            "tokens": 2455,
+            "usage_percent": 0.9025735294117647
           },
           {
             "category": "tools",
-            "tokens": 753,
-            "usage_percent": 0.27683823529411766
+            "tokens": 751,
+            "usage_percent": 0.2761029411764706
           },
           {
             "category": "memory",
-            "tokens": 340,
-            "usage_percent": 0.125
+            "tokens": 339,
+            "usage_percent": 0.12463235294117647
           },
           {
             "category": "conversation",
-            "tokens": 163684,
-            "usage_percent": 60.17794117647059
+            "tokens": 163955,
+            "usage_percent": 60.27757352941177
           },
           {
             "category": "other",
-            "tokens": 5,
-            "usage_percent": 0.001838235294117647
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "cabbef89-00d2-4374-a7bf-7c21e4fb8312",
-        "started_at": "2026-09-21T12:53:03.190324173Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-21T12:53:13.799473115Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "verify_source_head@1": {
       "first_event_seq": 25,
@@ -15880,6 +16341,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "route_worker_result@4": {
+      "first_event_seq": 6626,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-21T12:53:24.081537846Z",
+      "handler": "command",
+      "graph_visit": 4,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "delivery_planner@1": {
       "first_event_seq": 115,
