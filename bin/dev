@@ -768,7 +768,14 @@ _setup() {
   mix local.rebar --force
 
   echo "Fetching web dependencies..."
-  (cd "$repo_root/web" && mix deps.get)
+  local deps_get_log
+  deps_get_log=$(mktemp)
+  if ! (cd "$repo_root/web" && mix deps.get) >"$deps_get_log" 2>&1; then
+    cat "$deps_get_log" >&2
+    rm -f "$deps_get_log"
+    return 1
+  fi
+  rm -f "$deps_get_log"
 
   echo "Checking acceptance-test dependencies..."
   (
@@ -968,7 +975,14 @@ sandbox_check() {
   start_postgres
 
   echo "Starting test dependency compile smoke test..."
-  (cd "$repo_root/web" && MIX_ENV=test mix deps.compile --force)
+  local deps_compile_log
+  deps_compile_log=$(mktemp)
+  if ! (cd "$repo_root/web" && MIX_ENV=test mix deps.compile --force) >"$deps_compile_log" 2>&1; then
+    cat "$deps_compile_log" >&2
+    rm -f "$deps_compile_log"
+    return 1
+  fi
+  rm -f "$deps_compile_log"
 
   echo "Sandbox runtime check passed."
 }
