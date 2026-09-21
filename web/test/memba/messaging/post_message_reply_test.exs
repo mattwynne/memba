@@ -15,6 +15,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Recipient
@@ -307,6 +308,34 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              )
 
     refute Repo.get(MessageProjection, reply_message_id)
+    refute Messaging.following_conversation?(root_message_id, bob.person_id)
+    assert follow_events(root_message_id, bob.person_id) == []
+  end
+
+  test "a duplicate reply message ID emits neither a reply nor an author follow" do
+    club_id = Memba.ID.generate(:club)
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+
+    add_member(club_id, alice.person_id)
+    add_member(club_id, bob.person_id)
+
+    root_message_id = send_root_message(club_id, alice.person_id)
+    duplicate_message_id = send_root_message(club_id, alice.person_id)
+
+    assert {:error, :already_sent} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: duplicate_message_id,
+                 conversation_id: root_message_id,
+                 sender_id: bob.person_id,
+                 body: "This ID already belongs to another message."
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(root_message_id, bob.person_id)
+    assert follow_events(root_message_id, bob.person_id) == []
   end
 
   defp send_root_message(club_id, sender_id) do
@@ -380,6 +409,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     |> where([delivery], delivery.message_id == ^message_id)
     |> order_by([delivery], asc: delivery.recipient_name)
     |> Repo.all()
+  end
+
+  defp follow_events(conversation_id, member_id) do
+    conversation_id
+    |> then(&Commanded.EventStore.stream_forward(MessagingApp, &1))
+    |> Enum.flat_map(fn recorded_event ->
+      case recorded_event.data do
+        %ConversationFollowed{member_id: ^member_id} = event -> [event]
+        _event -> []
+      end
+    end)
   end
 
   defp create_person(attrs) do

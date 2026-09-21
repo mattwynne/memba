@@ -635,7 +635,15 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              })
 
     assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
-    assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 0
+
+    assert [
+             %ConversationUnfollowed{
+               member_id: target_person_id,
+               follow_retained: true
+             }
+           ] = unfollow_events(shared_conversation_id, fixture.target_person_id)
+
+    assert target_person_id == fixture.target_person_id
   end
 
   test "first delayed removal delivery cannot erase newer follows after a genuine re-add" do
@@ -741,18 +749,52 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                fixture.target_person_id
              )
 
-      assert count_unfollow_events(current_conversation_id, fixture.target_person_id) == 0
+      assert count_unfollow_events(current_conversation_id, fixture.target_person_id) == 1
     end
 
-    assert [%ConversationFollowed{membership_generation: refreshed_generation}] =
-             follow_events(conversation_id, fixture.target_person_id)
+    assert [
+             %ConversationFollowed{membership_generation: initial_generation},
+             %ConversationFollowed{membership_generation: refreshed_generation}
+           ] = follow_events(conversation_id, fixture.target_person_id)
 
-    assert [%MessageSent{sender_membership_generation: initial_generation} | _events] =
+    assert [%MessageSent{sender_membership_generation: ^initial_generation} | _events] =
              conversation_id
              |> then(&EventStore.stream_forward(MessagingApp, &1))
              |> Enum.map(& &1.data)
 
     assert refreshed_generation > initial_generation
+  end
+
+  test "cleanup acknowledged before a prepared root is dispatched blocks its stale auto-follow" do
+    fixture = explicit_removal_fixture!()
+    conversation_id = Memba.ID.generate(:message)
+    prepared_generation = Membership.current_group_membership_generation(fixture.club_id)
+
+    prepared_send = %SendMessage{
+      message_id: conversation_id,
+      club_id: fixture.club_id,
+      sender_id: fixture.target_person_id,
+      audience_group_id: fixture.group_id,
+      subject: "Prepared before removal",
+      body: "Dispatched only after cleanup acknowledgement.",
+      sender_membership_generation: prepared_generation,
+      recipients: [
+        %Recipient{
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: fixture.target_person_id,
+          name: "Departing Member",
+          email: "departing@example.com"
+        }
+      ]
+    }
+
+    assert :ok = remove_custom_group_member(fixture)
+    stop_event_sourced_aggregate_instances!()
+
+    assert :ok = MessagingApp.dispatch(prepared_send, consistency: :strong)
+
+    assert [] = follow_events(conversation_id, fixture.target_person_id)
+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
   end
 
   test "public eventual removal, re-add, and exact retry await durable cleanup progress" do

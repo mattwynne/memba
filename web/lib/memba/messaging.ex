@@ -20,6 +20,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
+  alias Memba.Messaging.Commands.RecordMemberFollowCleanup
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationAccess
@@ -36,7 +37,9 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
+  alias Memba.Messaging.MemberFollowEligibility
   alias Memba.Messaging.OutboundMessageID
+  alias Memba.Messaging.Policies.EstablishMessageSenderFollow
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
@@ -79,7 +82,8 @@ defmodule Memba.Messaging do
   def send_club_message(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- send_club_message_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+         {:ok, dispatch_result} <-
+           dispatch_command(command, message_sender_follow_consistency(dispatch_opts)) do
       dispatch_result
     end
   end
@@ -104,7 +108,8 @@ defmodule Memba.Messaging do
                {:ok, command}
              end
            end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+         {:ok, dispatch_result} <-
+           dispatch_command(command, message_sender_follow_consistency(dispatch_opts)) do
       dispatch_result
     end
   end
@@ -131,8 +136,8 @@ defmodule Memba.Messaging do
              end,
              projections: [ConversationFollowProjector]
            ),
-         :ok <- establish_reply_follow(command, dispatch_opts),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+         {:ok, dispatch_result} <-
+           dispatch_command(command, message_sender_follow_consistency(dispatch_opts)) do
       dispatch_result
     end
   end
@@ -258,6 +263,15 @@ defmodule Memba.Messaging do
          {:ok, cleanup_id} <- fetch_cleanup_id(attrs),
          {:ok, membership_generation} <- fetch_membership_generation(attrs),
          {:ok, checkpoint} <- fetch_cleanup_checkpoint(attrs),
+         :ok <-
+           record_member_follow_cleanup(
+             club_id,
+             group_id,
+             member_id,
+             cleanup_id,
+             membership_generation,
+             dispatch_opts
+           ),
          :ok <- await_removed_group_follow_cleanup_projections(checkpoint) do
       group_id
       |> list_conversations_for_group()
@@ -279,6 +293,34 @@ defmodule Memba.Messaging do
           {:error, _reason} = error -> {:halt, error}
         end
       end)
+    end
+  end
+
+  @doc false
+  def establish_message_sender_follow(%Memba.Messaging.Events.MessageSent{} = event) do
+    eligibility =
+      App.aggregate_state(
+        MemberFollowEligibility,
+        MemberFollowEligibility.identity(event.sender_id)
+      )
+
+    group_ids = sender_follow_group_ids(event)
+
+    if MemberFollowEligibility.follow_allowed?(
+         eligibility,
+         event.club_id,
+         group_ids,
+         event.sender_membership_generation
+       ) do
+      %FollowConversation{
+        club_id: event.club_id,
+        conversation_id: event.conversation_id || event.message_id,
+        member_id: event.sender_id,
+        membership_generation: event.sender_membership_generation
+      }
+      |> dispatch_ok(consistency: [ConversationFollowProjector])
+    else
+      :ok
     end
   end
 
@@ -1856,8 +1898,7 @@ defmodule Memba.Messaging do
                end
              end,
              projections: [ConversationFollowProjector]
-           ),
-         :ok <- establish_reply_follow(command, dispatch_opts) do
+           ) do
       dispatch_inbound_message_once(command, dispatch_opts)
     end
   end
@@ -1867,7 +1908,7 @@ defmodule Memba.Messaging do
   end
 
   defp dispatch_inbound_message_once(command, dispatch_opts) do
-    case dispatch_ok(command, dispatch_opts) do
+    case dispatch_ok(command, message_sender_follow_consistency(dispatch_opts)) do
       :ok -> :ok
       {:error, :already_sent} -> confirm_matching_inbound_message(command)
       {:error, _reason} = error -> error
@@ -2180,6 +2221,69 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp record_member_follow_cleanup(
+         club_id,
+         group_id,
+         member_id,
+         cleanup_id,
+         membership_generation,
+         dispatch_opts
+       ) do
+    %RecordMemberFollowCleanup{
+      eligibility_id: MemberFollowEligibility.identity(member_id),
+      club_id: club_id,
+      group_id: group_id,
+      member_id: member_id,
+      cleanup_id: cleanup_id,
+      membership_generation: membership_generation
+    }
+    |> dispatch_ok(dispatch_opts)
+  end
+
+  defp sender_follow_group_ids(%{message_id: message_id, conversation_id: message_id} = event) do
+    List.wrap(event.audience_group_id)
+  end
+
+  defp sender_follow_group_ids(%{conversation_id: conversation_id}) do
+    case App.aggregate_state(Message, conversation_id) do
+      %Message{group_access: group_access} -> Map.keys(group_access)
+      _missing_conversation -> []
+    end
+  end
+
+  defp message_sender_follow_consistency(dispatch_opts) do
+    Keyword.update(
+      dispatch_opts,
+      :consistency,
+      [EstablishMessageSenderFollow],
+      fn
+        :strong ->
+          :strong
+
+        :eventual ->
+          [EstablishMessageSenderFollow]
+
+        handlers when is_list(handlers) ->
+          if Enum.any?(handlers, &message_sender_follow_handler?/1) do
+            handlers
+          else
+            [EstablishMessageSenderFollow | handlers]
+          end
+
+        consistency ->
+          consistency
+      end
+    )
+  end
+
+  defp message_sender_follow_handler?(EstablishMessageSenderFollow), do: true
+
+  defp message_sender_follow_handler?(handler) when is_binary(handler) do
+    handler == inspect(EstablishMessageSenderFollow)
+  end
+
+  defp message_sender_follow_handler?(_handler), do: false
+
   defp clear_removed_group_member_follow(
          conversation_id,
          club_id,
@@ -2233,16 +2337,6 @@ defmodule Memba.Messaging do
           consistency
       end
     )
-  end
-
-  defp establish_reply_follow(%PostMessageReply{} = command, dispatch_opts) do
-    %FollowConversation{
-      club_id: command.club_id,
-      conversation_id: command.conversation_id,
-      member_id: command.sender_id,
-      membership_generation: command.sender_membership_generation
-    }
-    |> dispatch_ok(dispatch_opts)
   end
 
   defp report_email_delivery_delivered_command(attrs) do

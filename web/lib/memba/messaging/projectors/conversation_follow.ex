@@ -38,7 +38,13 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do
   end)
 
   project(%ConversationUnfollowed{} = event, fn multi ->
-    upsert_follow(multi, event.club_id, event.conversation_id, event.member_id, false)
+    upsert_follow(
+      multi,
+      event.club_id,
+      event.conversation_id,
+      event.member_id,
+      event.follow_retained == true
+    )
   end)
 
   @impl Commanded.Projections.Ecto

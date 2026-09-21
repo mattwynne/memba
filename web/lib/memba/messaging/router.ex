@@ -6,6 +6,7 @@ defmodule Memba.Messaging.Router do
   use Commanded.Commands.Router
 
   alias Memba.Messaging.InboundEmailReceipt
+  alias Memba.Messaging.MemberFollowEligibility
   alias Memba.Messaging.Message
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
@@ -20,11 +21,13 @@ defmodule Memba.Messaging.Router do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
+  alias Memba.Messaging.Commands.RecordMemberFollowCleanup
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
 
   identify(InboundEmailReceipt, by: :inbound_email_id)
   identify(ConversationFollowers, by: :conversation_id)
+  identify(MemberFollowEligibility, by: :eligibility_id)
 
   dispatch([ReceiveInboundEmail, AcceptInboundClubEmail, RejectInboundClubEmail],
     to: InboundEmailReceipt
@@ -54,4 +57,5 @@ defmodule Memba.Messaging.Router do
   )
 
   dispatch([FollowConversation, UnfollowConversation], to: ConversationFollowers)
+  dispatch(RecordMemberFollowCleanup, to: MemberFollowEligibility)
 end

@@ -55,14 +55,8 @@ defmodule Memba.Messaging.ConversationFollowers do
     with :ok <- validate_command(command),
          :ok <- validate_same_conversation(conversation, command),
          :ok <- validate_same_club(conversation, command) do
-      cleanup_generation = normalize_generation(command.membership_generation)
-
       cond do
         cleanup_completed?(conversation, command.cleanup_id) ->
-          []
-
-        is_binary(command.cleanup_id) and
-            cleanup_generation < follower_generation(conversation, command.member_id) ->
           []
 
         MapSet.member?(conversation.follower_ids, command.member_id) or
@@ -73,7 +67,11 @@ defmodule Memba.Messaging.ConversationFollowers do
             conversation_id: command.conversation_id,
             member_id: command.member_id,
             cleanup_id: command.cleanup_id,
-            membership_generation: command.membership_generation
+            membership_generation: command.membership_generation,
+            follow_retained:
+              is_binary(command.cleanup_id) and
+                normalize_generation(command.membership_generation) <
+                  follower_generation(conversation, command.member_id)
           }
 
         true ->

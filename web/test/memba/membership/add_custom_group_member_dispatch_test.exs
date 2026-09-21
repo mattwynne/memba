@@ -4,6 +4,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.App
+  alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -11,6 +12,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
@@ -140,6 +142,38 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                target_person_id,
                actor_person_id
              )
+  end
+
+  test "add_custom_group_member/2 preserves every supported Commanded return shape with list consistency" do
+    for return_mode <- [
+          {:returning, :aggregate_state},
+          {:returning, :aggregate_version},
+          {:returning, :events},
+          {:returning, :execution_result},
+          {:returning, false},
+          {:include_execution_result, true},
+          {:include_aggregate_version, true}
+        ] do
+      fixture = custom_group_admission_fixture!()
+
+      result =
+        add_custom_group_member(
+          fixture.club_id,
+          fixture.group_id,
+          fixture.target_membership_id,
+          fixture.target_person_id,
+          fixture.actor_person_id,
+          [return_mode, consistency: [MembershipProjector]]
+        )
+
+      assert_add_return_shape(result, return_mode, fixture.club_id)
+
+      assert %GroupMembershipProjection{active: true} =
+               Repo.get_by(GroupMembershipProjection,
+                 group_id: fixture.group_id,
+                 membership_id: fixture.target_membership_id
+               )
+    end
   end
 
   test "add_custom_group_member/2 lets an active Admin outside the group admit another member without joining" do
@@ -404,6 +438,62 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                consistency: :strong
              )
   end
+
+  defp custom_group_admission_fixture! do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+
+    create_club!(club_id)
+    create_member!(club_id, actor_membership_id, actor_person_id)
+    create_member!(club_id, target_membership_id, target_person_id)
+    create_custom_group!(club_id, group_id, actor_person_id)
+
+    %{
+      club_id: club_id,
+      group_id: group_id,
+      actor_person_id: actor_person_id,
+      target_person_id: target_person_id,
+      target_membership_id: target_membership_id
+    }
+  end
+
+  defp assert_add_return_shape(
+         {:ok, %Club{club_id: club_id}},
+         {:returning, :aggregate_state},
+         club_id
+       ),
+       do: :ok
+
+  defp assert_add_return_shape({:ok, version}, return_mode, _club_id)
+       when return_mode in [
+              {:returning, :aggregate_version},
+              {:include_aggregate_version, true}
+            ] and is_integer(version),
+       do: :ok
+
+  defp assert_add_return_shape(
+         {:ok, [%GroupMemberAdded{}]},
+         {:returning, :events},
+         _club_id
+       ),
+       do: :ok
+
+  defp assert_add_return_shape(
+         {:ok, %ExecutionResult{events: [%GroupMemberAdded{}]}},
+         return_mode,
+         _club_id
+       )
+       when return_mode in [
+              {:returning, :execution_result},
+              {:include_execution_result, true}
+            ],
+       do: :ok
+
+  defp assert_add_return_shape(:ok, {:returning, false}, _club_id), do: :ok
 
   defp create_custom_group!(club_id, group_id, actor_person_id) do
     assert :ok =

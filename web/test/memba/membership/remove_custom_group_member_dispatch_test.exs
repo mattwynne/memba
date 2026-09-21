@@ -11,6 +11,7 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Permissions
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -109,6 +110,34 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
              fixture
              |> Map.put(:target_person_id, fixture.actor_person_id)
              |> remove_custom_group_member()
+  end
+
+  test "remove_custom_group_member/2 preserves every supported Commanded return shape with list consistency" do
+    for return_mode <- [
+          {:returning, :aggregate_state},
+          {:returning, :aggregate_version},
+          {:returning, :events},
+          {:returning, :execution_result},
+          {:returning, false},
+          {:include_execution_result, true},
+          {:include_aggregate_version, true}
+        ] do
+      fixture = custom_group_with_target!()
+
+      result =
+        remove_custom_group_member(fixture, [
+          return_mode,
+          consistency: [MembershipProjector]
+        ])
+
+      assert_remove_return_shape(result, return_mode, fixture.club_id)
+
+      assert %GroupMembershipProjection{active: false} =
+               Repo.get_by(GroupMembershipProjection,
+                 group_id: fixture.group_id,
+                 membership_id: fixture.target_membership_id
+               )
+    end
   end
 
   test "a member can remove themselves as the final custom-group member" do
@@ -361,4 +390,38 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
       Keyword.put_new(opts, :consistency, :strong)
     )
   end
+
+  defp assert_remove_return_shape(
+         {:ok, %Club{club_id: club_id}},
+         {:returning, :aggregate_state},
+         club_id
+       ),
+       do: :ok
+
+  defp assert_remove_return_shape({:ok, version}, return_mode, _club_id)
+       when return_mode in [
+              {:returning, :aggregate_version},
+              {:include_aggregate_version, true}
+            ] and is_integer(version),
+       do: :ok
+
+  defp assert_remove_return_shape(
+         {:ok, [%GroupMemberRemoved{}]},
+         {:returning, :events},
+         _club_id
+       ),
+       do: :ok
+
+  defp assert_remove_return_shape(
+         {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}},
+         return_mode,
+         _club_id
+       )
+       when return_mode in [
+              {:returning, :execution_result},
+              {:include_execution_result, true}
+            ],
+       do: :ok
+
+  defp assert_remove_return_shape(:ok, {:returning, false}, _club_id), do: :ok
 end

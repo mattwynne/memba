@@ -149,20 +149,62 @@ defmodule Memba.Messaging.ConversationFollowersTest do
       assert MapSet.member?(followed_again.follower_ids, member_id)
     end
 
-    test "orders first cleanup delivery against a newer follow generation" do
-      conversation = followed_conversation(5)
+    test "records an older cleanup while preserving a newer follow and later rejects stale work" do
+      conversation = followed_conversation(6)
       member_id = hd(MapSet.to_list(conversation.follower_ids))
 
-      assert [] =
+      assert %ConversationUnfollowed{
+               cleanup_id: "older-removal",
+               membership_generation: 5,
+               follow_retained: true
+             } =
+               cleanup =
                ConversationFollowers.execute(conversation, %UnfollowConversation{
                  club_id: conversation.club_id,
                  conversation_id: conversation.conversation_id,
                  member_id: member_id,
                  cleanup_id: "older-removal",
-                 membership_generation: 4
+                 membership_generation: 5
                })
 
-      assert MapSet.member?(conversation.follower_ids, member_id)
+      cleaned = ConversationFollowers.apply(conversation, cleanup)
+      assert MapSet.member?(cleaned.follower_ids, member_id)
+      assert cleaned.cleanup_generations[member_id] == 5
+
+      assert %ConversationUnfollowed{cleanup_id: nil} =
+               ordinary_unfollow =
+               ConversationFollowers.execute(cleaned, %UnfollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id
+               })
+
+      unfollowed = ConversationFollowers.apply(cleaned, ordinary_unfollow)
+      refute MapSet.member?(unfollowed.follower_ids, member_id)
+      assert unfollowed.cleanup_generations[member_id] == 5
+
+      for source <- [:manual, :reply] do
+        assert [] =
+                 ConversationFollowers.execute(unfollowed, %FollowConversation{
+                   club_id: conversation.club_id,
+                   conversation_id: conversation.conversation_id,
+                   member_id: member_id,
+                   membership_generation: 4
+                 }),
+               "expected delayed #{source} follow work to remain rejected"
+      end
+
+      stale_root =
+        ConversationFollowers.apply(unfollowed, %MessageSent{
+          message_id: conversation.conversation_id,
+          club_id: conversation.club_id,
+          sender_id: member_id,
+          subject: "Delayed root",
+          body: "Prepared before removal.",
+          sender_membership_generation: 4
+        })
+
+      refute MapSet.member?(stale_root.follower_ids, member_id)
     end
 
     test "records a cleanup cutoff that rejects delayed stale follow work" do
@@ -327,7 +369,8 @@ defmodule Memba.Messaging.ConversationFollowersTest do
         membership_generation: 2
       })
 
-    assert [] =
+    assert %ConversationUnfollowed{} =
+             cleanup =
              ConversationFollowers.execute(followed_after_readd, %UnfollowConversation{
                club_id: conversation.club_id,
                conversation_id: conversation.conversation_id,
@@ -336,7 +379,9 @@ defmodule Memba.Messaging.ConversationFollowersTest do
                membership_generation: 1
              })
 
-    assert MapSet.member?(followed_after_readd.follower_ids, member_id)
+    cleaned = ConversationFollowers.apply(followed_after_readd, cleanup)
+    assert MapSet.member?(cleaned.follower_ids, member_id)
+    assert cleaned.cleanup_generations[member_id] == 1
   end
 
   defp followed_conversation(generation \\ nil) do

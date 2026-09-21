@@ -311,10 +311,12 @@ defmodule Memba.Messaging.Message do
         sender_id: command.sender_id,
         conversation_id: conversation_id,
         reply_to_message_id: reply_to_message_id,
+        audience_group_id: audience_group_id,
         subject: subject,
         body: body,
         sender_membership_generation: command.sender_membership_generation,
-        sender_follows_conversation: sender_follows_conversation?(command, recipients)
+        sender_follow_requested: sender_follows_conversation?(command, recipients),
+        sender_follows_conversation: false
       }
 
       [message_sent] ++
