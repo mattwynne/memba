@@ -1,0 +1,263 @@
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
+index 0376e9a..2e492ef 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
+@@ -1,40 +1,42 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "004-7859157-03",
++  "packet_id": "004-747c0b2-04",
+   "task_id": "004",
+   "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
+   "attempt": "revision",
+   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+-  "source_baseline": "78591570e55f275bc64b956712588903784b5126",
+-  "outcome": "Finish task 004 by making removal ordering durable even when an older cleanup preserves a newer follow or a pre-removal send creates its conversation after cleanup acknowledgement, and by making reply auto-follow contingent on successful reply acceptance.",
++  "source_baseline": "747c0b2351e7accbfed91acfd17dbd88f0d1f7e6",
++  "outcome": "Finish task 004 by durably recording a removal cutoff for shared-access conversations without dropping their valid follow, and by synchronizing cleanup enumeration through the Messaging-owned cleanup checkpoint so an interleaved stale root cannot restore a follow.",
+   "scope": [
+-    "Revise the current task-004 candidate in place and retain its Club-owned membership generations, public `Memba.Membership.Policies.ClearRemovedGroupMemberFollows` to `Memba.Messaging` boundary, projection checkpoint barrier, effective-access-union check, idempotent Messaging facts, and custom-group add/remove completion contract.",
+-    "Correct `Memba.Messaging.ConversationFollowers.execute/2` for cleanup generation 5 against current follow generation 6: preserve the newer follow while durably recording cleanup ID/cutoff 5. After an ordinary user unfollow removes generation 6, delayed manual, root-sender, or reply-author follow work at generation 4 must still be rejected rather than restoring pre-removal state.",
+-    "Make an acknowledged removal cutoff apply to relevant conversation streams created later. A root send authorized/prepared at an older generation and dispatched only after `clear_removed_group_member_follows/2` completes must not create a fresh stale auto-follow merely because the cleanup's one-time conversation enumeration could not see that stream. Use a durable person/removal cutoff or an equivalent event-sourced ordering mechanism through public Messaging APIs; do not rely on a transient process cache or direct projection mutation.",
+-    "Change `Memba.Messaging.post_message_reply/2` orchestration so reply-author auto-follow is established only if the `PostMessageReply` command is accepted. Blank, duplicate-message-id, or otherwise rejected replies must emit neither `ConversationFollowed` nor effective follow state. Audit `post_inbound_club_message_reply/5`, which uses the same pre-dispatch helper, and keep all reply entry points on the same success-only rule. Preserve successful reply dispatch return values, generation ordering, recipient behavior, and deterministic projection replay.",
+-    "Add focused deterministic tests for both ordering holes and reply rejection. Cover cleanup 5 -> follow 6 preserved -> ordinary unfollow -> delayed generation-4 manual/root/reply work rejected; a pre-removal root send dispatched after cleanup acknowledgement; and rejected blank plus duplicate (or equivalent aggregate-rejected) replies leaving no follow fact/state.",
+-    "Complete the packet-required dispatch-option matrix with explicit list-based consistency and every supported caller-selected Commanded return shape used by these APIs: `returning: :aggregate_state`, `:aggregate_version`, `:events`, `:execution_result`, and `false`, plus `include_execution_result` and `include_aggregate_version`. Prove public custom-group add/remove calls still wait for durable cleanup where promised and return the selected shape. Retain existing default, `:strong`, `:eventual`, event-free exact-retry, and `{:ok, result}` unfollow coverage.",
+-    "Keep and rerun the existing focused proof for manual/root/reply follow sources, historic absent-generation replay, delayed first cleanup, shared/unrelated access, projection lag, idempotency, and direct Everyone/Admin no-ops; adjust only where the corrected event contract requires it."
++    "Revise the current task-004 candidate in place. Retain its Club-owned membership generations, Messaging-owned `MemberFollowEligibility` cutoff stream, success-only sender-follow policy, retained-newer-follow event semantics, public Membership-to-Messaging cleanup boundary, and custom-group add/remove completion contract.",
++    "Change the shared-access branch of `Memba.Messaging.clear_removed_group_member_follow/7`: when another active group still grants authoritative conversation access, preserve the current follow but still dispatch an idempotent cleanup command/fact that records this removal generation in `Memba.Messaging.ConversationFollowers`. Do not encode preservation only as `cleanup_generation < current_follow_generation`; shared access can require retention when the generations are equal.",
++    "Keep effective-access union semantics intact. The surviving group continues to authorize and retain the shared follow, while the removed group's cutoff remains durable after an ordinary unfollow. Delayed manual or reply-auto work at or before that removal generation must then be rejected, and genuinely newer post-re-add follow work must remain allowed.",
++    "Make `Memba.Messaging.clear_removed_group_member_follows/2` wait its Message, conversation-access, and conversation-follow projectors through a durable checkpoint at or after the newly appended `MemberFollowCleanupRecorded`, not only through the originating Membership `GroupMemberRemoved` checkpoint. Preserve idempotent event-free retries by deriving or retaining a safe cleanup checkpoint when `RecordMemberFollowCleanup` emits no new event.",
++    "Add deterministic integration proof for the exact interleaving: a stale root `MessageSent` commits after the Membership removal checkpoint but before `MemberFollowCleanupRecorded`; its sender-follow policy reads the old eligibility state; its conversation is still unprojected at the old checkpoint; cleanup must not acknowledge until projectors cross the Messaging cleanup checkpoint, must discover and cut off the conversation, and must leave no effective follow.",
++    "Update shared/unrelated-access tests so the unrelated-only conversation receives no cleanup fact, while the shared conversation remains followed and receives one retained, idempotent cutoff fact. Then ordinarily unfollow it and prove delayed pre-removal manual and actual reply-auto follow work cannot restore it.",
++    "Keep and rerun the current focused proof for manual/root/reply sources, newer-follow retention, cleanup-before-later-stream creation, blank/duplicate reply rejection, remove/re-add races, projection lag, replay/idempotency, dispatch options, caller-selected return modes, unrelated follows, and Everyone/Admin no-ops."
+   ],
+   "scope_exclusions": [
+-    "Do not replace task 004 with a new task or reset its revision identity. Both prior candidate origins remain cumulative and unresolved until review accepts this obligation.",
++    "Do not replace task 004 with a new task or reset its revision identity. All three prior candidate origins remain cumulative and unresolved until review accepts this obligation.",
++    "Do not weaken effective-access union by requiring every conversation group to pass member-level eligibility. A valid surviving group still grants access; the missing invariant is the durable per-conversation cutoff for the removed group.",
+     "Do not change task 001's accepted removal authorization, actor/target validation, self/last-member behavior, club role/membership preservation, system-group rejection, or `GroupMemberRemoved`-only transition semantics except for backward-compatible task-004 ordering data.",
++    "Do not revisit already-closed prior gaps unless a regression requires it: success-only reply auto-follow, conversations created after fully acknowledged cleanup, retained newer follows, explicit consistency lists, and supported Commanded return shapes already have candidate coverage.",
+     "Do not implement broader group/conversation read or action authorization, queued-delivery/provider-handoff reauthorization, or open-LiveView refresh assigned to tasks 009-011.",
+     "Do not add Leave/Remove UI, confirmations, shared member-row changes, post-removal screens, or empty-group UI behavior assigned to tasks 012-014.",
+     "Do not edit iteration-064 feature files or implement the browser/domain acceptance layer assigned to tasks 015-016.",
+-    "Do not mutate Membership projections from Messaging or Messaging projections from Membership. Preserve the separate bounded contexts and coordinate through public APIs and durable commands/facts.",
++    "Do not mutate Membership projections from Messaging or Messaging projections from Membership, use transient process caches for ordering, or directly write projection tables. Preserve public context APIs and durable commands/facts.",
+     "Do not redesign unrelated delivery, conversation authorization, multi-group editing, projection infrastructure, or club role lifecycle.",
+     "Do not run `dev check`, `dev check --quick`, `dev ci`, browser acceptance, or another unscoped full-suite command; task 017 and the deterministic `dev_check` node own the final repository gate."
+   ],
+   "references": [
+     {
+       "path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+-      "facts": "Implementation Plan 2 and the acceptance/open-technical-decision text require public Messaging APIs, idempotent facts, all manual/root/reply follow sources, stale remove/re-add safety, unrelated-follow preservation, and unchanged system-group behavior."
++      "facts": "Implementation Plan 2 and the acceptance/open-technical-decision text require public Messaging APIs, idempotent facts, all follow sources, stale remove/re-add safety, unrelated-follow preservation, and unchanged system-group behavior."
+     },
+     {
+       "path": "docs/iterations/062-create-custom-groups/plan.md",
+-      "facts": "Iteration 062 established the origin-replaying Membership-to-Messaging cleanup collaboration and requires departure/rejoin ordering; task 004 extends that same collaboration to explicit custom-group removal."
++      "facts": "Iteration 062 established the replay-safe Membership-to-Messaging cleanup collaboration and requires departure/rejoin ordering; task 004 extends that boundary to explicit custom-group removal."
+     },
+     {
+       "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
+@@ -44,66 +46,59 @@
+       "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+       "facts": "The Club stream is authoritative for membership lifecycle and preserves historic facts; system-group membership remains a downstream policy consequence."
+     },
+-    {
+-      "path": "web/lib/memba/messaging/conversation_followers.ex",
+-      "facts": "`execute/2` currently returns `[]` when cleanup generation is older than the current follow, so no `ConversationUnfollowed` records that cleanup ID/cutoff. An ordinary unfollow later deletes the newer follower generation, allowing delayed older follow work to apply."
+-    },
+     {
+       "path": "web/lib/memba/messaging.ex",
+-      "facts": "`clear_removed_group_member_follows/2` currently enumerates `list_conversations_for_group/1` only once, leaving later-created streams without the removal cutoff. `post_message_reply/2` and `post_inbound_club_message_reply/5` call `establish_reply_follow/2` before dispatching `PostMessageReply`, so aggregate rejection can leave a follow."
++      "facts": "`clear_removed_group_member_follow/7` currently returns `:ok` when another group preserves access, skipping the `UnfollowConversation` cutoff entirely. `clear_removed_group_member_follows/2` appends `MemberFollowCleanupRecorded` but calls `await_removed_group_follow_cleanup_projections/1` with the earlier Membership checkpoint."
+     },
+     {
+-      "path": "web/lib/memba/messaging/message.ex",
+-      "facts": "`Message.execute/2` is the authoritative acceptance boundary for `PostMessageReply`, including blank-body and duplicate-message rejection. Follow establishment must be causally downstream of successful acceptance."
++      "path": "web/lib/memba/messaging/conversation_followers.ex",
++      "facts": "`ConversationFollowers` already keeps cleanup generations across ordinary unfollow and supports retained cleanup facts, but retention currently derives only from an older cleanup generation; shared access needs an explicit durable retain-with-cutoff contract."
+     },
+     {
+-      "path": "web/lib/memba/membership.ex",
+-      "facts": "The public custom-group add/remove paths preserve Commanded consistency and returning options while waiting on durable cleanup progress. Extend tests without regressing default, eventual, event-free retry, or selected return shapes."
++      "path": "web/lib/memba/messaging/member_follow_eligibility.ex",
++      "facts": "Member-level eligibility correctly permits a follow through any surviving access group. It cannot replace the missing conversation-specific cutoff after shared access and an ordinary unfollow."
+     },
+     {
+-      "path": "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
+-      "facts": "The strong origin-replaying handler carries Club-owned membership generation, event identity, and checkpoint into the public Messaging cleanup API. Preserve origin replay and system-group no-op behavior."
++      "path": "web/lib/memba/messaging/policies/establish_message_sender_follow.ex",
++      "facts": "The strong sender-follow policy reads Messaging-owned eligibility after `MessageSent`. The new interleaving test must prove cleanup catches stale work accepted before `MemberFollowCleanupRecorded` but not yet visible at the older Membership checkpoint."
+     },
+     {
+-      "path": "web/test/memba/messaging/conversation_followers_test.exs",
+-      "facts": "The existing older-cleanup test asserts only `[]` and preservation of generation 5; it does not apply a durable cutoff, ordinarily unfollow the newer state, then prove delayed generation-4 manual/root/reply work remains rejected."
++      "path": "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
++      "facts": "The origin-replaying handler supplies the Membership removal event identity, generation, and event-number checkpoint to the public Messaging cleanup API. Preserve origin replay and direct Everyone/Admin no-op behavior."
+     },
+     {
+       "path": "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
+-      "facts": "Existing generation and suspended-handler tests create known conversations before manual cleanup handling. Add a send whose conversation stream is first created after cleanup acknowledgement, plus explicit-list consistency and caller-returning coverage."
++      "facts": "The shared-access test currently expects zero cleanup events on the shared conversation, and the late-root test dispatches only after cleanup fully returns. Update the former and add a deterministic between-checkpoints interleaving using existing handler suspension, projector stop/restart, barriers, and `Task.yield/2` patterns."
+     },
+     {
+-      "path": "web/test/memba/messaging/post_message_reply_test.exs",
+-      "facts": "Current rejection tests assert no reply projection but do not assert absence of `ConversationFollowed` facts/effective follow state. Add negative assertions for blank and duplicate or another aggregate-rejected reply."
+-    },
+-    {
+-      "path": "web/test/memba/messaging/conversation_follow_projection_test.exs",
+-      "facts": "Successful root and reply `MessageSent` auto-follow projection behavior must remain deterministic after reply orchestration changes."
++      "path": "web/test/memba/messaging/conversation_followers_test.exs",
++      "facts": "Current retained-cutoff coverage proves only cleanup generation 5 against follow generation 6. Add aggregate proof that explicit shared-access retention records a cutoff without dropping an equal-generation valid follow and survives ordinary unfollow."
+     },
+     {
+       "path": "docs/reference/cqrs.md",
+-      "facts": "Commands and aggregate events remain the write authority; read projections may lag and must not become the source of the ordering invariant."
++      "facts": "Commands/events remain the write authority; lagging read projections may guide enumeration only after the required durable checkpoint."
+     },
+     {
+       "path": "docs/reference/event-sourcing.md",
+-      "facts": "Ordering and replay behavior must be represented by durable, backward-compatible facts rather than ephemeral workflow memory."
++      "facts": "Ordering and replay behavior must be represented by durable, backward-compatible facts rather than ephemeral workflow memory or projection-only state."
+     },
+     {
+       "path": "docs/reference/elixir-mix-tests.md",
+-      "facts": "Use focused tests and deterministic synchronization such as supervised processes, monitors, `Task.yield/2`, handler suspension, or state barriers rather than sleeps."
++      "facts": "Use deterministic synchronization such as supervised processes, handler suspension, monitors, `Task.yield/2`, and state/barrier checks rather than sleeps."
+     }
+   ],
+   "constraints": [
+     "Keep task identity 004 and revise the existing candidate; do not invent another task for the same rejected obligation.",
+     "Use Club-owned membership history as the causal source and Messaging-owned event-sourced state as the follow authority. Do not query another context's aggregate internals or directly write projection tables.",
+-    "Recording an older cleanup must not hide or unfollow a genuinely newer follow. It must only preserve the cutoff needed to reject work at or before that removal generation.",
+-    "The late-conversation solution must survive process restart/replay and apply before stale root/reply/manual follow establishment can become authoritative; a post-enumeration projection sweep alone is insufficient.",
+-    "Ordinary user unfollow semantics remain distinct from membership-removal cleanup. A later valid follow above the durable cleanup cutoff must still be possible.",
+-    "Reply auto-follow must reflect a successfully accepted reply and remain authoritative for reply-only authors; do not solve rejection leakage by dropping reply auto-follow coverage.",
+-    "Preserve backward replay of historic `GroupMemberAdded`, `GroupMemberRemoved`, `MessageSent`, `ConversationFollowed`, and `ConversationUnfollowed` shapes with absent generation/order fields.",
++    "Every relevant shared conversation must durably record the removed-group cutoff while retaining a currently valid shared follow. An unrelated conversation must remain untouched.",
++    "Ordinary user unfollow remains distinct from membership cleanup and must not erase prior cleanup generations or completed cleanup IDs.",
++    "Delayed work at or before the removed generation must remain rejected after ordinary unfollow; a valid follow above the cutoff after genuine re-add must remain possible.",
++    "The enumeration barrier must cover a durable Messaging checkpoint at or after `MemberFollowCleanupRecorded`; preserve safe behavior when an exact retry emits no new cleanup event.",
++    "The interleaving regression must be deterministic and prove the stale root commits between the Membership removal and Messaging cleanup facts while relevant projections remain behind. Avoid timing sleeps.",
++    "Preserve backward replay of historic `GroupMemberAdded`, `GroupMemberRemoved`, `MessageSent`, `ConversationFollowed`, `ConversationUnfollowed`, and cleanup shapes with absent generation/retention fields.",
+     "Preserve `ClearRemovedGroupMemberFollows` origin replay while ensuring ordinary projector reset/replay does not dispatch cross-context side effects.",
+-    "Preserve successful application-service return semantics for default and all supported caller-selected Commanded return options while honoring cleanup completion for `:strong`, `:eventual`, and explicit handler lists.",
+-    "Limit edits to durable cleanup/follow ordering, reply-follow success orchestration, completion-option coverage, and their focused tests. Leave tasks 009-017 untouched."
++    "Preserve successful public add/remove return semantics and cleanup completion for default, `:strong`, `:eventual`, explicit handler lists, event-free exact retry, and supported caller-selected Commanded return options.",
++    "Limit edits to durable shared-conversation cutoff semantics, cleanup checkpoint synchronization, and their focused tests. Leave tasks 009-017 untouched."
+   ],
+   "focused_validation": [
+     "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
+@@ -111,14 +106,13 @@
+     "git diff --check"
+   ],
+   "completion_evidence_required": [
+-    "List changed paths and describe the durable ordering facts/state used both for per-conversation cutoffs and conversations first created after cleanup acknowledgement, including replay and historic absent-field semantics.",
++    "List changed paths and describe the durable command/event state used to retain a valid shared follow while recording the removed-group per-conversation cutoff, including replay and historic absent-field behavior.",
++    "Describe how `clear_removed_group_member_follows/2` obtains and waits through the Messaging cleanup checkpoint, including event-free exact-retry handling.",
+     "Report exit statuses and test counts for both focused test commands on the exact handoff state, plus `git diff --check`.",
+-    "Identify a test proving cleanup generation 5 preserves current follow generation 6, records its cutoff, survives an ordinary unfollow, and rejects delayed generation-4 manual, root-auto, and reply-auto follow work.",
+-    "Identify a deterministic test where cleanup is acknowledged before an older authorized/prepared root send first creates its conversation stream, and show the stale sender auto-follow never becomes effective.",
+-    "Identify tests proving blank and duplicate or otherwise aggregate-rejected replies emit no reply and no follow fact/state, while successful reply auto-follow and caller-selected return values still work.",
+-    "Show explicit handler-list consistency and all supported caller-selected return shapes (`:aggregate_state`, `:aggregate_version`, `:events`, `:execution_result`, `false`, `include_execution_result`, and `include_aggregate_version`) for public add/remove, alongside retained default, `:strong`, `:eventual`, event-free exact-retry, and successful `{:ok, result}` unfollow handling.",
+-    "Show existing manual/root/reply source cleanup, first delayed removal, shared/unrelated access, projection-lag, idempotency, legacy replay, and Everyone/Admin no-op tests still pass.",
+-    "Confirm accepted task-001 behavior remains unchanged: explicit removal emits only the reusable Membership removal fact for a transition, exact retry emits no new fact, and club membership/roles plus system-group guards are preserved."
++    "Identify an integration test proving a shared conversation stays followed yet records one idempotent cutoff, an unrelated-only conversation receives none, ordinary unfollow preserves the cutoff, and delayed older manual plus actual reply-auto work cannot restore the follow.",
++    "Identify a deterministic test proving a stale root commits after the Membership removal checkpoint and before `MemberFollowCleanupRecorded`, remains unprojected at the old checkpoint, prevents cleanup acknowledgement until projectors cross the Messaging checkpoint, and ends without an effective sender follow.",
++    "Show genuinely newer post-re-add follows remain allowed and existing retained-newer-follow, manual/root/reply source, cleanup-before-later-stream, projection-lag, replay/idempotency, explicit-list/return-mode, and Everyone/Admin no-op tests still pass.",
++    "Confirm accepted task-001 behavior remains unchanged: explicit removal emits only the reusable Membership removal fact for a transition, exact retry emits no new Membership fact, and club membership/roles plus system-group guards are preserved."
+   ],
+   "candidate_origins": [
+     {
+@@ -136,16 +130,24 @@
+       "reason": "review_revise",
+       "task_id": "004",
+       "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
++    },
++    {
++      "base_sha": "78591570e55f275bc64b956712588903784b5126",
++      "head_sha": "747c0b2351e7accbfed91acfd17dbd88f0d1f7e6",
++      "packet_id": "004-7859157-03",
++      "reason": "review_revise",
++      "task_id": "004",
++      "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
+     }
+   ],
+   "latest_review": {
+-    "packet_id": "004-4774dd4-02",
++    "packet_id": "004-7859157-03",
+     "decision": "revise",
+-    "summary": "Durably record an older cleanup cutoff without hiding a newer follow; protect conversation streams created only after cleanup acknowledgement; establish reply auto-follow only after successful reply acceptance; and add explicit-list consistency plus caller-selected return-mode coverage."
++    "summary": "Record the removed-group cutoff even when shared access preserves the follow, and synchronize one-time conversation enumeration through the durable Messaging cleanup checkpoint so a stale root committed between cleanup facts cannot restore a follow."
+   },
+   "latest_worker_result": {
+-    "packet_id": "004-4774dd4-02",
++    "packet_id": "004-7859157-03",
+     "result": "ready_for_review",
+-    "summary": "The candidate added Club membership generations, generation-bearing manual/root/reply follow facts, cleanup cutoffs, durable handler checkpoint waiting, successful Messaging return normalization, system-group no-op coverage, and reported 35- and 41-test focused suites passing; the latest review found the remaining ordering and reply-rejection gaps described above."
++    "summary": "The candidate added member-scoped durable cleanup cutoffs, retained-newer-follow facts, success-only sender-follow orchestration, return/consistency coverage, and reported 38- and 79-test focused suites passing; the latest review found the remaining shared-access cutoff and between-checkpoints enumeration gaps described above."
+   }
+ }
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
+index 0b6bf1e..f61eb9e 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
+@@ -2,7 +2,7 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+-  "source_baseline": "78591570e55f275bc64b956712588903784b5126",
++  "source_baseline": "747c0b2351e7accbfed91acfd17dbd88f0d1f7e6",
+   "accepted_tasks": [
+     "- [x] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal."
+   ],
+@@ -41,6 +41,14 @@
+           "reason": "review_revise",
+           "task_id": "004",
+           "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
++        },
++        {
++          "base_sha": "78591570e55f275bc64b956712588903784b5126",
++          "head_sha": "747c0b2351e7accbfed91acfd17dbd88f0d1f7e6",
++          "packet_id": "004-7859157-03",
++          "reason": "review_revise",
++          "task_id": "004",
++          "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
+         }
+       ]
+     },
+@@ -160,6 +168,14 @@
+       "reason": "review_revise",
+       "task_id": "004",
+       "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
++    },
++    {
++      "base_sha": "78591570e55f275bc64b956712588903784b5126",
++      "head_sha": "747c0b2351e7accbfed91acfd17dbd88f0d1f7e6",
++      "packet_id": "004-7859157-03",
++      "reason": "review_revise",
++      "task_id": "004",
++      "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
+     }
+   ],
+   "coverage_map": [
+@@ -205,5 +221,5 @@
+       "accepted_task_lines": []
+     }
+   ],
+-  "planner_note": "Task 004 remains the first unchecked obligation and is prepared as a third bounded revision with both required candidate origins retained. The latest candidate added generation ordering and completion handling, but the latest review found three remaining semantic gaps: an older cleanup skipped for a newer follow does not durably record its cutoff, cleanup does not protect conversations created after its one-time enumeration, and reply auto-follow is persisted before reply acceptance. The revision also adds the still-missing explicit-list consistency and caller-selected return-mode coverage. Tasks 009-017 remain unchanged and out of scope."
++  "planner_note": "Task 004 remains the first unchecked obligation and is prepared as a fourth bounded revision with all three required candidate origins retained. The latest candidate closed the prior reply-acceptance, later-created-stream, dispatch-option, and retained-newer-follow gaps. The fresh review found two narrower ordering gaps: shared-access cleanup skips its per-conversation cutoff, and enumeration waits only through the earlier Membership removal checkpoint rather than the durable Messaging cleanup checkpoint. Tasks 009-017 remain unchanged and out of scope."
+ }
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
+index b7c4754..04ddb24 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
+@@ -2,6 +2,6 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+-  "source_baseline": "78591570e55f275bc64b956712588903784b5126",
++  "source_baseline": "747c0b2351e7accbfed91acfd17dbd88f0d1f7e6",
+   "decision": "ready"
+ }
