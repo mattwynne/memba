@@ -1,0 +1,934 @@
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+new file mode 100644
+index 0000000..d819f4f
+--- /dev/null
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+@@ -0,0 +1,66 @@
++{
++  "schema_version": 1,
++  "packet_id": "001-af147c6-01",
++  "task_id": "001",
++  "todo_line": "- [ ] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal.",
++  "result": "replan",
++  "changed_paths": [
++    "web/lib/memba/membership.ex",
++    "web/lib/memba/membership/club.ex",
++    "web/lib/memba/membership/router.ex",
++    "web/lib/memba/membership/commands/remove_custom_group_member.ex",
++    "web/test/memba/membership/app_test.exs",
++    "web/test/memba/membership/club_test.exs",
++    "web/test/memba/membership/group_command_event_modules_test.exs",
++    "web/test/memba/membership/public_api_test.exs",
++    "web/test/memba/membership/remove_custom_group_member_dispatch_test.exs"
++  ],
++  "validation": [
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
++      "exit_status": 1,
++      "evidence": "Expected red TDD run before implementation: RemoveCustomGroupMember was undefined."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
++      "exit_status": 0,
++      "evidence": "115 tests, 0 failures after implementation."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs",
++      "exit_status": 0,
++      "evidence": "108 tests, 0 failures."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
++      "exit_status": 0,
++      "evidence": "15 tests, 0 failures; admission and removal dispatch paths pass together."
++    },
++    {
++      "command": "./bin/dev check",
++      "exit_status": null,
++      "evidence": "The hard 600-second Fabro command limit terminated the foreground check after 602 seconds while passing browser scenarios were still running. No final dev check exit status was produced."
++    }
++  ],
++  "notes": [
++    "Added public Membership.remove_custom_group_member/1 and /2 backed by a dedicated actor-bearing RemoveCustomGroupMember command routed to the Club aggregate.",
++    "The aggregate validates typed identities and exact current Club/group state, permits current group members and active club.manage_members holders, rejects system groups and ordinary/inactive outsiders, allows self/final-member removal, and makes exact removed retries event-free.",
++    "A real transition emits only the existing GroupMemberRemoved event. Focused integration coverage proves the target remains an active club member and retains the Admin role and club.manage_members authority.",
++    "The trusted actor-free RemoveGroupMember command remains registered and unchanged for policy/backfill/fixture use. todo.md and acceptance feature files were not edited."
++  ],
++  "unresolved": [
++    "A successful final ./bin/dev check exit is still required. The implementation and both specified focused test groups pass, but the full browser suite did not finish within the runner's hard 600-second command ceiling."
++  ],
++  "replan_request": {
++    "blocker": "The packet requires a successful full ./bin/dev check, but that command's browser acceptance phase exceeds the documented 600-second Fabro shell limit.",
++    "partial_work": "The packet implementation and its focused aggregate, command shape/router, public API, projection, authorization, idempotency, self/last-member, system-group, and preserved-role tests are complete and passing.",
++    "completed_checks": [
++      "Focused aggregate/API/router suite: 108 tests, 0 failures.",
++      "Admission/removal dispatch suite: 15 tests, 0 failures.",
++      "Combined focused suite: 115 tests, 0 failures.",
++      "git diff --check passed."
++    ],
++    "remaining_validation": "Obtain one successful exit from ./bin/dev check on this candidate state.",
++    "why_replan": "Completing the mandatory full browser gate needs either the workflow's separate deterministic dev_check node or a foreground runner allowance longer than 600 seconds; neither is available inside this packet's bounded worker command."
++  }
++}
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 81f3f67..15b3923 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -24,6 +24,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.ResendClubMemberInvitation
+@@ -115,6 +116,23 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Remove an active club membership from a custom group as an authenticated actor.
++
++  The caller supplies the Club and group identities, the target
++  membership/person pair, and the authenticated actor's person identity. The
++  Club aggregate authoritatively requires an active actor who either belongs to
++  the custom group or has its club's `club.manage_members` permission. The
++  target must be the exact active club member recorded for the custom-group
++  membership. System groups are not writable through this use case.
++  """
++  def remove_custom_group_member(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- remove_custom_group_member_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
+   @doc """
+   Preview a custom group's normalized name and allocated email address.
+ 
+@@ -1803,6 +1821,23 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp remove_custom_group_member_command(attrs) do
++    with {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, group_id} <- fetch_required(attrs, :group_id),
++         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
++         {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
++      {:ok,
++       %RemoveCustomGroupMember{
++         club_id: club_id,
++         group_id: group_id,
++         membership_id: membership_id,
++         person_id: person_id,
++         actor_person_id: actor_person_id
++       }}
++    end
++  end
++
+   defp update_club_command(attrs) do
+     with {:ok, club_id} <- fetch_required(attrs, :club_id),
+          {:ok, club_id} <- cast_club_id(club_id),
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 2edd34f..d221f33 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -16,6 +16,7 @@ defmodule Memba.Membership.Club do
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+@@ -286,6 +287,28 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  def execute(%__MODULE__{club_id: nil}, %RemoveCustomGroupMember{}),
++    do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %RemoveCustomGroupMember{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
++         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
++         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
++         :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
++         :ok <- ensure_custom_group(club, command.group_id),
++         :ok <- authorize_custom_group_removal_actor(club, command),
++         :ok <-
++           ensure_current_or_removed_custom_group_target(
++             club,
++             command.group_id,
++             command.membership_id,
++             command.person_id
++           ) do
++      remove_custom_group_member_decision(club, command)
++    end
++  end
++
+   def execute(%__MODULE__{club_id: nil}, %AssignClubRoleToMember{}), do: {:error, :not_created}
+ 
+   def execute(%__MODULE__{} = club, %AssignClubRoleToMember{} = command) do
+@@ -977,6 +1000,51 @@ defmodule Memba.Membership.Club do
+     if authorized?, do: :ok, else: {:error, :unauthorized}
+   end
+ 
++  defp authorize_custom_group_removal_actor(
++         %__MODULE__{} = club,
++         %RemoveCustomGroupMember{} = command
++       ) do
++    authorized? =
++      Enum.any?(club.active_memberships, fn
++        {membership_id, actor_person_id} when actor_person_id == command.actor_person_id ->
++          active_group_membership?(
++            club,
++            command.group_id,
++            membership_id,
++            command.actor_person_id
++          ) or
++            membership_has_permission?(
++              club,
++              membership_id,
++              command.actor_person_id,
++              Permissions.club_manage_members()
++            ) or exact_self_removal_retry?(club, command)
++
++        {_membership_id, _other_person_id} ->
++          false
++      end)
++
++    if authorized?, do: :ok, else: {:error, :unauthorized}
++  end
++
++  defp exact_self_removal_retry?(
++         %__MODULE__{} = club,
++         %RemoveCustomGroupMember{
++           actor_person_id: person_id,
++           person_id: person_id
++         } = command
++       ) do
++    case Map.get(
++           club.group_memberships,
++           group_membership_key(command.group_id, command.membership_id)
++         ) do
++      %{active: false, person_id: ^person_id} -> true
++      _active_missing_or_mismatched -> false
++    end
++  end
++
++  defp exact_self_removal_retry?(%__MODULE__{}, %RemoveCustomGroupMember{}), do: false
++
+   defp active_group_membership?(%__MODULE__{} = club, group_id, membership_id, person_id) do
+     case Map.get(club.group_memberships, group_membership_key(group_id, membership_id)) do
+       %{active: true, person_id: ^person_id} -> true
+@@ -1013,6 +1081,26 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp ensure_current_or_removed_custom_group_target(
++         %__MODULE__{} = club,
++         group_id,
++         membership_id,
++         person_id
++       ) do
++    with :ok <- ensure_active_custom_group_target(club, membership_id, person_id) do
++      case Map.fetch(club.group_memberships, group_membership_key(group_id, membership_id)) do
++        {:ok, %{person_id: group_person_id}} when group_person_id != person_id ->
++          {:error, :group_membership_person_mismatch}
++
++        {:ok, %{person_id: ^person_id, active: active}} when is_boolean(active) ->
++          :ok
++
++        :error ->
++          {:error, :group_member_not_active}
++      end
++    end
++  end
++
+   defp ensure_group_name_available(%__MODULE__{} = club, group_id, name) do
+     case Map.fetch(club.group_name_keys, GroupName.uniqueness_key(name)) do
+       :error -> :ok
+@@ -1273,6 +1361,33 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp remove_custom_group_member_decision(
++         %__MODULE__{} = club,
++         %RemoveCustomGroupMember{} = command
++       ) do
++    case Map.fetch(
++           club.group_memberships,
++           group_membership_key(command.group_id, command.membership_id)
++         ) do
++      {:ok, %{person_id: person_id}} when person_id != command.person_id ->
++        {:error, :group_membership_person_mismatch}
++
++      {:ok, %{active: true}} ->
++        %GroupMemberRemoved{
++          club_id: command.club_id,
++          group_id: command.group_id,
++          membership_id: command.membership_id,
++          person_id: command.person_id
++        }
++
++      {:ok, %{active: false}} ->
++        []
++
++      :error ->
++        {:error, :group_member_not_active}
++    end
++  end
++
+   defp group_member_added_event(%{
+          club_id: club_id,
+          group_id: group_id,
+diff --git a/web/lib/memba/membership/commands/remove_custom_group_member.ex b/web/lib/memba/membership/commands/remove_custom_group_member.ex
+new file mode 100644
+index 0000000..7775fd7
+--- /dev/null
++++ b/web/lib/memba/membership/commands/remove_custom_group_member.ex
+@@ -0,0 +1,12 @@
++defmodule Memba.Membership.Commands.RemoveCustomGroupMember do
++  @moduledoc """
++  Command for an authenticated person to remove a club member from a custom group.
++
++  The command is routed to the Club aggregate by `club_id`. It carries the
++  authenticated actor separately from the target membership/person pair so the
++  removal policy is decided from current aggregate state.
++  """
++
++  @enforce_keys [:club_id, :group_id, :membership_id, :person_id, :actor_person_id]
++  defstruct [:club_id, :group_id, :membership_id, :person_id, :actor_person_id]
++end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index 05125db..4a76357 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -34,6 +34,7 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.ResendClubMemberInvitation
+@@ -60,6 +61,7 @@ defmodule Memba.Membership.Router do
+   dispatch(InviteClubMember, to: ClubInvitation)
+   dispatch(ReconcileLegacyAdminHistory, to: Club)
+   dispatch(MakePersonEmailAddressPrimary, to: Person)
++  dispatch(RemoveCustomGroupMember, to: Club)
+   dispatch(RemoveGroupMember, to: Club)
+   dispatch(RemoveClubMember, to: Club)
+   dispatch(RemoveClubRoleFromMember, to: Club)
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index edd28cf..6ab89fa 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -20,6 +20,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Commands.InviteClubMember
+   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+@@ -113,6 +114,7 @@ defmodule Memba.Membership.AppTest do
+         InviteClubMember,
+         MakePersonEmailAddressPrimary,
+         ReconcileLegacyAdminHistory,
++        RemoveCustomGroupMember,
+         RemoveGroupMember,
+         RemoveClubMember,
+         RemoveClubRoleFromMember,
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 3f22f48..53afe5b 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -12,6 +12,7 @@ defmodule Memba.Membership.ClubTest do
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+@@ -1761,6 +1762,188 @@ defmodule Memba.Membership.ClubTest do
+     end
+   end
+ 
++  describe "execute/2 RemoveCustomGroupMember authorization" do
++    test "lets a current group member remove the final member and retries exactly as a no-op" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++      actor_membership_id = Memba.ID.generate(:membership)
++      actor_person_id = Memba.ID.generate(:person)
++      target_membership_id = Memba.ID.generate(:membership)
++      target_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(group_id, nil, "Board")
++        |> activate_member(actor_membership_id, actor_person_id)
++        |> activate_member(target_membership_id, target_person_id)
++        |> add_group_member(group_id, actor_membership_id, actor_person_id)
++        |> add_group_member(group_id, target_membership_id, target_person_id)
++        |> remove_group_member(group_id, actor_membership_id, actor_person_id)
++
++      command = %RemoveCustomGroupMember{
++        club_id: club_id,
++        group_id: group_id,
++        membership_id: target_membership_id,
++        person_id: target_person_id,
++        actor_person_id: target_person_id
++      }
++
++      assert %GroupMemberRemoved{
++               club_id: ^club_id,
++               group_id: ^group_id,
++               membership_id: ^target_membership_id,
++               person_id: ^target_person_id
++             } = event = Club.execute(club, command)
++
++      assert [] = club |> Club.apply(event) |> Club.execute(command)
++    end
++
++    test "lets an active manager outside the group remove a member without changing club authority" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++      role_id = Memba.ID.generate(:role)
++      actor_membership_id = Memba.ID.generate(:membership)
++      actor_person_id = Memba.ID.generate(:person)
++      target_membership_id = Memba.ID.generate(:membership)
++      target_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(group_id, nil, "Board")
++        |> define_role(role_id, "membership-manager", "Membership manager")
++        |> grant_manage_members_permission(role_id)
++        |> activate_member(actor_membership_id, actor_person_id)
++        |> assign_member_role(actor_membership_id, actor_person_id, role_id)
++        |> activate_member(target_membership_id, target_person_id)
++        |> assign_member_role(target_membership_id, target_person_id, role_id)
++        |> add_group_member(group_id, target_membership_id, target_person_id)
++
++      command = %RemoveCustomGroupMember{
++        club_id: club_id,
++        group_id: group_id,
++        membership_id: target_membership_id,
++        person_id: target_person_id,
++        actor_person_id: actor_person_id
++      }
++
++      refute Map.has_key?(
++               club.group_memberships,
++               {group_id, actor_membership_id}
++             )
++
++      assert %GroupMemberRemoved{} = event = Club.execute(club, command)
++      updated_club = Club.apply(club, event)
++
++      assert updated_club.active_memberships == club.active_memberships
++      assert updated_club.role_assignments == club.role_assignments
++      assert updated_club.role_permissions == club.role_permissions
++    end
++
++    test "rejects ordinary outsiders, inactive actors, mismatched targets, and missing memberships" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++      actor_membership_id = Memba.ID.generate(:membership)
++      actor_person_id = Memba.ID.generate(:person)
++      outsider_membership_id = Memba.ID.generate(:membership)
++      outsider_person_id = Memba.ID.generate(:person)
++      target_membership_id = Memba.ID.generate(:membership)
++      target_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(group_id, nil, "Board")
++        |> activate_member(actor_membership_id, actor_person_id)
++        |> activate_member(outsider_membership_id, outsider_person_id)
++        |> activate_member(target_membership_id, target_person_id)
++        |> add_group_member(group_id, actor_membership_id, actor_person_id)
++        |> add_group_member(group_id, target_membership_id, target_person_id)
++
++      command = %RemoveCustomGroupMember{
++        club_id: club_id,
++        group_id: group_id,
++        membership_id: target_membership_id,
++        person_id: target_person_id,
++        actor_person_id: outsider_person_id
++      }
++
++      assert {:error, :unauthorized} = Club.execute(club, command)
++
++      inactive_actor_club =
++        Club.apply(club, %ClubMemberRemoved{
++          club_id: club_id,
++          membership_id: actor_membership_id,
++          person_id: actor_person_id
++        })
++
++      assert {:error, :unauthorized} =
++               Club.execute(inactive_actor_club, %{command | actor_person_id: actor_person_id})
++
++      assert {:error, :membership_person_mismatch} =
++               Club.execute(club, %{
++                 command
++                 | actor_person_id: actor_person_id,
++                   person_id: outsider_person_id
++               })
++
++      assert {:error, :group_member_not_active} =
++               Club.execute(club, %{
++                 command
++                 | actor_person_id: actor_person_id,
++                   membership_id: outsider_membership_id,
++                   person_id: outsider_person_id
++               })
++    end
++
++    test "validates command identities and rejects system groups" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++      actor_membership_id = Memba.ID.generate(:membership)
++      actor_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(group_id, nil, "Board")
++        |> activate_member(actor_membership_id, actor_person_id)
++        |> add_group_member(group_id, actor_membership_id, actor_person_id)
++
++      command = %RemoveCustomGroupMember{
++        club_id: club_id,
++        group_id: group_id,
++        membership_id: actor_membership_id,
++        person_id: actor_person_id,
++        actor_person_id: actor_person_id
++      }
++
++      assert {:error, :invalid_club_id} =
++               Club.execute(club, %{command | club_id: Memba.ID.generate(:club)})
++
++      assert {:error, :invalid_group_id} = Club.execute(club, %{command | group_id: "bad"})
++
++      assert {:error, :invalid_membership_id} =
++               Club.execute(club, %{command | membership_id: "bad"})
++
++      assert {:error, :invalid_person_id} =
++               Club.execute(club, %{command | person_id: "bad"})
++
++      assert {:error, :invalid_actor_person_id} =
++               Club.execute(club, %{command | actor_person_id: "bad"})
++
++      for system_group_id <- [
++            SystemGroups.everyone_group_id(club_id),
++            SystemGroups.admin_group_id(club_id)
++          ] do
++        system_group_club = create_group(club, system_group_id, nil, "System")
++
++        assert {:error, :system_group_not_allowed} =
++                 Club.execute(system_group_club, %{command | group_id: system_group_id})
++      end
++    end
++  end
++
+   describe "execute/2 AssignClubRoleToMember and RemoveClubRoleFromMember" do
+     test "emits role assignment and role removal events for a member" do
+       club_id = Memba.ID.generate(:club)
+diff --git a/web/test/memba/membership/group_command_event_modules_test.exs b/web/test/memba/membership/group_command_event_modules_test.exs
+index 4065042..00b1e98 100644
+--- a/web/test/memba/membership/group_command_event_modules_test.exs
++++ b/web/test/memba/membership/group_command_event_modules_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.CreateGroup
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
+   alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Events.GroupCreated
+   alias Memba.Membership.Events.GroupEmailSlugAssigned
+@@ -82,6 +83,15 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+            } ==
+              struct!(AddCustomGroupMember, Map.put(ids, :actor_person_id, actor_person_id))
+ 
++    assert %RemoveCustomGroupMember{
++             club_id: ids.club_id,
++             group_id: ids.group_id,
++             membership_id: ids.membership_id,
++             person_id: ids.person_id,
++             actor_person_id: actor_person_id
++           } ==
++             struct!(RemoveCustomGroupMember, Map.put(ids, :actor_person_id, actor_person_id))
++
+     assert %RemoveGroupMember{
+              club_id: ids.club_id,
+              group_id: ids.group_id,
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 6e43d4b..7aed353 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -36,7 +36,7 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+ 
+-  test "public Membership API exposes custom group creation and actor-authenticated admission" do
++  test "public Membership API exposes actor-authenticated custom group membership changes" do
+     refute function_exported?(Membership, :create_group, 1)
+     refute function_exported?(Membership, :create_group, 2)
+     assert function_exported?(Membership, :create_custom_group, 1)
+@@ -49,8 +49,8 @@ defmodule Memba.Membership.PublicApiTest do
+ 
+     refute function_exported?(Membership, :remove_group_member, 1)
+     refute function_exported?(Membership, :remove_group_member, 2)
+-    refute function_exported?(Membership, :remove_custom_group_member, 1)
+-    refute function_exported?(Membership, :remove_custom_group_member, 2)
++    assert function_exported?(Membership, :remove_custom_group_member, 1)
++    assert function_exported?(Membership, :remove_custom_group_member, 2)
+   end
+ 
+   test "create_club/2 dispatches CreateClub through the Membership context" do
+diff --git a/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs b/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs
+new file mode 100644
+index 0000000..099f1da
+--- /dev/null
++++ b/web/test/memba/membership/remove_custom_group_member_dispatch_test.exs
+@@ -0,0 +1,331 @@
++defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AssignClubRoleToMember
++  alias Memba.Membership.Commands.RemoveCustomGroupMember
++  alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
++  alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
++
++  test "remove_custom_group_member/2 emits only GroupMemberRemoved and updates the projection" do
++    fixture = custom_group_with_target!()
++    club_id = fixture.club_id
++    group_id = fixture.group_id
++    target_membership_id = fixture.target_membership_id
++    target_person_id = fixture.target_person_id
++    actor_person_id = fixture.actor_person_id
++
++    assert %RemoveCustomGroupMember{
++             club_id: club_id,
++             group_id: group_id,
++             membership_id: target_membership_id,
++             person_id: target_person_id,
++             actor_person_id: actor_person_id
++           } ==
++             struct!(RemoveCustomGroupMember, %{
++               club_id: club_id,
++               group_id: group_id,
++               membership_id: target_membership_id,
++               person_id: target_person_id,
++               actor_person_id: actor_person_id
++             })
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [
++                %GroupMemberRemoved{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  membership_id: ^target_membership_id,
++                  person_id: ^target_person_id
++                }
++              ]
++            }} =
++             remove_custom_group_member(fixture, returning: :execution_result)
++
++    assert %GroupMembershipProjection{
++             club_id: ^club_id,
++             group_id: ^group_id,
++             membership_id: ^target_membership_id,
++             person_id: ^target_person_id,
++             active: false
++           } =
++             Repo.get_by(GroupMembershipProjection,
++               group_id: group_id,
++               membership_id: target_membership_id
++             )
++  end
++
++  test "an exact retry is event-free while identity mismatches are rejected" do
++    fixture = custom_group_with_target!()
++
++    assert {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}} =
++             remove_custom_group_member(fixture, returning: :execution_result)
++
++    assert {:ok, %ExecutionResult{events: []}} =
++             remove_custom_group_member(fixture, returning: :execution_result)
++
++    assert {:error, :membership_person_mismatch} =
++             fixture
++             |> Map.put(:target_person_id, fixture.actor_person_id)
++             |> remove_custom_group_member()
++  end
++
++  test "a member can remove themselves as the final custom-group member" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    person_id = Memba.ID.generate(:person)
++    membership_id = Memba.ID.generate(:membership)
++
++    create_club!(club_id)
++    create_member!(club_id, membership_id, person_id)
++    create_custom_group!(club_id, group_id, person_id)
++
++    fixture = %{
++      club_id: club_id,
++      group_id: group_id,
++      actor_person_id: person_id,
++      target_person_id: person_id,
++      target_membership_id: membership_id
++    }
++
++    assert {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}} =
++             remove_custom_group_member(fixture, returning: :execution_result)
++
++    refute Membership.active_member_of_group?(group_id, person_id)
++
++    assert Enum.any?(
++             Membership.list_active_members_of_club(club_id),
++             &(&1.id == person_id)
++           )
++  end
++
++  test "an Admin outside the group can remove an Admin without removing club role authority" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    target_person_id = Memba.ID.generate(:person)
++    target_membership_id = Memba.ID.generate(:membership)
++    actor_person_id = Memba.ID.generate(:person)
++    actor_membership_id = Memba.ID.generate(:membership)
++
++    create_club!(club_id)
++    create_member!(club_id, target_membership_id, target_person_id)
++    create_member!(club_id, actor_membership_id, actor_person_id)
++    create_custom_group!(club_id, group_id, target_person_id)
++    assign_admin!(club_id, actor_membership_id, actor_person_id)
++
++    refute Membership.active_member_of_group?(group_id, actor_person_id)
++
++    fixture = %{
++      club_id: club_id,
++      group_id: group_id,
++      actor_person_id: actor_person_id,
++      target_person_id: target_person_id,
++      target_membership_id: target_membership_id
++    }
++
++    assert {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}} =
++             remove_custom_group_member(fixture, returning: :execution_result)
++
++    refute Membership.active_member_of_group?(group_id, target_person_id)
++    refute Membership.active_member_of_group?(group_id, actor_person_id)
++
++    assert %{roles: roles} =
++             Enum.find(
++               Membership.list_active_members_of_club(club_id),
++               &(&1.id == target_person_id)
++             )
++
++    assert Roles.membership_administrator_name() in roles
++
++    assert Membership.person_has_club_permission?(
++             club_id,
++             target_person_id,
++             Permissions.club_manage_members()
++           )
++  end
++
++  test "ordinary and inactive outsiders cannot remove a custom-group member" do
++    fixture = custom_group_with_target!()
++    outsider_person_id = Memba.ID.generate(:person)
++    outsider_membership_id = Memba.ID.generate(:membership)
++
++    create_member!(fixture.club_id, outsider_membership_id, outsider_person_id)
++
++    assert {:error, :unauthorized} =
++             fixture
++             |> Map.put(:actor_person_id, outsider_person_id)
++             |> remove_custom_group_member()
++
++    assign_admin!(
++      fixture.club_id,
++      fixture.target_membership_id,
++      fixture.target_person_id
++    )
++
++    assert :ok =
++             Membership.remove_member(
++               %{
++                 club_id: fixture.club_id,
++                 membership_id: fixture.actor_membership_id,
++                 person_id: fixture.actor_person_id
++               },
++               consistency: :strong
++             )
++
++    assert {:error, :unauthorized} = remove_custom_group_member(fixture)
++    assert Membership.active_member_of_group?(fixture.group_id, fixture.target_person_id)
++  end
++
++  test "the public removal path rejects wrong targets and system groups" do
++    fixture = custom_group_with_target!()
++    other_person_id = Memba.ID.generate(:person)
++    other_membership_id = Memba.ID.generate(:membership)
++
++    create_member!(fixture.club_id, other_membership_id, other_person_id)
++
++    assert {:error, :group_member_not_active} =
++             fixture
++             |> Map.merge(%{
++               target_membership_id: other_membership_id,
++               target_person_id: other_person_id
++             })
++             |> remove_custom_group_member()
++
++    for group_id <- [
++          SystemGroups.everyone_group_id(fixture.club_id),
++          SystemGroups.admin_group_id(fixture.club_id)
++        ] do
++      assert {:error, :system_group_not_allowed} =
++               fixture
++               |> Map.put(:group_id, group_id)
++               |> remove_custom_group_member()
++    end
++  end
++
++  test "remove_custom_group_member/2 requires every command identity" do
++    attrs = %{
++      club_id: Memba.ID.generate(:club),
++      group_id: Memba.ID.generate(:group),
++      membership_id: Memba.ID.generate(:membership),
++      person_id: Memba.ID.generate(:person),
++      actor_person_id: Memba.ID.generate(:person)
++    }
++
++    for required <- Map.keys(attrs) do
++      assert {:error, {:missing_required_attribute, ^required}} =
++               attrs
++               |> Map.delete(required)
++               |> Membership.remove_custom_group_member()
++    end
++  end
++
++  defp custom_group_with_target! do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    actor_person_id = Memba.ID.generate(:person)
++    actor_membership_id = Memba.ID.generate(:membership)
++    target_person_id = Memba.ID.generate(:person)
++    target_membership_id = Memba.ID.generate(:membership)
++
++    create_club!(club_id)
++    create_member!(club_id, actor_membership_id, actor_person_id)
++    create_member!(club_id, target_membership_id, target_person_id)
++    create_custom_group!(club_id, group_id, actor_person_id)
++    add_group_member!(club_id, group_id, target_membership_id, target_person_id)
++
++    %{
++      club_id: club_id,
++      group_id: group_id,
++      actor_person_id: actor_person_id,
++      actor_membership_id: actor_membership_id,
++      target_person_id: target_person_id,
++      target_membership_id: target_membership_id
++    }
++  end
++
++  defp create_club!(club_id) do
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id),
++               consistency: :strong
++             )
++  end
++
++  defp create_custom_group!(club_id, group_id, actor_person_id) do
++    assert :ok =
++             Membership.create_custom_group(
++               %{
++                 club_id: club_id,
++                 group_id: group_id,
++                 actor_person_id: actor_person_id,
++                 name: "Board"
++               },
++               consistency: :strong
++             )
++  end
++
++  defp create_member!(club_id, membership_id, person_id) do
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: "Test member",
++                 email: "#{person_id}@example.com"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_member(
++               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
++               consistency: :strong
++             )
++  end
++
++  defp add_group_member!(club_id, group_id, membership_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp assign_admin!(club_id, membership_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AssignClubRoleToMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: Roles.membership_administrator_role_id(club_id)
++               },
++               consistency: :strong
++             )
++  end
++
++  defp remove_custom_group_member(fixture, opts \\ []) do
++    Membership.remove_custom_group_member(
++      %{
++        club_id: fixture.club_id,
++        group_id: fixture.group_id,
++        membership_id: fixture.target_membership_id,
++        person_id: fixture.target_person_id,
++        actor_person_id: fixture.actor_person_id
++      },
++      Keyword.put_new(opts, :consistency, :strong)
++    )
++  end
++end
