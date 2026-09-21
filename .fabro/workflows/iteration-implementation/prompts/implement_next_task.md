@@ -47,7 +47,7 @@ Before finishing, write `.delivery/latest-worker-result.json` in the iteration d
 - `packet_id`, `task_id`, `todo_line`: exactly from `current-worker-packet.json`.
 - `result`: one of `ready_for_review`, `replan`, or `human_blocked`.
 - `changed_paths`: changed code/config/test/doc paths for this packet.
-- `validation`: commands run, exit statuses, and concise evidence.
+- `validation`: final commands, exit statuses, and concise evidence. For `ready_for_review`, include only successful final validation runs (every `exit_status` must be `0`); summarize superseded failing TDD/diagnostic runs in `notes` instead of adding them to this array.
 - `notes`: one non-empty concise string summarizing useful discoveries, reusable helpers and non-obvious constraints; do not write an array.
 - `unresolved`: unresolved facts or candidate work still needing validation.
 - For `replan`, include `replan_request` with the specific blocker, partial work, completed checks, remaining validation and why the packet is too broad/missing a prerequisite.

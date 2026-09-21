@@ -33,6 +33,7 @@ checks = [
     ("revision preserves candidate", "Preserve useful candidate work and earlier accepted tasks" in implementation),
     ("worker replan contract", "`replan`" in implementation and "missing preparation" in implementation),
     ("worker result notes match the guard schema", "one non-empty concise string" in implementation and "do not write an array" in implementation),
+    ("ready worker result contains only passing validation", "For `ready_for_review`, include only successful final validation runs" in implementation and "every `exit_status` must be `0`" in implementation and "superseded failing TDD/diagnostic runs in `notes`" in implementation),
     ("browser tasks use focused checks", "For browser-facing tasks, run targeted browser scenarios or a focused browser harness" in implementation),
     ("ordinary tasks prohibit every broad gate form", "Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command in ordinary implementation tasks." in implementation),
     ("explicit final-validation work preserved", "If the packet explicitly requires a full final-validation task" in implementation),
