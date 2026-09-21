@@ -39,13 +39,21 @@
       "reason": "review_revise",
       "task_id": "004",
       "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
+    },
+    {
+      "base_sha": "0bc43067626f7163f1b7066f55fd7ca2c285a225",
+      "head_sha": "6d4491e9c649a50872de9dc3292201ac363ce35f",
+      "packet_id": "004-0bc4306-06",
+      "reason": "review_revise",
+      "task_id": "004",
+      "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour."
     }
   ],
   "decision": "revise",
-  "packet_id": "004-0bc4306-06",
-  "reason": "Packet 004-0bc4306-06 is current, matches the first unchecked todo, retains prior candidate provenance, and has a matching ready_for_review result reporting 42 and 82 focused tests passing plus git diff --check. Two stale-ordering gaps remain. First, raw follow_conversation/2 strips caller-supplied source groups but still attaches the club-wide current membership generation; because that clock advances for every member/group transition, an unrelated membership change after removing member M from group A advances generation G to G+1, allowing a source-less raw follow while M remains absent. Re-adding M to A then makes that stored follow effective without an authorized post-re-add follow. Make source-less raw follows unable to escape a cleanup cutoff through unrelated club generation changes, and test removal A -> unrelated membership transition -> raw follow -> re-add A with no restored follow or delivery. Second, historical GroupMemberRemoved events without generation become cleanup generation 0 while historical post-re-add ConversationFollowed/MessageSent facts also normalize to 0; first/origin cleanup replay therefore treats the valid later follow as equal-generation and deletes it. Add durable backward-compatible ordering for legacy facts and test both removal of a pre-removal legacy follow and preservation of a generation-less follow genuinely established after historical re-add. I did not rerun the worker's focused tests because their exact current-state evidence is present; the passing suites omit these branches.",
-  "recorded_at": 1790010216,
-  "reviewed_head": "8f012f1ab3dfd45742486fe9c8460992b4ef4b89",
+  "packet_id": "004-34d71d9-07",
+  "reason": "Packet 004-34d71d9-07 is current, matches the first unchecked todo, preserves cumulative provenance, and has a matching ready_for_review result reporting 44 and 83 focused tests passing plus git diff --check; acceptance features and the todo remain unchanged. Two stale-ordering gaps remain. First, raw follow_conversation/2 checks only the per-conversation aggregate cutoff. After removal cleanup completes, a conversation created later for the removed group has no such cutoff, so a source-less raw follow is accepted at normalized generation zero despite the durable member-level cleanup; re-adding the member can then resume notifications without an authorized post-re-add follow. Make raw follows consult the applicable durable member/group cleanup or otherwise reject this path, and test removal/cleanup -> new group conversation -> raw follow while absent -> re-add, proving no ConversationFollowed, projected follow, or delivery until follow_conversation_as_current_member/2 succeeds. Second, legacy generation-less reply MessageSent facts are stored on reply streams, but latest_generationless_follow_checkpoint/2 examines only the root stream and generationless_follow_fact?/3 explicitly accepts only root MessageSent facts. Origin cleanup therefore erases a valid reply-author follow established after a historical re-add; moreover, ConversationFollowers does not rehydrate that reply-stream follow, so the current retain flag cannot preserve it. Add durable source-backed handling and pre-removal/post-re-add regressions for actual generation-less reply MessageSent shapes without reintroducing phantom follows, including retry/restart and replay assertions. I did not rerun the recorded suites because their exact successful evidence is current; neither suite covers these branches.",
+  "recorded_at": 1790013671,
+  "reviewed_head": "30206375babe9e3f635fe153a5fdf9e069dd95f5",
   "schema_version": 1,
   "task": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "task_id": "004",
