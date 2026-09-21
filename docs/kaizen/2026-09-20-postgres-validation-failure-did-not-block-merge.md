@@ -102,3 +102,9 @@ Limitations:
 - This is a guard on the Fabro delivery paths; a human or unrelated automation with direct permission to push `main` can still bypass it. Branch protection or server-side policy would be needed to make the requirement repository-wide.
 - A Git note is durable only when clients fetch `refs/notes/fabro-dev-check`; the delivery scripts push it before `main`, but ordinary Git fetches do not necessarily fetch notes automatically.
 - Review the next representative `dev check`/worktree run for a clean start, handoff, and teardown boundary.
+
+### Additional observation: 2026-09-20 — direct pushes remain unenforceable on GitHub.com
+
+The new Fabro attestation closes the known workflow paths, but it does not stop any actor with direct `main` push permission from bypassing it. GitHub.com cannot use a custom pre-receive hook to inspect the local Git note during a push. A repository-wide control therefore requires a GitHub branch ruleset that requires pull requests and a successful CI status check for the exact PR head SHA; Fabro would need to publish through that PR path rather than push `main` directly.
+
+This is a delivery-policy gap, not a defect in the local attestation helper. The remaining decision is whether the added GitHub Actions/CI cost and PR workflow are acceptable in exchange for making the gate non-bypassable.
