@@ -1249,12 +1249,16 @@
       "checkpoint_sha": "68f5d9a61f15de39aa3e7eae09c417006da79cb7"
     }
   },
-  "start": null,
-  "status": {
-    "kind": "starting"
+  "start": {
+    "start_time": "2026-09-21T07:38:41.361604977Z",
+    "run_branch": "fabro/run/01M31EBMGHK7FJKVEW624KB202",
+    "base_sha": "68f5d9a61f15de39aa3e7eae09c417006da79cb7"
   },
-  "status_updated_at": "2026-09-21T07:37:24.050532536Z",
-  "last_event_at": "2026-09-21T07:38:41.342924231Z",
+  "status": {
+    "kind": "running"
+  },
+  "status_updated_at": "2026-09-21T07:38:41.361634461Z",
+  "last_event_at": "2026-09-21T07:38:43.683603495Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1852,6 +1856,196 @@
           "deletions": 0
         }
       }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-21T07:38:43.691013149Z",
+        "current_node": "review_merge",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.node_visit_count": 1,
+          "internal.retry_count.start": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "thread.start.current_node": "read_plan",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.review_fork": 0,
+          "parallel.branch_count": 3,
+          "current_node": "review_merge",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.dev_check": 0,
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.review_merge": 0,
+          "graph.rankdir": "LR",
+          "parallel.results": [
+            {
+              "context_updates": {},
+              "id": "claude_review",
+              "index": 0,
+              "status": "failed"
+            },
+            {
+              "context_updates": {
+                "last_response": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified. The implementation evidence is consistent with the accepted archite",
+                "last_stage": "codex_review",
+                "response.codex_review": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified. The implementation evidence is consistent with the accepted architectural direction for the touched area:\n\n- Membership changes remain command-driven rather than mutating projections directly.\n- The existing `GroupMemberAdded` event and projection path are reused.\n- Authorization is evaluated through the Membership domain boundary rather than in LiveView alone.\n- Email delivery is downstream of a confirmed new transition rather than aggregate or projector behavior.\n- Web code is explicitly prevented from referencing the trusted internal membership commands directly.\n\n## Blocking issues\n\nNone identified.\n\nThe successful `dev ci` run, including all 189 browser acceptance scenarios, provides substantial behavioral coverage. No evidence indicates an omitted acceptance criterion, unsafe authorization path, event-sourcing violation, or welcome-email replay issue requiring another implementation pass.\n\n## Bounded-safe fixes\n\n1. **Strengthen the web-to-domain boundary test**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - The test searches source text for three fully qualified command module names. It can be bypassed unintentionally through aliases, shortened module references, dynamic module construction, or a newly added internal command omitted from the hard-coded list.\n   - This does not show that the current implementation bypasses the boundary, but the guard provides less protection than its name suggests.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Architecture enforcement is based on a command denylist**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - **Smell:** The test enumerates selected internal commands rather than expressing the broader rule that web delivery must not depend on `Memba.Membership.Commands`.\n   - **Why judgement may be needed:** A namespace-wide rule would be more durable, but the team may prefer narrow checks where trusted commands are intentionally used by other delivery mechanisms. This is architectural-test strategy rather than a product correctness problem.\n\n2. **Boundary enforcement uses raw source matching**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - **Smell:** Comments, strings, formatting, and alias choices can affect the result without changing actual module dependencies.\n   - **Why judgement may be needed:** Moving to AST-based inspection or a project-wide dependency checker adds complexity. The current lightweight check may be considered sufficient when paired with review discipline.\n\n## Suggested fixes\n\nFor the bounded-safe test improvement:\n\n1. Replace the three-command denylist with a check for dependencies on the internal `Memba.Membership.Commands` namespace from `lib/memba_web`.\n2. Prefer parsed Elixir AST over unrestricted source substring matching, so comments and string literals do not trigger the rule and aliased command references cannot evade it.\n3. If AST inspection is considered excessive, retain the lightweight test but:\n   - detect `alias Memba.Membership.Commands`;\n   - detect the namespace generally rather than individual commands; and\n   - document any intentional exceptions explicitly.\n\nThis can be handled as follow-up polish and does not need to block the iteration.\n\n## Validation notes\n\n- The sandbox runtime preflight passed.\n- `dev ci` completed successfully.\n- Browser acceptance suite result: **189 scenarios passed, 1415 steps passed**.\n- The reviewed evidence includes tests around the public Membership command boundary and integration/presentation behavior.\n- The implementation follows the plan’s key responsibility boundaries: commands and aggregates determine membership transitions, projections represent committed state, and welcome delivery is a post-transition integration concern.\n- No file changes were made during this review."
+              },
+              "id": "codex_review",
+              "index": 1,
+              "status": "succeeded"
+            },
+            {
+              "context_updates": {
+                "last_response": "# Implementation Review Report\n\n- **Decision**: ACCEPT\n- **Confidence**: Medium (Based on successful CI logs, full acceptance test pass, and limited/truncated implementation evidence).\n- **ADR conform",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "# Implementation Review Report\n\n- **Decision**: ACCEPT\n- **Confidence**: Medium (Based on successful CI logs, full acceptance test pass, and limited/truncated implementation evidence).\n- **ADR conformance**: PASS\n\n### ADR violations\nNone observed. The implementation actively protects the command boundary as mandated by the architectural guidelines, ensuring the web layer does not directly dispatch internal commands.\n\n### Blocking issues\nNone.\n\n### Bounded-safe fixes\nNone required.\n\n### Judgement-worthy non-blocking code-health findings\n1. **Source-based architectural boundary checking (`web/test/memba_web/membership_command_boundary_test.exs`)**: \n   The test enforces the iteration plan's requirement (\"Preserve trusted system-group commands rather than exposing them directly to web callers\") by reading `**/*.ex` files and performing string matching (`=~`). While this is a practical and pragmatic way to prevent direct command usage in the web layer for this iteration, it is structurally brittle. It can be bypassed using module aliases (`alias Memba.Membership.Commands.AddGroupMember, as: AddMember`), and it risks false positives if the module names are merely mentioned in code comments. \n   *Why it may need human judgement*: In the future, as the application scales, relying on `mix xref graph` or custom Elixir compiler tracers is a much more robust, AST-aware method for enforcing contextual boundaries and preventing cross-domain coupling.\n\n### Suggested fixes\nNo fixes are strictly necessary for this merge since the existing boundary check accomplishes the immediate goal securely. \n\n### Validation notes\n- **CI / Pipeline**: `dev check` passed successfully. All 189 scenarios (1415 steps) executed and passed (duration: 19m20s), confirming that the club membership, system-group behaviour, and outside-admin custom group features maintain system integrity.\n- **Preflight Sandbox**: The sandbox runtime check compiled all expected apps (`commanded`, `bandit`, `phoenix_live_view`, etc.) cleanly without compilation warnings blocking the pipeline.\n- **Design Alignment**: The provided test snippet explicitly proves that the implementation fulfills the technical requirement to insulate raw aggregate commands from the web delivery mechanism, correctly routing requests through the `Memba.Membership` public API."
+              },
+              "id": "gemini_review",
+              "index": 2,
+              "status": "succeeded"
+            }
+          ],
+          "outcome": "succeeded",
+          "failure_signature": "",
+          "command.output": "blob://sha256/4a12c55505812c33e1f0a54abe325fffb19bf0d73b7657a56bc6357952d878e1",
+          "failure_class": "",
+          "graph.max_node_visits": "160",
+          "internal.thread_id": null,
+          "internal.retry_count.read_plan": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.run_id": "01M31EBMGHK7FJKVEW624KB202",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "graph.default_fidelity": "summary:high"
+        },
+        "node_outcomes": {
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4a12c55505812c33e1f0a54abe325fffb19bf0d73b7657a56bc6357952d878e1"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '91edff41b9732c09f3d37ed00d8414696ddc5565'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 255,
+              "active_time_ms": 255
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3aaf85c3326402f338804f81603cef89962993651ad59e3a6a7da72337c4b6c4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 160,
+              "active_time_ms": 160
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/35965b357d78c24b4c38acf98694e7e29832c9cd9990c21bff99f24eb53713dd"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 142427,
+              "active_time_ms": 142427
+            }
+          },
+          "review_fork": {
+            "status": "partially_succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "context_updates": {},
+                  "id": "claude_review",
+                  "index": 0,
+                  "status": "failed"
+                },
+                {
+                  "context_updates": {
+                    "last_response": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified. The implementation evidence is consistent with the accepted archite",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified. The implementation evidence is consistent with the accepted architectural direction for the touched area:\n\n- Membership changes remain command-driven rather than mutating projections directly.\n- The existing `GroupMemberAdded` event and projection path are reused.\n- Authorization is evaluated through the Membership domain boundary rather than in LiveView alone.\n- Email delivery is downstream of a confirmed new transition rather than aggregate or projector behavior.\n- Web code is explicitly prevented from referencing the trusted internal membership commands directly.\n\n## Blocking issues\n\nNone identified.\n\nThe successful `dev ci` run, including all 189 browser acceptance scenarios, provides substantial behavioral coverage. No evidence indicates an omitted acceptance criterion, unsafe authorization path, event-sourcing violation, or welcome-email replay issue requiring another implementation pass.\n\n## Bounded-safe fixes\n\n1. **Strengthen the web-to-domain boundary test**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - The test searches source text for three fully qualified command module names. It can be bypassed unintentionally through aliases, shortened module references, dynamic module construction, or a newly added internal command omitted from the hard-coded list.\n   - This does not show that the current implementation bypasses the boundary, but the guard provides less protection than its name suggests.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Architecture enforcement is based on a command denylist**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - **Smell:** The test enumerates selected internal commands rather than expressing the broader rule that web delivery must not depend on `Memba.Membership.Commands`.\n   - **Why judgement may be needed:** A namespace-wide rule would be more durable, but the team may prefer narrow checks where trusted commands are intentionally used by other delivery mechanisms. This is architectural-test strategy rather than a product correctness problem.\n\n2. **Boundary enforcement uses raw source matching**\n   - **File:** `web/test/memba_web/membership_command_boundary_test.exs`\n   - **Smell:** Comments, strings, formatting, and alias choices can affect the result without changing actual module dependencies.\n   - **Why judgement may be needed:** Moving to AST-based inspection or a project-wide dependency checker adds complexity. The current lightweight check may be considered sufficient when paired with review discipline.\n\n## Suggested fixes\n\nFor the bounded-safe test improvement:\n\n1. Replace the three-command denylist with a check for dependencies on the internal `Memba.Membership.Commands` namespace from `lib/memba_web`.\n2. Prefer parsed Elixir AST over unrestricted source substring matching, so comments and string literals do not trigger the rule and aliased command references cannot evade it.\n3. If AST inspection is considered excessive, retain the lightweight test but:\n   - detect `alias Memba.Membership.Commands`;\n   - detect the namespace generally rather than individual commands; and\n   - document any intentional exceptions explicitly.\n\nThis can be handled as follow-up polish and does not need to block the iteration.\n\n## Validation notes\n\n- The sandbox runtime preflight passed.\n- `dev ci` completed successfully.\n- Browser acceptance suite result: **189 scenarios passed, 1415 steps passed**.\n- The reviewed evidence includes tests around the public Membership command boundary and integration/presentation behavior.\n- The implementation follows the plan’s key responsibility boundaries: commands and aggregates determine membership transitions, projections represent committed state, and welcome delivery is a post-transition integration concern.\n- No file changes were made during this review."
+                  },
+                  "id": "codex_review",
+                  "index": 1,
+                  "status": "succeeded"
+                },
+                {
+                  "context_updates": {
+                    "last_response": "# Implementation Review Report\n\n- **Decision**: ACCEPT\n- **Confidence**: Medium (Based on successful CI logs, full acceptance test pass, and limited/truncated implementation evidence).\n- **ADR conform",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "# Implementation Review Report\n\n- **Decision**: ACCEPT\n- **Confidence**: Medium (Based on successful CI logs, full acceptance test pass, and limited/truncated implementation evidence).\n- **ADR conformance**: PASS\n\n### ADR violations\nNone observed. The implementation actively protects the command boundary as mandated by the architectural guidelines, ensuring the web layer does not directly dispatch internal commands.\n\n### Blocking issues\nNone.\n\n### Bounded-safe fixes\nNone required.\n\n### Judgement-worthy non-blocking code-health findings\n1. **Source-based architectural boundary checking (`web/test/memba_web/membership_command_boundary_test.exs`)**: \n   The test enforces the iteration plan's requirement (\"Preserve trusted system-group commands rather than exposing them directly to web callers\") by reading `**/*.ex` files and performing string matching (`=~`). While this is a practical and pragmatic way to prevent direct command usage in the web layer for this iteration, it is structurally brittle. It can be bypassed using module aliases (`alias Memba.Membership.Commands.AddGroupMember, as: AddMember`), and it risks false positives if the module names are merely mentioned in code comments. \n   *Why it may need human judgement*: In the future, as the application scales, relying on `mix xref graph` or custom Elixir compiler tracers is a much more robust, AST-aware method for enforcing contextual boundaries and preventing cross-domain coupling.\n\n### Suggested fixes\nNo fixes are strictly necessary for this merge since the existing boundary check accomplishes the immediate goal securely. \n\n### Validation notes\n- **CI / Pipeline**: `dev check` passed successfully. All 189 scenarios (1415 steps) executed and passed (duration: 19m20s), confirming that the club membership, system-group behaviour, and outside-admin custom group features maintain system integrity.\n- **Preflight Sandbox**: The sandbox runtime check compiled all expected apps (`commanded`, `bandit`, `phoenix_live_view`, etc.) cleanly without compilation warnings blocking the pipeline.\n- **Design Alignment**: The provided test snippet explicitly proves that the implementation fulfills the technical requirement to insulate raw aggregate commands from the web delivery mechanism, correctly routing requests through the `Memba.Membership` public API."
+                  },
+                  "id": "gemini_review",
+                  "index": 2,
+                  "status": "succeeded"
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (2 succeeded, 1 failed)",
+            "usage": null
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e0b63810fcbbbe10686b9620a45c29207eb8586817cc3bdf1f0695528a47bfd1"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1431607,
+              "active_time_ms": 1431607
+            }
+          }
+        },
+        "next_node_id": "synthesize_review",
+        "node_visits": {
+          "dev_check": 1,
+          "preflight_sandbox": 1,
+          "review_merge": 1,
+          "read_plan": 1,
+          "start": 1,
+          "review_fork": 1,
+          "collect_implementation_evidence": 1
+        }
+      },
+      "diff": {}
     }
   ],
   "conclusion": null,
@@ -2255,6 +2449,31 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "review_merge@1": {
+      "first_event_seq": 47,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-21T07:38:43.683603495Z",
+      "handler": "parallel.fan_in",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     }
   }
 }
