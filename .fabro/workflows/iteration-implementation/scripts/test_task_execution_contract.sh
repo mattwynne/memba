@@ -21,6 +21,7 @@ checks = [
     ("planner owns task selection", "You own task selection, semantic splitting/reordering" in planner),
     ("planner cannot edit code", "You may edit only this iteration's `todo.md` and files under the iteration's `.delivery/` directory." in planner),
     ("planner writes durable state", ".delivery/execution-state.json" in planner and ".delivery/current-worker-packet.json" in planner),
+    ("planner uses binding checkpoint rather than predecessor", "Use that `git rev-parse HEAD` value as `source_baseline`" in planner and "Do not copy the baseline JSON's `pre_planner_head`" in planner and "guard will reject it" in planner),
     ("planner requires exact coverage key", "Each `coverage_map` item must use the exact key `scope`" in planner and "Do not use aliases such as `scope_or_acceptance_layer`" in planner),
     ("planner shows execution-state coverage schema", '"coverage_map": [' in planner and '{"scope": "approved scope or acceptance layer", "pending_task_ids": ["001"], "accepted_task_lines": []}' in planner),
     ("ordinary planner packets exclude the full gate", "For an ordinary implementation or revision packet, `focused_validation` must not include `dev check`" in planner and "deterministic `dev_check` node owns the iteration-wide gate" in planner),

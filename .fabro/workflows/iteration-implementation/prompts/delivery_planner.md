@@ -6,7 +6,7 @@ Use your file-reading tools. Do not edit application code, tests, feature files,
 
 - `{{ inputs.plan_path }}` in full.
 - The sibling `todo.md`.
-- The durable planner baseline at `.delivery/_guard/planner-guard-baseline.json` in the same iteration directory, plus `git rev-parse HEAD` for the binding checkpoint created immediately before this planner visit.
+- The durable planner baseline at `.delivery/_guard/planner-guard-baseline.json` in the same iteration directory, plus `git rev-parse HEAD` for the binding checkpoint created immediately before this planner visit. Use that `git rev-parse HEAD` value as `source_baseline` in every planner artifact. Do not copy the baseline JSON's `pre_planner_head`: that is the predecessor captured before the trusted checkpoint commit and the guard will reject it.
 - Existing `.delivery/execution-state.json`, `.delivery/current-worker-packet.json`, `.delivery/latest-worker-result.json`, and `.delivery/latest-review.json` when present. Read `.delivery/history.jsonl` only for targeted investigation/resume, not as routine growing input.
 - Relevant accepted code and tests in the repository. Inspect files directly; do not trust notes as ground truth.
 - ADRs and reference docs explicitly cited by the plan or needed for the selected work.
