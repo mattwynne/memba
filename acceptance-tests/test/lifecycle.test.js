@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
@@ -219,9 +220,9 @@ setInterval(() => {}, 1000);
   }
 );
 
-test("lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in a dev shell", async () => {
+test("lifecycle consumes its dev parent Postgres service without managing it", async () => {
   const calls = [];
-  const env = testEnv({ MEMBA_DEVENV_SHELL: "1" });
+  const env = testEnv({ MEMBA_DEVENV_SHELL: "1", MEMBA_POSTGRES_OWNER: "dev" });
   const lifecycle = createBrowserAcceptanceLifecycle({
     env,
     processRunner: {
@@ -252,7 +253,6 @@ test("lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in
   assert.deepEqual(
     calls.map((call) => `${call.type}:${call.label || call.url}`),
     [
-      "run:Postgres readiness",
       ...databaseSetupSteps.map((step) => `run:Database setup: ${step.label}`),
       `run:Asset setup: ${assetBuildStep.label}`,
       "start:Phoenix server",
@@ -262,6 +262,16 @@ test("lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in
   );
 });
 
+test("standalone lifecycle owns Postgres and passes that ownership to nested Mix commands", async () => {
+  const config = await buildLifecycleConfig(testEnv());
+  const mixCommand = buildMixCommand(config, ["ecto.create", "--quiet"]);
+
+  assert.equal(config.postgresOwner, "acceptance");
+  assert.equal(config.managePostgres, true);
+  assert.equal(config.tearDownPostgres, true);
+  assert.equal(mixCommand.env.MEMBA_POSTGRES_OWNER, "acceptance");
+});
+
 test("Postgres readiness uses devenv processes instead of removed bin/dev postgres", async () => {
   const config = await buildLifecycleConfig(testEnv());
   const command = buildPostgresReadinessCommand(config);
@@ -269,6 +279,7 @@ test("Postgres readiness uses devenv processes instead of removed bin/dev postgr
   assert.equal(command.command, "bash");
   assert.equal(command.args[0], "-lc");
   assert.match(command.args[1], /processes status postgres/);
+  assert.match(command.args[1], /case "\$phase" in ready\|running\) exit 0/);
   assert.match(command.args[1], /devenv -O services\.postgres\.port:int "\$MEMBA_POSTGRES_PORT" processes up --no-strict-ports -d postgres/);
   assert.match(command.args[1], /devenv -O services\.postgres\.port:int "\$MEMBA_POSTGRES_PORT" processes wait --timeout 120/);
   assert.doesNotMatch(command.args[1], /bin\/dev postgres/);
@@ -293,6 +304,13 @@ test("non-dev-shell mix commands run through devenv on the selected Postgres por
   assert.equal(command.env.PHX_SERVER, "true");
   assert.equal(command.env.PORT, "4444");
   assert.equal(command.env.MEMBA_POSTGRES_PORT, "15555");
+  assert.equal(command.env.MEMBA_POSTGRES_OWNER, "acceptance");
+});
+
+test("bin/mix never manages its parent Postgres service", () => {
+  const binMix = fs.readFileSync(path.resolve(__dirname, "../../bin/mix"), "utf8");
+
+  assert.doesNotMatch(binMix, /processes (up|down|start|stop|wait)/);
 });
 
 test("Phoenix server command starts a named node for acceptance server commands", async () => {

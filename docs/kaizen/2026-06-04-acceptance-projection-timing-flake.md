@@ -434,3 +434,55 @@ removed from the reusable system-group backfill. The compensating event remains
 in event history, and the reusable revocation support, aggregate-level
 initial-access precondition, and regression coverage preventing future audience
 widening remain in the application.
+
+## Additional observation: 2026-09-20 sign-out timeout
+
+### Context
+
+After recovering the main checkout's managed Postgres process, `bin/dev check`
+ran on the committed main state. The original Postgres startup failure did not
+recur, but browser acceptance ended with one failure.
+
+### What happened
+
+`features/authentication.feature:116`, **Club member signs out from a club
+page**, timed out in the `Alice signs out` step after 30 seconds. The run
+reported 188 passing and 1 failing scenario (1,413 passing steps, 1 failing,
+1 skipped). No product change was made before this run, and we are treating the
+single observation as a possible flicker rather than assigning a cause.
+
+### Required closure evidence
+
+Do not close this recurrence as a flicker solely because a later run passes.
+Before closing it, witness a fix or an evidence-backed explanation: preserve
+its relevant browser/server diagnostics, identify the mechanism, apply a
+bounded corrective change if needed, and observe the affected scenario and a
+full quality gate pass on the exact committed state.
+
+### Open questions
+
+- Did the timeout occur in browser interaction, LiveView navigation, session
+  invalidation, or test-harness cleanup?
+- Is it related to the known readiness/timing weaknesses recorded above, or a
+  distinct authentication sign-out path?
+
+### Resolution
+
+Root cause: `signOut` clicked the club identity `<details>` summary and immediately
+checked whether its CSS-hidden sign-out control was visible. On the transition
+where the browser had not applied the open state yet, that check returned false.
+The helper then fell back to the generic `Sign out` button, which does not exist
+on the club page and therefore consumed the Cucumber 30-second step timeout.
+
+Fix applied:
+
+- `acceptance-tests/features/support/authentication.js`: wait for the club
+  sign-out button to become visible after opening the identity menu, then click
+  it; only use the generic button when the club identity menu is absent.
+- `acceptance-tests/test/authentication.test.js`: regression coverage proves
+  the club path waits for the menu transition instead of using the generic
+  fallback.
+
+Focused validation:
+
+- `MEMBA_POSTGRES_PORT=15445 ACCEPTANCE_SERVER_NODE=memba_signout_fix@localhost ./bin/dev acceptance --name '^Club member signs out from a club page$'` — passed: 1 scenario, 4 steps.

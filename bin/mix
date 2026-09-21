@@ -3,48 +3,10 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 real_mix=""
-started_postgres=0
 
-devenv_from_repo_root() {
-  (cd "$repo_root" && devenv "$@")
-}
-
-ensure_postgres() {
-  if [ -z "${PGHOST:-}" ] || [ -z "${PGPORT:-}" ]; then
-    return
-  fi
-
-  if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
-    return
-  fi
-
-  # `devenv shell mix precommit` runs this wrapper without automatically
-  # starting declared services, but the precommit/test aliases need Postgres for
-  # Ecto and EventStore setup.
-  devenv_from_repo_root processes down >/dev/null 2>&1 || true
-  DEVENV_TUI=false devenv_from_repo_root processes up --strict-ports -d postgres
-  started_postgres=1
-  devenv_from_repo_root processes wait --timeout 120
-
-  if ! pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
-    devenv_from_repo_root processes logs -n 100 postgres >&2 || true
-    echo "Postgres did not become ready at PGHOST=$PGHOST PGPORT=$PGPORT" >&2
-    exit 1
-  fi
-}
-
-cleanup_started_postgres() {
-  if [ "$started_postgres" = 1 ]; then
-    devenv_from_repo_root processes down >/dev/null 2>&1 || true
-  fi
-}
-
-case "${1:-}" in
-  precommit|test|ecto.*|event_store.*)
-    trap cleanup_started_postgres EXIT
-    ensure_postgres
-    ;;
-esac
+# This wrapper only resolves and executes Mix for its own checkout. Postgres
+# lifecycle ownership belongs to an explicit parent (`bin/dev` or browser
+# acceptance); a nested Mix command must never reset or tear down that service.
 
 wrapper_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")"
 

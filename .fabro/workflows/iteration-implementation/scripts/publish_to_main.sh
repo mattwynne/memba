@@ -164,7 +164,13 @@ EOF
   exit 2
 fi
 
+(
+  cd "$publish_worktree"
+  "$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
+)
+
 published_sha=$(git -C "$publish_worktree" rev-parse HEAD)
+git -C "$publish_worktree" push origin refs/notes/fabro-dev-check
 git push origin "$published_sha:main"
 
 echo "Published implementation to main: $published_sha"
