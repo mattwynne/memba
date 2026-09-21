@@ -5,6 +5,11 @@ defmodule Memba.Messaging.Events.MessageSent do
   `sender_follows_conversation` records whether this send establishes a follower
   relationship for the sender. Historic events predate the field and are
   interpreted as following so replay preserves their original projection.
+
+  `sender_membership_generation` causally orders generated sender follows
+  against group-membership cleanup. Historic facts without it use generation
+  zero. New reply sends establish the authoritative root-stream follow with a
+  `ConversationFollowed` fact before this event is dispatched.
   """
 
   @derive Jason.Encoder
@@ -17,6 +22,7 @@ defmodule Memba.Messaging.Events.MessageSent do
     :reply_to_message_id,
     :subject,
     :body,
+    :sender_membership_generation,
     sender_follows_conversation: true
   ]
 

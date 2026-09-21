@@ -313,6 +313,7 @@ defmodule Memba.Messaging.Message do
         reply_to_message_id: reply_to_message_id,
         subject: subject,
         body: body,
+        sender_membership_generation: command.sender_membership_generation,
         sender_follows_conversation: sender_follows_conversation?(command, recipients)
       }
 

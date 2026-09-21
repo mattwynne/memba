@@ -40,6 +40,19 @@ defmodule Memba.Messaging.ConversationFollowersTest do
                })
     end
 
+    test "refreshes an existing follow when membership generation advances" do
+      conversation = followed_conversation(3)
+      member_id = hd(MapSet.to_list(conversation.follower_ids))
+
+      assert %ConversationFollowed{membership_generation: 5} =
+               ConversationFollowers.execute(conversation, %FollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id,
+                 membership_generation: 5
+               })
+    end
+
     test "rejects malformed identifiers and mismatched club context" do
       conversation = followed_conversation()
       member_id = hd(MapSet.to_list(conversation.follower_ids))
@@ -128,11 +141,73 @@ defmodule Memba.Messaging.ConversationFollowersTest do
           follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
           club_id: club_id,
           conversation_id: conversation_id,
-          member_id: member_id
+          member_id: member_id,
+          membership_generation: 1
         })
 
       assert [] = ConversationFollowers.execute(followed_again, command)
       assert MapSet.member?(followed_again.follower_ids, member_id)
+    end
+
+    test "orders first cleanup delivery against a newer follow generation" do
+      conversation = followed_conversation(5)
+      member_id = hd(MapSet.to_list(conversation.follower_ids))
+
+      assert [] =
+               ConversationFollowers.execute(conversation, %UnfollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id,
+                 cleanup_id: "older-removal",
+                 membership_generation: 4
+               })
+
+      assert MapSet.member?(conversation.follower_ids, member_id)
+    end
+
+    test "records a cleanup cutoff that rejects delayed stale follow work" do
+      club_id = Memba.ID.generate(:club)
+      conversation_id = Memba.ID.generate(:message)
+      member_id = Memba.ID.generate(:person)
+
+      cleanup =
+        ConversationFollowers.execute(%ConversationFollowers{}, %UnfollowConversation{
+          club_id: club_id,
+          conversation_id: conversation_id,
+          member_id: member_id,
+          cleanup_id: "removal-5",
+          membership_generation: 5
+        })
+
+      cleaned = ConversationFollowers.apply(%ConversationFollowers{}, cleanup)
+
+      assert [] =
+               ConversationFollowers.execute(cleaned, %FollowConversation{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: member_id,
+                 membership_generation: 4
+               })
+
+      stale_auto_follow =
+        ConversationFollowers.apply(cleaned, %MessageSent{
+          message_id: conversation_id,
+          club_id: club_id,
+          sender_id: member_id,
+          subject: "Delayed root",
+          body: "This send was prepared before removal.",
+          sender_membership_generation: 4
+        })
+
+      refute MapSet.member?(stale_auto_follow.follower_ids, member_id)
+
+      assert %ConversationFollowed{membership_generation: 6} =
+               ConversationFollowers.execute(cleaned, %FollowConversation{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: member_id,
+                 membership_generation: 6
+               })
     end
   end
 
@@ -193,7 +268,78 @@ defmodule Memba.Messaging.ConversationFollowersTest do
              })
   end
 
-  defp followed_conversation do
+  test "historic facts without generation remain replayable and precede generated facts" do
+    club_id = Memba.ID.generate(:club)
+    conversation_id = Memba.ID.generate(:message)
+    member_id = Memba.ID.generate(:person)
+
+    legacy_follow =
+      ConversationFollowers.apply(%ConversationFollowers{}, %ConversationFollowed{
+        follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
+        club_id: club_id,
+        conversation_id: conversation_id,
+        member_id: member_id
+      })
+
+    assert %ConversationUnfollowed{membership_generation: 1} =
+             cleanup =
+             ConversationFollowers.execute(legacy_follow, %UnfollowConversation{
+               club_id: club_id,
+               conversation_id: conversation_id,
+               member_id: member_id,
+               cleanup_id: "generated-removal",
+               membership_generation: 1
+             })
+
+    cleaned = ConversationFollowers.apply(legacy_follow, cleanup)
+    refute MapSet.member?(cleaned.follower_ids, member_id)
+
+    replayed_legacy_message =
+      ConversationFollowers.apply(cleaned, %MessageSent{
+        message_id: conversation_id,
+        club_id: club_id,
+        sender_id: member_id,
+        subject: "Historic root",
+        body: "Historic body"
+      })
+
+    refute MapSet.member?(replayed_legacy_message.follower_ids, member_id)
+  end
+
+  test "first generated cleanup delivery preserves a follow after legacy cleanup and re-add" do
+    conversation = followed_conversation()
+    member_id = hd(MapSet.to_list(conversation.follower_ids))
+
+    legacy_cleaned =
+      ConversationFollowers.apply(conversation, %ConversationUnfollowed{
+        follow_id: ConversationFollowers.follow_id(conversation.conversation_id, member_id),
+        club_id: conversation.club_id,
+        conversation_id: conversation.conversation_id,
+        member_id: member_id
+      })
+
+    followed_after_readd =
+      ConversationFollowers.apply(legacy_cleaned, %ConversationFollowed{
+        follow_id: ConversationFollowers.follow_id(conversation.conversation_id, member_id),
+        club_id: conversation.club_id,
+        conversation_id: conversation.conversation_id,
+        member_id: member_id,
+        membership_generation: 2
+      })
+
+    assert [] =
+             ConversationFollowers.execute(followed_after_readd, %UnfollowConversation{
+               club_id: conversation.club_id,
+               conversation_id: conversation.conversation_id,
+               member_id: member_id,
+               cleanup_id: "historic-removal-first-token-delivery",
+               membership_generation: 1
+             })
+
+    assert MapSet.member?(followed_after_readd.follower_ids, member_id)
+  end
+
+  defp followed_conversation(generation \\ nil) do
     club_id = Memba.ID.generate(:club)
     conversation_id = Memba.ID.generate(:message)
     member_id = Memba.ID.generate(:person)
@@ -202,7 +348,8 @@ defmodule Memba.Messaging.ConversationFollowersTest do
       follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
       club_id: club_id,
       conversation_id: conversation_id,
-      member_id: member_id
+      member_id: member_id,
+      membership_generation: generation
     })
   end
 end

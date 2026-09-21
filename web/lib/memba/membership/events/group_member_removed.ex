@@ -5,5 +5,5 @@ defmodule Memba.Membership.Events.GroupMemberRemoved do
 
   @derive Jason.Encoder
   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
-  defstruct [:club_id, :group_id, :membership_id, :person_id]
+  defstruct [:club_id, :group_id, :membership_id, :person_id, :membership_generation]
 end

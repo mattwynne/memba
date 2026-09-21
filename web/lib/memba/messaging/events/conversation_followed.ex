@@ -5,5 +5,5 @@ defmodule Memba.Messaging.Events.ConversationFollowed do
 
   @derive Jason.Encoder
   @enforce_keys [:follow_id, :club_id, :conversation_id, :member_id]
-  defstruct [:follow_id, :club_id, :conversation_id, :member_id]
+  defstruct [:follow_id, :club_id, :conversation_id, :member_id, :membership_generation]
 end

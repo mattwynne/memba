@@ -4,9 +4,10 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
 
   The handler subscribes to Membership facts and coordinates the cross-context
   consequence through Messaging's public API. Starting from origin repairs
-  earlier removals. Each removal's durable EventStore identity becomes the
-  Messaging cleanup key, making repeated delivery and replay safe even after a
-  genuine re-add and new follow.
+  earlier removals. Each removal carries its Club-owned group-membership
+  generation as the causal cutoff and its durable EventStore identity as a
+  retry key. Historic facts without a generation use generation zero, before
+  every generated follow fact.
   """
 
   use Commanded.Event.Handler,
@@ -36,9 +37,18 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
       group_id: event.group_id,
       member_id: event.person_id,
       cleanup_id: cleanup_id(event, metadata),
+      membership_generation: membership_generation(event),
       checkpoint: cleanup_checkpoint(metadata)
     })
   end
+
+  defp membership_generation(%GroupMemberRemoved{
+         membership_generation: membership_generation
+       })
+       when is_integer(membership_generation) and membership_generation > 0,
+       do: membership_generation
+
+  defp membership_generation(%GroupMemberRemoved{}), do: 0
 
   defp cleanup_id(event, metadata) do
     Map.get(metadata, :event_id) ||

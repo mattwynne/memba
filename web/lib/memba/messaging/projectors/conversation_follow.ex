@@ -17,7 +17,7 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
 
   project(%MessageSent{} = event, fn multi ->
-    if MessageSent.sender_follows_conversation?(event) do
+    if project_message_sender_follow?(event) do
       conversation_id =
         event.conversation_id || ConversationReference.root_conversation_id(event.message_id)
 
@@ -26,6 +26,12 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do
       multi
     end
   end)
+
+  defp project_message_sender_follow?(%MessageSent{} = event) do
+    MessageSent.sender_follows_conversation?(event) and
+      (event.message_id == event.conversation_id or
+         is_nil(event.sender_membership_generation))
+  end
 
   project(%ConversationFollowed{} = event, fn multi ->
     upsert_follow(multi, event.club_id, event.conversation_id, event.member_id, true)

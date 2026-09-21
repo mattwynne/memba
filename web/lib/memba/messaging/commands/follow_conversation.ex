@@ -4,5 +4,5 @@ defmodule Memba.Messaging.Commands.FollowConversation do
   """
 
   @enforce_keys [:club_id, :conversation_id, :member_id]
-  defstruct [:club_id, :conversation_id, :member_id]
+  defstruct [:club_id, :conversation_id, :member_id, :membership_generation]
 end

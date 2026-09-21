@@ -24,6 +24,7 @@ defmodule Memba.Messaging.Commands.SendMessage do
     :reply_to_message_id,
     :subject,
     :body,
-    :recipients
+    :recipients,
+    :sender_membership_generation
   ]
 end

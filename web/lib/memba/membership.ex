@@ -57,6 +57,7 @@ defmodule Memba.Membership do
   alias Memba.Repo
 
   @person_email_address_verification_token_ttl_seconds 15 * 60
+  @follow_cleanup_completion_timeout 5_000
   @group_access_projectors [GroupMembershipProjector, MembershipProjector]
 
   @doc """
@@ -135,7 +136,10 @@ defmodule Memba.Membership do
   def remove_custom_group_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_custom_group_member_command(attrs) do
-      dispatch(command, custom_group_membership_consistency(dispatch_opts))
+      dispatch_custom_group_membership(
+        command,
+        custom_group_membership_consistency(dispatch_opts)
+      )
     end
   end
 
@@ -1446,6 +1450,24 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Return the latest Club-owned group-membership generation.
+
+  The generation advances for every group membership add or removal and is
+  reconstructed from historic facts whose generation field predates this
+  contract. Messaging attaches it to follow-establishing facts so a delayed
+  cleanup can be ordered against a genuine later re-add.
+  """
+  def current_group_membership_generation(club_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         %Memba.Membership.Club{club_id: ^club_id} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id) do
+      club.group_membership_generation
+    else
+      _invalid_or_missing -> 0
+    end
+  end
+
+  @doc """
   Wait until the Membership read models used by `active_member_of_group?/2`
   have processed every event committed before this call.
 
@@ -2620,17 +2642,43 @@ defmodule Memba.Membership do
 
   defp dispatch_custom_group_admission(command, dispatch_opts) do
     if explicit_commanded_returning_mode?(dispatch_opts) do
-      dispatch(command, dispatch_opts)
+      dispatch_custom_group_membership(command, dispatch_opts)
     else
       dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
 
-      case dispatch(command, dispatch_opts) do
+      case dispatch_custom_group_membership(command, dispatch_opts) do
         {:ok, %Commanded.Commands.ExecutionResult{} = result} ->
           {:ok, custom_group_admission(command, result)}
 
         {:error, _reason} = error ->
           error
       end
+    end
+  end
+
+  defp dispatch_custom_group_membership(command, dispatch_opts) do
+    case dispatch(command, dispatch_opts) do
+      :ok = result ->
+        await_removed_group_member_follows(result)
+
+      {:ok, _dispatch_result} = result ->
+        await_removed_group_member_follows(result)
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp await_removed_group_member_follows(dispatch_result) do
+    checkpoint = ProjectionBarrier.current_checkpoint()
+
+    case ProjectionBarrier.await(
+           [ClearRemovedGroupMemberFollows],
+           checkpoint: checkpoint,
+           timeout: @follow_cleanup_completion_timeout
+         ) do
+      {:ok, _result} -> dispatch_result
+      {:error, :timeout, _result} -> {:error, :follow_cleanup_timeout}
     end
   end
 

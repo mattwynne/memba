@@ -4,10 +4,12 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.App
+  alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Roles
@@ -44,11 +46,15 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
                   club_id: ^club_id,
                   group_id: ^group_id,
                   membership_id: ^target_membership_id,
-                  person_id: ^target_person_id
+                  person_id: ^target_person_id,
+                  membership_generation: membership_generation
                 }
               ]
             }} =
              remove_custom_group_member(fixture, returning: :execution_result)
+
+    assert is_integer(membership_generation)
+    assert membership_generation > 0
 
     assert %GroupMembershipProjection{
              club_id: ^club_id,
@@ -61,6 +67,33 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
                group_id: group_id,
                membership_id: target_membership_id
              )
+  end
+
+  test "historic group membership facts without generations rebuild a causal sequence" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+
+    added =
+      Club.apply(%Club{}, %GroupMemberAdded{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: membership_id,
+        person_id: person_id
+      })
+
+    assert added.group_membership_generation == 1
+
+    removed =
+      Club.apply(added, %GroupMemberRemoved{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: membership_id,
+        person_id: person_id
+      })
+
+    assert removed.group_membership_generation == 2
   end
 
   test "an exact retry is event-free while identity mismatches are rejected" do

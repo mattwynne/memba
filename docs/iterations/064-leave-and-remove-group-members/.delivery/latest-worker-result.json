@@ -1,30 +1,40 @@
 {
   "schema_version": 1,
-  "packet_id": "004-72f5ddc-01",
+  "packet_id": "004-4774dd4-02",
   "task_id": "004",
   "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "result": "ready_for_review",
   "changed_paths": [
     "web/lib/memba/membership.ex",
+    "web/lib/memba/membership/club.ex",
+    "web/lib/memba/membership/events/group_member_added.ex",
+    "web/lib/memba/membership/events/group_member_removed.ex",
     "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
     "web/lib/memba/messaging.ex",
+    "web/lib/memba/messaging/commands/follow_conversation.ex",
+    "web/lib/memba/messaging/commands/post_message_reply.ex",
+    "web/lib/memba/messaging/commands/send_message.ex",
     "web/lib/memba/messaging/commands/unfollow_conversation.ex",
     "web/lib/memba/messaging/conversation_followers.ex",
+    "web/lib/memba/messaging/events/conversation_followed.ex",
     "web/lib/memba/messaging/events/conversation_unfollowed.ex",
+    "web/lib/memba/messaging/events/message_sent.ex",
+    "web/lib/memba/messaging/message.ex",
+    "web/lib/memba/messaging/projectors/conversation_follow.ex",
     "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
-    "web/test/memba/messaging/conversation_followers_test.exs",
-    "web/test/memba/messaging/send_club_message_test.exs"
+    "web/test/memba/membership/remove_custom_group_member_dispatch_test.exs",
+    "web/test/memba/messaging/conversation_followers_test.exs"
   ],
   "validation": [
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
       "exit_status": 0,
-      "evidence": "32 tests, 0 failures. Proves explicit removal completion and accepted return/event behavior, manual/root/reply follow cleanup facts, duplicate and replay idempotency, remove/re-add/follow safety, unrelated/shared-access preservation, lag blocking, and system-group no-ops."
+      "evidence": "35 tests, 0 failures. Proves generated and historic membership ordering, manual/root/reply follow cleanup facts, first-delivery and later-conversation safety, a suspended-handler remove/re-add/follow race, shared-skip replay, eventual and exact-retry completion, successful execution-result unfollows, lag blocking, and Everyone/Admin no-ops."
     },
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs",
       "exit_status": 0,
-      "evidence": "36 tests, 0 failures. Proves aggregate cleanup tokens can clear projection-only reply auto-follows, preserve later follows, retain composed access, and prevent a lag-hidden old follow from resuming after club rejoin."
+      "evidence": "41 tests, 0 failures. Proves aggregate generation refresh/cutoffs, delayed stale manual and root-auto follow rejection, absent-field replay, legacy-cleaned first delivery, deterministic follow projections, composed access, and existing send/lag behavior."
     },
     {
       "command": "git diff --check",
@@ -32,6 +42,6 @@
       "evidence": "No whitespace errors."
     }
   ],
-  "notes": "The selected stale-ordering mechanism uses each durable Membership removal event ID as a cleanup token recorded by ConversationUnfollowed in the root conversation-follow aggregate. The token emits an authoritative unfollow even when a reply auto-follow exists only in the projection; replaying the old removal is then a no-op after a post-re-add follow. Public custom-group add/remove calls wait for the origin-replaying cleanup handler, and cleanup waits for Message/access/follow projections through the removal checkpoint before discovering conversations. It excludes the removed group when checking authoritative surviving access, preserving unrelated and genuinely shared follows. The initial TDD run failed on the absent cleanup_id contract; superseded diagnostic focused runs exposed and corrected the old projection-lag test's false-success expectation and its stopped-handler test setup.",
+  "notes": "Club now assigns a monotonically increasing group-membership generation to add/remove facts; historic absent fields replay by incrementing Club state, while historic Messaging facts normalize to generation zero. Manual follows, root MessageSent auto-follows, and authoritative root-stream reply follows carry the current generation. ConversationFollowers stores per-person follow generations and cleanup cutoffs, refreshes an already-following member after re-add, ignores older first-delivery cleanup, and blocks delayed stale follow work; cleanup IDs remain retry deduplication only. Public custom-group add/remove calls additionally await the cleanup handler's durable EventStore subscription checkpoint after every successful dispatch, including :eventual and event-free retries, while preserving return modes. Focused races cover first delayed delivery, later-created and shared-skipped conversations, legacy cleanup, projection lag, unrelated follows, both system groups, and successful {:ok, result} unfollows. The initial TDD run failed because generation fields were absent; subsequent diagnostic runs exposed one legacy token test whose follow needed an explicitly newer generation. The repository formatter was also checked successfully for every changed Elixir file.",
   "unresolved": []
 }

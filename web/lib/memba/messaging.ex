@@ -131,6 +131,7 @@ defmodule Memba.Messaging do
              end,
              projections: [ConversationFollowProjector]
            ),
+         :ok <- establish_reply_follow(command, dispatch_opts),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -243,8 +244,8 @@ defmodule Memba.Messaging do
   Conversation discovery waits for Messaging's read models to reach the
   Membership removal checkpoint, so projection lag cannot turn cleanup into a
   false success. Each unfollow carries the Membership event ID as an idempotency
-  key. Replaying that removal therefore cannot erase a follow established after
-  cleanup and a genuine re-add.
+  key and its Club-owned membership generation as a causal cutoff. A cleanup
+  older than the current follow is a no-op even on first delivery.
 
   A conversation-wide follow is retained when another active group still gives
   the person authoritative read access to the conversation.
@@ -255,6 +256,7 @@ defmodule Memba.Messaging do
          {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
          {:ok, member_id} <- fetch_required_id(attrs, :member_id, :person),
          {:ok, cleanup_id} <- fetch_cleanup_id(attrs),
+         {:ok, membership_generation} <- fetch_membership_generation(attrs),
          {:ok, checkpoint} <- fetch_cleanup_checkpoint(attrs),
          :ok <- await_removed_group_follow_cleanup_projections(checkpoint) do
       group_id
@@ -267,11 +269,13 @@ defmodule Memba.Messaging do
             group_id,
             member_id,
             cleanup_id,
+            membership_generation,
             dispatch_opts
           )
 
         case result do
           :ok -> {:cont, :ok}
+          {:ok, _dispatch_result} -> {:cont, :ok}
           {:error, _reason} = error -> {:halt, error}
         end
       end)
@@ -1852,7 +1856,8 @@ defmodule Memba.Messaging do
                end
              end,
              projections: [ConversationFollowProjector]
-           ) do
+           ),
+         :ok <- establish_reply_follow(command, dispatch_opts) do
       dispatch_inbound_message_once(command, dispatch_opts)
     end
   end
@@ -2052,7 +2057,8 @@ defmodule Memba.Messaging do
          audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_group_recipients(club_id, audience_group_id)
+         recipients: resolve_group_recipients(club_id, audience_group_id),
+         sender_membership_generation: Membership.current_group_membership_generation(club_id)
        }}
     end
   end
@@ -2096,7 +2102,9 @@ defmodule Memba.Messaging do
          recipients:
            resolve_reply_recipients(root_message.club_id, conversation_id,
              except_person_id: sender_id
-           )
+           ),
+         sender_membership_generation:
+           Membership.current_group_membership_generation(root_message.club_id)
        }}
     end
   end
@@ -2109,7 +2117,8 @@ defmodule Memba.Messaging do
        %FollowConversation{
          club_id: club_id,
          conversation_id: conversation_id,
-         member_id: member_id
+         member_id: member_id,
+         membership_generation: Membership.current_group_membership_generation(club_id)
        }}
     end
   end
@@ -2123,7 +2132,8 @@ defmodule Memba.Messaging do
          club_id: club_id,
          conversation_id: conversation_id,
          member_id: member_id,
-         cleanup_id: optional_attribute(attrs, :cleanup_id)
+         cleanup_id: optional_attribute(attrs, :cleanup_id),
+         membership_generation: optional_attribute(attrs, :membership_generation)
        }}
     end
   end
@@ -2148,6 +2158,17 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp fetch_membership_generation(attrs) do
+    case fetch_required(attrs, :membership_generation) do
+      {:ok, membership_generation}
+      when is_integer(membership_generation) and membership_generation >= 0 ->
+        {:ok, membership_generation}
+
+      _missing_or_invalid ->
+        {:error, :invalid_membership_generation}
+    end
+  end
+
   defp await_removed_group_follow_cleanup_projections(checkpoint) do
     case ProjectionBarrier.await(
            @removed_group_follow_cleanup_projectors,
@@ -2165,6 +2186,7 @@ defmodule Memba.Messaging do
          removed_group_id,
          member_id,
          cleanup_id,
+         membership_generation,
          dispatch_opts
        ) do
     if member_has_authoritative_conversation_access_excluding_group?(
@@ -2180,7 +2202,8 @@ defmodule Memba.Messaging do
           club_id: club_id,
           conversation_id: conversation_id,
           member_id: member_id,
-          cleanup_id: cleanup_id
+          cleanup_id: cleanup_id,
+          membership_generation: membership_generation
         },
         include_conversation_follow_consistency(dispatch_opts)
       )
@@ -2210,6 +2233,16 @@ defmodule Memba.Messaging do
           consistency
       end
     )
+  end
+
+  defp establish_reply_follow(%PostMessageReply{} = command, dispatch_opts) do
+    %FollowConversation{
+      club_id: command.club_id,
+      conversation_id: command.conversation_id,
+      member_id: command.sender_id,
+      membership_generation: command.sender_membership_generation
+    }
+    |> dispatch_ok(dispatch_opts)
   end
 
   defp report_email_delivery_delivered_command(attrs) do

@@ -56,6 +56,7 @@ defmodule Memba.Membership.Club do
     group_email_slugs: %{},
     group_keys: %{},
     group_name_keys: %{},
+    group_membership_generation: 0,
     group_memberships: %{},
     native_membership_ids: MapSet.new(),
     roles: %{},
@@ -472,13 +473,18 @@ defmodule Memba.Membership.Club do
   end
 
   def apply(%__MODULE__{} = club, %GroupMemberAdded{} = event) do
+    membership_generation = event_membership_generation(club, event)
+
     group_membership = %{person_id: event.person_id, active: true}
+
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
 
     club =
       %__MODULE__{
         club
-        | group_memberships:
+        | group_membership_generation:
+            max(club.group_membership_generation, membership_generation),
+          group_memberships:
             Map.put(club.group_memberships, group_membership_key, group_membership)
       }
 
@@ -486,13 +492,18 @@ defmodule Memba.Membership.Club do
   end
 
   def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
+    membership_generation = event_membership_generation(club, event)
+
     group_membership = %{person_id: event.person_id, active: false}
+
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
 
     club =
       %__MODULE__{
         club
-        | group_memberships:
+        | group_membership_generation:
+            max(club.group_membership_generation, membership_generation),
+          group_memberships:
             Map.put(club.group_memberships, group_membership_key, group_membership)
       }
 
@@ -861,7 +872,7 @@ defmodule Memba.Membership.Club do
 
         if SystemGroups.custom_group?(group) do
           [
-            %GroupMemberRemoved{
+            %{
               club_id: club.club_id,
               group_id: group_id,
               membership_id: departing_membership_id,
@@ -876,6 +887,10 @@ defmodule Memba.Membership.Club do
         []
     end)
     |> Enum.sort_by(& &1.group_id)
+    |> Enum.with_index(club.group_membership_generation + 1)
+    |> Enum.map(fn {attrs, membership_generation} ->
+      struct!(GroupMemberRemoved, Map.put(attrs, :membership_generation, membership_generation))
+    end)
   end
 
   defp create_group_decision(
@@ -945,7 +960,8 @@ defmodule Memba.Membership.Club do
             club_id: command.club_id,
             group_id: command.group_id,
             membership_id: creator_membership_id,
-            person_id: command.actor_person_id
+            person_id: command.actor_person_id,
+            membership_generation: next_group_membership_generation(club)
           }
         ]
     end
@@ -1308,10 +1324,10 @@ defmodule Memba.Membership.Club do
         []
 
       {:ok, %{active: false}} ->
-        group_member_added_event(command)
+        group_member_added_event(club, command)
 
       :error ->
-        group_member_added_event(command)
+        group_member_added_event(club, command)
     end
   end
 
@@ -1330,10 +1346,10 @@ defmodule Memba.Membership.Club do
         []
 
       {:ok, %{active: false}} ->
-        group_member_added_event(command)
+        group_member_added_event(club, command)
 
       :error ->
-        group_member_added_event(command)
+        group_member_added_event(club, command)
     end
   end
 
@@ -1350,7 +1366,8 @@ defmodule Memba.Membership.Club do
           club_id: command.club_id,
           group_id: command.group_id,
           membership_id: command.membership_id,
-          person_id: command.person_id
+          person_id: command.person_id,
+          membership_generation: next_group_membership_generation(club)
         }
 
       {:ok, %{active: false}} ->
@@ -1377,7 +1394,8 @@ defmodule Memba.Membership.Club do
           club_id: command.club_id,
           group_id: command.group_id,
           membership_id: command.membership_id,
-          person_id: command.person_id
+          person_id: command.person_id,
+          membership_generation: next_group_membership_generation(club)
         }
 
       {:ok, %{active: false}} ->
@@ -1388,7 +1406,7 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp group_member_added_event(%{
+  defp group_member_added_event(%__MODULE__{} = club, %{
          club_id: club_id,
          group_id: group_id,
          membership_id: membership_id,
@@ -1398,8 +1416,24 @@ defmodule Memba.Membership.Club do
       club_id: club_id,
       group_id: group_id,
       membership_id: membership_id,
-      person_id: person_id
+      person_id: person_id,
+      membership_generation: next_group_membership_generation(club)
     }
+  end
+
+  defp next_group_membership_generation(%__MODULE__{} = club) do
+    club.group_membership_generation + 1
+  end
+
+  defp event_membership_generation(%__MODULE__{} = club, event) do
+    case event.membership_generation do
+      membership_generation
+      when is_integer(membership_generation) and membership_generation > 0 ->
+        membership_generation
+
+      _historic_event ->
+        next_group_membership_generation(club)
+    end
   end
 
   defp put_role_key(role_keys, nil, _role_id), do: role_keys
