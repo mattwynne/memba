@@ -23,7 +23,7 @@ The user may provide:
    - If multiple files match, show the matches and ask the user which one to fix.
    - If no files match, stop and report that the note could not be found.
 2. If the user does not specify a note, find unresolved recent notes:
-   - List `docs/kaizen/*.md` newest first.
+   - List top-level `docs/kaizen/*.md` note files newest first, excluding `docs/kaizen/README.md`. Consult their ledger rows, but confirm resolution state from each note and relevant history rather than trusting status alone.
    - Treat a note as resolved when it has a heading named `## Resolution`, `## Resolution applied`, `## Resolution plan`, or another clear resolution heading with substantive content.
    - Treat a note as unresolved when it lacks a substantive resolution heading. Options or a plan awaiting a decision or implementation do not count as resolved, even if their heading contains “Resolution”.
    - Before presenting unresolved notes, check recent git history for each candidate. Some older notes are implementation plans or observations that were completed but never backfilled with a resolution.
@@ -36,8 +36,8 @@ The user may provide:
 Useful commands:
 
 ```bash
-find docs/kaizen -maxdepth 1 -type f -name '*.md' -print | sort -r
-rg -L '^## Resolution( |$)|^## Resolution applied$|^## Resolution plan' docs/kaizen/*.md
+find docs/kaizen -maxdepth 1 -type f -name '*.md' ! -name README.md -print | sort -r
+rg -L '^## Resolution( |$)|^## Resolution applied$|^## Resolution plan' docs/kaizen/*.md --glob '!README.md'
 ```
 
 Use the commands as aids, not as a substitute for reading candidate notes. Some notes may use a variant resolution heading; inspect before deciding.
@@ -72,14 +72,16 @@ Use [A3 problem-solving](a3-problem-solving.md) to frame the improvement from ob
    - Run the smallest relevant checks first.
    - Follow the target project's validation instructions and required quality gates (for example, its documented `dev check` or `just` command).
    - For purely documentation changes, use narrower checks when the project permits them.
-7. **Update the kaizen note**
+7. **Update the kaizen note and ledger**
    - Append or update a resolution section in the original note.
    - Preserve the original observation text.
    - Include the date, root cause, applied fix or options, files changed, validation performed, and remaining follow-up.
    - Follow the [A3 check-and-act loop](a3-problem-solving.md#check-results-and-sustain-the-improvement): record expected versus observed results, and any owner/review point for later effectiveness checks. Distinguish a fix being applied from recurrence prevention being demonstrated.
+   - Update the note's existing row in `docs/kaizen/README.md`: use `Open` when the assessment says it remains worth addressing, or `Closed` when no further action is intended or the outcome is documented. Use `Experiment` only for an explicitly approved experiment currently in progress, with its agreed review date; otherwise Review due is `—`. Do not infer status or dates from headings.
+   - Verify every top-level note except `README.md` has exactly one valid linked row, no row points to a missing note, and at most one row is `Experiment`.
 8. **Commit the completed kaizen fix**
    - Review `git status --short` and `git diff --stat`.
-   - Commit only the kaizen fix, its resolution-note update, and directly supporting workflow/skill/doc changes.
+   - Commit only the kaizen fix, its note and ledger updates, and directly supporting workflow/skill/doc changes.
    - Do not include unrelated user work.
    - Use a concise message such as `kaizen: <short resolved problem>`.
    - Do not push unless the user explicitly asks.
@@ -160,7 +162,7 @@ When done, report:
 - Selected kaizen note path.
 - Root cause.
 - Whether a fix was applied or options were proposed.
-- Files changed.
+- Files changed, including the ledger update.
 - Validation run and result.
 - Commit SHA and message, or why no commit was made.
 - Any remaining follow-up or decision needed from the user.

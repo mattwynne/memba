@@ -60,7 +60,7 @@ Usually not candidates:
    - What kind of protection was missing or weak? Examples: guardrail, validation, error message, default, documentation, checklist, handoff, recovery path, observability, or ownership boundary.
    - How urgent is it? Examples: minor friction, repeated friction, blocked work, quality risk, or customer risk.
 4. Check for an existing note about the same symptom or problem before creating a new file:
-   - list existing notes in `docs/kaizen/`;
+   - list existing note files in `docs/kaizen/`, excluding `README.md`;
    - search note titles and bodies for the same symptom, failure mode, workflow, command, tool, skill, or handoff;
    - prefer amending a matching note when the new evidence describes the same problem, even if the root cause is still uncertain.
 5. If a matching note exists, update that note instead of creating a duplicate:
@@ -71,7 +71,12 @@ Usually not candidates:
 6. If no matching note exists, choose a concise slug and create:
    - `docs/kaizen/YYYY-MM-DD-short-observation-slug.md`
 7. Keep the note factual and diagnostic.
-8. Commit the note once written. Do not include unrelated working-tree changes.
+8. Maintain `docs/kaizen/README.md` in the same change:
+   - for a new note, add exactly one row with its first-observed date, linked title, `New`, and `—` for Review due;
+   - for an amendment, verify the existing row and link remain accurate; preserve its status unless the conversation contains an explicit assessment or outcome that justifies a change under the ledger's definitions;
+   - never infer a review date. It is populated only for an explicitly approved active experiment;
+   - verify every top-level note except `README.md` has exactly one valid linked row, no row points to a missing note, and at most one row is `Experiment`.
+9. Commit the note and ledger update together. Do not include unrelated working-tree changes.
 
 ## Note Template
 

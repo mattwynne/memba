@@ -15,7 +15,7 @@ Anchor the configurable evidence window to review start (default 90 days). Inven
 
 Record unavailable sources and retention gaps explicitly. Do not translate a missing run, deploy, cost, or intervention record into success.
 
-Up to four BB research children may inspect independent evidence domains in parallel. A useful split is (1) iterations/Git/deploy/CI, (2) Fabro runs, (3) tests/incidents/kaizen, and (4) BB/human interventions/token cost. Avoid duplicate scopes and require source paths, IDs, dates, and uncertainties in each report.
+Start exactly four BB research children in parallel, each with a distinct evidence domain: (1) iterations/Git/deploy/CI, (2) Fabro runs, (3) tests/incidents/kaizen, and (4) BB/human interventions/token cost. Require source paths, IDs, dates, and uncertainties in each report. A child with no accessible evidence reports the gap rather than borrowing another child's scope.
 
 ## 2. Search broad, then drill down
 
@@ -57,11 +57,11 @@ Explain the top problem, causal mechanism, operational impact, supporting eviden
 
 Ask Matt to approve the recommendation before implementation. Approval to conduct the retrospective is not approval to change the factory.
 
-If the ledger already has an `Experiment`, review it instead: compare its primary metric and guardrails with baseline, account for confounders, and recommend adopt, revise, continue, or revert. Do not start a second experiment.
+If the ledger already has an `Experiment`, stop and invoke the sibling `kaizen-experiment-review` skill. Do not duplicate that skill's review procedure here and do not start a second experiment.
 
 ## 6. Implement safely after approval
 
-Delegate implementation and independent validation to separate BB child threads where practical. Define the validation ladder before making the change:
+After Matt approves the selected action, delegate implementation and independent validation to separate BB child threads. Define the validation ladder before making the change:
 
 1. static checks and contracts;
 2. deterministic fixtures;

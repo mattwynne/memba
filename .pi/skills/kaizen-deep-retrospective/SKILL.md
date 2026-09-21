@@ -1,6 +1,6 @@
 ---
 name: kaizen-deep-retrospective
-description: Review Memba's software-delivery factory periodically or on demand, select its highest-value systemic problem from broad evidence, and propose one approval-gated improvement or experiment.
+description: Conduct a comprehensive, evidence-led review of Memba's software-delivery factory across many deliveries, selecting one systemic improvement for approval. Use for periodic or explicitly requested deep factory reviews, not ordinary retrospectives, incident notes, or fixing an existing kaizen note.
 ---
 
 # Kaizen deep retrospective
@@ -22,7 +22,7 @@ Default to the 90 days ending at review start; accept a different requested wind
 ## Control rules
 
 - Read [the review protocol](references/review-protocol.md) before conducting a review.
-- Inspect `docs/kaizen/README.md` first. If any row is `Experiment`, do not launch another; route the work to reviewing that experiment.
+- Inspect `docs/kaizen/README.md` first. If any row is `Experiment`, stop this retrospective and invoke the sibling `kaizen-experiment-review` skill; do not launch or design another experiment.
 - Work largely autonomously. Ask only when evidence is unavailable or contradictory, or business context is necessary.
 - Question assumptions and existing standard work. ADRs have a higher burden of proof, not immunity from review.
 - Surface one top problem concisely with enough causal and impact context. Offer options only for a genuine tradeoff; otherwise recommend one improvement.
@@ -38,12 +38,12 @@ Write the full retrospective to `docs/notes/YYYY-MM-DD-<title>.md`. Preserve:
 - runners-up and rejected ideas without needlessly deep investigation;
 - evidence gaps and review usage when available.
 
-Create or update exactly one selected note in `docs/kaizen/` and update its ledger row. Put experiment design in that kaizen note, not the retrospective. Do not discard useful runner-up evidence and do not create kaizen notes for every candidate.
+Create or update exactly one selected note in `docs/kaizen/` and update its ledger row. Keep it `Open` while seeking approval. Put an approved experiment design in that kaizen note, not the retrospective, and change it to `Experiment` with the agreed review date only when Matt explicitly approves starting that experiment. Do not discard useful runner-up evidence and do not create kaizen notes for every candidate.
 
 An experiment note must record causal evidence and hypothesis, baseline, one primary outcome metric aligned to the objective order, quality guardrails, implementation, validation ladder, review date, and decision criteria.
 
 ## After approval
 
-Use BB child threads to implement and independently validate the approved factory change. Test outside production delivery using an evidence-appropriate ladder: static/contracts, fixtures, isolated historical replay, then limited canary. Never make the next real delivery the first test. If no safe harness exists, recommend building one instead.
+Only after approval, use separate BB child threads for implementation and independent validation of the approved factory change. Validate outside production delivery using an evidence-appropriate ladder: static/contracts, fixtures, isolated historical replay, then limited non-production canary. Never make the next real delivery the first test. If no safe harness exists, recommend building one instead.
 
 Keep `docs/kaizen/README.md` complete and preserve its exact columns and allowed statuses. Follow project instructions for validation; docs/skill-only changes do not require `dev check`.
