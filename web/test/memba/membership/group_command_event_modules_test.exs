@@ -6,6 +6,7 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateGroup
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
@@ -81,6 +82,15 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
              actor_person_id: actor_person_id
            } ==
              struct!(AddCustomGroupMember, Map.put(ids, :actor_person_id, actor_person_id))
+
+    assert %RemoveCustomGroupMember{
+             club_id: ids.club_id,
+             group_id: ids.group_id,
+             membership_id: ids.membership_id,
+             person_id: ids.person_id,
+             actor_person_id: actor_person_id
+           } ==
+             struct!(RemoveCustomGroupMember, Map.put(ids, :actor_person_id, actor_person_id))
 
     assert %RemoveGroupMember{
              club_id: ids.club_id,

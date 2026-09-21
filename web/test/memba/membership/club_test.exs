@@ -12,6 +12,7 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -1748,6 +1749,188 @@ defmodule Memba.Membership.ClubTest do
                  command
                  | group_id: Memba.ID.generate(:group)
                })
+
+      for system_group_id <- [
+            SystemGroups.everyone_group_id(club_id),
+            SystemGroups.admin_group_id(club_id)
+          ] do
+        system_group_club = create_group(club, system_group_id, nil, "System")
+
+        assert {:error, :system_group_not_allowed} =
+                 Club.execute(system_group_club, %{command | group_id: system_group_id})
+      end
+    end
+  end
+
+  describe "execute/2 RemoveCustomGroupMember authorization" do
+    test "lets a current group member remove the final member and retries exactly as a no-op" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      actor_membership_id = Memba.ID.generate(:membership)
+      actor_person_id = Memba.ID.generate(:person)
+      target_membership_id = Memba.ID.generate(:membership)
+      target_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, nil, "Board")
+        |> activate_member(actor_membership_id, actor_person_id)
+        |> activate_member(target_membership_id, target_person_id)
+        |> add_group_member(group_id, actor_membership_id, actor_person_id)
+        |> add_group_member(group_id, target_membership_id, target_person_id)
+        |> remove_group_member(group_id, actor_membership_id, actor_person_id)
+
+      command = %RemoveCustomGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: target_membership_id,
+        person_id: target_person_id,
+        actor_person_id: target_person_id
+      }
+
+      assert %GroupMemberRemoved{
+               club_id: ^club_id,
+               group_id: ^group_id,
+               membership_id: ^target_membership_id,
+               person_id: ^target_person_id
+             } = event = Club.execute(club, command)
+
+      assert [] = club |> Club.apply(event) |> Club.execute(command)
+    end
+
+    test "lets an active manager outside the group remove a member without changing club authority" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      role_id = Memba.ID.generate(:role)
+      actor_membership_id = Memba.ID.generate(:membership)
+      actor_person_id = Memba.ID.generate(:person)
+      target_membership_id = Memba.ID.generate(:membership)
+      target_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, nil, "Board")
+        |> define_role(role_id, "membership-manager", "Membership manager")
+        |> grant_manage_members_permission(role_id)
+        |> activate_member(actor_membership_id, actor_person_id)
+        |> assign_member_role(actor_membership_id, actor_person_id, role_id)
+        |> activate_member(target_membership_id, target_person_id)
+        |> assign_member_role(target_membership_id, target_person_id, role_id)
+        |> add_group_member(group_id, target_membership_id, target_person_id)
+
+      command = %RemoveCustomGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: target_membership_id,
+        person_id: target_person_id,
+        actor_person_id: actor_person_id
+      }
+
+      refute Map.has_key?(
+               club.group_memberships,
+               {group_id, actor_membership_id}
+             )
+
+      assert %GroupMemberRemoved{} = event = Club.execute(club, command)
+      updated_club = Club.apply(club, event)
+
+      assert updated_club.active_memberships == club.active_memberships
+      assert updated_club.role_assignments == club.role_assignments
+      assert updated_club.role_permissions == club.role_permissions
+    end
+
+    test "rejects ordinary outsiders, inactive actors, mismatched targets, and missing memberships" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      actor_membership_id = Memba.ID.generate(:membership)
+      actor_person_id = Memba.ID.generate(:person)
+      outsider_membership_id = Memba.ID.generate(:membership)
+      outsider_person_id = Memba.ID.generate(:person)
+      target_membership_id = Memba.ID.generate(:membership)
+      target_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, nil, "Board")
+        |> activate_member(actor_membership_id, actor_person_id)
+        |> activate_member(outsider_membership_id, outsider_person_id)
+        |> activate_member(target_membership_id, target_person_id)
+        |> add_group_member(group_id, actor_membership_id, actor_person_id)
+        |> add_group_member(group_id, target_membership_id, target_person_id)
+
+      command = %RemoveCustomGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: target_membership_id,
+        person_id: target_person_id,
+        actor_person_id: outsider_person_id
+      }
+
+      assert {:error, :unauthorized} = Club.execute(club, command)
+
+      inactive_actor_club =
+        Club.apply(club, %ClubMemberRemoved{
+          club_id: club_id,
+          membership_id: actor_membership_id,
+          person_id: actor_person_id
+        })
+
+      assert {:error, :unauthorized} =
+               Club.execute(inactive_actor_club, %{command | actor_person_id: actor_person_id})
+
+      assert {:error, :membership_person_mismatch} =
+               Club.execute(club, %{
+                 command
+                 | actor_person_id: actor_person_id,
+                   person_id: outsider_person_id
+               })
+
+      assert {:error, :group_member_not_active} =
+               Club.execute(club, %{
+                 command
+                 | actor_person_id: actor_person_id,
+                   membership_id: outsider_membership_id,
+                   person_id: outsider_person_id
+               })
+    end
+
+    test "validates command identities and rejects system groups" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      actor_membership_id = Memba.ID.generate(:membership)
+      actor_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, nil, "Board")
+        |> activate_member(actor_membership_id, actor_person_id)
+        |> add_group_member(group_id, actor_membership_id, actor_person_id)
+
+      command = %RemoveCustomGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: actor_membership_id,
+        person_id: actor_person_id,
+        actor_person_id: actor_person_id
+      }
+
+      assert {:error, :invalid_club_id} =
+               Club.execute(club, %{command | club_id: Memba.ID.generate(:club)})
+
+      assert {:error, :invalid_group_id} = Club.execute(club, %{command | group_id: "bad"})
+
+      assert {:error, :invalid_membership_id} =
+               Club.execute(club, %{command | membership_id: "bad"})
+
+      assert {:error, :invalid_person_id} =
+               Club.execute(club, %{command | person_id: "bad"})
+
+      assert {:error, :invalid_actor_person_id} =
+               Club.execute(club, %{command | actor_person_id: "bad"})
 
       for system_group_id <- [
             SystemGroups.everyone_group_id(club_id),

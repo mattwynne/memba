@@ -24,6 +24,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
@@ -112,6 +113,23 @@ defmodule Memba.Membership do
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_custom_group_member_command(attrs) do
       dispatch_custom_group_admission(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Remove an active club membership from a custom group as an authenticated actor.
+
+  The caller supplies the Club and group identities, the target
+  membership/person pair, and the authenticated actor's person identity. The
+  Club aggregate authoritatively requires an active actor who either belongs to
+  the custom group or has its club's `club.manage_members` permission. The
+  target must be the exact active club member recorded for the custom-group
+  membership. System groups are not writable through this use case.
+  """
+  def remove_custom_group_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- remove_custom_group_member_command(attrs) do
+      dispatch(command, dispatch_opts)
     end
   end
 
@@ -1794,6 +1812,23 @@ defmodule Memba.Membership do
          {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
       {:ok,
        %AddCustomGroupMember{
+         club_id: club_id,
+         group_id: group_id,
+         membership_id: membership_id,
+         person_id: person_id,
+         actor_person_id: actor_person_id
+       }}
+    end
+  end
+
+  defp remove_custom_group_member_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
+      {:ok,
+       %RemoveCustomGroupMember{
          club_id: club_id,
          group_id: group_id,
          membership_id: membership_id,

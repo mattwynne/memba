@@ -36,7 +36,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
-  test "public Membership API exposes custom group creation and actor-authenticated admission" do
+  test "public Membership API exposes actor-authenticated custom group membership changes" do
     refute function_exported?(Membership, :create_group, 1)
     refute function_exported?(Membership, :create_group, 2)
     assert function_exported?(Membership, :create_custom_group, 1)
@@ -49,8 +49,8 @@ defmodule Memba.Membership.PublicApiTest do
 
     refute function_exported?(Membership, :remove_group_member, 1)
     refute function_exported?(Membership, :remove_group_member, 2)
-    refute function_exported?(Membership, :remove_custom_group_member, 1)
-    refute function_exported?(Membership, :remove_custom_group_member, 2)
+    assert function_exported?(Membership, :remove_custom_group_member, 1)
+    assert function_exported?(Membership, :remove_custom_group_member, 2)
   end
 
   test "create_club/2 dispatches CreateClub through the Membership context" do

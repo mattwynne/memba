@@ -16,6 +16,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -283,6 +284,28 @@ defmodule Memba.Membership.Club do
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
          :ok <- ensure_group_exists(club, command.group_id) do
       remove_group_member_decision(club, command)
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %RemoveCustomGroupMember{}),
+    do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %RemoveCustomGroupMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
+         :ok <- ensure_custom_group(club, command.group_id),
+         :ok <- authorize_custom_group_removal_actor(club, command),
+         :ok <-
+           ensure_current_or_removed_custom_group_target(
+             club,
+             command.group_id,
+             command.membership_id,
+             command.person_id
+           ) do
+      remove_custom_group_member_decision(club, command)
     end
   end
 
@@ -977,6 +1000,51 @@ defmodule Memba.Membership.Club do
     if authorized?, do: :ok, else: {:error, :unauthorized}
   end
 
+  defp authorize_custom_group_removal_actor(
+         %__MODULE__{} = club,
+         %RemoveCustomGroupMember{} = command
+       ) do
+    authorized? =
+      Enum.any?(club.active_memberships, fn
+        {membership_id, actor_person_id} when actor_person_id == command.actor_person_id ->
+          active_group_membership?(
+            club,
+            command.group_id,
+            membership_id,
+            command.actor_person_id
+          ) or
+            membership_has_permission?(
+              club,
+              membership_id,
+              command.actor_person_id,
+              Permissions.club_manage_members()
+            ) or exact_self_removal_retry?(club, command)
+
+        {_membership_id, _other_person_id} ->
+          false
+      end)
+
+    if authorized?, do: :ok, else: {:error, :unauthorized}
+  end
+
+  defp exact_self_removal_retry?(
+         %__MODULE__{} = club,
+         %RemoveCustomGroupMember{
+           actor_person_id: person_id,
+           person_id: person_id
+         } = command
+       ) do
+    case Map.get(
+           club.group_memberships,
+           group_membership_key(command.group_id, command.membership_id)
+         ) do
+      %{active: false, person_id: ^person_id} -> true
+      _active_missing_or_mismatched -> false
+    end
+  end
+
+  defp exact_self_removal_retry?(%__MODULE__{}, %RemoveCustomGroupMember{}), do: false
+
   defp active_group_membership?(%__MODULE__{} = club, group_id, membership_id, person_id) do
     case Map.get(club.group_memberships, group_membership_key(group_id, membership_id)) do
       %{active: true, person_id: ^person_id} -> true
@@ -1010,6 +1078,26 @@ defmodule Memba.Membership.Club do
       {:ok, ^person_id} -> :ok
       {:ok, _different_person_id} -> {:error, :membership_person_mismatch}
       :error -> {:error, :member_not_active}
+    end
+  end
+
+  defp ensure_current_or_removed_custom_group_target(
+         %__MODULE__{} = club,
+         group_id,
+         membership_id,
+         person_id
+       ) do
+    with :ok <- ensure_active_custom_group_target(club, membership_id, person_id) do
+      case Map.fetch(club.group_memberships, group_membership_key(group_id, membership_id)) do
+        {:ok, %{person_id: group_person_id}} when group_person_id != person_id ->
+          {:error, :group_membership_person_mismatch}
+
+        {:ok, %{person_id: ^person_id, active: active}} when is_boolean(active) ->
+          :ok
+
+        :error ->
+          {:error, :group_member_not_active}
+      end
     end
   end
 
@@ -1270,6 +1358,33 @@ defmodule Memba.Membership.Club do
 
       :error ->
         []
+    end
+  end
+
+  defp remove_custom_group_member_decision(
+         %__MODULE__{} = club,
+         %RemoveCustomGroupMember{} = command
+       ) do
+    case Map.fetch(
+           club.group_memberships,
+           group_membership_key(command.group_id, command.membership_id)
+         ) do
+      {:ok, %{person_id: person_id}} when person_id != command.person_id ->
+        {:error, :group_membership_person_mismatch}
+
+      {:ok, %{active: true}} ->
+        %GroupMemberRemoved{
+          club_id: command.club_id,
+          group_id: command.group_id,
+          membership_id: command.membership_id,
+          person_id: command.person_id
+        }
+
+      {:ok, %{active: false}} ->
+        []
+
+      :error ->
+        {:error, :group_member_not_active}
     end
   end
 
