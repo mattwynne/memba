@@ -596,6 +596,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              %ConversationUnfollowed{
                member_id: target_person_id,
                membership_generation: removal_generation,
+               removed_group_id: removed_group_id,
                follow_retained: true
              }
            ] = unfollow_events(shared_conversation_id, fixture.target_person_id)
@@ -612,6 +613,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
       end)
 
     assert target_person_id == fixture.target_person_id
+    assert removed_group_id == fixture.group_id
     assert removal_generation == recorded_removal.data.membership_generation
 
     assert :ok =
@@ -632,7 +634,8 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                  club_id: fixture.club_id,
                  conversation_id: shared_conversation_id,
                  member_id: fixture.target_person_id,
-                 membership_generation: removal_generation - 1
+                 membership_generation: removal_generation - 1,
+                 authorizing_group_ids: [fixture.group_id]
                },
                consistency: :strong
              )
@@ -650,7 +653,8 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                  subject: "Re: Board plans",
                  body: "Prepared before the Board removal.",
                  recipients: [],
-                 sender_membership_generation: removal_generation - 1
+                 sender_membership_generation: removal_generation - 1,
+                 sender_follow_group_ids: [fixture.group_id]
                },
                consistency: :strong
              )
@@ -690,6 +694,218 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
 
     assert Messaging.following_conversation?(shared_conversation_id, fixture.target_person_id)
     assert count_unfollow_events(shared_conversation_id, fixture.target_person_id) == 2
+  end
+
+  test "cleanup records a shared-conversation cutoff without following an unfollowed member" do
+    fixture = explicit_removal_fixture!()
+    retained_group_id = Memba.ID.generate(:group)
+    conversation_id = Memba.ID.generate(:message)
+
+    create_custom_group(fixture.club_id, retained_group_id, "Trips", "trips")
+
+    add_group_member(
+      fixture.club_id,
+      retained_group_id,
+      fixture.target_membership_id,
+      fixture.target_person_id
+    )
+
+    create_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      conversation_id,
+      fixture.actor_person_id
+    )
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(
+               %{
+                 conversation_id: conversation_id,
+                 club_id: fixture.club_id,
+                 group_id: retained_group_id,
+                 access_level: :write
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+    assert :ok = remove_custom_group_member(fixture)
+
+    refute Messaging.following_conversation?(conversation_id, fixture.target_person_id)
+
+    refute Enum.any?(
+             Messaging.list_conversation_followers(conversation_id),
+             &(&1.member_id == fixture.target_person_id)
+           )
+
+    assert [
+             %ConversationUnfollowed{
+               removed_group_id: removed_group_id,
+               follow_retained: false
+             }
+           ] = unfollow_events(conversation_id, fixture.target_person_id)
+
+    assert removed_group_id == fixture.group_id
+
+    assert {:ok, %ExecutionResult{events: reply_events}} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: Memba.ID.generate(:message),
+                 sender_id: fixture.actor_person_id,
+                 conversation_id: conversation_id,
+                 body: "No phantom follower should receive this."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    refute Enum.any?(reply_events, fn
+             %EmailDeliveryCreated{recipient_id: person_id} ->
+               person_id == fixture.target_person_id
+
+             _other_event ->
+               false
+           end)
+  end
+
+  test "same-generation manual, root, and reply follows use a surviving group source" do
+    fixture = explicit_removal_fixture!()
+    retained_group_id = Memba.ID.generate(:group)
+    shared_conversation_id = Memba.ID.generate(:message)
+    retained_root_id = Memba.ID.generate(:message)
+
+    create_custom_group(fixture.club_id, retained_group_id, "Trips", "trips")
+
+    add_group_member(
+      fixture.club_id,
+      retained_group_id,
+      fixture.target_membership_id,
+      fixture.target_person_id
+    )
+
+    create_followed_conversation(
+      fixture.club_id,
+      fixture.group_id,
+      shared_conversation_id,
+      fixture.target_person_id
+    )
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(
+               %{
+                 conversation_id: shared_conversation_id,
+                 club_id: fixture.club_id,
+                 group_id: retained_group_id,
+                 access_level: :write
+               },
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %GroupMemberRemoved{membership_generation: removal_generation}
+              ]
+            }} =
+             remove_custom_group_member(fixture, returning: :execution_result)
+
+    assert :ok =
+             Messaging.unfollow_conversation(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: shared_conversation_id,
+                 member_id: fixture.target_person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Messaging.follow_conversation_as_current_member(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: shared_conversation_id,
+                 member_id: fixture.target_person_id
+               },
+               consistency: :strong
+             )
+
+    assert %ConversationFollowed{
+             membership_generation: ^removal_generation,
+             authorizing_group_ids: [^retained_group_id]
+           } =
+             List.last(follow_events(shared_conversation_id, fixture.target_person_id))
+
+    assert :ok =
+             Messaging.unfollow_conversation(
+               %{
+                 club_id: fixture.club_id,
+                 conversation_id: shared_conversation_id,
+                 member_id: fixture.target_person_id
+               },
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %MessageSent{
+                  sender_membership_generation: ^removal_generation,
+                  sender_follow_group_ids: [^retained_group_id]
+                }
+                | _delivery_events
+              ]
+            }} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: Memba.ID.generate(:message),
+                 sender_id: fixture.target_person_id,
+                 conversation_id: shared_conversation_id,
+                 body: "Still active through Trips."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %ConversationFollowed{
+             membership_generation: ^removal_generation,
+             authorizing_group_ids: [^retained_group_id]
+           } =
+             List.last(follow_events(shared_conversation_id, fixture.target_person_id))
+
+    assert :ok =
+             MessagingApp.dispatch(
+               %SendMessage{
+                 message_id: retained_root_id,
+                 club_id: fixture.club_id,
+                 sender_id: fixture.target_person_id,
+                 audience_group_id: retained_group_id,
+                 subject: "Trips plans",
+                 body: "This root is authorized through the surviving group.",
+                 recipients: [
+                   %Recipient{
+                     delivery_id: Memba.ID.generate(:delivery),
+                     person_id: fixture.target_person_id,
+                     name: "Departing Member",
+                     email: "departing@example.com"
+                   }
+                 ],
+                 sender_membership_generation: removal_generation,
+                 sender_follow_group_ids: [retained_group_id]
+               },
+               consistency: :strong
+             )
+
+    assert [
+             %ConversationFollowed{
+               membership_generation: ^removal_generation,
+               authorizing_group_ids: [^retained_group_id]
+             }
+           ] = follow_events(retained_root_id, fixture.target_person_id)
+
+    assert [%MessageSent{sender_follow_group_ids: [^retained_group_id]} | _events] =
+             retained_root_id
+             |> then(&EventStore.stream_forward(MessagingApp, &1))
+             |> Enum.map(& &1.data)
   end
 
   test "first delayed removal delivery cannot erase newer follows after a genuine re-add" do

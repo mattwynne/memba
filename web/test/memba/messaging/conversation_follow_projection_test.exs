@@ -121,6 +121,57 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
              )
   end
 
+  test "a retained-access cleanup does not project a follow for an unfollowed member" do
+    club_id = Memba.ID.generate(:club)
+    conversation_id = Memba.ID.generate(:message)
+    member_id = Memba.ID.generate(:person)
+    removed_group_id = Memba.ID.generate(:group)
+
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %ConversationUnfollowed{
+                  removed_group_id: ^removed_group_id,
+                  follow_retained: false
+                }
+              ]
+            }} =
+             Messaging.unfollow_conversation(
+               %{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: member_id,
+                 cleanup_id: "unfollowed-shared-cleanup",
+                 membership_generation: 5,
+                 removed_group_id: removed_group_id,
+                 retain_follow: true
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %ConversationFollowProjection{following: false} =
+             Messaging.get_conversation_follow(conversation_id, member_id)
+
+    refute Messaging.following_conversation?(conversation_id, member_id)
+    assert Messaging.list_conversation_followers(conversation_id) == []
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             Messaging.unfollow_conversation(
+               %{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: member_id,
+                 cleanup_id: "unfollowed-shared-cleanup",
+                 membership_generation: 5,
+                 removed_group_id: removed_group_id,
+                 retain_follow: true
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+  end
+
   test "MessageSent auto-follows the root sender and each reply author" do
     club_id = Memba.ID.generate(:club)
     root_message_id = Memba.ID.generate(:message)

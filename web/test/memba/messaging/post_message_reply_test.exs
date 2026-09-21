@@ -12,6 +12,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
@@ -25,6 +26,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
 
   test "a current club member can post a reply and email only current followers except themself" do
     club_id = Memba.ID.generate(:club)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
     alice = create_person(name: "Alice", email: "alice@example.com")
     bob = create_person(name: "Bob", email: "bob@example.com")
     carol = create_person(name: "Carol", email: "carol@example.com")
@@ -61,6 +63,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
                   sender_id: bob_id,
                   conversation_id: ^root_message_id,
                   reply_to_message_id: ^root_message_id,
+                  sender_follow_group_ids: [^everyone_group_id],
                   subject: "Trip planning night",
                   body: "I can bring maps."
                 }

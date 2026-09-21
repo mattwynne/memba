@@ -62,6 +62,7 @@ defmodule Memba.Messaging.MessageTest do
                  sender_id: ^sender_id,
                  conversation_id: ^message_id,
                  reply_to_message_id: nil,
+                 sender_follow_group_ids: [^group_id],
                  subject: "Trail day",
                  body: "Meet at 9am."
                },

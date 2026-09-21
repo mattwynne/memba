@@ -169,7 +169,7 @@ defmodule Memba.Messaging.ConversationFollowersTest do
 
       cleaned = ConversationFollowers.apply(conversation, cleanup)
       assert MapSet.member?(cleaned.follower_ids, member_id)
-      assert cleaned.cleanup_generations[member_id] == 5
+      assert cleaned.cleanup_generations[{member_id, nil}] == 5
 
       assert %ConversationUnfollowed{cleanup_id: nil} =
                ordinary_unfollow =
@@ -181,7 +181,7 @@ defmodule Memba.Messaging.ConversationFollowersTest do
 
       unfollowed = ConversationFollowers.apply(cleaned, ordinary_unfollow)
       refute MapSet.member?(unfollowed.follower_ids, member_id)
-      assert unfollowed.cleanup_generations[member_id] == 5
+      assert unfollowed.cleanup_generations[{member_id, nil}] == 5
 
       for source <- [:manual, :reply] do
         assert [] =
@@ -207,13 +207,48 @@ defmodule Memba.Messaging.ConversationFollowersTest do
       refute MapSet.member?(stale_root.follower_ids, member_id)
     end
 
-    test "explicitly retains an equal-generation shared follow while recording its cutoff" do
-      conversation = followed_conversation(5)
-      member_id = hd(MapSet.to_list(conversation.follower_ids))
+    test "records a group cutoff without manufacturing a retained follow" do
+      club_id = Memba.ID.generate(:club)
+      conversation_id = Memba.ID.generate(:message)
+      member_id = Memba.ID.generate(:person)
+      removed_group_id = Memba.ID.generate(:group)
 
       assert %ConversationUnfollowed{
                cleanup_id: "shared-access-removal",
                membership_generation: 5,
+               removed_group_id: ^removed_group_id,
+               follow_retained: false
+             } =
+               cleanup =
+               ConversationFollowers.execute(
+                 %ConversationFollowers{},
+                 %UnfollowConversation{
+                   club_id: club_id,
+                   conversation_id: conversation_id,
+                   member_id: member_id,
+                   cleanup_id: "shared-access-removal",
+                   membership_generation: 5,
+                   removed_group_id: removed_group_id,
+                   retain_follow: true
+                 }
+               )
+
+      cleaned = ConversationFollowers.apply(%ConversationFollowers{}, cleanup)
+      refute MapSet.member?(cleaned.follower_ids, member_id)
+      assert cleaned.cleanup_generations[{member_id, removed_group_id}] == 5
+      assert [] = ConversationFollowers.execute(cleaned, cleanup_command(cleanup))
+    end
+
+    test "retains a shared follow and allows equal-generation work through a surviving group" do
+      conversation = followed_conversation(5)
+      member_id = hd(MapSet.to_list(conversation.follower_ids))
+      removed_group_id = Memba.ID.generate(:group)
+      surviving_group_id = Memba.ID.generate(:group)
+
+      assert %ConversationUnfollowed{
+               cleanup_id: "shared-access-removal",
+               membership_generation: 5,
+               removed_group_id: ^removed_group_id,
                follow_retained: true
              } =
                cleanup =
@@ -223,12 +258,13 @@ defmodule Memba.Messaging.ConversationFollowersTest do
                  member_id: member_id,
                  cleanup_id: "shared-access-removal",
                  membership_generation: 5,
+                 removed_group_id: removed_group_id,
                  retain_follow: true
                })
 
       retained = ConversationFollowers.apply(conversation, cleanup)
       assert MapSet.member?(retained.follower_ids, member_id)
-      assert retained.cleanup_generations[member_id] == 5
+      assert retained.cleanup_generations[{member_id, removed_group_id}] == 5
 
       assert %ConversationUnfollowed{cleanup_id: nil} =
                ordinary_unfollow =
@@ -240,15 +276,68 @@ defmodule Memba.Messaging.ConversationFollowersTest do
 
       unfollowed = ConversationFollowers.apply(retained, ordinary_unfollow)
       refute MapSet.member?(unfollowed.follower_ids, member_id)
-      assert unfollowed.cleanup_generations[member_id] == 5
+      assert unfollowed.cleanup_generations[{member_id, removed_group_id}] == 5
 
       assert [] =
                ConversationFollowers.execute(unfollowed, %FollowConversation{
                  club_id: conversation.club_id,
                  conversation_id: conversation.conversation_id,
                  member_id: member_id,
-                 membership_generation: 5
+                 membership_generation: 5,
+                 authorizing_group_ids: [removed_group_id]
                })
+
+      assert %ConversationFollowed{
+               membership_generation: 5,
+               authorizing_group_ids: [^surviving_group_id]
+             } =
+               ConversationFollowers.execute(unfollowed, %FollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id,
+                 membership_generation: 5,
+                 authorizing_group_ids: [surviving_group_id]
+               })
+
+      assert %ConversationFollowed{authorizing_group_ids: authorizing_group_ids} =
+               ConversationFollowers.execute(unfollowed, %FollowConversation{
+                 club_id: conversation.club_id,
+                 conversation_id: conversation.conversation_id,
+                 member_id: member_id,
+                 membership_generation: 5,
+                 authorizing_group_ids: [removed_group_id, surviving_group_id]
+               })
+
+      assert Enum.sort(authorizing_group_ids) ==
+               Enum.sort([removed_group_id, surviving_group_id])
+
+      stale_root =
+        ConversationFollowers.apply(unfollowed, %MessageSent{
+          message_id: conversation.conversation_id,
+          club_id: conversation.club_id,
+          sender_id: member_id,
+          audience_group_id: removed_group_id,
+          subject: "Delayed Board root",
+          body: "Prepared through the removed group.",
+          sender_membership_generation: 5,
+          sender_follow_group_ids: [removed_group_id]
+        })
+
+      refute MapSet.member?(stale_root.follower_ids, member_id)
+
+      surviving_root =
+        ConversationFollowers.apply(unfollowed, %MessageSent{
+          message_id: conversation.conversation_id,
+          club_id: conversation.club_id,
+          sender_id: member_id,
+          audience_group_id: surviving_group_id,
+          subject: "Trips root",
+          body: "Authorized through the surviving group.",
+          sender_membership_generation: 5,
+          sender_follow_group_ids: [surviving_group_id]
+        })
+
+      assert MapSet.member?(surviving_root.follower_ids, member_id)
     end
 
     test "records a cleanup cutoff that rejects delayed stale follow work" do
@@ -425,7 +514,19 @@ defmodule Memba.Messaging.ConversationFollowersTest do
 
     cleaned = ConversationFollowers.apply(followed_after_readd, cleanup)
     assert MapSet.member?(cleaned.follower_ids, member_id)
-    assert cleaned.cleanup_generations[member_id] == 1
+    assert cleaned.cleanup_generations[{member_id, nil}] == 1
+  end
+
+  defp cleanup_command(%ConversationUnfollowed{} = event) do
+    %UnfollowConversation{
+      club_id: event.club_id,
+      conversation_id: event.conversation_id,
+      member_id: event.member_id,
+      cleanup_id: event.cleanup_id,
+      membership_generation: event.membership_generation,
+      removed_group_id: event.removed_group_id,
+      retain_follow: true
+    }
   end
 
   defp followed_conversation(generation \\ nil) do

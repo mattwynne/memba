@@ -25,14 +25,20 @@ defmodule Memba.Messaging.ConversationFollowers do
   @impl Aggregate
   def execute(%__MODULE__{} = conversation, %FollowConversation{} = command) do
     with :ok <- validate_command(command),
+         :ok <- validate_group_ids(command.authorizing_group_ids),
          :ok <- validate_same_conversation(conversation, command),
          :ok <- validate_same_club(conversation, command) do
       membership_generation = normalize_generation(command.membership_generation)
       current_generation = follower_generation(conversation, command.member_id)
-      cleanup_generation = cleanup_generation(conversation, command.member_id)
+      authorizing_group_ids = normalize_group_ids(command.authorizing_group_ids)
 
       cond do
-        membership_generation <= cleanup_generation ->
+        not follow_allowed?(
+          conversation,
+          command.member_id,
+          authorizing_group_ids,
+          membership_generation
+        ) ->
           []
 
         MapSet.member?(conversation.follower_ids, command.member_id) and
@@ -45,7 +51,8 @@ defmodule Memba.Messaging.ConversationFollowers do
             club_id: command.club_id,
             conversation_id: command.conversation_id,
             member_id: command.member_id,
-            membership_generation: command.membership_generation
+            membership_generation: command.membership_generation,
+            authorizing_group_ids: authorizing_group_ids
           }
       end
     end
@@ -53,6 +60,7 @@ defmodule Memba.Messaging.ConversationFollowers do
 
   def execute(%__MODULE__{} = conversation, %UnfollowConversation{} = command) do
     with :ok <- validate_command(command),
+         :ok <- validate_optional_removed_group_id(command.removed_group_id),
          :ok <- validate_same_conversation(conversation, command),
          :ok <- validate_same_club(conversation, command) do
       cond do
@@ -68,8 +76,10 @@ defmodule Memba.Messaging.ConversationFollowers do
             member_id: command.member_id,
             cleanup_id: command.cleanup_id,
             membership_generation: command.membership_generation,
+            removed_group_id: command.removed_group_id,
             follow_retained:
-              is_binary(command.cleanup_id) and
+              MapSet.member?(conversation.follower_ids, command.member_id) and
+                is_binary(command.cleanup_id) and
                 (command.retain_follow == true or
                    normalize_generation(command.membership_generation) <
                      follower_generation(conversation, command.member_id))
@@ -93,7 +103,8 @@ defmodule Memba.Messaging.ConversationFollowers do
       apply_follow(
         conversation,
         event.sender_id,
-        event.sender_membership_generation
+        event.sender_membership_generation,
+        message_sender_follow_group_ids(event)
       )
     else
       conversation
@@ -107,7 +118,12 @@ defmodule Memba.Messaging.ConversationFollowers do
         club_id: event.club_id
     }
 
-    apply_follow(conversation, event.member_id, event.membership_generation)
+    apply_follow(
+      conversation,
+      event.member_id,
+      event.membership_generation,
+      event.authorizing_group_ids
+    )
   end
 
   def apply(%__MODULE__{} = conversation, %ConversationUnfollowed{} = event) do
@@ -162,10 +178,21 @@ defmodule Memba.Messaging.ConversationFollowers do
 
   defp record_completed_cleanup(cleanup_ids, _cleanup_id), do: cleanup_ids
 
-  defp apply_follow(conversation, member_id, membership_generation) do
+  defp apply_follow(
+         conversation,
+         member_id,
+         membership_generation,
+         authorizing_group_ids
+       ) do
     membership_generation = normalize_generation(membership_generation)
+    authorizing_group_ids = normalize_group_ids(authorizing_group_ids)
 
-    if membership_generation > cleanup_generation(conversation, member_id) do
+    if follow_allowed?(
+         conversation,
+         member_id,
+         authorizing_group_ids,
+         membership_generation
+       ) do
       %__MODULE__{
         conversation
         | follower_ids: MapSet.put(conversation.follower_ids, member_id),
@@ -187,7 +214,7 @@ defmodule Memba.Messaging.ConversationFollowers do
         | cleanup_generations:
             Map.update(
               conversation.cleanup_generations,
-              event.member_id,
+              {event.member_id, event.removed_group_id},
               membership_generation,
               &max(&1, membership_generation)
             )
@@ -217,9 +244,71 @@ defmodule Memba.Messaging.ConversationFollowers do
     Map.get(conversation.follower_generations, member_id, 0)
   end
 
-  defp cleanup_generation(conversation, member_id) do
-    Map.get(conversation.cleanup_generations, member_id, -1)
+  defp follow_allowed?(conversation, member_id, [], membership_generation) do
+    membership_generation > latest_cleanup_generation(conversation, member_id)
   end
+
+  defp follow_allowed?(
+         conversation,
+         member_id,
+         authorizing_group_ids,
+         membership_generation
+       ) do
+    historic_cutoff =
+      Map.get(conversation.cleanup_generations, {member_id, nil}, -1)
+
+    Enum.any?(authorizing_group_ids, fn group_id ->
+      removed_group_cutoff =
+        Map.get(conversation.cleanup_generations, {member_id, group_id}, -1)
+
+      membership_generation > max(historic_cutoff, removed_group_cutoff)
+    end)
+  end
+
+  defp latest_cleanup_generation(conversation, member_id) do
+    conversation.cleanup_generations
+    |> Enum.reduce(-1, fn
+      {{^member_id, _group_id}, generation}, latest -> max(generation, latest)
+      {_other_member_and_group, _generation}, latest -> latest
+    end)
+  end
+
+  defp message_sender_follow_group_ids(%MessageSent{} = event) do
+    case event.sender_follow_group_ids do
+      group_ids when is_list(group_ids) and group_ids != [] ->
+        group_ids
+
+      _historic_or_unspecified
+      when is_nil(event.conversation_id) or event.message_id == event.conversation_id ->
+        List.wrap(event.audience_group_id)
+
+      _historic_or_unspecified ->
+        []
+    end
+  end
+
+  defp validate_group_ids(nil), do: :ok
+
+  defp validate_group_ids(group_ids) when is_list(group_ids) do
+    Enum.reduce_while(group_ids, :ok, fn group_id, :ok ->
+      case validate_id(:group, group_id, :invalid_authorizing_group_ids) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp validate_group_ids(_invalid), do: {:error, :invalid_authorizing_group_ids}
+
+  defp validate_optional_removed_group_id(nil), do: :ok
+
+  defp validate_optional_removed_group_id(group_id),
+    do: validate_id(:group, group_id, :invalid_removed_group_id)
+
+  defp normalize_group_ids(group_ids) when is_list(group_ids),
+    do: group_ids |> Enum.uniq() |> Enum.sort()
+
+  defp normalize_group_ids(_historic_or_invalid), do: []
 
   defp normalize_generation(generation)
        when is_integer(generation) and generation >= 0,

@@ -315,6 +315,8 @@ defmodule Memba.Messaging.Message do
         subject: subject,
         body: body,
         sender_membership_generation: command.sender_membership_generation,
+        sender_follow_group_ids:
+          sender_follow_group_ids(command, audience_group_id, reply_to_message_id),
         sender_follow_requested: sender_follows_conversation?(command, recipients),
         sender_follows_conversation: false
       }
@@ -327,6 +329,20 @@ defmodule Memba.Messaging.Message do
           audience_group_id
         ) ++
         Enum.map(recipients, &email_delivery_created(command.message_id, &1))
+    end
+  end
+
+  defp sender_follow_group_ids(command, audience_group_id, nil) do
+    case command.sender_follow_group_ids do
+      group_ids when is_list(group_ids) and group_ids != [] -> group_ids
+      _historic_or_unspecified -> List.wrap(audience_group_id)
+    end
+  end
+
+  defp sender_follow_group_ids(command, _audience_group_id, _reply_to_message_id) do
+    case command.sender_follow_group_ids do
+      group_ids when is_list(group_ids) -> group_ids
+      _historic_or_unspecified -> []
     end
   end
 

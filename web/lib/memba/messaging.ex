@@ -130,8 +130,8 @@ defmodule Memba.Messaging do
            authorize_at_stable_checkpoint(
              fn ->
                with {:ok, command} <- post_message_reply_command(attrs),
-                    :ok <- authorize_reply_sender(command) do
-                 {:ok, command}
+                    {:ok, authorizing_group_ids} <- authorize_reply_sender(command) do
+                 {:ok, %{command | sender_follow_group_ids: authorizing_group_ids}}
                end
              end,
              projections: [ConversationFollowProjector]
@@ -223,8 +223,9 @@ defmodule Memba.Messaging do
     with {:ok, command} <-
            authorize_at_stable_checkpoint(fn ->
              with {:ok, command} <- follow_conversation_command(attrs),
-                  :ok <- authorize_current_member_conversation_action(command) do
-               {:ok, command}
+                  {:ok, authorizing_group_ids} <-
+                    authorize_current_member_conversation_action_with_groups(command) do
+               {:ok, %{command | authorizing_group_ids: authorizing_group_ids}}
              end
            end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
@@ -320,7 +321,8 @@ defmodule Memba.Messaging do
         club_id: event.club_id,
         conversation_id: event.conversation_id || event.message_id,
         member_id: event.sender_id,
-        membership_generation: event.sender_membership_generation
+        membership_generation: event.sender_membership_generation,
+        authorizing_group_ids: group_ids
       }
       |> dispatch_ok(consistency: [ConversationFollowProjector])
     else
@@ -1897,8 +1899,8 @@ defmodule Memba.Messaging do
            authorize_at_stable_checkpoint(
              fn ->
                with {:ok, command} <- post_message_reply_command(attrs),
-                    :ok <- authorize_reply_sender(command) do
-                 {:ok, command}
+                    {:ok, authorizing_group_ids} <- authorize_reply_sender(command) do
+                 {:ok, %{command | sender_follow_group_ids: authorizing_group_ids}}
                end
              end,
              projections: [ConversationFollowProjector]
@@ -2103,7 +2105,8 @@ defmodule Memba.Messaging do
          subject: subject,
          body: body,
          recipients: resolve_group_recipients(club_id, audience_group_id),
-         sender_membership_generation: Membership.current_group_membership_generation(club_id)
+         sender_membership_generation: Membership.current_group_membership_generation(club_id),
+         sender_follow_group_ids: [audience_group_id]
        }}
     end
   end
@@ -2163,7 +2166,8 @@ defmodule Memba.Messaging do
          club_id: club_id,
          conversation_id: conversation_id,
          member_id: member_id,
-         membership_generation: Membership.current_group_membership_generation(club_id)
+         membership_generation: Membership.current_group_membership_generation(club_id),
+         authorizing_group_ids: optional_attribute(attrs, :authorizing_group_ids) || []
        }}
     end
   end
@@ -2179,6 +2183,7 @@ defmodule Memba.Messaging do
          member_id: member_id,
          cleanup_id: optional_attribute(attrs, :cleanup_id),
          membership_generation: optional_attribute(attrs, :membership_generation),
+         removed_group_id: optional_attribute(attrs, :removed_group_id),
          retain_follow: optional_attribute(attrs, :retain_follow)
        }}
     end
@@ -2254,14 +2259,17 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp sender_follow_group_ids(%{message_id: message_id, conversation_id: message_id} = event) do
-    List.wrap(event.audience_group_id)
-  end
+  defp sender_follow_group_ids(event) do
+    case event.sender_follow_group_ids do
+      group_ids when is_list(group_ids) and group_ids != [] ->
+        group_ids
 
-  defp sender_follow_group_ids(%{conversation_id: conversation_id}) do
-    case App.aggregate_state(Message, conversation_id) do
-      %Message{group_access: group_access} -> Map.keys(group_access)
-      _missing_conversation -> []
+      _historic_or_unspecified
+      when is_nil(event.conversation_id) or event.message_id == event.conversation_id ->
+        List.wrap(event.audience_group_id)
+
+      _historic_or_unspecified ->
+        []
     end
   end
 
@@ -2322,6 +2330,7 @@ defmodule Memba.Messaging do
         member_id: member_id,
         cleanup_id: cleanup_id,
         membership_generation: membership_generation,
+        removed_group_id: removed_group_id,
         retain_follow: retain_follow
       },
       include_conversation_follow_consistency(dispatch_opts)
@@ -2441,14 +2450,14 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_reply_sender(%PostMessageReply{} = command) do
-    case member_has_authoritative_conversation_access?(
+    case authoritative_conversation_group_ids(
            command.conversation_id,
            command.club_id,
            command.sender_id,
            :write
          ) do
-      true -> :ok
-      false -> {:error, :not_current_member}
+      [] -> {:error, :not_current_member}
+      group_ids -> {:ok, group_ids}
     end
   end
 
@@ -2465,18 +2474,25 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_current_member_conversation_action(command) do
+    case authorize_current_member_conversation_action_with_groups(command) do
+      {:ok, _authorizing_group_ids} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp authorize_current_member_conversation_action_with_groups(command) do
     with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),
          :ok <- require_conversation_in_club(root_message, command.club_id),
-         true <-
-           member_has_authoritative_conversation_access?(
+         authorizing_group_ids when authorizing_group_ids != [] <-
+           authoritative_conversation_group_ids(
              command.conversation_id,
              command.club_id,
              command.member_id,
              :read
            ) do
-      :ok
+      {:ok, authorizing_group_ids}
     else
-      false -> {:error, :not_current_member}
+      [] -> {:error, :not_current_member}
       {:error, _reason} = error -> error
     end
   end
@@ -2542,6 +2558,20 @@ defmodule Memba.Messaging do
          person_id,
          access_level
        ) do
+    authoritative_conversation_group_ids(
+      conversation_id,
+      club_id,
+      person_id,
+      access_level
+    ) != []
+  end
+
+  defp authoritative_conversation_group_ids(
+         conversation_id,
+         club_id,
+         person_id,
+         access_level
+       ) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
          {:ok, club_id} <- ID.cast(:club, club_id),
          {:ok, person_id} <- ID.cast(:person, person_id),
@@ -2553,16 +2583,22 @@ defmodule Memba.Messaging do
          } <- App.aggregate_state(Message, conversation_id) do
       grant_levels = ConversationAccess.grant_levels_including(access_level)
 
-      Enum.any?(group_access, fn {group_id, granted_access_level} ->
-        granted_access_level in grant_levels and
-          Membership.active_member_of_group_authoritatively?(
-            club_id,
-            group_id,
-            person_id
-          )
+      group_access
+      |> Enum.flat_map(fn {group_id, granted_access_level} ->
+        if granted_access_level in grant_levels and
+             Membership.active_member_of_group_authoritatively?(
+               club_id,
+               group_id,
+               person_id
+             ) do
+          [group_id]
+        else
+          []
+        end
       end)
+      |> Enum.sort()
     else
-      _invalid_missing_or_inaccessible -> false
+      _invalid_missing_or_inaccessible -> []
     end
   end
 

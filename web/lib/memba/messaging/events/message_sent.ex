@@ -13,6 +13,8 @@ defmodule Memba.Messaging.Events.MessageSent do
   New sends set `sender_follow_requested` when acceptance should establish the
   sender follow. A strong Messaging policy handles that request only after this
   fact is committed and checks durable member/group cleanup cutoffs first.
+  `sender_follow_group_ids` preserves the groups that authorized that request;
+  roots use their audience and replies capture active writable groups.
   Historic facts predate the field and retain their original direct
   `sender_follows_conversation` replay behavior.
   """
@@ -29,6 +31,7 @@ defmodule Memba.Messaging.Events.MessageSent do
     :subject,
     :body,
     :sender_membership_generation,
+    sender_follow_group_ids: [],
     sender_follow_requested: false,
     sender_follows_conversation: true
   ]
