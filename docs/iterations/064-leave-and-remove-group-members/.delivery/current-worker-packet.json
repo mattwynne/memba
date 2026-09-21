@@ -1,118 +1,127 @@
 {
   "schema_version": 1,
-  "packet_id": "001-15d75fd-02",
-  "task_id": "001",
-  "todo_line": "- [ ] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal.",
+  "packet_id": "004-72f5ddc-01",
+  "task_id": "004",
+  "todo_line": "- [ ] 004 Implement and test explicit custom-group-removal follow cleanup through public Messaging APIs, including manual and auto-follow sources, idempotent stale-safe remove/re-add ordering, unrelated-follow preservation, and unchanged system-group behaviour.",
   "attempt": "implementation",
   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
-  "source_baseline": "15d75fd4ac9f439e847f6b0836aad3901b69b854",
-  "outcome": "Bring the existing unaccepted task-001 candidate to review-ready status by freshly validating the actor-authorized custom-group removal boundary on this source baseline and repairing only concrete task-001 gaps, if any.",
+  "source_baseline": "72f5ddc7caca697256cc264ef502c03fd028b5b5",
+  "outcome": "Make explicit custom-group removal durably clear only the conversation follows invalidated by that departure, including manual and root/reply auto-follows, while preserving independently valid follows and ensuring delayed or replayed cleanup cannot erase a follow established after a genuine re-add.",
   "scope": [
-    "Inspect and preserve the existing candidate spanning Memba.Membership.remove_custom_group_member/1 and /2, the actor-bearing RemoveCustomGroupMember command, Club.execute/2 authorization and identity checks, Club-routed dispatch, and focused tests.",
-    "Confirm from current Club aggregate state that an active custom-group member may remove another member or themselves and that an active club.manage_members holder may remove a member while outside the group; ordinary or inactive outsiders must remain unauthorized.",
-    "Confirm exact typed club, custom-group, target membership/person, and actor identities are enforced, including rejection of actors or targets that are not active in the routed club and rejection of Everyone/Admin system groups.",
-    "Confirm self-removal and final-member removal are allowed, including an event-free exact retry after self-removal, with the custom group unchanged and the target still an active club member.",
-    "Confirm a real transition emits only the existing actor-free GroupMemberRemoved event and does not alter club membership, Admin role assignment, club.manage_members authority, invitations, or the trusted actor-free RemoveGroupMember path.",
-    "Add or adjust only focused task-001 tests when current coverage does not directly establish those rules; otherwise leave the candidate unchanged and return fresh passing evidence."
+    "Extend the existing `Memba.Membership.Policies.ClearRemovedGroupMemberFollows` collaboration; the accepted `Membership.remove_custom_group_member/2` path already emits the reusable `GroupMemberRemoved` fact, so do not create a second cleanup process.",
+    "Give the public explicit-removal use case a completion contract that does not report success before its required Messaging cleanup is durable, while preserving its existing Commanded return modes and task-001 authorization/event semantics.",
+    "Clear every current follow source through public Messaging commands and idempotent facts: a true manual `ConversationFollowed`, a root sender auto-followed by `MessageSent`, and a reply author whose auto-follow currently exists in the projection even though the reply event lives outside the root conversation stream.",
+    "Implement and test an ordering or generation/version mechanism so remove, rapid genuine re-add, and explicit follow-again are causally safe; repeated or replayed delivery of the old removal must be a no-op against the newer follow.",
+    "Keep cleanup scoped to follows actually invalidated by the removed group. Preserve a follow for a different conversation in another group and preserve a shared-conversation follow when the person still has effective read access through another active group.",
+    "Retain the origin-replaying handler's durable behavior and avoid falsely completing cleanup from an empty lagging conversation-access projection when that would allow an old follow to survive and later resume.",
+    "Keep Everyone/Admin handling unchanged: explicit custom-group removal still rejects system groups, and synthetic or replayed system-group removal facts do not clear conversation follows.",
+    "Add focused aggregate/integration tests that directly prove cleanup completion, all follow origins, duplicate/replay idempotency, rapid remove/re-add/follow safety, unrelated/shared access preservation, projection-lag behavior, and system-group no-ops."
   ],
   "scope_exclusions": [
-    "Do not implement follow cleanup, public Messaging API changes, or remove/re-add cleanup ordering; pending tasks 004-008 own that cross-context outcome.",
-    "Do not change conversation/query authorization, queued-delivery handoff, open LiveView refresh, or stale-view behavior; pending tasks 009-011 own those boundaries.",
-    "Do not add Leave/Remove controls, confirmations, shared member-row changes, former-member surfaces, or empty-group UI behavior.",
-    "Do not edit either iteration-064 acceptance feature file or remove its runner-debt tags in this packet.",
-    "Do not run dev check, dev check --quick, dev ci, the browser suite, or another full-suite command; the deterministic dev_check node and explicit final task 017 own iteration-wide validation."
+    "Do not change the accepted Club authorization, actor/target validation, self/last-member rules, role preservation, or `GroupMemberRemoved`-only Membership decision except for the application-service cleanup completion needed by this packet.",
+    "Do not implement the broader query/action/provider-handoff authorization work, queued-delivery cancellation, or open-LiveView refresh assigned to pending tasks 009-011.",
+    "Do not add Leave/Remove controls, confirmations, member-row changes, former-member surfaces, or empty-group UI behavior assigned to tasks 012-014.",
+    "Do not edit the iteration-064 acceptance feature files or implement the browser/domain acceptance layer assigned to tasks 015-016.",
+    "Do not redesign unrelated Messaging delivery or multi-group conversation editing behavior.",
+    "Do not run `dev check`, `dev check --quick`, `dev ci`, browser acceptance, or another unscoped full-suite command; task 017 and the deterministic `dev_check` node own the final repository gate."
   ],
   "references": [
     {
       "path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
-      "facts": "Implementation Plan 1 and the matching acceptance criteria require the actor-bearing Club-boundary removal use case, member/outside-admin authority, self and last-member removal, system-group guards, idempotency, and preservation of club membership and roles."
+      "facts": "Implementation Plan 2 and the acceptance/open-technical-decision text require public Messaging APIs, idempotent unfollow facts, root/reply auto-follow cleanup, stale remove/re-add safety, unrelated-follow preservation, and unchanged system-group behavior."
     },
     {
-      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
-      "facts": "Current Membership writes use Club-owned event-sourced state for active membership and role decisions; projection preflight must not own the removal invariant."
+      "path": "docs/iterations/062-create-custom-groups/plan.md",
+      "facts": "Iteration 062 introduced the origin-replaying Membership-to-Messaging cleanup collaboration and its club-departure completion ordering; iteration 064 must extend that boundary rather than add another process."
     },
     {
       "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
-      "facts": "Membership owns group membership state. This packet stays inside Membership and leaves follow cleanup to the later cross-context obligation."
+      "facts": "Membership owns group membership while Messaging owns follow state; coordinate through public context APIs rather than direct cross-context projection writes."
     },
     {
-      "path": "web/lib/memba/membership/commands/remove_custom_group_member.ex",
-      "facts": "The unaccepted candidate has a dedicated command with enforced club_id, group_id, membership_id, person_id, and actor_person_id fields."
+      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+      "facts": "The Club stream remains the authoritative membership lifecycle and identity boundary; system-group facts remain separately policy-maintained consequences."
+    },
+    {
+      "path": "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
+      "facts": "The existing strong handler starts from origin, filters custom `GroupMemberRemoved` facts, lists conversations through Messaging, and dispatches public unfollow commands with follow-projector consistency."
     },
     {
       "path": "web/lib/memba/membership.ex",
-      "facts": "The candidate exposes remove_custom_group_member/1 and /2 and builds the five-identity command. Existing remove_member/2 is club departure and must remain distinct."
+      "facts": "`remove_custom_group_member/2` currently performs a plain dispatch, while club-member lifecycle dispatch augments consistency with `ClearRemovedGroupMemberFollows`; `add_custom_group_member/2` also needs to participate in whichever stale-cleanup ordering contract is selected."
     },
     {
-      "path": "web/lib/memba/membership/club.ex",
-      "facts": "RemoveCustomGroupMember currently validates routed and typed identities, custom-group status, current actor authority, and the exact active target. authorize_custom_group_removal_actor/2 includes an exact self-removal retry case; remove_custom_group_member_decision/2 emits GroupMemberRemoved or an empty retry."
+      "path": "web/lib/memba/membership/projectors/membership.ex",
+      "facts": "The accepted 062 club-rejoin mechanism waits for durable cleanup progress before projecting `ClubMemberAdded`; use it as ordering precedent without coupling independent projection rebuilds."
     },
     {
-      "path": "web/lib/memba/membership/router.ex",
-      "facts": "The candidate registers RemoveCustomGroupMember on the Club route while retaining the separate trusted RemoveGroupMember command."
+      "path": "web/lib/memba/messaging.ex",
+      "facts": "Public `list_conversations_for_group/1`, `follow_conversation/2`, `unfollow_conversation/2`, and effective conversation-access APIs are the current cross-context seams. The private email-token reconciliation demonstrates the existing projection/write-model mismatch for auto-follow before unfollow."
     },
     {
-      "path": "web/test/memba/membership/remove_custom_group_member_dispatch_test.exs",
-      "facts": "Current integration coverage exercises the sole emitted event and projection, ordinary retry, final-member self-removal, outside-admin removal with preserved Admin authority, outsider refusal, wrong targets, system groups, and required API attributes."
+      "path": "web/lib/memba/messaging/conversation_followers.ex",
+      "facts": "The root-routed aggregate makes manual follow/unfollow idempotent and rehydrates root `MessageSent`, but it cannot see an auto-following reply `MessageSent` stored on a separate reply stream."
     },
     {
-      "path": "web/test/memba/membership/club_test.exs",
-      "facts": "The RemoveCustomGroupMember authorization block covers aggregate-state member/manager authority, self-removal retry, identity mismatches, typed IDs, system groups, and unchanged club role state."
+      "path": "web/lib/memba/messaging/projectors/conversation_follow.ex",
+      "facts": "The projection records both root and reply `MessageSent` auto-follows plus explicit follow/unfollow facts in one deterministic conversation/person row."
     },
     {
-      "path": "web/test/memba/membership/group_command_event_modules_test.exs",
-      "facts": "This test protects the actor-bearing public command versus trusted actor-free command/event shapes."
+      "path": "web/test/memba/membership/clear_removed_group_member_follows_policy_test.exs",
+      "facts": "Existing tests cover handler shape, origin replay, club-departure cleanup, suspended-handler club rejoin ordering, no automatic follow restoration, and easy duplicate idempotency; they do not yet cover explicit group removal, reply-only auto-follow, post-re-add follow replay safety, shared access, or direct system-group no-ops."
     },
     {
-      "path": "web/test/memba/membership/app_test.exs",
-      "facts": "The candidate's command is included in both Membership App and Router registration assertions."
+      "path": "web/test/memba/messaging/conversation_follow_projection_test.exs",
+      "facts": "Existing focused coverage establishes projected manual state and root/reply `MessageSent` auto-follow behavior."
     },
     {
-      "path": "web/test/memba/membership/public_api_test.exs",
-      "facts": "The current test explicitly loads Memba.Membership before asserting the new public exports and continued absence of a public remove_group_member API; this file changed after the prior worker's focused run and needs fresh evidence."
+      "path": "web/test/memba/messaging/conversation_group_access_projection_test.exs",
+      "facts": "Existing tests establish that effective access composes across multiple group grants; cleanup must not destroy a global conversation/person follow while another active group still supplies access."
+    },
+    {
+      "path": "web/test/memba/messaging/send_club_message_test.exs",
+      "facts": "The existing lagging-access-projector regression proves authoritative delivery denial but currently permits cleanup to miss the conversation and leave an old follow behind."
     },
     {
       "path": "docs/reference/elixir-mix-tests.md",
-      "facts": "Follow the project Elixir and focused-test conventions; avoid timing sleeps and use start_supervised!/1 when starting test processes."
+      "facts": "Use focused tests, `start_supervised!/1` for test processes, monitors or synchronization primitives instead of sleeps, and deterministic process synchronization for race coverage."
     }
   ],
   "constraints": [
-    "Treat the carried code as an unaccepted candidate, not accepted evidence; inspect it and return fresh validation from source baseline 15d75fd4ac9f439e847f6b0836aad3901b69b854.",
-    "Keep task identity 001 and candidate provenance intact; this is a normal implementation/revalidation attempt because no revise review verdict exists.",
-    "Do not authorize from projections or caller-supplied role claims; the current Club aggregate state owns actor, target, group, and permission decisions.",
-    "Do not broaden or replace the trusted actor-free RemoveGroupMember path used by system-group policies, replay, setup, or fixtures.",
-    "Do not add actor_person_id to GroupMemberRemoved; actor identity belongs to the command while the existing event remains the reusable membership fact.",
-    "No custom-group member floor exists. Removing the final member must not archive, delete, rename, or otherwise mutate the group.",
-    "Keep exact retries event-free, including a self-removal retry after the actor has ceased to be a group member.",
-    "Limit any edits to task-001 Membership implementation and focused tests; do not absorb pending follow, authorization, delivery, LiveView, UI, acceptance-feature, or final-gate work."
+    "Use the accepted actor-bearing custom-group removal and existing `GroupMemberRemoved` fact; do not introduce a parallel member-removal command or route through club/role removal.",
+    "Keep cross-context writes behind public Messaging APIs and event-sourced commands/facts; do not delete or toggle Messaging projection rows directly from Membership code.",
+    "A reply-author auto-follow must become authoritatively unfollowable even though its `MessageSent` event is stored on the reply stream; a projection-only false value is not sufficient.",
+    "Stale-cleanup safety must cover the actual remove/re-add/follow race and origin replay, not only repeated cleanup while already unfollowed.",
+    "The follow is conversation/person scoped, not group scoped. Do not unfollow a shared conversation when another active group still grants that person effective read access.",
+    "Preserve historical event replay. If command/event fields or generation identity change, old `MessageSent`, follow, unfollow, and Membership facts must remain readable with their established semantics.",
+    "Preserve `ClearRemovedGroupMemberFollows` durable origin replay and Membership projection rebuild independence; do not make ordinary projection reset replay external side effects.",
+    "Preserve explicit-removal return values, caller-selected Commanded returning modes, and exact-retry behavior while adding required consistency.",
+    "Limit edits to the cleanup/follow/order seam and its focused tests; leave pending authorization, delivery, LiveView, UI, acceptance-runner, and final-gate obligations untouched."
   ],
   "focused_validation": [
-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
+    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/clear_removed_group_member_follows_policy_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/system_group_membership_policy_dispatch_test.exs",
+    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/conversation_group_access_projection_test.exs test/memba/messaging/send_club_message_test.exs",
     "git diff --check"
   ],
   "completion_evidence_required": [
-    "List changed paths, or explicitly state that the carried candidate required no further edits after inspection.",
-    "Report fresh exit statuses and test counts for both focused commands on the exact handoff state; do not rely on the prior worker's recorded runs.",
-    "Identify the assertions proving member removal, outside-manager removal without joining, ordinary/inactive outsider rejection, self and final-member removal, exact retry idempotency, routed-club actor/target validation, and system-group rejection.",
-    "Show that GroupMemberRemoved is the only event for a real transition and that club membership, Admin role/management permission, the custom group, and the trusted actor-free removal path remain intact.",
-    "Report git diff --check. If any focused failure cannot be repaired within task 001, return a concrete replan or human-blocked result instead of broadening scope or claiming completion."
+    "List changed paths and identify the selected completion-ordering or generation/version mechanism, including why an old cleanup cannot erase a newer post-re-add follow.",
+    "Report exit statuses and test counts for both focused test commands on the exact handoff state, plus `git diff --check`.",
+    "Identify tests proving explicit `remove_custom_group_member/2` does not complete before required follow cleanup and that its accepted Membership event/return contract remains intact.",
+    "Identify emitted Messaging facts proving cleanup of a true manual follow, root-sender auto-follow, and reply-author auto-follow, including idempotent duplicate/replayed removal behavior.",
+    "Show a remove/re-add/follow race or controlled delayed-handler test where the genuinely new follow survives late old work while the pre-removal follow does not resume automatically.",
+    "Show that a different-group conversation follow and a shared-conversation follow with surviving effective access are preserved, while Everyone/Admin cleanup facts remain no-ops.",
+    "Show that conversation-access projection lag cannot falsely acknowledge cleanup and later reactivate a pre-removal follow. If this cannot be solved within the bounded seam, return a concrete replan instead of weakening the obligation."
   ],
-  "candidate_origins": [
-    {
-      "base_sha": "af147c6426110ebf4368bf833f52720c316770a0",
-      "head_sha": "25ace4d142544b63f59cb72d35ed71f4b31f23eb",
-      "packet_id": "001-af147c6-01",
-      "reason": "worker_replan",
-      "task_id": "001",
-      "todo_line": "- [ ] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal."
-    }
-  ],
+  "candidate_origins": [],
+  "latest_review": {
+    "packet_id": "001-15d75fd-02",
+    "decision": "accept",
+    "summary": "Task 001 is accepted: the actor-bearing public removal path is Club-routed, emits only the reusable `GroupMemberRemoved` fact for a transition, preserves club roles/membership, and rejects system groups."
+  },
   "latest_worker_result": {
-    "packet_id": "001-af147c6-01",
-    "result": "replan",
-    "summary": "The prior worker implemented the task-001 candidate and reported its focused Membership suites passing. Its required full ./bin/dev check exceeded the worker command limit before producing a final status.",
-    "remaining_for_this_packet": "Inspect the carried candidate and produce fresh focused evidence on the current source baseline. The full repository gate is intentionally left to the deterministic dev_check node."
+    "packet_id": "001-15d75fd-02",
+    "result": "ready_for_review",
+    "summary": "The accepted predecessor reported focused Membership suites passing with no unresolved gaps; this packet begins at the follow-cleanup consequence of its committed `GroupMemberRemoved` fact."
   }
 }
