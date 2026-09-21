@@ -37,6 +37,8 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.SystemGroups
 
   test "public Membership API exposes actor-authenticated custom group membership changes" do
+    assert Code.ensure_loaded?(Membership)
+
     refute function_exported?(Membership, :create_group, 1)
     refute function_exported?(Membership, :create_group, 2)
     assert function_exported?(Membership, :create_custom_group, 1)
