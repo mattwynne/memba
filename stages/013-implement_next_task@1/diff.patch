@@ -1,0 +1,86 @@
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+index d5f7865..8af5996 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+@@ -1,9 +1,9 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "001-af147c6-01",
++  "packet_id": "001-da2964e-02",
+   "task_id": "001",
+   "todo_line": "- [ ] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal.",
+-  "result": "replan",
++  "result": "ready_for_review",
+   "changed_paths": [
+     "web/lib/memba/membership.ex",
+     "web/lib/memba/membership/club.ex",
+@@ -17,45 +17,26 @@
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
+-      "exit_status": 1,
+-      "evidence": "Expected red TDD run before implementation: RemoveCustomGroupMember was undefined."
++      "command": "./bin/dev test test/memba/membership/club_test.exs:1765 test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/group_command_event_modules_test.exs:35 test/memba/membership/app_test.exs:98 test/memba/membership/public_api_test.exs:39",
++      "exit_status": 2,
++      "evidence": "Initial focused run exposed an isolated test-order issue: PublicApiTest selected alone had not loaded Memba.Membership before function_exported?/3, causing the pre-existing create_custom_group/1 assertion to report false; 115 tests, 1 failure, 108 excluded."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
++      "command": "./bin/dev test test/memba/membership/club_test.exs:1765 test/memba/membership/remove_custom_group_member_dispatch_test.exs test/memba/membership/group_command_event_modules_test.exs:35 test/memba/membership/app_test.exs:98 test/memba/membership/public_api_test.exs:39",
+       "exit_status": 0,
+-      "evidence": "115 tests, 0 failures after implementation."
++      "evidence": "After explicitly ensuring Memba.Membership is loaded in PublicApiTest: 115 tests, 0 failures, 108 excluded. The selected tests cover the public actor-bearing API/command/router, member and outside-manager authorization, ordinary/inactive outsider rejection, typed and mismatched identities, custom/system group guards, self/final-member removal, exact self-retry idempotency, the existing actor-free GroupMemberRemoved fact, and unchanged aggregate club membership/role authority."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs",
++      "command": "./bin/dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
+       "exit_status": 0,
+-      "evidence": "108 tests, 0 failures."
++      "evidence": "15 tests, 0 failures. Admission and removal dispatch paths pass together; a real removal emits only GroupMemberRemoved, deactivates the group-membership projection, permits an outside Admin without joining, and preserves the removed Admin target's active club membership, Admin role, and club.manage_members permission."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
++      "command": "git diff --check",
+       "exit_status": 0,
+-      "evidence": "15 tests, 0 failures; admission and removal dispatch paths pass together."
+-    },
+-    {
+-      "command": "./bin/dev check",
+-      "exit_status": null,
+-      "evidence": "The hard 600-second Fabro command limit terminated the foreground check after 602 seconds while passing browser scenarios were still running. No final dev check exit status was produced."
++      "evidence": "No whitespace errors in the packet diff."
+     }
+   ],
+-  "notes": "Added public Membership.remove_custom_group_member/1 and /2 backed by a dedicated actor-bearing RemoveCustomGroupMember command routed to the Club aggregate. The aggregate validates typed identities and exact current Club/group state, permits current group members and active club.manage_members holders, rejects system groups and ordinary/inactive outsiders, allows self/final-member removal, and makes exact removed retries event-free. A real transition emits only the existing GroupMemberRemoved event. Focused integration coverage proves the target remains an active club member and retains the Admin role and club.manage_members authority. The trusted actor-free RemoveGroupMember command remains registered and unchanged for policy/backfill/fixture use. todo.md and acceptance feature files were not edited.",
+-  "unresolved": [
+-    "A successful final ./bin/dev check exit is still required. The implementation and both specified focused test groups pass, but the full browser suite did not finish within the runner's hard 600-second command ceiling."
+-  ],
+-  "replan_request": {
+-    "blocker": "The packet requires a successful full ./bin/dev check, but that command's browser acceptance phase exceeds the documented 600-second Fabro shell limit.",
+-    "partial_work": "The packet implementation and its focused aggregate, command shape/router, public API, projection, authorization, idempotency, self/last-member, system-group, and preserved-role tests are complete and passing.",
+-    "completed_checks": [
+-      "Focused aggregate/API/router suite: 108 tests, 0 failures.",
+-      "Admission/removal dispatch suite: 15 tests, 0 failures.",
+-      "Combined focused suite: 115 tests, 0 failures.",
+-      "git diff --check passed."
+-    ],
+-    "remaining_validation": "Obtain one successful exit from ./bin/dev check on this candidate state.",
+-    "why_replan": "Completing the mandatory full browser gate needs either the workflow's separate deterministic dev_check node or a foreground runner allowance longer than 600 seconds; neither is available inside this packet's bounded worker command."
+-  }
++  "notes": "Verified the carried task-001 candidate: Membership.remove_custom_group_member/1 and /2 build a dedicated actor-bearing command routed by club_id to Membership.Club, while trusted actor-free RemoveGroupMember remains separate. Club current event-sourced state validates actor, target, group, and typed identities; authorizes current custom-group members or active club.manage_members holders; supports self/final-member removal and an event-free self retry after departure; rejects ordinary/inactive outsiders and system groups; and emits only the existing GroupMemberRemoved fact without changing club membership or roles. The only new correction makes the focused PublicApiTest independent of incidental module load order. todo.md, acceptance features, Messaging cleanup, UI, and full-suite ownership were left untouched.",
++  "unresolved": []
+ }
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 7aed353..0b5de44 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -37,6 +37,8 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.SystemGroups
+ 
+   test "public Membership API exposes actor-authenticated custom group membership changes" do
++    assert Code.ensure_loaded?(Membership)
++
+     refute function_exported?(Membership, :create_group, 1)
+     refute function_exported?(Membership, :create_group, 2)
+     assert function_exported?(Membership, :create_custom_group, 1)
