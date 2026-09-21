@@ -779,8 +779,15 @@ _setup() {
       || [ ! -f node_modules/.package-lock.json ] \
       || [ package-lock.json -nt node_modules/.package-lock.json ]; then
       # Dependency installation is a runtime prerequisite, not the security-audit
-      # gate. Inherited npm audit-level settings must not make sandbox setup fail.
-      npm ci --no-audit
+      # gate. Some sandbox npm configurations return non-zero after completing a
+      # usable install, so validate the required tools before treating that as fatal.
+      if ! npm ci --no-audit; then
+        if [ ! -x node_modules/.bin/cucumber-js ] || [ ! -x node_modules/.bin/playwright ]; then
+          echo "npm ci failed before installing required acceptance-test tools." >&2
+          return 1
+        fi
+        echo "npm ci returned non-zero after installing the required acceptance-test tools; continuing." >&2
+      fi
     else
       echo "Acceptance-test npm dependencies already installed."
     fi
