@@ -38,7 +38,7 @@ Read the linked note and recover what existed before results were known:
 - review date; and
 - Adopt, Iterate, and Revert criteria.
 
-Do not retrofit metrics, thresholds, baselines, or guardrails. Missing or materially ambiguous fields are evidence gaps. A weak baseline, primary metric, or guardrail rules out **Adopt**: recommend **Iterate** with a prospective, approval-gated contract repair when safe and worthwhile, otherwise **Revert**.
+Do not retrofit metrics, thresholds, baselines, or guardrails. Missing or materially ambiguous fields are evidence gaps. A weak baseline, primary metric, or guardrail rules out **Adopt**: recommend **Iterate** with a prospective, approval-gated contract repair when safe and worthwhile, otherwise **Revert**. Pre-repair observations may inform the new design but cannot satisfy its adoption criteria; measure effectiveness in a fresh, comparable window after the repaired contract is approved.
 
 ## Evaluate evidence
 
@@ -52,26 +52,26 @@ Compare the experiment window with its baseline and declared criteria:
 4. Make an adversarial pass: seek disconfirming evidence, inspect failures and outliers, and test plausible alternative explanations.
 5. Name missing data and uncertainty; never average away a guardrail failure or infer success from absence.
 
-If review is due without the declared sample, still conclude it but do not Adopt. Recommend **Iterate** with a justified sample requirement and new date when continued exposure is safe and informative; recommend **Revert** when guardrails fail, exposure is unsafe, or more evidence is not worth its cost.
+If review is due before the declared sample is reached, still conclude it but do not Adopt. When continued exposure is safe and informative, recommend **Iterate** by retaining the original metric, thresholds, guardrails, and sample target and extending only the collection window and review date. Recommend **Revert** when guardrails fail, exposure is unsafe, or more evidence is not worth its cost.
 
 ## Recommend one outcome
 
 Briefly state what changed, expected versus observed result, guardrails, strongest evidence, confounders, missing data, and uncertainty. Recommend exactly one:
 
 - **Adopt** — guardrails hold and declared adoption criteria are met.
-- **Iterate** — one focused adjustment, prospective contract repair, or bounded evidence extension is justified. Define the single change or sample requirement, metric/criteria, and new review date; WIP remains occupied.
+- **Iterate** — one focused implementation adjustment, prospective contract repair, or bounded evidence extension is justified. For an extension, preserve the contract and change only the date. For a repair, declare the metric and criteria prospectively and start a fresh measurement window. Define one path and its new review date; WIP remains occupied.
 - **Revert** — guardrails fail, revert criteria are met, or continued use is unjustified.
 
-Do not offer a menu unless a genuine unresolved tradeoff prevents a responsible recommendation. Ask for approval before material action. Recording evidence and the recommendation does not authorize behaviour or status changes.
+Recommend one outcome even under uncertainty, and state what evidence could change it; do not replace the recommendation with a menu. Ask for approval before material action. Recording evidence and the recommendation does not authorize behaviour or status changes.
 
 ## Execute only after approval
 
 After approval, dispatch one BB child thread to implement and another to validate independently. Use isolated worktrees for code changes. Reconcile evidence; the validator must inspect implementation and note/ledger consistency, not repeat the implementer's claims.
 
-Validate from safest to broadest: static/contracts, fixtures or synthetic cases, isolated historical replay, then a supported limited canary. Never make a real production delivery the first test of a factory change. Follow project quality gates; skill/docs-only changes need no `dev check` unless requested or executable examples change.
+Validate from safest to broadest: static/contracts, fixtures or synthetic cases, isolated historical replay, then a supported limited canary. Never make a real production delivery the first test of a factory change. Run `dev check` for code, config, dependency, migration, acceptance-test, or app-behaviour changes, and report it passing only for the exact final state or an equivalent clean worktree with the same diff staged. Skill/docs-only changes need no `dev check` unless requested or executable examples change.
 
 - **Adopt:** standardize, remove obsolete experiment scaffolding, validate, then close.
-- **Iterate:** change only the approved variable or evidence contract, validate, set a new date, and retain `Experiment`.
+- **Iterate:** apply only the approved adjustment, prospective contract repair, or date extension; validate, set the new date, and retain `Experiment`.
 - **Revert:** reverse only experiment behaviour, retain justified instrumentation, validate restoration, then close.
 
 ## Preserve the learning
