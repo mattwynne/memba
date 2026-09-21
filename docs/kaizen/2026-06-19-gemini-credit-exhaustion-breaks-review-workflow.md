@@ -86,3 +86,57 @@ Fabro is supposed to provide reliable implementation and review throughput. If a
 - Add fallback model routing for independent reviewer slots when a provider is unavailable.
 - Periodically check configured provider balances/quotas and surface them in `fabro doctor` or a project delivery preflight.
 - Keep a single project-level model-routing policy so plan validation and review do not drift into stale provider assumptions.
+
+### Additional observation: 2026-09-21 factory retrospective
+
+The failure class recurred after model-routing changes. Of eight iteration-review runs from 2026-09-13 onward, five failed at `synthesize_review` because one required reviewer produced no usable report:
+
+- `01M2GFYQR4NV7T7FFQF833WY79`
+- `01M2GHF4W1R9AANP8NVKAZRC0Q`
+- `01M30SK3NT65YGJ6T9BGJ8TAKK`
+- `01M31EBMGHK7FJKVEW624KB202`
+- `01M31EMV03T23KFC1MVMVPRNYH`
+
+The first three directly logged OpenRouter HTTP 402. In the two later forks, Claude evidence was absent while Sol and Gemini both returned usable `ACCEPT` reviews; the matching cause is likely but not directly proven. One run spent 27m37s after `dev ci` had already passed before terminating for unavailable synthesis.
+
+The current graph fans out to Claude, Sol and Gemini but sends `review_merge` to `synthesis_unavailable` unless every branch succeeds. `synthesize_review` declares `allow_partial=true`, so the fan-in availability rule—not synthesis capability—is the immediate hard dependency.
+
+This note is now assessed as **Open**. Restoring credits is containment, not recurrence prevention: May Anthropic exhaustion and this note's June Gemini exhaustion show that the weakness follows whichever external provider is mandatory.
+
+## Proposed experiment: availability-tolerant independent-review quorum
+
+Status: awaiting approval. Do not change the ledger to `Experiment` or alter the workflow until Matt approves this contract and review date.
+
+Hypothesis: allowing synthesis with at least two usable independent reports from distinct configured model/provider routes will prevent a single unavailable reviewer from terminating otherwise reviewable work, without reducing defect detection or bypassing a negative verdict.
+
+Baseline: 5/8 iteration-review runs from 2026-09-13 onward terminated at synthesis because one required reviewer was unavailable; three are directly tied to HTTP 402. Historical May and June notes show the same class across Anthropic and Gemini.
+
+Primary outcome metric: **eligible review completion rate** — the proportion of review runs with at least two usable independent reports that reach a synthesized product verdict rather than terminating solely for reviewer unavailability. Baseline for the five affected runs: 0/5. Proposed operational target: 5/5 qualifying runs after rollout.
+
+Quality guardrails:
+
+- require at least two usable independent reports from distinct configured routes;
+- never convert absence or provider failure into an acceptance verdict;
+- any received blocking or reject finding must continue into repair or a fail-closed outcome;
+- fewer than two usable reports remains terminal;
+- retain `dev check`, exact-candidate attestation, artifact, plan-conformance and publication gates;
+- historical replay must not lose a blocking finding or produce a more permissive verdict than the existing complete-review synthesis without an explicit investigated explanation.
+
+Proposed implementation: make review fan-in classify usable, unavailable and negative reviewer outcomes deterministically; pass the available reports and explicit absence metadata to synthesis only when the quorum and guardrails hold. Preserve all three reviewer calls in normal operation. Record reviewer availability, verdict, provider/model, elapsed time and whether quorum mode was used.
+
+Validation ladder before routine delivery:
+
+1. Static graph/schema checks and deterministic fixtures for 3/3 usable, 2/3 usable, fewer than two usable, one unavailable plus one negative, and synthesis failure.
+2. Replay the five affected runs' retained reports and a corpus of successful reviews containing accepted and blocking findings; compare the quorum result with full-review decisions where available.
+3. Run an isolated historical review with publication and product side effects disabled.
+4. Only after those pass, use a limited canary while retaining all ordinary quality and publication gates.
+
+Proposed decision criteria:
+
+- **Adopt:** deterministic and historical replay guardrails pass; the next five qualifying operational reviews reach a verdict without an availability-only terminal failure; no blocking finding is lost and no quality guardrail regresses.
+- **Iterate:** quality guardrails hold but fewer than five qualifying runs exist by the review date, or observability/implementation defects prevent a fair comparison; change one variable or extend only the evidence window.
+- **Revert:** quorum mode loses or suppresses a blocking finding, accepts with fewer than two usable independent reports, bypasses another gate, or creates a quality regression plausibly attributable to reduced review evidence.
+
+Proposed review date: 2026-10-19, with at least five qualifying reviews required for adoption. If the sample is smaller, retain the criteria and extend the collection window rather than declaring success.
+
+Source: [2026-09-21 software factory retrospective](../notes/2026-09-21-software-factory-retrospective.md).

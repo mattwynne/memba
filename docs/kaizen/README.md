@@ -20,6 +20,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-09-14 | [Just-in-time delivery planner](2026-09-14-just-in-time-delivery-planner.md) | Open | — |
 | 2026-09-03 | [Problem: iteration workflow timeout masks the actionable test failure](2026-09-03-iteration-workflow-timeout-masks-test-failure.md) | Open | — |
 | 2026-06-21 | [Problem: Fabro-published commits are attributed to the GitHub user `fabro`](2026-06-21-fabro-commit-attribution.md) | Open | — |
+| 2026-06-19 | [Problem: Gemini credit exhaustion broke Fabro review synthesis](2026-06-19-gemini-credit-exhaustion-breaks-review-workflow.md) | Open | — |
 | 2026-06-17 | [Problem: Handoff claimed `dev check` passed while current main fails in ExUnit](2026-06-17-dev-check-false-green-handoff.md) | Open | — |
 | 2026-06-05 | [Problem: Fabro publish conflict left a manual merge to recover](2026-06-05-fabro-publish-conflict-leaves-manual-merge.md) | Open | — |
 | 2026-06-04 | [Problem: Browser acceptance tests are slow, and shared global state blocks the parallelism that should speed them up](2026-06-04-acceptance-parallelization-blocked-by-global-state.md) | Open | — |
@@ -32,7 +33,6 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-07-09 | [Problem: fresh sandbox Postgres role mismatch, and reset+seed against a reused Phoenix server poisons Commanded aggregates](2026-07-09-gallery-walk-stale-sandbox-postgres-role-and-aggregate-cache.md) | New | — |
 | 2026-07-05 | [Problem: review repair loop repeated without a verified diff](2026-07-05-review-repair-loop-without-diff.md) | New | — |
 | 2026-06-23 | [Problem: dev fabro progress exits before rendering when no tasks are complete](2026-06-23-dev-fabro-progress-zero-completed-exits.md) | New | — |
-| 2026-06-19 | [Problem: Gemini credit exhaustion broke Fabro review synthesis](2026-06-19-gemini-credit-exhaustion-breaks-review-workflow.md) | New | — |
 | 2026-06-18 | [Problem: implementation task-list check routed unchecked tasks to human failure](2026-06-18-implementation-task-list-check-routes-unchecked-tasks-to-human-failure.md) | New | — |
 | 2026-06-09 | [Problem: Suggested slug autofill acceptance scenario is flaky](2026-06-17-slug-autofill-acceptance-flake.md) | New | — |
 | 2026-06-17 | [Problem: Test command standard was not obvious during local implementation](2026-06-17-test-command-standard-not-obvious.md) | New | — |
