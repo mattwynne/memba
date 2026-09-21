@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "packet_id": "001-af147c6-01",
+  "packet_id": "001-15d75fd-02",
   "task_id": "001",
   "todo_line": "- [ ] 001 Implement and test the actor-bearing custom-group removal use case at the Club boundary, including custom-group/actor/target validation, self/last-member removal, idempotency, and reuse of `GroupMemberRemoved` without club/role removal.",
-  "result": "replan",
+  "result": "ready_for_review",
   "changed_paths": [
     "web/lib/memba/membership.ex",
     "web/lib/memba/membership/club.ex",
@@ -18,44 +18,20 @@
   "validation": [
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
-      "exit_status": 1,
-      "evidence": "Expected red TDD run before implementation: RemoveCustomGroupMember was undefined."
-    },
-    {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
       "exit_status": 0,
-      "evidence": "115 tests, 0 failures after implementation."
-    },
-    {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/club_test.exs test/memba/membership/group_command_event_modules_test.exs test/memba/membership/app_test.exs test/memba/membership/public_api_test.exs",
-      "exit_status": 0,
-      "evidence": "108 tests, 0 failures."
+      "evidence": "115 tests, 0 failures. Covers aggregate-state member and outside-manager authority, ordinary/inactive outsider refusal, typed/routed identities, self/final-member removal, exact retry idempotency, system-group guards, command/event shape, public API, routing, and projection behavior."
     },
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/add_custom_group_member_dispatch_test.exs test/memba/membership/remove_custom_group_member_dispatch_test.exs",
       "exit_status": 0,
-      "evidence": "15 tests, 0 failures; admission and removal dispatch paths pass together."
+      "evidence": "15 tests, 0 failures. The existing admission boundary and the new removal boundary pass together."
     },
     {
-      "command": "./bin/dev check",
-      "exit_status": null,
-      "evidence": "The hard 600-second Fabro command limit terminated the foreground check after 602 seconds while passing browser scenarios were still running. No final dev check exit status was produced."
+      "command": "git diff --check",
+      "exit_status": 0,
+      "evidence": "No whitespace errors."
     }
   ],
-  "notes": "Added public Membership.remove_custom_group_member/1 and /2 backed by a dedicated actor-bearing RemoveCustomGroupMember command routed to the Club aggregate. The aggregate validates typed identities and exact current Club/group state, permits current group members and active club.manage_members holders, rejects system groups and ordinary/inactive outsiders, allows self/final-member removal, and makes exact removed retries event-free. A real transition emits only the existing GroupMemberRemoved event. Focused integration coverage proves the target remains an active club member and retains the Admin role and club.manage_members authority. The trusted actor-free RemoveGroupMember command remains registered and unchanged for policy/backfill/fixture use. todo.md and acceptance feature files were not edited.",
-  "unresolved": [
-    "A successful final ./bin/dev check exit is still required. The implementation and both specified focused test groups pass, but the full browser suite did not finish within the runner's hard 600-second command ceiling."
-  ],
-  "replan_request": {
-    "blocker": "The packet requires a successful full ./bin/dev check, but that command's browser acceptance phase exceeds the documented 600-second Fabro shell limit.",
-    "partial_work": "The packet implementation and its focused aggregate, command shape/router, public API, projection, authorization, idempotency, self/last-member, system-group, and preserved-role tests are complete and passing.",
-    "completed_checks": [
-      "Focused aggregate/API/router suite: 108 tests, 0 failures.",
-      "Admission/removal dispatch suite: 15 tests, 0 failures.",
-      "Combined focused suite: 115 tests, 0 failures.",
-      "git diff --check passed."
-    ],
-    "remaining_validation": "Obtain one successful exit from ./bin/dev check on this candidate state.",
-    "why_replan": "Completing the mandatory full browser gate needs either the workflow's separate deterministic dev_check node or a foreground runner allowance longer than 600 seconds; neither is available inside this packet's bounded worker command."
-  }
+  "notes": "The carried task-001 candidate required no further code or test edits after inspection. RemoveCustomGroupMember is actor-bearing and Club-routed, while GroupMemberRemoved and the trusted RemoveGroupMember path remain actor-free. Focused assertions prove a real transition emits only GroupMemberRemoved, target and actor identities come from current aggregate state, member/self/final-member and outside-manager removal work, retries are event-free, outsiders/system groups are rejected, and club membership plus Admin role/club.manage_members authority remain intact. The custom group is unchanged because GroupMemberRemoved only deactivates its keyed group-membership entry; no club/role/invitation event is emitted. The earlier full-check timeout is superseded by this packet's focused-validation contract; the deterministic dev_check node owns the full gate.",
+  "unresolved": []
 }
