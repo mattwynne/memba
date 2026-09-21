@@ -48,7 +48,7 @@ Before finishing, write `.delivery/latest-worker-result.json` in the iteration d
 - `result`: one of `ready_for_review`, `replan`, or `human_blocked`.
 - `changed_paths`: changed code/config/test/doc paths for this packet.
 - `validation`: commands run, exit statuses, and concise evidence.
-- `notes`: useful discoveries, reusable helpers and non-obvious constraints.
+- `notes`: one non-empty concise string summarizing useful discoveries, reusable helpers and non-obvious constraints; do not write an array.
 - `unresolved`: unresolved facts or candidate work still needing validation.
 - For `replan`, include `replan_request` with the specific blocker, partial work, completed checks, remaining validation and why the packet is too broad/missing a prerequisite.
 - For `human_blocked`, state the business/acceptance-contract decision needed.
