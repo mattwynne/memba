@@ -778,27 +778,27 @@ _setup() {
   rm -f "$deps_get_log"
 
   echo "Checking acceptance-test dependencies..."
-  (
-    cd "$repo_root/acceptance-tests"
-
-    if [ ! -x node_modules/.bin/cucumber-js ] \
-      || [ ! -x node_modules/.bin/playwright ] \
-      || [ ! -f node_modules/.package-lock.json ] \
-      || [ package-lock.json -nt node_modules/.package-lock.json ]; then
-      # Dependency installation is a runtime prerequisite, not the security-audit
-      # gate. Some sandbox npm configurations return non-zero after completing a
-      # usable install, so validate the required tools before treating that as fatal.
-      if ! npm ci --no-audit; then
-        if [ ! -x node_modules/.bin/cucumber-js ] || [ ! -x node_modules/.bin/playwright ]; then
-          echo "npm ci failed before installing required acceptance-test tools." >&2
-          return 1
-        fi
-        echo "npm ci returned non-zero after installing the required acceptance-test tools; continuing." >&2
-      fi
-    else
-      echo "Acceptance-test npm dependencies already installed."
+  local acceptance_dir="$repo_root/acceptance-tests"
+  if [ ! -x "$acceptance_dir/node_modules/.bin/cucumber-js" ] \
+    || [ ! -x "$acceptance_dir/node_modules/.bin/playwright" ] \
+    || [ ! -f "$acceptance_dir/node_modules/.package-lock.json" ] \
+    || [ "$acceptance_dir/package-lock.json" -nt "$acceptance_dir/node_modules/.package-lock.json" ]; then
+    # Dependency installation is a runtime prerequisite, not the security-audit
+    # gate. Some sandbox npm configurations return non-zero after completing a
+    # usable install, so validate the required tools before treating that as fatal.
+    local npm_status=0
+    (cd "$acceptance_dir" && npm ci --no-audit) || npm_status=$?
+    if [ ! -x "$acceptance_dir/node_modules/.bin/cucumber-js" ] \
+      || [ ! -x "$acceptance_dir/node_modules/.bin/playwright" ]; then
+      echo "npm ci failed before installing required acceptance-test tools." >&2
+      return 1
     fi
-  )
+    if [ "$npm_status" -ne 0 ]; then
+      echo "npm ci returned non-zero after installing the required acceptance-test tools; continuing." >&2
+    fi
+  else
+    echo "Acceptance-test npm dependencies already installed."
+  fi
 
   export MEMBA_DEV_SETUP_DONE=1
 }
