@@ -1,0 +1,1242 @@
+{
+  "title": "Review an already-published implementation and produce clean, bounded-heal, durable-record, or co...",
+  "spec": {
+    "run_id": "01M33X1XFJMCBT6K62P5BXZDNG",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Review an already-published implementation and produce clean, bounded-heal, durable-record, or consequential-human routing without gating delivery"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "base_sha": "8b938c7d1d0838c3cfd47fb7b236fae084db193d",
+          "plan_path": "docs/iterations/063-add-custom-group-members/plan.md",
+          "candidate_sha": "c2bc3acd80385bfef882caf61e60353779639fae"
+        },
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-5",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [
+            {
+              "type": "command",
+              "command": [
+                "bash",
+                "/workspace/memba/.fabro/workflows/code-review/prepare_mix.sh"
+              ]
+            }
+          ],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 1,
+            "memory": "2048MB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "CodeReview",
+      "nodes": {
+        "preflight_sandbox": {
+          "id": "preflight_sandbox",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/preflight_sandbox.sh 'c2bc3acd80385bfef882caf61e60353779639fae'"
+            },
+            "label": {
+              "String": "Preflight Code-review Sandbox"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 600,
+                "nanos": 0
+              }
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "verify_heal_progress": {
+          "id": "verify_heal_progress",
+          "attrs": {
+            "label": {
+              "String": "Verify Heal Progress"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/verify_review_repair.sh"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "code_health_recording_failed": {
+          "id": "code_health_recording_failed",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Fail: Code-health Recording"
+            },
+            "script": {
+              "String": "echo 'Code-health recording failed. The finding remains in this run; implementation publication remains successful.' >&2\nexit 1"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "observe_dismiss": {
+          "id": "observe_dismiss",
+          "attrs": {
+            "label": {
+              "String": "Observe Human Dismissal"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/record_observability.sh dismissed true false"
+            }
+          }
+        },
+        "artifact_failed": {
+          "id": "artifact_failed",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Fail: Final Artifact Gate"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "echo 'Healer artifact policy failed; nothing is allowed to alter the successful delivery result.' >&2\nexit 1"
+            }
+          }
+        },
+        "publish_followup": {
+          "id": "publish_followup",
+          "attrs": {
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/publish_polish_to_main.sh 'docs/iterations/063-add-custom-group-members/plan.md'"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 3600,
+                "nanos": 0
+              }
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "label": {
+              "String": "Publish Separate Follow-up Commit"
+            }
+          }
+        },
+        "disposition": {
+          "id": "disposition",
+          "attrs": {
+            "shape": {
+              "String": "diamond"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "label": {
+              "String": "Review disposition"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "read_plan": {
+          "id": "read_plan",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Read Iteration Plan"
+            },
+            "script": {
+              "String": "PLAN_PATH='docs/iterations/063-add-custom-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then exit 1; fi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\""
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "final_artifact_gate": {
+          "id": "final_artifact_gate",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Final Healer Artifact Gate"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/final_artifact_gate.sh 'docs/iterations/063-add-custom-group-members/plan.md' '8b938c7d1d0838c3cfd47fb7b236fae084db193d'"
+            }
+          }
+        },
+        "observe_clean": {
+          "id": "observe_clean",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/record_observability.sh clean false false"
+            },
+            "label": {
+              "String": "Observe Clean Review"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "focused_reviewer": {
+          "id": "focused_reviewer",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Focused OpenAI Code Reviewer"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "retry_policy": {
+              "String": "patient"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "model": {
+              "String": "gpt-5.6-terra"
+            },
+            "prompt": {
+              "String": "You are the single focused OpenAI reviewer for the already-published implementation of docs/iterations/063-add-custom-group-members/plan.md.\n\nReview the plan, the collected evidence, the current tree, and `8b938c7d1d0838c3cfd47fb7b236fae084db193d..HEAD`. Implementation has already passed its delivery gates and reached `main`; this healer is not an acceptance gate. Do not edit files, do not reinterpret provider failure as a verdict, and do not request acceptance-feature edits.\n\nRead applicable ADRs and project references, especially `docs/reference/domain-driven-design.md`, `docs/reference/cqrs.md`, `docs/reference/event-sourcing.md`, and `docs/reference/responsibility-driven-design.md`. Preserve factual evidence: name files, symbols, tests, ADRs, and concrete risks.\n\nClassify the whole review into exactly one disposition:\n\n- `clean`: no actionable finding. This completes without rerunning the full gate.\n- `bounded_heal`: one small, low-risk code/config/test/refactoring correction that preserves existing product behaviour and architecture. It can receive at most one automatic repair pass.\n- `record`: a factual, non-urgent code-health finding worth preserving in `docs/code-health.md`, but no code/config/test change now.\n- `consequential`: requires Matt's judgement. This includes product behaviour, ADR or architecture decisions, migrations or production data, security/privacy, broad cross-cutting work, a behavioural gap, or any repeated/no-progress repair concern. When uncertain between bounded and consequential, choose consequential.\n\nDo not split a consequential finding into a supposedly bounded fix. Multiple independent findings that cannot be safely handled by one bounded pass are consequential. Historical synthesis omissions are evidence that every supported finding must remain visible in your report.\n\nReturn concise Markdown containing: disposition, confidence, factual evidence, why the classification threshold applies, proposed next action, and focused checks (if bounded). End with exactly one routing JSON object:\n\n```json\n{\"context_updates\":{\"review_disposition\":\"clean\",\"review_finding_ids\":[],\"review_evidence\":\"concise factual evidence\"}}\n```\n\n`review_disposition` must be exactly `clean`, `bounded_heal`, `record`, or `consequential`. Use stable short IDs for findings. The JSON must be the final response content."
+            },
+            "output_schema": {
+              "String": "routing"
+            }
+          }
+        },
+        "collect_implementation_evidence": {
+          "id": "collect_implementation_evidence",
+          "attrs": {
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/collect_implementation_evidence.sh '8b938c7d1d0838c3cfd47fb7b236fae084db193d'"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 120,
+                "nanos": 0
+              }
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "label": {
+              "String": "Collect Published Implementation Evidence"
+            }
+          }
+        },
+        "preflight_failed": {
+          "id": "preflight_failed",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "echo 'Code-review infrastructure preflight failed. Implementation publication is unchanged; inspect this run and retry the healer.' >&2\nexit 1"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "label": {
+              "String": "Fail: Sandbox Preflight"
+            }
+          }
+        },
+        "collect_evidence_failed": {
+          "id": "collect_evidence_failed",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "echo 'Code review could not collect published implementation evidence. Implementation publication is unchanged.' >&2\nexit 1"
+            },
+            "label": {
+              "String": "Fail: Evidence Collection"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "record_code_health": {
+          "id": "record_code_health",
+          "attrs": {
+            "shape": {
+              "String": "box"
+            },
+            "prompt": {
+              "String": "Preserve the preceding focused-review or human-gate finding durably in `docs/code-health.md` for docs/iterations/063-add-custom-group-members/plan.md.\n\nThis is a docs-only recording step, not permission to change code, config, tests, product behaviour, ADRs, migrations, production data, security/privacy policy, or acceptance features. Include the date, plan path, stable finding ID when available, factual file/symbol/ADR evidence, risk, disposition, and suggested next action. Include Matt's selected option or freeform guidance from `human.gate` when present. Do not claim the finding is fixed.\n\nIf the same finding is already present, make no duplicate edit and explain the no-op. If recording is needed, verify `git diff -- docs/code-health.md`. If you cannot preserve the finding, fail closed.\n\nEnd with exactly one routing JSON object. Success/no-op:\n`{\"context_updates\":{\"code_health_recording_ok\":true,\"review_disposition\":\"record\"}}`\nFailure:\n`{\"context_updates\":{\"code_health_recording_ok\":false}}`"
+            },
+            "label": {
+              "String": "Record Non-urgent Finding"
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "reviewer_unavailable": {
+          "id": "reviewer_unavailable",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Fail: Reviewer Unavailable"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/record_observability.sh provider_failure false false\necho 'The focused reviewer failed. No acceptance or rejection is implied; implementation publication remains successful.' >&2\nexit 1"
+            }
+          }
+        },
+        "read_failed": {
+          "id": "read_failed",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Fail: Plan Missing"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "echo 'Code review could not read the plan. The already-published implementation remains successful.' >&2\nexit 1"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "label": {
+              "String": "Start"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "observe_record": {
+          "id": "observe_record",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Observe Recorded Finding"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/record_observability.sh record false false"
+            }
+          }
+        },
+        "prepare_followup": {
+          "id": "prepare_followup",
+          "attrs": {
+            "output_schema": {
+              "String": "routing"
+            },
+            "prompt": {
+              "String": "Preserve the preceding focused-review or human-gate finding durably in `docs/code-health.md` for docs/iterations/063-add-custom-group-members/plan.md.\n\nThis is a docs-only recording step, not permission to change code, config, tests, product behaviour, ADRs, migrations, production data, security/privacy policy, or acceptance features. Include the date, plan path, stable finding ID when available, factual file/symbol/ADR evidence, risk, disposition, and suggested next action. Include Matt's selected option or freeform guidance from `human.gate` when present. Do not claim the finding is fixed.\n\nIf the same finding is already present, make no duplicate edit and explain the no-op. If recording is needed, verify `git diff -- docs/code-health.md`. If you cannot preserve the finding, fail closed.\n\nEnd with exactly one routing JSON object. Success/no-op:\n`{\"context_updates\":{\"code_health_recording_ok\":true,\"review_disposition\":\"record\"}}`\nFailure:\n`{\"context_updates\":{\"code_health_recording_ok\":false}}`"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Prepare Human-directed Follow-up Record"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "observe_heal": {
+          "id": "observe_heal",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/record_observability.sh bounded_heal false true"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Observe Published Heal"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "dev_check": {
+          "id": "dev_check",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Exact-state Dev Check"
+            },
+            "script": {
+              "String": "PATH=\"$PWD/bin:$PATH\" dev check"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 3600,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "snapshot_before_heal": {
+          "id": "snapshot_before_heal",
+          "attrs": {
+            "label": {
+              "String": "Snapshot Before Bounded Heal"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "set -eu\nmkdir -p .fabro/tmp\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > .fabro/tmp/review-repair-before-head.txt\ngit diff --binary \"$before_head\" > .fabro/tmp/review-repair-before.patch\nprintf 'Bounded-heal baseline captured at %s.\\n' \"$before_head\""
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "final_summary": {
+          "id": "final_summary",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "prompt": {
+              "String": "Summarize this post-merge code-review healer run for docs/iterations/063-add-custom-group-members/plan.md without editing files.\n\nState the run identity when available, elapsed evidence from the observability stage, exact disposition, whether the run paused for Matt, whether a separate healing or docs commit was published (or main was unchanged), factual finding evidence and routing, focused/full validation actually run, and any remaining action. Do not describe implementation delivery as failed: it was published before this independent healer. Do not claim operational effectiveness from fixtures or from this single run."
+            },
+            "label": {
+              "String": "Final Code-review Summary"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "Msquare"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Exit"
+            }
+          }
+        },
+        "consequential_gate": {
+          "id": "consequential_gate",
+          "attrs": {
+            "label": {
+              "String": "Matt: choose a safe disposition for the consequential finding (review preceding evidence)"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "question_type": {
+              "String": "multiple_choice"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "hexagon"
+            }
+          }
+        },
+        "apply_bounded_heal": {
+          "id": "apply_bounded_heal",
+          "attrs": {
+            "prompt": {
+              "String": "Apply one bounded healing pass for the focused review of docs/iterations/063-add-custom-group-members/plan.md.\n\nUse only the preceding review's factual evidence. Make the smallest low-risk code/config/test change that preserves existing product behaviour and architecture. Do not make product decisions, ADR/architecture changes, migrations/production-data changes, security/privacy policy changes, broad cross-cutting changes, or acceptance-feature changes.\n\nDo not commit or push. Do not spawn subagents. Run only focused checks directly related to the change. Do not run `dev check`, `dev check --quick`, `dev ci`, or another full suite here; the workflow owns the exact-state full gate. Do not launch background/detached commands.\n\nThere is only one automatic repair pass. If the finding cannot be safely fixed, is already fixed, repeats, or would produce no meaningful repository diff, leave clear factual evidence; the deterministic progress check will escalate to Matt rather than loop.\n\nSummarize the finding-to-change mapping, files changed, focused checks and remaining risk."
+            },
+            "shape": {
+              "String": "box"
+            },
+            "label": {
+              "String": "Apply One Bounded Heal"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "consequential_context": {
+          "id": "consequential_context",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "label": {
+              "String": "Preserve Consequential Finding Context"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/code-review/scripts/record_observability.sh consequential true false\necho 'Consequential finding requires Matt: product behaviour, ADR/architecture, migration/production data, security/privacy, broad cross-cutting work, or repeated/no-progress repair. Review the preceding reviewer and repair evidence before answering.'"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "publish_failed": {
+          "id": "publish_failed",
+          "attrs": {
+            "script": {
+              "String": "echo 'Follow-up publication failed. Inspect the run/checkpoint/rescue evidence; implementation is still delivered.' >&2\nexit 1"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Fail: Follow-up Publication"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "read_plan",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan",
+          "to": "preflight_sandbox",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "preflight_sandbox",
+          "to": "collect_implementation_evidence",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "preflight_sandbox",
+          "to": "preflight_failed",
+          "attrs": {}
+        },
+        {
+          "from": "preflight_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "collect_implementation_evidence",
+          "to": "focused_reviewer",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "collect_implementation_evidence",
+          "to": "collect_evidence_failed",
+          "attrs": {}
+        },
+        {
+          "from": "collect_evidence_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "focused_reviewer",
+          "to": "disposition",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "focused_reviewer",
+          "to": "reviewer_unavailable",
+          "attrs": {}
+        },
+        {
+          "from": "reviewer_unavailable",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "disposition",
+          "to": "observe_clean",
+          "attrs": {
+            "label": {
+              "String": "Clean"
+            },
+            "condition": {
+              "String": "context.review_disposition=clean"
+            }
+          }
+        },
+        {
+          "from": "disposition",
+          "to": "snapshot_before_heal",
+          "attrs": {
+            "condition": {
+              "String": "context.review_disposition=bounded_heal"
+            },
+            "label": {
+              "String": "Bounded heal"
+            }
+          }
+        },
+        {
+          "from": "disposition",
+          "to": "record_code_health",
+          "attrs": {
+            "label": {
+              "String": "Record"
+            },
+            "condition": {
+              "String": "context.review_disposition=record"
+            }
+          }
+        },
+        {
+          "from": "disposition",
+          "to": "consequential_context",
+          "attrs": {
+            "label": {
+              "String": "Consequential or invalid classification"
+            }
+          }
+        },
+        {
+          "from": "snapshot_before_heal",
+          "to": "apply_bounded_heal",
+          "attrs": {}
+        },
+        {
+          "from": "apply_bounded_heal",
+          "to": "verify_heal_progress",
+          "attrs": {}
+        },
+        {
+          "from": "verify_heal_progress",
+          "to": "dev_check",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "verify_heal_progress",
+          "to": "consequential_context",
+          "attrs": {
+            "label": {
+              "String": "No progress; escalate"
+            }
+          }
+        },
+        {
+          "from": "dev_check",
+          "to": "final_artifact_gate",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "dev_check",
+          "to": "consequential_context",
+          "attrs": {
+            "label": {
+              "String": "Validation failed; escalate"
+            }
+          }
+        },
+        {
+          "from": "record_code_health",
+          "to": "final_artifact_gate",
+          "attrs": {
+            "condition": {
+              "String": "context.code_health_recording_ok=true"
+            }
+          }
+        },
+        {
+          "from": "record_code_health",
+          "to": "code_health_recording_failed",
+          "attrs": {}
+        },
+        {
+          "from": "code_health_recording_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "prepare_followup",
+          "to": "final_artifact_gate",
+          "attrs": {
+            "condition": {
+              "String": "context.code_health_recording_ok=true"
+            }
+          }
+        },
+        {
+          "from": "prepare_followup",
+          "to": "code_health_recording_failed",
+          "attrs": {}
+        },
+        {
+          "from": "consequential_context",
+          "to": "consequential_gate",
+          "attrs": {}
+        },
+        {
+          "from": "consequential_gate",
+          "to": "record_code_health",
+          "attrs": {
+            "label": {
+              "String": "[R] Record / defer"
+            }
+          }
+        },
+        {
+          "from": "consequential_gate",
+          "to": "prepare_followup",
+          "attrs": {
+            "label": {
+              "String": "[P] Prepare / attempt a separately approved follow-up"
+            }
+          }
+        },
+        {
+          "from": "consequential_gate",
+          "to": "observe_dismiss",
+          "attrs": {
+            "label": {
+              "String": "[D] Dismiss with rationale"
+            }
+          }
+        },
+        {
+          "from": "consequential_gate",
+          "to": "prepare_followup",
+          "attrs": {
+            "freeform": {
+              "Boolean": true
+            }
+          }
+        },
+        {
+          "from": "final_artifact_gate",
+          "to": "publish_followup",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "final_artifact_gate",
+          "to": "artifact_failed",
+          "attrs": {}
+        },
+        {
+          "from": "artifact_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "publish_followup",
+          "to": "observe_heal",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && context.review_disposition=bounded_heal"
+            }
+          }
+        },
+        {
+          "from": "publish_followup",
+          "to": "observe_record",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "publish_followup",
+          "to": "publish_failed",
+          "attrs": {}
+        },
+        {
+          "from": "publish_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "observe_clean",
+          "to": "final_summary",
+          "attrs": {}
+        },
+        {
+          "from": "observe_record",
+          "to": "final_summary",
+          "attrs": {}
+        },
+        {
+          "from": "observe_heal",
+          "to": "final_summary",
+          "attrs": {}
+        },
+        {
+          "from": "observe_dismiss",
+          "to": "final_summary",
+          "attrs": {}
+        },
+        {
+          "from": "final_summary",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": "Review an already-published implementation and produce clean, bounded-heal, durable-record, or consequential-human routing without gating delivery"
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        },
+        "max_node_visits": {
+          "Integer": 40
+        },
+        "rankdir": {
+          "String": "LR"
+        },
+        "model_stylesheet": {
+          "String": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #focused_reviewer { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
+        }
+      }
+    },
+    "graph_source": "digraph CodeReview {\n    graph [\n        goal=\"Review the already-published implementation of {{ inputs.plan_path }} and heal only bounded code-health issues without changing delivery status\",\n        default_fidelity=\"summary:high\",\n        max_node_visits=40,\n        model_stylesheet=\"\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #focused_reviewer { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit [shape=Msquare, label=\"Exit\"]\n\n    read_plan [\n        label=\"Read Iteration Plan\",\n        shape=parallelogram,\n        script=\"PLAN_PATH='{{ inputs.plan_path }}'\\nif [ ! -f \\\"$PLAN_PATH\\\" ]; then exit 1; fi\\nprintf 'PLAN_PATH=%s\\\\n\\\\n' \\\"$PLAN_PATH\\\"\\nsed -n '1,320p' \\\"$PLAN_PATH\\\"\"\n    ]\n    read_failed [label=\"Fail: Plan Missing\", shape=parallelogram, script=\"echo 'Code review could not read the plan. The already-published implementation remains successful.' >&2\\nexit 1\"]\n\n    preflight_sandbox [\n        label=\"Preflight Code-review Sandbox\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/code-review/scripts/preflight_sandbox.sh '{{ inputs.candidate_sha }}'\",\n        timeout=\"600s\"\n    ]\n    preflight_failed [label=\"Fail: Sandbox Preflight\", shape=parallelogram, script=\"echo 'Code-review infrastructure preflight failed. Implementation publication is unchanged; inspect this run and retry the healer.' >&2\\nexit 1\"]\n\n    collect_implementation_evidence [\n        label=\"Collect Published Implementation Evidence\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/code-review/scripts/collect_implementation_evidence.sh '{{ inputs.base_sha }}'\",\n        timeout=\"120s\"\n    ]\n    collect_evidence_failed [label=\"Fail: Evidence Collection\", shape=parallelogram, script=\"echo 'Code review could not collect published implementation evidence. Implementation publication is unchanged.' >&2\\nexit 1\"]\n\n    focused_reviewer [\n        label=\"Focused OpenAI Code Reviewer\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/review.md\",\n        retry_policy=\"patient\"\n    ]\n    reviewer_unavailable [label=\"Fail: Reviewer Unavailable\", shape=parallelogram, script=\"bash .fabro/workflows/code-review/scripts/record_observability.sh provider_failure false false\\necho 'The focused reviewer failed. No acceptance or rejection is implied; implementation publication remains successful.' >&2\\nexit 1\"]\n\n    disposition [shape=diamond, label=\"Review disposition\"]\n\n    snapshot_before_heal [\n        label=\"Snapshot Before Bounded Heal\",\n        shape=parallelogram,\n        script=\"set -eu\\nmkdir -p .fabro/tmp\\nbefore_head=$(git rev-parse HEAD)\\nprintf '%s\\\\n' \\\"$before_head\\\" > .fabro/tmp/review-repair-before-head.txt\\ngit diff --binary \\\"$before_head\\\" > .fabro/tmp/review-repair-before.patch\\nprintf 'Bounded-heal baseline captured at %s.\\\\n' \\\"$before_head\\\"\"\n    ]\n    apply_bounded_heal [\n        label=\"Apply One Bounded Heal\",\n        shape=box,\n        prompt=\"@prompts/apply_review_fixes.md\",\n        timeout=\"2400s\"\n    ]\n    verify_heal_progress [\n        label=\"Verify Heal Progress\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/code-review/scripts/verify_review_repair.sh\"\n    ]\n    dev_check [\n        label=\"Exact-state Dev Check\",\n        shape=parallelogram,\n        script=\"PATH=\\\"$PWD/bin:$PATH\\\" dev check\",\n        timeout=\"3600s\"\n    ]\n\n    record_code_health [\n        label=\"Record Non-urgent Finding\",\n        shape=box,\n        fidelity=\"truncate\",\n        output_schema=\"routing\",\n        prompt=\"@prompts/record_code_health.md\"\n    ]\n    code_health_recording_failed [label=\"Fail: Code-health Recording\", shape=parallelogram, script=\"echo 'Code-health recording failed. The finding remains in this run; implementation publication remains successful.' >&2\\nexit 1\"]\n\n    consequential_context [\n        label=\"Preserve Consequential Finding Context\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/code-review/scripts/record_observability.sh consequential true false\\necho 'Consequential finding requires Matt: product behaviour, ADR/architecture, migration/production data, security/privacy, broad cross-cutting work, or repeated/no-progress repair. Review the preceding reviewer and repair evidence before answering.'\"\n    ]\n    consequential_gate [\n        label=\"Matt: choose a safe disposition for the consequential finding (review preceding evidence)\",\n        shape=hexagon,\n        question_type=\"multiple_choice\"\n    ]\n    prepare_followup [\n        label=\"Prepare Human-directed Follow-up Record\",\n        shape=box,\n        output_schema=\"routing\",\n        prompt=\"@prompts/record_code_health.md\"\n    ]\n\n    final_artifact_gate [\n        label=\"Final Healer Artifact Gate\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/code-review/scripts/final_artifact_gate.sh '{{ inputs.plan_path }}' '{{ inputs.base_sha }}'\"\n    ]\n    artifact_failed [label=\"Fail: Final Artifact Gate\", shape=parallelogram, script=\"echo 'Healer artifact policy failed; nothing is allowed to alter the successful delivery result.' >&2\\nexit 1\"]\n    publish_followup [\n        label=\"Publish Separate Follow-up Commit\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/code-review/scripts/publish_polish_to_main.sh '{{ inputs.plan_path }}'\",\n        timeout=\"3600s\"\n    ]\n    publish_failed [label=\"Fail: Follow-up Publication\", shape=parallelogram, script=\"echo 'Follow-up publication failed. Inspect the run/checkpoint/rescue evidence; implementation is still delivered.' >&2\\nexit 1\"]\n\n    observe_clean [label=\"Observe Clean Review\", shape=parallelogram, script=\"bash .fabro/workflows/code-review/scripts/record_observability.sh clean false false\"]\n    observe_record [label=\"Observe Recorded Finding\", shape=parallelogram, script=\"bash .fabro/workflows/code-review/scripts/record_observability.sh record false false\"]\n    observe_heal [label=\"Observe Published Heal\", shape=parallelogram, script=\"bash .fabro/workflows/code-review/scripts/record_observability.sh bounded_heal false true\"]\n    observe_dismiss [label=\"Observe Human Dismissal\", shape=parallelogram, script=\"bash .fabro/workflows/code-review/scripts/record_observability.sh dismissed true false\"]\n\n    final_summary [label=\"Final Code-review Summary\", shape=tab, prompt=\"@prompts/final_summary.md\", goal_gate=true]\n\n    start -> read_plan\n    read_plan -> preflight_sandbox [condition=\"outcome=succeeded\"]\n    read_plan -> read_failed\n    read_failed -> exit\n    preflight_sandbox -> collect_implementation_evidence [condition=\"outcome=succeeded\"]\n    preflight_sandbox -> preflight_failed\n    preflight_failed -> exit\n    collect_implementation_evidence -> focused_reviewer [condition=\"outcome=succeeded\"]\n    collect_implementation_evidence -> collect_evidence_failed\n    collect_evidence_failed -> exit\n    focused_reviewer -> disposition [condition=\"outcome=succeeded\"]\n    focused_reviewer -> reviewer_unavailable\n    reviewer_unavailable -> exit\n\n    disposition -> observe_clean [label=\"Clean\", condition=\"context.review_disposition=clean\"]\n    disposition -> snapshot_before_heal [label=\"Bounded heal\", condition=\"context.review_disposition=bounded_heal\"]\n    disposition -> record_code_health [label=\"Record\", condition=\"context.review_disposition=record\"]\n    disposition -> consequential_context [label=\"Consequential or invalid classification\"]\n\n    snapshot_before_heal -> apply_bounded_heal\n    apply_bounded_heal -> verify_heal_progress\n    verify_heal_progress -> dev_check [condition=\"outcome=succeeded\"]\n    verify_heal_progress -> consequential_context [label=\"No progress; escalate\"]\n    dev_check -> final_artifact_gate [condition=\"outcome=succeeded\"]\n    dev_check -> consequential_context [label=\"Validation failed; escalate\"]\n\n    record_code_health -> final_artifact_gate [condition=\"context.code_health_recording_ok=true\"]\n    record_code_health -> code_health_recording_failed\n    code_health_recording_failed -> exit\n    prepare_followup -> final_artifact_gate [condition=\"context.code_health_recording_ok=true\"]\n    prepare_followup -> code_health_recording_failed\n\n    consequential_context -> consequential_gate\n    consequential_gate -> record_code_health [label=\"[R] Record / defer\"]\n    consequential_gate -> prepare_followup [label=\"[P] Prepare / attempt a separately approved follow-up\"]\n    consequential_gate -> observe_dismiss [label=\"[D] Dismiss with rationale\"]\n    consequential_gate -> prepare_followup [freeform=true]\n\n    final_artifact_gate -> publish_followup [condition=\"outcome=succeeded\"]\n    final_artifact_gate -> artifact_failed\n    artifact_failed -> exit\n    publish_followup -> observe_heal [condition=\"outcome=succeeded && context.review_disposition=bounded_heal\"]\n    publish_followup -> observe_record [condition=\"outcome=succeeded\"]\n    publish_followup -> publish_failed\n    publish_failed -> exit\n\n    observe_clean -> final_summary\n    observe_record -> final_summary\n    observe_heal -> final_summary\n    observe_dismiss -> final_summary\n    final_summary -> exit\n}\n",
+    "workflow_slug": "code-review",
+    "source_directory": "/home/matt/memba-code-review-code-review-tmp-main-20260922063232",
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "e853c2ca6545786d9e429cf606157acc41ecef1ef0878c0b8e1110c07d5922d0",
+    "definition_blob": "7d75c01735c9d69c1f8c1b8ee5ab14b86c7c73f13c60724edd50038f453b7a8f",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "code-review/tmp/main-20260922063232",
+      "sha": "c2bc3acd80385bfef882caf61e60353779639fae",
+      "dirty": "clean"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M33X1XFJMCBT6K62P5BXZDNG",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-09-22T06:32:36.034910906Z",
+  "last_event_at": "2026-09-22T06:32:40.710321628Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:latest"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+      "runtime": {
+        "id": "308d7b817f507ee464db2d16036cf5b3b28de9540a23102f10da824f2d8b72e2",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "code-review/tmp/main-20260922063232",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}

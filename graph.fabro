@@ -1,0 +1,174 @@
+digraph CodeReview {
+    graph [
+        goal="Review the already-published implementation of {{ inputs.plan_path }} and heal only bounded code-health issues without changing delivery status",
+        default_fidelity="summary:high",
+        max_node_visits=40,
+        model_stylesheet="
+            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #focused_reviewer { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }
+            #read_plan { reasoning_effort: low; }
+            #record_code_health { reasoning_effort: high; }
+            #final_summary { reasoning_effort: low; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit [shape=Msquare, label="Exit"]
+
+    read_plan [
+        label="Read Iteration Plan",
+        shape=parallelogram,
+        script="PLAN_PATH='{{ inputs.plan_path }}'\nif [ ! -f \"$PLAN_PATH\" ]; then exit 1; fi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\""
+    ]
+    read_failed [label="Fail: Plan Missing", shape=parallelogram, script="echo 'Code review could not read the plan. The already-published implementation remains successful.' >&2\nexit 1"]
+
+    preflight_sandbox [
+        label="Preflight Code-review Sandbox",
+        shape=parallelogram,
+        script="bash .fabro/workflows/code-review/scripts/preflight_sandbox.sh '{{ inputs.candidate_sha }}'",
+        timeout="600s"
+    ]
+    preflight_failed [label="Fail: Sandbox Preflight", shape=parallelogram, script="echo 'Code-review infrastructure preflight failed. Implementation publication is unchanged; inspect this run and retry the healer.' >&2\nexit 1"]
+
+    collect_implementation_evidence [
+        label="Collect Published Implementation Evidence",
+        shape=parallelogram,
+        script="bash .fabro/workflows/code-review/scripts/collect_implementation_evidence.sh '{{ inputs.base_sha }}'",
+        timeout="120s"
+    ]
+    collect_evidence_failed [label="Fail: Evidence Collection", shape=parallelogram, script="echo 'Code review could not collect published implementation evidence. Implementation publication is unchanged.' >&2\nexit 1"]
+
+    focused_reviewer [
+        label="Focused OpenAI Code Reviewer",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/review.md",
+        retry_policy="patient"
+    ]
+    reviewer_unavailable [label="Fail: Reviewer Unavailable", shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh provider_failure false false\necho 'The focused reviewer failed. No acceptance or rejection is implied; implementation publication remains successful.' >&2\nexit 1"]
+
+    disposition [shape=diamond, label="Review disposition"]
+
+    snapshot_before_heal [
+        label="Snapshot Before Bounded Heal",
+        shape=parallelogram,
+        script="set -eu\nmkdir -p .fabro/tmp\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > .fabro/tmp/review-repair-before-head.txt\ngit diff --binary \"$before_head\" > .fabro/tmp/review-repair-before.patch\nprintf 'Bounded-heal baseline captured at %s.\\n' \"$before_head\""
+    ]
+    apply_bounded_heal [
+        label="Apply One Bounded Heal",
+        shape=box,
+        prompt="@prompts/apply_review_fixes.md",
+        timeout="2400s"
+    ]
+    verify_heal_progress [
+        label="Verify Heal Progress",
+        shape=parallelogram,
+        script="bash .fabro/workflows/code-review/scripts/verify_review_repair.sh"
+    ]
+    dev_check [
+        label="Exact-state Dev Check",
+        shape=parallelogram,
+        script="PATH=\"$PWD/bin:$PATH\" dev check",
+        timeout="3600s"
+    ]
+
+    record_code_health [
+        label="Record Non-urgent Finding",
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
+        prompt="@prompts/record_code_health.md"
+    ]
+    code_health_recording_failed [label="Fail: Code-health Recording", shape=parallelogram, script="echo 'Code-health recording failed. The finding remains in this run; implementation publication remains successful.' >&2\nexit 1"]
+
+    consequential_context [
+        label="Preserve Consequential Finding Context",
+        shape=parallelogram,
+        script="bash .fabro/workflows/code-review/scripts/record_observability.sh consequential true false\necho 'Consequential finding requires Matt: product behaviour, ADR/architecture, migration/production data, security/privacy, broad cross-cutting work, or repeated/no-progress repair. Review the preceding reviewer and repair evidence before answering.'"
+    ]
+    consequential_gate [
+        label="Matt: choose a safe disposition for the consequential finding (review preceding evidence)",
+        shape=hexagon,
+        question_type="multiple_choice"
+    ]
+    prepare_followup [
+        label="Prepare Human-directed Follow-up Record",
+        shape=box,
+        output_schema="routing",
+        prompt="@prompts/record_code_health.md"
+    ]
+
+    final_artifact_gate [
+        label="Final Healer Artifact Gate",
+        shape=parallelogram,
+        script="bash .fabro/workflows/code-review/scripts/final_artifact_gate.sh '{{ inputs.plan_path }}' '{{ inputs.base_sha }}'"
+    ]
+    artifact_failed [label="Fail: Final Artifact Gate", shape=parallelogram, script="echo 'Healer artifact policy failed; nothing is allowed to alter the successful delivery result.' >&2\nexit 1"]
+    publish_followup [
+        label="Publish Separate Follow-up Commit",
+        shape=parallelogram,
+        script="bash .fabro/workflows/code-review/scripts/publish_polish_to_main.sh '{{ inputs.plan_path }}'",
+        timeout="3600s"
+    ]
+    publish_failed [label="Fail: Follow-up Publication", shape=parallelogram, script="echo 'Follow-up publication failed. Inspect the run/checkpoint/rescue evidence; implementation is still delivered.' >&2\nexit 1"]
+
+    observe_clean [label="Observe Clean Review", shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh clean false false"]
+    observe_record [label="Observe Recorded Finding", shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh record false false"]
+    observe_heal [label="Observe Published Heal", shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh bounded_heal false true"]
+    observe_dismiss [label="Observe Human Dismissal", shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh dismissed true false"]
+
+    final_summary [label="Final Code-review Summary", shape=tab, prompt="@prompts/final_summary.md", goal_gate=true]
+
+    start -> read_plan
+    read_plan -> preflight_sandbox [condition="outcome=succeeded"]
+    read_plan -> read_failed
+    read_failed -> exit
+    preflight_sandbox -> collect_implementation_evidence [condition="outcome=succeeded"]
+    preflight_sandbox -> preflight_failed
+    preflight_failed -> exit
+    collect_implementation_evidence -> focused_reviewer [condition="outcome=succeeded"]
+    collect_implementation_evidence -> collect_evidence_failed
+    collect_evidence_failed -> exit
+    focused_reviewer -> disposition [condition="outcome=succeeded"]
+    focused_reviewer -> reviewer_unavailable
+    reviewer_unavailable -> exit
+
+    disposition -> observe_clean [label="Clean", condition="context.review_disposition=clean"]
+    disposition -> snapshot_before_heal [label="Bounded heal", condition="context.review_disposition=bounded_heal"]
+    disposition -> record_code_health [label="Record", condition="context.review_disposition=record"]
+    disposition -> consequential_context [label="Consequential or invalid classification"]
+
+    snapshot_before_heal -> apply_bounded_heal
+    apply_bounded_heal -> verify_heal_progress
+    verify_heal_progress -> dev_check [condition="outcome=succeeded"]
+    verify_heal_progress -> consequential_context [label="No progress; escalate"]
+    dev_check -> final_artifact_gate [condition="outcome=succeeded"]
+    dev_check -> consequential_context [label="Validation failed; escalate"]
+
+    record_code_health -> final_artifact_gate [condition="context.code_health_recording_ok=true"]
+    record_code_health -> code_health_recording_failed
+    code_health_recording_failed -> exit
+    prepare_followup -> final_artifact_gate [condition="context.code_health_recording_ok=true"]
+    prepare_followup -> code_health_recording_failed
+
+    consequential_context -> consequential_gate
+    consequential_gate -> record_code_health [label="[R] Record / defer"]
+    consequential_gate -> prepare_followup [label="[P] Prepare / attempt a separately approved follow-up"]
+    consequential_gate -> observe_dismiss [label="[D] Dismiss with rationale"]
+    consequential_gate -> prepare_followup [freeform=true]
+
+    final_artifact_gate -> publish_followup [condition="outcome=succeeded"]
+    final_artifact_gate -> artifact_failed
+    artifact_failed -> exit
+    publish_followup -> observe_heal [condition="outcome=succeeded && context.review_disposition=bounded_heal"]
+    publish_followup -> observe_record [condition="outcome=succeeded"]
+    publish_followup -> publish_failed
+    publish_failed -> exit
+
+    observe_clean -> final_summary
+    observe_record -> final_summary
+    observe_heal -> final_summary
+    observe_dismiss -> final_summary
+    final_summary -> exit
+}
