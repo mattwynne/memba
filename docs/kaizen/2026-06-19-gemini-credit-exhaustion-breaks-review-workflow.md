@@ -213,3 +213,16 @@ Implemented locally without launching a live delivery or code-review run:
 Validation includes static graph/schema/command assertions; deterministic no-model routing fixtures for clean, bounded heal, record, consequential, no-progress, provider failure, publication/no-op, unanswered input and detached launch; historical no-model replay fixtures for an ADR 0024 aggregate-boundary finding and two findings omitted by synthesis; helper publication/no-progress tests; Fabro graph validation; and the required exact-state `dev check`.
 
 These fixtures validate classification and routing contracts only. They do not establish operational effectiveness; adoption still requires the 5/5 qualifying operational sample and guardrails above.
+
+### Integrated-review corrections — 2026-09-22
+
+Independent validation found that preflight captured whichever `origin/main` existed when preflight ran, rather than the candidate selected when the detached review was launched. If `main` advanced from candidate A to B in that interval, publication could construct an inverse stale-tree diff. The correction now passes the launch candidate SHA as an explicit workflow input, requires the sandbox tree to match that candidate (allowing only tree-identical Fabro checkpoints), records that identity as publication provenance, and rebases only the A-based follow-up commit onto freshly fetched main. A later non-fast-forward push still fails closed.
+
+Correction evidence, using no model calls or external repositories:
+
+- `test_preflight_sandbox.sh` holds the review on A, advances the temporary bare origin's main to B before preflight, proves preflight records A rather than B or the checkpoint commit, and proves a retargeted sandbox fails closed.
+- `test_publish_polish_to_main.sh` reproduces A → concurrent B → preflight → healer change → publish for both bounded-heal and docs-only record paths; B's independently added file survives in both published trees.
+- `test_code_review_runtime.py` runs a native local Fabro server with inert scripted nodes while retaining the production graph edges. It executes clean, heal, record, consequential, invalid-fallthrough, no-progress, and historical-fixture routes; verifies one repair pass; verifies unanswered human input remains paused; and verifies explicit `--auto-approve` selects the first safe record/defer choice. This is runtime contract evidence, not reviewer-quality or operational-effectiveness evidence.
+- `test_code_review_launch.sh` executes the real `bin/dev fabro code-review` helper against fake local Fabro responses. It covers detached launch arguments, run-ID extraction after a nonzero launch command, succeeded/failed/active/unknown remote classification, monitoring guidance, and temporary-worktree cleanup.
+
+No live delivery or code-review canary was launched for these corrections. The experiment remains `Experiment`; no operational completion-rate or quality-effectiveness claim is made.

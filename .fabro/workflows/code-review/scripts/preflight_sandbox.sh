@@ -2,6 +2,8 @@
 set -euo pipefail
 
 START_SHA_FILE=".fabro/tmp/review-start-sha.txt"
+CANDIDATE_SHA_FILE=".fabro/tmp/review-candidate-sha.txt"
+EXPECTED_CANDIDATE_SHA="${1:?expected review candidate SHA required}"
 
 if [ ! -x bin/dev ]; then
   echo "Missing or non-executable bin/dev" >&2
@@ -19,17 +21,24 @@ rm -rf .fabro/tmp
 mkdir -p .fabro/tmp
 date +%s > .fabro/tmp/code-review-start-epoch
 
-if ! git fetch --quiet origin main:refs/remotes/origin/main; then
-  echo 'Could not fetch origin/main before capturing review start SHA.' >&2
+if ! candidate_sha=$(git rev-parse --verify "$EXPECTED_CANDIDATE_SHA^{commit}" 2>/dev/null); then
+  echo "Expected review candidate does not resolve: $EXPECTED_CANDIDATE_SHA" >&2
   exit 1
 fi
 
-if ! git rev-parse --verify --quiet 'origin/main^{commit}' >/dev/null; then
-  echo 'Could not resolve origin/main after fetch; cannot capture review start SHA.' >&2
+# Fabro may have checkpointed read_plan before this stage, so HEAD's commit ID
+# can differ while its tree must still be the exact tree selected at launch.
+head_tree=$(git rev-parse 'HEAD^{tree}')
+candidate_tree=$(git rev-parse "$candidate_sha^{tree}")
+if [ "$head_tree" != "$candidate_tree" ]; then
+  echo 'Review sandbox tree no longer matches the launch candidate; refusing stale or retargeted review.' >&2
+  echo "Launch candidate: $candidate_sha ($candidate_tree)" >&2
+  echo "Sandbox HEAD: $(git rev-parse HEAD) ($head_tree)" >&2
   exit 1
 fi
 
-git rev-parse 'origin/main^{commit}' > "$START_SHA_FILE"
-echo "Review start SHA (origin/main): $(cat "$START_SHA_FILE")"
+printf '%s\n' "$candidate_sha" > "$START_SHA_FILE"
+printf '%s\n' "$candidate_sha" > "$CANDIDATE_SHA_FILE"
+echo "Review candidate SHA (launch HEAD): $candidate_sha"
 
 PATH="$PWD/bin:$PATH" dev sandbox-check

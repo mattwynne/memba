@@ -3,6 +3,7 @@ set -euo pipefail
 
 PLAN_PATH="${1:?plan path required}"
 START_SHA_FILE=".fabro/tmp/review-start-sha.txt"
+CANDIDATE_SHA_FILE=".fabro/tmp/review-candidate-sha.txt"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../../scripts/git_identity.sh
 source "$SCRIPT_DIR/../../scripts/git_identity.sh"
@@ -22,12 +23,17 @@ stage_publish_artifact() {
   done < <(git ls-files -z --modified --deleted --others --exclude-standard)
 }
 
-if [ ! -f "$START_SHA_FILE" ]; then
-  echo "Missing review start SHA file: $START_SHA_FILE" >&2
+if [ ! -f "$START_SHA_FILE" ] || [ ! -f "$CANDIDATE_SHA_FILE" ]; then
+  echo "Missing explicit review provenance files: $START_SHA_FILE and $CANDIDATE_SHA_FILE are required" >&2
   exit 1
 fi
 
 start_sha=$(cat "$START_SHA_FILE")
+candidate_sha=$(cat "$CANDIDATE_SHA_FILE")
+if [ "$start_sha" != "$candidate_sha" ]; then
+  echo "Review provenance mismatch: start $start_sha is not launch candidate $candidate_sha" >&2
+  exit 1
+fi
 if ! git cat-file -e "$start_sha^{commit}" 2>/dev/null; then
   echo "Review start SHA does not resolve: $start_sha" >&2
   exit 1

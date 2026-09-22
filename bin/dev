@@ -1582,7 +1582,7 @@ _fabro_inspect_status_kind() {
     | jq -r 'if type == "array" then .[0] else . end | .status.kind // .status // .state // .outcome // empty'
 }
 
-_fabro_implementation_status_class() {
+_fabro_run_status_class() {
   local status_kind="$1"
 
   case "$(printf '%s' "$status_kind" | tr '[:upper:]' '[:lower:]')" in
@@ -1599,6 +1599,10 @@ _fabro_implementation_status_class() {
       printf '%s\n' unknown
       ;;
   esac
+}
+
+_fabro_implementation_status_class() {
+  _fabro_run_status_class "$1"
 }
 
 _fabro_print_implementation_recovery_commands() {
@@ -1962,15 +1966,18 @@ _fabro_code_review() {
 
   echo "Launching code review from isolated worktree: $worktree"
   echo "Code-review branch: $worktree_branch"
-  echo "Code-review HEAD: $(git -C "$worktree" rev-parse HEAD)"
+  local candidate_sha
+  candidate_sha=$(git -C "$worktree" rev-parse 'HEAD^{commit}')
+  echo "Code-review HEAD: $candidate_sha"
   echo "Code-review base sha: $base_sha"
 
-  local launch_output launch_status=0 run_id run_url
+  local launch_output launch_status=0 run_id run_url status_kind status_class
   launch_output=$(
     cd "$worktree"
     command fabro run "$repo_root/.fabro/workflows/code-review/workflow.toml" \
       -I "plan_path=$plan_path" \
       -I "base_sha=$base_sha" \
+      -I "candidate_sha=$candidate_sha" \
       --detach 2>&1
   ) || launch_status=$?
   printf '%s\n' "$launch_output"
@@ -1998,8 +2005,26 @@ _fabro_code_review() {
   echo "If it pauses for Matt, answer the consequential gate in the Fabro web UI or by attaching: fabro attach $run_id"
 
   if [ "$launch_status" -ne 0 ]; then
-    echo "Fabro returned run ID $run_id but the local detached launch command exited $launch_status; inspect the retained remote run before retrying." >&2
-    return "$launch_status"
+    status_kind=$(_fabro_inspect_status_kind "$run_id" 2>/dev/null || true)
+    status_class=$(_fabro_run_status_class "$status_kind")
+    case "$status_class" in
+      succeeded)
+        echo "Fabro's local launch command exited $launch_status, but remote code-review run $run_id succeeded." >&2
+        return 0
+        ;;
+      failed)
+        echo "Fabro's local launch command exited $launch_status and remote code-review run $run_id is '${status_kind}'. Review its evidence before deciding whether to retry." >&2
+        return "$launch_status"
+        ;;
+      active)
+        echo "Fabro's local launch command exited $launch_status, but remote code-review run $run_id is '${status_kind}' and may still be active. Monitor this run; do not launch a duplicate." >&2
+        return 0
+        ;;
+      unknown)
+        echo "Fabro's local launch command exited $launch_status and remote code-review run $run_id status is '${status_kind:-unknown}'. Inspect this run before any retry; do not launch a duplicate while it may be active." >&2
+        return 0
+        ;;
+    esac
   fi
 }
 
