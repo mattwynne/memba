@@ -246,7 +246,7 @@ Do not remove or weaken `.fabro/workflows/plan-validation/test.sh`; it is the sa
 
 ### Context
 
-We inspected the `code-review` workflow after Matt observed that code review "never seems to come back with anything." The reviewed workflow was `.fabro/workflows/code-review/workflow.fabro`, with reviewer and synthesis prompts under `.fabro/workflows/code-review/prompts/`.
+We inspected the `iteration-review` workflow after Matt observed that code review "never seems to come back with anything." The reviewed workflow was `.fabro/workflows/iteration-review/workflow.fabro`, with reviewer and synthesis prompts under `.fabro/workflows/iteration-review/prompts/`.
 
 Recent review runs inspected:
 
@@ -257,7 +257,7 @@ Recent review runs inspected:
 
 ### Expected standard
 
-The code review workflow is supposed to run independent Claude, Codex/GPT, and Gemini reviews, synthesize their reports, apply bounded-safe fixes where appropriate, and record judgement-worthy non-blocking findings in `docs/code-health.md`.
+The iteration review workflow is supposed to run independent Claude, Codex/GPT, and Gemini reviews, synthesize their reports, apply bounded-safe fixes where appropriate, and record judgement-worthy non-blocking findings in `docs/code-health.md`.
 
 A successful review should not mean only that the reviewer branches completed. It should mean the synthesis step has actually seen and accounted for the reviewer reports.
 
@@ -303,21 +303,21 @@ The impact is quality risk rather than an immediate production bug:
 
 ### What allowed it to happen
 
-The same Fabro parallel fan-in evidence gap observed in plan validation also existed in code review. The workflow trusted parallel branch success metadata as if it implied reviewer report visibility.
+The same Fabro parallel fan-in evidence gap observed in plan validation also existed in iteration review. The workflow trusted parallel branch success metadata as if it implied reviewer report visibility.
 
 Missing or weak protections:
 
 - no guardrail checked that synthesis could see each reviewer body's Markdown before accepting;
 - no shape validation rejected synthesis responses that were only tool-call JSON plus routing JSON;
 - `record_code_health` relied on synthesis, so it inherited the blind spot;
-- there was no eval/test equivalent for code review that plants reviewer findings and proves they reach synthesis/code-health recording.
+- there was no eval/test equivalent for iteration review that plants reviewer findings and proves they reach synthesis/code-health recording.
 
 ### Observations
 
 - This is not a reviewer-quality problem: the individual review stages did produce useful reports.
 - This is not a product-code problem: the abnormality is in workflow evidence handoff after parallel fan-in.
 - The problem recurred after the same failure mode had already been documented and worked around in plan validation.
-- A tactical fix was applied in commit `82f1eee3` (`Harden code review synthesis`): code-review now runs the reviewer stages sequentially and the prompts fail closed if reviewer Markdown is not visible.
+- A tactical fix was applied in commit `82f1eee3` (`Harden iteration review synthesis`): iteration-review now runs the reviewer stages sequentially and the prompts fail closed if reviewer Markdown is not visible.
 
 ### Why this matters
 
@@ -325,13 +325,13 @@ Review is the last delivery-machine step meant to catch maintainability, ADR, an
 
 ### Open questions
 
-- Should code review have an eval/test fixture like plan validation, with planted reviewer outputs that must reach synthesis and `docs/code-health.md`?
+- Should iteration review have an eval/test fixture like plan validation, with planted reviewer outputs that must reach synthesis and `docs/code-health.md`?
 - Can Fabro expose all parallel branch responses as first-class downstream context so the workflow can safely regain parallelism?
 - Should prompt response shape validation reject tool-call-looking JSON before routing context updates are accepted?
 
 ### Possible prevention ideas
 
-- Keep code-review sequential until Fabro provides reliable fan-in evidence visibility.
-- Add an code-review workflow eval that fails if reviewer findings are omitted by synthesis.
+- Keep iteration-review sequential until Fabro provides reliable fan-in evidence visibility.
+- Add an iteration-review workflow eval that fails if reviewer findings are omitted by synthesis.
 - Add a deterministic synthesis preflight/guardrail: require visible `response.claude_review`, `response.codex_review`, and `response.gemini_review` content before accepting.
 - Treat malformed synthesis output, especially command JSON followed only by routing JSON, as an infrastructure failure rather than a clean review.

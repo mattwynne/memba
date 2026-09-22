@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Structural policy checks; runtime routing is covered by test_code_review_runtime.py."""
 from pathlib import Path
+import json
 import re
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -15,6 +16,19 @@ for obsolete in ("review_fork", "review_merge", "claude_review", "gemini_review"
     assert obsolete not in graph
 for disposition in ("clean", "bounded_heal", "record", "consequential"):
     assert f"`{disposition}`" in prompt
+
+# Historical findings are source-backed contract examples, not simulated model
+# classifications. They prove that the prompt names the applicable threshold
+# and that the retained source excerpt still exists.
+fixture_path = WORKFLOW / "test/fixtures/historical_contract_examples.json"
+fixture = json.loads(fixture_path.read_text())
+assert "do not test or claim LLM classification effectiveness" in fixture["description"]
+for example in fixture["examples"]:
+    source = ROOT / example["source"]
+    assert example["source_excerpt"] in source.read_text(), example["name"]
+    for term in example["required_contract_terms"]:
+        assert term in prompt, (example["name"], term)
+assert not (WORKFLOW / "test/fixtures/routing.json").exists()
 
 # Exactly one repair entry and no repair loop; runtime coverage proves both the
 # successful and no-progress outgoing routes execute as encoded.

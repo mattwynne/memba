@@ -4,7 +4,7 @@ Date: 2026-09-04
 
 ## Context
 
-Memba's plan-validation and code-review workflows deliberately use multiple models for independent review. Their model stylesheets evolved through availability incidents and provider-routing upgrades, but did not state which roles should use Memba's OpenAI subscription or when token-billed providers were justified.
+Memba's plan-validation and iteration-review workflows deliberately use multiple models for independent review. Their model stylesheets evolved through availability incidents and provider-routing upgrades, but did not state which roles should use Memba's OpenAI subscription or when token-billed providers were justified.
 
 Before this observation, plan validation used GPT-5.6 Sol for the GPT review, synthesis, plan repair, and recheck. The same model family could therefore review, coordinate repair, make the repair, and certify the result. Claude Sonnet 5 and Gemini 3.1 Pro Preview were each called through OpenRouter for an independent review, but the workflow did not describe their limited, paid role.
 

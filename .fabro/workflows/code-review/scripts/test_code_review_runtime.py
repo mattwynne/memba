@@ -87,7 +87,15 @@ provider='local'
     def make_fixture(self, name: str, scenario: dict) -> Path:
         fixture = self.tmp / name
         (fixture / "scripts").mkdir(parents=True)
+        helper_dir = fixture / ".fabro/workflows/code-review/scripts"
+        helper_dir.mkdir(parents=True)
+        for helper in ("preflight_sandbox.sh", "collect_implementation_evidence.sh", "verify_review_repair.sh", "record_observability.sh"):
+            shutil.copy2(WORKFLOW / "scripts" / helper, helper_dir / helper)
+        (fixture / "bin").mkdir()
+        (fixture / "bin/dev").write_text("#!/usr/bin/env bash\n[ \"${1:-}\" = sandbox-check ]\n")
+        (fixture / "bin/dev").chmod(0o755)
         (fixture / "scenario.json").write_text(json.dumps(scenario))
+        (fixture / "heal.txt").write_text("before\n")
         (fixture / "scripts/step.py").write_text(STEP)
         (fixture / "workflow.fabro").write_text(self.fixture_graph())
         (fixture / "workflow.toml").write_text(textwrap.dedent(f"""
@@ -133,6 +141,22 @@ provider='local'
                 definitions.append("    disposition [shape=diamond]")
             elif node == "consequential_gate":
                 definitions.append('    consequential_gate [shape=hexagon, question_type="multiple_choice", label="Safe disposition"]')
+            elif node == "preflight_sandbox":
+                definitions.append('    preflight_sandbox [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/preflight_sandbox.sh $(git rev-parse HEAD)"]')
+            elif node == "collect_implementation_evidence":
+                definitions.append('    collect_implementation_evidence [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/collect_implementation_evidence.sh $(git rev-parse HEAD)"]')
+            elif node == "snapshot_before_heal":
+                definitions.append('    snapshot_before_heal [shape=parallelogram, script="mkdir -p .fabro/tmp; git rev-parse HEAD > .fabro/tmp/review-repair-before-head.txt; git diff --binary HEAD > .fabro/tmp/review-repair-before.patch"]')
+            elif node == "verify_heal_progress":
+                definitions.append('    verify_heal_progress [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/verify_review_repair.sh"]')
+            elif node.startswith("observe_"):
+                args = {
+                    "observe_clean": "clean false false",
+                    "observe_record": "record false false",
+                    "observe_heal": "bounded_heal false true",
+                    "observe_dismiss": "dismissed true false",
+                }[node]
+                definitions.append(f'    {node} [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh {args}"]')
             else:
                 schema = ', output_schema="routing"' if node in {"focused_reviewer", "record_code_health", "prepare_followup"} else ""
                 definitions.append(f'    {node} [shape=parallelogram{schema}, script="python3 scripts/step.py {node}"]')
@@ -175,6 +199,13 @@ provider='local'
         records = self.events(run_id)
         combined = done.stdout + done.stderr + "\n".join(json.dumps(r) for r in records)
         self.assertEqual(done.returncode, 0, combined)
+        observation_stages = {"observe_clean", "observe_record", "observe_heal", "observe_dismiss"}
+        if any(r.get("node_id") in observation_stages for r in records):
+            observation_file = fixture / ".fabro/tmp/code-review-observability.jsonl"
+            self.assertTrue(observation_file.is_file(), combined)
+            observations = [json.loads(line) for line in observation_file.read_text().splitlines()]
+            self.assertEqual(len(observations), 1)
+            self.assertIn(observations[0]["review_disposition"], {"clean", "record", "bounded_heal", "dismissed"})
         return [r.get("node_id") for r in records if r["event"] == "stage.started"]
 
     def test_clean_heal_record_and_consequential_routes(self) -> None:
@@ -206,13 +237,6 @@ provider='local'
         self.assertIn("consequential_gate", no_progress)
         self.assertNotIn("dev_check", no_progress)
 
-    def test_historical_representative_findings_use_expected_native_routes(self) -> None:
-        fixtures = json.loads((WORKFLOW / "test/fixtures/historical.json").read_text())
-        expected_stage = {"consequential": "consequential_gate", "record": "record_code_health", "bounded_heal": "apply_bounded_heal"}
-        for index, item in enumerate(fixtures):
-            stages = self.completed_stages({"disposition": item["expected"]}, f"historical-{index}")
-            self.assertIn(expected_stage[item["expected"]], stages, item["finding"])
-
     def test_unanswered_human_gate_remains_paused(self) -> None:
         fixture = self.make_fixture("unanswered", {"disposition": "consequential"})
         done, run_id = self.launch(fixture, auto=False, detach=True)
@@ -238,14 +262,12 @@ from pathlib import Path
 import sys
 node = sys.argv[1]
 scenario = json.loads(Path("scenario.json").read_text())
-with Path("stages.log").open("a") as log:
-    log.write(node + "\n")
 if node == "focused_reviewer":
     print(json.dumps({"context_updates": {"review_disposition": scenario.get("disposition", "invalid")}}))
 elif node in ("record_code_health", "prepare_followup"):
     print(json.dumps({"context_updates": {"code_health_recording_ok": True}}))
-elif node == "verify_heal_progress" and scenario.get("no_progress"):
-    raise SystemExit(1)
+elif node == "apply_bounded_heal" and not scenario.get("no_progress"):
+    Path("heal.txt").write_text("after\n")
 elif node in {"read_failed", "preflight_failed", "collect_evidence_failed", "reviewer_unavailable", "code_health_recording_failed", "artifact_failed", "publish_failed"}:
     raise SystemExit(1)
 '''

@@ -41,7 +41,7 @@ LLM error: Rate limited by gemini: Your prepayment credits are depleted. Please 
 After the final retry, the workflow routed to `synthesis_unavailable` and failed with:
 
 ```text
-Code review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.
+Iteration review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.
 ```
 
 The immediate operator workaround was to route the `gemini_review` nodes in Fabro workflows to `gpt-5.5` and rerun the review.
@@ -89,7 +89,7 @@ Fabro is supposed to provide reliable implementation and review throughput. If a
 
 ### Additional observation: 2026-09-21 factory retrospective
 
-The failure class recurred after model-routing changes. Of eight code-review runs from 2026-09-13 onward, five failed at `synthesize_review` because one required reviewer produced no usable report:
+The failure class recurred after model-routing changes. Of eight iteration-review runs from 2026-09-13 onward, five failed at `synthesize_review` because one required reviewer produced no usable report:
 
 - `01M2GFYQR4NV7T7FFQF833WY79`
 - `01M2GHF4W1R9AANP8NVKAZRC0Q`
@@ -109,7 +109,7 @@ Status: awaiting approval. Do not change the ledger to `Experiment` or alter the
 
 Hypothesis: allowing synthesis with at least two usable independent reports from distinct configured model/provider routes will prevent a single unavailable reviewer from terminating otherwise reviewable work, without reducing defect detection or bypassing a negative verdict.
 
-Baseline: 5/8 code-review runs from 2026-09-13 onward terminated at synthesis because one required reviewer was unavailable; three are directly tied to HTTP 402. Historical May and June notes show the same class across Anthropic and Gemini.
+Baseline: 5/8 iteration-review runs from 2026-09-13 onward terminated at synthesis because one required reviewer was unavailable; three are directly tied to HTTP 402. Historical May and June notes show the same class across Anthropic and Gemini.
 
 Primary outcome metric: **eligible review completion rate** — the proportion of review runs with at least two usable independent reports that reach a synthesized product verdict rather than terminating solely for reviewer unavailability. Baseline for the five affected runs: 0/5. Proposed operational target: 5/5 qualifying runs after rollout.
 
@@ -210,9 +210,9 @@ Implemented locally without launching a live delivery or code-review run:
 - Retained concurrent-main-safe follow-up publication and added run/disposition, human-pause, heal-publication and elapsed observability in Fabro stage output.
 - Deleted obsolete fan-out/synthesis prompts and graph machinery.
 
-Validation includes static graph/schema/command assertions; deterministic no-model routing fixtures for clean, bounded heal, record, consequential, no-progress, provider failure, publication/no-op, unanswered input and detached launch; historical no-model replay fixtures for an ADR 0024 aggregate-boundary finding and two findings omitted by synthesis; helper publication/no-progress tests; Fabro graph validation; and the required exact-state `dev check`.
+Validation includes static graph/schema/command assertions; deterministic no-model graph routing fixtures for clean, bounded heal, record, consequential, no-progress, provider failure, publication/no-op, unanswered input and detached launch; source-backed prompt-contract examples for an ADR 0024 aggregate-boundary finding and two findings omitted by synthesis; native helper tests; Fabro graph validation; and the required exact-state `dev check`.
 
-These fixtures validate classification and routing contracts only. They do not establish operational effectiveness; adoption still requires the 5/5 qualifying operational sample and guardrails above.
+The scripted graph fixtures validate deterministic routing after a disposition is supplied; they do not test LLM classification. The historical examples verify only that retained source excerpts exist and the reviewer prompt states the applicable contract thresholds. Neither establishes classification quality or operational effectiveness; adoption still requires the 5/5 qualifying operational sample and guardrails above.
 
 ### Integrated-review corrections — 2026-09-22
 
@@ -222,7 +222,7 @@ Correction evidence, using no model calls or external repositories:
 
 - `test_preflight_sandbox.sh` holds the review on A, advances the temporary bare origin's main to B before preflight, proves preflight records A rather than B or the checkpoint commit, and proves a retargeted sandbox fails closed.
 - `test_publish_polish_to_main.sh` reproduces A → concurrent B → preflight → healer change → publish for both bounded-heal and docs-only record paths; B's independently added file survives in both published trees.
-- `test_code_review_runtime.py` runs a native local Fabro server with inert scripted nodes while retaining the production graph edges. It executes clean, heal, record, consequential, invalid-fallthrough, no-progress, and historical-fixture routes; verifies one repair pass; verifies unanswered human input remains paused; and verifies explicit `--auto-approve` selects the first safe record/defer choice. This is runtime contract evidence, not reviewer-quality or operational-effectiveness evidence.
-- `test_code_review_launch.sh` executes the real `bin/dev fabro code-review` helper against fake local Fabro responses. It covers detached launch arguments, run-ID extraction after a nonzero launch command, succeeded/failed/active/unknown remote classification, monitoring guidance, and temporary-worktree cleanup.
+- `test_code_review_runtime.py` runs a native local Fabro server while retaining the production graph edges. Scripted nodes supply dispositions without model calls, while representative deterministic production helpers perform sandbox preflight, evidence collection, repair-progress verification, and observability recording. It executes clean, heal, record, consequential, invalid-fallthrough, and no-progress routes; verifies one repair pass; verifies unanswered human input remains paused; verifies observability output; and verifies explicit `--auto-approve` selects the first safe record/defer choice. This is runtime routing evidence after a supplied disposition, not classification-quality or operational-effectiveness evidence.
+- `test_code_review_launch.sh` executes the real `bin/dev fabro code-review` helper against fake local Fabro responses. It covers canonical and shell-hostile plan paths, ancestor and non-ancestor explicit bases, detached launch arguments, run-ID extraction after a nonzero launch command, succeeded/failed/active/unknown remote status handling, monitoring guidance, interrupted-launch cleanup, and temporary-worktree cleanup.
 
 No live delivery or code-review canary was launched for these corrections. The experiment remains `Experiment`; no operational completion-rate or quality-effectiveness claim is made.

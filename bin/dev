@@ -1860,6 +1860,15 @@ _fabro_deliver() {
   return 0
 }
 
+_fabro_review_worktree=""
+
+_fabro_cleanup_code_review_worktree() {
+  if [ -n "$_fabro_review_worktree" ]; then
+    git -C "$repo_root" worktree remove --force "$_fabro_review_worktree" >/dev/null 2>&1 || true
+    _fabro_review_worktree=""
+  fi
+}
+
 _fabro_code_review() {
   local branch="${1:-}"
   local plan_path="${2:-}"
@@ -1869,6 +1878,20 @@ _fabro_code_review() {
     echo "Usage: $0 fabro code-review <branch> <plan_path> [base_ref_or_base_sha]" >&2
     exit 2
   fi
+
+  case "$plan_path" in
+    *[!A-Za-z0-9_./-]* | *//* | */../* | */./* | ../* | ./* | */.. | */.)
+      echo "Unsupported plan_path: use a canonical relative path containing only letters, digits, '.', '_', '/', and '-'." >&2
+      exit 2
+      ;;
+  esac
+  case "$plan_path" in
+    docs/iterations/*/plan.md) ;;
+    *)
+      echo "Unsupported plan_path: expected docs/iterations/NNN-topic/plan.md" >&2
+      exit 2
+      ;;
+  esac
 
   _fabro_require_tool fabro
 
@@ -1929,6 +1952,9 @@ _fabro_code_review() {
   fi
 
   git -C "$repo_root" worktree add "$worktree" "$ref"
+  _fabro_review_worktree="$worktree"
+  trap _fabro_cleanup_code_review_worktree EXIT
+  trap 'exit 130' INT TERM
 
   local worktree_branch
   worktree_branch=$(git -C "$worktree" branch --show-current)
@@ -1949,25 +1975,31 @@ _fabro_code_review() {
       git -C "$repo_root" worktree remove "$worktree"
       exit 1
     fi
-  elif [[ "$base_ref_or_base_sha" =~ ^[0-9a-fA-F]{40}$ ]] && git -C "$worktree" cat-file -e "$base_ref_or_base_sha^{commit}" 2>/dev/null; then
-    base_sha="$base_ref_or_base_sha"
   else
-    if ! git -C "$worktree" rev-parse --verify --quiet "$base_ref_or_base_sha^{commit}" >/dev/null; then
+    if ! base_sha=$(git -C "$worktree" rev-parse --verify --quiet "$base_ref_or_base_sha^{commit}"); then
       git -C "$worktree" fetch origin >/dev/null 2>&1 || true
+      if ! base_sha=$(git -C "$worktree" rev-parse --verify --quiet "$base_ref_or_base_sha^{commit}"); then
+        echo "Could not resolve explicit review base $base_ref_or_base_sha for review branch $worktree_branch" >&2
+        echo "Pass a base commit/ref visible in the review worktree." >&2
+        git -C "$worktree" log --oneline --decorate --max-count=30 --all >&2 || true
+        git -C "$repo_root" worktree remove "$worktree"
+        exit 1
+      fi
     fi
-    if ! base_sha=$(git -C "$worktree" merge-base HEAD "$base_ref_or_base_sha" 2>/dev/null); then
-      echo "Could not resolve base SHA from $base_ref_or_base_sha for review branch $worktree_branch" >&2
-      echo "Pass an explicit base SHA, or ensure the base ref is visible in the review worktree." >&2
-      git -C "$worktree" log --oneline --decorate --max-count=30 --all >&2 || true
-      git -C "$repo_root" worktree remove "$worktree"
-      exit 1
-    fi
+  fi
+
+  local candidate_sha
+  candidate_sha=$(git -C "$worktree" rev-parse 'HEAD^{commit}')
+  if ! git -C "$worktree" merge-base --is-ancestor "$base_sha" "$candidate_sha"; then
+    echo "Explicit review base is not an ancestor of the launch candidate." >&2
+    echo "Resolved base: $base_sha ($base_ref_or_base_sha)" >&2
+    echo "Launch candidate: $candidate_sha ($worktree_branch)" >&2
+    git -C "$repo_root" worktree remove "$worktree"
+    exit 1
   fi
 
   echo "Launching code review from isolated worktree: $worktree"
   echo "Code-review branch: $worktree_branch"
-  local candidate_sha
-  candidate_sha=$(git -C "$worktree" rev-parse 'HEAD^{commit}')
   echo "Code-review HEAD: $candidate_sha"
   echo "Code-review base sha: $base_sha"
 
@@ -1983,7 +2015,8 @@ _fabro_code_review() {
   printf '%s\n' "$launch_output"
   run_id=$(printf '%s\n' "$launch_output" | _fabro_extract_run_id)
 
-  git -C "$repo_root" worktree remove "$worktree" >/dev/null 2>&1 || true
+  _fabro_cleanup_code_review_worktree
+  trap - EXIT INT TERM
 
   if [ -z "$run_id" ]; then
     echo "Code-review launch did not return a run ID. Implementation publication is unchanged." >&2

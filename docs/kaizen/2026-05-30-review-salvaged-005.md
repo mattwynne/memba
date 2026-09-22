@@ -27,7 +27,7 @@ Run an isolated code review on the salvaged iteration 005 app-surface slice afte
 
 ## Suggested command
 
-Use the project `code-review` workflow/skill against the salvaged implementation metadata rather than reviewing the failed Fabro run branch directly.
+Use the project `iteration-review` workflow/skill against the salvaged implementation metadata rather than reviewing the failed Fabro run branch directly.
 
 ## Done when
 

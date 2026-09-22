@@ -1,4 +1,4 @@
-# Problem: Code review accepted despite failing to record code-health findings
+# Problem: Iteration review accepted despite failing to record code-health findings
 
 Date: 2026-06-09
 
@@ -8,7 +8,7 @@ We checked whether the Fabro workflow reviewed iteration 031, `docs/iterations/0
 
 Relevant run:
 
-- Workflow: `code-review`
+- Workflow: `iteration-review`
 - Run ID: `01KTP93QJMPN6T387GRBVC1QXN`
 - Base SHA: `f8dc9335a51468eb9e94b0e2a8637d22ea75be8e`
 - Reviewed implementation commit: `f074e5bf54aca593d2f5a17d7c976a4807544727`
@@ -18,14 +18,14 @@ The review ran Claude, Codex/GPT, and Gemini reviewers. All accepted the impleme
 
 ## Expected standard
 
-The code-review workflow is expected to preserve review findings after implementation has merged.
+The iteration-review workflow is expected to preserve review findings after implementation has merged.
 
 Current standard work says:
 
-- `.fabro/workflows/code-review/prompts/synthesize_review.md` requires judgement-worthy non-blocking findings to be preserved in a `Code-health findings for human judgement` section.
-- `.fabro/workflows/code-review/prompts/record_code_health.md` requires the `Record Code Health Findings` step to append judgement-worthy findings to `docs/code-health.md`.
+- `.fabro/workflows/iteration-review/prompts/synthesize_review.md` requires judgement-worthy non-blocking findings to be preserved in a `Code-health findings for human judgement` section.
+- `.fabro/workflows/iteration-review/prompts/record_code_health.md` requires the `Record Code Health Findings` step to append judgement-worthy findings to `docs/code-health.md`.
 - The same prompt says: if the step cannot edit `docs/code-health.md`, it must return `CODE_HEALTH_RECORDING_FAILED:` and explain the findings that still need recording.
-- `.fabro/workflows/code-review/prompts/final_summary.md` requires unrecorded findings to be called out explicitly as a workflow failure/gap.
+- `.fabro/workflows/iteration-review/prompts/final_summary.md` requires unrecorded findings to be called out explicitly as a workflow failure/gap.
 
 ## What happened
 
@@ -89,7 +89,7 @@ The final summary prompt made the abnormality visible, but it was observational 
 
 ## Why this matters
 
-The code-review workflow is the last delivery-machine step intended to catch and preserve maintainability, ADR, and code-health signals after implementation. If it can succeed while known code-health findings are not recorded, review debt can disappear from the normal project memory and trust in successful review runs is weakened.
+The iteration-review workflow is the last delivery-machine step intended to catch and preserve maintainability, ADR, and code-health signals after implementation. If it can succeed while known code-health findings are not recorded, review debt can disappear from the normal project memory and trust in successful review runs is weakened.
 
 ## Open questions
 
@@ -113,15 +113,15 @@ Root cause: `record_code_health` was configured as a prompt-only `shape=tab` nod
 
 Fix applied:
 
-- `.fabro/workflows/code-review/workflow.fabro`: changed `record_code_health` to an agent node (`shape=box`) with routing output so it can inspect/edit the repository and report whether recording succeeded.
-- `.fabro/workflows/code-review/workflow.fabro`: added a dedicated `code_health_recording_failed` terminal gate and routed `record_code_health` to final artifact publication only when `context.code_health_recording_ok=true`.
-- `.fabro/workflows/code-review/prompts/record_code_health.md`: updated the prompt to reflect agent-node tool access and require a final routing JSON object for successful/no-op recording versus failed/unrecorded findings.
-- `.fabro/workflows/code-review/scripts/test_review_report_routing.sh`: added guard assertions for the code-health recording node shape and failure route.
+- `.fabro/workflows/iteration-review/workflow.fabro`: changed `record_code_health` to an agent node (`shape=box`) with routing output so it can inspect/edit the repository and report whether recording succeeded.
+- `.fabro/workflows/iteration-review/workflow.fabro`: added a dedicated `code_health_recording_failed` terminal gate and routed `record_code_health` to final artifact publication only when `context.code_health_recording_ok=true`.
+- `.fabro/workflows/iteration-review/prompts/record_code_health.md`: updated the prompt to reflect agent-node tool access and require a final routing JSON object for successful/no-op recording versus failed/unrecorded findings.
+- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`: added guard assertions for the code-health recording node shape and failure route.
 
 Validation:
 
-- `bash .fabro/workflows/code-review/scripts/test_review_report_routing.sh` — passed.
-- `fabro validate .fabro/workflows/code-review/workflow.toml --no-upgrade-check` — passed; expected goal-gate retry warnings remain, including the new code-health recording failure gate.
+- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed; expected goal-gate retry warnings remain, including the new code-health recording failure gate.
 - `dev check --quick` — passed: 758 tests, 0 failures.
 - `dev check` — failed in browser acceptance at the pre-existing/unrelated `Staff create a club with the suggested slug` scenario (`#club-slug-input` remained empty). This workflow-only fix does not touch that product/browser path; a rerun of the acceptance command also showed the same scenario can pass, but full `dev check` still reproduced the failure.
 
@@ -132,36 +132,36 @@ Remaining follow-up:
 
 Review repair:
 
-- `.fabro/workflows/code-review/workflow.fabro`: extracted implementation evidence collection to a script-backed step so the excerpt policy can be tested directly.
-- `.fabro/workflows/code-review/scripts/collect_implementation_evidence.sh`: expanded review evidence excerpts to include changed `.fabro/workflows/` and `docs/kaizen/` files as well as existing product, bin, iteration, and ADR paths.
-- `.fabro/workflows/code-review/scripts/test_collect_implementation_evidence.sh`: added a focused regression test proving workflow and kaizen changes appear in collected evidence.
-- `.fabro/workflows/code-review/scripts/test_review_report_routing.sh`: added a guard that the workflow uses the script-backed evidence collector.
+- `.fabro/workflows/iteration-review/workflow.fabro`: extracted implementation evidence collection to a script-backed step so the excerpt policy can be tested directly.
+- `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`: expanded review evidence excerpts to include changed `.fabro/workflows/` and `docs/kaizen/` files as well as existing product, bin, iteration, and ADR paths.
+- `.fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh`: added a focused regression test proving workflow and kaizen changes appear in collected evidence.
+- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`: added a guard that the workflow uses the script-backed evidence collector.
 
 Review repair validation:
 
-- `bash .fabro/workflows/code-review/scripts/test_review_report_routing.sh` — passed.
-- `bash .fabro/workflows/code-review/scripts/test_collect_implementation_evidence.sh` — passed.
-- `bash .fabro/workflows/code-review/scripts/collect_implementation_evidence.sh 745e53ab293802c5ced1a4c877e3c604a996469e | grep -E '^(=== \\.fabro/workflows/code-review/(workflow\\.fabro|prompts/record_code_health\\.md|scripts/test_review_report_routing\\.sh) ===|=== docs/kaizen/2026-06-09-code-review-code-health-recording-failure\\.md ===|--- changed source/config/test/workflow/kaizen file excerpts ---)'` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 745e53ab293802c5ced1a4c877e3c604a996469e | grep -E '^(=== \\.fabro/workflows/iteration-review/(workflow\\.fabro|prompts/record_code_health\\.md|scripts/test_review_report_routing\\.sh) ===|=== docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure\\.md ===|--- changed source/config/test/workflow/kaizen file excerpts ---)'` — passed.
 - `dev check --quick` — passed: 758 tests, 0 failures.
 
 Second review repair:
 
-- `.fabro/workflows/code-review/workflow.fabro`: replaced the `verify_review_repair` patch comparison from `cmp -s` with `git diff --no-index --quiet`, and made unexpected comparison statuses fail the verification step instead of silently passing.
-- `.fabro/workflows/code-review/scripts/test_review_report_routing.sh`: added guard assertions that the repair verifier no longer depends on `cmp` and includes the checked comparison failure path.
+- `.fabro/workflows/iteration-review/workflow.fabro`: replaced the `verify_review_repair` patch comparison from `cmp -s` with `git diff --no-index --quiet`, and made unexpected comparison statuses fail the verification step instead of silently passing.
+- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`: added guard assertions that the repair verifier no longer depends on `cmp` and includes the checked comparison failure path.
 
 Follow-up sharp-edge repair:
 
-- Observation: running `code-review` against this kaizen note published review polish successfully, then failed in `finalize_iteration_status` because the path was not an iteration `*/plan.md` file.
+- Observation: running `iteration-review` against this kaizen note published review polish successfully, then failed in `finalize_iteration_status` because the path was not an iteration `*/plan.md` file.
 - Root cause: `finalize_iteration_status.sh` assumed every review target was an iteration plan even though the workflow is useful for kaizen/workflow review targets too.
-- `.fabro/workflows/code-review/scripts/finalize_iteration_status.sh`: now skips iteration-status finalization for non-`docs/iterations/*/plan.md` targets instead of failing after publish.
-- `.fabro/workflows/code-review/scripts/test_finalize_iteration_status.sh`: added a regression test for non-code review targets.
+- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: now skips iteration-status finalization for non-`docs/iterations/*/plan.md` targets instead of failing after publish.
+- `.fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh`: added a regression test for non-iteration review targets.
 
 Follow-up validation:
 
-- `bash .fabro/workflows/code-review/scripts/test_finalize_iteration_status.sh` — passed.
-- `bash .fabro/workflows/code-review/scripts/test_review_report_routing.sh` — passed.
-- `bash .fabro/workflows/code-review/scripts/test_collect_implementation_evidence.sh` — passed.
-- `fabro validate .fabro/workflows/code-review/workflow.toml --no-upgrade-check` — passed with expected goal-gate retry warnings.
+- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh` — passed.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with expected goal-gate retry warnings.
 - `dev check --quick` — passed: 758 tests, 0 failures.
 
 ### Additional observation: 2026-09-04 — review recorded and published code-health findings but still ended failed
@@ -201,7 +201,7 @@ The review graph retains `code_health_recording_failed` as a `goal_gate=true` te
 
 #### Cross-reference
 
-See also [implementation-workflow-terminal-success-gate](2026-09-04-implementation-workflow-terminal-success-gate.md), whose additional 2026-09-04 observation records a separate implementation-run mismatch caused by post-publish run-branch checkpoint status. Both failures require checking durable `origin/main` artifacts, but this note is specifically about code-review goal-gate routing.
+See also [implementation-workflow-terminal-success-gate](2026-09-04-implementation-workflow-terminal-success-gate.md), whose additional 2026-09-04 observation records a separate implementation-run mismatch caused by post-publish run-branch checkpoint status. Both failures require checking durable `origin/main` artifacts, but this note is specifically about iteration-review goal-gate routing.
 
 #### Open questions
 
@@ -225,9 +225,9 @@ Date: 2026-09-04
 
 Validation:
 
-- `bash .fabro/workflows/code-review/scripts/test_review_report_routing.sh` — passed.
-- `bash .fabro/workflows/code-review/scripts/test_preflight_sandbox.sh` — passed.
-- `bash .fabro/workflows/code-review/scripts/test_publish_polish_to_main.sh` — passed, including simulated Fabro checkpoint pushes after review publication and after iteration-status finalization.
+- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_preflight_sandbox.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` — passed, including simulated Fabro checkpoint pushes after review publication and after iteration-status finalization.
 
 Remaining follow-up:
 
