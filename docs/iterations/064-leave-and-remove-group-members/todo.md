@@ -1,0 +1,27 @@
+# Implementation TODO
+
+- [ ] 001 Record the architecture decision before further implementation.
+- [ ] 002 Define club membership and group membership as separate domain concepts.
+- [ ] 003 Each group admission creates a new group membership; removal ends that exact group membership; re-addition creates another.
+- [ ] 004 Membership remains authoritative for current group participation and emits immutable facts that identify the group membership being started or ended.
+- [ ] 005 Preserve club membership, club roles, system-group invariants and accepted actor/target authorization.
+- [ ] 006 Replace the reusable active/inactive group relation with a current-state projection of first-class group memberships.
+- [ ] 007 Reconcile each existing active relation into one current group membership with deterministic, retry-safe identity.
+- [ ] 008 Preserve historical source events and replay compatibility; do not invent historical membership periods that cannot be proved.
+- [ ] 009 Add an actor-bearing custom-group removal use case at the appropriate Membership consistency boundary.
+- [ ] 010 Validate custom-group, actor and target identities; permit self-removal and last-member removal; make exact retries event-free; and end only the selected group membership.
+- [ ] 011 Replace conversation cleanup fan-out with a Messaging-owned member subscription ledger.
+- [ ] 012 Canonical follow facts record which current group memberships authorized the subscription.
+- [ ] 013 Membership sends one idempotent revocation when a group membership ends; Messaging serializes subscription changes and revocation in the same member-owned stream and records a durable completion receipt.
+- [ ] 014 Arrival order must not affect the result: delayed work authorized by an ended group membership is rejected, while a follow authorized by another current group membership or a newly created group membership can succeed.
+- [ ] 015 Route manual follow and successful root/reply auto-follow through the same authoritative subscription operation.
+- [ ] 016 Product callers must not supply trusted authorization provenance.
+- [ ] 017 Stop deriving projected follow state independently from `MessageSent`; canonical subscription facts become the source for aggregate and projection replay.
+- [ ] 018 Reconcile historic root/reply follow shapes once, with deterministic retry/restart behaviour, then keep legacy scans out of the live command path.
+- [ ] 019 Apply current authorization throughout group/conversation queries, actions, notification creation and provider handoff.
+- [ ] 020 If the removal API promises completed cleanup, wait for the explicit Messaging revocation receipt rather than projection enumeration.
+- [ ] 021 Projection barriers remain for read-model visibility only.
+- [ ] 022 Refresh `MemberDashboardLive`, conversation views and membership panels on relevant read-model events so content disappears after revocation.
+- [ ] 023 Extend shared custom-group member rows with Remove/Leave confirmation and post-removal surfaces.
+- [ ] 024 Preserve ordinary member lists, actor role labels, route context, focus handling, the single tab action slot and existing empty-group administration.
+- [ ] 025 Implement the approved domain/browser examples and focused state-machine coverage: follow then remove; remove then delayed old follow; remove/re-add/new follow; surviving access through another group membership; ordinary unfollow followed by delayed work; root/reply auto-follow; queued delivery; handler retry; aggregate restart; projection replay; historic reconciliation; delivered-copy limits; and existing system/club invariants. Run `dev check` on the exact final delivery state.
