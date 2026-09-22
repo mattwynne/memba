@@ -1,0 +1,534 @@
+diff --git a/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md b/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md
+index 6eb68c3..6e19996 100644
+--- a/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md
++++ b/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md
+@@ -236,78 +236,159 @@ The canonical command and event vocabulary is:
+   `ConversationSubscriptionAuthorized`;
+ - `CancelConversationSubscriptionIntent` /
+   `ConversationSubscriptionIntentCancelled`;
++- `RecordRootConversationSubscriptionSkipped` /
++  `RootConversationSubscriptionSkipped`;
+ - `EndConversationSubscription` /
++  `ConversationSubscriptionAuthorizationEnded` and
+   `ConversationSubscriptionEnded`;
+ - `RevokeGroupMembershipSubscriptions` /
+-  `GroupMembershipSubscriptionAuthorizationRevoked`; and
++  `GroupMembershipSubscriptionAuthorizationRevoked`,
++  `ConversationSubscriptionAuthorizationProvenanceRevoked`, and
++  `ConversationSubscriptionAuthorizationEnded`; and
+ - `GroupMembershipSubscriptionRevocationCompleted`, the durable completion
+   receipt.
+ 
+-Canonical subscription facts carry `person_id`, `club_id`, `conversation_id`,
+-`subscription_id`, `subscription_intent_id`, source (`manual`, `root`, `reply`,
+-or `legacy_reconciliation`), and the complete set of
+-`authorizing_group_membership_ids` resolved for custom groups. Each successful
+-activation also has a `subscription_authorization_id` deterministically derived
+-from `subscription_intent_id`; it identifies that exact canonical grant even
+-if a later grant makes the same deterministic `subscription_id` active again.
+-The facts do not use the ambiguous field `membership_id`. System-group
+-authorization is represented separately by `club_membership_id` and an
+-explicit authority kind.
+-
++Each conversation-scoped fact carries the exact applicable subset of this
++schema rather than pretending that differently scoped facts share one shape:
++
++- `ConversationSubscriptionPrepared` carries `person_id`, `club_id`,
++  `conversation_id`, `subscription_id`, `subscription_intent_id`, source
++  (`manual`, `root`, `reply`, or `legacy_reconciliation`), expected
++  `message_id` for auto-follow, `club_membership_id`, authority kind, and the
++  complete non-empty set of server-resolved
++  `authorizing_group_membership_ids` for custom-group authority.
++- `ConversationSubscriptionAuthorized` carries those person, club,
++  conversation, subscription, intent, source, and provenance fields plus
++  `subscription_authorization_id`, deterministically derived from
++  `subscription_intent_id`. It records one immutable grant, including all
++  group memberships that authorized that intent.
++- `ConversationSubscriptionIntentCancelled` carries the person, club,
++  conversation, subscription, intent, source, expected message when present,
++  immutable `club_membership_id`, authority kind and authorizing
++  group-membership provenance from preparation, reason (`send_rejected`,
++  `unfollowed`, or `authorization_revoked`), and the applicable
++  `unfollow_operation_id` or `revocation_id`.
++- `ConversationSubscriptionAuthorizationProvenanceRevoked` carries the person,
++  club, conversation, `subscription_id`, `subscription_intent_id`,
++  `subscription_authorization_id`, source, immutable `club_membership_id`,
++  authority kind and original authorizing group-membership set of one grant,
++  the exact removed `group_membership_id`, and the `revocation_id`. It never
++  changes the immutable grant; replay subtracts that one provenance.
++- `ConversationSubscriptionAuthorizationEnded` carries the person, club,
++  conversation, `subscription_id`, `subscription_intent_id`,
++  `subscription_authorization_id`, source, immutable `club_membership_id`,
++  authority kind and original authorizing group-membership set of one grant,
++  reason `unfollowed` or `authorization_revoked`, and the applicable
++  `unfollow_operation_id` or `revocation_id`.
++- `ConversationSubscriptionEnded` is the explicit-unfollow tombstone. It
++  carries `person_id`, `club_id`, `conversation_id`, `subscription_id`, the
++  caller-generated `unfollow_operation_id`, and the complete sorted
++  `ended_subscription_authorization_ids` and
++  `cancelled_subscription_intent_ids` outcome.
++
++The membership-wide `GroupMembershipSubscriptionAuthorizationRevoked` has a
++deliberately different schema: only `person_id`, `club_id`, `group_id`,
++`group_membership_id`, and `revocation_id`. It is the permanent member-stream
++tombstone for that group membership and does not name a conversation,
++subscription, intent, or grant. The completion receipt carries that same
++membership-wide schema. No fact uses the ambiguous field `membership_id`.
++System-group authorization is represented separately by
++`club_membership_id` and an explicit authority kind.
++
++A stable `subscription_id` can therefore own multiple immutable authorization
++grants. An exact activation retry for the same `subscription_intent_id` finds
++the same deterministic `subscription_authorization_id` and emits no event. A
++different successfully activated intent appends its own
++`ConversationSubscriptionAuthorized` even while another grant already makes
++the subscription effective. The subscription remains effective while at least
++one ordered grant retains effective provenance and has not ended.
+ `ConversationSubscriptionAuthorized`,
+-`ConversationSubscriptionEnded`, and
+-`GroupMembershipSubscriptionAuthorizationRevoked` are the sole facts from
+-which the aggregate and current follow projection derive subscription state.
+-`MessageSent` is no longer interpreted as a follow fact.
++`ConversationSubscriptionAuthorizationProvenanceRevoked`,
++`ConversationSubscriptionAuthorizationEnded`, and
++`ConversationSubscriptionEnded` are the conversation-scoped facts from which
++the aggregate and current follow projection derive that state.
++`GroupMembershipSubscriptionAuthorizationRevoked` prevents old provenance from
++being admitted again. `MessageSent` is no longer interpreted independently as
++a follow fact.
+ 
+ ### Provenance is server-resolved and follow intent is durable
+ 
+-Manual follow and successful root/reply auto-follow use one public Messaging
+-operation. Product, UI, and message callers provide intent and the relevant
++Manual follow and root/reply auto-follow use the same authoritative preparation
++and activation commands, but root preparation has a different ordering because
++the conversation and its access grant do not exist before the root succeeds.
++Product, UI, and message callers provide intent and relevant
+ person/conversation identifiers; they may not provide trusted
+ `authorizing_group_membership_ids`, `club_membership_id`, or authority kind.
+-The operation resolves the conversation's groups and current authorization
+-through Membership's public API, then sends a trusted internal command.
+-
+-The operation has prepare, activate, and cancel phases so delayed work cannot
+-undo an ordinary unfollow:
+-
+-1. `PrepareConversationSubscription` persists a unique intent and its
+-   server-resolved authorization in the member stream. For an auto-follow it
+-   also records the caller-generated `message_id` that is allowed to complete
+-   the intent.
+-2. Manual follow activates that prepared intent immediately.
+-3. Root/reply auto-follow generates `subscription_intent_id` before either
+-   operation, prepares it, and puts that same identifier on `SendMessage`.
+-   `MessageSent` persists both `message_id` and `subscription_intent_id`.
+-   A strong, retrying Messaging policy dispatches
+-   `ActivateConversationSubscription` from that success fact. Activation must
+-   match the prepared intent's person, conversation, source, and expected
+-   `message_id`; no other success or caller assertion can activate it.
+-4. A durable send coordinator handles each prepared auto-follow intent. It
+-   dispatches the same `SendMessage` until either the matching `MessageSent` is
+-   committed or a terminal command rejection is known. A matching
+-   `SendMessage` retry is successful and event-free after its `MessageSent`;
+-   conflicting reuse of the message or intent identity is rejected. The
+-   coordinator does not acknowledge its prepared-event position until success
+-   exists or cancellation has committed, so a process crash resumes the same
+-   work rather than abandoning it.
+-5. On terminal send rejection, the coordinator dispatches
+-   `CancelConversationSubscriptionIntent` with reason `send_rejected`. That
+-   command appends `ConversationSubscriptionIntentCancelled`. Transient errors
+-   are retried and do not cancel. Because one coordinator serializes each
+-   intent and a matching successful send is recognized on retry, cancellation
+-   cannot race a successful send for that identity.
+-6. `EndConversationSubscription` appends
+-   `ConversationSubscriptionEnded` and one
+-   `ConversationSubscriptionIntentCancelled` with reason `unfollowed` for every
+-   earlier prepared intent for that conversation in the same member-stream
+-   append. During cutover it records the ended tombstone even when no canonical
+-   authorization is currently active, so stale historic reconciliation cannot
+-   resurrect an unfollowed conversation.
+-7. A delayed activation for a cancelled, ended, unknown, mismatched, revoked,
+-   or already-completed intent emits no event. A later explicit follow has a
+-   new intent and may succeed after current authority is resolved again.
++Messaging resolves the conversation's groups and current authorization through
++Membership's public API, then sends trusted internal commands.
++
++The three sequences are:
++
++1. **Manual follow.** The application service generates
++   `subscription_intent_id`, resolves current authority, and dispatches
++   `PrepareConversationSubscription`. It then immediately dispatches
++   `ActivateConversationSubscription` for the same intent. Preparation records
++   the server-resolved provenance; activation appends its immutable grant.
++2. **Reply auto-follow.** Because the conversation and its access already
++   exist, the service generates `message_id` and `subscription_intent_id`,
++   resolves current authority, and prepares an intent whose source is `reply`
++   and whose expected message is that exact `message_id`. A durable send
++   coordinator dispatches the same reply command until the correlated
++   `MessageSent` commits or a terminal rejection is known. A strong, retrying
++   policy activates only from that exact success correlation. Terminal
++   rejection appends `ConversationSubscriptionIntentCancelled` with reason
++   `send_rejected`; transient failures keep retrying.
++3. **Root auto-follow.** The service generates `message_id` and
++   `subscription_intent_id` but does not prepare a subscription. It sends the
++   root first, carrying the intent as correlation. Server-side root audience
++   resolution also puts a `sender_auto_follow_candidate` on `MessageSent`: the
++   sender's exact `club_membership_id`, authority kind, and root-time
++   `authorizing_group_membership_ids`, or explicit `none` when the sender was
++   outside the addressed group. This is an immutable send outcome, not
++   caller-supplied provenance or a follow fact. One aggregate append orders
++   root `MessageSent` before its
++   `ConversationAccessGrantedToGroup`; both identify the root conversation and
++   the sent fact carries the intent and candidate. A durable root-follow
++   coordinator consumes that exact pair only after both facts are committed,
++   then verifies through Membership's public contract that the candidate's
++   exact identities still provide the sender's resulting conversation
++   authority. If authorized, it prepares and activates the correlated
++   source-`root` intent with only that captured provenance. If the candidate is
++   `none`, or its exact membership ended before preparation, it appends
++   `RootConversationSubscriptionSkipped` carrying `person_id`, `club_id`,
++   `conversation_id`, `message_id`, `subscription_id`,
++   `subscription_intent_id`, source `root`, and reason
++   `sender_not_authorized_at_root` or `authorization_ended`. The root remains
++   successful but an outside-group sender gains neither conversation access nor
++   a follow. A later re-add has a different group-membership identity and
++   cannot satisfy the captured candidate. A rejected root emits neither root
++   fact, so it leaves no prepared intent or skip fact.
++
++The reply send coordinator does not acknowledge its prepared-event position
++until the matching success or cancellation has committed. The root-follow
++coordinator does not acknowledge the correlated root facts until their
++activation or exact skip marker has committed. After a crash each resumes with
++the same message, intent, and deterministic authorization identifiers. A
++matching send or coordinator retry is event-free after its terminal facts;
++conflicting reuse is rejected. No root policy may run from `MessageSent` alone
++or before the root audience grant.
++
++`EndConversationSubscription` carries caller-generated
++`unfollow_operation_id`. In one member-stream append it deterministically
++orders all currently effective grants by `subscription_authorization_id` and
++appends one `ConversationSubscriptionAuthorizationEnded` with reason
++`unfollowed` for each; orders all earlier prepared incomplete intents by
++`subscription_intent_id` and appends one
++`ConversationSubscriptionIntentCancelled` with reason `unfollowed` for each;
++then appends `ConversationSubscriptionEnded` last. The final tombstone closes
++every causally prior grant and intent even when none was active. An exact
++operation retry emits no events and returns the recorded sorted outcome. A
++fresh intent prepared after that tombstone may establish a new grant.
++
++A delayed activation for a cancelled, unknown, mismatched, revoked, or
++unfollow-closed intent emits no event. Activation of a valid different intent
++still appends a grant when the stable subscription is already effective; it is
++not collapsed into the existing grant.
+ 
+ Prepared, activated, cancelled, and ended intent state is rebuilt entirely
+ from canonical facts in the member stream after aggregate restart. Command,
+@@ -326,33 +407,45 @@ a `revocation_id` deterministically derived from `group_membership_id`.
+ 
+ In the person's subscription stream, one aggregate decision:
+ 
+-1. permanently records `group_membership_id` as revoked;
+-2. removes that identifier from every prepared and active authorization;
++1. appends the membership-wide
++   `GroupMembershipSubscriptionAuthorizationRevoked` tombstone;
++2. for each affected grant, ordered by
++   `{conversation_id, subscription_intent_id,
++   subscription_authorization_id}`, appends
++   `ConversationSubscriptionAuthorizationProvenanceRevoked` for that exact
++   grant/provenance pair;
+ 3. appends `ConversationSubscriptionIntentCancelled` with reason
+-   `authorization_revoked` for a prepared intent left with no authorization;
+-4. ends an active canonical grant only when it has no other current
+-   authorization; and
+-5. appends `GroupMembershipSubscriptionRevocationCompleted` with the same
+-   `revocation_id`.
+-
+-The revocation fact and completion receipt are appended atomically. The
+-aggregate retains revoked membership identifiers and completed revocation
+-identifiers, so an exact handler retry emits no events and an old delayed
+-intent cannot become authorized after an aggregate restart. The receipt exists
+-even when the ended membership authorized no subscription.
++   `authorization_revoked` for each prepared intent left with no authorization;
++4. appends `ConversationSubscriptionAuthorizationEnded` with reason
++   `authorization_revoked` for each grant left with no effective provenance;
++   and
++5. appends one `GroupMembershipSubscriptionRevocationCompleted` with the same
++   `revocation_id` last.
++
++All consequences and the receipt are one atomic member-stream append. There is
++one membership-wide tombstone and receipt per revocation, zero or more
++conversation-scoped provenance, cancellation, and grant-end facts, and no
++conversation identity on either membership-wide fact. The aggregate retains
++revoked membership and completed revocation identifiers, so an exact handler
++retry emits no events and an old delayed intent cannot become authorized after
++restart. The receipt exists even when the ended membership authorized no
++intent or grant.
+ 
+ The following outcomes are independent of command arrival order:
+ 
+-- If an old intent is authorized first, later revocation removes the ended
+-  membership's authorization.
++- If an old intent is authorized first, later revocation records removal of
++  the ended membership from that exact immutable grant and ends the grant only
++  if no effective provenance remains.
+ - If revocation arrives first, a later prepare or activation carrying that
+   ended identifier is rejected.
+-- Revoking one identifier preserves a subscription authorized by another
+-  current custom-group membership or applicable system-group authority.
++- Revoking one identifier preserves any surviving provenance on the same grant
++  and every separate grant authorized by another current custom-group
++  membership or applicable system-group authority.
+ - Re-addition has a new `group_membership_id`; it does not un-revoke the old
+-  identifier or restore an ended subscription.
++  identifier, restore an ended grant, or make a queued delivery bound to that
++  grant eligible again.
+ - An explicit follow after re-addition resolves the new identifier and can
+-  establish a new subscription.
++  establish a new intent and immutable grant on the stable subscription.
+ - Ordinary unfollow cancels earlier prepared work, while a genuinely later
+   explicit follow uses a fresh intent and can succeed.
+ 
+@@ -424,15 +517,21 @@ no legacy follower writer remains enabled. It then appends
+ `LegacyConversationSubscriptionReconciliationFenceRecorded` with `fence_id`
+ and the event-store global high-water mark. A restartable scan of
+ `MessageSent`, `ConversationFollowed`, and `ConversationUnfollowed` at or below
+-that immutable prefix derives each person's provable effective follow. For
+-each candidate:
++that immutable prefix derives each person's provable effective follow.
++`MessageSent` contributes only when its historic
++`sender_follows_conversation` shape is true or defaults to true; an explicit
++false is a provable no-follow and creates no candidate. For each followed
++person/conversation relation:
+ 
+ - use deterministic `reconciliation_id`, `subscription_intent_id`, and
+   `subscription_authorization_id` values based on the historic
+-  person/conversation relation;
+-- bind custom-group authority only to exact first-class memberships that were
+-  current at the fence and remain current when dispatched; a later re-addition
+-  is not acceptable provenance for an old follow;
++  person/conversation relation and one exact authority provenance;
++- enumerate one ordered reconciliation candidate per independently applicable
++  custom-group membership or system-group authority, so each candidate grant
++  has one exact provenance. Bind custom-group candidates only to first-class
++  memberships that were current at the fence and remain current when
++  dispatched; a later re-addition is not acceptable provenance for an old
++  follow;
+ - re-read the relevant legacy stream through its current tail before dispatch,
+   so a source fact omitted by the enumerated page cannot make a stale candidate
+   look current;
+@@ -440,18 +539,38 @@ each candidate:
+ - dispatch `ReconcileLegacyConversationSubscription` to the person's stream
+   with the fence, source stream version, and resolved provenance.
+ 
+-The member aggregate revalidates its complete stream at execution. It appends
+-`LegacyConversationSubscriptionReconciled` with outcome `authorized` plus
+-`ConversationSubscriptionAuthorized` only when the historic follow and exact
+-current authorization remain provable and no canonical live decision exists
+-for that conversation. A canonical prepare, authorization, cancellation,
+-unfollow tombstone, or relevant membership revocation takes precedence and
+-instead produces terminal outcome `suppressed_by_live_state` without
+-authorizing. If reconciliation authorizes first, a racing live unfollow or
+-revocation is serialized after it and ends it. If the live fact lands first,
+-the reconciliation cannot restore it. Missing or ambiguous source state and
+-formerly ended memberships produce terminal outcome `unproved`, never a
+-subscription.
++The member aggregate revalidates its complete stream at execution. A merely
++prepared intent is not a follow decision, and cancellation reason
++`send_rejected` says only that one new message did not complete. Neither may
++erase a provable historic follow. The deterministic precedence is:
++
++| Member-stream state when reconciliation executes | Item outcome | Grant result |
++| --- | --- | --- |
++| No effective canonical grant, tombstone, or relevant revocation; perhaps a prepared intent or `send_rejected` cancellation | `authorized` | Append the deterministic `ConversationSubscriptionAuthorized` grant. |
++| An effective canonical grant already exists for the conversation | `superseded_by_canonical_grant` | Append no reconciliation grant. |
++| An explicit `ConversationSubscriptionEnded` tombstone exists after canonical cutover | `suppressed_by_unfollow` | Append no grant, regardless of prepared or cancelled intents. |
++| `GroupMembershipSubscriptionAuthorizationRevoked` names the historic candidate's exact group-membership provenance | `suppressed_by_relevant_revocation` | Append no grant for that provenance; a later re-add cannot substitute. |
++| Revocation names no provenance used by the historic candidate | Continue normal evaluation | The unrelated revocation does not suppress an otherwise provable grant. |
++| Source follow or exact fence-time/current provenance is missing or ambiguous | `unproved` | Append no grant. |
++
++Every row appends one `LegacyConversationSubscriptionReconciled` item marker
++with `reconciliation_id`, `fence_id`, person, club, conversation,
++`subscription_id`, deterministic intent and authorization identifiers, exact
++historic provenance, and the terminal outcome. For `authorized`, the marker and
++`ConversationSubscriptionAuthorized` grant are one append. An exact item retry
++is event-free.
++
++Serialization also makes every race deterministic. If reconciliation
++authorizes before a prepared live intent activates, the later different intent
++adds its own grant; if that intent is rejected, its cancellation leaves the
++historic grant alone. A later explicit unfollow ends all grants established
++before its tombstone. A later relevant revocation ends the one historic grant
++for that exact provenance; independently authorized candidate grants survive.
++If activation, rejection, unfollow, or revocation lands first, the table above
++decides each candidate's reconciliation result. Prepared-only and
++`send_rejected` still permit authorization, while unfollow and an exact
++relevant revocation prevent restoration of their affected candidates. An
++unrelated revocation has no effect in either order.
+ 
+ `LegacyConversationSubscriptionReconciliationCheckpointAdvanced` records
+ completed pages and
+@@ -470,25 +589,70 @@ proof of current access. Group and conversation reads, writes, follow actions,
+ notification creation, queued-delivery claiming, and the final email-provider
+ handoff recheck current authority through Membership's public contract.
+ 
++Private delivery moves to provenance-aware dispatch through a durable cutover,
++not a compatibility fallback:
++
++1. Quiesce startup dispatch and manual retry and drain in-flight provider
++   calls, so every already-provider-accepted delivery is durably distinguishable
++   before the fence. Such deliveries remain accepted and are never recalled or
++   reclassified.
++2. Enable the writer that requires `delivery_authorization` on every new
++   private `EmailDeliveryCreated`, then append
++   `PrivateDeliveryAuthorizationCutoverFenceRecorded` to the Messaging
++   migration stream with `fence_id` and the event-store global high-water mark.
++3. Scan every private delivery created at or below the fence whose immutable
++   create fact lacks exact authorization. For each delivery not already
++   provider-accepted, dispatch
++   `MarkLegacyPrivateEmailDeliveryIneligible` with deterministic
++   `disposition_id` derived from `{fence_id, delivery_id}` to the
++   delivery-owning Message stream. It appends
++   `LegacyPrivateEmailDeliveryMarkedIneligible` carrying `fence_id`,
++   `disposition_id`, `message_id`, `delivery_id`, `recipient_id`, and reason
++   `missing_creation_authorization`. The projection's terminal status is
++   `ineligible`; pending, failed/manual-retryable, and startup-recovered
++   dispatching work all receive the same disposition.
++4. Append `PrivateDeliveryAuthorizationCutoverCheckpointAdvanced` only after
++   every item in a page is provider-accepted or has its disposition event, and
++   append `PrivateDeliveryAuthorizationCutoverCompleted` after the fenced
++   source is exhausted. Both carry `fence_id`. Only then enable the
++   provenance-aware startup dispatcher and manual retry boundary.
++
++The disposition event is the replayable source of terminal ineligibility, not
++an update to a transient claim alone. Exact command, item, checkpoint, and
++completion retries emit no duplicate event; restart resumes at the last
++checkpoint. Startup dispatch refuses to claim private work until the matching
++completion marker exists and, afterward, refuses any row with missing
++authorization or an ineligible disposition. Manual retry applies the same
++guard and returns terminal `ineligible`, including for a historically failed
++delivery. Thus restart, retry, removal followed by re-addition, or current
++access cannot revive an unproved legacy delivery. A provider-accepted delivery
++is untouched at every step.
++
+ Every queued private delivery captures immutable `delivery_authorization` at
+ the decision that emits `EmailDeliveryCreated`, and the email-delivery
+ projection persists the same value. It contains:
+ 
++- the exact `person_id`, `club_id`, and `conversation_id`;
+ - the recipient's exact `club_membership_id`;
+ - authority kind `custom_group` or the explicit system-group kind;
+ - for custom groups, the non-empty set of exact current
+   `authorizing_group_membership_ids` that made the recipient eligible; and
+-- for followed delivery, the exact `subscription_id`,
++- for followed delivery, one exact `subscription_id`,
+   `subscription_authorization_id`, and `subscription_intent_id` from the
+-  canonical authorization grant. Direct audience delivery leaves those three
+-  subscription fields absent.
+-
+-Recipient resolution may capture more than one current custom-group membership
+-when more than one independently authorizes the conversation. The immutable
+-payload records the complete resolved set; it never records only a person,
+-conversation, or club-wide generation. Historic `EmailDeliveryCreated` events
+-without this payload remain readable, but private deliveries created after
+-cutover require it and cannot be dispatched through a compatibility fallback.
++  canonical immutable grant plus that grant's captured membership
++  authorization. Direct audience delivery leaves those three subscription
++  fields absent.
++
++Direct audience resolution captures the complete current custom-group
++membership set when more than one membership independently authorizes the
++conversation. Followed resolution selects the earliest still-effective grant
++by member-stream event position and captures that exact grant's still-effective
++membership provenance; it does not add authority that the grant never contained
++or fall through to another grant after creation. The immutable payload never
++records only a person, conversation, or club-wide generation. Historic
++`EmailDeliveryCreated` events without this payload remain readable, but private
++deliveries created after cutover require it and cannot be dispatched through a
++compatibility fallback.
+ 
+ Immediately before provider handoff, the dispatcher validates the captured
+ authorization through public Membership and Messaging contracts. The exact
+@@ -501,12 +665,13 @@ effective with captured authorization, not merely that the deterministic
+ `subscription_id` is active again.
+ 
+ There is no fallback to a newer club membership, a new
+-`group_membership_id`, or a later `subscription_intent_id`. Removal followed by
+-re-addition therefore cannot revive old queued work: all of its captured
+-custom-membership identifiers are ended, and a later follow is a different
+-canonical authorization. If one of several captured memberships remains
+-current and the captured subscription grant remains effective, that surviving
+-authority may still permit the delivery as intended.
++`group_membership_id`, a later `subscription_intent_id`, another grant on the
++same stable `subscription_id`, or merely effective subscription state. Removal
++followed by re-addition therefore cannot revive old queued work: all of its
++captured custom-membership identifiers are ended, and a later follow is a
++different canonical authorization. If one of several memberships captured on
++that exact grant remains current and the same grant remains effective, that
++surviving provenance may still permit the delivery as intended.
+ 
+ If an exact check fails before provider handoff, pending private delivery is
+ persistently skipped or made ineligible even if a lagging read model still
+@@ -556,7 +721,8 @@ history, prepared intents, and revoked membership identifiers. In return,
+ follow, unfollow, revocation, retry, and restart ordering is decided from one
+ event history without conversation enumeration.
+ 
+-Two explicit reconciliations and a coordinated cutover are required. They add
+-operational work, but preserve immutable source history, are deterministic and
+-restartable, and avoid asserting lifecycle periods or authorization provenance
+-that old facts cannot prove.
++Two explicit reconciliations, one private-delivery disposition sweep, and their
++coordinated cutovers are required. They add operational work, but preserve
++immutable source history, are deterministic and restartable, and avoid
++asserting lifecycle periods or authorization provenance that old facts cannot
++prove.
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+index bb7411c..333d904 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json
+@@ -1,6 +1,6 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "001-50c18db-02",
++  "packet_id": "001-8319b25-03",
+   "task_id": "001",
+   "todo_line": "- [ ] 001 Record the architecture decision before further implementation.",
+   "result": "ready_for_review",
+@@ -9,26 +9,31 @@
+   ],
+   "validation": [
+     {
+-      "command": "git diff --check -- docs/adr/README.md docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md",
++      "command": "git diff --check -- docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md",
+       "exit_status": 0,
+       "evidence": "No whitespace errors were reported."
+     },
+     {
+-      "command": "bash relative-Markdown-link resolution loop over docs/adr/README.md and docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md using grep, sed, dirname, and test -e",
++      "command": "bash relative-Markdown-link resolution loop over docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md using grep, sed, and test -e",
+       "exit_status": 0,
+-      "evidence": "Every relative Markdown target in ADR 0025 and the unchanged ADR index resolves to an existing repository path."
++      "evidence": "Every relative Markdown target in ADR 0025 resolves to an existing repository path."
+     },
+     {
+-      "command": "grep assertions for creator_group_membership_id, duplicate current admission, RemoveClubMember, ended_group_membership_ids, zero/one/many revocations, ConversationSubscriptionIntentCancelled, MessageSent intent correlation, delivery_authorization, subscription_authorization_id, both reconciliation fences, and live-state suppression",
++      "command": "grep -F assertions for delivery cutover/disposition, provider-accepted preservation, root grant-before-follow and outside-sender skip, prepared/send_rejected precedence, immutable multi-grants, unfollow ordering, scoped revocation facts/receipt ordering, and exact queued-delivery grant binding",
+       "exit_status": 0,
+-      "evidence": "The revised ADR names the concrete lifecycle, cancellation, delivery-provenance, receipt-set, and fenced-reconciliation contracts required by the packet."
++      "evidence": "All packet-required contracts and named markers/events were present."
+     },
+     {
+-      "command": "git diff --quiet HEAD -- docs/adr/README.md docs/iterations/064-leave-and-remove-group-members/plan.md docs/iterations/064-leave-and-remove-group-members/todo.md acceptance-tests web design-system",
++      "command": "git diff --name-only 8319b25d483c15f44634c0f9994751db7804a3b7 --",
+       "exit_status": 0,
+-      "evidence": "No executable, acceptance, design, ADR-index, iteration-plan, or todo path changed."
++      "evidence": "Output contained ADR 0025 and the planner-owned .delivery handoff/state files only; no code, test, feature, design, ADR-index, iteration plan, todo, or other project-document path appeared."
++    },
++    {
++      "command": "test \"$(git diff --name-only HEAD -- ':!docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json')\" = 'docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md'",
++      "exit_status": 0,
++      "evidence": "Excluding the required result artifact, this worker's content diff is limited to ADR 0025."
+     }
+   ],
+-  "notes": "Revised accepted ADR 0025 to make CreateCustomGroup atomically start a retry-stable creator membership, enforce one current membership per group/club-membership pair, and make direct removal and RemoveClubMember produce exact end reasons and durable zero/one/many revocation outcomes. The member-owned Messaging protocol now has durable send-intent cancellation and exact MessageSent correlation; queued private deliveries persist exact membership and canonical subscription authorization; both legacy reconciliations use named high-water fences, aggregate-stream revalidation, checkpoints, and live-write precedence. ADR 0025 remains consistent with the Club boundary, separate Membership/Messaging contexts, server-resolved provenance, system groups, immutable replay, and receipt-based completion. This packet is documentation-only, so dev check was not run as required.",
++  "notes": "Revised accepted ADR 0025 only. `PrivateDeliveryAuthorizationCutoverFenceRecorded` fences a restartable sweep whose terminal `LegacyPrivateEmailDeliveryMarkedIneligible` fact blocks legacy pending/startup/manual-retry work without exact creation-time provenance while leaving provider-accepted work untouched. Root send now commits `MessageSent` and its audience grant before a correlated, server-authorized follow; an outside-group sender records `RootConversationSubscriptionSkipped` and gains no follow. Historic reconciliation now lets prepared and `send_rejected` intents coexist with a provable historic grant, while effective canonical grants, explicit unfollow, and exact relevant revocation supersede it. Each successful intent has an immutable grant; same-intent retry is event-free, different intents remain distinct, unfollow closes prior grants, revocation appends one membership-wide tombstone, ordered conversation consequences, and the receipt last. Followed deliveries bind to one exact grant and cannot be revived by another grant or re-addition. An initial text-inspection diagnostic used a cross-line literal and exited 1; corrected required-contract assertions passed. The unrelated Fabro-generated pycache was preserved. Per packet constraint, dev check was not run for this documentation-only task.",
+   "unresolved": []
+ }
