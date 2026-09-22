@@ -1,0 +1,272 @@
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
+index ab3eade..345a8bc 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json
+@@ -1,117 +1,114 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "001-8319b25-03",
++  "packet_id": "001-45a21e9-04",
+   "task_id": "001",
+   "todo_line": "- [ ] 001 Record the architecture decision before further implementation.",
+   "attempt": "revision",
+   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+-  "source_baseline": "8319b25d483c15f44634c0f9994751db7804a3b7",
+-  "outcome": "Revise ADR 0025 so its accepted architecture has one complete, replayable contract for legacy queued deliveries, conditional root auto-follow, historic-follow cutover precedence, multiple immutable subscription grants, and revocation event scope.",
++  "source_baseline": "45a21e984490182d7bea913de16ca18784db820e",
++  "outcome": "Revise ADR 0025 so provider acceptance survives replay, historic follow provenance is temporally proved, sibling reconciliation grants cannot suppress one another, and every revocation consequence has deterministic append order.",
+   "scope": [
+-    "Revise only `docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md`, preserving its accepted status and the lifecycle, uniqueness, receipt, cancellation, provenance, and reconciliation contracts already established.",
+-    "Close the pre-cutover delivery hole with an explicit delivery cutover fence and durable terminal disposition. Before provenance-aware dispatch is enabled, every pending, startup-recovered, or manually retryable private delivery whose historic `EmailDeliveryCreated` lacks exact creation-time authorization must be permanently marked ineligible; current access or a later re-add must never serve as fallback proof. Provider-accepted deliveries remain untouched. Name the marker/event and define retry, restart, startup sweep, and manual-retry behavior.",
+-    "Separate root auto-follow from manual and reply preparation. A root send must first durably create the root and its audience access grant; only that exact successful root outcome may trigger idempotent server-authorized subscription work. Resolve the sender's resulting conversation authority after the root facts exist. Preserve the accepted inbound path where an active club member outside the addressed custom group creates the root but gains no access or follow, and make a root rejection leave no prepared follow behind.",
+-    "Refine historic-follow reconciliation precedence. A merely prepared intent and an intent cancelled as `send_rejected` do not supersede a provable historic follow. A canonical authorized grant, explicit unfollow/end tombstone, or revocation relevant to the candidate's exact provenance does supersede it; an unrelated membership revocation does not. Define deterministic terminal outcomes and races for reconcile-before/after activation, rejection, unfollow, and revocation.",
+-    "Define activation while already subscribed using immutable grants. Retrying the same `subscription_intent_id` is event-free; each different successfully activated intent has its own deterministic `subscription_authorization_id` and grant provenance even when another grant already makes the stable `subscription_id` active. The effective subscription remains active while at least one ordered grant is effective. Explicit unfollow ends all grants established before its tombstone, a fresh later intent may establish a new grant, and queued delivery stays bound to the exact grant that selected it.",
+-    "Disambiguate event cardinality and payloads. Conversation-scoped prepare, authorize, cancel, grant-end, and unfollow consequences carry the exact person, club, conversation, subscription, intent/grant, source, provenance, reason, and revocation correlation applicable to that fact. The single membership-wide `GroupMembershipSubscriptionAuthorizationRevoked` tombstone carries `person_id`, `club_id`, `group_id`, `group_membership_id`, and `revocation_id` without pretending to identify one conversation. Name any per-conversation grant consequences separately, order them deterministically in the same member-stream append, and append the one atomic completion receipt last.",
+-    "Make the revised sections internally consistent with delivery authorization: a followed delivery records one exact immutable grant plus its captured group-membership authorization; later grants, membership re-addition, or a merely active stable `subscription_id` cannot revive it. Remove or rewrite contradictory statements such as every canonical fact sharing one payload shape or all live preparation/cancellation suppressing reconciliation."
++    "Revise only `docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md`, preserving its accepted status and every settled first-class membership, member-owned subscription, root/reply ordering, delivery cutover, authorization, revocation-receipt, and reconciliation rule not implicated by the latest review.",
++    "Make provider acceptance durable and replayable for both legacy and provenance-aware private deliveries. Name the fact, ledger record, or equivalent rebuild-preservation mechanism; define its owner, required identity/correlation payload, append or persistence point relative to the external provider response, exact retry and restart behavior, and the recovery rule for the provider-accepted/crash-before-local-record window. A projection rebuild must not turn already-provider-accepted work back into pending or allow a second handoff.",
++    "Extend the private-delivery cutover protocol to classify already-provider-accepted legacy deliveries from durable replayable evidence, including the disposition of currently `sent` operational rows before the fence. Do not treat a mutable projection-only `sent` update as rebuild-safe evidence, and do not reclassify provider-accepted work as ineligible.",
++    "Require temporal proof for every historic custom-group follow candidate. The decisive effective legacy follow fact must be durably ordered inside the final uninterrupted legacy admission interval represented by the reconciled current membership: after the interval-opening `GroupMemberAdded`, with no later `GroupMemberRemoved` through the fence. State the comparable event-position evidence used across Membership and Messaging. If the source facts cannot prove that relationship, append the deterministic `unproved` result rather than binding the follow to whichever membership happens to be current at the fence.",
++    "Fix multi-provenance historic reconciliation so independently applicable sibling candidates for one person/conversation relation are evaluated without grants produced earlier in the same reconciliation batch suppressing later siblings. Define one atomic aggregate-local command/decision or an equally explicit pre-batch-state rule, deterministic candidate/grant/marker ordering, and event-free exact retry. Preserve the reviewed precedence for genuinely pre-existing canonical state, unfollow tombstones, and exact relevant revocations.",
++    "Complete the revocation append contract with total sort keys for prepared-intent cancellations and authorization-end facts. Keep the existing membership-wide tombstone first, per-grant provenance consequences, cancellations, grant ends, and completion receipt last; specify deterministic ordering within every zero-or-more consequence class so map/set iteration cannot change replayed event order."
+   ],
+   "scope_exclusions": [
+-    "Do not change application code, migrations, tests, feature files, acceptance tags, designs, ADR index entries, iteration files, or runtime behavior in this packet.",
+-    "Do not reopen the Club aggregate boundary, fresh group-membership identity, one-current-membership invariant, creator admission, club-departure end set, durable send cancellation, server-resolved provenance, receipt-based completion, or fenced live-write precedence already settled in ADR 0025.",
+-    "Do not restore conversation cleanup fan-out, projection enumeration, projection barriers, current-access-only delivery fallback, reusable membership activation, or `MessageSent` as an independently replayed follow fact.",
+-    "Do not make root creation contingent on successful follow authorization or grant conversation access to an outside-group inbound sender.",
+-    "Do not treat either prior ADR candidate as accepted task evidence, change the task identity, or implement later todo obligations."
++    "Do not change application code, migrations, tests, feature files, acceptance tags, designs, ADR index entries, iteration files, todo lines, or runtime behavior in this packet.",
++    "Do not reopen the Club aggregate boundary, fresh group-membership identity, one-current-membership invariant, creator admission, club-departure end set, conditional root auto-follow, immutable subscription-grant model, server-resolved provenance, provider-handoff authority check, or receipt-based removal completion already settled in ADR 0025.",
++    "Do not restore projection-only provider acceptance, current-access fallback for legacy work, conversation cleanup fan-out, projection enumeration, reusable membership activation, or `MessageSent` as an independently replayed live follow fact.",
++    "Do not infer historic follow provenance from fence-time membership alone, timestamps without a durable total order, a later re-addition, or an ambiguous source interval.",
++    "Do not change the task identity, reset revision history, promote any candidate ADR revision to accepted task evidence, or implement tasks 002-025."
+   ],
+   "references": [
+     {
+       "path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+-      "facts": "Implementation Plan steps 1, 4-6 and 8 require the binding ADR, order-independent member-owned subscription state, canonical follow facts, conservative historic reconciliation, exact authorization through provider handoff, and root/reply plus queued-delivery race coverage."
++      "facts": "Implementation Plan steps 1, 2, 4-6, and 8 require a binding replay-safe architecture, conservative reconciliation, immutable subscription authorization, durable revocation, exact provider-handoff eligibility, and restart/race coverage."
+     },
+     {
+       "path": "docs/iterations/064-leave-and-remove-group-members/.delivery/latest-review.json",
+-      "facts": "The current revise verdict identifies four remaining correctness holes: legacy pending deliveries without provenance, over-broad historic-follow suppression, impossible pre-root authorization plus the outside-sender exception, and unspecified already-subscribed grant semantics/event scope."
++      "facts": "The current revise verdict identifies exactly four remaining gaps: projection-only provider acceptance, missing final-admission temporal proof, same-batch sibling reconciliation suppression, and unspecified ordering for revocation-time cancellation and grant-end facts."
+     },
+     {
+       "path": "docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md",
+-      "facts": "The current accepted candidate already defines Club-owned first-class memberships, one person-owned subscription stream, prepared auto-follow intents, deterministic revocation receipts, fenced reconciliations, and post-cutover delivery provenance. Revise the contradictory or incomplete portions without discarding those settled contracts."
++      "facts": "The current accepted candidate already defines the delivery fence and legacy ineligibility fact, final-handoff authorization, immutable multi-grants, historic reconciliation table, and revocation append groups. Revise those sections narrowly to close the latest four gaps without discarding settled contracts."
+     },
+     {
+-      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
+-      "facts": "Messaging may resolve authority only through Membership's public contract and must not read Membership aggregates, streams, or projection storage directly."
+-    },
+-    {
+-      "path": "docs/adr/0022-use-projection-barriers-for-read-your-writes.md",
+-      "facts": "Projection barriers prove read-model progress, not subscription revocation, exact delivery authority, or completion of domain work."
++      "path": "docs/adr/0004-model-message-deliverability-as-a-message-aggregate.md",
++      "facts": "The Message aggregate owns each delivery state machine and stream, which constrains where a replayable provider-acceptance fact or its explicitly justified equivalent belongs."
+     },
+     {
+       "path": "docs/reference/event-sourcing.md",
+-      "facts": "The revised facts, cutover markers, and reconciliation outcomes must be immutable, deterministic, idempotent, restartable, and sufficient for replay."
++      "facts": "Provider acceptance, migration outcomes, and reconciliation decisions must remain reconstructible from immutable durable facts; projections and snapshots are not source-of-truth substitutes."
+     },
+     {
+-      "path": "web/lib/memba/messaging/events/email_delivery_created.ex",
+-      "facts": "`EmailDeliveryCreated` currently has recipient identity but no club-membership, group-membership, conversation-subscription, or grant provenance, so legacy pending work cannot use post-cutover exact checks as written."
++      "path": "web/lib/memba/messaging/email_delivery_dispatcher.ex",
++      "facts": "`mark_delivery_sent/2` currently records provider acceptance only with `Repo.update_all/2` on the email-delivery projection. A crash/rebuild can therefore lose the acceptance outcome even though the provider call already succeeded."
+     },
+     {
+       "path": "web/lib/memba/messaging/projectors/email_delivery.ex",
+-      "facts": "The accepted projector turns every historic create event into pending work without authorization provenance."
++      "facts": "Replay of every historic `EmailDeliveryCreated` inserts a `pending` row and has no provider-acceptance event handler, demonstrating the rebuild hole named by review."
+     },
+     {
+-      "path": "web/lib/memba/messaging/email_delivery_dispatcher.ex",
+-      "facts": "Startup claims pending rows and manual retry can re-enter dispatch; the current handoff check asks only whether the recipient now has some conversation access. The ADR must prevent those paths from reviving unproved legacy work after remove/re-add."
++      "path": "web/lib/memba/messaging/events/email_delivery_created.ex",
++      "facts": "`EmailDeliveryCreated` contains message, delivery, and recipient fields but no provider-acceptance identity or outcome; creation is not durable proof that an external provider accepted the delivery."
+     },
+     {
+-      "path": "web/lib/memba/messaging/message.ex",
+-      "facts": "`message_events/3` durably emits root `MessageSent`, then `ConversationAccessGrantedToGroup`, then delivery facts. Root subscription authority therefore cannot be resolved through an already-existing conversation before send; `sender_follows_conversation?/2` currently makes follow conditional on the sender being among resolved recipients."
++      "path": "web/test/memba/messaging/email_delivery_dispatcher_test.exs",
++      "facts": "Accepted tests verify provider success updates a row to `sent` and later access loss leaves that row untouched, but do not supply replayable acceptance evidence after projection rebuild."
+     },
+     {
+-      "path": "web/test/memba/messaging/inbound_club_message_acceptance_test.exs",
+-      "facts": "The accepted custom-group inbound test proves an active club member outside Board may create a Board root while receiving no delivery, conversation access, reply permission, or follow. Preserve this send-without-follow behavior."
++      "path": "web/lib/memba/membership/events/group_member_added.ex",
++      "facts": "The legacy start fact identifies club, group, reusable club membership, and person but has no first-class admission identity; its durable event position must delimit any provable final uninterrupted admission interval."
+     },
+     {
+-      "path": "acceptance-tests/features/custom_group_conversations.feature",
+-      "facts": "The accepted behavior contract likewise allows an active club member outside a custom group to email its address without gaining access."
++      "path": "web/lib/memba/membership/events/group_member_removed.ex",
++      "facts": "The legacy removal fact uses the same reusable relation identity, so remove/re-add histories require source ordering rather than fence-time current state to prove which admission contained a historic follow."
+     },
+     {
+       "path": "web/lib/memba/messaging/events/message_sent.ex",
+-      "facts": "Historic successful sends default to auto-follow unless `sender_follows_conversation` is explicitly false; historic reconciliation must preserve that distinction while no longer deriving live follow state directly from this event."
++      "facts": "Historic `MessageSent` may establish an effective follow, including default-true legacy shapes, but carries no group-membership provenance; reconciliation must correlate its durable position conservatively with the final uninterrupted admission."
+     },
+     {
+-      "path": "web/lib/memba/messaging/projectors/conversation_follow.ex",
+-      "facts": "The legacy projection derives current state from `MessageSent`, `ConversationFollowed`, and `ConversationUnfollowed`; these immutable shapes are the fenced historic source."
++      "path": "web/lib/memba/messaging/events/conversation_followed.ex",
++      "facts": "Historic explicit follow facts identify person, club, and conversation but no group-membership admission, so current-at-fence membership alone cannot prove temporal provenance."
+     },
+     {
+-      "path": "web/test/memba/messaging/conversation_followers_test.exs",
+-      "facts": "Accepted behavior makes a duplicate follow event-free and preserves an excluded root sender as unfollowed. The replacement may add immutable grant detail but must retain effective idempotency and the explicit no-follow case."
++      "path": "web/lib/memba/messaging/events/conversation_unfollowed.ex",
++      "facts": "Historic explicit unfollow contributes to the decisive effective legacy relation and must be included when selecting the exact follow fact whose admission interval is proved."
++    },
++    {
++      "path": "web/config/config.exs",
++      "facts": "Membership and Messaging use their respective Commanded applications and configured EventStore adapters; the ADR must name the durable comparable event-position contract used for cross-context temporal proof rather than relying on wall-clock timestamps."
+     }
+   ],
+   "constraints": [
+-    "Keep ADR 0025 status `accepted`; the approved iteration has no open business or technical decision and executable implementation remains blocked on this record.",
+-    "Use unambiguous `club_membership_id`, `group_membership_id`, `subscription_id`, `subscription_intent_id`, `subscription_authorization_id`, `revocation_id`, and delivery-authorization language.",
+-    "Define concrete command/event/marker names, required payloads, cardinality, deterministic ordering, and exact-retry behavior for every new or revised protocol.",
+-    "Legacy private delivery without exact persisted creation-time provenance must fail closed before startup or manual dispatch; a current Membership query cannot reconstruct the missing temporal authority.",
+-    "Root creation and root auto-follow are separately recoverable transitions. Root success and its audience grant precede conditional auto-follow; absence of sender group authority means successful send with no grant, not failed send or implicit access.",
+-    "Prepared-only and `send_rejected` states are not negative follow decisions. Historic reconciliation suppression must be based on an effective canonical grant, explicit unfollow, or exact relevant revocation.",
+-    "A stable subscription may own multiple immutable grants. Same-intent retry is event-free, different successful intents are distinguishable, revoking one provenance cannot erase unrelated surviving grants, and unfollow closes all causally prior grants.",
+-    "Membership-wide revocation and per-conversation grant consequences must use distinct unambiguous schemas; one member-stream decision remains atomic and ends with one durable completion receipt.",
+-    "Retain append-only compatibility and do not invent historical membership periods, follow provenance, or delivery authorization that source facts cannot prove.",
++    "Keep ADR 0025 status `accepted`; the approved plan has no open business decision and executable work remains blocked on a complete architecture record.",
++    "Use concrete command, event, marker, or ledger names and define ownership, payload, cardinality, ordering, idempotency, and restart/rebuild behavior for every revised protocol.",
++    "Provider-accepted means the external handoff already succeeded and cannot be recalled. Its durable evidence must prevent both projection-rebuild regression to `pending` and duplicate provider handoff, including the crash boundary between provider response and local persistence.",
++    "The delivery cutover may preserve legacy accepted work, but it must not manufacture exact creation-time authorization for old pending work or use current access after remove/re-add as proof.",
++    "Historic custom-group authorization is provable only when the decisive effective follow fact is durably located within the final uninterrupted legacy admission interval. Missing, incomparable, or ambiguous order is `unproved`.",
++    "Sibling reconciliation candidates must retain independent provenance. Grants and markers emitted for one sibling in the current atomic batch are not pre-existing canonical state and cannot suppress another valid sibling.",
++    "Revocation event order must be a pure function of aggregate state and command data. Specify total keys for provenance-removal facts, prepared-intent cancellations, and grant-end facts, with the one completion receipt last.",
++    "Retain append-only compatibility and do not rewrite historic events, invent unproved membership periods, or treat read projections as aggregate/domain completion evidence.",
+     "This is documentation-only, so do not run `dev check`, `dev check --quick`, `dev ci`, or another full-suite command."
+   ],
+   "focused_validation": [
+     "git diff --check -- docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md",
+-    "Review the final ADR against all four gaps in `.delivery/latest-review.json` and report the exact new or revised fact/marker names, payload scope, ordering rule, and idempotency rule that closes each gap.",
+-    "Verify by targeted text inspection that the ADR covers legacy pending/startup/manual-retry disposition, provider-accepted preservation, root grant-before-follow ordering, outside-group send without follow, prepared/send-rejected reconciliation precedence, multiple immutable grants, explicit unfollow ordering, and membership-wide versus conversation-scoped revocation facts.",
++    "Review the final ADR against all four gaps in `.delivery/latest-review.json` and report the exact provider-acceptance fact/protocol, final-admission proof rule, sibling-batch evaluation rule, and revocation sort keys that close them.",
++    "Verify by targeted text inspection that provider acceptance survives projection rebuild and the provider-response crash boundary for both legacy and new deliveries; current `sent` rows have an explicit cutover disposition; ambiguous historic admission provenance becomes `unproved`; all valid sibling candidates can append grants in one batch; and every revocation consequence class has deterministic total order.",
+     "Verify every relative Markdown link in `docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md` resolves to an existing repository path.",
+-    "git diff --name-only 8319b25d483c15f44634c0f9994751db7804a3b7 --"
++    "git diff --name-only 45a21e984490182d7bea913de16ca18784db820e --"
+   ],
+   "completion_evidence_required": [
+-    "Return the exact changed path and confirm no code, test, feature, design, ADR-index, iteration plan, todo, or other project-document path changed.",
+-    "Name the delivery cutover fence and terminal legacy-delivery disposition, and explain startup recovery, failed manual retry, remove/re-add, exact retry/restart, and already-provider-accepted outcomes.",
+-    "Summarize the separate manual, reply, and root subscription sequences, including root success/grant correlation and the outside-group inbound no-follow outcome.",
+-    "Provide the historic reconciliation precedence table for prepared, `send_rejected`, authorized, explicit unfollow, relevant revocation, and unrelated revocation states.",
+-    "List the immutable grant and event schemas, explain same-intent versus different-intent activation, multi-grant survival, unfollow ordering, per-conversation revocation consequences, and the membership-wide receipt append order.",
+-    "Explain how a queued followed delivery remains bound to one exact grant and why another grant or re-addition cannot revive it.",
++    "Return the exact changed path and confirm no code, migration, test, feature, design, ADR-index, iteration plan, todo, or other project-document path changed.",
++    "Name the replayable provider-acceptance mechanism and explain owner, payload, provider-call/local-persistence ordering, idempotent retry, crash recovery, projection rebuild, and legacy cutover treatment.",
++    "State the durable temporal predicate that proves a historic follow belongs to the final uninterrupted legacy admission, including remove/re-add and ambiguous/incomparable outcomes.",
++    "Describe the atomic sibling-candidate evaluation and deterministic grant/marker order, and explain why the first reconciled provenance cannot suppress later valid siblings.",
++    "List the complete revocation append sequence and total sort key for every repeated consequence class, especially prepared-intent cancellations and authorization-end facts.",
+     "Report successful whitespace, scope, required-contract, and relative-link validations with exit statuses."
+   ],
+   "candidate_origins": [
+@@ -130,19 +127,27 @@
+       "reason": "review_revise",
+       "task_id": "001",
+       "todo_line": "- [ ] 001 Record the architecture decision before further implementation."
++    },
++    {
++      "base_sha": "8319b25d483c15f44634c0f9994751db7804a3b7",
++      "head_sha": "90fc51b2ad19afcadcb9c02b1d037924aa7b1849",
++      "packet_id": "001-8319b25-03",
++      "reason": "review_revise",
++      "task_id": "001",
++      "todo_line": "- [ ] 001 Record the architecture decision before further implementation."
+     }
+   ],
+   "latest_review": {
+-    "packet_id": "001-50c18db-02",
++    "packet_id": "001-8319b25-03",
+     "decision": "revise",
+-    "summary": "The revised ADR closes the earlier creator, club-departure, uniqueness, receipt, cancellation, and reconciliation-fence gaps, but still lacks safe legacy queued-delivery disposition, valid root-send/conditional-follow ordering, precise historic-follow precedence, and immutable already-subscribed grant plus revocation event semantics."
++    "summary": "ADR 0025 still needs replayable provider-acceptance evidence, temporal proof tying each historic follow to the final uninterrupted legacy admission, same-batch-safe multi-provenance reconciliation, and deterministic ordering for revocation-time prepared cancellations and grant ends."
+   },
+   "latest_worker_result": {
+-    "packet_id": "001-50c18db-02",
++    "packet_id": "001-8319b25-03",
+     "result": "ready_for_review",
+     "changed_paths": [
+       "docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md"
+     ],
+-    "summary": "The second candidate added atomic creator admission, one-current-membership uniqueness, exact club-departure outcomes, durable send cancellation/correlation, post-cutover queued-delivery provenance, and fenced live-wins reconciliation; its reported documentation validations passed."
++    "summary": "The third candidate added a delivery cutover fence and terminal legacy disposition, root grant-before-follow ordering, refined reconciliation precedence, immutable multi-grants, scoped revocation facts, and exact queued-delivery grant binding; its reported documentation validations passed."
+   }
+ }
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
+index 9895968..f9a4dd8 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json
+@@ -2,7 +2,7 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+-  "source_baseline": "8319b25d483c15f44634c0f9994751db7804a3b7",
++  "source_baseline": "45a21e984490182d7bea913de16ca18784db820e",
+   "accepted_tasks": [],
+   "pending_obligations": [
+     {
+@@ -30,6 +30,14 @@
+           "reason": "review_revise",
+           "task_id": "001",
+           "todo_line": "- [ ] 001 Record the architecture decision before further implementation."
++        },
++        {
++          "base_sha": "8319b25d483c15f44634c0f9994751db7804a3b7",
++          "head_sha": "90fc51b2ad19afcadcb9c02b1d037924aa7b1849",
++          "packet_id": "001-8319b25-03",
++          "reason": "review_revise",
++          "task_id": "001",
++          "todo_line": "- [ ] 001 Record the architecture decision before further implementation."
+         }
+       ]
+     },
+@@ -314,6 +322,14 @@
+       "reason": "review_revise",
+       "task_id": "001",
+       "todo_line": "- [ ] 001 Record the architecture decision before further implementation."
++    },
++    {
++      "base_sha": "8319b25d483c15f44634c0f9994751db7804a3b7",
++      "head_sha": "90fc51b2ad19afcadcb9c02b1d037924aa7b1849",
++      "packet_id": "001-8319b25-03",
++      "reason": "review_revise",
++      "task_id": "001",
++      "todo_line": "- [ ] 001 Record the architecture decision before further implementation."
+     }
+   ],
+   "coverage_map": [
+@@ -391,5 +407,5 @@
+       "accepted_task_lines": []
+     }
+   ],
+-  "planner_note": "The approved todo order is retained without splitting or combining. Task 001 remains the first pending obligation and is prepared as the same bounded revision, preserving both unresolved candidate origins; tasks 002-025 remain pending. The second review confirms the prior lifecycle and fence gaps are closed but requires ADR 0025 to settle legacy queued-delivery disposition, root-send versus auto-follow ordering, historic-follow precedence, immutable grant behavior while already subscribed, and unambiguous conversation-scoped versus membership-wide event schemas before executable work begins."
++  "planner_note": "The approved todo order is retained without splitting or combining. Task 001 remains the first pending obligation and is prepared as the same bounded revision, preserving all three unresolved candidate origins; tasks 002-025 remain pending. The latest review confirms the prior delivery cutover, root ordering, reconciliation precedence, and immutable-grant revisions but requires ADR 0025 to make provider acceptance replayable, prove that each historic follow belongs to the final uninterrupted legacy admission, authorize sibling reconciliation candidates without same-batch self-suppression, and define total ordering for revocation-time cancellations and grant-end facts before executable work begins."
+ }
+diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
+index 3112787..d9fd672 100644
+--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
++++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json
+@@ -2,6 +2,6 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+   "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+-  "source_baseline": "8319b25d483c15f44634c0f9994751db7804a3b7",
++  "source_baseline": "45a21e984490182d7bea913de16ca18784db820e",
+   "decision": "ready"
+ }
