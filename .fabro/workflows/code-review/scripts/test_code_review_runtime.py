@@ -198,19 +198,20 @@ provider='local'
         self.assertFalse(any(r["event"].startswith("agent.llm") for r in records))
         return records
 
-    def read_observations(self, fixture: Path, combined: str) -> list[dict]:
+    def read_observations(self, fixture: Path, combined: str, expected_run_id: str) -> list[dict]:
         observation_file = fixture / ".fabro/tmp/code-review-observability.jsonl"
         self.assertTrue(observation_file.is_file(), combined)
         observations = [json.loads(line) for line in observation_file.read_text().splitlines()]
         for observation in observations:
-            self.assertTrue(
-                observation["run_id"] == "unknown" or re.fullmatch(r"[0-9A-Z]{26}", observation["run_id"]),
-                observation["run_id"],
-            )
+            # The local provider does not export FABRO_RUN_ID to command
+            # sandboxes. Its event envelope is authoritative; if the helper
+            # receives an identity, it must equal that envelope exactly.
+            self.assertIn(observation["run_id"], {"unknown", expected_run_id})
             self.assertIsInstance(observation["human_paused"], bool)
             self.assertIsInstance(observation["heal_commit_published"], bool)
             self.assertIsInstance(observation["elapsed_seconds"], int)
-            self.assertGreaterEqual(observation["elapsed_seconds"], 0)
+            self.assertGreaterEqual(observation["elapsed_seconds"], 7)
+            self.assertLess(observation["elapsed_seconds"], 20)
         return observations
 
     def completed_stages(self, scenario: dict, name: str) -> list[str]:
@@ -228,7 +229,7 @@ provider='local'
         }[scenario.get("disposition", "invalid")]
         if scenario.get("no_progress"):
             expected = [("consequential", True, False), ("record", False, False)]
-        observations = self.read_observations(fixture, combined)
+        observations = self.read_observations(fixture, combined, run_id)
         actual = [
             (item["review_disposition"], item["human_paused"], item["heal_commit_published"])
             for item in observations
@@ -277,7 +278,7 @@ provider='local'
                 break
             time.sleep(.2)
         self.assertIn("consequential_gate", stages)
-        observations = self.read_observations(fixture, done.stdout + done.stderr)
+        observations = self.read_observations(fixture, done.stdout + done.stderr, run_id)
         self.assertEqual(
             [(item["review_disposition"], item["human_paused"]) for item in observations],
             [("consequential", True)],
@@ -296,7 +297,7 @@ provider='local'
         self.assertNotEqual(done.returncode, 0, combined)
         stages = [r.get("node_id") for r in records if r["event"] == "stage.started"]
         self.assertIn("reviewer_unavailable", stages)
-        observations = self.read_observations(fixture, combined)
+        observations = self.read_observations(fixture, combined, run_id)
         self.assertEqual(len(observations), 1)
         self.assertEqual(observations[0]["review_disposition"], "provider_failure")
         self.assertFalse(observations[0]["human_paused"])
@@ -307,9 +308,11 @@ STEP = r'''#!/usr/bin/env python3
 import json
 from pathlib import Path
 import sys
+import time
 node = sys.argv[1]
 scenario = json.loads(Path("scenario.json").read_text())
 if node == "focused_reviewer":
+    Path(".fabro/tmp/code-review-start-epoch").write_text(str(int(time.time()) - 7) + "\n")
     if scenario.get("provider_failure"):
         raise SystemExit(1)
     print(json.dumps({"context_updates": {"review_disposition": scenario.get("disposition", "invalid")}}))
