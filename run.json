@@ -1791,7 +1791,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-22T07:03:10.056480447Z",
-  "last_event_at": "2026-09-22T08:53:31.480602116Z",
+  "last_event_at": "2026-09-22T09:02:47.135745558Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -9856,9 +9856,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 3029,
       "checkpoint": {
-        "timestamp": "2026-09-22T08:53:31.640997206Z",
+        "timestamp": "2026-09-22T08:53:35.773457834Z",
         "current_node": "route_worker_result",
         "completed_nodes": [
           "start",
@@ -9892,8 +9892,465 @@
         ],
         "node_retries": {},
         "context_values": {
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas.\"}",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.todo_readable": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "last_stage": "revise_task",
+          "output.validate_task": {
+            "decision": "revise",
+            "task": "- [ ] 001 Record the architecture decision before further implementation.",
+            "reason": "The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas."
+          },
+          "thread.apply_task_verdict.current_node": "before_delivery_planner",
+          "internal.retry_count.verify_source_head": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.start": 0,
           "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.resume_gate": 0,
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.guard_delivery_packet": 0,
           "last_response": "Packet `001-8319b25-03` is complete with result `ready_for_review`.\n\nThe accepted architecture in [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversat",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: low; }\n            #resume_gate { reasoning_effort: low; }\n            #delivery_planner { reasoning_effort: high; }\n            #implement_next_task { reasoning_effort: high; }\n            #revise_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.apply_task_verdict": 0,
+          "outcome": "succeeded",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.before_delivery_planner": 0,
+          "internal.thread_id": "revise_task",
+          "internal.retry_count.read_plan": 0,
+          "current_node": "route_worker_result",
+          "internal.retry_count.wip_gate": 0,
+          "thread.validate_task.current_node": "apply_task_verdict",
+          "response.revise_task": "Packet `001-8319b25-03` is complete with result `ready_for_review`.\n\nThe accepted architecture in [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md:215) now closes all four review gaps:\n\n- `PrivateDeliveryAuthorizationCutoverFenceRecorded` fences a restartable legacy-delivery sweep. `LegacyPrivateEmailDeliveryMarkedIneligible` permanently blocks pending, startup-recovered, dispatching, and manually retryable private deliveries that lack creation-time provenance. Exact retries and restarts are idempotent; remove/re-add cannot revive them; provider-accepted deliveries remain untouched.\n- Manual follow prepares and activates immediately. Reply auto-follow prepares before sending and activates only after the correlated success. Root auto-follow commits `MessageSent` and its audience grant first, then resolves the exact captured sender authority. Outside-group senders receive `RootConversationSubscriptionSkipped`, while rejected roots leave no prepared follow.\n- Historic reconciliation now uses explicit precedence:\n\n  | State | Result |\n  | --- | --- |\n  | Prepared only or `send_rejected` | Historic grant may be authorized |\n  | Effective canonical grant | `superseded_by_canonical_grant` |\n  | Explicit unfollow | `suppressed_by_unfollow` |\n  | Exact relevant revocation | `suppressed_by_relevant_revocation` |\n  | Unrelated revocation | Continue normal evaluation |\n  | Unproved source/provenance | `unproved` |\n\n- Every successful intent has a deterministic immutable `subscription_authorization_id`. Same-intent retries are event-free; different intents create distinct grants; subscriptions remain effective while any grant survives. Unfollow closes all prior grants. Membership revocation atomically appends one membership-wide tombstone, ordered conversation-scoped provenance/grant consequences, and one completion receipt last.\n- Followed deliveries bind to one exact grant and its captured membership provenance. Another grant, a later follow, or re-addition cannot revive queued work associated with the old grant.\n\nOnly ADR 0025 was changed as packet content. The required result is recorded in [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). `todo.md` remains untouched.\n\nValidation passed with exit status 0:\n\n- ADR whitespace validation\n- Relative Markdown-link resolution\n- Required-contract text assertions\n- Worker scope validation\n- Worker-result JSON/schema and packet-identity validation\n\n`dev check` was not run because this packet explicitly prohibits full-suite commands for its documentation-only scope; the workflow’s later deterministic gate owns that run. The unrelated Fabro-generated `__pycache__` remains untouched.",
+          "internal.retry_count.revise_task": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.node_visit_count": 3,
+          "thread.implement_next_task.current_node": "route_worker_result",
+          "graph.rankdir": "LR",
+          "thread.before_delivery_planner.current_node": "delivery_planner",
+          "thread.all_tasks_done.current_node": "before_delivery_planner",
+          "failure_class": "",
+          "internal.retry_count.route_worker_result": 0,
+          "preferred_label": "review",
+          "response.delivery_planner": "Prepared revision packet `001-8319b25-03` for task 001, bound to checkpoint `8319b25d483c15f44634c0f9994751db7804a3b7`.\n\nThe packet directs a documentation-only ADR 0025 revision covering:\n\n- Safe disposition of legacy queued deliveries without authorization provenance.\n- Root-send-before-auto-follow ordering, preserving outside-group send-without-follow behavior.\n- Precise historic-follow reconciliation precedence.\n- Immutable multiple subscription grants and explicit unfollow semantics.\n- Unambiguous membership-wide versus conversation-scoped revocation events.\n\nUpdated artifacts:\n\n- [current-worker-packet.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json)\n- [execution-state.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json)\n- [planner-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json)\n\nBoth unresolved candidate origins are preserved. All 25 todo obligations remain pending, with task 001 still first and unchanged. JSON parsing, whitespace checks, source-baseline consistency, coverage mapping, candidate provenance, and the repository’s non-mutating planner-contract validations passed.\n\nNo application, test, feature, ADR, plan, or todo file was changed. `dev check` was not run because this was planning-only work and the selected revision is documentation-only.",
+          "failure_signature": "",
+          "thread.revise_task.current_node": "route_worker_result",
+          "internal.run_id": "01M33YR130B147ZZVAN2ANYC7E",
+          "internal.work_dir": "/workspace/memba",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
+          "internal.retry_count.validate_task": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.max_node_visits": "80",
+          "thread.guard_delivery_packet.current_node": "revise_task",
+          "thread.delivery_planner.current_node": "guard_delivery_packet",
+          "thread.read_plan.current_node": "wip_gate",
+          "response.implement_next_task": "Implemented packet `001-db9620b-01` with result `ready_for_review`.\n\nChanges:\n\n- Added accepted [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md:1).\n- Added its accepted entry to the [ADR index](/workspace/memba/docs/adr/README.md:31).\n- Wrote the required [worker result artifact](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1).\n- Left `todo.md` unchecked and unchanged.\n\nADR 0025 establishes:\n\n- `Memba.Membership.Club`, routed by `club_id`, as the serialized custom-group membership boundary.\n- Fresh caller-generated `group_membership_id` values with `CustomGroupMembershipStarted` and `CustomGroupMembershipEnded`.\n- Deterministic, append-only legacy relation reconciliation without inventing historical periods.\n- Everyone/Admin as derived system-group consequences without first-class group-membership identities.\n- `Memba.Messaging.MemberConversationSubscriptions`, routed by `person_id`, as the canonical subscription ledger.\n- Server-resolved provenance, durable prepared follow intents, order-independent revocation, and `GroupMembershipSubscriptionRevocationCompleted` receipts.\n- Explicit relationships to ADRs 0007, 0011, 0022, and 0024.\n\nFocused validation passed with exit status 0:\n\n- ADR/index `git diff --check`, plus no-index whitespace validation for the new ADR.\n- Resolution of every relative Markdown link.\n- Required architecture vocabulary and accepted/index uniqueness assertions.\n- Verification that application, acceptance, design, plan, and todo paths were unchanged.\n- Worker-result JSON parsing and required-field assertions.\n\n`dev check` was not run because this packet is documentation-only and explicitly excludes executable changes. The pre-existing `.fabro/.../__pycache__/` remains untouched.",
+          "thread.route_worker_result.current_node": "validate_task",
+          "thread.verify_source_head.current_node": "read_plan",
+          "internal.retry_count.delivery_planner": 0,
+          "thread.start.current_node": "verify_source_head"
+        },
+        "node_outcomes": {
+          "guard_delivery_packet": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 268,
+              "active_time_ms": 268
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c04488d1561fc006641eacd307ae7e876f201f6bf96ace1de376178cabd4dd98"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas.\"}",
+              "output.validate_task": {
+                "decision": "revise",
+                "task": "- [ ] 001 Record the architecture decision before further implementation.",
+                "reason": "The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas."
+              },
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"The packet and ready_for_review result match the first unchecked task, and the documen",
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 369238,
+                    "output_tokens": 2978,
+                    "reasoning_tokens": 2870,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2021630
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 209906,
+              "tool_time_ms": 369988,
+              "active_time_ms": 579894
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/24ba31ae39e5718603694f376a4793630d9b9d12646690dd69cd6bd0dc1fc23f"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/04d0e0024aaa8bb96aed9019b99a537f46550579118ffdb5eaebfdf83fbd8ec3"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93993,
+              "active_time_ms": 93993
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9f3b070bea16392137c87415aead76ddc156e383d5ca054526dfc7ae92e511f8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/954bf1652d54b70379abbc476cc77dd69661e5338c59dfe803578ff2d09f9674"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "apply_task_verdict": {
+            "status": "succeeded",
+            "preferred_label": "revise",
+            "context_updates": {
+              "command.output": "blob://sha256/2d593f5e2753fde72b1fe10a13db0be78d5a3d20bcccff355400d0d84e48ce2b"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 148,
+              "active_time_ms": 148
+            }
+          },
+          "delivery_planner": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.delivery_planner": "Prepared revision packet `001-8319b25-03` for task 001, bound to checkpoint `8319b25d483c15f44634c0f9994751db7804a3b7`.\n\nThe packet directs a documentation-only ADR 0025 revision covering:\n\n- Safe disposition of legacy queued deliveries without authorization provenance.\n- Root-send-before-auto-follow ordering, preserving outside-group send-without-follow behavior.\n- Precise historic-follow reconciliation precedence.\n- Immutable multiple subscription grants and explicit unfollow semantics.\n- Unambiguous membership-wide versus conversation-scoped revocation events.\n\nUpdated artifacts:\n\n- [current-worker-packet.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json)\n- [execution-state.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json)\n- [planner-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json)\n\nBoth unresolved candidate origins are preserved. All 25 todo obligations remain pending, with task 001 still first and unchanged. JSON parsing, whitespace checks, source-baseline consistency, coverage mapping, candidate provenance, and the repository’s non-mutating planner-contract validations passed.\n\nNo application, test, feature, ADR, plan, or todo file was changed. `dev check` was not run because this was planning-only work and the selected revision is documentation-only.",
+              "last_response": "Prepared revision packet `001-8319b25-03` for task 001, bound to checkpoint `8319b25d483c15f44634c0f9994751db7804a3b7`.\n\nThe packet directs a documentation-only ADR 0025 revision covering:\n\n- Safe dis",
+              "last_stage": "delivery_planner"
+            },
+            "notes": "Stage completed: delivery_planner",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1002973,
+                    "output_tokens": 9941,
+                    "reasoning_tokens": 5905,
+                    "cache_read_tokens": 430848,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5705669
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 554805,
+              "tool_time_ms": 590946,
+              "active_time_ms": 1145751
+            }
+          },
+          "revise_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "revise_task",
+              "response.revise_task": "Packet `001-8319b25-03` is complete with result `ready_for_review`.\n\nThe accepted architecture in [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md:215) now closes all four review gaps:\n\n- `PrivateDeliveryAuthorizationCutoverFenceRecorded` fences a restartable legacy-delivery sweep. `LegacyPrivateEmailDeliveryMarkedIneligible` permanently blocks pending, startup-recovered, dispatching, and manually retryable private deliveries that lack creation-time provenance. Exact retries and restarts are idempotent; remove/re-add cannot revive them; provider-accepted deliveries remain untouched.\n- Manual follow prepares and activates immediately. Reply auto-follow prepares before sending and activates only after the correlated success. Root auto-follow commits `MessageSent` and its audience grant first, then resolves the exact captured sender authority. Outside-group senders receive `RootConversationSubscriptionSkipped`, while rejected roots leave no prepared follow.\n- Historic reconciliation now uses explicit precedence:\n\n  | State | Result |\n  | --- | --- |\n  | Prepared only or `send_rejected` | Historic grant may be authorized |\n  | Effective canonical grant | `superseded_by_canonical_grant` |\n  | Explicit unfollow | `suppressed_by_unfollow` |\n  | Exact relevant revocation | `suppressed_by_relevant_revocation` |\n  | Unrelated revocation | Continue normal evaluation |\n  | Unproved source/provenance | `unproved` |\n\n- Every successful intent has a deterministic immutable `subscription_authorization_id`. Same-intent retries are event-free; different intents create distinct grants; subscriptions remain effective while any grant survives. Unfollow closes all prior grants. Membership revocation atomically appends one membership-wide tombstone, ordered conversation-scoped provenance/grant consequences, and one completion receipt last.\n- Followed deliveries bind to one exact grant and its captured membership provenance. Another grant, a later follow, or re-addition cannot revive queued work associated with the old grant.\n\nOnly ADR 0025 was changed as packet content. The required result is recorded in [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). `todo.md` remains untouched.\n\nValidation passed with exit status 0:\n\n- ADR whitespace validation\n- Relative Markdown-link resolution\n- Required-contract text assertions\n- Worker scope validation\n- Worker-result JSON/schema and packet-identity validation\n\n`dev check` was not run because this packet explicitly prohibits full-suite commands for its documentation-only scope; the workflow’s later deterministic gate owns that run. The unrelated Fabro-generated `__pycache__` remains untouched.",
+              "last_response": "Packet `001-8319b25-03` is complete with result `ready_for_review`.\n\nThe accepted architecture in [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversat"
+            },
+            "notes": "Stage completed: revise_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1423372,
+                    "output_tokens": 18096,
+                    "reasoning_tokens": 11777,
+                    "cache_read_tokens": 1003392,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 8514746
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 1041787,
+              "tool_time_ms": 4262,
+              "active_time_ms": 1046049
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b96badd0d9804513e5513be5d3b7fd9633997760ccba029a556e045c8ab4cdb8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 -B .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented packet `001-db9620b-01` with result `ready_for_review`.\n\nChanges:\n\n- Added accepted [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md:1).\n- Added its accepted entry to the [ADR index](/workspace/memba/docs/adr/README.md:31).\n- Wrote the required [worker result artifact](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1).\n- Left `todo.md` unchecked and unchanged.\n\nADR 0025 establishes:\n\n- `Memba.Membership.Club`, routed by `club_id`, as the serialized custom-group membership boundary.\n- Fresh caller-generated `group_membership_id` values with `CustomGroupMembershipStarted` and `CustomGroupMembershipEnded`.\n- Deterministic, append-only legacy relation reconciliation without inventing historical periods.\n- Everyone/Admin as derived system-group consequences without first-class group-membership identities.\n- `Memba.Messaging.MemberConversationSubscriptions`, routed by `person_id`, as the canonical subscription ledger.\n- Server-resolved provenance, durable prepared follow intents, order-independent revocation, and `GroupMembershipSubscriptionRevocationCompleted` receipts.\n- Explicit relationships to ADRs 0007, 0011, 0022, and 0024.\n\nFocused validation passed with exit status 0:\n\n- ADR/index `git diff --check`, plus no-index whitespace validation for the new ADR.\n- Resolution of every relative Markdown link.\n- Required architecture vocabulary and accepted/index uniqueness assertions.\n- Verification that application, acceptance, design, plan, and todo paths were unchanged.\n- Worker-result JSON parsing and required-field assertions.\n\n`dev check` was not run because this packet is documentation-only and explicitly excludes executable changes. The pre-existing `.fabro/.../__pycache__/` remains untouched.",
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented packet `001-db9620b-01` with result `ready_for_review`.\n\nChanges:\n\n- Added accepted [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversatio"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 587235,
+                    "output_tokens": 11198,
+                    "reasoning_tokens": 11222,
+                    "cache_read_tokens": 156288,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3686919
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 758127,
+              "tool_time_ms": 2571,
+              "active_time_ms": 760698
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e723767adccb047e6708bf8305585e2e5f0d42c26f6ca3e855417c534b5df032"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '5b7d85d4fc7a87dffe06e68bb2e10794ee68ef11'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 200,
+              "active_time_ms": 200
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4c84c562bd3904ebf8ee3ae219c23a8707b0d686de726d0cdbb39e01be9a1031"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1719,
+              "active_time_ms": 1719
+            }
+          },
+          "before_delivery_planner": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/95dea22a974087b1fd4fa1914ae85ae9eccbc27aef5a57bd7a9ae774bafd3b71"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "route_worker_result": {
+            "status": "succeeded",
+            "preferred_label": "review",
+            "context_updates": {
+              "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "e9243f7e3b0f3f8e05b1a9c8356317f625de849c",
+        "node_visits": {
+          "todo_readable": 1,
+          "preflight_sandbox": 1,
+          "wip_gate": 1,
+          "read_plan": 1,
+          "validate_task": 2,
+          "verify_source_head": 1,
+          "all_tasks_done": 1,
+          "delivery_planner": 3,
+          "implement_next_task": 1,
+          "apply_task_verdict": 2,
+          "resume_gate": 1,
+          "before_delivery_planner": 3,
+          "revise_task": 2,
+          "sync_task_list": 1,
+          "route_worker_result": 3,
+          "start": 1,
+          "guard_delivery_packet": 3
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/064-leave-and-remove-group-members/.delivery/history.jsonl b/docs/iterations/064-leave-and-remove-group-members/.delivery/history.jsonl\nindex 92d6f9a..212be96 100644\n--- a/docs/iterations/064-leave-and-remove-group-members/.delivery/history.jsonl\n+++ b/docs/iterations/064-leave-and-remove-group-members/.delivery/history.jsonl\n@@ -5,3 +5,4 @@\n {\"kind\": \"worker_result\", \"packet_id\": \"001-50c18db-02\", \"recorded_at\": 1790064409, \"result\": \"ready_for_review\", \"task_id\": \"001\", \"todo_line\": \"- [ ] 001 Record the architecture decision before further implementation.\"}\n {\"candidate_origins\": [{\"base_sha\": \"db9620bd03bdf9b0db45f022c64594c8e6a34496\", \"head_sha\": \"12f075213f4b9f7d2ba2167ff300afd546d8cb47\", \"packet_id\": \"001-db9620b-01\", \"reason\": \"review_revise\", \"task_id\": \"001\", \"todo_line\": \"- [ ] 001 Record the architecture decision before further implementation.\"}], \"decision\": \"revise\", \"kind\": \"review\", \"packet_id\": \"001-50c18db-02\", \"reason\": \"The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas.\", \"recorded_at\": 1790064998, \"reviewed_head\": \"fe1908be088a3b4e5568e466e482474b74651b5e\", \"schema_version\": 1, \"task\": \"- [ ] 001 Record the architecture decision before further implementation.\", \"task_id\": \"001\", \"worker_result\": \"ready_for_review\"}\n {\"attempt\": \"revision\", \"baseline_head\": \"8319b25d483c15f44634c0f9994751db7804a3b7\", \"kind\": \"planner_guard\", \"recorded_at\": 1790066156, \"task_id\": \"001\", \"todo_line\": \"- [ ] 001 Record the architecture decision before further implementation.\"}\n+{\"kind\": \"worker_result\", \"packet_id\": \"001-8319b25-03\", \"recorded_at\": 1790067211, \"result\": \"ready_for_review\", \"task_id\": \"001\", \"todo_line\": \"- [ ] 001 Record the architecture decision before further implementation.\"}\n",
+        "summary": {
+          "files_changed": 10,
+          "additions": 1430,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-22T09:02:47.140168380Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "implement_next_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "revise_task",
+          "route_worker_result",
+          "validate_task",
+          "apply_task_verdict",
+          "before_delivery_planner",
+          "delivery_planner",
+          "guard_delivery_packet",
+          "revise_task",
+          "route_worker_result",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.resume_gate.current_node": "sync_task_list",
+          "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"Packet 001-8319b25-03 and its ready_for_review result match the first unchecked todo; ",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "response.delivery_planner": "Prepared revision packet `001-8319b25-03` for task 001, bound to checkpoint `8319b25d483c15f44634c0f9994751db7804a3b7`.\n\nThe packet directs a documentation-only ADR 0025 revision covering:\n\n- Safe disposition of legacy queued deliveries without authorization provenance.\n- Root-send-before-auto-follow ordering, preserving outside-group send-without-follow behavior.\n- Precise historic-follow reconciliation precedence.\n- Immutable multiple subscription grants and explicit unfollow semantics.\n- Unambiguous membership-wide versus conversation-scoped revocation events.\n\nUpdated artifacts:\n\n- [current-worker-packet.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/current-worker-packet.json)\n- [execution-state.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/execution-state.json)\n- [planner-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/planner-result.json)\n\nBoth unresolved candidate origins are preserved. All 25 todo obligations remain pending, with task 001 still first and unchanged. JSON parsing, whitespace checks, source-baseline consistency, coverage mapping, candidate provenance, and the repository’s non-mutating planner-contract validations passed.\n\nNo application, test, feature, ADR, plan, or todo file was changed. `dev check` was not run because this was planning-only work and the selected revision is documentation-only.",
           "thread.delivery_planner.current_node": "guard_delivery_packet",
@@ -9912,7 +10369,7 @@
           "response.implement_next_task": "Implemented packet `001-db9620b-01` with result `ready_for_review`.\n\nChanges:\n\n- Added accepted [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md:1).\n- Added its accepted entry to the [ADR index](/workspace/memba/docs/adr/README.md:31).\n- Wrote the required [worker result artifact](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1).\n- Left `todo.md` unchecked and unchanged.\n\nADR 0025 establishes:\n\n- `Memba.Membership.Club`, routed by `club_id`, as the serialized custom-group membership boundary.\n- Fresh caller-generated `group_membership_id` values with `CustomGroupMembershipStarted` and `CustomGroupMembershipEnded`.\n- Deterministic, append-only legacy relation reconciliation without inventing historical periods.\n- Everyone/Admin as derived system-group consequences without first-class group-membership identities.\n- `Memba.Messaging.MemberConversationSubscriptions`, routed by `person_id`, as the canonical subscription ledger.\n- Server-resolved provenance, durable prepared follow intents, order-independent revocation, and `GroupMembershipSubscriptionRevocationCompleted` receipts.\n- Explicit relationships to ADRs 0007, 0011, 0022, and 0024.\n\nFocused validation passed with exit status 0:\n\n- ADR/index `git diff --check`, plus no-index whitespace validation for the new ADR.\n- Resolution of every relative Markdown link.\n- Required architecture vocabulary and accepted/index uniqueness assertions.\n- Verification that application, acceptance, design, plan, and todo paths were unchanged.\n- Worker-result JSON parsing and required-field assertions.\n\n`dev check` was not run because this packet is documentation-only and explicitly excludes executable changes. The pre-existing `.fabro/.../__pycache__/` remains untouched.",
           "graph.max_node_visits": "80",
           "thread.wip_gate.current_node": "preflight_sandbox",
-          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas.\"}",
+          "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"Packet 001-8319b25-03 and its ready_for_review result match the first unchecked todo; the documentation validations report exit 0, so no rerun was needed and omitting dev check was correct. ADR 0025 still has correctness gaps: provider acceptance is currently only a projection update, so rebuild can turn an accepted delivery back into pending; define a replayable acceptance fact or equivalent rebuild-preservation protocol for legacy and provenance-aware deliveries. Historic reconciliation binds follows to memberships current at the fence without requiring proof that the follow belongs to the final uninterrupted legacy admission; require that temporal proof or mark the candidate unproved. The ADR also creates one reconciliation candidate per independent provenance but suppresses every candidate after the first because an effective grant then exists, contradicting its multi-grant survival guarantee; evaluate sibling candidates atomically or exclude grants from the same reconciliation batch from suppression. Finally, specify deterministic sort keys for revocation-time prepared-intent cancellations and grant-end facts.\"}",
           "internal.retry_count.all_tasks_done": 0,
           "internal.retry_count.todo_readable": 0,
           "thread.all_tasks_done.current_node": "before_delivery_planner",
@@ -9922,14 +10379,14 @@
           "thread.before_delivery_planner.current_node": "delivery_planner",
           "internal.retry_count.implement_next_task": 0,
           "internal.retry_count.wip_gate": 0,
-          "internal.thread_id": "revise_task",
-          "internal.fidelity": "summary:high",
+          "internal.thread_id": "route_worker_result",
+          "internal.fidelity": "truncate",
           "internal.retry_count.guard_delivery_packet": 0,
           "thread.validate_task.current_node": "apply_task_verdict",
           "internal.work_dir": "/workspace/memba",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "response.revise_task": "Packet `001-8319b25-03` is complete with result `ready_for_review`.\n\nThe accepted architecture in [ADR 0025](/workspace/memba/docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md:215) now closes all four review gaps:\n\n- `PrivateDeliveryAuthorizationCutoverFenceRecorded` fences a restartable legacy-delivery sweep. `LegacyPrivateEmailDeliveryMarkedIneligible` permanently blocks pending, startup-recovered, dispatching, and manually retryable private deliveries that lack creation-time provenance. Exact retries and restarts are idempotent; remove/re-add cannot revive them; provider-accepted deliveries remain untouched.\n- Manual follow prepares and activates immediately. Reply auto-follow prepares before sending and activates only after the correlated success. Root auto-follow commits `MessageSent` and its audience grant first, then resolves the exact captured sender authority. Outside-group senders receive `RootConversationSubscriptionSkipped`, while rejected roots leave no prepared follow.\n- Historic reconciliation now uses explicit precedence:\n\n  | State | Result |\n  | --- | --- |\n  | Prepared only or `send_rejected` | Historic grant may be authorized |\n  | Effective canonical grant | `superseded_by_canonical_grant` |\n  | Explicit unfollow | `suppressed_by_unfollow` |\n  | Exact relevant revocation | `suppressed_by_relevant_revocation` |\n  | Unrelated revocation | Continue normal evaluation |\n  | Unproved source/provenance | `unproved` |\n\n- Every successful intent has a deterministic immutable `subscription_authorization_id`. Same-intent retries are event-free; different intents create distinct grants; subscriptions remain effective while any grant survives. Unfollow closes all prior grants. Membership revocation atomically appends one membership-wide tombstone, ordered conversation-scoped provenance/grant consequences, and one completion receipt last.\n- Followed deliveries bind to one exact grant and its captured membership provenance. Another grant, a later follow, or re-addition cannot revive queued work associated with the old grant.\n\nOnly ADR 0025 was changed as packet content. The required result is recorded in [latest-worker-result.json](/workspace/memba/docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json:1). `todo.md` remains untouched.\n\nValidation passed with exit status 0:\n\n- ADR whitespace validation\n- Relative Markdown-link resolution\n- Required-contract text assertions\n- Worker scope validation\n- Worker-result JSON/schema and packet-identity validation\n\n`dev check` was not run because this packet explicitly prohibits full-suite commands for its documentation-only scope; the workflow’s later deterministic gate owns that run. The unrelated Fabro-generated `__pycache__` remains untouched.",
-          "last_stage": "revise_task",
+          "last_stage": "validate_task",
           "internal.retry_count.resume_gate": 0,
           "internal.retry_count.verify_source_head": 0,
           "thread.read_plan.current_node": "wip_gate",
@@ -9937,13 +10394,13 @@
           "output.validate_task": {
             "decision": "revise",
             "task": "- [ ] 001 Record the architecture decision before further implementation.",
-            "reason": "The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas."
+            "reason": "Packet 001-8319b25-03 and its ready_for_review result match the first unchecked todo; the documentation validations report exit 0, so no rerun was needed and omitting dev check was correct. ADR 0025 still has correctness gaps: provider acceptance is currently only a projection update, so rebuild can turn an accepted delivery back into pending; define a replayable acceptance fact or equivalent rebuild-preservation protocol for legacy and provenance-aware deliveries. Historic reconciliation binds follows to memberships current at the fence without requiring proof that the follow belongs to the final uninterrupted legacy admission; require that temporal proof or mark the candidate unproved. The ADR also creates one reconciliation candidate per independent provenance but suppresses every candidate after the first because an effective grant then exists, contradicting its multi-grant survival guarantee; evaluate sibling candidates atomically or exclude grants from the same reconciliation batch from suppression. Finally, specify deterministic sort keys for revocation-time prepared-intent cancellations and grant-end facts."
           },
           "graph.rankdir": "LR",
           "internal.retry_count.validate_task": 0,
           "thread.verify_source_head.current_node": "read_plan",
           "internal.retry_count.delivery_planner": 0,
-          "current_node": "route_worker_result",
+          "current_node": "validate_task",
           "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
           "internal.retry_count.revise_task": 0,
           "preferred_label": "review",
@@ -10019,14 +10476,14 @@
           "validate_task": {
             "status": "succeeded",
             "context_updates": {
-              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas.\"}",
+              "response.validate_task": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"Packet 001-8319b25-03 and its ready_for_review result match the first unchecked todo; the documentation validations report exit 0, so no rerun was needed and omitting dev check was correct. ADR 0025 still has correctness gaps: provider acceptance is currently only a projection update, so rebuild can turn an accepted delivery back into pending; define a replayable acceptance fact or equivalent rebuild-preservation protocol for legacy and provenance-aware deliveries. Historic reconciliation binds follows to memberships current at the fence without requiring proof that the follow belongs to the final uninterrupted legacy admission; require that temporal proof or mark the candidate unproved. The ADR also creates one reconciliation candidate per independent provenance but suppresses every candidate after the first because an effective grant then exists, contradicting its multi-grant survival guarantee; evaluate sibling candidates atomically or exclude grants from the same reconciliation batch from suppression. Finally, specify deterministic sort keys for revocation-time prepared-intent cancellations and grant-end facts.\"}",
+              "last_stage": "validate_task",
+              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"Packet 001-8319b25-03 and its ready_for_review result match the first unchecked todo; ",
               "output.validate_task": {
                 "decision": "revise",
                 "task": "- [ ] 001 Record the architecture decision before further implementation.",
-                "reason": "The packet and ready_for_review result match the first unchecked task, and the documentation-only validations report exit 0; dev check was correctly omitted. The revised ADR closes the previously identified creator admission, club-departure, uniqueness, revocation-receipt, cancellation, and fence gaps, but still leaves correctness holes: pending pre-cutover EmailDeliveryCreated facts lack exact authorization provenance and could be dispatched after remove/re-add; historic-follow reconciliation treats a merely prepared or send_rejected intent as superseding a valid historic follow; root auto-follow assumes conversation authority can be resolved before the root creates that authority and does not preserve the accepted outside-member send-without-follow path; and activation while already subscribed plus the per-conversation versus membership-wide revocation event payloads are unspecified. Revise ADR 0025 to define conservative disposition or exact reconciliation for legacy pending deliveries, suppress historic reconciliation only for genuinely superseding live decisions, specify separate root-send and conditional auto-follow ordering, and define stable grant/update semantics and unambiguous event schemas."
-              },
-              "last_response": "{\"decision\":\"revise\",\"task\":\"- [ ] 001 Record the architecture decision before further implementation.\",\"reason\":\"The packet and ready_for_review result match the first unchecked task, and the documen",
-              "last_stage": "validate_task"
+                "reason": "Packet 001-8319b25-03 and its ready_for_review result match the first unchecked todo; the documentation validations report exit 0, so no rerun was needed and omitting dev check was correct. ADR 0025 still has correctness gaps: provider acceptance is currently only a projection update, so rebuild can turn an accepted delivery back into pending; define a replayable acceptance fact or equivalent rebuild-preservation protocol for legacy and provenance-aware deliveries. Historic reconciliation binds follows to memberships current at the fence without requiring proof that the follow belongs to the final uninterrupted legacy admission; require that temporal proof or mark the candidate unproved. The ADR also creates one reconciliation candidate per independent provenance but suppresses every candidate after the first because an effective grant then exists, contradicting its multi-grant survival guarantee; evaluate sibling candidates atomically or exclude grants from the same reconciliation batch from suppression. Finally, specify deterministic sort keys for revocation-time prepared-intent cancellations and grant-end facts."
+              }
             },
             "notes": "Stage completed: validate_task",
             "usage": {
@@ -10037,10 +10494,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 369238,
-                    "output_tokens": 2978,
-                    "reasoning_tokens": 2870,
-                    "cache_read_tokens": 0,
+                    "input_tokens": 446460,
+                    "output_tokens": 3166,
+                    "reasoning_tokens": 5515,
+                    "cache_read_tokens": 40064,
                     "cache_write_tokens": 0
                   }
                 },
@@ -10048,13 +10505,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 2021630
+              "total_usd_micros": 2512762
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 209906,
-              "tool_time_ms": 369988,
-              "active_time_ms": 579894
+              "inference_time_ms": 303581,
+              "tool_time_ms": 247420,
+              "active_time_ms": 551001
             }
           },
           "route_worker_result": {
@@ -10280,7 +10737,7 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "apply_task_verdict",
         "node_visits": {
           "revise_task": 2,
           "verify_source_head": 1,
@@ -10292,7 +10749,7 @@
           "apply_task_verdict": 2,
           "start": 1,
           "route_worker_result": 3,
-          "validate_task": 2,
+          "validate_task": 3,
           "guard_delivery_packet": 3,
           "delivery_planner": 3,
           "implement_next_task": 1,
@@ -10382,95 +10839,45 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "read_plan@1": {
-      "first_event_seq": 35,
+    "route_worker_result@2": {
+      "first_event_seq": 1815,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Script completed: PLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
         "failure_reason": null,
-        "timestamp": "2026-09-22T07:03:16.989503678Z"
+        "timestamp": "2026-09-22T08:06:49.643901308Z"
       },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
-        "script": "PLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "language": "shell"
-      },
-      "script_timing": {
-        "output": "blob://sha256/24ba31ae39e5718603694f376a4793630d9b9d12646690dd69cd6bd0dc1fc23f",
-        "exit_code": 0,
-        "duration_ms": 156,
-        "termination": "exited",
-        "output_bytes": 13371,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 13371,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T07:03:16.829079001Z",
-      "handler": "command",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 159,
-        "inference_time_ms": 0,
-        "tool_time_ms": 156,
-        "active_time_ms": 156
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "before_delivery_planner@2": {
-      "first_event_seq": 1336,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:44:00.106833909Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
         "language": "shell",
         "timeout_ms": 120000
       },
       "script_timing": {
-        "output": "blob://sha256/1763ee7aa9c5dc9fd7281ce72d49214454696e5ca134a022c9a0ec1e332dba42",
+        "output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
         "exit_code": 0,
-        "duration_ms": 157,
+        "duration_ms": 146,
         "termination": "exited",
-        "output_bytes": 180,
+        "output_bytes": 35,
         "live_streaming": true
       },
       "parallel_results": null,
       "output": null,
-      "output_bytes": 180,
+      "output_bytes": 35,
       "live_streaming": true,
       "termination": "exited",
-      "started_at": "2026-09-22T07:43:59.945089875Z",
+      "started_at": "2026-09-22T08:06:49.492411631Z",
       "handler": "command",
       "graph_visit": 2,
       "timing": {
-        "wall_time_ms": 160,
+        "wall_time_ms": 150,
         "inference_time_ms": 0,
-        "tool_time_ms": 157,
-        "active_time_ms": 157
+        "tool_time_ms": 146,
+        "active_time_ms": 146
       },
       "usage": {
         "input_tokens": 0,
@@ -10522,57 +10929,6 @@
         "inference_time_ms": 0,
         "tool_time_ms": 93993,
         "active_time_ms": 93993
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "route_worker_result@2": {
-      "first_event_seq": 1815,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T08:06:49.643901308Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
-        "exit_code": 0,
-        "duration_ms": 146,
-        "termination": "exited",
-        "output_bytes": 35,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 35,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T08:06:49.492411631Z",
-      "handler": "command",
-      "graph_visit": 2,
-      "timing": {
-        "wall_time_ms": 150,
-        "inference_time_ms": 0,
-        "tool_time_ms": 146,
-        "active_time_ms": 146
       },
       "usage": {
         "input_tokens": 0,
@@ -10806,107 +11162,203 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "apply_task_verdict@1": {
-      "first_event_seq": 1326,
+    "validate_task@3": {
+      "first_event_seq": 3032,
       "prompt": null,
       "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:43:55.992215205Z"
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
       },
-      "provider_used": null,
       "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/6f53490e14b0123b1cc7c906ef78862965771c997bb3c0af81ff0a751895c8c0",
-        "exit_code": 0,
-        "duration_ms": 155,
-        "termination": "exited",
-        "output_bytes": 1272,
-        "live_streaming": true
-      },
+      "script_invocation": null,
+      "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "output_bytes": 1272,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T07:43:55.832558580Z",
-      "handler": "command",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 159,
-        "inference_time_ms": 0,
-        "tool_time_ms": 155,
-        "active_time_ms": 155
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "before_delivery_planner@3": {
-      "first_event_seq": 2118,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T08:16:42.041130476Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/95dea22a974087b1fd4fa1914ae85ae9eccbc27aef5a57bd7a9ae774bafd3b71",
-        "exit_code": 0,
-        "duration_ms": 150,
-        "termination": "exited",
-        "output_bytes": 180,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 180,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T08:16:41.886326507Z",
-      "handler": "command",
+      "started_at": "2026-09-22T08:53:35.784167700Z",
+      "handler": "agent",
       "graph_visit": 3,
-      "timing": {
-        "wall_time_ms": 154,
-        "inference_time_ms": 0,
-        "tool_time_ms": 150,
-        "active_time_ms": 150
-      },
+      "live_inference_ms": 289068,
+      "live_tool_ms": 247419,
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "input_tokens": 901044,
+        "output_tokens": 6794,
+        "total_tokens": 1041188,
+        "reasoning_tokens": 13030,
+        "cache_read_tokens": 120320,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5160100
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:47ee4724-2ea0-42f1-a173-f139e3ca65b9",
+        "items": [
+          {
+            "id": "f5d32d96006c7a4d",
+            "status": "completed",
+            "order": 0,
+            "subject": "Verify plan, todo ordering, packet identity, and worker-result provenance"
+          },
+          {
+            "id": "5e2fdc267fbef40b",
+            "status": "completed",
+            "order": 1,
+            "subject": "Inspect checkpoint history and the full candidate implementation against plan and repository rules"
+          },
+          {
+            "id": "57f3084bce1375b0",
+            "status": "completed",
+            "order": 2,
+            "subject": "Evaluate test evidence and return the JSON verdict"
+          }
+        ]
+      },
+      "subagents": [
+        {
+          "agent_id": "afe5159b",
+          "depth": 1,
+          "task": "Independently review candidate task 001 for iteration 064 without editing. Read plan/todo, nested .delivery packet/result/latest review, ADR 0025 current full content, relevant existing ADRs/code as needed, and checkpoint history. Assess whether the ADR fully closes all prior review gaps and coherently satisfies packet/plan. Return concise accept/revise/blocked recommendation with exact technical gaps. Do not run full tests or edit files.",
+          "status": {
+            "kind": "completed",
+            "success": true,
+            "turns_used": 28
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 73229,
+        "usage_percent": 26.922426470588235,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-22T09:02:32.627627617Z",
+        "event_seq": 3327,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2662,
+            "usage_percent": 0.9786764705882353
+          },
+          {
+            "category": "tools",
+            "tokens": 810,
+            "usage_percent": 0.2977941176470588
+          },
+          {
+            "category": "memory",
+            "tokens": 366,
+            "usage_percent": 0.13455882352941176
+          },
+          {
+            "category": "conversation",
+            "tokens": 69385,
+            "usage_percent": 25.509191176470587
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "inference": {
+        "session_id": "47ee4724-2ea0-42f1-a173-f139e3ca65b9",
+        "started_at": "2026-09-22T09:02:32.629890083Z",
+        "requested_model": {
+          "provider": "openai",
+          "model_id": "gpt-5.6-sol"
+        },
+        "first_output_at": "2026-09-22T09:02:39.795588585Z",
+        "first_output_kind": "text",
+        "retries": 0
       },
       "agent_control": "running",
-      "state": "succeeded"
+      "state": "running"
     },
     "delivery_planner@2": {
       "first_event_seq": 1346,
@@ -11098,108 +11550,6 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "guard_delivery_packet@3": {
-      "first_event_seq": 2677,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T08:35:56.674791514Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733",
-        "exit_code": 0,
-        "duration_ms": 268,
-        "termination": "exited",
-        "output_bytes": 35,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 35,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T08:35:56.402619926Z",
-      "handler": "command",
-      "graph_visit": 3,
-      "timing": {
-        "wall_time_ms": 271,
-        "inference_time_ms": 0,
-        "tool_time_ms": 268,
-        "active_time_ms": 268
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "guard_delivery_packet@1": {
-      "first_event_seq": 636,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:17:20.247459643Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/34e22720767b2ce9f30d1c2e660493a4619417a2668de3a0e22a172ba57c9424",
-        "exit_code": 0,
-        "duration_ms": 151,
-        "termination": "exited",
-        "output_bytes": 38,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 38,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T07:17:20.088990656Z",
-      "handler": "command",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 157,
-        "inference_time_ms": 0,
-        "tool_time_ms": 151,
-        "active_time_ms": 151
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
     "resume_gate@1": {
       "first_event_seq": 65,
       "prompt": null,
@@ -11239,57 +11589,6 @@
         "inference_time_ms": 0,
         "tool_time_ms": 154,
         "active_time_ms": 154
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "guard_delivery_packet@2": {
-      "first_event_seq": 1568,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:51:27.500132993Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733",
-        "exit_code": 0,
-        "duration_ms": 147,
-        "termination": "exited",
-        "output_bytes": 35,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 35,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T07:51:27.347052365Z",
-      "handler": "command",
-      "graph_visit": 2,
-      "timing": {
-        "wall_time_ms": 150,
-        "inference_time_ms": 0,
-        "tool_time_ms": 147,
-        "active_time_ms": 147
       },
       "usage": {
         "input_tokens": 0,
@@ -11353,196 +11652,6 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "revise_task@2": {
-      "first_event_seq": 2687,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: revise_task",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T08:53:27.337913447Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.6-sol",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-09-22T08:36:00.893919753Z",
-      "handler": "agent",
-      "graph_visit": 2,
-      "timing": {
-        "wall_time_ms": 1046442,
-        "inference_time_ms": 1041787,
-        "tool_time_ms": 4262,
-        "active_time_ms": 1046049
-      },
-      "usage": {
-        "input_tokens": 1423372,
-        "output_tokens": 18096,
-        "total_tokens": 2456637,
-        "reasoning_tokens": 11777,
-        "cache_read_tokens": 1003392,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 8514746
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.6-sol"
-      },
-      "todos": {
-        "kind": "openai_plan",
-        "list_id": "openai_plan:58bd4f8b-cab5-4a9e-abe2-2bf753937e2e",
-        "items": [
-          {
-            "id": "420f0dbc0640fc79",
-            "status": "completed",
-            "order": 0,
-            "subject": "Inspect repository status and read the required packet, iteration, architecture, and project guidance"
-          },
-          {
-            "id": "68d97f4915013f33",
-            "status": "completed",
-            "order": 1,
-            "subject": "Implement the packet behavior test-first without changing todo.md"
-          },
-          {
-            "id": "948b1d8e5eab9f34",
-            "status": "completed",
-            "order": 2,
-            "subject": "Run the packet’s focused validation and resolve failures"
-          },
-          {
-            "id": "d323e8fc0614826b",
-            "status": "completed",
-            "order": 3,
-            "subject": "Write and verify .delivery/latest-worker-result.json"
-          }
-        ]
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": true
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running or completed subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell_command",
-          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": true
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": true
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.6-sol",
-        "context_window_tokens": 272000,
-        "input_tokens": 93561,
-        "usage_percent": 34.397426470588236,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-09-22T08:53:27.333057339Z",
-        "event_seq": 3012,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 2085,
-            "usage_percent": 0.7665441176470589
-          },
-          {
-            "category": "tools",
-            "tokens": 634,
-            "usage_percent": 0.23308823529411765
-          },
-          {
-            "category": "memory",
-            "tokens": 287,
-            "usage_percent": 0.10551470588235294
-          },
-          {
-            "category": "conversation",
-            "tokens": 90550,
-            "usage_percent": 33.29044117647059
-          },
-          {
-            "category": "other",
-            "tokens": 5,
-            "usage_percent": 0.001838235294117647
-          }
-        ],
-        "warnings": []
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
     "apply_task_verdict@2": {
       "first_event_seq": 2108,
       "prompt": null,
@@ -11594,42 +11703,6 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "start@1": {
-      "first_event_seq": 21,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:03:12.470434464Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-09-22T07:03:12.468913696Z",
-      "handler": "start",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 0,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
     "wip_gate@1": {
       "first_event_seq": 45,
       "prompt": null,
@@ -11669,57 +11742,6 @@
         "inference_time_ms": 0,
         "tool_time_ms": 1719,
         "active_time_ms": 1719
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "before_delivery_planner@1": {
-      "first_event_seq": 105,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:05:20.922917550Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/a8b9ca7f1e238428c8e7054f04b57312fa6778c74d72ec2ad627ce1d05f4ee48",
-        "exit_code": 0,
-        "duration_ms": 147,
-        "termination": "exited",
-        "output_bytes": 180,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 180,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T07:05:20.770437775Z",
-      "handler": "command",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 151,
-        "inference_time_ms": 0,
-        "tool_time_ms": 147,
-        "active_time_ms": 147
       },
       "usage": {
         "input_tokens": 0,
@@ -11932,108 +11954,6 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "verify_source_head@1": {
-      "first_event_seq": 25,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '5b7d85d4fc7a87dffe06e68bb2e10794ee68ef11'",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:03:12.678267847Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '5b7d85d4fc7a87dffe06e68bb2e10794ee68ef11'",
-        "command": "exec 2>&1\nbash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '5b7d85d4fc7a87dffe06e68bb2e10794ee68ef11'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/e723767adccb047e6708bf8305585e2e5f0d42c26f6ca3e855417c534b5df032",
-        "exit_code": 0,
-        "duration_ms": 200,
-        "termination": "exited",
-        "output_bytes": 231,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 231,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T07:03:12.472503219Z",
-      "handler": "command",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 205,
-        "inference_time_ms": 0,
-        "tool_time_ms": 200,
-        "active_time_ms": 200
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "todo_readable@1": {
-      "first_event_seq": 85,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T07:05:13.039501188Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/9f3b070bea16392137c87415aead76ddc156e383d5ca054526dfc7ae92e511f8",
-        "exit_code": 0,
-        "duration_ms": 151,
-        "termination": "exited",
-        "output_bytes": 94,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 94,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-09-22T07:05:12.883510592Z",
-      "handler": "command",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 155,
-        "inference_time_ms": 0,
-        "tool_time_ms": 151,
-        "active_time_ms": 151
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
     "revise_task@1": {
       "first_event_seq": 1578,
       "prompt": null,
@@ -12217,6 +12137,278 @@
             "category": "other",
             "tokens": 5,
             "usage_percent": 0.001838235294117647
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "verify_source_head@1": {
+      "first_event_seq": 25,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '5b7d85d4fc7a87dffe06e68bb2e10794ee68ef11'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:03:12.678267847Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '5b7d85d4fc7a87dffe06e68bb2e10794ee68ef11'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '5b7d85d4fc7a87dffe06e68bb2e10794ee68ef11'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/e723767adccb047e6708bf8305585e2e5f0d42c26f6ca3e855417c534b5df032",
+        "exit_code": 0,
+        "duration_ms": 200,
+        "termination": "exited",
+        "output_bytes": 231,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 231,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:03:12.472503219Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 205,
+        "inference_time_ms": 0,
+        "tool_time_ms": 200,
+        "active_time_ms": 200
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "todo_readable@1": {
+      "first_event_seq": 85,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:05:13.039501188Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/9f3b070bea16392137c87415aead76ddc156e383d5ca054526dfc7ae92e511f8",
+        "exit_code": 0,
+        "duration_ms": 151,
+        "termination": "exited",
+        "output_bytes": 94,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 94,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:05:12.883510592Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 155,
+        "inference_time_ms": 0,
+        "tool_time_ms": 151,
+        "active_time_ms": 151
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "validate_task@2": {
+      "first_event_seq": 1825,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T08:16:33.998812412Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-22T08:06:53.756130158Z",
+      "handler": "agent",
+      "graph_visit": 2,
+      "timing": {
+        "wall_time_ms": 580240,
+        "inference_time_ms": 209906,
+        "tool_time_ms": 369988,
+        "active_time_ms": 579894
+      },
+      "usage": {
+        "input_tokens": 369238,
+        "output_tokens": 2978,
+        "total_tokens": 375086,
+        "reasoning_tokens": 2870,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 2021630
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "subagents": [
+        {
+          "agent_id": "10dc319d",
+          "depth": 1,
+          "task": "Independently review candidate task 001 for iteration 064 from live repo. Do not edit or run broad tests. Read plan/todo/current packet/latest result/latest review and complete ADR 0025 plus relevant existing ADRs/code as needed. Focus on whether revised ADR closes prior gaps and has contradictions or missing plan constraints. Return recommended accept/revise/blocked with concrete evidence.",
+          "status": {
+            "kind": "closed"
+          }
+        }
+      ],
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 57788,
+        "usage_percent": 21.245588235294118,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-22T08:16:33.995293624Z",
+        "event_seq": 2097,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2684,
+            "usage_percent": 0.986764705882353
+          },
+          {
+            "category": "tools",
+            "tokens": 816,
+            "usage_percent": 0.3
+          },
+          {
+            "category": "memory",
+            "tokens": 369,
+            "usage_percent": 0.13566176470588234
+          },
+          {
+            "category": "conversation",
+            "tokens": 53913,
+            "usage_percent": 19.82095588235294
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
@@ -12414,181 +12606,16 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "validate_task@2": {
-      "first_event_seq": 1825,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: validate_task",
-        "failure_reason": null,
-        "timestamp": "2026-09-22T08:16:33.998812412Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.6-sol",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-09-22T08:06:53.756130158Z",
-      "handler": "agent",
-      "graph_visit": 2,
-      "timing": {
-        "wall_time_ms": 580240,
-        "inference_time_ms": 209906,
-        "tool_time_ms": 369988,
-        "active_time_ms": 579894
-      },
-      "usage": {
-        "input_tokens": 369238,
-        "output_tokens": 2978,
-        "total_tokens": 375086,
-        "reasoning_tokens": 2870,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 2021630
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.6-sol"
-      },
-      "subagents": [
-        {
-          "agent_id": "10dc319d",
-          "depth": 1,
-          "task": "Independently review candidate task 001 for iteration 064 from live repo. Do not edit or run broad tests. Read plan/todo/current packet/latest result/latest review and complete ADR 0025 plus relevant existing ADRs/code as needed. Focus on whether revised ADR closes prior gaps and has contradictions or missing plan constraints. Return recommended accept/revise/blocked with concrete evidence.",
-          "status": {
-            "kind": "closed"
-          }
-        }
-      ],
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running or completed subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell_command",
-          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": true
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": true
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": true
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": true
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.6-sol",
-        "context_window_tokens": 272000,
-        "input_tokens": 57788,
-        "usage_percent": 21.245588235294118,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-09-22T08:16:33.995293624Z",
-        "event_seq": 2097,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 2684,
-            "usage_percent": 0.986764705882353
-          },
-          {
-            "category": "tools",
-            "tokens": 816,
-            "usage_percent": 0.3
-          },
-          {
-            "category": "memory",
-            "tokens": 369,
-            "usage_percent": 0.13566176470588234
-          },
-          {
-            "category": "conversation",
-            "tokens": 53913,
-            "usage_percent": 19.82095588235294
-          },
-          {
-            "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
-          }
-        ],
-        "warnings": []
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
     "route_worker_result@3": {
       "first_event_seq": 3022,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T08:53:31.639902009Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -12597,12 +12624,28 @@
         "language": "shell",
         "timeout_ms": 120000
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
+        "exit_code": 0,
+        "duration_ms": 155,
+        "termination": "exited",
+        "output_bytes": 35,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 35,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-09-22T08:53:31.479753420Z",
       "handler": "command",
       "graph_visit": 3,
+      "timing": {
+        "wall_time_ms": 158,
+        "inference_time_ms": 0,
+        "tool_time_ms": 155,
+        "active_time_ms": 155
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -12612,7 +12655,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "delivery_planner@3": {
       "first_event_seq": 2128,
@@ -12810,6 +12853,639 @@
           }
         ],
         "warnings": []
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "read_plan@1": {
+      "first_event_seq": 35,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: PLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:03:16.989503678Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "PLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/064-leave-and-remove-group-members/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/24ba31ae39e5718603694f376a4793630d9b9d12646690dd69cd6bd0dc1fc23f",
+        "exit_code": 0,
+        "duration_ms": 156,
+        "termination": "exited",
+        "output_bytes": 13371,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 13371,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:03:16.829079001Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 159,
+        "inference_time_ms": 0,
+        "tool_time_ms": 156,
+        "active_time_ms": 156
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "before_delivery_planner@2": {
+      "first_event_seq": 1336,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:44:00.106833909Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/1763ee7aa9c5dc9fd7281ce72d49214454696e5ca134a022c9a0ec1e332dba42",
+        "exit_code": 0,
+        "duration_ms": 157,
+        "termination": "exited",
+        "output_bytes": 180,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 180,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:43:59.945089875Z",
+      "handler": "command",
+      "graph_visit": 2,
+      "timing": {
+        "wall_time_ms": 160,
+        "inference_time_ms": 0,
+        "tool_time_ms": 157,
+        "active_time_ms": 157
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "before_delivery_planner@3": {
+      "first_event_seq": 2118,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T08:16:42.041130476Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/95dea22a974087b1fd4fa1914ae85ae9eccbc27aef5a57bd7a9ae774bafd3b71",
+        "exit_code": 0,
+        "duration_ms": 150,
+        "termination": "exited",
+        "output_bytes": 180,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 180,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T08:16:41.886326507Z",
+      "handler": "command",
+      "graph_visit": 3,
+      "timing": {
+        "wall_time_ms": 154,
+        "inference_time_ms": 0,
+        "tool_time_ms": 150,
+        "active_time_ms": 150
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "apply_task_verdict@1": {
+      "first_event_seq": 1326,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:43:55.992215205Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/6f53490e14b0123b1cc7c906ef78862965771c997bb3c0af81ff0a751895c8c0",
+        "exit_code": 0,
+        "duration_ms": 155,
+        "termination": "exited",
+        "output_bytes": 1272,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 1272,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:43:55.832558580Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 159,
+        "inference_time_ms": 0,
+        "tool_time_ms": 155,
+        "active_time_ms": 155
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "guard_delivery_packet@3": {
+      "first_event_seq": 2677,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T08:35:56.674791514Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733",
+        "exit_code": 0,
+        "duration_ms": 268,
+        "termination": "exited",
+        "output_bytes": 35,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 35,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T08:35:56.402619926Z",
+      "handler": "command",
+      "graph_visit": 3,
+      "timing": {
+        "wall_time_ms": 271,
+        "inference_time_ms": 0,
+        "tool_time_ms": 268,
+        "active_time_ms": 268
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "guard_delivery_packet@1": {
+      "first_event_seq": 636,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:17:20.247459643Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/34e22720767b2ce9f30d1c2e660493a4619417a2668de3a0e22a172ba57c9424",
+        "exit_code": 0,
+        "duration_ms": 151,
+        "termination": "exited",
+        "output_bytes": 38,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 38,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:17:20.088990656Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 157,
+        "inference_time_ms": 0,
+        "tool_time_ms": 151,
+        "active_time_ms": 151
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "guard_delivery_packet@2": {
+      "first_event_seq": 1568,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:51:27.500132993Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/4e2f7b12ba58c7d4d205338a355a7f0457e5d3c799c21e8f5711ae53854e8733",
+        "exit_code": 0,
+        "duration_ms": 147,
+        "termination": "exited",
+        "output_bytes": 35,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 35,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:51:27.347052365Z",
+      "handler": "command",
+      "graph_visit": 2,
+      "timing": {
+        "wall_time_ms": 150,
+        "inference_time_ms": 0,
+        "tool_time_ms": 147,
+        "active_time_ms": 147
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "revise_task@2": {
+      "first_event_seq": 2687,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: revise_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T08:53:27.337913447Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-22T08:36:00.893919753Z",
+      "handler": "agent",
+      "graph_visit": 2,
+      "timing": {
+        "wall_time_ms": 1046442,
+        "inference_time_ms": 1041787,
+        "tool_time_ms": 4262,
+        "active_time_ms": 1046049
+      },
+      "usage": {
+        "input_tokens": 1423372,
+        "output_tokens": 18096,
+        "total_tokens": 2456637,
+        "reasoning_tokens": 11777,
+        "cache_read_tokens": 1003392,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 8514746
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:58bd4f8b-cab5-4a9e-abe2-2bf753937e2e",
+        "items": [
+          {
+            "id": "420f0dbc0640fc79",
+            "status": "completed",
+            "order": 0,
+            "subject": "Inspect repository status and read the required packet, iteration, architecture, and project guidance"
+          },
+          {
+            "id": "68d97f4915013f33",
+            "status": "completed",
+            "order": 1,
+            "subject": "Implement the packet behavior test-first without changing todo.md"
+          },
+          {
+            "id": "948b1d8e5eab9f34",
+            "status": "completed",
+            "order": 2,
+            "subject": "Run the packet’s focused validation and resolve failures"
+          },
+          {
+            "id": "d323e8fc0614826b",
+            "status": "completed",
+            "order": 3,
+            "subject": "Write and verify .delivery/latest-worker-result.json"
+          }
+        ]
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell_command",
+          "description": "Runs a shell command and returns its output.\n- Always set the `workdir` param rather than using `cd`.\n- Reading and searching files goes through this tool: prefer `rg` and `rg --files`, which are much faster than alternatives like `grep` and `find`.\n- Use `apply_patch` to edit files, not `cat`, heredocs, or other shell write tricks.\n- `timeout_ms` defaults to 10000 ms and is capped at 600000 ms. A command that timed out once will time out again, so raise the timeout rather than retrying.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "context_window_tokens": 272000,
+        "input_tokens": 93561,
+        "usage_percent": 34.397426470588236,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-22T08:53:27.333057339Z",
+        "event_seq": 3012,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2085,
+            "usage_percent": 0.7665441176470589
+          },
+          {
+            "category": "tools",
+            "tokens": 634,
+            "usage_percent": 0.23308823529411765
+          },
+          {
+            "category": "memory",
+            "tokens": 287,
+            "usage_percent": 0.10551470588235294
+          },
+          {
+            "category": "conversation",
+            "tokens": 90550,
+            "usage_percent": 33.29044117647059
+          },
+          {
+            "category": "other",
+            "tokens": 5,
+            "usage_percent": 0.001838235294117647
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "start@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:03:12.470434464Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-22T07:03:12.468913696Z",
+      "handler": "start",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "before_delivery_planner@1": {
+      "first_event_seq": 105,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-22T07:05:20.922917550Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "command": "exec 2>&1\npython3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner 'docs/iterations/064-leave-and-remove-group-members/plan.md'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/a8b9ca7f1e238428c8e7054f04b57312fa6778c74d72ec2ad627ce1d05f4ee48",
+        "exit_code": 0,
+        "duration_ms": 147,
+        "termination": "exited",
+        "output_bytes": 180,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 180,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-22T07:05:20.770437775Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 151,
+        "inference_time_ms": 0,
+        "tool_time_ms": 147,
+        "active_time_ms": 147
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "agent_control": "running",
       "state": "succeeded"
