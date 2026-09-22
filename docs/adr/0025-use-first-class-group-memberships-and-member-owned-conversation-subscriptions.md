@@ -82,30 +82,74 @@ preflights:
 
 The public write vocabulary is:
 
+- `CreateCustomGroup`, extended with caller-generated
+  `creator_group_membership_id`;
 - `AddCustomGroupMember`, carrying `club_id`, `group_id`,
   caller-generated `group_membership_id`, target `club_membership_id`,
   `person_id`, and `actor_person_id`;
 - `RemoveCustomGroupMember`, carrying `club_id`, `group_id`, the exact
-  `group_membership_id`, target `club_membership_id`, `person_id`, and
-  `actor_person_id`;
-- `CustomGroupMembershipStarted`, carrying those unambiguous identities and
-  the admitting actor; and
-- `CustomGroupMembershipEnded`, carrying those identities, the removing actor,
-  and an explicit end reason.
+  `group_membership_id`, target `club_membership_id`, `person_id`,
+  `actor_person_id`, and caller-generated `removal_operation_id`;
+- `RemoveClubMember`, extended with caller-generated
+  `removal_operation_id`;
+- `CustomGroupMembershipStarted`, carrying those unambiguous identities, the
+  admitting actor, and admission source `group_creation`,
+  `explicit_admission`, or `legacy_reconciliation`; and
+- `CustomGroupMembershipEnded`, carrying those identities,
+  `removal_operation_id`, the removing actor when there is one, and exactly one
+  of `self_left`, `removed_by_group_member`, `removed_by_club_admin`, or
+  `club_membership_ended`.
 
-`AddCustomGroupMember` follows the caller-generated typed UUID rule from
-[ADR 0011](0011-use-caller-generated-uuid-aggregate-identities.md). Its caller
-generates `group_membership_id` before dispatch. An exact retry with an already
-started identifier emits no event. Reusing that identifier for different
-club, group, club-membership, or person data is rejected. A new admission after
-an end must supply a new identifier.
+All first-class admission paths follow the caller-generated typed UUID rule
+from [ADR 0011](0011-use-caller-generated-uuid-aggregate-identities.md).
+`CreateCustomGroup` receives `creator_group_membership_id` from its application
+service at the same time as `group_id`; both identifiers are retained unchanged
+across dispatch retries. Its one Club decision appends `GroupCreated`,
+`GroupEmailSlugAssigned`, and `CustomGroupMembershipStarted` for the creator.
+The start event identifies the creator's current `club_membership_id` and uses
+admission source `group_creation`. An exact creation retry whose group,
+normalized name, creator, allocated slug, and creator group-membership identity
+all match emits no events. Reusing either identifier with different creation
+data, including a different creator group-membership identity, is a conflict.
+The creator is therefore never admitted through a later best-effort policy.
+
+The Club aggregate enforces at most one current custom-group membership for
+each `{group_id, club_membership_id}` pair. `AddCustomGroupMember` generates
+its `group_membership_id` before dispatch. An exact retry for the same current
+identity and the same club, group, club membership, person, and admitting actor
+emits no event. Reusing that identity for different data is rejected. If the
+pair already has a different current `group_membership_id`, a command carrying
+a fresh identifier is rejected as a duplicate current admission; it does not
+create a parallel membership and is not treated as a retry. After the current
+membership ends, a genuine re-admission must carry a fresh identifier; every
+ended identifier remains reserved permanently.
 
 `RemoveCustomGroupMember` selects the first-class relationship by
-`group_membership_id`, not merely by person and group. An exact retry after that
-relationship ended emits no event. A delayed retry therefore cannot end a
-newer admission for the same person. A fresh removal decision validates the
-actor and target against current aggregate state and emits
-`CustomGroupMembershipEnded` only for the selected relationship.
+`group_membership_id`, not merely by person and group. The aggregate derives
+the end reason deterministically: self-removal is `self_left`; otherwise a
+current group member takes precedence as `removed_by_group_member`; an actor
+who is not a current group member but is a club Admin produces
+`removed_by_club_admin`. An exact retry with the same
+`removal_operation_id`, actor, target, and already-ended identity emits no
+event. Reusing the operation identifier for different data is rejected. A
+delayed retry with an old group-membership identity therefore cannot end a
+newer admission.
+
+`RemoveClubMember` is the other termination path. Extend it with a
+caller-generated `removal_operation_id`. After enforcing ADR 0024's
+final-member and Admin-continuity invariants, one Club decision appends one
+`CustomGroupMembershipEnded` with reason `club_membership_ended` for every
+current custom-group membership owned by the departing `club_membership_id`,
+followed by `ClubMemberRemoved`. The events are ordered by
+`group_membership_id`, and `ClubMemberRemoved` records that same operation
+identifier plus the complete sorted `ended_group_membership_ids` outcome.
+System-group consequences remain downstream and are not included in that set.
+An exact retry of the recorded club-removal operation emits no events and
+returns the previously recorded outcome through Membership's public
+operation-status API; a different operation against the ended club membership
+is not a second removal. Thus club departure ends zero, one, or many exact
+custom-group memberships atomically without weakening the existing club or
+role invariants.
 
 Membership's public query contract remains authoritative for current group
 participation. Its current-state projection exposes both
@@ -123,21 +167,24 @@ only the first-class events above; the old event family remains available for
 the system-group consequences described below.
 
 Run a bounded, restartable reconciliation for every custom-group relation that
-full legacy replay proves is active at cutover. Dispatch
-`ReconcileLegacyCustomGroupMembership` to the Club stream with:
+full legacy replay proves is active at the membership reconciliation fence.
+Dispatch `ReconcileLegacyCustomGroupMembership` to the Club stream with:
 
 - `group_membership_id` deterministically derived from
   `{club_id, group_id, club_membership_id}`;
 - the explicit `club_id`, `group_id`, `club_membership_id`, and `person_id`;
   and
-- a deterministic reconciliation identifier equal to that source relation.
+- a deterministic reconciliation identifier equal to that source relation,
+  the fence identifier, and the source Club stream version observed during
+  enumeration.
 
-The command emits `LegacyCustomGroupMembershipReconciled`. That event means
-only “this relation was provably current at reconciliation”; it does not claim
-an admission date or synthesize earlier membership periods. The aggregate
-records the deterministic identifier, so a retry or restart emits no duplicate
-event. A conflicting deterministic identity is an error rather than an
-overwrite.
+The command emits `LegacyCustomGroupMembershipReconciled` and the corresponding
+`CustomGroupMembershipStarted` with source `legacy_reconciliation` in one
+append. The reconciliation fact means only “this relation was provably current
+at the named fence”; it does not claim an admission date or synthesize earlier
+membership periods. The aggregate records the deterministic identifier, so a
+retry or restart emits no duplicate event. A conflicting deterministic
+identity is an error rather than an overwrite.
 
 Inactive legacy relations produce no first-class membership. In particular,
 reconciliation must not infer an admission/removal pair from incomplete
@@ -187,6 +234,8 @@ The canonical command and event vocabulary is:
   `ConversationSubscriptionPrepared`;
 - `ActivateConversationSubscription` /
   `ConversationSubscriptionAuthorized`;
+- `CancelConversationSubscriptionIntent` /
+  `ConversationSubscriptionIntentCancelled`;
 - `EndConversationSubscription` /
   `ConversationSubscriptionEnded`;
 - `RevokeGroupMembershipSubscriptions` /
@@ -197,9 +246,13 @@ The canonical command and event vocabulary is:
 Canonical subscription facts carry `person_id`, `club_id`, `conversation_id`,
 `subscription_id`, `subscription_intent_id`, source (`manual`, `root`, `reply`,
 or `legacy_reconciliation`), and the complete set of
-`authorizing_group_membership_ids` resolved for custom groups. They do not use
-the ambiguous field `membership_id`. System-group authorization is represented
-separately by `club_membership_id` and an explicit authority kind.
+`authorizing_group_membership_ids` resolved for custom groups. Each successful
+activation also has a `subscription_authorization_id` deterministically derived
+from `subscription_intent_id`; it identifies that exact canonical grant even
+if a later grant makes the same deterministic `subscription_id` active again.
+The facts do not use the ambiguous field `membership_id`. System-group
+authorization is represented separately by `club_membership_id` and an
+explicit authority kind.
 
 `ConversationSubscriptionAuthorized`,
 `ConversationSubscriptionEnded`, and
@@ -216,25 +269,52 @@ person/conversation identifiers; they may not provide trusted
 The operation resolves the conversation's groups and current authorization
 through Membership's public API, then sends a trusted internal command.
 
-The operation has prepare and activate phases so delayed work cannot undo an
-ordinary unfollow:
+The operation has prepare, activate, and cancel phases so delayed work cannot
+undo an ordinary unfollow:
 
 1. `PrepareConversationSubscription` persists a unique intent and its
-   server-resolved authorization in the member stream.
+   server-resolved authorization in the member stream. For an auto-follow it
+   also records the caller-generated `message_id` that is allowed to complete
+   the intent.
 2. Manual follow activates that prepared intent immediately.
-3. Root/reply auto-follow prepares the intent before sending and activates the
-   same intent only after `MessageSent` confirms success. A failed send cancels
-   or leaves no activatable intent.
-4. `EndConversationSubscription` ends the active subscription and cancels all
-   earlier prepared intents for that conversation in the same member stream.
-5. A delayed activation for a cancelled, ended, unknown, or already-completed
-   intent emits no event. A later explicit follow has a new intent and may
-   succeed after current authority is resolved again.
+3. Root/reply auto-follow generates `subscription_intent_id` before either
+   operation, prepares it, and puts that same identifier on `SendMessage`.
+   `MessageSent` persists both `message_id` and `subscription_intent_id`.
+   A strong, retrying Messaging policy dispatches
+   `ActivateConversationSubscription` from that success fact. Activation must
+   match the prepared intent's person, conversation, source, and expected
+   `message_id`; no other success or caller assertion can activate it.
+4. A durable send coordinator handles each prepared auto-follow intent. It
+   dispatches the same `SendMessage` until either the matching `MessageSent` is
+   committed or a terminal command rejection is known. A matching
+   `SendMessage` retry is successful and event-free after its `MessageSent`;
+   conflicting reuse of the message or intent identity is rejected. The
+   coordinator does not acknowledge its prepared-event position until success
+   exists or cancellation has committed, so a process crash resumes the same
+   work rather than abandoning it.
+5. On terminal send rejection, the coordinator dispatches
+   `CancelConversationSubscriptionIntent` with reason `send_rejected`. That
+   command appends `ConversationSubscriptionIntentCancelled`. Transient errors
+   are retried and do not cancel. Because one coordinator serializes each
+   intent and a matching successful send is recognized on retry, cancellation
+   cannot race a successful send for that identity.
+6. `EndConversationSubscription` appends
+   `ConversationSubscriptionEnded` and one
+   `ConversationSubscriptionIntentCancelled` with reason `unfollowed` for every
+   earlier prepared intent for that conversation in the same member-stream
+   append. During cutover it records the ended tombstone even when no canonical
+   authorization is currently active, so stale historic reconciliation cannot
+   resurrect an unfollowed conversation.
+7. A delayed activation for a cancelled, ended, unknown, mismatched, revoked,
+   or already-completed intent emits no event. A later explicit follow has a
+   new intent and may succeed after current authority is resolved again.
 
-This protocol, including prepared and cancelled intent state, is rebuilt from
-the member stream after aggregate restart. Handler retries use the same
-`subscription_intent_id` and are event-free after the first successful
-transition.
+Prepared, activated, cancelled, and ended intent state is rebuilt entirely
+from canonical facts in the member stream after aggregate restart. Command,
+policy, and coordinator retries use the same identifiers and are event-free
+after the first successful transition. `MessageSent` remains a send-success
+fact, not an independently interpreted follow fact; only its exact durable
+correlation can request canonical activation.
 
 ### Membership revocation is one idempotent cross-context command
 
@@ -248,8 +328,11 @@ In the person's subscription stream, one aggregate decision:
 
 1. permanently records `group_membership_id` as revoked;
 2. removes that identifier from every prepared and active authorization;
-3. ends a subscription only when it has no other current authorization; and
-4. appends `GroupMembershipSubscriptionRevocationCompleted` with the same
+3. appends `ConversationSubscriptionIntentCancelled` with reason
+   `authorization_revoked` for a prepared intent left with no authorization;
+4. ends an active canonical grant only when it has no other current
+   authorization; and
+5. appends `GroupMembershipSubscriptionRevocationCompleted` with the same
    `revocation_id`.
 
 The revocation fact and completion receipt are appended atomically. The
@@ -273,40 +356,112 @@ The following outcomes are independent of command arrival order:
 - Ordinary unfollow cancels earlier prepared work, while a genuinely later
   explicit follow uses a fresh intent and can succeed.
 
+Every `CustomGroupMembershipEnded` produces one logical revocation and one
+receipt, regardless of end reason or whether any subscription used the ended
+membership. `revocation_id` is deterministically derived from
+`group_membership_id`, so policy redelivery does not produce a second
+revocation or receipt.
+
 The Membership removal application service may report cleanup complete only
-after it observes the matching
-`GroupMembershipSubscriptionRevocationCompleted` domain receipt through
-Messaging's public receipt API. A receipt projection or subscriber may make
-that fact awaitable, but callers wait for the named receipt; they do not infer
-completion by enumerating projected conversations. Projection barriers remain
-limited to coordinating visibility of selected read models.
+after it observes the complete expected receipt set through Messaging's public
+receipt API. For `RemoveCustomGroupMember`, operation status identifies the one
+ended `group_membership_id` and the service waits for its one deterministic
+`revocation_id`. For `RemoveClubMember`, the durable
+`ended_group_membership_ids` on the recorded operation maps to zero, one, or
+many deterministic revocation identifiers. Zero completes immediately; one or
+many completes only when every exact receipt is present. Retrying either
+application flow reads the same Membership operation outcome and resumes
+waiting for the same set. It never enumerates conversations or derives expected
+work from a projection of current memberships.
 
-### Historic follows are reconciled once
+A receipt projection or subscriber may make
+`GroupMembershipSubscriptionRevocationCompleted` awaitable, but the named
+domain receipt is the completion evidence. Projection barriers remain limited
+to coordinating visibility of selected read models.
 
-Before canonical subscription facts become the only live source, run a
-restartable reconciliation over historic `MessageSent`,
-`ConversationFollowed`, and `ConversationUnfollowed` shapes to derive each
-person's provable effective follow at cutover. For each candidate:
+### Reconciliation uses fenced live-write precedence
 
-- use a deterministic reconciliation and `subscription_intent_id` based on the
-  historic person/conversation relation;
-- resolve current authorization on the server;
-- dispatch `ReconcileLegacyConversationSubscription` to the person's stream;
+Both reconciliations use a recorded source fence and aggregate-local live-write
+precedence; a paged database snapshot by itself is not a cutover protocol.
+
+For custom-group membership, the migration coordinator first appends
+`CustomGroupMembershipReconciliationFenceRecorded` to its durable migration
+stream with a `fence_id` and the event-store global high-water mark. Candidate
+legacy relations are derived only from source events at or below that mark.
+After the fence is recorded, every product admission and removal uses the
+first-class Club path. Each reconciliation command carries the fence and
+observed Club stream version, but the Club aggregate revalidates the pair
+against its complete current stream when the command executes:
+
+- if the legacy relation is no longer active, the command is a no-op;
+- if a canonical start, end, or current first-class membership already exists
+  for the pair, that live decision wins and stale backfill cannot overwrite it;
   and
-- append a reconciliation marker plus
-  `ConversationSubscriptionAuthorized` only when both the historic follow and
-  current authorization are provable.
+- only a still-current legacy relation with no canonical decision can append
+  the deterministic reconciliation start.
 
-The persisted marker makes item retries event-free, and a durable job
-checkpoint makes enumeration restartable. A missing current authorization,
-ambiguous historic state, or a formerly removed custom-group relation does not
-produce a subscription. Reconciliation does not assign historic follows to
-unproved group-membership periods.
+A live removal encountered before its legacy pair has been materialized
+atomically appends the deterministic `LegacyCustomGroupMembershipReconciled`
+and `CustomGroupMembershipStarted` facts followed by the exact
+`CustomGroupMembershipEnded`; it therefore leaves a canonical tombstone that a
+later stale reconciliation observes. A live admission with a fresh identity
+against a still-current legacy pair is rejected by the one-current-membership
+invariant. If reconciliation appends first, any later live start or end is
+serialized after it and naturally wins.
 
-After the cutover checkpoint, live follow paths do not scan legacy messages or
-follow projections. Existing events stay replayable as historical facts, but
-aggregate and projection replay uses the newly appended canonical subscription
-facts for current state.
+`CustomGroupMembershipReconciliationCheckpointAdvanced` stores each completed
+page and `CustomGroupMembershipReconciliationCompleted` records exhaustion of
+the fenced source. Both markers include `fence_id`. The checkpoint advances
+only after every candidate in its page has reached a terminal reconciled,
+suppressed-by-live-state, or inactive outcome. An identity conflict stops the
+job without advancing its checkpoint. The current-state projection is rebuilt
+through the same first-class facts before the legacy relation is removed from
+live query paths.
+
+Historic follow cutover follows the same shape. The coordinator first routes
+all new manual, root, reply, and unfollow work to the canonical member stream;
+no legacy follower writer remains enabled. It then appends
+`LegacyConversationSubscriptionReconciliationFenceRecorded` with `fence_id`
+and the event-store global high-water mark. A restartable scan of
+`MessageSent`, `ConversationFollowed`, and `ConversationUnfollowed` at or below
+that immutable prefix derives each person's provable effective follow. For
+each candidate:
+
+- use deterministic `reconciliation_id`, `subscription_intent_id`, and
+  `subscription_authorization_id` values based on the historic
+  person/conversation relation;
+- bind custom-group authority only to exact first-class memberships that were
+  current at the fence and remain current when dispatched; a later re-addition
+  is not acceptable provenance for an old follow;
+- re-read the relevant legacy stream through its current tail before dispatch,
+  so a source fact omitted by the enumerated page cannot make a stale candidate
+  look current;
+- resolve those exact memberships through Membership's public contract; and
+- dispatch `ReconcileLegacyConversationSubscription` to the person's stream
+  with the fence, source stream version, and resolved provenance.
+
+The member aggregate revalidates its complete stream at execution. It appends
+`LegacyConversationSubscriptionReconciled` with outcome `authorized` plus
+`ConversationSubscriptionAuthorized` only when the historic follow and exact
+current authorization remain provable and no canonical live decision exists
+for that conversation. A canonical prepare, authorization, cancellation,
+unfollow tombstone, or relevant membership revocation takes precedence and
+instead produces terminal outcome `suppressed_by_live_state` without
+authorizing. If reconciliation authorizes first, a racing live unfollow or
+revocation is serialized after it and ends it. If the live fact lands first,
+the reconciliation cannot restore it. Missing or ambiguous source state and
+formerly ended memberships produce terminal outcome `unproved`, never a
+subscription.
+
+`LegacyConversationSubscriptionReconciliationCheckpointAdvanced` records
+completed pages and
+`LegacyConversationSubscriptionReconciliationCompleted` records exhaustion of
+the fenced prefix. A page advances only after all its deterministic item
+markers commit. Marker and checkpoint retries are event-free, so crashes may
+resume without changing precedence. After completion, live paths never scan
+legacy messages or follow projections. Existing events remain replayable as
+historical facts, while aggregate and projection replay derive current state
+only from canonical subscription facts.
 
 ### Current authorization is required through provider handoff
 
@@ -315,11 +470,50 @@ proof of current access. Group and conversation reads, writes, follow actions,
 notification creation, queued-delivery claiming, and the final email-provider
 handoff recheck current authority through Membership's public contract.
 
-If access ended before provider handoff, pending private delivery is skipped or
-made ineligible even if a lagging read model still shows a follow. Once a
-provider has accepted a delivery, Memba cannot recall it. Projection barriers
-may make revoked state visible to pages and tests, but neither authorization
-nor delivery eligibility is inferred from barrier completion.
+Every queued private delivery captures immutable `delivery_authorization` at
+the decision that emits `EmailDeliveryCreated`, and the email-delivery
+projection persists the same value. It contains:
+
+- the recipient's exact `club_membership_id`;
+- authority kind `custom_group` or the explicit system-group kind;
+- for custom groups, the non-empty set of exact current
+  `authorizing_group_membership_ids` that made the recipient eligible; and
+- for followed delivery, the exact `subscription_id`,
+  `subscription_authorization_id`, and `subscription_intent_id` from the
+  canonical authorization grant. Direct audience delivery leaves those three
+  subscription fields absent.
+
+Recipient resolution may capture more than one current custom-group membership
+when more than one independently authorizes the conversation. The immutable
+payload records the complete resolved set; it never records only a person,
+conversation, or club-wide generation. Historic `EmailDeliveryCreated` events
+without this payload remain readable, but private deliveries created after
+cutover require it and cannot be dispatched through a compatibility fallback.
+
+Immediately before provider handoff, the dispatcher validates the captured
+authorization through public Membership and Messaging contracts. The exact
+`club_membership_id` must still be current. For custom authority, at least one
+captured `group_membership_id` must still be current for that same club
+membership and conversation; for system authority, the captured
+club-membership/system-kind pair must still apply. A followed delivery also
+requires that its exact canonical `subscription_authorization_id` remains
+effective with captured authorization, not merely that the deterministic
+`subscription_id` is active again.
+
+There is no fallback to a newer club membership, a new
+`group_membership_id`, or a later `subscription_intent_id`. Removal followed by
+re-addition therefore cannot revive old queued work: all of its captured
+custom-membership identifiers are ended, and a later follow is a different
+canonical authorization. If one of several captured memberships remains
+current and the captured subscription grant remains effective, that surviving
+authority may still permit the delivery as intended.
+
+If an exact check fails before provider handoff, pending private delivery is
+persistently skipped or made ineligible even if a lagging read model still
+shows a follow. Once a provider has accepted a delivery, Memba cannot recall
+it. Projection barriers may make revoked state visible to pages and tests, but
+neither authorization nor delivery eligibility is inferred from barrier
+completion.
 
 ## Relationship to earlier decisions
 
@@ -327,7 +521,7 @@ nor delivery eligibility is inferred from barrier completion.
   Membership owns participation, Messaging owns subscriptions and delivery,
   and their collaboration uses public contracts.
 - It extends [ADR 0011](0011-use-caller-generated-uuid-aggregate-identities.md)
-  with caller-generated `group_membership_id` and
+  with caller-generated `group_membership_id`, `removal_operation_id`, and
   `subscription_intent_id`. It does not restore ADR 0011's superseded
   projection preflight or club-membership stream routing.
 - It narrows [ADR 0022](0022-use-projection-barriers-for-read-your-writes.md)
