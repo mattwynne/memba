@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "packet_id": "001-db9620b-01",
+  "task_id": "001",
+  "todo_line": "- [ ] 001 Record the architecture decision before further implementation.",
+  "attempt": "implementation",
+  "plan_path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+  "todo_path": "docs/iterations/064-leave-and-remove-group-members/todo.md",
+  "source_baseline": "db9620bd03bdf9b0db45f022c64594c8e6a34496",
+  "outcome": "Record an accepted ADR that fixes the concrete first-class group-membership and Messaging subscription architecture required by iteration 064 before any executable implementation proceeds.",
+  "scope": [
+    "Create the next sequential record, `docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md`, and add its accepted entry to `docs/adr/README.md`.",
+    "Name the Membership consistency boundary, aggregate/stream identity, commands, immutable events, and fields that distinguish enduring club membership from a fresh `group_membership_id` for every genuine custom-group admission and exact removal.",
+    "Define caller-generated identity for new admissions and a deterministic, retry-safe identity/append-only reconciliation contract for each provable active legacy relation; state how legacy `GroupMemberAdded` and `GroupMemberRemoved` facts replay without inventing unproved periods.",
+    "State explicitly how Everyone/Admin system-group consequences remain compatible and whether first-class group-membership identity applies to them, while preserving ADR 0024 club membership, role, and Admin-continuity ownership.",
+    "Name the Messaging member-owned subscription aggregate/stream, canonical follow/subscription facts, server-resolved authorization provenance, idempotent group-membership revocation contract, and durable completion receipt.",
+    "Specify order-independent behavior for delayed old follows, ordinary unfollow, alternate authorizing group memberships, remove/re-add/new follow, handler retry, and aggregate restart.",
+    "Define how manual follow and successful root/reply auto-follow use one authoritative operation without trusting product-supplied provenance, and how historic `MessageSent`/follow shapes are reconciled once without legacy scans in the live path.",
+    "Clarify that projection barriers coordinate read-model visibility only, while removal completion relies on the Messaging domain receipt and current authority is rechecked through provider handoff."
+  ],
+  "scope_exclusions": [
+    "Do not change application code, migrations, tests, feature files, acceptance tags, designs, iteration plan/todo files, or behavior in this packet.",
+    "Do not implement the group-membership projection/reconciliation, removal use case, subscription ledger, revocation handler, UI, or acceptance scenarios.",
+    "Do not reopen stakeholder-approved business choices such as keeping empty groups, preserving full history on re-add, clearing old follows, or preserving club roles.",
+    "Do not preserve the existing conversation-by-conversation cleanup fan-out or infer correctness from projection cutoffs/generations."
+  ],
+  "references": [
+    {
+      "path": "docs/iterations/064-leave-and-remove-group-members/plan.md",
+      "facts": "Implementation Plan step 1 requires the ADR before implementation; steps 2-6 and Open Technical Decisions constrain the identities, ownership, reconciliation, member-owned stream, revocation receipt, provenance, and barrier contracts the ADR must make concrete."
+    },
+    {
+      "path": "docs/adr/README.md",
+      "facts": "ADR index currently ends at 0024; add one concise accepted row for ADR 0025."
+    },
+    {
+      "path": "docs/adr/adr_template.md",
+      "facts": "Use the repository Date, Status, Context, Decision, and Consequences structure; recent ADRs also link relevant reference guidance and state supersession where applicable."
+    },
+    {
+      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
+      "facts": "Membership and Messaging are separate Commanded contexts; Messaging depends on Membership through a public contract and must not mutate Membership state or query its aggregates/storage directly."
+    },
+    {
+      "path": "docs/adr/0011-use-caller-generated-uuid-aggregate-identities.md",
+      "facts": "Caller-generated typed UUID identity remains accepted, although ADR 0024 superseded its club-membership routing/preflight choices; the new ADR must describe its relationship to this identity rule."
+    },
+    {
+      "path": "docs/adr/0022-use-projection-barriers-for-read-your-writes.md",
+      "facts": "A projection barrier proves selected read models reached a checkpoint but does not prove later asynchronous domain work completed; iteration 064 requires an explicit Messaging receipt for that completion."
+    },
+    {
+      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+      "facts": "Club owns active club membership and role/Admin invariants, explicitly does not claim an unbounded arbitrary-group matrix, and leaves future arbitrary group-membership consistency to a boundary chosen around its own invariants."
+    },
+    {
+      "path": "docs/reference/domain-driven-design.md",
+      "facts": "Choose aggregate boundaries around immediate invariants and express cross-aggregate/context workflows through explicit domain contracts."
+    },
+    {
+      "path": "docs/reference/cqrs.md",
+      "facts": "Keep command ownership explicit and do not use query projections as the write-side authority."
+    },
+    {
+      "path": "docs/reference/event-sourcing.md",
+      "facts": "Historical events remain immutable; deterministic projection derivations and new domain facts require different reconciliation strategies, and production-history compatibility must be replayable and retry-safe."
+    },
+    {
+      "path": "docs/reference/responsibility-driven-design.md",
+      "facts": "Assign authorization, lifecycle, subscription, and coordination responsibilities to explicit collaborators with public contracts."
+    },
+    {
+      "path": "web/lib/memba/membership/club.ex",
+      "facts": "`Memba.Membership.Club` currently stores `group_memberships` by `{group_id, club_membership_id}` and applies `GroupMemberAdded`/`GroupMemberRemoved` by toggling one reusable active relation; `AddCustomGroupMember` authorization also currently executes at this boundary."
+    },
+    {
+      "path": "web/lib/memba/membership/projections/group_membership.ex",
+      "facts": "The current read model overloads `membership_id` as club membership and stores an `active` flag rather than a distinct group-membership identity."
+    },
+    {
+      "path": "web/lib/memba/membership/policies/clear_removed_group_member_follows.ex",
+      "facts": "The current strong Membership handler scans projected group conversations and dispatches one Messaging unfollow per conversation; this fan-out is the rejected correctness mechanism."
+    },
+    {
+      "path": "web/lib/memba/messaging/conversation_followers.ex",
+      "facts": "The current aggregate is conversation-owned, records only person IDs, and derives sender auto-follow directly from `MessageSent`; it has no authorizing group-membership provenance."
+    },
+    {
+      "path": "web/lib/memba/messaging/projectors/conversation_follow.ex",
+      "facts": "The current projection independently derives root/reply follow state from `MessageSent`; the approved architecture makes canonical subscription facts the replay source instead."
+    },
+    {
+      "path": "web/lib/memba/messaging/email_delivery_dispatcher.ex",
+      "facts": "Existing provider handoff already has a current-access recheck boundary that the ADR should preserve while changing subscription authorization."
+    }
+  ],
+  "constraints": [
+    "Set the ADR status to `accepted`: the approved plan says there are no open business or technical decisions and requires this record to bind subsequent implementation.",
+    "Use unambiguous field language such as `club_membership_id` and `group_membership_id`; do not silently reuse the existing ambiguous `membership_id` for both concepts.",
+    "Choose and name the custom-group lifecycle consistency boundary and its concurrency guarantee; do not leave Club-versus-Group ownership as an implementation-time decision.",
+    "Give concrete command/event/receipt and aggregate/stream names sufficient for later packets to implement one coherent model; keep incidental module layout flexible where it is not architectural.",
+    "Preserve Membership as current group-participation authority and Messaging as subscription/delivery authority, with cross-context communication through public idempotent contracts.",
+    "A re-add must create a new group membership; ended membership authorization stays ended. Revoking one authorization must not erase another current group membership's authorization.",
+    "Product/UI/message callers may request follow behavior but may not assert trusted group-membership provenance; the authoritative operation resolves it from Membership.",
+    "Reconciliation must be deterministic, restartable, append-only where new aggregate facts are required, and conservative where source history cannot prove a lifecycle period.",
+    "Keep legacy source events replayable and identify any ADRs this record amends or partially supersedes rather than rewriting their historical text.",
+    "This is documentation-only, so project rules do not call for `dev check`."
+  ],
+  "focused_validation": [
+    "git diff --check -- docs/adr/README.md docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md",
+    "Review the new ADR against every item in this packet's scope and report the exact chosen consistency boundary, identities, command/event/receipt vocabulary, reconciliation rule, and ordering guarantees.",
+    "Verify every relative Markdown link added to ADR 0025 and the ADR index resolves to an existing repository path."
+  ],
+  "completion_evidence_required": [
+    "Return the exact changed paths and confirm no executable, acceptance, iteration-plan, or todo files changed.",
+    "Summarize the accepted boundary, stream identities, command/event/receipt names, system-group treatment, and legacy reconciliation strategy recorded by ADR 0025.",
+    "Report successful `git diff --check` and link-resolution evidence with exit statuses.",
+    "Call out the ADR's explicit relationship to ADRs 0007, 0011, 0022, and 0024."
+  ],
+  "candidate_origins": []
+}
