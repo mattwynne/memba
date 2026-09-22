@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "packet_id": "001-50c18db-02",
+  "packet_id": "001-8319b25-03",
   "task_id": "001",
   "todo_line": "- [ ] 001 Record the architecture decision before further implementation.",
   "result": "ready_for_review",
@@ -9,26 +9,31 @@
   ],
   "validation": [
     {
-      "command": "git diff --check -- docs/adr/README.md docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md",
+      "command": "git diff --check -- docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md",
       "exit_status": 0,
       "evidence": "No whitespace errors were reported."
     },
     {
-      "command": "bash relative-Markdown-link resolution loop over docs/adr/README.md and docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md using grep, sed, dirname, and test -e",
+      "command": "bash relative-Markdown-link resolution loop over docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md using grep, sed, and test -e",
       "exit_status": 0,
-      "evidence": "Every relative Markdown target in ADR 0025 and the unchanged ADR index resolves to an existing repository path."
+      "evidence": "Every relative Markdown target in ADR 0025 resolves to an existing repository path."
     },
     {
-      "command": "grep assertions for creator_group_membership_id, duplicate current admission, RemoveClubMember, ended_group_membership_ids, zero/one/many revocations, ConversationSubscriptionIntentCancelled, MessageSent intent correlation, delivery_authorization, subscription_authorization_id, both reconciliation fences, and live-state suppression",
+      "command": "grep -F assertions for delivery cutover/disposition, provider-accepted preservation, root grant-before-follow and outside-sender skip, prepared/send_rejected precedence, immutable multi-grants, unfollow ordering, scoped revocation facts/receipt ordering, and exact queued-delivery grant binding",
       "exit_status": 0,
-      "evidence": "The revised ADR names the concrete lifecycle, cancellation, delivery-provenance, receipt-set, and fenced-reconciliation contracts required by the packet."
+      "evidence": "All packet-required contracts and named markers/events were present."
     },
     {
-      "command": "git diff --quiet HEAD -- docs/adr/README.md docs/iterations/064-leave-and-remove-group-members/plan.md docs/iterations/064-leave-and-remove-group-members/todo.md acceptance-tests web design-system",
+      "command": "git diff --name-only 8319b25d483c15f44634c0f9994751db7804a3b7 --",
       "exit_status": 0,
-      "evidence": "No executable, acceptance, design, ADR-index, iteration-plan, or todo path changed."
+      "evidence": "Output contained ADR 0025 and the planner-owned .delivery handoff/state files only; no code, test, feature, design, ADR-index, iteration plan, todo, or other project-document path appeared."
+    },
+    {
+      "command": "test \"$(git diff --name-only HEAD -- ':!docs/iterations/064-leave-and-remove-group-members/.delivery/latest-worker-result.json')\" = 'docs/adr/0025-use-first-class-group-memberships-and-member-owned-conversation-subscriptions.md'",
+      "exit_status": 0,
+      "evidence": "Excluding the required result artifact, this worker's content diff is limited to ADR 0025."
     }
   ],
-  "notes": "Revised accepted ADR 0025 to make CreateCustomGroup atomically start a retry-stable creator membership, enforce one current membership per group/club-membership pair, and make direct removal and RemoveClubMember produce exact end reasons and durable zero/one/many revocation outcomes. The member-owned Messaging protocol now has durable send-intent cancellation and exact MessageSent correlation; queued private deliveries persist exact membership and canonical subscription authorization; both legacy reconciliations use named high-water fences, aggregate-stream revalidation, checkpoints, and live-write precedence. ADR 0025 remains consistent with the Club boundary, separate Membership/Messaging contexts, server-resolved provenance, system groups, immutable replay, and receipt-based completion. This packet is documentation-only, so dev check was not run as required.",
+  "notes": "Revised accepted ADR 0025 only. `PrivateDeliveryAuthorizationCutoverFenceRecorded` fences a restartable sweep whose terminal `LegacyPrivateEmailDeliveryMarkedIneligible` fact blocks legacy pending/startup/manual-retry work without exact creation-time provenance while leaving provider-accepted work untouched. Root send now commits `MessageSent` and its audience grant before a correlated, server-authorized follow; an outside-group sender records `RootConversationSubscriptionSkipped` and gains no follow. Historic reconciliation now lets prepared and `send_rejected` intents coexist with a provable historic grant, while effective canonical grants, explicit unfollow, and exact relevant revocation supersede it. Each successful intent has an immutable grant; same-intent retry is event-free, different intents remain distinct, unfollow closes prior grants, revocation appends one membership-wide tombstone, ordered conversation consequences, and the receipt last. Followed deliveries bind to one exact grant and cannot be revived by another grant or re-addition. An initial text-inspection diagnostic used a cross-line literal and exited 1; corrected required-contract assertions passed. The unrelated Fabro-generated pycache was preserved. Per packet constraint, dev check was not run for this documentation-only task.",
   "unresolved": []
 }
