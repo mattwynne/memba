@@ -140,3 +140,58 @@ Proposed decision criteria:
 Proposed review date: 2026-10-19, with at least five qualifying reviews required for adoption. If the sample is smaller, retain the criteria and extend the collection window rather than declaring success.
 
 Source: [2026-09-21 software factory retrospective](../notes/2026-09-21-software-factory-retrospective.md).
+
+## Approved experiment: simplify post-merge review into a healer
+
+Approved: 2026-09-21
+
+The quorum proposal above was rejected during decision discussion. Two of the three reviewers currently depend on OpenRouter, so a two-report quorum would still fail during a full OpenRouter outage. Provider-aware fallbacks would add machinery to preserve multi-provider review before its incremental value has been demonstrated.
+
+Rename the standard post-merge workflow from `iteration-review` to `code-review` and make its purpose explicit: it is a non-gating healer for trunk-based development. Implementation may merge to `main` first. Code review then produces zero or more follow-up improvements and must not retroactively turn successful delivery into failure.
+
+Hypothesis: one focused OpenAI reviewer with explicit clean/heal/record/escalate outcomes will complete more reliably and cheaply than three-provider fan-out and synthesis while retaining the useful code-health and bounded-polish outcomes.
+
+Baseline:
+
+- 5/8 recent iteration-review runs terminated at synthesis because one reviewer was unavailable.
+- The current workflow requires three reviewer reports and a synthesis stage.
+- Five `docs/code-health.md` sections explicitly say synthesis omitted independent-review findings and the recorder recovered them.
+- Review currently reruns a full gate before reviewing even though implementation already validated the exact candidate.
+- Review completion is synchronously coupled to `bin/dev fabro deliver` after implementation has already merged.
+
+Primary outcome metric: **hands-off code-review completion rate** — the proportion of launched post-merge reviews that reach clean, healed, recorded, or explicitly human-paused state without infrastructure/provider recovery. Proposed adoption target: at least 5/5 qualifying code reviews.
+
+Quality guardrails:
+
+- Historical replay must retain the consequential findings and bounded improvements selected from representative prior reviews.
+- The reviewer must distinguish clean, bounded automatic healing, non-urgent recording, and consequential human judgement.
+- Behavioural gaps, ADR/architecture decisions, migrations or production-data risk, security/privacy concerns, broad cross-cutting changes, and repeated/no-progress healing attempts must not be silently auto-fixed.
+- A bounded code/config/test change must pass the project-required `dev check` on its exact final state before publication.
+- Non-blocking findings must remain durable; clean or infrastructure outcomes must not erase review evidence.
+- Implementation publication and production delivery remain independent of healer success.
+
+Slice 1 implementation:
+
+1. Rename workflow and user-facing command to `code-review`, retaining a narrow compatibility alias only if it materially reduces migration risk.
+2. Launch code review asynchronously after implementation reaches `main`; return its run ID/link rather than waiting for completion.
+3. Replace reviewer fan-out and synthesis with one focused OpenAI reviewer and explicit routing.
+4. Allow at most one bounded automatic healing pass before reclassification or human escalation.
+5. Record non-urgent findings in `docs/code-health.md`.
+6. Route consequential findings to a Fabro human gate with safe choices and free-form direction. Use Fabro's web/CLI interviewer initially; Slack is explicitly out of scope.
+7. Do not pass `--auto-approve` to code review, because that would bypass real human involvement.
+
+Validation ladder before a live canary:
+
+1. Static graph/schema/command tests for renamed paths and removal of the three-review/synthesis dependency.
+2. Deterministic routing fixtures for clean, bounded heal, record, consequential human gate, no-progress heal, provider failure, publication/no-op, and unanswered human input.
+3. Historical replay fixtures using representative retained reviewer findings, including findings previously omitted by synthesis.
+4. Full `dev check` on the exact implementation state.
+5. Only after these pass, launch a limited code-review canary; do not use a production delivery as the first test.
+
+Decision criteria:
+
+- **Adopt:** validation passes; 5/5 qualifying reviews reach a valid terminal or explicit human-paused state without infrastructure recovery; historical consequential findings remain visible; bounded changes pass exact-state validation; no quality regression is attributable to simplification.
+- **Iterate:** guardrails hold but fewer than five qualifying reviews exist, classification thresholds need one focused adjustment, or observability prevents a fair comparison.
+- **Revert:** the simplified reviewer loses a consequential historical finding, silently auto-fixes a judgement-heavy change, publishes without required validation, or couples healer failure back into delivery success.
+
+Review due: 2026-10-19, requiring at least five qualifying reviews for adoption. Slack integration is a later optional slice and is not part of this experiment.

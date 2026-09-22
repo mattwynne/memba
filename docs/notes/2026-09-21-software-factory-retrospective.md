@@ -106,3 +106,11 @@ The detailed proposed contract and evidence are recorded in [the selected kaizen
 - Measure operational effectiveness of the just-in-time planner and focused-test evidence reuse.
 - Join dispatch, run, validation, merge, deploy, intervention and provider usage into one durable delivery record.
 - Reassess repository ruleset/required-PR enforcement after current exact-SHA controls have representative operational evidence.
+
+## Decision update — 2026-09-21
+
+The initial availability-quorum recommendation exposed a simpler architectural question. Claude and Gemini both use OpenRouter, so a two-report quorum still fails during a provider-wide outage; fallback routing would add complexity before multi-provider review's marginal value is measured.
+
+Matt confirmed the trunk-based intent: implementation may merge to `main`, and post-merge review is a healer that can contribute one or more follow-up improvements rather than a delivery gate. He approved a revised experiment to rename the workflow `code-review`, use one OpenAI reviewer, route bounded improvements autonomously, record non-urgent findings, and use Fabro's human gate for consequential findings. Code review will launch asynchronously after merge so its completion cannot block delivery. Slack is deferred; Fabro's existing web/CLI interviewer is sufficient for the experiment.
+
+The approved contract and review criteria are recorded in [the selected kaizen note](../kaizen/2026-06-19-gemini-credit-exhaustion-breaks-review-workflow.md).

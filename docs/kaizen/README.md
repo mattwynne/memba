@@ -20,7 +20,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-09-14 | [Just-in-time delivery planner](2026-09-14-just-in-time-delivery-planner.md) | Open | — |
 | 2026-09-03 | [Problem: iteration workflow timeout masks the actionable test failure](2026-09-03-iteration-workflow-timeout-masks-test-failure.md) | Open | — |
 | 2026-06-21 | [Problem: Fabro-published commits are attributed to the GitHub user `fabro`](2026-06-21-fabro-commit-attribution.md) | Open | — |
-| 2026-06-19 | [Problem: Gemini credit exhaustion broke Fabro review synthesis](2026-06-19-gemini-credit-exhaustion-breaks-review-workflow.md) | Open | — |
+| 2026-06-19 | [Problem: Gemini credit exhaustion broke Fabro review synthesis](2026-06-19-gemini-credit-exhaustion-breaks-review-workflow.md) | Experiment | 2026-10-19 |
 | 2026-06-17 | [Problem: Handoff claimed `dev check` passed while current main fails in ExUnit](2026-06-17-dev-check-false-green-handoff.md) | Open | — |
 | 2026-06-05 | [Problem: Fabro publish conflict left a manual merge to recover](2026-06-05-fabro-publish-conflict-leaves-manual-merge.md) | Open | — |
 | 2026-06-04 | [Problem: Browser acceptance tests are slow, and shared global state blocks the parallelism that should speed them up](2026-06-04-acceptance-parallelization-blocked-by-global-state.md) | Open | — |
