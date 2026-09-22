@@ -1,7 +1,7 @@
 # Leave custom groups and remove their members
 
 Date: 2026-09-13
-Status: draft revision
+Status: validated
 
 The behaviour and designs remain stakeholder-approved. The implementation approach is being revised after delivery review exposed a missing first-class group-membership model.
 
