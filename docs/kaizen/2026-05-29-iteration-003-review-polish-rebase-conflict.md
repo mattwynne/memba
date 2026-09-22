@@ -36,7 +36,7 @@ Observations:
 Retry options:
 
 ```bash
-bin/dev iteration-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
+bin/dev code-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
 ```
 
 A safer retry may require a review branch based on current `main` or a publish script path that can run from the committed workflow definition rather than from stale reviewed branch contents.

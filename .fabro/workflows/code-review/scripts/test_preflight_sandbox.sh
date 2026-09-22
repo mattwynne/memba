@@ -61,4 +61,4 @@ if ! grep -Fq "Review start SHA (origin/main): $origin_main_sha" /tmp/review-pre
   exit 1
 fi
 
-echo "iteration-review preflight sandbox tests passed"
+echo "code-review preflight sandbox tests passed"

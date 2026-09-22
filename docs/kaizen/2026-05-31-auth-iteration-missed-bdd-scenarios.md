@@ -111,7 +111,7 @@ Validation:
 
 - `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed; existing goal-gate retry warnings only.
 - `bash .fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed.
-- `bash .fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh` — passed.
+- `bash .fabro/workflows/code-review/scripts/test_final_artifact_gate.sh` — passed.
 
 Remaining follow-up:
 

@@ -68,15 +68,27 @@ if [ -z "$iteration_number" ]; then
   iteration_number="unknown"
 fi
 run_id="${FABRO_RUN_ID:-${FABRO_RUN:-unknown}}"
+docs_only=false
+if [ -n "$changed_paths" ] && ! printf '%s\n' "$changed_paths" | grep -Fvx 'docs/code-health.md' >/dev/null; then
+  docs_only=true
+fi
 commit_msg=$(mktemp)
 {
-  printf 'review polish: iteration %s\n\n' "$iteration_number"
+  if [ "$docs_only" = true ]; then
+    printf 'code review: record iteration %s finding\n\n' "$iteration_number"
+  else
+    printf 'code review: heal iteration %s\n\n' "$iteration_number"
+  fi
   printf 'Plan-Path: %s\n' "$PLAN_PATH"
-  printf 'Fabro-Workflow: iteration-review\n'
+  printf 'Fabro-Workflow: code-review\n'
   printf 'Fabro-Run-Id: %s\n' "$run_id"
-  printf 'Review-Start-Sha: %s\n' "$start_sha"
-  printf 'Review-Head-Sha: %s\n' "$head_sha"
-  printf 'Validation: dev check passed after review changes\n'
+  printf 'Code-Review-Start-Sha: %s\n' "$start_sha"
+  printf 'Code-Review-Head-Sha: %s\n' "$head_sha"
+  if [ "$docs_only" = true ]; then
+    printf 'Validation: docs-only code-health record; dev check not required by project policy\n'
+  else
+    printf 'Validation: exact published candidate passed dev check\n'
+  fi
 } > "$commit_msg"
 
 tree_sha=$(git write-tree)
@@ -125,11 +137,19 @@ fi
 
 (
   cd "$publish_worktree"
-  "$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
+  if [ "$docs_only" != true ]; then
+    "$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
+  fi
 )
 
 published_sha=$(git -C "$publish_worktree" rev-parse HEAD)
-git -C "$publish_worktree" push origin refs/notes/fabro-dev-check
+if [ "$docs_only" != true ]; then
+  git -C "$publish_worktree" push origin refs/notes/fabro-dev-check
+fi
 git push origin "$published_sha:main"
 
-echo "Published review polish to main: $published_sha"
+if [ "$docs_only" = true ]; then
+  echo "Published code-health record to main without unnecessary dev check: $published_sha"
+else
+  echo "Published separately validated code-review healing commit to main: $published_sha"
+fi

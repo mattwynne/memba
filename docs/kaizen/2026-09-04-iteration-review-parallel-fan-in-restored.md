@@ -1,22 +1,22 @@
-# Improvement: iteration-review can safely fan out and fan in reviewer evidence again
+# Improvement: code-review can safely fan out and fan in reviewer evidence again
 
 Date: 2026-09-04
 
 ## Context
 
-Iteration review is supposed to run independent Claude, Sol, and Gemini reviews, then synthesize all reviewer findings before deciding whether to accept, apply bounded polish, or record code-health findings.
+Code review is supposed to run independent Claude, Sol, and Gemini reviews, then synthesize all reviewer findings before deciding whether to accept, apply bounded polish, or record code-health findings.
 
 The workflow previously used Fabro's parallel fan-out/fan-in shape, but older Fabro runs exposed only branch metadata to the synthesis stage. The synthesis step could see that reviewer branches had completed, but it did not reliably see the full reviewer reports. That caused false-clean review results: individual reviewers raised bounded fixes or judgement-worthy code-health findings, while synthesis accepted as if there were no findings.
 
-Because of that historical evidence loss, iteration review was changed to a safe sequential topology. The sequential chain was slower, but it preserved reviewer Markdown in ordinary prior-stage context and failed before synthesis when a required reviewer could not complete.
+Because of that historical evidence loss, code review was changed to a safe sequential topology. The sequential chain was slower, but it preserved reviewer Markdown in ordinary prior-stage context and failed before synthesis when a required reviewer could not complete.
 
 ## Current change
 
 Fabro 0.316.0-nightly.0 has now been proven to preserve completed branch responses under `parallel.results`. The repository also contains the small `fan-in-evidence-spike` workflow that verifies a downstream synthesis prompt can see distinct branch response tokens after a component fork and tripleoctagon merge.
 
-With that proof in place, iteration review can regain parallelism while keeping the safety invariant explicit.
+With that proof in place, code review can regain parallelism while keeping the safety invariant explicit.
 
-The iteration-review workflow now uses:
+The code-review workflow now uses:
 
 - a `review_fork` node with `shape=component` and `max_parallel=3`;
 - independent `claude_review`, `codex_review`, and `gemini_review` branches;

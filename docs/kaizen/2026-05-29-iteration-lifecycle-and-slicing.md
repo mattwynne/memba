@@ -53,7 +53,7 @@ in the skill. They did not need a subsystem.
 
 ## Related notes
 
-- `2026-05-28-extract-iteration-review-workflow.md`
+- `2026-05-28-extract-code-review-workflow.md`
 - `2026-05-28-resumable-iteration-implementation.md`
 
 ## Resolution

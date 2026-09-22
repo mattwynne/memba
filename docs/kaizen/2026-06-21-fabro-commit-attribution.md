@@ -27,8 +27,8 @@ d48758270  Fabro <noreply@fabro.sh>              Fabro <fabro@users.noreply.gith
 The repository workflows include hard-coded Git identities in publish/finalization scripts:
 
 - `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`
-- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`
-- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`
+- `.fabro/workflows/code-review/scripts/finalize_iteration_status.sh`
+- `.fabro/workflows/code-review/scripts/publish_polish_to_main.sh`
 - `.fabro/workflows/plan-validation/scripts/publish_ready.sh`
 
 Each configures `user.name` as `Fabro` and uses `fabro@users.noreply.github.com` for commits that can be pushed to the shared repository history.
@@ -78,8 +78,8 @@ Fix applied:
 
 - `.fabro/workflows/scripts/git_identity.sh`: added a scoped `fabro_git_commit` helper that sets author/committer identity only for the single `git commit` command. The default identity is `Fabro <noreply@fabro.sh>` and can be overridden with `FABRO_GIT_AUTHOR_*` / `FABRO_GIT_COMMITTER_*` environment variables.
 - `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`: replaced persistent `git config` with the scoped helper.
-- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: replaced persistent `git config` with the scoped helper.
-- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`: replaced persistent `git config` with the scoped helper.
+- `.fabro/workflows/code-review/scripts/finalize_iteration_status.sh`: replaced persistent `git config` with the scoped helper.
+- `.fabro/workflows/code-review/scripts/publish_polish_to_main.sh`: replaced persistent `git config` with the scoped helper.
 - `.fabro/workflows/plan-validation/scripts/publish_ready.sh`: replaced persistent `git config` with the scoped helper.
 - `.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh`: added assertions that published commits use `Fabro <noreply@fabro.sh>` and that the script does not mutate repo-local Git identity.
 - `.fabro/workflows/scripts/test_git_identity.sh`: added a focused regression test for the helper and a scan that fails if Fabro workflow files reintroduce `fabro@users.noreply.github.com`.
@@ -90,10 +90,10 @@ Validation:
 
 - `bash .fabro/workflows/scripts/test_git_identity.sh` — passed.
 - `bash .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh` — passed.
-- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
-- `bash -n .fabro/workflows/scripts/git_identity.sh .fabro/workflows/scripts/test_git_identity.sh .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh .fabro/workflows/plan-validation/scripts/publish_ready.sh .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh .fabro/workflows/plan-validation/test.sh` — passed.
+- `bash .fabro/workflows/code-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash -n .fabro/workflows/scripts/git_identity.sh .fabro/workflows/scripts/test_git_identity.sh .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh .fabro/workflows/code-review/scripts/finalize_iteration_status.sh .fabro/workflows/code-review/scripts/publish_polish_to_main.sh .fabro/workflows/plan-validation/scripts/publish_ready.sh .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh .fabro/workflows/code-review/scripts/test_finalize_iteration_status.sh .fabro/workflows/plan-validation/test.sh` — passed.
 - `fabro validate .fabro/workflows/iteration-implementation/workflow.toml --no-upgrade-check` — passed with existing goal-gate retry warnings.
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with existing goal-gate retry warnings.
+- `fabro validate .fabro/workflows/code-review/workflow.toml --no-upgrade-check` — passed with existing goal-gate retry warnings.
 - `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed.
 - `./bin/dev check` — passed.
 

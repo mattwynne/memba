@@ -1,4 +1,4 @@
-# Problem: Iteration review checkpoint tried to add ignored .fabro/tmp
+# Problem: Code review checkpoint tried to add ignored .fabro/tmp
 
 Date: 2026-05-29
 
@@ -27,7 +27,7 @@ The review preflight script added .fabro/tmp/ to .git/info/exclude and then wrot
 Commands used:
 
 ```bash
-bin/dev iteration-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
+bin/dev code-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
 ```
 
 Observations:
@@ -40,7 +40,7 @@ Observations:
 Retry command after applying the workflow metadata fix:
 
 ```bash
-bin/dev iteration-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
+bin/dev code-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
 ```
 
 ## Resolution
@@ -51,14 +51,14 @@ Root cause: Review preflight wrote `.fabro/tmp/` to `.git/info/exclude` and then
 
 Fix applied:
 
-- `.fabro/workflows/iteration-review/workflow.fabro`: commit `c4fdb16` changed preflight to clean/create `.fabro/tmp` without mutating `.git/info/exclude`.
-- `.fabro/workflows/iteration-review/workflow.toml`: commit `c4fdb16` expanded checkpoint excludes to cover both `.fabro/tmp` and `.fabro/tmp/**`.
-- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`: commit `c4fdb16` removed the `.git/info/exclude` write and stages changes with explicit pathspec exclusions for `.fabro/tmp`.
+- `.fabro/workflows/code-review/workflow.fabro`: commit `c4fdb16` changed preflight to clean/create `.fabro/tmp` without mutating `.git/info/exclude`.
+- `.fabro/workflows/code-review/workflow.toml`: commit `c4fdb16` expanded checkpoint excludes to cover both `.fabro/tmp` and `.fabro/tmp/**`.
+- `.fabro/workflows/code-review/scripts/publish_polish_to_main.sh`: commit `c4fdb16` removed the `.git/info/exclude` write and stages changes with explicit pathspec exclusions for `.fabro/tmp`.
 
 Validation:
 
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml` — read-only status check reported validation OK, with only existing goal-gate retry warnings.
-- Read-only status check confirmed `rg "git/info/exclude" .fabro/workflows/iteration-review` finds no matches in current review workflow files.
+- `fabro validate .fabro/workflows/code-review/workflow.toml` — read-only status check reported validation OK, with only existing goal-gate retry warnings.
+- Read-only status check confirmed `rg "git/info/exclude" .fabro/workflows/code-review` finds no matches in current review workflow files.
 
 Remaining follow-up:
 

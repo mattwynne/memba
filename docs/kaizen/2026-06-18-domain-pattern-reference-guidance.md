@@ -20,10 +20,10 @@ After adding the reference docs, Matt asked that the Fabro code-review prompts u
 We updated:
 
 - `docs/reference/README.md` to index all four pattern reference docs.
-- `.fabro/workflows/iteration-review/prompts/review.md` and `synthesize_review.md` to require reviewers and synthesis to use the four docs as design-quality guidance when reviewing domain modeling, Commanded/CQRS, event streams, projections, aggregates, read models, and responsibility boundaries.
+- `.fabro/workflows/code-review/prompts/review.md` and `synthesize_review.md` to require reviewers and synthesis to use the four docs as design-quality guidance when reviewing domain modeling, Commanded/CQRS, event streams, projections, aggregates, read models, and responsibility boundaries.
 - `.fabro/workflows/iteration-implementation/prompts/review.md` and `synthesize_review.md` with the same guidance for the older implementation-review prompt set.
-- `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh` so the four reference docs are printed into the review evidence context.
-- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` and `test_collect_implementation_evidence.sh` so future workflow edits must keep these pattern references visible.
+- `.fabro/workflows/code-review/scripts/collect_implementation_evidence.sh` so the four reference docs are printed into the review evidence context.
+- `.fabro/workflows/code-review/scripts/test_review_report_routing.sh` and `test_collect_implementation_evidence.sh` so future workflow edits must keep these pattern references visible.
 - Relevant ADRs (`0002`, `0004`, `0005`, `0007`, `0008`, `0009`, `0011`, `0021`, `0022`) with “Related reference guidance” links to the applicable pattern docs.
 
 The change was committed and pushed as:
@@ -60,9 +60,9 @@ Making the reference guidance visible to both ADR readers and Fabro reviewers im
 
 We ran:
 
-- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`
-- `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh`
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check`
+- `bash .fabro/workflows/code-review/scripts/test_review_report_routing.sh`
+- `bash .fabro/workflows/code-review/scripts/test_collect_implementation_evidence.sh`
+- `fabro validate .fabro/workflows/code-review/workflow.toml --no-upgrade-check`
 
 Fabro validation passed with the existing expected goal-gate retry warnings.
 

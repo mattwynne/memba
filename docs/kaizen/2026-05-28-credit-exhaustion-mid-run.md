@@ -95,7 +95,7 @@ struck on the last task (009 of 009), after 8 durable task commits.
 - Re-run `iteration-implementation` against
   `docs/iterations/001-event-sourced-foundation/plan.md`.
 - Confirm it resumes at task 009 with no rework (resume rehearsal), then let it
-  finish and hand off to `iteration-review`.
+  finish and hand off to `code-review`.
 
 ## Resolution
 

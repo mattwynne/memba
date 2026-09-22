@@ -4,7 +4,7 @@ Date: 2026-05-29
 Status: implemented
 
 > Supersedes the PR/auto-merge delivery references in the resolution plan of
-> `2026-05-28-extract-iteration-review-workflow.md` (Change 1/Change 2 say "PR +
+> `2026-05-28-extract-code-review-workflow.md` (Change 1/Change 2 say "PR +
 > squash-merge" / "rides the squash-merge"). Those entries are left as-is; where
 > they describe *delivery*, read this kaizen instead. The smell-alerting and
 > simplification decisions there still stand.
@@ -15,7 +15,7 @@ Today the two workflows have two separate merge/PR points:
 
 - `iteration-implementation` ends by creating a pull request, which it never
   merges.
-- `iteration-review` is the node that actually auto-squash-merges the branch to
+- `code-review` is the node that actually auto-squash-merges the branch to
   `main` (`[run.pull_request] auto_merge = true, merge_strategy = "squash"`).
 
 The implementation PR is effectively vestigial: it sits open until review merges
@@ -49,7 +49,7 @@ the honest model.
 iteration-implementation:  build → green dev check → plan conformance
                            → squash-merge to main           (no PR)
 
-iteration-review (after):  clone main → review the iteration's diff
+code-review (after):  clone main → review the iteration's diff
                            → auto-fix bounded issues → re-run dev check
                            → push polish to main → log judgement findings
                                                     to docs/code-health.md
@@ -84,7 +84,7 @@ iteration-review (after):  clone main → review the iteration's diff
 
 ## Acceptance criteria
 
-- Neither `iteration-implementation` nor `iteration-review` creates a pull
+- Neither `iteration-implementation` nor `code-review` creates a pull
   request; neither `workflow.toml` contains a `[run.pull_request]` block.
 - A successful implementation run lands exactly one squashed
   `iteration NNN: ...` commit on `main` with deterministic run metadata in the

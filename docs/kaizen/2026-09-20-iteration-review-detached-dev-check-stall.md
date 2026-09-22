@@ -1,4 +1,4 @@
-# Problem: iteration review repair left a detached dev check running into the workflow gate
+# Problem: code review repair left a detached dev check running into the workflow gate
 
 Date: 2026-09-20
 
@@ -12,12 +12,12 @@ Checked for matching kaizen notes before creating this note. Related notes alrea
 - `docs/kaizen/2026-09-14-test-feedback-cost-outgrew-implementation-loop.md`
 - `docs/kaizen/2026-09-05-review-repair-evidence-ignored-staged-changes.md`
 
-Those notes cover implementation-loop broad checks, task timeouts, and a prior review-repair verifier defect. No existing note matched this iteration-review-specific detached-process stall.
+Those notes cover implementation-loop broad checks, task timeouts, and a prior review-repair verifier defect. No existing note matched this code-review-specific detached-process stall.
 
 Relevant machinery:
 
-- `.fabro/workflows/iteration-review/workflow.fabro`
-- `.fabro/workflows/iteration-review/prompts/apply_review_fixes.md`
+- `.fabro/workflows/code-review/workflow.fabro`
+- `.fabro/workflows/code-review/prompts/apply_review_fixes.md`
 - `bin/dev` quality-gate locking around `dev check`, `dev ci`, `dev test`, and `dev acceptance`
 
 ## Expected standard
@@ -112,16 +112,16 @@ Root cause: the review-repair prompt left ownership of final validation ambiguou
 
 Fix applied:
 
-- `.fabro/workflows/iteration-review/prompts/apply_review_fixes.md`: made the repair node single-owner, prohibited subagents/delegated validation, restricted repair validation to focused commands, reserved `dev check`/`dev check --quick`/`dev ci` and other unscoped full-suite commands for the workflow-owned post-verifier gate, and prohibited detached/background test processes, `nohup`, and over-budget polling.
-- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`: added contract checks so the review workflow test fails if those repair-boundary rules disappear, and corrected the verifier-contract assertion to inspect the delegated verifier script rather than stale inline graph text.
-- `.fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` and `.fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh`: set the temporary bare origin's `HEAD` to `main` so the existing git-fixture tests clone the intended branch reliably during validation.
-- `docs/kaizen/2026-09-20-iteration-review-detached-dev-check-stall.md`: recorded the observation, cause analysis, countermeasure, validation, and follow-up.
+- `.fabro/workflows/code-review/prompts/apply_review_fixes.md`: made the repair node single-owner, prohibited subagents/delegated validation, restricted repair validation to focused commands, reserved `dev check`/`dev check --quick`/`dev ci` and other unscoped full-suite commands for the workflow-owned post-verifier gate, and prohibited detached/background test processes, `nohup`, and over-budget polling.
+- `.fabro/workflows/code-review/scripts/test_review_report_routing.sh`: added contract checks so the review workflow test fails if those repair-boundary rules disappear, and corrected the verifier-contract assertion to inspect the delegated verifier script rather than stale inline graph text.
+- `.fabro/workflows/code-review/scripts/test_finalize_iteration_status.sh` and `.fabro/workflows/code-review/scripts/test_publish_polish_to_main.sh`: set the temporary bare origin's `HEAD` to `main` so the existing git-fixture tests clone the intended branch reliably during validation.
+- `docs/kaizen/2026-09-20-code-review-detached-dev-check-stall.md`: recorded the observation, cause analysis, countermeasure, validation, and follow-up.
 
 Validation:
 
-- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
-- `for f in .fabro/workflows/iteration-review/scripts/test_*.sh; do bash "$f"; done` — passed all iteration-review shell contract/helper tests.
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — validation OK; retained the pre-existing `finalize_iteration_status` goal-gate warning.
+- `bash .fabro/workflows/code-review/scripts/test_review_report_routing.sh` — passed.
+- `for f in .fabro/workflows/code-review/scripts/test_*.sh; do bash "$f"; done` — passed all code-review shell contract/helper tests.
+- `fabro validate .fabro/workflows/code-review/workflow.toml --no-upgrade-check` — validation OK; retained the pre-existing `finalize_iteration_status` goal-gate warning.
 - `env -u MEMBA_DEVENV_SHELL ./bin/dev check` — passed: 1,529 ExUnit tests with 0 failures; 189 browser scenarios / 1,415 steps passed.
 
 Check / expected result:

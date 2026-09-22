@@ -1,13 +1,13 @@
-# Problem: iteration review sandbox clone timed out
+# Problem: code review sandbox clone timed out
 
 Date: 2026-05-29
 
 ## Context
 
-After adding the `iteration-review` skill and `bin/dev iteration-review`, we tried to review PR #1:
+After adding the `code-review` skill and `bin/dev code-review`, we tried to review PR #1:
 
 ```bash
-bin/dev iteration-review \
+bin/dev code-review \
   pr/event-sourced-foundation \
   docs/iterations/001-event-sourced-foundation/plan.md \
   origin/main
@@ -55,7 +55,7 @@ The important historical lesson from `2026-05-29-return-to-fabro-managed-clone-f
 
 ## Problem statement
 
-Iteration review currently depends on Fabro's Docker sandbox being able to clone the repository during sandbox initialization. When that clone times out, the review cannot proceed and the failure is too early to benefit from workflow-level diagnostics.
+Code review currently depends on Fabro's Docker sandbox being able to clone the repository during sandbox initialization. When that clone times out, the review cannot proceed and the failure is too early to benefit from workflow-level diagnostics.
 
 We need a reliable, observable review-run startup path that preserves the advantages of Fabro-managed clones/run branches without reintroducing the opaque failure modes that previous sandbox work was designed to avoid.
 
@@ -94,7 +94,7 @@ Run continued past sandbox into `prepare_mix.sh` and then into the workflow.
 
 ## Conclusion
 
-The original failure was a transient network timeout on the Fabro server. No workflow, image, or clone-strategy change is needed. Fabro-managed clone works correctly for `iteration-review` from a git worktree context.
+The original failure was a transient network timeout on the Fabro server. No workflow, image, or clone-strategy change is needed. Fabro-managed clone works correctly for `code-review` from a git worktree context.
 
 ## Success criteria (met)
 
@@ -110,8 +110,8 @@ Root cause: Review sandbox setup could fail opaquely during clone/setup, leaving
 Fix applied:
 
 - `48edd9c`: recorded the clone-timeout finding.
-- `d136afb`: fixed iteration-review run branch handling so review evidence collection targets the intended branch/workspace.
-- `23d7eeb`: made iteration review evidence failures diagnostic.
+- `d136afb`: fixed code-review run branch handling so review evidence collection targets the intended branch/workspace.
+- `23d7eeb`: made code review evidence failures diagnostic.
 
 Validation:
 

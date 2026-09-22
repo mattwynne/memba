@@ -222,7 +222,7 @@ Fix applied:
 - Host recovery: terminated the obsolete stuck Fabro workers and setup commands for runs `01KVD4QS7YWV8WXTKT4VTY0AZW` and `01KVD4QTPF926TR7PRT7H792VA`; both runs then became inspectable as `failed`, reason `terminated`.
 - Host cleanup: stopped the two corresponding Docker run containers (`fabro-run-01KVD4QS7YWV8WXTKT4VTY0AZW` and `fabro-run-01KVD4QTPF926TR7PRT7H792VA`).
 - Host capacity: increased Proxmox LXC 115 (`fabro`) from 2 GB RAM / 1 GB swap / 1 core to 4 GB RAM / 2 GB swap / 2 cores with `pct set 115 -memory 4096 -swap 2048 -cores 2`.
-- `.fabro/workflows/iteration-review/workflow.toml`: added Docker resource limits (`cpu = 1`, `memory = "1024MB"`) so review sandboxes cannot individually consume the whole Fabro LXC while running alongside implementation sandboxes.
+- `.fabro/workflows/code-review/workflow.toml`: added Docker resource limits (`cpu = 1`, `memory = "1024MB"`) so review sandboxes cannot individually consume the whole Fabro LXC while running alongside implementation sandboxes.
 
 Validation:
 
@@ -230,7 +230,7 @@ Validation:
 - `fabro inspect 01KVD4QTPF926TR7PRT7H792VA` — returned `failed`, reason `terminated` instead of timing out.
 - `fabro doctor` — server location and credentials passed; remaining warnings were version parity, missing Daytona sandbox, and missing Brave web search, not server health.
 - `git show origin/main:docs/iterations/README.md | grep -n "034\|035\|036\|037"` — confirmed iteration state was not left ambiguous: 034 and 035 merged; 036 and 037 validated.
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with the expected existing goal-gate retry warnings.
+- `fabro validate .fabro/workflows/code-review/workflow.toml --no-upgrade-check` — passed with the expected existing goal-gate retry warnings.
 
 Remaining follow-up:
 

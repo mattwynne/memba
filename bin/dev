@@ -1269,7 +1269,7 @@ _iteration_status_tool() {
 }
 
 # @cmd Run Fabro workflow helpers
-# @arg command![validate-plan|deliver|review|pull-todo|progress|clean-branches] Helper command
+# @arg command![validate-plan|deliver|code-review|review|pull-todo|progress|clean-branches] Helper command
 # @arg args~ Arguments for the helper command
 fabro() {
   local command_name="${1:-}"
@@ -1280,7 +1280,11 @@ fabro() {
   case "$command_name" in
     validate-plan) _fabro_validate_plan "$@" ;;
     deliver) _fabro_deliver "$@" ;;
-    review) _fabro_review "$@" ;;
+    code-review) _fabro_code_review "$@" ;;
+    review)
+      echo "Deprecated: use '$0 fabro code-review ...'." >&2
+      _fabro_code_review "$@"
+      ;;
     pull-todo) _fabro_pull_todo "$@" ;;
     progress) _fabro_progress "$@" ;;
     clean-branches) _fabro_clean_branches "$@" ;;
@@ -1291,7 +1295,8 @@ Usage: $0 fabro <command> [args]
 Commands:
   validate-plan <plan_path>
   deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]
-  review <branch> <plan_path> [base_ref_or_base_sha]
+  code-review <branch> <plan_path> [base_ref_or_base_sha]
+  review <branch> <plan_path> [base_ref_or_base_sha]  (deprecated alias)
   pull-todo <run_id> [plan_path] [destination]
   progress <run_id> [plan_path] [--watch] [--interval seconds]
   clean-branches [--force]
@@ -1794,7 +1799,7 @@ _fabro_deliver() {
       implementation_status_class=$(_fabro_implementation_status_class "$implementation_status_kind")
       case "$implementation_status_class" in
         succeeded)
-          echo "Fabro launch failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind}'. Continuing to review." >&2
+          echo "Fabro launch failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind}'. Continuing to detached code review." >&2
           implementation_create_status=0
           ;;
         failed)
@@ -1827,7 +1832,7 @@ _fabro_deliver() {
     implementation_status_class=$(_fabro_implementation_status_class "$implementation_status_kind")
     case "$implementation_status_class" in
       succeeded)
-        echo "Fabro wait failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind}'. Continuing to review." >&2
+        echo "Fabro wait failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind}'. Continuing to detached code review." >&2
         ;;
       failed)
         _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
@@ -1842,18 +1847,22 @@ _fabro_deliver() {
     esac
   fi
 
-  echo "== Running review workflow =="
+  echo "== Launching detached post-merge code-review healer =="
   git -C "$repo_root" fetch origin
-  _fabro_review origin/main "$plan_path" "$base_sha"
+  if ! _fabro_code_review origin/main "$plan_path" "$base_sha"; then
+    echo "WARNING: implementation was published successfully, but the detached code-review healer could not be launched." >&2
+    echo "Delivery remains successful. Retry with: $0 fabro code-review origin/main $plan_path $base_sha" >&2
+  fi
+  return 0
 }
 
-_fabro_review() {
+_fabro_code_review() {
   local branch="${1:-}"
   local plan_path="${2:-}"
   local base_ref_or_base_sha="${3:-}"
 
   if [ -z "$branch" ] || [ -z "$plan_path" ]; then
-    echo "Usage: $0 fabro review <branch> <plan_path> [base_ref_or_base_sha]" >&2
+    echo "Usage: $0 fabro code-review <branch> <plan_path> [base_ref_or_base_sha]" >&2
     exit 2
   fi
 
@@ -1877,7 +1886,7 @@ _fabro_review() {
     review_branch="$branch"
     ref="$review_branch"
   elif git -C "$repo_root" rev-parse --verify --quiet "${branch}^{commit}" >/dev/null; then
-    echo "Resolved $branch as a commit, tag, or detached ref, but fabro review needs a remote branch Fabro can clone." >&2
+    echo "Resolved $branch as a commit, tag, or detached ref, but fabro code-review needs a remote branch Fabro can clone." >&2
     echo "Create and push a review branch first, then retry: git branch <branch-name> $branch && git push -u origin <branch-name>" >&2
     exit 1
   else
@@ -1890,7 +1899,7 @@ _fabro_review() {
       local branch_worktree
       branch_worktree=$(git -C "$repo_root" branch --format='%(worktreepath)' --list "$review_branch")
       if [ -n "$branch_worktree" ]; then
-        review_branch="review/tmp/${remote_branch//\//-}-$(date +%Y%m%d%H%M%S)"
+        review_branch="code-review/tmp/${remote_branch//\//-}-$(date +%Y%m%d%H%M%S)"
         ref="$review_branch"
         git -C "$repo_root" branch "$review_branch" "origin/$remote_branch"
         git -C "$repo_root" push -u origin "$review_branch"
@@ -1907,7 +1916,7 @@ _fabro_review() {
   safe_branch=$(printf '%s' "$review_branch" | tr '/:' '--' | tr -cd 'A-Za-z0-9._-')
 
   local worktree_parent="${MEMBA_REVIEW_WORKTREE_ROOT:-$(dirname "$repo_root")}"
-  local worktree="$worktree_parent/memba-review-$safe_branch"
+  local worktree="$worktree_parent/memba-code-review-$safe_branch"
 
   if [ -e "$worktree" ]; then
     echo "Review worktree already exists: $worktree" >&2
@@ -1951,25 +1960,54 @@ _fabro_review() {
     fi
   fi
 
-  echo "Running iteration review in isolated worktree: $worktree"
-  echo "Review branch: $worktree_branch"
-  echo "Review HEAD: $(git -C "$worktree" rev-parse HEAD)"
-  echo "Review upstream: $(git -C "$worktree" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
-  echo "Review base input: $base_ref_or_base_sha"
-  echo "Review base sha: $base_sha"
-  (
+  echo "Launching code review from isolated worktree: $worktree"
+  echo "Code-review branch: $worktree_branch"
+  echo "Code-review HEAD: $(git -C "$worktree" rev-parse HEAD)"
+  echo "Code-review base sha: $base_sha"
+
+  local launch_output launch_status=0 run_id run_url
+  launch_output=$(
     cd "$worktree"
-    command fabro run "$repo_root/.fabro/workflows/iteration-review/workflow.toml" \
+    command fabro run "$repo_root/.fabro/workflows/code-review/workflow.toml" \
       -I "plan_path=$plan_path" \
       -I "base_sha=$base_sha" \
-      --auto-approve
-  )
+      --detach 2>&1
+  ) || launch_status=$?
+  printf '%s\n' "$launch_output"
+  run_id=$(printf '%s\n' "$launch_output" | _fabro_extract_run_id)
+
+  git -C "$repo_root" worktree remove "$worktree" >/dev/null 2>&1 || true
+
+  if [ -z "$run_id" ]; then
+    echo "Code-review launch did not return a run ID. Implementation publication is unchanged." >&2
+    if [ "$launch_status" -eq 0 ]; then
+      launch_status=1
+    fi
+    return "$launch_status"
+  fi
+
+  mkdir -p "$repo_root/.fabro/tmp"
+  printf '%s\n' "$run_id" > "$repo_root/.fabro/tmp/code-review-run-id"
+  run_url="https://fabro.home.wynne.family/runs/$run_id"
+  echo "Code-review run ID: $run_id"
+  echo "Code-review URL: $run_url"
+  echo "The healer is detached and does not gate the already-successful implementation delivery."
+  echo "Inspect/status: fabro inspect $run_id --no-upgrade-check"
+  echo "Events: fabro events $run_id --no-upgrade-check"
+  echo "Logs: fabro logs $run_id --no-upgrade-check"
+  echo "If it pauses for Matt, answer the consequential gate in the Fabro web UI or by attaching: fabro attach $run_id"
+
+  if [ "$launch_status" -ne 0 ]; then
+    echo "Fabro returned run ID $run_id but the local detached launch command exited $launch_status; inspect the retained remote run before retrying." >&2
+    return "$launch_status"
+  fi
 }
 
 _fabro_is_review_cleanup_candidate() {
   local name="$1"
   case "$name" in
-    review/tmp/*) return 0 ;;
+    code-review/tmp/*) return 0 ;;
+    review/tmp/*) return 0 ;; # compatibility cleanup for pre-rename branches
     review/main-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) return 0 ;;
     *) return 1 ;;
   esac
@@ -2042,7 +2080,7 @@ _fabro_clean_branches() {
       echo "would delete $branch_name"
     fi
     cleaned=$((cleaned + 1))
-  done < <(git -C "$repo_root" for-each-ref --format='%(refname)' refs/remotes/origin/review)
+  done < <(git -C "$repo_root" for-each-ref --format='%(refname)' refs/remotes/origin/code-review refs/remotes/origin/review)
 
   echo "Temporary review branch cleanup candidates: $cleaned; skipped: $skipped."
 }

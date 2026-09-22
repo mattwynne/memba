@@ -6,7 +6,7 @@ Status: implemented
 > Builds on the trunk-based delivery model in
 > `2026-05-29-deliver-iterations-by-merging-to-main.md` (implementation merges to
 > `main`; review runs after, fix-forward, never blocks) and the split established in
-> `2026-05-28-extract-iteration-review-workflow.md`. This kaizen adds an orchestration
+> `2026-05-28-extract-code-review-workflow.md`. This kaizen adds an orchestration
 > layer *above* those three workflows; it changes none of their internal behaviour.
 
 ## Context
@@ -15,7 +15,7 @@ Delivering one iteration is three separate manual steps today:
 
 1. `iteration-planning` skill validates the plan via the `plan-validation` workflow.
 2. `iteration-implementation` workflow implements it and squash-merges to `main`.
-3. `iteration-review` workflow (via `bin/dev iteration-review`) reviews the merged
+3. `code-review` workflow (via `bin/dev code-review`) reviews the merged
    diff post-hoc.
 
 Each is kicked off by hand, one skill/command at a time. The phases are already
@@ -65,7 +65,7 @@ iteration-deliver (lightweight run: git read + fabro run-management tools; no me
   orchestrate iteration-implementation child (-I plan_path)
         fail      ─▶ stop: implementation failure (no review; iteration not on main)
         success   ─▶ "iteration NNN:" squash-commit now on main
-  orchestrate iteration-review child (-I plan_path -I base_sha)
+  orchestrate code-review child (-I plan_path -I base_sha)
         (post-merge polish; non-blocking; never pushes red)
   finalize: bin/dev iteration-mark-merged-style ready→merged index update, push
   summary: stage-labeled report (child run IDs/URLs, validation verdict, review findings)
@@ -77,10 +77,10 @@ Each child's contract is unchanged:
 |---|---|---|---|
 | plan-validation | `plan_path` | own | READY / NOT READY verdict |
 | iteration-implementation | `plan_path` | own (fresh clone of `main`) | squashed `iteration NNN:` pushed to `main` |
-| iteration-review | `plan_path`, `base_sha` | own (fresh clone of merged `main`) | bounded polish commit + code-health findings |
+| code-review | `plan_path`, `base_sha` | own (fresh clone of merged `main`) | bounded polish commit + code-health findings |
 
 `base_sha` is the only new plumbing: deliver captures `origin/main`'s pre-implementation
-tip and threads it to the review child — exactly what `bin/dev iteration-review` does by
+tip and threads it to the review child — exactly what `bin/dev code-review` does by
 hand today (diff `base_sha..HEAD` of merged `main`).
 
 ## Design rules
@@ -123,7 +123,7 @@ hand today (diff `base_sha..HEAD` of merged `main`).
 - **New `iteration-deliver` skill**: a thin driver to kick off / re-run deliver against
   a selected `ready` iteration and report, for delivering a validated plan without
   going back through planning.
-- **`iteration-implementation` / `iteration-review` skills**: retained as escape
+- **`iteration-implementation` / `code-review` skills**: retained as escape
   hatches for manual re-runs and resume scenarios; deliver becomes the normal path.
 
 ## Acceptance criteria
@@ -132,7 +132,7 @@ hand today (diff `base_sha..HEAD` of merged `main`).
   `validation:not-ready` status and blocker text; `main` is untouched.
 - A deliver run against a `ready` plan produces, as nested child runs: plan-validation
   (READY), iteration-implementation (one `iteration NNN:` commit on `main`),
-  iteration-review (runs post-merge against the captured `base_sha`); then a `merged`
+  code-review (runs post-merge against the captured `base_sha`); then a `merged`
   status in `docs/iterations/README.md` and a stage-labeled summary listing all child
   run IDs.
 - Child runs are visible under the deliver run's Children tab.

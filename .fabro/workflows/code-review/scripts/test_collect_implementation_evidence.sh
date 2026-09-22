@@ -26,8 +26,8 @@ git add README.md
 git commit --quiet -m 'initial'
 base_sha=$(git rev-parse HEAD)
 
-mkdir -p .fabro/workflows/iteration-review docs/kaizen docs/misc docs/reference
-printf 'workflow evidence marker\n' > .fabro/workflows/iteration-review/workflow.fabro
+mkdir -p .fabro/workflows/code-review docs/kaizen docs/misc docs/reference
+printf 'workflow evidence marker\n' > .fabro/workflows/code-review/workflow.fabro
 printf 'kaizen evidence marker\n' > docs/kaizen/example.md
 printf 'unexcerpted marker\n' > docs/misc/example.md
 printf 'domain reference marker\n' > docs/reference/domain-driven-design.md
@@ -50,7 +50,7 @@ assert_output_contains 'event sourcing reference marker'
 assert_output_contains '=== docs/reference/responsibility-driven-design.md ==='
 assert_output_contains 'responsibility reference marker'
 assert_output_contains '--- changed source/config/test/workflow/kaizen/reference file excerpts ---'
-assert_output_contains '=== .fabro/workflows/iteration-review/workflow.fabro ==='
+assert_output_contains '=== .fabro/workflows/code-review/workflow.fabro ==='
 assert_output_contains 'workflow evidence marker'
 assert_output_contains '=== docs/kaizen/example.md ==='
 assert_output_contains 'kaizen evidence marker'
@@ -67,4 +67,4 @@ if grep -Fq 'No changed files matched the excerpt filter.' "$output_path"; then
   exit 1
 fi
 
-echo 'iteration-review implementation evidence tests passed'
+echo 'code-review implementation evidence tests passed'

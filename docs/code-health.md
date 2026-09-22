@@ -208,7 +208,7 @@ Note: the final review synthesis omitted the independent reviewers' code-health 
    - Suggested next action: before introducing tagged Examples blocks, decide whether inventory should represent an outline once or represent each expanded example, then add a focused parser/inventory regression for that policy.
 
 3. **Review-repair verification depends on an unavailable `cmp` executable and did not fail closed.**
-   - Evidence: `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh` compares snapshots with `cmp -s`, but the review sandbox did not provide `cmp`; the corresponding workflow stage still reported success. The review's product diff was independently checked and the full test suite passed, so this did not invalidate iteration 061's product result.
+   - Evidence: `.fabro/workflows/code-review/scripts/verify_review_repair.sh` compares snapshots with `cmp -s`, but the review sandbox did not provide `cmp`; the corresponding workflow stage still reported success. The review's product diff was independently checked and the full test suite passed, so this did not invalidate iteration 061's product result.
    - Risk: a future review repair can appear independently verified even when the before/after comparison command never ran, weakening confidence that a requested repair produced a repository change.
    - Suggested next action: replace `cmp` with a repository-supported Git comparison or add the utility to the review image, and add a workflow-script test proving a missing comparison tool or failed comparison cannot be reported as successful verification.
 

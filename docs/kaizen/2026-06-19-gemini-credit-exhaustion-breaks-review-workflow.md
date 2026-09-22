@@ -41,7 +41,7 @@ LLM error: Rate limited by gemini: Your prepayment credits are depleted. Please 
 After the final retry, the workflow routed to `synthesis_unavailable` and failed with:
 
 ```text
-Iteration review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.
+Code review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.
 ```
 
 The immediate operator workaround was to route the `gemini_review` nodes in Fabro workflows to `gpt-5.5` and rerun the review.
@@ -89,7 +89,7 @@ Fabro is supposed to provide reliable implementation and review throughput. If a
 
 ### Additional observation: 2026-09-21 factory retrospective
 
-The failure class recurred after model-routing changes. Of eight iteration-review runs from 2026-09-13 onward, five failed at `synthesize_review` because one required reviewer produced no usable report:
+The failure class recurred after model-routing changes. Of eight code-review runs from 2026-09-13 onward, five failed at `synthesize_review` because one required reviewer produced no usable report:
 
 - `01M2GFYQR4NV7T7FFQF833WY79`
 - `01M2GHF4W1R9AANP8NVKAZRC0Q`
@@ -109,7 +109,7 @@ Status: awaiting approval. Do not change the ledger to `Experiment` or alter the
 
 Hypothesis: allowing synthesis with at least two usable independent reports from distinct configured model/provider routes will prevent a single unavailable reviewer from terminating otherwise reviewable work, without reducing defect detection or bypassing a negative verdict.
 
-Baseline: 5/8 iteration-review runs from 2026-09-13 onward terminated at synthesis because one required reviewer was unavailable; three are directly tied to HTTP 402. Historical May and June notes show the same class across Anthropic and Gemini.
+Baseline: 5/8 code-review runs from 2026-09-13 onward terminated at synthesis because one required reviewer was unavailable; three are directly tied to HTTP 402. Historical May and June notes show the same class across Anthropic and Gemini.
 
 Primary outcome metric: **eligible review completion rate** — the proportion of review runs with at least two usable independent reports that reach a synthesized product verdict rather than terminating solely for reviewer unavailability. Baseline for the five affected runs: 0/5. Proposed operational target: 5/5 qualifying runs after rollout.
 
@@ -143,17 +143,19 @@ Source: [2026-09-21 software factory retrospective](../notes/2026-09-21-software
 
 ## Approved experiment: simplify post-merge review into a healer
 
+Status: Experiment
+
 Approved: 2026-09-21
 
 The quorum proposal above was rejected during decision discussion. Two of the three reviewers currently depend on OpenRouter, so a two-report quorum would still fail during a full OpenRouter outage. Provider-aware fallbacks would add machinery to preserve multi-provider review before its incremental value has been demonstrated.
 
-Rename the standard post-merge workflow from `iteration-review` to `code-review` and make its purpose explicit: it is a non-gating healer for trunk-based development. Implementation may merge to `main` first. Code review then produces zero or more follow-up improvements and must not retroactively turn successful delivery into failure.
+Rename the former standard post-merge workflow and canonical command to `code-review` and make its purpose explicit: it is a non-gating healer for trunk-based development. Implementation may merge to `main` first. Code review then produces zero or more follow-up improvements and must not retroactively turn successful delivery into failure.
 
 Hypothesis: one focused OpenAI reviewer with explicit clean/heal/record/escalate outcomes will complete more reliably and cheaply than three-provider fan-out and synthesis while retaining the useful code-health and bounded-polish outcomes.
 
 Baseline:
 
-- 5/8 recent iteration-review runs terminated at synthesis because one reviewer was unavailable.
+- 5/8 recent code-review runs terminated at synthesis because one reviewer was unavailable.
 - The current workflow requires three reviewer reports and a synthesis stage.
 - Five `docs/code-health.md` sections explicitly say synthesis omitted independent-review findings and the recorder recovered them.
 - Review currently reruns a full gate before reviewing even though implementation already validated the exact candidate.
@@ -195,3 +197,19 @@ Decision criteria:
 - **Revert:** the simplified reviewer loses a consequential historical finding, silently auto-fixes a judgement-heavy change, publishes without required validation, or couples healer failure back into delivery success.
 
 Review due: 2026-10-19, requiring at least five qualifying reviews for adoption. Slack integration is a later optional slice and is not part of this experiment.
+
+### Slice 1 implementation and validation
+
+Implemented locally without launching a live delivery or code-review run:
+
+- Renamed the workflow directory and canonical helper to `code-review`; `bin/dev fabro review` remains only as a deprecated forwarding alias.
+- `bin/dev fabro deliver` now waits only for implementation publication, then launches the healer with `--detach`, reports the run ID, web URL and recovery/status commands, and preserves successful delivery if launch fails.
+- Replaced Claude/Sol/Gemini fan-out and synthesis with one explicitly routed OpenAI GPT-5.6 Terra reviewer, distinct from the routine GPT-5.6 Sol implementation/repair assignment.
+- Added explicit clean, one-pass bounded heal, durable record and consequential-human routes. Clean skips the full gate; bounded code/config/test healing requires exact-state `dev check`; docs-only code-health publication skips that unnecessary gate.
+- Added a fail-closed `shape=hexagon` consequential gate with record/defer, prepare separately approved follow-up, dismiss-with-rationale and freeform options. Canonical launch does not pass `--auto-approve`.
+- Retained concurrent-main-safe follow-up publication and added run/disposition, human-pause, heal-publication and elapsed observability in Fabro stage output.
+- Deleted obsolete fan-out/synthesis prompts and graph machinery.
+
+Validation includes static graph/schema/command assertions; deterministic no-model routing fixtures for clean, bounded heal, record, consequential, no-progress, provider failure, publication/no-op, unanswered input and detached launch; historical no-model replay fixtures for an ADR 0024 aggregate-boundary finding and two findings omitted by synthesis; helper publication/no-progress tests; Fabro graph validation; and the required exact-state `dev check`.
+
+These fixtures validate classification and routing contracts only. They do not establish operational effectiveness; adoption still requires the 5/5 qualifying operational sample and guardrails above.

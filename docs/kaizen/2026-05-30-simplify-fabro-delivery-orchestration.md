@@ -22,7 +22,7 @@ Keep only these public iteration workflow commands:
 ```bash
 bin/dev fabro validate-plan <plan_path>
 bin/dev fabro deliver <plan_path>
-bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]
+bin/dev fabro code-review <branch> <plan_path> [base_ref_or_base_sha]
 ```
 
 Roles:
@@ -62,7 +62,7 @@ Status finalization should be owned by the delivery/review flow, not exposed as 
 6. Watch the implementation run in the foreground, or use `fabro attach`/`fabro wait` if the command detaches.
 7. Fetch `origin/main` and run review directly:
    ```bash
-   fabro run .fabro/workflows/iteration-review/workflow.toml \
+   fabro run .fabro/workflows/code-review/workflow.toml \
      -I plan_path=<plan_path> \
      -I base_sha=<base_sha> \
      --auto-approve
@@ -78,7 +78,7 @@ The review workflow is already the last delivery stage:
 - review may publish a green polish commit;
 - after review succeeds, delivery is complete.
 
-Therefore `.fabro/workflows/iteration-review/` should mark the iteration `merged` as its final successful step.
+Therefore `.fabro/workflows/code-review/` should mark the iteration `merged` as its final successful step.
 
 Expected behaviour:
 
@@ -132,7 +132,7 @@ Remove or retire:
 
 - `iteration-deliver` skill;
 - `iteration-implementation` skill;
-- `iteration-review` skill.
+- `code-review` skill.
 
 Keep unrelated thinking/process skills such as BDD and kaizen skills; they remain useful because they guide interactive work rather than wrapping a deterministic command.
 
@@ -156,7 +156,7 @@ Canonical commands should become:
 ```bash
 bin/dev fabro validate-plan <plan_path>
 bin/dev fabro deliver <plan_path>
-bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]
+bin/dev fabro code-review <branch> <plan_path> [base_ref_or_base_sha]
 ```
 
 ## Validation plan
@@ -167,21 +167,21 @@ After implementation:
 - `bin/dev fabro --help`
 - `fabro validate .fabro/workflows/plan-validation/workflow.toml`
 - `fabro validate .fabro/workflows/iteration-implementation/workflow.toml`
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml`
+- `fabro validate .fabro/workflows/code-review/workflow.toml`
 - `dev check`
 
 If practical, run a dry/safe smoke of argument validation for:
 
 ```bash
 bin/dev fabro deliver
-bin/dev fabro review
+bin/dev fabro code-review
 ```
 
 ## Open questions
 
 - Should `bin/dev fabro deliver` run each workflow in the foreground, or should it use `--detach` plus `fabro attach`/`fabro wait` for better run ID handling?
 - Should a failed review leave status as `implementing`, or should delivery introduce a distinct status such as `review-failed`?
-- Should `bin/dev fabro review` also finalize `merged` when run manually, or only when invoked by `deliver`?
+- Should `bin/dev fabro code-review` also finalize `merged` when run manually, or only when invoked by `deliver`?
 
 ## Resolution
 
@@ -193,21 +193,21 @@ Fix applied:
 
 - `bin/dev`: replaced `fabro start`, `fabro mark-merged`, and `fabro mark-merged-style` with `fabro deliver`; delivery now validates, reserves the WIP slot, commits/pushes `implementing`, captures `origin/main` as `base_sha`, runs implementation directly with `--auto-approve`, and launches review directly with `--auto-approve`.
 - `.fabro/workflows/iteration-deliver/`: removed the parent workflow and its orchestration prompt.
-- `.fabro/workflows/iteration-review/workflow.fabro`: added a final successful status-finalization step after review publish/no-op.
-- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: added merged-status finalization for the plan, iteration index, and implementation record when present.
+- `.fabro/workflows/code-review/workflow.fabro`: added a final successful status-finalization step after review publish/no-op.
+- `.fabro/workflows/code-review/scripts/finalize_iteration_status.sh`: added merged-status finalization for the plan, iteration index, and implementation record when present.
 - `.fabro/workflows/README.md`: documented the direct CLI orchestration contract and canonical commands.
 - `.pi/skills/iteration-planning/SKILL.md`: changed planning to publish artifacts and hand off `bin/dev fabro deliver <plan_path>` instead of launching delivery itself.
-- `.pi/skills/iteration-deliver/`, `.pi/skills/iteration-implementation/`, `.pi/skills/iteration-review/`: removed retired wrapper skills.
+- `.pi/skills/iteration-deliver/`, `.pi/skills/iteration-implementation/`, `.pi/skills/code-review/`: removed retired wrapper skills.
 
 Validation:
 
 - `bash -n bin/dev` — passed.
 - `bin/dev fabro --help` — passed; help lists `validate-plan`, `deliver`, and `review`.
 - `bin/dev fabro deliver` — passed argument-validation smoke; exits with usage and code 2.
-- `bin/dev fabro review` — passed argument-validation smoke; exits with usage and code 2.
+- `bin/dev fabro code-review` — passed argument-validation smoke; exits with usage and code 2.
 - `fabro validate .fabro/workflows/plan-validation/workflow.toml` — passed with existing goal-gate warnings.
 - `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` — passed with existing goal-gate warnings.
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml` — passed with existing goal-gate warnings.
+- `fabro validate .fabro/workflows/code-review/workflow.toml` — passed with existing goal-gate warnings.
 - `dev check` — passed; 108 tests, 0 failures.
 
 Remaining follow-up:

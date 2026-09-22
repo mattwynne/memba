@@ -10,13 +10,14 @@ fi
 
 status=$(git status --short)
 if [ -n "$status" ]; then
-  echo 'Iteration review requires a clean working tree before review starts.' >&2
+  echo 'Code review requires a clean working tree before review starts.' >&2
   printf '%s\n' "$status" >&2
   exit 1
 fi
 
 rm -rf .fabro/tmp
 mkdir -p .fabro/tmp
+date +%s > .fabro/tmp/code-review-start-epoch
 
 if ! git fetch --quiet origin main:refs/remotes/origin/main; then
   echo 'Could not fetch origin/main before capturing review start SHA.' >&2

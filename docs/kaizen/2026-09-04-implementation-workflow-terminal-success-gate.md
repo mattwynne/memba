@@ -6,7 +6,7 @@ Date: 2026-09-04
 
 Fabro 0.316 documents that node outcomes and workflow status are separate. A command node whose script exits non-zero has outcome `failed`, but the workflow can still reach `exit` and complete successfully when the graph handles that failed outcome. A `goal_gate=true` node must have last outcome `succeeded` or `partially_succeeded`; `failed` and `skipped` gates fail the workflow at exit.
 
-Matt asked for the plan-validation insight to be applied to `.fabro/workflows/iteration-implementation/workflow.fabro` without changing plan-validation or iteration-review workflows.
+Matt asked for the plan-validation insight to be applied to `.fabro/workflows/iteration-implementation/workflow.fabro` without changing plan-validation or code-review workflows.
 
 ## Audit evidence
 
@@ -47,7 +47,7 @@ The workflow also used `goal_gate=true` on terminal `Fail:` nodes. Under skipped
 
 - `fabro validate` now reports the expected warning that `publish_to_main` is a goal gate without a retry target. This is deliberate: existing graph routes already handle publish conflicts by preserving a rescue branch, collecting conflict evidence, resolving conflicts, and returning through `dev_check`. A generic goal-gate retry target would risk obscuring the explicit recovery loop.
 - `final_summary` remains non-gating. If it fails after a successful publish, the implementation artifact has already been delivered; the summary is not the implementation success condition.
-- This note covers only the iteration-implementation workflow. Plan-validation and iteration-review were intentionally not changed in this audit.
+- This note covers only the iteration-implementation workflow. Plan-validation and code-review were intentionally not changed in this audit.
 
 ## Validation
 
@@ -102,7 +102,7 @@ The positive `publish_to_main` gate correctly protects the product artifact, but
 
 #### Cross-reference
 
-This is separate from, but operationally similar to, the review terminal-status mismatch recorded in [iteration-review-code-health-recording-failure](2026-06-09-iteration-review-code-health-recording-failure.md). That observation concerns review routing/goal gates after code-health processing; this one concerns implementation run-branch checkpoint publication after a successful `main` publish.
+This is separate from, but operationally similar to, the review terminal-status mismatch recorded in [code-review-code-health-recording-failure](2026-06-09-code-review-code-health-recording-failure.md). That observation concerns review routing/goal gates after code-health processing; this one concerns implementation run-branch checkpoint publication after a successful `main` publish.
 
 #### Open questions
 
@@ -127,16 +127,16 @@ Fix applied:
 - `.fabro/workflows/scripts/git_identity.sh`: added an identity-scoped `git commit-tree` helper.
 - `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`: construct the squashed implementation commit with `git commit-tree`, rebase and push it from a disposable worktree, and leave the active managed run branch on its checkpoint ancestry. If publication conflicts, preserve rescue/recovery branches and materialize a merge conflict without rebasing the run branch.
 - `.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh`: seed a remote managed run branch and prove post-publish and post-conflict-recovery checkpoints fast-forward it.
-- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`: apply the same detached-candidate/disposable-worktree publication strategy to review polish.
-- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: perform any main finalization commit and rebase in a disposable worktree, then stage matching lifecycle metadata on the active run branch for Fabro's next checkpoint.
-- `.fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` and `test_finalize_iteration_status.sh`: cover review publication, approved commit identity, code-health content, no-op review/finalization, concurrent main movement, and run-branch fast-forwards after publication and finalization.
+- `.fabro/workflows/code-review/scripts/publish_polish_to_main.sh`: apply the same detached-candidate/disposable-worktree publication strategy to review polish.
+- `.fabro/workflows/code-review/scripts/finalize_iteration_status.sh`: perform any main finalization commit and rebase in a disposable worktree, then stage matching lifecycle metadata on the active run branch for Fabro's next checkpoint.
+- `.fabro/workflows/code-review/scripts/test_publish_polish_to_main.sh` and `test_finalize_iteration_status.sh`: cover review publication, approved commit identity, code-health content, no-op review/finalization, concurrent main movement, and run-branch fast-forwards after publication and finalization.
 
 Validation:
 
 - Both new run-branch assertions failed against the old reset-based publishers.
 - `bash .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh` — passed after the fix.
-- `bash .fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` — passed after the fix; an independent review first reproduced the remaining non-fast-forward through `finalize_iteration_status.sh`, and the integrated regression now covers that node too.
-- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash .fabro/workflows/code-review/scripts/test_publish_polish_to_main.sh` — passed after the fix; an independent review first reproduced the remaining non-fast-forward through `finalize_iteration_status.sh`, and the integrated regression now covers that node too.
+- `bash .fabro/workflows/code-review/scripts/test_finalize_iteration_status.sh` — passed.
 - `bash -n` for the changed shell scripts — passed.
 
 Remaining follow-up:

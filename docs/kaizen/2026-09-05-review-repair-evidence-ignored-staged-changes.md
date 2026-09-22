@@ -28,18 +28,18 @@ Root cause: the repair snapshot/verifier modeled only an unstaged working-tree p
 
 Fix applied:
 
-- `.fabro/workflows/iteration-review/scripts/verify_review_repair.sh`: compare the complete staged, unstaged, and committed repository state against the captured baseline commit; retain the no-op and locked-feature protections.
-- `.fabro/workflows/iteration-review/workflow.fabro`: capture baseline `HEAD` and delegate verification to the tested script.
-- `.fabro/workflows/iteration-review/scripts/test_verify_review_repair.sh`: prove staged and committed repairs pass, while no-op repairs and staged acceptance-feature changes fail.
-- `.fabro/workflows/iteration-review/scripts/final_artifact_gate.sh`: emit the exact `docs/code-health.md` diff recorded since review start.
-- `.fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh`: prove the final evidence includes the exact staged code-health heading.
-- `.fabro/workflows/iteration-review/prompts/final_summary.md`: require the summary to use that exact diff rather than substitute findings from earlier reviewer/synthesis responses.
+- `.fabro/workflows/code-review/scripts/verify_review_repair.sh`: compare the complete staged, unstaged, and committed repository state against the captured baseline commit; retain the no-op and locked-feature protections.
+- `.fabro/workflows/code-review/workflow.fabro`: capture baseline `HEAD` and delegate verification to the tested script.
+- `.fabro/workflows/code-review/scripts/test_verify_review_repair.sh`: prove staged and committed repairs pass, while no-op repairs and staged acceptance-feature changes fail.
+- `.fabro/workflows/code-review/scripts/final_artifact_gate.sh`: emit the exact `docs/code-health.md` diff recorded since review start.
+- `.fabro/workflows/code-review/scripts/test_final_artifact_gate.sh`: prove the final evidence includes the exact staged code-health heading.
+- `.fabro/workflows/code-review/prompts/final_summary.md`: require the summary to use that exact diff rather than substitute findings from earlier reviewer/synthesis responses.
 
 Validation:
 
-- `bash .fabro/workflows/iteration-review/scripts/test_verify_review_repair.sh` — passed all staged, committed, no-op, and locked-feature cases.
-- `bash .fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh` — passed and proved the final evidence includes the exact staged code-health heading.
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — `Validation: OK`; only the existing intentional finalization goal-gate warning remains.
+- `bash .fabro/workflows/code-review/scripts/test_verify_review_repair.sh` — passed all staged, committed, no-op, and locked-feature cases.
+- `bash .fabro/workflows/code-review/scripts/test_final_artifact_gate.sh` — passed and proved the final evidence includes the exact staged code-health heading.
+- `fabro validate .fabro/workflows/code-review/workflow.toml --no-upgrade-check` — `Validation: OK`; only the existing intentional finalization goal-gate warning remains.
 - Shell syntax checks for all changed scripts — passed.
 - `env -u MEMBA_DEVENV_SHELL ./bin/dev check` — 1,129 tests with 0 failures; 122 browser scenarios and 877 steps passed.
 - Independent Claude review — approved with no blockers.

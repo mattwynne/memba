@@ -182,7 +182,7 @@ Root cause: Long implementation runs needed resumable workflow boundaries rather
 
 Fix applied:
 
-- `1b1d6d9`: split Fabro iteration review workflow and moved toward resumable run boundaries.
+- `1b1d6d9`: split Fabro code review workflow and moved toward resumable run boundaries.
 - `b12f326`: restored Fabro-managed clones/run branches, completing the practical resume contract.
 
 Validation:

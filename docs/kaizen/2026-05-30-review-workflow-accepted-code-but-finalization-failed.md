@@ -4,12 +4,12 @@ Date: 2026-05-30
 
 ## Context
 
-We ran the iteration review workflow for the rescued iteration 006 implementation:
+We ran the code review workflow for the rescued iteration 006 implementation:
 
 - Implementation commit: `e112917` (`Implement browser Cucumber automation`)
 - Plan: `docs/iterations/006-browser-cucumber-automation/plan.md`
 - Review run: `01KSY7ZSD15X0ZS9PWQ0H74VKY`
-- Review command: `PATH="$PWD/bin:$PATH" dev fabro review review/006-browser-cucumber-automation docs/iterations/006-browser-cucumber-automation/plan.md afb4188dcc5ddfe88d0753add1ec35c8738231d4`
+- Review command: `PATH="$PWD/bin:$PATH" dev fabro code-review review/006-browser-cucumber-automation docs/iterations/006-browser-cucumber-automation/plan.md afb4188dcc5ddfe88d0753add1ec35c8738231d4`
 
 ## What happened
 
@@ -34,7 +34,7 @@ The workflow then attempted to continue and failed marking the iteration merged:
 Error: env: ‘python3’: No such file or directory
 
 ✗ Fail: Finalize Iteration Status
-Error: Iteration review succeeded but could not mark the iteration merged. Rerun review after resolving push/status conflicts.
+Error: Code review succeeded but could not mark the iteration merged. Rerun review after resolving push/status conflicts.
 ```
 
 Manual follow-up was needed to push the status changes to `main`.
@@ -67,15 +67,15 @@ Root cause: Review finalization used the implementation `base_sha..HEAD` diff to
 
 Fix applied:
 
-- `.fabro/workflows/iteration-review/scripts/final_artifact_gate.sh`: extracted the final artifact policy into a tested script. It now applies the implementation workflow's explicit plan-permission guard to implementation feature-file changes since `base_sha`, while separately rejecting any `.feature` changes made during review polish since `.fabro/tmp/review-start-sha.txt`.
-- `.fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh`: added regression coverage for planned implementation feature edits, missing plan permission, and forbidden review-polish feature edits.
-- `.fabro/workflows/iteration-review/workflow.fabro`: calls the extracted final artifact gate script and routes final artifact policy failures to an explicit accepted-but-final-artifact-failed terminal node instead of continuing toward status finalization.
+- `.fabro/workflows/code-review/scripts/final_artifact_gate.sh`: extracted the final artifact policy into a tested script. It now applies the implementation workflow's explicit plan-permission guard to implementation feature-file changes since `base_sha`, while separately rejecting any `.feature` changes made during review polish since `.fabro/tmp/review-start-sha.txt`.
+- `.fabro/workflows/code-review/scripts/test_final_artifact_gate.sh`: added regression coverage for planned implementation feature edits, missing plan permission, and forbidden review-polish feature edits.
+- `.fabro/workflows/code-review/workflow.fabro`: calls the extracted final artifact gate script and routes final artifact policy failures to an explicit accepted-but-final-artifact-failed terminal node instead of continuing toward status finalization.
 
 Validation:
 
 - `.fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed.
-- `.fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh` — passed.
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml` — passed with existing goal-gate retry warnings.
+- `.fabro/workflows/code-review/scripts/test_final_artifact_gate.sh` — passed.
+- `fabro validate .fabro/workflows/code-review/workflow.toml` — passed with existing goal-gate retry warnings.
 - `dev check` — passed (132 ExUnit tests, 0 failures).
 
 Remaining follow-up:

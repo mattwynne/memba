@@ -11,14 +11,14 @@ The helper runs the real workflows directly from the CLI, so approval stays at t
 1. `plan-validation` validates the plan at `plan_path` with `--auto-approve` only when the plan status is `ready`. A plan already marked `validated` reuses that result and skips validation. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
 2. `bin/dev` checks that all earlier-numbered iterations are `merged`, then waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the predecessor and WIP checks pass, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
 3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, marks the iteration `merged`, and pushes that commit directly to `main`.
-4. `iteration-review` reviews the merged implementation diff from the captured `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded safe fixes/hardening/verification when possible, records only genuinely judgement-heavy findings in `docs/code-health.md`, pushes any green polish as a separate `review polish: iteration NNN` commit to `main`, and leaves already-merged iteration lifecycle metadata unchanged.
+4. `code-review` is launched detached after that publication. One focused OpenAI reviewer classifies the merged diff as clean, bounded heal, durable non-urgent record, or consequential human judgement. It is a healer, not a delivery gate: failures and unanswered human gates remain on the review run and never rewrite successful implementation delivery. A bounded code/config/test heal gets one pass and an exact-state `dev check` before a separate commit; a docs-only code-health record is published without an unnecessary full gate.
 
 Canonical commands:
 
 ```bash
 bin/dev fabro validate-plan docs/iterations/NNN-topic/plan.md
 bin/dev fabro deliver docs/iterations/NNN-topic/plan.md [--wait|--no-wait] [--poll-interval seconds]
-bin/dev fabro review <branch> docs/iterations/NNN-topic/plan.md [base_ref_or_base_sha]
+bin/dev fabro code-review <branch> docs/iterations/NNN-topic/plan.md [base_ref_or_base_sha]
 bin/dev fabro clean-branches [--force]
 ```
 
@@ -41,7 +41,7 @@ fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/itera
 .fabro/workflows/scripts/iteration_status.py check-predecessors docs/iterations/NNN-topic/plan.md
 .fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/NNN-topic/plan.md
 fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
-bin/dev fabro review <branch> docs/iterations/NNN-topic/plan.md <base-sha>
+bin/dev fabro code-review <branch> docs/iterations/NNN-topic/plan.md <base-sha>
 ```
 
 Neither implementation nor review opens a pull request. Their `workflow.toml` files should not contain a `[run.pull_request]` block.
@@ -90,11 +90,11 @@ Acceptance feature files are locked by default. When an iteration genuinely need
 
 Each bullet must name the exact `.feature` path and the allowed kind of change. If the bullet says `tag-only`, the publish guard rejects any non-tag Gherkin line changes in that file.
 
-Review is post-merge and non-blocking. It must never push red: changes flow back through `dev ci`, and the publish script only runs after that green check. If there are no review changes, the publish step exits successfully without touching `main`. If there are bounded safe changes, including low-risk hardening or tests that prove existing intended behaviour, they are squashed into one `review polish: iteration NNN` commit and pushed to `main`. Human-judgement findings belong in `docs/code-health.md`, not in a PR or blocking gate.
+Code review is post-merge, detached, and non-blocking. Clean review completes without a full gate. A bounded heal gets at most one automatic repair pass, then runs `dev check`; publication rebases onto current `origin/main` and reruns the exact-candidate gate before pushing a separate `code review: heal iteration NNN` commit. No-progress, repeated, failed-validation, behavioural, ADR/architecture, migration/data, security/privacy, and broad findings pause at a `shape=hexagon` gate for Matt. The gate offers record/defer, prepare a separately approved follow-up, dismiss with rationale, and freeform guidance; no default and no `--auto-approve` means an unanswered gate cannot imply approval.
 
-After review publish/no-op succeeds, the review workflow verifies the iteration is marked `merged` in the plan, implementation record when present, and `docs/iterations/README.md`; when implementation already published the merged metadata, this is a no-op. If review fails, the implementation remains merged and the review run can be retried with the printed `bin/dev fabro review ...` command after resolving the failure.
+Non-urgent findings are appended to `docs/code-health.md` and can publish as a docs-only `code review: record iteration NNN finding` commit without `dev check`, as project policy permits. Provider, healer, gate, or publication failure remains separate from implementation delivery. The run retains disposition, human-pause, healing-publication, elapsed, run-ID, checkpoint and rescue evidence for later inspection.
 
-When `bin/dev fabro review` must review `origin/main` while local `main` is checked out, it creates a temporary pushed branch under `review/tmp/` so Fabro can clone a real branch without detaching `main`. These branches are safe to delete only after their foreground review run has finished and their tip is already contained in `origin/main`. Use `bin/dev fabro clean-branches` to dry-run safe cleanup, then `bin/dev fabro clean-branches --force` to delete the listed temporary local and remote branches. The cleanup command also recognises older `review/main-YYYYMMDDHHMMSS` temporary branches.
+When `bin/dev fabro code-review` must review `origin/main` while local `main` is checked out, it creates a temporary pushed branch under `code-review/tmp/` so Fabro can clone a real branch without detaching `main`. Detached launch returns the run ID, web URL and inspect/events/logs/attach commands, then removes the local worktree. Use `bin/dev fabro clean-branches` to dry-run cleanup once temporary branch tips are contained in `origin/main`, then add `--force` to delete them.
 
 ## Resuming a failed implementation
 

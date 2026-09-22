@@ -12,7 +12,7 @@ echo ''
 
 if [ -z "$base_sha" ]; then
   echo 'Missing required input: base_sha' >&2
-  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2
+  echo 'Run via: bin/dev fabro code-review <branch> <plan_path> [base_ref_or_base_sha]' >&2
   exit 1
 fi
 

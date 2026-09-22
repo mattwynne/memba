@@ -5,7 +5,7 @@ Status: implemented
 
 ## Context
 
-The `iteration-review` workflow currently owns a `plan_conformance_gate`: an LLM
+The `code-review` workflow currently owns a `plan_conformance_gate`: an LLM
 node that re-reads the iteration plan, enumerates every explicit requirement
 ("Add", "Implement", "Configure", "Run", "Use"...), and checks the
 already-committed implementation against them, routing to `PLAN_CONFORMANT`,
@@ -27,7 +27,7 @@ Two problems fall out of that placement:
 
 2. **It bloats review.** The gate and its repair scaffold are a large chunk of
    the review pipeline's complexity (see
-   `2026-05-28-extract-iteration-review-workflow.md`), and they duplicate what
+   `2026-05-28-extract-code-review-workflow.md`), and they duplicate what
    the three independent reviewers are already told to check (`review.md`
    item 1, "Plan fidelity"). Review should be a code-polish + smell radar on
    *already-conforming* code, not a re-litigation of the spec.
@@ -41,7 +41,7 @@ in its own right.
 ## Goal
 
 Make `iteration-implementation` responsible for proving plan conformance before
-it exits, so that `iteration-review` can *assume* conformance the same way it
+it exits, so that `code-review` can *assume* conformance the same way it
 assumes the suite is green.
 
 ## Proposed change
@@ -65,10 +65,10 @@ Reuse the *cleaned* gate logic, not the iteration-001-specific text. Where it
 needs the plan's requirements, derive them from the plan + the task list the
 implementation loop already maintains, rather than re-reading the plan cold.
 
-### In `iteration-review`
+### In `code-review`
 
 Remove the `plan_conformance_gate` and its repair scaffold entirely (covered by
-the resolution plan in `2026-05-28-extract-iteration-review-workflow.md`). The
+the resolution plan in `2026-05-28-extract-code-review-workflow.md`). The
 three reviewers keep a *light* plan-fidelity sanity check (`review.md` item 1)
 as defence-in-depth, but review no longer carries a dedicated plan gate or
 plan-repair loop.
@@ -80,7 +80,7 @@ plan-repair loop.
   unbounded/ambiguous gaps.
 - The gate/fix prompts contain no iteration-001-specific text; requirements are
   derived from the plan + task list generically.
-- `iteration-review` no longer contains a `plan_conformance_*` node, edge, or
+- `code-review` no longer contains a `plan_conformance_*` node, edge, or
   prompt.
 - An implementation run that misses an explicit plan requirement does not exit
   as succeeded; it either repairs the gap or stops for human input.
@@ -91,7 +91,7 @@ plan-repair loop.
 - The implementation workflow must agree with review on "what the iteration
   changes are" (the commit range since the iteration base). Use the same
   `base_sha` strategy adopted for review evidence (see the resolution plan in
-  `2026-05-28-extract-iteration-review-workflow.md`).
+  `2026-05-28-extract-code-review-workflow.md`).
 - Moving conformance earlier means a badly off-plan implementation is caught
   before any review spend — the intended win — but the implementation loop must
   be careful not to enter an endless plan-repair cycle. Keep the existing

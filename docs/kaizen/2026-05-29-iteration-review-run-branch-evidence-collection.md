@@ -1,4 +1,4 @@
-# Kaizen: iteration review cannot reliably collect evidence from Fabro run branches
+# Kaizen: code review cannot reliably collect evidence from Fabro run branches
 
 Date: 2026-05-29
 
@@ -19,10 +19,10 @@ The implementation run had succeeded according to Fabro and produced a pushed ru
 fabro/run/01KST2YJGFYEGE4CAR6JK5JF8H
 ```
 
-We then attempted to run the iteration review workflow using:
+We then attempted to run the code review workflow using:
 
 ```bash
-bin/dev iteration-review \
+bin/dev code-review \
   fabro/run/01KST2YJGFYEGE4CAR6JK5JF8H \
   docs/iterations/002-membership-model/plan.md \
   origin/main
@@ -50,7 +50,7 @@ Failure:
 Sandbox: docker failed: Failed to clone repo into Docker sandbox: fatal: Remote branch HEAD not found in upstream origin
 ```
 
-Cause: `bin/dev iteration-review` created an isolated worktree from the remote run ref in detached-HEAD state. Fabro then detected the current branch as `HEAD` and tried to clone remote branch `HEAD`, which does not exist.
+Cause: `bin/dev code-review` created an isolated worktree from the remote run ref in detached-HEAD state. Fabro then detected the current branch as `HEAD` and tried to clone remote branch `HEAD`, which does not exist.
 
 We worked around this by creating a local tracking branch:
 
@@ -94,7 +94,7 @@ Error: * [new branch]      main       -> origin/main
 The command failed before producing the expected evidence output. The run then routed to `collect_evidence_failed` and failed the review:
 
 ```text
-Iteration review failed before gates: implementation evidence could not be collected. Check base_ref and branch visibility, then retry.
+Code review failed before gates: implementation evidence could not be collected. Check base_ref and branch visibility, then retry.
 ```
 
 The recorded command for evidence collection attempted to fetch/verify `origin/main`, compute a merge base, and diff from merge base to `HEAD`.
@@ -110,7 +110,7 @@ No actual diff evidence was collected.
 
 ## The problem
 
-Iteration review is not robust when the implementation branch is a Fabro run branch rather than a normal PR branch.
+Code review is not robust when the implementation branch is a Fabro run branch rather than a normal PR branch.
 
 There are two distinct failure modes:
 
@@ -128,19 +128,19 @@ The result is that review cannot reach the model review gates even though:
 
 The implementation workflow may not always create PR branches. When it leaves work on `fabro/run/<run_id>`, the review handoff metadata currently has to point at that run branch.
 
-If iteration review only works reliably with normal PR branches, then a successful implementation run without PR creation is not actually reviewable by the standard workflow.
+If code review only works reliably with normal PR branches, then a successful implementation run without PR creation is not actually reviewable by the standard workflow.
 
 That breaks the intended handoff:
 
 ```text
-implementation run -> implementation.md -> iteration-review workflow
+implementation run -> implementation.md -> code-review workflow
 ```
 
 It also increases manual intervention: the operator has to inspect run branches, create local tracking branches, retry, and diagnose shell-script evidence failures.
 
 ## Desired behaviour
 
-Iteration review should accept any valid implementation ref recorded in `implementation.md`, including:
+Code review should accept any valid implementation ref recorded in `implementation.md`, including:
 
 - `pr/...` branches;
 - `fabro/run/...` branches;
@@ -153,7 +153,7 @@ Evidence collection should treat benign fetch output as normal and should not fa
 
 ## Questions to answer
 
-1. Should `bin/dev iteration-review` always create a local tracking branch for remote refs before creating the review worktree?
+1. Should `bin/dev code-review` always create a local tracking branch for remote refs before creating the review worktree?
 2. Should it reject detached worktrees before invoking Fabro?
 3. Should it pass an explicit branch/ref input to Fabro so the sandbox does not infer `HEAD`?
 4. Why did `Collect Implementation Evidence` exit after printing only the `git fetch` output?
@@ -164,7 +164,7 @@ Evidence collection should treat benign fetch output as normal and should not fa
 
 ### Worktree/ref handling
 
-- In `bin/dev iteration-review`, if the requested branch is `origin/foo` or resolves only as a remote ref, create or update a local branch `foo` tracking `origin/foo` before `git worktree add`.
+- In `bin/dev code-review`, if the requested branch is `origin/foo` or resolves only as a remote ref, create or update a local branch `foo` tracking `origin/foo` before `git worktree add`.
 - Fail fast if `git -C "$worktree" branch --show-current` is empty.
 - Include a diagnostic that prints the worktree branch, HEAD SHA, upstream, and remote ref before invoking `fabro run`.
 
@@ -200,7 +200,7 @@ Evidence collection should treat benign fetch output as normal and should not fa
 
 ## Resolution applied
 
-Changed `bin/dev iteration-review` so remote refs are materialized as local tracking branches before the review worktree is created. For example, both `fabro/run/<id>` and `origin/fabro/run/<id>` resolve to a local `fabro/run/<id>` branch that tracks `origin/fabro/run/<id>`, so Fabro sees a real branch name instead of detached `HEAD`.
+Changed `bin/dev code-review` so remote refs are materialized as local tracking branches before the review worktree is created. For example, both `fabro/run/<id>` and `origin/fabro/run/<id>` resolve to a local `fabro/run/<id>` branch that tracks `origin/fabro/run/<id>`, so Fabro sees a real branch name instead of detached `HEAD`.
 
 The command now also fails fast if the review worktree is detached and prints branch diagnostics before invoking Fabro:
 
@@ -215,4 +215,4 @@ Raw commit SHAs remain intentionally unsupported for direct review because Fabro
 
 ## Current takeaway
 
-Iteration review now treats Fabro run branches as first-class review refs when they exist on `origin`. The important contract is that the implementation handoff must name a remote branch that Fabro can clone; `bin/dev iteration-review` will turn that remote branch into a non-detached local review worktree before starting the workflow.
+Code review now treats Fabro run branches as first-class review refs when they exist on `origin`. The important contract is that the implementation handoff must name a remote branch that Fabro can clone; `bin/dev code-review` will turn that remote branch into a non-detached local review worktree before starting the workflow.

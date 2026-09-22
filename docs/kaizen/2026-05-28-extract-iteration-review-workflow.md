@@ -1,10 +1,10 @@
-# Idea: extract review/repair tail into a separate iteration-review workflow
+# Idea: extract review/repair tail into a separate code-review workflow
 
 Date: 2026-05-28
 Status: implemented
 
 > **2026-05-29 update.** Phase 1 — extracting the review tail into its own
-> `iteration-review` workflow — is done. Running it against iterations 001/002
+> `code-review` workflow — is done. Running it against iterations 001/002
 > exposed a second problem: the extracted pipeline is *itself* both ineffective
 > and over-complex. It runs three overlapping quality gates, triplicates the
 > snapshot→fix→verify repair scaffold, fights Fabro's git mechanics in ~70 lines
@@ -49,7 +49,7 @@ review-loop maintenance.
 ## Goal
 
 Reduce `iteration-implementation` to just the implementation job, and move the
-review/repair tail into a separate `iteration-review` workflow that can be run
+review/repair tail into a separate `code-review` workflow that can be run
 on demand against an iteration whose implementation workflow has already
 exited cleanly.
 
@@ -82,7 +82,7 @@ Edges:
 - `dev_check -> fix_dev_check -> dev_check` on failure (existing `max_visits=3`)
 - `final_artifact_gate -> final_summary -> exit`
 
-Nodes removed (move to `iteration-review`):
+Nodes removed (move to `code-review`):
 
 - `plan_conformance_gate`, `plan_gate`, `snapshot_before_plan_repair`,
   `fix_plan_conformance`, `verify_plan_repair`, `plan_not_ready`
@@ -96,7 +96,7 @@ Nodes removed (move to `iteration-review`):
 Corresponding model-stylesheet entries for the removed nodes should be deleted
 from the trimmed workflow.
 
-### `iteration-review` (new workflow)
+### `code-review` (new workflow)
 
 Inputs:
 
@@ -131,7 +131,7 @@ be moved into the new workflow's directory.
 ## Migration steps
 
 1. Copy `.fabro/workflows/iteration-implementation/` to
-   `.fabro/workflows/iteration-review/` and trim it down to the review-only
+   `.fabro/workflows/code-review/` and trim it down to the review-only
    pipeline above. Keep its `prompts/` directory in sync with the prompts it
    actually uses, copying from the implementation workflow as needed.
 2. Edit `.fabro/workflows/iteration-implementation/workflow.fabro` to remove
@@ -142,7 +142,7 @@ be moved into the new workflow's directory.
    to also run review (e.g. the kaizen entries in `docs/kaizen/`).
 5. Add a short `README.md` (or extend an existing one) describing the two-step
    flow: run `iteration-implementation`, then optionally run
-   `iteration-review` against the same plan.
+   `code-review` against the same plan.
 
 ## Acceptance criteria
 
@@ -150,7 +150,7 @@ be moved into the new workflow's directory.
   plan-conformance, or ADR-coherence node.
 - The implementation workflow ends at `final_summary` immediately after
   `dev_check` is green and `final_artifact_gate` passes.
-- A new `iteration-review/workflow.fabro` exists and runs the previously
+- A new `code-review/workflow.fabro` exists and runs the previously
   embedded gates against a clean implementation commit set.
 - Both workflows validate with `fabro validate`.
 - Re-running review against an already-clean implementation does not require
@@ -167,7 +167,7 @@ be moved into the new workflow's directory.
 - Some prompts may currently assume context built up during implementation
   (e.g. todo-list state). Those should be adjusted to read from `todo.md` and
   the commit log instead of in-memory context.
-- We should decide whether `iteration-review` can mutate the working tree at
+- We should decide whether `code-review` can mutate the working tree at
   all (currently the `fix_*` nodes do). Keeping that behaviour is fine for now;
   later we may want a read-only review mode.
 
@@ -247,13 +247,13 @@ kaizens. Replace with a base **SHA** resolved locally where full history exists:
 
 - implementation handoff (`implementation.md`) records `Base sha:` (the commit
   the run branched from), not just `Base ref:`;
-- `bin/dev iteration-review` resolves that SHA locally and passes `base_sha`;
+- `bin/dev code-review` resolves that SHA locally and passes `base_sha`;
 - `collect_implementation_evidence` collapses from ~70 lines to a deterministic
   `git diff base_sha..HEAD`, with a single `--unshallow` fallback and a loud,
   non-silent failure.
 
 This delivers the base-SHA / run-metadata diff strategy left open in
-`2026-05-29-iteration-review-evidence-script-silent-exit.md` ("Current
+`2026-05-29-code-review-evidence-script-silent-exit.md` ("Current
 takeaway").
 
 ### Change 4 — prompt cleanup
@@ -266,7 +266,7 @@ judgement-worthy non-blocking → code-health note + merge.
 
 ### Acceptance criteria
 
-- `iteration-review/workflow.fabro` has no `plan_conformance_*` or
+- `code-review/workflow.fabro` has no `plan_conformance_*` or
   `adr_coherence_*` nodes/edges; the four corresponding prompts are deleted; the
   model-stylesheet has no orphaned entries.
 - Exactly one snapshot→fix→verify repair scaffold remains (the review repair
@@ -274,11 +274,11 @@ judgement-worthy non-blocking → code-health note + merge.
 - `collect_implementation_evidence` takes `base_sha` and diffs
   `base_sha..HEAD` with no merge-base archaeology; any failure prints
   diagnostics (never a silent exit).
-- `bin/dev iteration-review` passes `base_sha`; `implementation.md` records it.
+- `bin/dev code-review` passes `base_sha`; `implementation.md` records it.
 - A review that finds only judgement-worthy non-blocking smells auto-merges and
   appends one entry to `docs/code-health.md`; a clean review writes no entry.
 - No surviving prompt references iteration-001 specifics.
-- `fabro validate .fabro/workflows/iteration-review/workflow.toml` passes.
+- `fabro validate .fabro/workflows/code-review/workflow.toml` passes.
 
 ### Out of scope
 

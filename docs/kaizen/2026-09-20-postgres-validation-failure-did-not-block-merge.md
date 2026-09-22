@@ -81,7 +81,7 @@ Expected versus observed: `dev check` was expected to serialize work for its sel
 
 Follow-up resolution — exact-commit publication attestation:
 
-Root-cause evidence: all three Fabro paths that update `main` constructed or rebased the candidate after the graph's earlier `dev_check` node. `iteration-implementation/scripts/publish_to_main.sh` and `iteration-review/scripts/publish_polish_to_main.sh` then pushed that un-attested candidate directly; `iteration-review/scripts/finalize_iteration_status.sh` and `plan-validation/scripts/publish_ready.sh` had the same final `pull --rebase`/push gap. Thus even a prior successful gate was neither evidence for the final commit object nor a publish precondition.
+Root-cause evidence: all three Fabro paths that update `main` constructed or rebased the candidate after the graph's earlier `dev_check` node. `iteration-implementation/scripts/publish_to_main.sh` and `code-review/scripts/publish_polish_to_main.sh` then pushed that un-attested candidate directly; `code-review/scripts/finalize_iteration_status.sh` and `plan-validation/scripts/publish_ready.sh` had the same final `pull --rebase`/push gap. Thus even a prior successful gate was neither evidence for the final commit object nor a publish precondition.
 
 Fix applied:
 
@@ -92,8 +92,8 @@ Fix applied:
 Validation:
 
 - `bash .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh` — passed.
-- `bash .fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` — passed.
-- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash .fabro/workflows/code-review/scripts/test_publish_polish_to_main.sh` — passed.
+- `bash .fabro/workflows/code-review/scripts/test_finalize_iteration_status.sh` — passed.
 - `bash -n` over the changed Fabro shell scripts — passed.
 - `./bin/dev check` — see this change's delivery validation.
 
