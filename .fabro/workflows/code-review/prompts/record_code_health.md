@@ -5,6 +5,6 @@ This is a docs-only recording step, not permission to change code, config, tests
 If the same finding is already present, make no duplicate edit and explain the no-op. If recording is needed, verify `git diff -- docs/code-health.md`. If you cannot preserve the finding, fail closed.
 
 End with exactly one routing JSON object. Success/no-op:
-`{"context_updates":{"code_health_recording_ok":true}}`
+`{"context_updates":{"code_health_recording_ok":true,"review_disposition":"record"}}`
 Failure:
 `{"context_updates":{"code_health_recording_ok":false}}`

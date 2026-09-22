@@ -155,7 +155,7 @@ Hypothesis: one focused OpenAI reviewer with explicit clean/heal/record/escalate
 
 Baseline:
 
-- 5/8 recent code-review runs terminated at synthesis because one reviewer was unavailable.
+- 5/8 recent `iteration-review` runs terminated at synthesis because one reviewer was unavailable.
 - The current workflow requires three reviewer reports and a synthesis stage.
 - Five `docs/code-health.md` sections explicitly say synthesis omitted independent-review findings and the recorder recovered them.
 - Review currently reruns a full gate before reviewing even though implementation already validated the exact candidate.
@@ -210,7 +210,7 @@ Implemented locally without launching a live delivery or code-review run:
 - Retained concurrent-main-safe follow-up publication and added run/disposition, human-pause, heal-publication and elapsed observability in Fabro stage output.
 - Deleted obsolete fan-out/synthesis prompts and graph machinery.
 
-Validation includes static graph/schema/command assertions; deterministic no-model graph routing fixtures for clean, bounded heal, record, consequential, no-progress, provider failure, publication/no-op, unanswered input and detached launch; source-backed prompt-contract examples for an ADR 0024 aggregate-boundary finding and two findings omitted by synthesis; native helper tests; Fabro graph validation; and the required exact-state `dev check`.
+Validation includes static graph/schema/command assertions; deterministic no-model graph routing fixtures for clean, bounded heal, record, consequential, no-progress, provider failure, publication/no-op, unanswered input and detached launch; route-specific observability assertions for disposition, human pause, publication state, elapsed time and run identity; source-backed prompt-contract examples for an ADR 0024 aggregate-boundary finding and two findings omitted by synthesis; native helper tests; Fabro graph validation; and the required exact-state `dev check`.
 
 The scripted graph fixtures validate deterministic routing after a disposition is supplied; they do not test LLM classification. The historical examples verify only that retained source excerpts exist and the reviewer prompt states the applicable contract thresholds. Neither establishes classification quality or operational effectiveness; adoption still requires the 5/5 qualifying operational sample and guardrails above.
 

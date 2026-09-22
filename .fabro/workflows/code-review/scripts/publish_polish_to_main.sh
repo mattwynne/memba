@@ -153,6 +153,7 @@ if [ "$docs_only" != true ]; then
   git -C "$publish_worktree" push origin refs/notes/fabro-dev-check
 fi
 git push origin "$published_sha:main"
+printf '%s\n' "$published_sha" > .fabro/tmp/code-review-published-sha.txt
 
 if [ "$docs_only" = true ]; then
   echo "Published code-health record to main without unnecessary dev check: $published_sha"

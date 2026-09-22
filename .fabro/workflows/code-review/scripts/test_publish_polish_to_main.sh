@@ -78,6 +78,7 @@ message=$(git log -1 --format=%B origin/main)
 grep -Fq 'code review: record iteration 001 finding' <<<"$message"
 grep -Fq 'docs-only code-health record' <<<"$message"
 git show origin/main:docs/concurrent-DOCS.md | grep -Fxq 'concurrent B'
+[ "$(cat .fabro/tmp/code-review-published-sha.txt)" = "$(git rev-parse origin/main)" ]
 
 new_fixture HEAL
 candidate_a=$(git rev-parse HEAD)
@@ -94,5 +95,16 @@ grep -Fq 'Fabro-Workflow: code-review' <<<"$message"
 grep -Fxq "$published check" "$FABRO_DEV_CHECK_LOG"
 git notes --ref=refs/notes/fabro-dev-check show "$published" | grep -Fxq "Validated-Commit: $published"
 git show "$published:docs/concurrent-HEAL.md" | grep -Fxq 'concurrent B'
+[ "$(cat .fabro/tmp/code-review-published-sha.txt)" = "$published" ]
+observation=$("$scripts_dir/record_observability.sh" bounded_heal false true | tail -1)
+python3 - "$published" "$observation" <<'PY'
+import json, sys
+published, raw = sys.argv[1:]
+record = json.loads(raw)
+assert record["review_disposition"] == "bounded_heal", record
+assert record["human_paused"] is False, record
+assert record["heal_commit_published"] is True, (published, record)
+assert isinstance(record["elapsed_seconds"], int), record
+PY
 
-printf 'code-review stale-candidate publication/no-op and concurrent-main tests passed\n'
+printf 'code-review stale-candidate publication/no-op, concurrent-main, and publication-observability tests passed\n'

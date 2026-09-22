@@ -44,7 +44,7 @@ Research used four BB children over about 22.5 elapsed minutes. Their latest est
 
 ### 1. Remove the hard availability dependency on every configured review provider
 
-From 2026-09-13 onward, 5/8 code-review runs failed at synthesis because one required reviewer produced no usable evidence. Three failures directly logged OpenRouter HTTP 402; two later forks had the same empty-Claude pattern while Sol and Gemini both returned usable `ACCEPT` reviews. One failure consumed 27m37s after `dev ci` had already passed.
+From 2026-09-13 onward, 5/8 `iteration-review` runs failed at synthesis because one required reviewer produced no usable evidence. Three failures directly logged OpenRouter HTTP 402; two later forks had the same empty-Claude pattern while Sol and Gemini both returned usable `ACCEPT` reviews. One failure consumed 27m37s after `dev ci` had already passed.
 
 This is recurrent rather than provider-specific: Gemini credit exhaustion blocked review in June, and Anthropic credit exhaustion terminated a nearly complete implementation in May. The current fan-in requires every review branch to complete before synthesis, despite `synthesize_review` itself permitting partial input.
 

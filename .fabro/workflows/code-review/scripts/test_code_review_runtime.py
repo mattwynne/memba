@@ -141,6 +141,8 @@ provider='local'
                 definitions.append("    disposition [shape=diamond]")
             elif node == "consequential_gate":
                 definitions.append('    consequential_gate [shape=hexagon, question_type="multiple_choice", label="Safe disposition"]')
+            elif node == "final_summary":
+                definitions.append('    final_summary [shape=parallelogram, goal_gate=true, script="python3 scripts/step.py final_summary"]')
             elif node == "preflight_sandbox":
                 definitions.append('    preflight_sandbox [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/preflight_sandbox.sh $(git rev-parse HEAD)"]')
             elif node == "collect_implementation_evidence":
@@ -149,14 +151,17 @@ provider='local'
                 definitions.append('    snapshot_before_heal [shape=parallelogram, script="mkdir -p .fabro/tmp; git rev-parse HEAD > .fabro/tmp/review-repair-before-head.txt; git diff --binary HEAD > .fabro/tmp/review-repair-before.patch"]')
             elif node == "verify_heal_progress":
                 definitions.append('    verify_heal_progress [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/verify_review_repair.sh"]')
-            elif node.startswith("observe_"):
+            elif node.startswith("observe_") or node in {"consequential_context", "reviewer_unavailable"}:
                 args = {
                     "observe_clean": "clean false false",
                     "observe_record": "record false false",
                     "observe_heal": "bounded_heal false true",
                     "observe_dismiss": "dismissed true false",
+                    "consequential_context": "consequential true false",
+                    "reviewer_unavailable": "provider_failure false false",
                 }[node]
-                definitions.append(f'    {node} [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh {args}"]')
+                suffix = "; exit 1" if node == "reviewer_unavailable" else ""
+                definitions.append(f'    {node} [shape=parallelogram, script="bash .fabro/workflows/code-review/scripts/record_observability.sh {args}{suffix}"]')
             else:
                 schema = ', output_schema="routing"' if node in {"focused_reviewer", "record_code_health", "prepare_followup"} else ""
                 definitions.append(f'    {node} [shape=parallelogram{schema}, script="python3 scripts/step.py {node}"]')
@@ -193,19 +198,42 @@ provider='local'
         self.assertFalse(any(r["event"].startswith("agent.llm") for r in records))
         return records
 
+    def read_observations(self, fixture: Path, combined: str) -> list[dict]:
+        observation_file = fixture / ".fabro/tmp/code-review-observability.jsonl"
+        self.assertTrue(observation_file.is_file(), combined)
+        observations = [json.loads(line) for line in observation_file.read_text().splitlines()]
+        for observation in observations:
+            self.assertTrue(
+                observation["run_id"] == "unknown" or re.fullmatch(r"[0-9A-Z]{26}", observation["run_id"]),
+                observation["run_id"],
+            )
+            self.assertIsInstance(observation["human_paused"], bool)
+            self.assertIsInstance(observation["heal_commit_published"], bool)
+            self.assertIsInstance(observation["elapsed_seconds"], int)
+            self.assertGreaterEqual(observation["elapsed_seconds"], 0)
+        return observations
+
     def completed_stages(self, scenario: dict, name: str) -> list[str]:
         fixture = self.make_fixture(name, scenario)
         done, run_id = self.launch(fixture)
         records = self.events(run_id)
         combined = done.stdout + done.stderr + "\n".join(json.dumps(r) for r in records)
         self.assertEqual(done.returncode, 0, combined)
-        observation_stages = {"observe_clean", "observe_record", "observe_heal", "observe_dismiss"}
-        if any(r.get("node_id") in observation_stages for r in records):
-            observation_file = fixture / ".fabro/tmp/code-review-observability.jsonl"
-            self.assertTrue(observation_file.is_file(), combined)
-            observations = [json.loads(line) for line in observation_file.read_text().splitlines()]
-            self.assertEqual(len(observations), 1)
-            self.assertIn(observations[0]["review_disposition"], {"clean", "record", "bounded_heal", "dismissed"})
+        expected = {
+            "clean": [("clean", False, False)],
+            "bounded_heal": [("bounded_heal", False, False)],
+            "record": [("record", False, False)],
+            "consequential": [("consequential", True, False), ("record", False, False)],
+            "invalid": [("consequential", True, False), ("record", False, False)],
+        }[scenario.get("disposition", "invalid")]
+        if scenario.get("no_progress"):
+            expected = [("consequential", True, False), ("record", False, False)]
+        observations = self.read_observations(fixture, combined)
+        actual = [
+            (item["review_disposition"], item["human_paused"], item["heal_commit_published"])
+            for item in observations
+        ]
+        self.assertEqual(actual, expected)
         return [r.get("node_id") for r in records if r["event"] == "stage.started"]
 
     def test_clean_heal_record_and_consequential_routes(self) -> None:
@@ -249,11 +277,30 @@ provider='local'
                 break
             time.sleep(.2)
         self.assertIn("consequential_gate", stages)
+        observations = self.read_observations(fixture, done.stdout + done.stderr)
+        self.assertEqual(
+            [(item["review_disposition"], item["human_paused"]) for item in observations],
+            [("consequential", True)],
+        )
         time.sleep(.3)
         stages = [r.get("node_id") for r in self.events(run_id) if r["event"] == "stage.started"]
         self.assertNotIn("record_code_health", stages)
         self.assertNotIn("prepare_followup", stages)
         self.assertNotIn("observe_dismiss", stages)
+
+    def test_provider_failure_records_exact_observability_and_fails(self) -> None:
+        fixture = self.make_fixture("provider-failure", {"provider_failure": True})
+        done, run_id = self.launch(fixture)
+        records = self.events(run_id)
+        combined = done.stdout + done.stderr + "\n".join(json.dumps(r) for r in records)
+        self.assertNotEqual(done.returncode, 0, combined)
+        stages = [r.get("node_id") for r in records if r["event"] == "stage.started"]
+        self.assertIn("reviewer_unavailable", stages)
+        observations = self.read_observations(fixture, combined)
+        self.assertEqual(len(observations), 1)
+        self.assertEqual(observations[0]["review_disposition"], "provider_failure")
+        self.assertFalse(observations[0]["human_paused"])
+        self.assertFalse(observations[0]["heal_commit_published"])
 
 
 STEP = r'''#!/usr/bin/env python3
@@ -263,9 +310,11 @@ import sys
 node = sys.argv[1]
 scenario = json.loads(Path("scenario.json").read_text())
 if node == "focused_reviewer":
+    if scenario.get("provider_failure"):
+        raise SystemExit(1)
     print(json.dumps({"context_updates": {"review_disposition": scenario.get("disposition", "invalid")}}))
 elif node in ("record_code_health", "prepare_followup"):
-    print(json.dumps({"context_updates": {"code_health_recording_ok": True}}))
+    print(json.dumps({"context_updates": {"code_health_recording_ok": True, "review_disposition": "record"}}))
 elif node == "apply_bounded_heal" and not scenario.get("no_progress"):
     Path("heal.txt").write_text("after\n")
 elif node in {"read_failed", "preflight_failed", "collect_evidence_failed", "reviewer_unavailable", "code_health_recording_failed", "artifact_failed", "publish_failed"}:

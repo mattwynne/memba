@@ -16,7 +16,14 @@ elapsed=$((now - start))
 heal_published=false
 if [ "$heal_expected" = true ]; then
   git fetch --quiet origin main:refs/remotes/origin/main || true
-  if git log -20 --format='%B' origin/main 2>/dev/null | grep -Fq "Fabro-Run-Id: $run_id"; then
+  published_sha_file=.fabro/tmp/code-review-published-sha.txt
+  if [ -f "$published_sha_file" ]; then
+    published_sha=$(cat "$published_sha_file")
+    if git cat-file -e "$published_sha^{commit}" 2>/dev/null &&
+       git merge-base --is-ancestor "$published_sha" origin/main 2>/dev/null; then
+      heal_published=true
+    fi
+  elif [ "$run_id" != unknown ] && git log -20 --format='%B' origin/main 2>/dev/null | grep -Fq "Fabro-Run-Id: $run_id"; then
     heal_published=true
   fi
 fi
