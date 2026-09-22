@@ -1,4 +1,4 @@
-# Problem: Code review sandbox clone failed with no space left on device
+# Problem: Iteration review sandbox clone failed with no space left on device
 
 Date: 2026-05-29
 
@@ -32,7 +32,7 @@ and retry with 'git restore --source=HEAD :/'
 Commands used:
 
 ```bash
-bin/dev code-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
+bin/dev iteration-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
 fabro system df
 fabro system prune --older-than 1h --yes
 fabro system prune --older-than 24h --yes
@@ -41,7 +41,7 @@ fabro system prune --older-than 24h --yes
 Observations:
 
 - The implementation workflow for iteration 003 had already succeeded and published commit `8fcf5e6` to `main`.
-- A review branch `review/003-messaging-skeleton` was created and pushed for the review command because the recorded implementation metadata used a commit SHA and `bin/dev code-review` requires a branch.
+- A review branch `review/003-messaging-skeleton` was created and pushed for the review command because the recorded implementation metadata used a commit SHA and `bin/dev iteration-review` requires a branch.
 - The review run failed before any review stage executed, during Docker sandbox repository checkout.
 - Retrying the same command produced the same sandbox initialization failure.
 - Local disk space on the client machine was not exhausted, and the failure text came from the Fabro server-side Docker sandbox clone.
@@ -52,7 +52,7 @@ Observations:
 Retry command after server-side Docker disk space is recovered:
 
 ```bash
-bin/dev code-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
+bin/dev iteration-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
 ```
 
 ## Resolution

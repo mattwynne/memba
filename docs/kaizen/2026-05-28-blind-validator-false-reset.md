@@ -82,7 +82,7 @@ crystallised; nothing about task 4 is special.
 
 Confirmed present and working (do not redo): task-draining loop, simplified
 single-owner task loop, commit guardrails, `reset_task_attempt` retry,
-`resume_gate`, todo preservation, and the extracted `code-review` workflow.
+`resume_gate`, todo preservation, and the extracted `iteration-review` workflow.
 
 Confirmed **missing** (the gap that caused this): everything from
 `2026-05-28-task-contract-validation-workflow.md`. The current

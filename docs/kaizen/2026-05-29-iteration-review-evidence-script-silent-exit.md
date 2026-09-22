@@ -1,10 +1,10 @@
-# Kaizen: code review evidence collection can fail silently before diagnostics
+# Kaizen: iteration review evidence collection can fail silently before diagnostics
 
 Date: 2026-05-29
 
 ## Context
 
-After a fix for code-review run-branch handling, we retried reviewing iteration 002.
+After a fix for iteration-review run-branch handling, we retried reviewing iteration 002.
 
 Implementation metadata:
 
@@ -18,7 +18,7 @@ Status: ready-for-review
 Review command:
 
 ```bash
-bin/dev code-review \
+bin/dev iteration-review \
   fabro/run/01KST2YJGFYEGE4CAR6JK5JF8H \
   docs/iterations/002-membership-model/plan.md \
   origin/main
@@ -124,7 +124,7 @@ The workflow therefore fails before the actual review gates without enough infor
 
 ## Why this matters
 
-Code review is the quality gate between implementation and merge. It needs to be more observable than normal implementation stages, not less.
+Iteration review is the quality gate between implementation and merge. It needs to be more observable than normal implementation stages, not less.
 
 A failure in evidence collection should never be silent. If the workflow cannot compare the implementation branch with the base, it should print a complete Git diagnostic bundle before exiting.
 
@@ -199,7 +199,7 @@ git fetch --quiet --unshallow origin || true
 
 1. Did `git merge-base HEAD origin/main` fail in the sandbox?
 2. Is the review sandbox clone shallow, and does that explain the missing merge base?
-3. Should code-review force a full-history fetch for the implementation branch and base branch before evidence collection?
+3. Should iteration-review force a full-history fetch for the implementation branch and base branch before evidence collection?
 4. Are Fabro run branch checkpoint commits connected to `origin/main`, or do they need a different diff strategy?
 5. Should `base_ref` be compared directly (`git diff origin/main..HEAD`) when merge-base fails, or is a merge base required?
 6. Should the review workflow accept a raw implementation run branch and derive its true base commit from Fabro metadata instead of Git ancestry?
@@ -244,7 +244,7 @@ git diff --stat "$base_sha".."$implementation_sha"
 
 ## Resolution
 
-Implemented in `.fabro/workflows/code-review/workflow.fabro`.
+Implemented in `.fabro/workflows/iteration-review/workflow.fabro`.
 
 The `Collect Implementation Evidence` script is now diagnostic-first. It prints a debug header before any base-ref or merge-base work:
 

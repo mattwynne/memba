@@ -9,13 +9,13 @@ After upgrading the remote Fabro server and local CLI from `0.243.0-nightly.1` t
 The affected workflows were:
 
 - `.fabro/workflows/plan-validation/workflow.fabro`
-- `.fabro/workflows/code-review/workflow.fabro`
+- `.fabro/workflows/iteration-review/workflow.fabro`
 
 Both route their `claude_review` node to `claude-sonnet-4-5` while the general workflow default is OpenAI `gpt-5.5`.
 
 ## Expected standard
 
-A workflow stylesheet that names a catalogued model should select that model's provider, or preflight should clearly identify any unsupported routing before a delivery run starts. Plan validation and code review need to probe Claude through Anthropic and GPT through OpenAI.
+A workflow stylesheet that names a catalogued model should select that model's provider, or preflight should clearly identify any unsupported routing before a delivery run starts. Plan validation and iteration review need to probe Claude through Anthropic and GPT through OpenAI.
 
 ## What happened
 
@@ -35,7 +35,7 @@ That probe succeeded. Adding `provider: anthropic` explicitly to each affected `
 
 ## Impact
 
-This blocked plan-validation and code-review runs immediately after an otherwise successful Fabro upgrade. The error looked like an Anthropic-model availability problem even though the model and Anthropic credentials were usable, requiring manual diagnosis of model routing and a workflow patch.
+This blocked plan-validation and iteration-review runs immediately after an otherwise successful Fabro upgrade. The error looked like an Anthropic-model availability problem even though the model and Anthropic credentials were usable, requiring manual diagnosis of model routing and a workflow patch.
 
 ## What allowed it to happen
 

@@ -245,9 +245,9 @@ command = ["bash", ".fabro/workflows/iteration-implementation/prepare_mix.sh"]
 
 The smoke test showed node scripts run with `PWD=/repos/mattwynne/memba`, while the sandbox metadata link is `/workspace/memba`. The absolute symlink path is probably safest for prepare.
 
-### Apply the same clone cleanup to `code-review`
+### Apply the same clone cleanup to `iteration-review`
 
-`.fabro/workflows/code-review/workflow.toml` currently has the same manual clone pattern. Once implementation is fixed, apply the same managed-clone strategy there too, so review runs can start from a run branch or implementation branch instead of always cloning `main`.
+`.fabro/workflows/iteration-review/workflow.toml` currently has the same manual clone pattern. Once implementation is fixed, apply the same managed-clone strategy there too, so review runs can start from a run branch or implementation branch instead of always cloning `main`.
 
 ## Expected recovery model after the change
 
@@ -320,7 +320,7 @@ Mitigation: after managed clone is restored, run a recovery rehearsal and docume
 3. Run `fabro validate` and `fabro preflight`.
 4. Run a missing-plan smoke test with `--preserve-sandbox`.
 5. Inspect smoke run metadata and confirm `repo_cloned`, `run_branch`, `base_sha`, `git_commit_sha`, and pushed run branch.
-6. Apply the same cleanup to `code-review/workflow.toml` if the implementation smoke test succeeds.
+6. Apply the same cleanup to `iteration-review/workflow.toml` if the implementation smoke test succeeds.
 7. Update `.fabro/workflows/README.md` with:
    - the managed-clone contract;
    - the `working_dir` gotcha;

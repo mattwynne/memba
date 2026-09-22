@@ -5,7 +5,7 @@ Status: implemented
 
 ## Context
 
-Code review can merge an implementation branch, but the iteration index in
+Iteration review can merge an implementation branch, but the iteration index in
 `docs/iterations/README.md` is separate status metadata. After iteration 002 was
 reviewed, the table still said `ready-for-review`, which made it unclear what
 should happen next.
@@ -26,7 +26,7 @@ The helper:
 - updates `docs/iterations/README.md` to `merged` for that iteration;
 - updates `Status: merged` in the iteration `plan.md` and `implementation.md`.
 
-The code-review skill and workflow README now remind us to run this helper
+The iteration-review skill and workflow README now remind us to run this helper
 after the merge is confirmed.
 
 ## Why this shape

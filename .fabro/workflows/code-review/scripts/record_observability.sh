@@ -22,5 +22,8 @@ if [ "$heal_expected" = true ]; then
 fi
 printf 'CODE_REVIEW_OBSERVABILITY run_id=%s disposition=%s human_paused=%s heal_commit_published=%s elapsed_seconds=%s\n' \
   "$run_id" "$disposition" "$human_paused" "$heal_published" "$elapsed"
-printf '{"run_id":"%s","review_disposition":"%s","human_paused":%s,"heal_commit_published":%s,"elapsed_seconds":%s}\n' \
-  "$run_id" "$disposition" "$human_paused" "$heal_published" "$elapsed"
+record=$(printf '{"run_id":"%s","review_disposition":"%s","human_paused":%s,"heal_commit_published":%s,"elapsed_seconds":%s}' \
+  "$run_id" "$disposition" "$human_paused" "$heal_published" "$elapsed")
+printf '%s\n' "$record"
+mkdir -p .fabro/tmp
+printf '%s\n' "$record" >> .fabro/tmp/code-review-observability.jsonl

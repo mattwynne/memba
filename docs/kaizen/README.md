@@ -42,7 +42,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-06-03 | [Problem: Fabro dev image CI does not refresh the Fabro host](2026-06-03-fabro-dev-image-ci-does-not-refresh-host.md) | New | — |
 | 2026-06-02 | [Problem: Provider webhooks lacked authentication guardrails](2026-06-02-provider-webhook-authentication-gap.md) | New | — |
 | 2026-06-01 | [Problem: Fabro marked iteration 016 merged while tasks were still incomplete](2026-06-01-fabro-iteration-016-premature-merge-and-zombie-runs.md) | New | — |
-| 2026-09-20 | [Problem: code review repair left a detached dev check running into the workflow gate](2026-09-20-code-review-detached-dev-check-stall.md) | Closed | — |
+| 2026-09-20 | [Problem: iteration review repair left a detached dev check running into the workflow gate](2026-09-20-iteration-review-detached-dev-check-stall.md) | Closed | — |
 | 2026-09-13 | [Problem: task validator requested a retry, but the workflow terminated](2026-09-13-task-retry-verdict-terminates-iteration.md) | Closed | — |
 | 2026-09-12 | [Problem: Acceptance inputs raced LiveView root join](2026-09-12-acceptance-inputs-race-liveview-join.md) | Closed | — |
 | 2026-09-12 | [Problem: dev check can validate the wrong checkout](2026-09-12-dev-check-can-validate-the-wrong-checkout.md) | Closed | — |
@@ -52,18 +52,18 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-09-04 | [Problem: Fabro model routing lacked an explicit cost and independence policy](2026-09-04-fabro-model-routing-lacked-cost-and-role-policy.md) | Closed | — |
 | 2026-09-04 | [Problem: implementation todo generator created tasks from prerequisites and scope guards](2026-09-04-implementation-todo-generator-created-scope-guard-tasks.md) | Closed | — |
 | 2026-09-04 | [Problem: implementation workflow final artifact failure could route to publish under Fabro terminal-success semantics](2026-09-04-implementation-workflow-terminal-success-gate.md) | Closed | — |
-| 2026-09-04 | [Improvement: code-review can safely fan out and fan in reviewer evidence again](2026-09-04-code-review-parallel-fan-in-restored.md) | Closed | — |
+| 2026-09-04 | [Improvement: iteration-review can safely fan out and fan in reviewer evidence again](2026-09-04-iteration-review-parallel-fan-in-restored.md) | Closed | — |
 | 2026-06-23 | [Problem: coarse Fabro todos exhausted an implementation node timeout](2026-06-23-coarse-fabro-todos-timeout.md) | Closed | — |
 | 2026-06-23 | [Problem: bin/dev fabro deliver stream timeout leaves remote run state ambiguous](2026-06-23-fabro-deliver-stream-timeout-ambiguous.md) | Closed | — |
 | 2026-06-23 | [Problem: Fabro focused tests can use stale PGHOST and fail despite Postgres being ready](2026-06-23-fabro-focused-tests-stale-pghost.md) | Closed | — |
 | 2026-06-23 | [Problem: Fabro read-guard can block routine todo.md check-off late in a task](2026-06-23-fabro-read-guard-todo-checkoff-friction.md) | Closed | — |
 | 2026-06-23 | [Problem: Fabro sandbox files can be root-owned and block formatting](2026-06-23-fabro-sandbox-root-owned-files-block-format.md) | Closed | — |
 | 2026-06-18 | [Problem: Domain architecture guidance was implicit and not visible enough to reviewers](2026-06-18-domain-pattern-reference-guidance.md) | Closed | — |
-| 2026-06-09 | [Problem: Code review accepted despite failing to record code-health findings](2026-06-09-code-review-code-health-recording-failure.md) | Closed | — |
+| 2026-06-09 | [Problem: Iteration review accepted despite failing to record code-health findings](2026-06-09-iteration-review-code-health-recording-failure.md) | Closed | — |
 | 2026-06-06 | [Problem: implementation workflow left completed iteration marked implementing](2026-06-06-implementation-workflow-does-not-mark-merged.md) | Closed | — |
 | 2026-06-06 | [Problem: Planning skill does not validate plans by default](2026-06-06-planning-skill-does-not-validate-plan-by-default.md) | Closed | — |
 | 2026-06-05 | [Plan: Continue acceptance fast-feedback improvements without sharding](2026-06-05-acceptance-fast-feedback-follow-up-plan.md) | Closed | — |
-| 2026-06-05 | [Problem: CodeReview dev check cannot find cucumber-js](2026-06-05-code-review-missing-cucumber-js.md) | Closed | — |
+| 2026-06-05 | [Problem: IterationReview dev check cannot find cucumber-js](2026-06-05-iteration-review-missing-cucumber-js.md) | Closed | — |
 | 2026-06-05 | [Problem: Plan validation failed because chunked plan reads were still summarized](2026-06-05-plan-validation-chunked-read-still-summarized.md) | Closed | — |
 | 2026-06-04 | [Problem: Concurrent `dev check` runs race over shared test resources](2026-06-04-dev-check-concurrent-runs-race.md) | Closed | — |
 | 2026-06-03 | [Problem: Fabro implementation loop wedged the remote server after rate limits](2026-06-03-fabro-rate-limit-loop-wedges-server.md) | Closed | — |
@@ -78,7 +78,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-05-31 | [Problem: failed deliver leaves stale implementing status](2026-05-31-deliver-leaves-stale-implementing-status.md) | Closed | — |
 | 2026-05-31 | [Problem: `dev check` cannot run beside `dev up`](2026-05-31-dev-check-cannot-run-beside-dev-up.md) | Closed | — |
 | 2026-05-31 | [Problem: implementation workflow publish depends on missing sandbox Python](2026-05-31-iteration-implementation-python3-publish-failure.md) | Closed | — |
-| 2026-05-31 | [Problem: Review synthesis LLM outage failed an otherwise recoverable code review](2026-05-31-review-synthesis-llm-outage-fails-run.md) | Closed | — |
+| 2026-05-31 | [Problem: Review synthesis LLM outage failed an otherwise recoverable iteration review](2026-05-31-review-synthesis-llm-outage-fails-run.md) | Closed | — |
 | 2026-05-30 | [Problem: deliver command should handle validated plans and WIP waiting explicitly](2026-05-30-deliver-validated-plan-wip-waiting.md) | Closed | — |
 | 2026-05-30 | [Problem: Iteration deliver stalled waiting for child-run approval](2026-05-30-iteration-deliver-child-approval-stall.md) | Closed | — |
 | 2026-05-30 | [Problem: iteration implementation hit reset-task retry cycle limit](2026-05-30-iteration-implementation-reset-cycle-limit.md) | Closed | — |
@@ -96,9 +96,9 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-05-29 | [Problem: Iteration 003 review accepted implementation but publish polish rebase failed](2026-05-29-iteration-003-review-polish-rebase-conflict.md) | Closed | — |
 | 2026-05-29 | [Kaizen: nest validate→implement→review into one iteration-deliver workflow](2026-05-29-iteration-deliver-workflow.md) | Closed | — |
 | 2026-05-29 | [Idea: keep iterations small by sizing and slicing during planning](2026-05-29-iteration-lifecycle-and-slicing.md) | Closed | — |
-| 2026-05-29 | [Kaizen: code review evidence collection can fail silently before diagnostics](2026-05-29-code-review-evidence-script-silent-exit.md) | Closed | — |
-| 2026-05-29 | [Kaizen: code review cannot reliably collect evidence from Fabro run branches](2026-05-29-code-review-run-branch-evidence-collection.md) | Closed | — |
-| 2026-05-29 | [Problem: code review sandbox clone timed out](2026-05-29-code-review-sandbox-clone-timeout.md) | Closed | — |
+| 2026-05-29 | [Kaizen: iteration review evidence collection can fail silently before diagnostics](2026-05-29-iteration-review-evidence-script-silent-exit.md) | Closed | — |
+| 2026-05-29 | [Kaizen: iteration review cannot reliably collect evidence from Fabro run branches](2026-05-29-iteration-review-run-branch-evidence-collection.md) | Closed | — |
+| 2026-05-29 | [Problem: iteration review sandbox clone timed out](2026-05-29-iteration-review-sandbox-clone-timeout.md) | Closed | — |
 | 2026-05-29 | [Kaizen: mark iterations merged in the index](2026-05-29-mark-iterations-merged-in-index.md) | Closed | — |
 | 2026-05-29 | [Kaizen: move plan conformance into the implementation workflow](2026-05-29-move-plan-conformance-to-implementation.md) | Closed | — |
 | 2026-05-29 | [Kaizen: allow plan review ahead of implementation while enforcing implementation WIP limit](2026-05-29-plan-review-before-implementation-wip-limit.md) | Closed | — |
@@ -106,12 +106,12 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-05-29 | [Kaizen: PR creation should not depend on the wrong LLM](2026-05-29-pr-creation-should-not-depend-on-llm.md) | Closed | — |
 | 2026-05-29 | [Kaizen: resumability needs an accessible branch, not just task commits](2026-05-29-resume-contract-gap-between-checkpoints-and-branches.md) | Closed | — |
 | 2026-05-29 | [Plan: return iteration implementation to Fabro-managed clone and run branches](2026-05-29-return-to-fabro-managed-clone-for-resumability.md) | Closed | — |
-| 2026-05-29 | [Problem: Code review checkpoint tried to add ignored .fabro/tmp](2026-05-29-review-checkpoint-adds-ignored-tmp.md) | Closed | — |
-| 2026-05-29 | [Problem: Code review publish checkpoint used stale tmp ignore from review branch](2026-05-29-review-publish-used-stale-tmp-ignore.md) | Closed | — |
-| 2026-05-29 | [Problem: Code review sandbox clone failed with no space left on device](2026-05-29-review-sandbox-clone-no-space.md) | Closed | — |
+| 2026-05-29 | [Problem: Iteration review checkpoint tried to add ignored .fabro/tmp](2026-05-29-review-checkpoint-adds-ignored-tmp.md) | Closed | — |
+| 2026-05-29 | [Problem: Iteration review publish checkpoint used stale tmp ignore from review branch](2026-05-29-review-publish-used-stale-tmp-ignore.md) | Closed | — |
+| 2026-05-29 | [Problem: Iteration review sandbox clone failed with no space left on device](2026-05-29-review-sandbox-clone-no-space.md) | Closed | — |
 | 2026-05-28 | [Plan: stop the blind validator from hallucinating a persistence failure and resetting good work](2026-05-28-blind-validator-false-reset.md) | Closed | — |
 | 2026-05-28 | [Kaizen: validator fix confirmed; long runs die opaquely when Anthropic credits run out](2026-05-28-credit-exhaustion-mid-run.md) | Closed | — |
-| 2026-05-28 | [Idea: extract review/repair tail into a separate code-review workflow](2026-05-28-extract-code-review-workflow.md) | Closed | — |
+| 2026-05-28 | [Idea: extract review/repair tail into a separate iteration-review workflow](2026-05-28-extract-iteration-review-workflow.md) | Closed | — |
 | 2026-05-28 | [Idea: make iteration-implementation resumable across runs](2026-05-28-resumable-iteration-implementation.md) | Closed | — |
 | 2026-05-28 | [Idea: simplify iteration task loop ownership](2026-05-28-simplify-iteration-task-loop.md) | Closed | — |
 | 2026-05-28 | [Idea: task contract validation for iteration workflow](2026-05-28-task-contract-validation-workflow.md) | Closed | — |

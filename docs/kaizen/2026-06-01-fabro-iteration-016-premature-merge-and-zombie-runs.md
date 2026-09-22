@@ -141,7 +141,7 @@ This is a quality risk as well as a productivity problem. A future occurrence co
 ## Possible prevention ideas
 
 - Make finalization refuse to mark an iteration `merged` unless `docs/iterations/<iteration>/todo.md` exists and contains no unchecked `- [ ]` tasks.
-- Make `bin/dev fabro deliver` and `bin/dev fabro code-review` check active Fabro run state, not just `docs/iterations/README.md`, before starting later iterations or review.
+- Make `bin/dev fabro deliver` and `bin/dev fabro review` check active Fabro run state, not just `docs/iterations/README.md`, before starting later iterations or review.
 - Add a final review gate that verifies the reviewed branch is the terminal implementation artifact for the selected iteration and that no same-iteration implementation run is still active.
 - Make status restoration after a failed/timed-out implementation launch detect whether the remote run is still running before changing the plan status back.
 - Add a `bin/dev fabro pause/stop <run>` or documented safe-stop procedure that is reliable and obvious to operators.

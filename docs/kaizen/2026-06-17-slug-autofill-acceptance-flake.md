@@ -20,7 +20,7 @@ Browser acceptance scenarios in `dev check` should provide a reliable signal. If
 
 One acceptance run timed out waiting for the club slug input to be autofilled. Reruns passed without a reported product-code change.
 
-Existing related evidence: `docs/kaizen/2026-06-09-code-review-code-health-recording-failure.md` also records `dev check` failing in browser acceptance at the pre-existing/unrelated `Staff create a club with the suggested slug` scenario, with `#club-slug-input` remaining empty, and says the same scenario could pass on rerun.
+Existing related evidence: `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md` also records `dev check` failing in browser acceptance at the pre-existing/unrelated `Staff create a club with the suggested slug` scenario, with `#club-slug-input` remaining empty, and says the same scenario could pass on rerun.
 
 ## Impact
 

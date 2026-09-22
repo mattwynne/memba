@@ -1,13 +1,13 @@
-# Problem: CodeReview dev check cannot find cucumber-js
+# Problem: IterationReview dev check cannot find cucumber-js
 
 Date: 2026-06-05
 
 ## Context
 
-The `CodeReview` Fabro workflow was reviewing a completed plan-conforming implementation for code polish, ADR conformance, and code-health signals.
+The `IterationReview` Fabro workflow was reviewing a completed plan-conforming implementation for code polish, ADR conformance, and code-health signals.
 
-- Workflow: `CodeReview` (30 nodes, 41 edges)
-- Workflow definition: `.fabro/workflows/code-review/workflow.fabro`
+- Workflow: `IterationReview` (30 nodes, 41 edges)
+- Workflow definition: `.fabro/workflows/iteration-review/workflow.fabro`
 - Run: `01KTCS5B6M5RQS0SV9XA5QZ31M`
 - Web UI: `https://fabro.home.wynne.family/runs/01KTCS5B6M5RQS0SV9XA5QZ31M`
 - Sandbox: docker
@@ -16,7 +16,7 @@ The `CodeReview` Fabro workflow was reviewing a completed plan-conforming implem
 
 ## Expected standard
 
-`CodeReview` should be able to run the standard quality gate in its review sandbox. The workflow's `Run Dev Check` node runs:
+`IterationReview` should be able to run the standard quality gate in its review sandbox. The workflow's `Run Dev Check` node runs:
 
 ```sh
 PATH="$PWD/bin:$PATH" dev ci
@@ -76,7 +76,7 @@ This suggests a weak guardrail between "sandbox has Node/npm" and "the standard 
 
 ## Why this matters
 
-Code review is supposed to be a reliable post-merge quality signal. If the review sandbox can pass preflight while lacking acceptance-test executables, future reviews can fail late, spend money on irrelevant repair attempts, and leave completed iterations without review evidence.
+Iteration review is supposed to be a reliable post-merge quality signal. If the review sandbox can pass preflight while lacking acceptance-test executables, future reviews can fail late, spend money on irrelevant repair attempts, and leave completed iterations without review evidence.
 
 ## Open questions
 

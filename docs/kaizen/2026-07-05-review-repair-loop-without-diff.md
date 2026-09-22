@@ -7,7 +7,7 @@ Date: 2026-07-05
 We were processing queued iterations one at a time. After iteration 045 was implemented and published, we ran the Fabro review workflow:
 
 ```sh
-bin/dev fabro code-review origin/main docs/iterations/045-club-home-section-tabs/plan.md bcc2749ab7813feab4e1c2f78ca029f0765559e4
+bin/dev fabro review origin/main docs/iterations/045-club-home-section-tabs/plan.md bcc2749ab7813feab4e1c2f78ca029f0765559e4
 ```
 
 Review run:
@@ -25,7 +25,7 @@ The review synthesis found bounded blockers around the club-home tabs:
 
 ## Expected standard
 
-The code-review workflow should either:
+The iteration-review workflow should either:
 
 - apply bounded review repairs, produce a concrete code/test/config diff, verify it, run `dev check`, and publish the polish; or
 - if automatic repair cannot make progress, stop with clear human-input evidence after preserving the review findings.
