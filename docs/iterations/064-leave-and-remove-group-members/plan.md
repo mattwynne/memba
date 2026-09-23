@@ -1,7 +1,7 @@
 # Leave custom groups and remove their members
 
 Date: 2026-09-13
-Status: implementing
+Status: merged
 
 The approved removal controls, confirmations, and post-removal surfaces remain unchanged. This revision simplifies the underlying behaviour and implementation model.
 
