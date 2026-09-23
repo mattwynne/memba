@@ -82,7 +82,7 @@ defmodule Memba.ConversationSubscriptionFixtures do
         conversation_id: ids.conversation_id,
         club_id: ids.club_id,
         group_id: ids.group_id,
-        access_level: "read"
+        access_level: "write"
       }
     ]
 

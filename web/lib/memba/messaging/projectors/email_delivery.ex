@@ -22,6 +22,13 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
       recipient_id: event.recipient_id,
       recipient_name: event.recipient_name,
       recipient_address: event.recipient_email,
+      subscription_authorization_id: event.subscription_authorization_id,
+      authority_decision_id: event.authority_decision_id,
+      authority_kind: event.authority_kind,
+      authority_club_id: event.authority_club_id,
+      authority_club_membership_id: event.authority_club_membership_id,
+      authority_group_membership_id: event.authority_group_membership_id,
+      authority_club_stream_version: event.authority_club_stream_version,
       channel: "email",
       status: EmailDeliveryStatus.pending(),
       attempt_count: 0

@@ -8,7 +8,6 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.EndPersonConversationSubscription
-  alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
@@ -20,9 +19,9 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.RevokeGroupMembershipConversationSubscriptions
+  alias Memba.Messaging.Commands.RevokeSystemConversationSubscriptions
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
-  alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
   alias Memba.Messaging.EmailDeliveryDispatcher
@@ -100,8 +99,6 @@ defmodule Memba.Messaging.AppTest do
       MapSet.new([
         SendMessage,
         PostMessageReply,
-        FollowConversation,
-        UnfollowConversation,
         GrantConversationAccessToGroup,
         GrantInitialConversationAccessToGroup,
         RevokeConversationAccessFromGroup,
@@ -116,7 +113,8 @@ defmodule Memba.Messaging.AppTest do
         AuthorizePersonConversationSubscriptionIntent,
         CancelPersonConversationSubscriptionIntent,
         EndPersonConversationSubscription,
-        RevokeGroupMembershipConversationSubscriptions
+        RevokeGroupMembershipConversationSubscriptions,
+        RevokeSystemConversationSubscriptions
       ])
 
     assert MapSet.new(App.__registered_commands__()) == expected_commands

@@ -2,6 +2,16 @@ defmodule Memba.Repo.Migrations.CreatePersonConversationSubscriptionsProjection 
   use Ecto.Migration
 
   def change do
+    alter table(:messaging_email_deliveries) do
+      add :subscription_authorization_id, :text
+      add :authority_decision_id, :text
+      add :authority_kind, :text
+      add :authority_club_id, :text
+      add :authority_club_membership_id, :text
+      add :authority_group_membership_id, :text
+      add :authority_club_stream_version, :bigint
+    end
+
     create table(:messaging_person_conversation_subscriptions, primary_key: false) do
       add :subscription_id, :text, primary_key: true
       add :person_id, :text, null: false
@@ -34,8 +44,11 @@ defmodule Memba.Repo.Migrations.CreatePersonConversationSubscriptionsProjection 
 
       add :subscription_intent_id, :text, null: false
       add :authority_decision_id, :text, null: false
+      add :club_id, :text
       add :club_membership_id, :text, null: false
-      add :group_membership_id, :text, null: false
+      add :club_stream_version, :bigint
+      add :group_membership_id, :text
+      add :authority_kind, :text, null: false
       add :effective, :boolean, null: false, default: true
       add :revocation_id, :text
       add :unfollow_id, :text
@@ -71,6 +84,27 @@ defmodule Memba.Repo.Migrations.CreatePersonConversationSubscriptionsProjection 
     create unique_index(:messaging_group_membership_subscription_revocation_receipts, [
              :person_id,
              :group_membership_id
+           ])
+
+    create table(:messaging_system_authority_subscription_revocation_receipts,
+             primary_key: false
+           ) do
+      add :revocation_id, :text, primary_key: true
+      add :person_id, :text, null: false
+      add :club_id, :text, null: false
+      add :club_membership_id, :text, null: false
+      add :authority_kind, :text, null: false
+      add :authority_through_club_stream_version, :bigint, null: false
+      add :completed, :boolean, null: false, default: false
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create unique_index(:messaging_system_authority_subscription_revocation_receipts, [
+             :person_id,
+             :club_id,
+             :club_membership_id,
+             :authority_kind,
+             :authority_through_club_stream_version
            ])
   end
 end

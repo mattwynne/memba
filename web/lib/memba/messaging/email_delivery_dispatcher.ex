@@ -543,16 +543,21 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          %EmailDeliveryRequest{} = request,
          %EmailDeliveryProjection{} = delivery
        ) do
-    if Memba.Messaging.member_has_conversation_access?(
-         request.message_id,
-         request.club_id,
-         delivery.recipient_id,
-         :read
-       ) do
-      :ok
-    else
-      {:error, :recipient_access_ended}
-    end
+    access? =
+      Memba.Messaging.member_has_conversation_access?(
+        request.message_id,
+        request.club_id,
+        delivery.recipient_id,
+        :read
+      )
+
+    exact_subscription_authority? =
+      request.message_id == request.conversation_id or
+        Memba.Messaging.delivery_subscription_authorization_effective?(delivery)
+
+    if access? and exact_subscription_authority?,
+      do: :ok,
+      else: {:error, :recipient_access_ended}
   end
 
   defp request_channel("email"), do: {:ok, :email}

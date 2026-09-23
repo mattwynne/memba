@@ -14,6 +14,7 @@ defmodule Memba.Membership.Events.ConversationSubscriptionAuthorityDecided do
     :authority_decision_id,
     :club_membership_id,
     :group_membership_ids,
+    :system_authority_kinds,
     :club_stream_version
   ]
   defstruct @enforce_keys

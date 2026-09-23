@@ -368,6 +368,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              )
 
     refute Messaging.following_conversation?(conversation_id, eve.person_id)
+    assert Messaging.list_effective_person_conversation_subscriptions(eve.person_id) == []
     assert 1 == count_events(MessageSent)
   end
 
@@ -399,6 +400,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert [%{recipient_id: alice_id}] = Messaging.list_recipient_deliveries(message_id)
     assert alice_id == alice.person_id
     assert Messaging.following_conversation?(message_id, alice.person_id)
+
+    assert %{effective: true} =
+             Messaging.get_person_conversation_subscription(alice.person_id, message_id)
   end
 
   test "an active Admin member can reply to an inbound Admin conversation" do
@@ -549,6 +553,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert is_nil(Messaging.get_member_email_delivery(reply_message_id, carol.person_id))
     assert is_nil(Messaging.get_member_email_delivery(reply_message_id, dana.person_id))
     assert Messaging.following_conversation?(root_message_id, carol.person_id)
+
+    assert %{effective: true} =
+             Messaging.get_person_conversation_subscription(
+               carol.person_id,
+               root_message_id
+             )
   end
 
   test "an active non-Admin cannot forge an Admin reply with another recipient's header" do
@@ -2576,10 +2586,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     message_id
   end
 
-  defp follow_conversation!(club_id, conversation_id, member_id) do
+  defp follow_conversation!(_club_id, conversation_id, member_id) do
     assert :ok =
              Messaging.follow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
+               %{
+                 person_id: member_id,
+                 conversation_id: conversation_id,
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
+               },
                consistency: :strong
              )
   end

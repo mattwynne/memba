@@ -30,6 +30,13 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
     field :recipient_id, :string
     field :recipient_name, :string
     field :recipient_address, :string
+    field :subscription_authorization_id, :string
+    field :authority_decision_id, :string
+    field :authority_kind, :string
+    field :authority_club_id, :string
+    field :authority_club_membership_id, :string
+    field :authority_group_membership_id, :string
+    field :authority_club_stream_version, :integer
     field :channel, :string
     field :status, :string
     field :attempt_count, :integer, default: 0

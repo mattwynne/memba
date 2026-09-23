@@ -17,7 +17,9 @@ defmodule Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent do
     :authority_decision_id,
     :source,
     :club_membership_id,
+    :club_stream_version,
     :group_membership_ids,
+    :system_authority_kinds,
     :authority_decision
   ]
   defstruct @enforce_keys

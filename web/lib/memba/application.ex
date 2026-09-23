@@ -28,6 +28,8 @@ defmodule Memba.Application do
       Memba.Messaging.Projectors.InboundEmailSource,
       # Membership activation waits for this policy's prior Club-stream work.
       Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
+      Memba.Membership.Policies.RevokeGroupMembershipConversationSubscriptions,
+      Memba.Membership.Policies.RevokeSystemConversationSubscriptions,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.ClubInvitation,
       Memba.Membership.Projectors.Membership,

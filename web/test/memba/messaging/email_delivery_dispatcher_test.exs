@@ -21,6 +21,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
+  alias Memba.Messaging.Projections.ConversationFollow
   alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -349,6 +350,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           status: "dispatching"
         )
 
+      insert_legacy_follow!(club.club_id, root_message.message_id, recipient_id)
       assert :ok = EmailDeliveryDispatcher.deliver_to_provider(delivery)
 
       assert [
@@ -448,6 +450,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           status: "dispatching"
         )
 
+      insert_legacy_follow!(club.club_id, root_message.message_id, delivery.recipient_id)
       assert :ok = EmailDeliveryDispatcher.deliver_to_provider(delivery)
 
       assert [
@@ -1021,6 +1024,16 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           active: true
         })
     end
+  end
+
+  defp insert_legacy_follow!(club_id, conversation_id, person_id) do
+    Repo.insert!(%ConversationFollow{
+      follow_id: Memba.Messaging.ConversationFollowers.follow_id(conversation_id, person_id),
+      club_id: club_id,
+      conversation_id: conversation_id,
+      member_id: person_id,
+      following: true
+    })
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

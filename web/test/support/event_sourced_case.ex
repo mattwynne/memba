@@ -30,7 +30,9 @@ defmodule Memba.EventSourcedCase do
   ]
   @event_handlers [
     Memba.Membership.Policies.SystemGroupMembership,
-    Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+    Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
+    Memba.Membership.Policies.RevokeGroupMembershipConversationSubscriptions,
+    Memba.Membership.Policies.RevokeSystemConversationSubscriptions
   ]
   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
 

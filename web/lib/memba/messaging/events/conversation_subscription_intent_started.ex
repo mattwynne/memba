@@ -12,7 +12,9 @@ defmodule Memba.Messaging.Events.ConversationSubscriptionIntentStarted do
     :authority_decision_id,
     :source,
     :club_membership_id,
-    :group_membership_ids
+    :club_stream_version,
+    :group_membership_ids,
+    :system_authority_kinds
   ]
   defstruct @enforce_keys
 end

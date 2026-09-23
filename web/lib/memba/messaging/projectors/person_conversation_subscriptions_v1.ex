@@ -22,9 +22,12 @@ defmodule Memba.Messaging.Projectors.PersonConversationSubscriptionsV1 do
   alias Memba.Messaging.Events.ConversationSubscriptionIntentStarted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationCompleted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationRecorded
+  alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationCompleted
+  alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationRecorded
   alias Memba.Messaging.Projections.ConversationSubscriptionAuthorization
   alias Memba.Messaging.Projections.GroupMembershipSubscriptionRevocationReceipt
   alias Memba.Messaging.Projections.PersonConversationSubscription
+  alias Memba.Messaging.Projections.SystemAuthoritySubscriptionRevocationReceipt
 
   project(%ConversationSubscriptionIntentStarted{} = event, fn multi ->
     now = DateTime.utc_now(:microsecond)
@@ -59,8 +62,11 @@ defmodule Memba.Messaging.Projectors.PersonConversationSubscriptionsV1 do
         subscription_id: event.subscription_id,
         subscription_intent_id: event.subscription_intent_id,
         authority_decision_id: event.authority_decision_id,
+        club_id: event.club_id,
         club_membership_id: event.club_membership_id,
+        club_stream_version: event.club_stream_version,
         group_membership_id: event.group_membership_id,
+        authority_kind: event.authority_kind || "group_membership",
         effective: true,
         inserted_at: now,
         updated_at: now
@@ -160,6 +166,50 @@ defmodule Memba.Messaging.Projectors.PersonConversationSubscriptionsV1 do
         revocation_id: event.revocation_id,
         person_id: event.person_id,
         group_membership_id: event.group_membership_id,
+        completed: true,
+        inserted_at: now,
+        updated_at: now
+      },
+      on_conflict: [set: [completed: true, updated_at: now]],
+      conflict_target: :revocation_id
+    )
+  end)
+
+  project(%SystemAuthoritySubscriptionRevocationRecorded{} = event, fn multi ->
+    now = DateTime.utc_now(:microsecond)
+
+    Ecto.Multi.insert(
+      multi,
+      {:system_authority_subscription_revocation, event.revocation_id},
+      %SystemAuthoritySubscriptionRevocationReceipt{
+        revocation_id: event.revocation_id,
+        person_id: event.person_id,
+        club_id: event.club_id,
+        club_membership_id: event.club_membership_id,
+        authority_kind: event.authority_kind,
+        authority_through_club_stream_version: event.authority_through_club_stream_version,
+        completed: false,
+        inserted_at: now,
+        updated_at: now
+      },
+      on_conflict: :nothing,
+      conflict_target: :revocation_id
+    )
+  end)
+
+  project(%SystemAuthoritySubscriptionRevocationCompleted{} = event, fn multi ->
+    now = DateTime.utc_now(:microsecond)
+
+    Ecto.Multi.insert(
+      multi,
+      {:complete_system_authority_subscription_revocation, event.revocation_id},
+      %SystemAuthoritySubscriptionRevocationReceipt{
+        revocation_id: event.revocation_id,
+        person_id: event.person_id,
+        club_id: event.club_id,
+        club_membership_id: event.club_membership_id,
+        authority_kind: event.authority_kind,
+        authority_through_club_stream_version: event.authority_through_club_stream_version,
         completed: true,
         inserted_at: now,
         updated_at: now

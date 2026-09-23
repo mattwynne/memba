@@ -10,7 +10,9 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
@@ -30,12 +32,14 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
 
-  alias Memba.Messaging.Projectors.ConversationFollow,
-    as: ConversationFollowProjector
-
   alias Memba.Messaging.Projectors.Message, as: MessageProjector
+
+  alias Memba.Messaging.Projectors.PersonConversationSubscriptionsV1,
+    as: PersonConversationSubscriptionsProjector
+
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
+  alias Memba.Messaging.Projections.SystemAuthoritySubscriptionRevocationReceipt
 
   @email_delivery_replay_projectors [
     Memba.Messaging.Projectors.EmailDelivery
@@ -262,6 +266,34 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
   end
 
+  test "root sender outside the addressed group gets no subscription" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+    admin = create_person(name: "Alice Admin", email: "alice@example.com")
+    sender = create_person(name: "Carol Member", email: "carol@example.com")
+    admin_membership_id = add_member(club_id, admin.person_id)
+    add_member(club_id, sender.person_id)
+    assign_admin_role(club_id, admin_membership_id, admin.person_id)
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: sender.person_id,
+                 audience_group_id: admin_group_id,
+                 subject: "Addressed outside sender",
+                 body: "The sender is not an Admin."
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(message_id, sender.person_id)
+    assert is_nil(Messaging.get_person_conversation_subscription(sender.person_id, message_id))
+  end
+
   test "resolves recipients from a future named group without system-group assumptions" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
@@ -276,9 +308,32 @@ defmodule Memba.Messaging.SendClubMessageTest do
     bob_membership_id = add_member(club_id, bob.person_id)
     add_member(club_id, carol.person_id)
     dana_membership_id = add_member(club_id, dana.person_id)
+    assign_admin_role(club_id, alice_membership_id, alice.person_id)
 
-    add_group_member(club_id, trips_group_id, alice_membership_id, alice.person_id)
-    add_group_member(club_id, trips_group_id, bob_membership_id, bob.person_id)
+    assert {:ok, _admission} =
+             Memba.Membership.add_custom_group_member(
+               %{
+                 club_id: club_id,
+                 group_id: trips_group_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice.person_id,
+                 actor_person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    assert {:ok, _admission} =
+             Memba.Membership.add_custom_group_member(
+               %{
+                 club_id: club_id,
+                 group_id: trips_group_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob.person_id,
+                 actor_person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
     add_group_member(club_id, trips_group_id, dana_membership_id, dana.person_id)
     remove_group_member(club_id, trips_group_id, dana_membership_id, dana.person_id)
 
@@ -322,6 +377,29 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
     assert Messaging.group_has_conversation_access?(message_id, trips_group_id, :write)
     assert [%{message_id: ^message_id}] = Messaging.list_conversations_for_group(trips_group_id)
+    assert Messaging.following_conversation?(message_id, alice.person_id)
+
+    assert %{effective: true} =
+             Messaging.get_person_conversation_subscription(alice.person_id, message_id)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: trips_group_id,
+                 subject: "Summer objectives",
+                 body: "Choose the committee's next trip."
+               },
+               consistency: :strong
+             )
+
+    assert [_one_grant] =
+             Messaging.list_person_conversation_subscription_grants(
+               alice.person_id,
+               message_id
+             )
   end
 
   test "does not hand private email to a departed member who has rejoined only Everyone" do
@@ -367,9 +445,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert :ok =
              Messaging.follow_conversation(
                %{
-                 club_id: club_id,
+                 person_id: carol.person_id,
                  conversation_id: private_message_id,
-                 member_id: carol.person_id
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
                },
                consistency: :strong
              )
@@ -513,12 +592,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     refute Repo.get(MessageProjection, reply_message_id)
 
-    assert {:error, :not_current_member} =
-             Messaging.follow_conversation_as_current_member(
+    assert {:error, :conversation_subscription_not_authorized} =
+             Messaging.follow_conversation(
                %{
-                 club_id: club_id,
+                 person_id: carol.person_id,
                  conversation_id: message_id,
-                 member_id: carol.person_id
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
                },
                consistency: :strong
              )
@@ -681,7 +761,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     ])
   end
 
-  test "does not create a reply delivery when access projection lag makes departure follow cleanup miss the conversation" do
+  test "canonical revocation prevents reply delivery while access projection lags" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
 
@@ -714,11 +794,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert :ok =
              Messaging.follow_conversation(
                %{
-                 club_id: club_id,
+                 person_id: carol.person_id,
                  conversation_id: conversation_id,
-                 member_id: carol.person_id
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
                },
-               consistency: [ConversationFollowProjector]
+               consistency: [PersonConversationSubscriptionsProjector]
              )
 
     assert [] = Messaging.list_conversations_for_group(board_group_id)
@@ -756,7 +837,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
       SystemGroupMembership
     ])
 
-    assert Messaging.following_conversation?(conversation_id, carol.person_id)
+    refute Messaging.following_conversation?(conversation_id, carol.person_id)
     assert Memba.Membership.active_member_of_club_authoritatively?(club_id, carol.person_id)
 
     refute Memba.Membership.active_member_of_group_authoritatively?(
@@ -966,10 +1047,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
     create_club(club_id, "Kootenay Mountaineering Club")
     alice = create_person(name: "Alice", email: "alice@example.com")
     add_member(club_id, alice.person_id)
+    message_id = Memba.ID.generate(:message)
 
     assert {:error, :invalid_subject} =
              Messaging.send_club_message(%{
-               message_id: Memba.ID.generate(:message),
+               message_id: message_id,
                club_id: club_id,
                sender_id: alice.person_id,
                subject: "  ",
@@ -977,6 +1059,438 @@ defmodule Memba.Messaging.SendClubMessageTest do
              })
 
     assert Fake.deliveries() == []
+
+    assert %Memba.Messaging.PersonConversationSubscriptions{intents: intents} =
+             Memba.Messaging.App.aggregate_state(
+               Memba.Messaging.PersonConversationSubscriptions,
+               Memba.Messaging.PersonConversationSubscriptions.stream_id(alice.person_id)
+             )
+
+    assert intents == %{}
+  end
+
+  test "delivery handoff rejects an old queued grant after unfollow and refollow" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    add_member(club_id, alice.person_id)
+    add_member(club_id, bob.person_id)
+    conversation_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: conversation_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Queued reply",
+                 body: "Root."
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 person_id: bob.person_id,
+                 conversation_id: conversation_id,
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
+               },
+               consistency: :strong
+             )
+
+    dispatcher_stopped? = stop_email_delivery_dispatcher()
+    on_exit(fn -> restart_email_delivery_dispatcher(dispatcher_stopped?) end)
+    reply_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_id,
+                 conversation_id: conversation_id,
+                 sender_id: alice.person_id,
+                 body: "Queued for Bob."
+               },
+               consistency: :strong
+             )
+
+    assert [delivery] = pending_deliveries_for_message(reply_id)
+    assert is_binary(delivery.subscription_authorization_id)
+
+    assert :ok =
+             Messaging.unfollow_conversation(
+               %{
+                 person_id: bob.person_id,
+                 conversation_id: conversation_id,
+                 unfollow_id: Ecto.UUID.generate()
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 person_id: bob.person_id,
+                 conversation_id: conversation_id,
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
+               },
+               consistency: :strong
+             )
+
+    assert {:error, :recipient_access_ended} =
+             EmailDeliveryDispatcher.deliver_to_provider(delivery)
+  end
+
+  test "duplicate root conflict leaves no Club authority fact or person intent" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Memba.Messaging.App.dispatch(
+               %Memba.Messaging.Commands.SendMessage{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Existing root",
+                 body: "Already committed.",
+                 recipients: [
+                   %Memba.Messaging.Recipient{
+                     delivery_id: Memba.ID.generate(:delivery),
+                     person_id: alice.person_id,
+                     name: alice.name,
+                     email: alice.email
+                   }
+                 ]
+               },
+               consistency: :strong
+             )
+
+    club_before = MembershipApp.aggregate_state(Memba.Membership.Club, club_id)
+
+    assert {:error, :already_sent} =
+             Messaging.send_club_message(%{
+               message_id: message_id,
+               club_id: club_id,
+               sender_id: alice.person_id,
+               subject: "Conflicting root",
+               body: "Must not bind authority."
+             })
+
+    club_after = MembershipApp.aggregate_state(Memba.Membership.Club, club_id)
+    assert club_after.stream_version == club_before.stream_version
+
+    assert club_after.conversation_authority_decisions ==
+             club_before.conversation_authority_decisions
+
+    assert %Memba.Messaging.PersonConversationSubscriptions{intents: %{}} =
+             Memba.Messaging.App.aggregate_state(
+               Memba.Messaging.PersonConversationSubscriptions,
+               Memba.Messaging.PersonConversationSubscriptions.stream_id(alice.person_id)
+             )
+  end
+
+  test "club removal revokes derived Everyone subscription without GroupMembership facts" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    membership_id = add_member(club_id, alice.person_id)
+    bob_membership_id = add_member(club_id, bob.person_id)
+    assign_admin_role(club_id, bob_membership_id, bob.person_id)
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Everyone topic",
+                 body: "Derived authority."
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(message_id, alice.person_id)
+
+    assert :ok =
+             Memba.Membership.remove_member(
+               %{membership_id: membership_id, club_id: club_id, person_id: alice.person_id},
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(message_id, alice.person_id)
+  end
+
+  test "system authority revocation is scoped to the exact club membership" do
+    alice = create_person(name: "Alice", email: "alice@example.com")
+
+    conversations =
+      for suffix <- ["one", "two"] do
+        club_id = Memba.ID.generate(:club)
+        create_club(club_id, "Club #{suffix}")
+        alice_membership_id = add_member(club_id, alice.person_id)
+        backup = create_person(name: "Backup #{suffix}", email: "backup-#{suffix}@example.com")
+        backup_membership_id = add_member(club_id, backup.person_id)
+        assign_admin_role(club_id, backup_membership_id, backup.person_id)
+        message_id = Memba.ID.generate(:message)
+
+        assert :ok =
+                 Messaging.send_club_message(
+                   %{
+                     message_id: message_id,
+                     club_id: club_id,
+                     sender_id: alice.person_id,
+                     audience_group_id: SystemGroups.admin_group_id(club_id),
+                     subject: "Admin #{suffix}",
+                     body: "Scoped authority."
+                   },
+                   consistency: :strong
+                 )
+
+        {club_id, alice_membership_id, message_id, backup}
+      end
+
+    [
+      {first_club_id, first_membership_id, first_message_id, first_backup},
+      {_second_club_id, _, second_message_id, _second_backup}
+    ] = conversations
+
+    dispatcher_stopped? = stop_email_delivery_dispatcher()
+    on_exit(fn -> restart_email_delivery_dispatcher(dispatcher_stopped?) end)
+    queued_reply_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: queued_reply_id,
+                 conversation_id: first_message_id,
+                 sender_id: first_backup.person_id,
+                 body: "Queued before Admin removal."
+               },
+               consistency: :strong
+             )
+
+    assert [old_delivery] = pending_deliveries_for_message(queued_reply_id)
+    assert old_delivery.recipient_id == alice.person_id
+    assert old_delivery.authority_kind == "admin"
+
+    remove_admin_role(first_club_id, first_membership_id, alice.person_id)
+
+    assert [%SystemAuthoritySubscriptionRevocationReceipt{completed: true}] =
+             Repo.all(
+               from receipt in SystemAuthoritySubscriptionRevocationReceipt,
+                 where:
+                   receipt.club_id == ^first_club_id and
+                     receipt.club_membership_id == ^first_membership_id and
+                     receipt.authority_kind == "admin"
+             )
+
+    refute Messaging.following_conversation?(first_message_id, alice.person_id)
+    assert Messaging.following_conversation?(second_message_id, alice.person_id)
+
+    assign_admin_role(first_club_id, first_membership_id, alice.person_id)
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 person_id: alice.person_id,
+                 conversation_id: first_message_id,
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.delivery_subscription_authorization_effective?(old_delivery)
+
+    assert {:error, :recipient_access_ended} =
+             EmailDeliveryDispatcher.deliver_to_provider(old_delivery)
+  end
+
+  test "Admin remove and re-add cannot authorize delayed old root decision" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Admin lifecycle")
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    backup = create_person(name: "Backup", email: "backup@example.com")
+    alice_membership_id = add_member(club_id, alice.person_id)
+    backup_membership_id = add_member(club_id, backup.person_id)
+    assign_admin_role(club_id, backup_membership_id, backup.person_id)
+    message_id = Memba.ID.generate(:message)
+    parent = self()
+
+    Application.put_env(:memba, :auto_follow_send_succeeded_hook, fn _command, _decision ->
+      send(parent, {:admin_root_committed, self()})
+      receive do: (:finalize -> :ok)
+    end)
+
+    on_exit(fn -> Application.delete_env(:memba, :auto_follow_send_succeeded_hook) end)
+
+    attrs = %{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: alice.person_id,
+      audience_group_id: SystemGroups.admin_group_id(club_id),
+      subject: "Delayed Admin root",
+      body: "Old decision must stay dead."
+    }
+
+    task = Task.async(fn -> Messaging.send_club_message(attrs, consistency: :strong) end)
+    assert_receive {:admin_root_committed, workflow_pid}
+    remove_admin_role(club_id, alice_membership_id, alice.person_id)
+    assign_admin_role(club_id, alice_membership_id, alice.person_id)
+    send(workflow_pid, :finalize)
+    assert :ok = Task.await(task)
+    refute Messaging.following_conversation?(message_id, alice.person_id)
+
+    Application.delete_env(:memba, :auto_follow_send_succeeded_hook)
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 person_id: alice.person_id,
+                 conversation_id: message_id,
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(message_id, alice.person_id)
+  end
+
+  test "pre-removal reply intent stays ungrantable after Admin re-add and aggregate restart" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Delayed reply authority")
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    add_member(club_id, alice.person_id)
+    bob_membership_id = add_member(club_id, bob.person_id)
+    assign_admin_role(club_id, bob_membership_id, bob.person_id)
+    conversation_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: conversation_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: SystemGroups.admin_group_id(club_id),
+                 subject: "Admin thread",
+                 body: "Prepare reply intent."
+               },
+               consistency: :strong
+             )
+
+    parent = self()
+
+    Application.put_env(:memba, :auto_follow_send_succeeded_hook, fn _command, _decision ->
+      send(parent, {:admin_reply_committed, self()})
+      receive do: (:finalize -> :ok)
+    end)
+
+    on_exit(fn -> Application.delete_env(:memba, :auto_follow_send_succeeded_hook) end)
+    reply_id = Memba.ID.generate(:message)
+
+    task =
+      Task.async(fn ->
+        Messaging.post_message_reply(
+          %{
+            message_id: reply_id,
+            conversation_id: conversation_id,
+            sender_id: bob.person_id,
+            body: "Delayed authorization."
+          },
+          consistency: :strong
+        )
+      end)
+
+    assert_receive {:admin_reply_committed, workflow_pid}
+
+    assert %Memba.Messaging.PersonConversationSubscriptions{intents: intents} =
+             Memba.Messaging.App.aggregate_state(
+               Memba.Messaging.PersonConversationSubscriptions,
+               Memba.Messaging.PersonConversationSubscriptions.stream_id(bob.person_id)
+             )
+
+    assert Enum.any?(intents, fn {_id, intent} -> intent.source == :reply end)
+
+    remove_admin_role(club_id, bob_membership_id, bob.person_id)
+    assign_admin_role(club_id, bob_membership_id, bob.person_id)
+    Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
+    send(workflow_pid, :finalize)
+    assert :ok = Task.await(task)
+    refute Messaging.following_conversation?(conversation_id, bob.person_id)
+
+    Application.delete_env(:memba, :auto_follow_send_succeeded_hook)
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 person_id: bob.person_id,
+                 conversation_id: conversation_id,
+                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
+                 source: :manual
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(conversation_id, bob.person_id)
+  end
+
+  test "root success followed by unfollow defeats delayed coordinator and retry" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+    message_id = Memba.ID.generate(:message)
+    parent = self()
+
+    Application.put_env(:memba, :auto_follow_send_succeeded_hook, fn _command, _decision ->
+      send(parent, {:root_committed_before_follow, self()})
+
+      receive do
+        :finalize -> :ok
+      end
+    end)
+
+    on_exit(fn -> Application.delete_env(:memba, :auto_follow_send_succeeded_hook) end)
+
+    attrs = %{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: alice.person_id,
+      subject: "Delayed root",
+      body: "Coordinator waits."
+    }
+
+    task = Task.async(fn -> Messaging.send_club_message(attrs, consistency: :strong) end)
+    assert_receive {:root_committed_before_follow, workflow_pid}
+
+    assert :ok =
+             Messaging.unfollow_conversation(
+               %{
+                 person_id: alice.person_id,
+                 conversation_id: message_id,
+                 unfollow_id: Ecto.UUID.generate()
+               },
+               consistency: :strong
+             )
+
+    send(workflow_pid, :finalize)
+    assert :ok = Task.await(task)
+    refute Messaging.following_conversation?(message_id, alice.person_id)
+
+    Application.delete_env(:memba, :auto_follow_send_succeeded_hook)
+    Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
+    assert :ok = Messaging.send_club_message(attrs, consistency: :strong)
+    refute Messaging.following_conversation?(message_id, alice.person_id)
   end
 
   test "returns success after recording message work when the configured provider would fail" do
@@ -1256,6 +1770,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
   defp add_group_member(club_id, group_id, membership_id, person_id) do
     assert :ok =
              MembershipApp.dispatch(
+               %StartGroupMembership{
+                 club_id: club_id,
+                 group_id: group_id,
+                 group_membership_id: Memba.ID.generate(:group_membership),
+                 club_membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             MembershipApp.dispatch(
                %AddGroupMember{
                  club_id: club_id,
                  group_id: group_id,
@@ -1274,6 +1800,19 @@ defmodule Memba.Messaging.SendClubMessageTest do
                  group_id: group_id,
                  membership_id: membership_id,
                  person_id: person_id
+               },
+               consistency: :strong
+             )
+  end
+
+  defp remove_admin_role(club_id, membership_id, person_id) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubRoleFromMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id,
+                 role_id: Roles.membership_administrator_role_id(club_id)
                },
                consistency: :strong
              )

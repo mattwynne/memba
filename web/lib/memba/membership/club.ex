@@ -566,7 +566,7 @@ defmodule Memba.Membership.Club do
          :ok <- validate_conversation_group_ids(command.conversation_group_ids),
          :ok <- validate_conversation_stream_version(command.conversation_stream_version),
          :ok <- validate_authority_decision_reuse(club, command),
-         {:ok, club_membership_id, group_membership_ids} <-
+         {:ok, club_membership_id, group_membership_ids, system_authority_kinds} <-
            resolve_conversation_subscription_authority(club, command) do
       %ConversationSubscriptionAuthorityDecided{
         club_id: command.club_id,
@@ -580,6 +580,7 @@ defmodule Memba.Membership.Club do
         authority_decision_id: command.authority_decision_id,
         club_membership_id: club_membership_id,
         group_membership_ids: group_membership_ids,
+        system_authority_kinds: system_authority_kinds,
         club_stream_version: club.stream_version + 1
       }
     else
@@ -606,6 +607,7 @@ defmodule Memba.Membership.Club do
       event
       |> Map.from_struct()
       |> Map.update!(:source, &normalize_subscription_source/1)
+      |> Map.update(:system_authority_kinds, [], &(&1 || []))
 
     %__MODULE__{
       club
@@ -1067,9 +1069,27 @@ defmodule Memba.Membership.Club do
         end)
         |> Enum.sort()
 
-      if group_membership_ids == [],
+      system_authority_kinds =
+        command.conversation_group_ids
+        |> Enum.flat_map(fn group_id ->
+          cond do
+            group_id == SystemGroups.everyone_group_id(club.club_id) ->
+              ["everyone"]
+
+            group_id == SystemGroups.admin_group_id(club.club_id) and
+                MapSet.member?(club.active_admin_membership_ids, club_membership_id) ->
+              ["admin"]
+
+            true ->
+              []
+          end
+        end)
+        |> Enum.uniq()
+        |> Enum.sort()
+
+      if group_membership_ids == [] and system_authority_kinds == [],
         do: nil,
-        else: {:ok, club_membership_id, group_membership_ids}
+        else: {:ok, club_membership_id, group_membership_ids, system_authority_kinds}
     end) || {:error, :conversation_subscription_not_authorized}
   end
 

@@ -14,6 +14,8 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Events.GroupMembershipEnded
+  alias Memba.Membership.Events.GroupMembershipStarted
   alias Memba.Membership.Events.ClubMemberAdded
   alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.ClubRoleAssignedToMember
@@ -46,6 +48,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
              )
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
+    refute_first_class_system_group_events(club_id, everyone_group_id)
   end
 
   test "Admin role assignment and removal dispatch idempotent Admin group membership commands" do
@@ -87,6 +90,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
              )
 
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
+    refute_first_class_system_group_events(club_id, admin_group_id)
   end
 
   test "RemoveClubMember emits custom removal while the policy removes Everyone and Admin" do
@@ -338,6 +342,13 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
         recorded_event.data
       )
     end)
+  end
+
+  defp refute_first_class_system_group_events(club_id, group_id) do
+    refute Enum.any?(recorded_events(club_id), fn recorded_event ->
+             match?(%GroupMembershipStarted{group_id: ^group_id}, recorded_event.data) or
+               match?(%GroupMembershipEnded{group_id: ^group_id}, recorded_event.data)
+           end)
   end
 
   defp await_group_membership_projector! do

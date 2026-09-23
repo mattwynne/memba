@@ -35,10 +35,13 @@ defmodule Memba.Membership do
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.Events.ConversationSubscriptionAuthorityDecided
   alias Memba.Membership.Events.GroupMembershipStarted
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+  alias Memba.Membership.Policies.RevokeGroupMembershipConversationSubscriptions
+  alias Memba.Membership.Policies.RevokeSystemConversationSubscriptions
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projectors.FirstClassGroupMembershipV1
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
@@ -1396,19 +1399,42 @@ defmodule Memba.Membership do
   end
 
   @doc false
-  def decide_conversation_subscription_authority(%ConversationAuthorityDescriptor{} = descriptor) do
-    command = %DecideConversationSubscriptionAuthority{
-      conversation_authority_descriptor: descriptor,
-      club_id: descriptor.club_id,
-      person_id: descriptor.person_id,
-      subscription_intent_id: descriptor.subscription_intent_id,
-      source: descriptor.source,
-      conversation_id: descriptor.conversation_id,
-      conversation_group_ids: descriptor.conversation_group_ids,
-      conversation_stream_version: descriptor.conversation_stream_version,
-      authority_request_id: Ecto.UUID.generate(),
-      authority_decision_id: ID.generate(:authority_decision)
-    }
+  def issue_unrecorded_conversation_subscription_authority(descriptor, opts \\ [])
+
+  def issue_unrecorded_conversation_subscription_authority(
+        %ConversationAuthorityDescriptor{} = descriptor,
+        opts
+      ) do
+    command = conversation_subscription_authority_command(descriptor, opts)
+    club = App.aggregate_state(Memba.Membership.Club, descriptor.club_id)
+
+    with true <- Memba.Messaging.valid_conversation_authority_descriptor?(descriptor),
+         %ConversationSubscriptionAuthorityDecided{} = event <-
+           Memba.Membership.Club.execute(club, command) do
+      event
+      |> Map.from_struct()
+      |> Map.put(:club_stream_version, club.stream_version)
+      |> Map.update(:system_authority_kinds, [], &(&1 || []))
+      |> sign_conversation_authority_decision()
+      |> then(&{:ok, &1})
+    else
+      false -> {:error, :invalid_conversation_authority_descriptor}
+      {:error, _reason} = error -> error
+      _unexpected -> {:error, :authority_decision_not_issued}
+    end
+  end
+
+  def issue_unrecorded_conversation_subscription_authority(_descriptor, _opts),
+    do: {:error, :invalid_conversation_authority_descriptor}
+
+  @doc false
+  def decide_conversation_subscription_authority(descriptor, opts \\ [])
+
+  def decide_conversation_subscription_authority(
+        %ConversationAuthorityDescriptor{} = descriptor,
+        opts
+      ) do
+    command = conversation_subscription_authority_command(descriptor, opts)
 
     with true <- Memba.Messaging.valid_conversation_authority_descriptor?(descriptor),
          :ok <- App.dispatch(command, retry_attempts: 10),
@@ -1429,8 +1455,24 @@ defmodule Memba.Membership do
     end
   end
 
-  def decide_conversation_subscription_authority(_descriptor),
+  def decide_conversation_subscription_authority(_descriptor, _opts),
     do: {:error, :invalid_conversation_authority_descriptor}
+
+  defp conversation_subscription_authority_command(descriptor, opts) do
+    %DecideConversationSubscriptionAuthority{
+      conversation_authority_descriptor: descriptor,
+      club_id: descriptor.club_id,
+      person_id: descriptor.person_id,
+      subscription_intent_id: descriptor.subscription_intent_id,
+      source: descriptor.source,
+      conversation_id: descriptor.conversation_id,
+      conversation_group_ids: descriptor.conversation_group_ids,
+      conversation_stream_version: descriptor.conversation_stream_version,
+      authority_request_id: Keyword.get_lazy(opts, :authority_request_id, &Ecto.UUID.generate/0),
+      authority_decision_id:
+        Keyword.get_lazy(opts, :authority_decision_id, fn -> ID.generate(:authority_decision) end)
+    }
+  end
 
   @doc false
   def conversation_subscription_authority_decision_for_intent(club_id, subscription_intent_id) do
@@ -1461,10 +1503,13 @@ defmodule Memba.Membership do
     with true <- valid_conversation_authority_signature?(decision),
          %Memba.Membership.Club{} = club <-
            App.aggregate_state(Memba.Membership.Club, decision.club_id),
-         true <- recorded_authority_decision?(club, decision),
+         true <-
+           recorded_authority_decision?(club, decision) or
+             root_authority_decision_bound?(decision),
          true <-
            Map.get(club.active_memberships, decision.club_membership_id) == decision.person_id,
-         true <- exact_group_memberships_current?(club, decision) do
+         true <- exact_group_memberships_current?(club, decision),
+         true <- system_authorities_current?(club, decision) do
       :ok
     else
       _invalid_or_ended -> {:error, :conversation_subscription_authority_ended}
@@ -1472,6 +1517,26 @@ defmodule Memba.Membership do
   end
 
   def revalidate_conversation_subscription_authority(_forged),
+    do: {:error, :invalid_conversation_subscription_authority}
+
+  @doc false
+  def revalidate_unrecorded_conversation_subscription_authority(
+        %ConversationSubscriptionAuthorityDecision{} = decision
+      ) do
+    with true <- valid_conversation_authority_signature?(decision),
+         %Memba.Membership.Club{} = club <-
+           App.aggregate_state(Memba.Membership.Club, decision.club_id),
+         true <-
+           Map.get(club.active_memberships, decision.club_membership_id) == decision.person_id,
+         true <- exact_group_memberships_current?(club, decision),
+         true <- system_authorities_current?(club, decision) do
+      :ok
+    else
+      _invalid_or_ended -> {:error, :conversation_subscription_authority_ended}
+    end
+  end
+
+  def revalidate_unrecorded_conversation_subscription_authority(_forged),
     do: {:error, :invalid_conversation_subscription_authority}
 
   @doc "Verify that a decision was issued unchanged by this server."
@@ -2779,6 +2844,7 @@ defmodule Memba.Membership do
   defp member_lifecycle_consistency(dispatch_opts) do
     dispatch_opts
     |> system_group_membership_consistency()
+    |> Keyword.update!(:consistency, &include_group_membership_revocation_consistency/1)
     |> Keyword.update!(
       :consistency,
       &include_removed_group_member_follows_consistency/1
@@ -2786,12 +2852,13 @@ defmodule Memba.Membership do
   end
 
   defp system_group_membership_consistency(dispatch_opts) do
-    Keyword.update(
-      dispatch_opts,
+    dispatch_opts
+    |> Keyword.update(
       :consistency,
-      [SystemGroupMembership],
+      [SystemGroupMembership, RevokeSystemConversationSubscriptions],
       &include_system_group_membership_consistency/1
     )
+    |> Keyword.update!(:consistency, &include_system_revocation_consistency/1)
   end
 
   defp include_system_group_membership_consistency(:strong), do: :strong
@@ -2814,6 +2881,41 @@ defmodule Memba.Membership do
   end
 
   defp system_group_membership_handler?(_handler), do: false
+
+  defp include_system_revocation_consistency(:strong), do: :strong
+
+  defp include_system_revocation_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &system_revocation_handler?/1),
+      do: handlers,
+      else: [RevokeSystemConversationSubscriptions | handlers]
+  end
+
+  defp include_system_revocation_consistency(consistency), do: consistency
+
+  defp system_revocation_handler?(RevokeSystemConversationSubscriptions), do: true
+
+  defp system_revocation_handler?(handler) when is_binary(handler),
+    do: handler == inspect(RevokeSystemConversationSubscriptions)
+
+  defp system_revocation_handler?(_handler), do: false
+
+  defp include_group_membership_revocation_consistency(:strong), do: :strong
+
+  defp include_group_membership_revocation_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &group_membership_revocation_handler?/1),
+      do: handlers,
+      else: [RevokeGroupMembershipConversationSubscriptions | handlers]
+  end
+
+  defp include_group_membership_revocation_consistency(consistency), do: consistency
+
+  defp group_membership_revocation_handler?(RevokeGroupMembershipConversationSubscriptions),
+    do: true
+
+  defp group_membership_revocation_handler?(handler) when is_binary(handler),
+    do: handler == inspect(RevokeGroupMembershipConversationSubscriptions)
+
+  defp group_membership_revocation_handler?(_handler), do: false
 
   defp include_removed_group_member_follows_consistency(:strong), do: :strong
 
@@ -3038,6 +3140,8 @@ defmodule Memba.Membership do
   end
 
   defp sign_conversation_authority_decision(decision) do
+    decision = Map.update(decision, :system_authority_kinds, [], &(&1 || []))
+
     unsigned =
       struct!(ConversationSubscriptionAuthorityDecision, Map.put(decision, :signature, ""))
 
@@ -3058,11 +3162,13 @@ defmodule Memba.Membership do
         decision.authority_decision_id,
         decision.club_membership_id,
         decision.group_membership_ids,
+        decision.system_authority_kinds,
         decision.club_stream_version
       ]
       |> :erlang.term_to_binary()
 
     :crypto.mac(:hmac, :sha256, authority_signing_key(), payload)
+    |> Base.encode64()
   end
 
   defp authority_signing_key do
@@ -3070,6 +3176,21 @@ defmodule Memba.Membership do
     |> Application.fetch_env!(MembaWeb.Endpoint)
     |> Keyword.fetch!(:secret_key_base)
   end
+
+  defp root_authority_decision_bound?(%{source: :root} = decision) do
+    case Memba.Messaging.App.aggregate_state(Memba.Messaging.Message, decision.conversation_id) do
+      %Memba.Messaging.Message{} = message ->
+        message.subscription_intent_id == decision.subscription_intent_id and
+          message.authority_request_id == decision.authority_request_id and
+          message.authority_decision_id == decision.authority_decision_id and
+          message.root_subscription_authority_decision == decision
+
+      _missing ->
+        false
+    end
+  end
+
+  defp root_authority_decision_bound?(_decision), do: false
 
   defp recorded_authority_decision?(club, decision) do
     case Map.get(club.conversation_authority_decisions, decision.authority_decision_id) do
@@ -3090,11 +3211,26 @@ defmodule Memba.Membership do
             :authority_decision_id,
             :club_membership_id,
             :group_membership_ids,
+            :system_authority_kinds,
             :club_stream_version
           ],
           &(Map.get(recorded, &1) == Map.get(decision, &1))
         )
     end
+  end
+
+  defp system_authorities_current?(club, decision) do
+    Enum.all?(decision.system_authority_kinds, fn
+      "everyone" ->
+        Map.get(club.active_memberships, decision.club_membership_id) == decision.person_id
+
+      "admin" ->
+        Map.get(club.active_memberships, decision.club_membership_id) == decision.person_id and
+          MapSet.member?(club.active_admin_membership_ids, decision.club_membership_id)
+
+      _unknown ->
+        false
+    end)
   end
 
   defp exact_group_memberships_current?(club, decision) do

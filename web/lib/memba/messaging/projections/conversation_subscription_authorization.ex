@@ -9,8 +9,11 @@ defmodule Memba.Messaging.Projections.ConversationSubscriptionAuthorization do
     field :subscription_id, :string
     field :subscription_intent_id, :string
     field :authority_decision_id, :string
+    field :club_id, :string
     field :club_membership_id, :string
+    field :club_stream_version, :integer
     field :group_membership_id, :string
+    field :authority_kind, :string
     field :effective, :boolean, default: true
     field :revocation_id, :string
     field :unfollow_id, :string

@@ -11,7 +11,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
-  alias Memba.Messaging.Commands.FollowConversation
+  alias Memba.Messaging.Commands.EndPersonConversationSubscription
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
@@ -24,7 +24,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
-  alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationAuthorityDescriptor
   alias Memba.Messaging.ConversationReference
@@ -46,14 +45,15 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
 
-  alias Memba.Messaging.Projectors.ConversationFollow,
-    as: ConversationFollowProjector
+  alias Memba.Messaging.Projectors.PersonConversationSubscriptionsV1,
+    as: PersonConversationSubscriptionsProjector
 
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.ConversationSubscriptionAuthorization
   alias Memba.Messaging.Projections.GroupMembershipSubscriptionRevocationReceipt
   alias Memba.Messaging.Projections.PersonConversationSubscription
+  alias Memba.Messaging.Projections.SystemAuthoritySubscriptionRevocationReceipt
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -91,33 +91,7 @@ defmodule Memba.Messaging do
              source
            ),
          :ok <- run_subscription_authority_issued_hook(decision),
-         :ok <-
-           dispatch_subscription_with_revalidation(
-             %StartPersonConversationSubscriptionIntent{
-               person_id: person_id,
-               club_id: decision.club_id,
-               conversation_id: conversation_id,
-               conversation_group_ids: decision.conversation_group_ids,
-               conversation_stream_version: decision.conversation_stream_version,
-               subscription_id:
-                 PersonConversationSubscriptions.subscription_id(person_id, conversation_id),
-               subscription_intent_id: subscription_intent_id,
-               authority_decision_id: decision.authority_decision_id,
-               source: source,
-               club_membership_id: decision.club_membership_id,
-               group_membership_ids: decision.group_membership_ids,
-               authority_decision: decision
-             },
-             decision,
-             dispatch_opts
-           ),
-         :ok <-
-           authorize_subscription_intent(
-             person_id,
-             subscription_intent_id,
-             decision,
-             dispatch_opts
-           ) do
+         :ok <- start_and_authorize_subscription(decision, dispatch_opts) do
       :ok
     else
       {:error, _reason} = error -> error
@@ -186,6 +160,15 @@ defmodule Memba.Messaging do
     end
   end
 
+  @doc false
+  def get_system_authority_subscription_revocation_receipt(revocation_id) do
+    with {:ok, revocation_id} <- Ecto.UUID.cast(revocation_id) do
+      Repo.get(SystemAuthoritySubscriptionRevocationReceipt, revocation_id)
+    else
+      :error -> nil
+    end
+  end
+
   @doc """
   Send a message to the active members of a club conversation group.
 
@@ -199,9 +182,8 @@ defmodule Memba.Messaging do
   """
   def send_club_message(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- send_club_message_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
+    with {:ok, command} <- send_club_message_command(attrs) do
+      send_root_and_follow(command, dispatch_opts)
     end
   end
 
@@ -224,9 +206,8 @@ defmodule Memba.Messaging do
                   :ok <- authorize_message_sender(command) do
                {:ok, command}
              end
-           end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
+           end) do
+      send_root_and_follow(command, dispatch_opts)
     end
   end
 
@@ -243,17 +224,13 @@ defmodule Memba.Messaging do
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <-
-           authorize_at_stable_checkpoint(
-             fn ->
-               with {:ok, command} <- post_message_reply_command(attrs),
-                    :ok <- authorize_reply_sender(command) do
-                 {:ok, command}
-               end
-             end,
-             projections: [ConversationFollowProjector]
-           ),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- post_message_reply_command(attrs),
+                  :ok <- authorize_reply_sender(command) do
+               {:ok, command}
+             end
+           end) do
+      send_reply_and_follow(command, dispatch_opts)
     end
   end
 
@@ -310,73 +287,55 @@ defmodule Memba.Messaging do
     end
   end
 
-  @doc """
-  Follow a club-message conversation for reply notifications.
-
-  This command records follow state only. Caller-facing authorization, such as
-  ensuring a person is a current club member before opting in from the app, is
-  applied by the surfaces that expose this capability.
-  """
+  @doc "Begin and authorize a manual conversation subscription."
   def follow_conversation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- follow_conversation_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
-    end
+    begin_person_conversation_subscription(attrs, dispatch_opts)
   end
 
-  @doc """
-  Follow a conversation from an in-app current-member surface.
-
-  The raw `follow_conversation/2` command records follow state for system and
-  future email-unsubscribe workflows. Browser surfaces should use this wrapper
-  so only people with effective read access through an active group membership
-  can opt in through the app.
-  """
+  @doc "Follow a conversation from an in-app current-member surface."
   def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <-
-           authorize_at_stable_checkpoint(fn ->
-             with {:ok, command} <- follow_conversation_command(attrs),
-                  :ok <- authorize_current_member_conversation_action(command) do
-               {:ok, command}
-             end
-           end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
-    end
+    follow_conversation(attrs, dispatch_opts)
   end
 
-  @doc """
-  Stop following a club-message conversation.
-  """
+  @doc "End every earlier subscription intent and grant for a conversation."
   def unfollow_conversation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- unfollow_conversation_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with :ok <- reject_unfollow_provenance(attrs),
+         {:ok, person_id} <- fetch_and_cast(attrs, :person_id, :person),
+         {:ok, conversation_id} <- fetch_and_cast(attrs, :conversation_id, :message),
+         {:ok, unfollow_id} <- fetch_uuid(attrs, :unfollow_id),
+         {:ok, dispatch_result} <-
+           dispatch_command(
+             %EndPersonConversationSubscription{
+               person_id: person_id,
+               conversation_id: conversation_id,
+               unfollow_id: unfollow_id
+             },
+             dispatch_opts
+           ) do
       dispatch_result
     end
   end
 
-  @doc """
-  Stop following a conversation from an in-app current-member surface.
-
-  Email stop-follow links intentionally use the raw unfollow command so former
-  members can reduce notifications without signing in. In-app unfollow remains
-  limited to people with effective read access through an active group
-  membership.
-  """
+  @doc "Stop following from an in-app current-member surface."
   def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <-
-           authorize_at_stable_checkpoint(fn ->
-             with {:ok, command} <- unfollow_conversation_command(attrs),
-                  :ok <- authorize_current_member_conversation_action(command) do
-               {:ok, command}
-             end
-           end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
+    with {:ok, person_id} <- fetch_and_cast(attrs, :person_id, :person),
+         {:ok, conversation_id} <- fetch_and_cast(attrs, :conversation_id, :message),
+         {:ok, club_id} <- canonical_conversation_club_id(conversation_id),
+         true <-
+           member_has_authoritative_conversation_access?(
+             conversation_id,
+             club_id,
+             person_id,
+             :read
+           ) do
+      unfollow_conversation(attrs, dispatch_opts)
+    else
+      false -> {:error, :not_current_member}
+      {:error, _reason} = error -> error
     end
   end
 
@@ -391,13 +350,12 @@ defmodule Memba.Messaging do
       when is_list(dispatch_opts) do
     with {:ok, scope} <- ConversationStopFollowToken.verify(token),
          {:ok, root_message} <- fetch_conversation_root(scope.conversation_id),
-         :ok <- ensure_stop_follow_scope(root_message, scope),
-         :ok <- reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
+         :ok <- ensure_stop_follow_scope(root_message, scope) do
       case unfollow_conversation(
              %{
-               club_id: scope.club_id,
+               person_id: scope.member_id,
                conversation_id: scope.conversation_id,
-               member_id: scope.member_id
+               unfollow_id: stable_unfollow_id(scope)
              },
              dispatch_opts
            ) do
@@ -663,17 +621,24 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Return a projected follow state for a member in a conversation.
+  Return effective follow state during the staged subscription cutover.
 
-  Invalid IDs or missing follow rows return `nil`.
+  Any canonical person/conversation marker, including an unfollow tombstone,
+  wins. Only pairs with no canonical marker fall back to the legacy projection.
   """
   def get_conversation_follow(conversation_id, member_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
          {:ok, member_id} <- ID.cast(:person, member_id) do
-      Repo.get(
-        ConversationFollowProjection,
-        ConversationFollowers.follow_id(conversation_id, member_id)
-      )
+      case canonical_subscription_state(member_id, conversation_id) do
+        {:canonical, effective?} ->
+          canonical_follow_projection(member_id, conversation_id, effective?)
+
+        :no_canonical_marker ->
+          Repo.get(
+            ConversationFollowProjection,
+            ConversationFollowers.follow_id(conversation_id, member_id)
+          )
+      end
     else
       :error -> nil
     end
@@ -791,18 +756,39 @@ defmodule Memba.Messaging do
     }
   end
 
-  @doc """
-  List current projected followers for a conversation.
+  @doc false
+  def delivery_subscription_authorization_effective?(%EmailDeliveryProjection{
+        subscription_authorization_id: nil
+      }),
+      do: true
 
-  This is the raw Messaging follow state. Delivery eligibility that depends on
-  current club membership is applied by reply-delivery code.
-  """
+  def delivery_subscription_authorization_effective?(%EmailDeliveryProjection{} = delivery) do
+    subscriptions =
+      App.aggregate_state(
+        PersonConversationSubscriptions,
+        PersonConversationSubscriptions.stream_id(delivery.recipient_id)
+      )
+
+    case Map.get(subscriptions.grants, delivery.subscription_authorization_id) do
+      %{active: true} = grant ->
+        grant.authority_decision_id == delivery.authority_decision_id and
+          grant.authority_kind == delivery.authority_kind and
+          grant.club_id == delivery.authority_club_id and
+          grant.club_membership_id == delivery.authority_club_membership_id and
+          grant.group_membership_id == delivery.authority_group_membership_id and
+          grant.club_stream_version == delivery.authority_club_stream_version
+
+      _missing_or_revoked ->
+        false
+    end
+  end
+
+  @doc "List effective canonical-or-legacy followers for a conversation."
   def list_conversation_followers(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
-      ConversationFollowProjection
-      |> where([follow], follow.conversation_id == ^conversation_id and follow.following == true)
-      |> order_by([follow], asc: follow.member_id)
-      |> Repo.all()
+      conversation_id
+      |> effective_follow_candidates()
+      |> Enum.map(& &1.follow)
     else
       :error -> []
     end
@@ -1081,6 +1067,112 @@ defmodule Memba.Messaging do
     else
       :error -> []
     end
+  end
+
+  defp canonical_subscription_state(person_id, conversation_id) do
+    {state, _grant} = canonical_subscription_evaluation(person_id, conversation_id)
+    state
+  end
+
+  defp canonical_subscription_evaluation(person_id, conversation_id) do
+    subscriptions =
+      App.aggregate_state(
+        PersonConversationSubscriptions,
+        PersonConversationSubscriptions.stream_id(person_id)
+      )
+
+    marker? =
+      Enum.any?(subscriptions.intents, fn {_id, intent} ->
+        intent.conversation_id == conversation_id
+      end) or
+        Enum.any?(subscriptions.unfollows, fn {_id, unfollow} ->
+          unfollow.conversation_id == conversation_id
+        end) or
+        Enum.any?(subscriptions.grants, fn {_id, grant} ->
+          grant.conversation_id == conversation_id
+        end)
+
+    if marker? do
+      active_grant =
+        subscriptions.grants
+        |> Map.values()
+        |> Enum.filter(&(&1.conversation_id == conversation_id and &1.active))
+        |> Enum.sort_by(& &1.authorization_id)
+        |> List.first()
+
+      {{:canonical, not is_nil(active_grant)}, active_grant}
+    else
+      {:no_canonical_marker, nil}
+    end
+  end
+
+  defp effective_follow_candidates(conversation_id) do
+    checkpoint = ProjectionBarrier.current_checkpoint()
+
+    ProjectionBarrier.await!(
+      [PersonConversationSubscriptionsProjector, Memba.Messaging.Projectors.ConversationFollow],
+      checkpoint: checkpoint,
+      timeout: @default_authorization_stability_timeout
+    )
+
+    conversation_id
+    |> follow_candidate_person_ids()
+    |> Enum.map(fn person_id ->
+      {state, grant} = canonical_subscription_evaluation(person_id, conversation_id)
+      {person_id, state, grant}
+    end)
+    |> Enum.filter(fn {person_id, state, _grant} ->
+      case state do
+        {:canonical, effective?} -> effective?
+        :no_canonical_marker -> legacy_following?(conversation_id, person_id)
+      end
+    end)
+    |> Enum.map(fn {person_id, _state, grant} ->
+      %{follow: canonical_follow_projection(person_id, conversation_id, true), grant: grant}
+    end)
+    |> Enum.sort_by(& &1.follow.member_id)
+  end
+
+  defp follow_candidate_person_ids(conversation_id) do
+    legacy_ids =
+      ConversationFollowProjection
+      |> where([follow], follow.conversation_id == ^conversation_id)
+      |> select([follow], follow.member_id)
+      |> Repo.all()
+
+    canonical_ids =
+      PersonConversationSubscription
+      |> where([subscription], subscription.conversation_id == ^conversation_id)
+      |> select([subscription], subscription.person_id)
+      |> Repo.all()
+
+    Enum.uniq(canonical_ids ++ legacy_ids)
+  end
+
+  defp legacy_following?(conversation_id, person_id) do
+    case Repo.get_by(ConversationFollowProjection,
+           conversation_id: conversation_id,
+           member_id: person_id
+         ) do
+      %ConversationFollowProjection{following: following?} -> following?
+      nil -> false
+    end
+  end
+
+  defp canonical_follow_projection(person_id, conversation_id, effective?) do
+    club_id =
+      case App.aggregate_state(Message, conversation_id) do
+        %Message{club_id: club_id} -> club_id
+        _missing -> nil
+      end
+
+    %ConversationFollowProjection{
+      follow_id: ConversationFollowers.follow_id(conversation_id, person_id),
+      club_id: club_id,
+      conversation_id: conversation_id,
+      member_id: person_id,
+      following: effective?
+    }
   end
 
   defp normalize_member_email_delivery(nil), do: nil
@@ -1543,6 +1635,7 @@ defmodule Memba.Messaging do
              destination,
              sender
            ),
+         :ok <- finalize_committed_inbound_auto_follow(message, dispatch_opts),
          :ok <-
            record_inbound_club_email_accepted(
              receive_command.inbound_email,
@@ -1905,7 +1998,9 @@ defmodule Memba.Messaging do
                {:ok, command}
              end
            end) do
-      dispatch_inbound_message_once(command, dispatch_opts)
+      command
+      |> send_root_and_follow(dispatch_opts)
+      |> normalize_dispatch_ok()
     end
   end
 
@@ -1924,16 +2019,15 @@ defmodule Memba.Messaging do
     }
 
     with {:ok, command} <-
-           authorize_at_stable_checkpoint(
-             fn ->
-               with {:ok, command} <- post_message_reply_command(attrs),
-                    :ok <- authorize_reply_sender(command) do
-                 {:ok, command}
-               end
-             end,
-             projections: [ConversationFollowProjector]
-           ) do
-      dispatch_inbound_message_once(command, dispatch_opts)
+           authorize_at_stable_checkpoint(fn ->
+             with {:ok, command} <- post_message_reply_command(attrs),
+                  :ok <- authorize_reply_sender(command) do
+               {:ok, command}
+             end
+           end) do
+      command
+      |> send_reply_and_follow(dispatch_opts)
+      |> normalize_dispatch_ok()
     end
   end
 
@@ -1941,52 +2035,25 @@ defmodule Memba.Messaging do
     ID.deterministic(:message, [inbound_email_id])
   end
 
-  defp dispatch_inbound_message_once(command, dispatch_opts) do
-    case dispatch_ok(command, dispatch_opts) do
-      :ok -> :ok
-      {:error, :already_sent} -> confirm_matching_inbound_message(command)
-      {:error, _reason} = error -> error
-    end
-  end
+  defp finalize_committed_inbound_auto_follow(%Message{} = message, dispatch_opts) do
+    root? = message.message_id == message.conversation_id
 
-  defp confirm_matching_inbound_message(%SendMessage{} = command) do
-    case App.aggregate_state(Message, command.message_id) do
-      %Message{
-        message_id: message_id,
-        club_id: club_id,
-        sender_id: sender_id,
-        conversation_id: message_id,
-        group_access: group_access
-      }
-      when message_id == command.message_id and club_id == command.club_id and
-             sender_id == command.sender_id ->
-        if Map.get(group_access, command.audience_group_id) == "write" do
-          :ok
-        else
-          {:error, :already_sent}
-        end
+    if root? do
+      start_and_finalize_root_auto_follow(
+        message.root_subscription_authority_decision,
+        dispatch_opts
+      )
+    else
+      intent_id = auto_follow_intent_id(:reply, message.message_id, message.sender_id)
 
-      _missing_or_different_message ->
-        {:error, :already_sent}
-    end
-  end
-
-  defp confirm_matching_inbound_message(%PostMessageReply{} = command) do
-    case App.aggregate_state(Message, command.message_id) do
-      %Message{
-        message_id: message_id,
-        club_id: club_id,
-        sender_id: sender_id,
-        conversation_id: conversation_id,
-        reply_to_message_id: reply_to_message_id
-      }
-      when message_id == command.message_id and club_id == command.club_id and
-             sender_id == command.sender_id and conversation_id == command.conversation_id and
-             reply_to_message_id == command.reply_to_message_id ->
-        :ok
-
-      _missing_or_different_message ->
-        {:error, :already_sent}
+      case Membership.conversation_subscription_authority_decision_for_intent(
+             message.club_id,
+             intent_id
+           ) do
+        {:ok, decision} -> finalize_auto_follow(decision, dispatch_opts)
+        {:error, :authority_decision_not_found} -> :ok
+        {:error, _reason} = error -> error
+      end
     end
   end
 
@@ -2181,32 +2248,6 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp follow_conversation_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
-         {:ok, member_id} <- fetch_required(attrs, :member_id) do
-      {:ok,
-       %FollowConversation{
-         club_id: club_id,
-         conversation_id: conversation_id,
-         member_id: member_id
-       }}
-    end
-  end
-
-  defp unfollow_conversation_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
-         {:ok, member_id} <- fetch_required(attrs, :member_id) do
-      {:ok,
-       %UnfollowConversation{
-         club_id: club_id,
-         conversation_id: conversation_id,
-         member_id: member_id
-       }}
-    end
-  end
-
   defp report_email_delivery_delivered_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
@@ -2251,6 +2292,267 @@ defmodule Memba.Messaging do
          reason: reason
        }}
     end
+  end
+
+  defp send_root_and_follow(command, dispatch_opts) do
+    intent_id = auto_follow_intent_id(:root, command.message_id, command.sender_id)
+
+    with :ok <- validate_unsent_root(command),
+         {:ok, decision} <-
+           prepare_root_subscription_authority(command, intent_id)
+           |> optional_authorized_decision() do
+      command = bind_root_subscription_authority(command, decision, intent_id)
+
+      case dispatch_message_for_auto_follow(command, dispatch_opts) do
+        {:ok, dispatch_result} ->
+          with :ok <- run_auto_follow_send_succeeded_hook(command, decision),
+               :ok <- start_and_finalize_root_auto_follow(decision, dispatch_opts) do
+            dispatch_result
+          end
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
+  defp send_reply_and_follow(command, dispatch_opts) do
+    intent_id = auto_follow_intent_id(:reply, command.message_id, command.sender_id)
+
+    with {:ok, decision} <-
+           resolve_subscription_authority_decision(
+             command.sender_id,
+             command.conversation_id,
+             intent_id,
+             :reply
+           )
+           |> optional_authorized_decision(),
+         :ok <- prepare_auto_follow_intent(decision, dispatch_opts) do
+      dispatch_send_then_finalize_follow(command, decision, dispatch_opts)
+    end
+  end
+
+  defp dispatch_send_then_finalize_follow(command, decision, dispatch_opts) do
+    case dispatch_message_for_auto_follow(command, dispatch_opts) do
+      {:ok, dispatch_result} ->
+        with :ok <- run_auto_follow_send_succeeded_hook(command, decision),
+             :ok <- finalize_auto_follow(decision, dispatch_opts) do
+          dispatch_result
+        end
+
+      {:error, _reason} = error ->
+        _ = cancel_failed_auto_follow(decision, dispatch_opts)
+        error
+    end
+  end
+
+  defp dispatch_message_for_auto_follow(command, dispatch_opts) do
+    case dispatch_command(command, dispatch_opts) do
+      {:error, :already_sent} ->
+        if matching_committed_message?(command),
+          do: {:ok, :ok},
+          else: {:error, :already_sent}
+
+      result ->
+        result
+    end
+  end
+
+  defp matching_committed_message?(command) do
+    case App.aggregate_state(Message, command.message_id) do
+      %Message{} = message ->
+        expected_conversation_id = Map.get(command, :conversation_id) || command.message_id
+
+        message.message_id == command.message_id and
+          message.club_id == command.club_id and
+          message.sender_id == command.sender_id and
+          message.conversation_id == expected_conversation_id and
+          message.subscription_intent_id == Map.get(command, :subscription_intent_id) and
+          message.authority_request_id == Map.get(command, :authority_request_id) and
+          message.authority_decision_id == Map.get(command, :authority_decision_id) and
+          message.subject == String.trim(command.subject) and
+          message.body == String.trim(command.body)
+
+      _missing ->
+        false
+    end
+  end
+
+  defp validate_unsent_root(command) do
+    case Message.execute(%Message{}, command) do
+      events when is_list(events) -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp bind_root_subscription_authority(command, nil, _intent_id), do: command
+
+  defp bind_root_subscription_authority(command, decision, intent_id) do
+    %{
+      command
+      | subscription_intent_id: intent_id,
+        authority_request_id: decision.authority_request_id,
+        authority_decision_id: decision.authority_decision_id,
+        root_subscription_authority_decision: decision
+    }
+  end
+
+  defp prepare_root_subscription_authority(command, intent_id) do
+    descriptor = %ConversationAuthorityDescriptor{
+      club_id: command.club_id,
+      person_id: command.sender_id,
+      subscription_intent_id: intent_id,
+      source: :root,
+      conversation_id: command.message_id,
+      conversation_group_ids: [command.audience_group_id],
+      conversation_stream_version: 2 + length(command.recipients),
+      signature: ""
+    }
+
+    descriptor = %{
+      descriptor
+      | signature: conversation_authority_descriptor_signature(descriptor)
+    }
+
+    case App.aggregate_state(Message, command.message_id) do
+      %Message{root_subscription_authority_decision: decision} when not is_nil(decision) ->
+        validate_recorded_subscription_authority_decision(
+          decision,
+          command.sender_id,
+          command.message_id,
+          :root
+        )
+
+      %Message{message_id: message_id} when not is_nil(message_id) ->
+        {:ok, nil}
+
+      _unsent ->
+        Membership.issue_unrecorded_conversation_subscription_authority(
+          descriptor,
+          authority_request_id: stable_uuid(["root-authority", command.message_id]),
+          authority_decision_id:
+            ID.deterministic(:authority_decision, ["root", command.message_id])
+        )
+    end
+  end
+
+  defp optional_authorized_decision({:ok, decision}), do: {:ok, decision}
+
+  defp optional_authorized_decision({:error, :conversation_subscription_not_authorized}),
+    do: {:ok, nil}
+
+  defp optional_authorized_decision({:error, _reason} = error), do: error
+
+  defp start_and_finalize_root_auto_follow(nil, _dispatch_opts), do: :ok
+
+  defp start_and_finalize_root_auto_follow(decision, dispatch_opts) do
+    case start_and_authorize_subscription(decision, dispatch_opts) do
+      {:error, reason}
+      when reason in [
+             :subscription_intent_cancelled,
+             :conversation_subscription_authority_ended,
+             :authority_no_longer_current
+           ] ->
+        :ok
+
+      result ->
+        result
+    end
+  end
+
+  defp prepare_auto_follow_intent(nil, _dispatch_opts), do: :ok
+
+  defp prepare_auto_follow_intent(decision, dispatch_opts) do
+    start_subscription_intent(decision, dispatch_opts)
+  end
+
+  defp finalize_auto_follow(nil, _dispatch_opts), do: :ok
+
+  defp finalize_auto_follow(decision, dispatch_opts) do
+    case authorize_subscription_intent(
+           decision.person_id,
+           decision.subscription_intent_id,
+           decision,
+           dispatch_opts
+         ) do
+      :ok ->
+        :ok
+
+      {:error, reason}
+      when reason in [
+             :subscription_intent_cancelled,
+             :conversation_subscription_authority_ended,
+             :authority_no_longer_current
+           ] ->
+        :ok
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp cancel_failed_auto_follow(nil, _dispatch_opts), do: :ok
+
+  defp cancel_failed_auto_follow(decision, dispatch_opts) do
+    App.dispatch(
+      %CancelPersonConversationSubscriptionIntent{
+        person_id: decision.person_id,
+        subscription_intent_id: decision.subscription_intent_id,
+        cancellation_id: stable_uuid(["send-failed", decision.subscription_intent_id]),
+        reason: "send_failed"
+      },
+      Keyword.put(dispatch_opts, :retry_attempts, 0)
+    )
+    |> normalize_dispatch_ok()
+  end
+
+  defp run_auto_follow_send_succeeded_hook(command, decision) do
+    case Application.get_env(:memba, :auto_follow_send_succeeded_hook) do
+      hook when is_function(hook, 2) -> hook.(command, decision)
+      _no_hook -> :ok
+    end
+  end
+
+  defp auto_follow_intent_id(source, message_id, person_id) do
+    ID.deterministic(:subscription_intent, [Atom.to_string(source), message_id, person_id])
+  end
+
+  defp start_and_authorize_subscription(decision, dispatch_opts) do
+    with :ok <- start_subscription_intent(decision, dispatch_opts) do
+      authorize_subscription_intent(
+        decision.person_id,
+        decision.subscription_intent_id,
+        decision,
+        dispatch_opts
+      )
+    end
+  end
+
+  defp start_subscription_intent(decision, dispatch_opts) do
+    dispatch_subscription_with_revalidation(
+      %StartPersonConversationSubscriptionIntent{
+        person_id: decision.person_id,
+        club_id: decision.club_id,
+        conversation_id: decision.conversation_id,
+        conversation_group_ids: decision.conversation_group_ids,
+        conversation_stream_version: decision.conversation_stream_version,
+        subscription_id:
+          PersonConversationSubscriptions.subscription_id(
+            decision.person_id,
+            decision.conversation_id
+          ),
+        subscription_intent_id: decision.subscription_intent_id,
+        authority_decision_id: decision.authority_decision_id,
+        source: decision.source,
+        club_membership_id: decision.club_membership_id,
+        club_stream_version: decision.club_stream_version,
+        group_membership_ids: decision.group_membership_ids,
+        system_authority_kinds: decision.system_authority_kinds,
+        authority_decision: decision
+      },
+      decision,
+      dispatch_opts
+    )
   end
 
   defp run_subscription_authority_issued_hook(decision) do
@@ -2391,6 +2693,11 @@ defmodule Memba.Messaging do
     |> then(&:crypto.mac(:hmac, :sha256, &1, "messaging-conversation-authority"))
   end
 
+  defp reject_unfollow_provenance(attrs) do
+    allowed = MapSet.new([:person_id, :conversation_id, :unfollow_id])
+    reject_untrusted_attributes(attrs, allowed)
+  end
+
   defp reject_subscription_provenance(attrs) do
     allowed = MapSet.new([:person_id, :conversation_id, :subscription_intent_id, :source])
 
@@ -2406,6 +2713,31 @@ defmodule Memba.Messaging do
       else: {:error, :trusted_subscription_provenance_not_accepted}
   rescue
     ArgumentError -> {:error, :unknown_subscription_attribute}
+  end
+
+  defp reject_untrusted_attributes(attrs, allowed) do
+    supplied =
+      attrs
+      |> Map.keys()
+      |> Enum.map(fn key -> if is_binary(key), do: key, else: Atom.to_string(key) end)
+      |> Enum.map(&String.to_existing_atom/1)
+      |> MapSet.new()
+
+    if MapSet.subset?(supplied, allowed),
+      do: :ok,
+      else: {:error, :trusted_subscription_provenance_not_accepted}
+  rescue
+    ArgumentError -> {:error, :unknown_subscription_attribute}
+  end
+
+  defp fetch_uuid(attrs, key) do
+    with {:ok, value} <- fetch_required(attrs, key),
+         {:ok, ^value} <- Ecto.UUID.cast(value) do
+      {:ok, value}
+    else
+      :error -> {:error, :invalid_unfollow_id}
+      {:error, _reason} = error -> error
+    end
   end
 
   defp fetch_and_cast(attrs, key, type) do
@@ -2449,6 +2781,7 @@ defmodule Memba.Messaging do
       subscription_intent_id: intent_id,
       authority_decision_id: decision.authority_decision_id,
       current_group_membership_ids: decision.group_membership_ids,
+      current_system_authority_kinds: decision.system_authority_kinds,
       authority_decision: decision
     }
 
@@ -2553,23 +2886,6 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp authorize_current_member_conversation_action(command) do
-    with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),
-         :ok <- require_conversation_in_club(root_message, command.club_id),
-         true <-
-           member_has_authoritative_conversation_access?(
-             command.conversation_id,
-             command.club_id,
-             command.member_id,
-             :read
-           ) do
-      :ok
-    else
-      false -> {:error, :not_current_member}
-      {:error, _reason} = error -> error
-    end
-  end
-
   defp authorize_at_stable_checkpoint(authorization) when is_function(authorization, 0) do
     authorize_at_stable_checkpoint(authorization, [])
   end
@@ -2655,12 +2971,6 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp require_conversation_in_club(%MessageProjection{club_id: club_id}, club_id), do: :ok
-
-  defp require_conversation_in_club(%MessageProjection{}, _club_id) do
-    {:error, :conversation_not_found}
-  end
-
   defp ensure_stop_follow_scope(
          %MessageProjection{club_id: club_id, message_id: conversation_id},
          %{
@@ -2673,23 +2983,20 @@ defmodule Memba.Messaging do
 
   defp ensure_stop_follow_scope(%MessageProjection{}, _scope), do: {:error, :wrong_scope}
 
-  defp reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
-    if following_conversation?(scope.conversation_id, scope.member_id) do
-      case follow_conversation(
-             %{
-               club_id: scope.club_id,
-               conversation_id: scope.conversation_id,
-               member_id: scope.member_id
-             },
-             dispatch_opts
-           ) do
-        {:error, _reason} = error -> error
-        _dispatch_result -> :ok
-      end
-    else
-      :ok
-    end
+  defp stable_unfollow_id(scope) do
+    stable_uuid([scope.club_id, scope.conversation_id, scope.member_id, "email-unfollow"])
   end
+
+  defp stable_uuid(parts) do
+    parts
+    |> Enum.join(<<0>>)
+    |> then(&:crypto.hash(:md5, &1))
+    |> Ecto.UUID.load!()
+  end
+
+  defp normalize_dispatch_ok(:ok), do: :ok
+  defp normalize_dispatch_ok({:ok, _result}), do: :ok
+  defp normalize_dispatch_ok({:error, _reason} = error), do: error
 
   defp resolve_group_recipients(club_id, group_id, opts \\ []) do
     except_person_id = Keyword.get(opts, :except_person_id)
@@ -2703,29 +3010,58 @@ defmodule Memba.Messaging do
 
   defp resolve_reply_recipients(club_id, conversation_id, opts) do
     except_person_id = Keyword.get(opts, :except_person_id)
-    follower_ids = current_follower_ids(club_id, conversation_id)
 
-    club_id
-    |> Membership.list_active_members_of_club()
-    |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
-    |> Enum.reject(&(&1.id == except_person_id))
-    |> Enum.filter(
-      &member_has_authoritative_conversation_access?(
-        conversation_id,
-        club_id,
-        &1.id,
-        :read
+    candidates =
+      conversation_id
+      |> effective_follow_candidates()
+      |> Enum.reject(&(&1.follow.member_id == except_person_id))
+      |> Enum.filter(
+        &member_has_authoritative_conversation_access?(
+          conversation_id,
+          club_id,
+          &1.follow.member_id,
+          :read
+        )
       )
-    )
-    |> Enum.map(&resolved_recipient/1)
+
+    contacts =
+      candidates
+      |> Enum.map(& &1.follow.member_id)
+      |> Membership.list_person_contact_summaries()
+
+    candidates
+    |> Enum.flat_map(fn candidate ->
+      case Map.get(contacts, candidate.follow.member_id) do
+        nil -> []
+        contact -> [resolved_reply_recipient(contact, candidate.grant)]
+      end
+    end)
+    |> Enum.sort_by(&{&1.name, &1.person_id})
   end
 
-  defp current_follower_ids(club_id, conversation_id) do
-    conversation_id
-    |> list_conversation_followers()
-    |> Enum.filter(&(&1.club_id == club_id))
-    |> Enum.map(& &1.member_id)
-    |> MapSet.new()
+  defp resolved_reply_recipient(contact, nil) do
+    resolved_recipient(%{
+      id: contact.person_id,
+      name: contact.name,
+      email: contact.primary_email
+    })
+  end
+
+  defp resolved_reply_recipient(contact, grant) do
+    %{
+      resolved_recipient(%{
+        id: contact.person_id,
+        name: contact.name,
+        email: contact.primary_email
+      })
+      | subscription_authorization_id: grant.authorization_id,
+        authority_decision_id: grant.authority_decision_id,
+        authority_kind: grant.authority_kind,
+        authority_club_id: grant.club_id,
+        authority_club_membership_id: grant.club_membership_id,
+        authority_group_membership_id: grant.group_membership_id,
+        authority_club_stream_version: grant.club_stream_version
+    }
   end
 
   defp resolved_recipient(%{id: person_id, name: name, email: email}) do

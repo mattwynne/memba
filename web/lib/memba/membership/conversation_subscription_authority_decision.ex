@@ -6,6 +6,7 @@ defmodule Memba.Membership.ConversationSubscriptionAuthorityDecision do
   alter valid provenance because Membership signs every immutable field.
   """
 
+  @derive Jason.Encoder
   @type t :: %__MODULE__{}
   @opaque signed_t :: t()
 
@@ -21,6 +22,7 @@ defmodule Memba.Membership.ConversationSubscriptionAuthorityDecision do
     :authority_decision_id,
     :club_membership_id,
     :group_membership_ids,
+    :system_authority_kinds,
     :club_stream_version,
     :signature
   ]

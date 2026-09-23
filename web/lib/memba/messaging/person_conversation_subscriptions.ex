@@ -16,6 +16,7 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.EndPersonConversationSubscription
   alias Memba.Messaging.Commands.RevokeGroupMembershipConversationSubscriptions
+  alias Memba.Messaging.Commands.RevokeSystemConversationSubscriptions
   alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
   alias Memba.Messaging.Events.ConversationSubscriptionAuthorizationGranted
   alias Memba.Messaging.Events.ConversationSubscriptionAuthorizationRevoked
@@ -24,6 +25,8 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   alias Memba.Messaging.Events.ConversationSubscriptionIntentStarted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationCompleted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationRecorded
+  alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationCompleted
+  alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationRecorded
 
   @behaviour Aggregate
   @sources [:manual, :root, :reply]
@@ -32,7 +35,9 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
             intents: %{},
             grants: %{},
             revoked_group_memberships: %{},
+            revoked_system_authorities: %{},
             revocations: %{},
+            system_revocations: %{},
             unfollows: %{},
             cancellations: %{}
 
@@ -52,6 +57,7 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
     with :ok <- validate_start(command),
          :ok <- validate_person(subscriptions, command.person_id),
          :ok <- validate_subscription_identity(command),
+         :ok <- validate_system_authority_tombstones(subscriptions, command),
          :ok <- validate_new_intent(subscriptions, command) do
       %ConversationSubscriptionIntentStarted{
         person_id: command.person_id,
@@ -64,7 +70,9 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
         authority_decision_id: command.authority_decision_id,
         source: command.source,
         club_membership_id: command.club_membership_id,
-        group_membership_ids: Enum.sort(command.group_membership_ids)
+        club_stream_version: command.club_stream_version,
+        group_membership_ids: Enum.sort(command.group_membership_ids),
+        system_authority_kinds: Enum.sort(command.system_authority_kinds)
       }
     else
       :exact_retry -> []
@@ -80,11 +88,14 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
          :ok <- validate_person(subscriptions, command.person_id),
          {:ok, intent} <- fetch_open_intent(subscriptions, command.subscription_intent_id),
          :ok <- validate_authority_decision(intent, command.authority_decision_id),
-         {:ok, group_membership_ids} <-
-           grantable_group_memberships(subscriptions, intent, command) do
-      group_membership_ids
-      |> Enum.map(fn group_membership_id ->
-        authorization_id = authorization_id(intent.subscription_intent_id, group_membership_id)
+         {:ok, authorities} <- grantable_authorities(subscriptions, intent, command) do
+      Enum.map(authorities, fn {authority_kind, group_membership_id} ->
+        authorization_id =
+          authorization_id(
+            intent.subscription_intent_id,
+            authority_kind,
+            group_membership_id
+          )
 
         %ConversationSubscriptionAuthorizationGranted{
           person_id: command.person_id,
@@ -93,8 +104,11 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
           subscription_intent_id: intent.subscription_intent_id,
           authority_decision_id: intent.authority_decision_id,
           authorization_id: authorization_id,
+          club_id: intent.club_id,
           club_membership_id: intent.club_membership_id,
-          group_membership_id: group_membership_id
+          club_stream_version: intent.club_stream_version,
+          group_membership_id: group_membership_id,
+          authority_kind: authority_kind
         }
       end)
     end
@@ -213,6 +227,59 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
     end
   end
 
+  def execute(
+        %__MODULE__{} = subscriptions,
+        %RevokeSystemConversationSubscriptions{} = command
+      ) do
+    with :ok <- validate_system_revoke(command),
+         :ok <- validate_person(subscriptions, command.person_id),
+         :ok <- validate_system_revocation_retry(subscriptions, command) do
+      revoked =
+        subscriptions.grants
+        |> Map.values()
+        |> Enum.filter(fn grant ->
+          grant.club_id == command.club_id and
+            grant.club_membership_id == command.club_membership_id and
+            grant.authority_kind == command.authority_kind and
+            is_integer(grant.club_stream_version) and
+            grant.club_stream_version <= command.authority_through_club_stream_version and
+            grant.active
+        end)
+        |> Enum.sort_by(&{&1.conversation_id, &1.authorization_id})
+        |> Enum.map(fn grant ->
+          authorization_revoked(grant,
+            reason: "system_authority_ended",
+            revocation_id: command.revocation_id
+          )
+        end)
+
+      [
+        %SystemAuthoritySubscriptionRevocationRecorded{
+          person_id: command.person_id,
+          club_id: command.club_id,
+          club_membership_id: command.club_membership_id,
+          authority_kind: command.authority_kind,
+          authority_through_club_stream_version: command.authority_through_club_stream_version,
+          revocation_id: command.revocation_id
+        }
+        | revoked
+      ] ++
+        [
+          %SystemAuthoritySubscriptionRevocationCompleted{
+            person_id: command.person_id,
+            club_id: command.club_id,
+            club_membership_id: command.club_membership_id,
+            authority_kind: command.authority_kind,
+            authority_through_club_stream_version: command.authority_through_club_stream_version,
+            revocation_id: command.revocation_id
+          }
+        ]
+    else
+      :exact_retry -> []
+      error -> error
+    end
+  end
+
   @impl Aggregate
   def apply(%__MODULE__{} = subscriptions, %ConversationSubscriptionIntentStarted{} = event) do
     intent = %{
@@ -226,7 +293,9 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
       authority_decision_id: event.authority_decision_id,
       source: normalize_source(event.source),
       club_membership_id: event.club_membership_id,
+      club_stream_version: event.club_stream_version,
       group_membership_ids: event.group_membership_ids,
+      system_authority_kinds: event.system_authority_kinds || [],
       status: :open
     }
 
@@ -266,7 +335,10 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
       authority_decision_id: event.authority_decision_id,
       authorization_id: event.authorization_id,
       club_membership_id: event.club_membership_id,
+      club_id: event.club_id,
+      club_stream_version: event.club_stream_version,
       group_membership_id: event.group_membership_id,
+      authority_kind: event.authority_kind || "group_membership",
       active: true
     }
 
@@ -316,14 +388,65 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
     }
   end
 
+  def apply(
+        %__MODULE__{} = subscriptions,
+        %SystemAuthoritySubscriptionRevocationRecorded{} = event
+      ) do
+    key = {event.club_id, event.club_membership_id, event.authority_kind}
+
+    tombstone = %{
+      authority_through_club_stream_version: event.authority_through_club_stream_version,
+      revocation_id: event.revocation_id
+    }
+
+    %{
+      subscriptions
+      | revoked_system_authorities:
+          Map.update(subscriptions.revoked_system_authorities, key, tombstone, fn current ->
+            if current.authority_through_club_stream_version >=
+                 tombstone.authority_through_club_stream_version,
+               do: current,
+               else: tombstone
+          end)
+    }
+  end
+
+  def apply(
+        %__MODULE__{} = subscriptions,
+        %SystemAuthoritySubscriptionRevocationCompleted{} = event
+      ) do
+    receipt = %{
+      club_id: event.club_id,
+      club_membership_id: event.club_membership_id,
+      authority_kind: event.authority_kind,
+      authority_through_club_stream_version: event.authority_through_club_stream_version,
+      completed: true
+    }
+
+    %{
+      subscriptions
+      | system_revocations:
+          Map.put(subscriptions.system_revocations, event.revocation_id, receipt)
+    }
+  end
+
   def apply(%__MODULE__{} = subscriptions, _event), do: subscriptions
+
+  def stream_id(person_id), do: "person-conversation-subscriptions-#{person_id}"
 
   def subscription_id(person_id, conversation_id),
     do: ID.deterministic(:conversation_subscription, [person_id, conversation_id])
 
   def authorization_id(subscription_intent_id, group_membership_id),
-    do:
-      ID.deterministic(:subscription_authorization, [subscription_intent_id, group_membership_id])
+    do: authorization_id(subscription_intent_id, "group_membership", group_membership_id)
+
+  def authorization_id(subscription_intent_id, authority_kind, group_membership_id) do
+    ID.deterministic(:subscription_authorization, [
+      subscription_intent_id,
+      authority_kind,
+      group_membership_id || "system"
+    ])
+  end
 
   def revocation_id(group_membership_id),
     do: ID.deterministic(:subscription_revocation, [group_membership_id])
@@ -366,10 +489,12 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
            ),
          :ok <- validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
          :ok <- validate_source(command.source),
-         :ok <- validate_group_memberships(command.group_membership_ids) do
-      if command.group_membership_ids == Enum.sort(Enum.uniq(command.group_membership_ids)),
-        do: :ok,
-        else: {:error, :group_membership_ids_not_canonical}
+         :ok <- validate_group_memberships(command.group_membership_ids, allow_empty: true),
+         :ok <- validate_system_authority_kinds(command.system_authority_kinds) do
+      if command.group_membership_ids == Enum.sort(Enum.uniq(command.group_membership_ids)) and
+           (command.group_membership_ids != [] or command.system_authority_kinds != []),
+         do: :ok,
+         else: {:error, :authorities_not_canonical}
     end
   end
 
@@ -388,7 +513,10 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
              command.authority_decision_id,
              :invalid_authority_decision_id
            ) do
-      validate_group_memberships(command.current_group_membership_ids, allow_empty: true)
+      with :ok <-
+             validate_group_memberships(command.current_group_membership_ids, allow_empty: true) do
+        validate_system_authority_kinds(command.current_system_authority_kinds)
+      end
     end
   end
 
@@ -409,6 +537,20 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
     with :ok <- validate_id(:person, command.person_id, :invalid_person_id),
          :ok <- validate_id(:message, command.conversation_id, :invalid_conversation_id) do
       validate_uuid(command.unfollow_id, :invalid_unfollow_id)
+    end
+  end
+
+  defp validate_system_revoke(command) do
+    with :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+         :ok <-
+           validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
+         :ok <- validate_system_authority_kinds([command.authority_kind]),
+         :ok <- validate_uuid(command.revocation_id, :invalid_revocation_id) do
+      if is_integer(command.authority_through_club_stream_version) and
+           command.authority_through_club_stream_version > 0,
+         do: :ok,
+         else: {:error, :invalid_club_stream_version}
     end
   end
 
@@ -461,7 +603,11 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
         decision.group_membership_ids ==
           Map.get(command, :group_membership_ids, decision.group_membership_ids) and
         decision.group_membership_ids ==
-          Map.get(command, :current_group_membership_ids, decision.group_membership_ids)
+          Map.get(command, :current_group_membership_ids, decision.group_membership_ids) and
+        decision.system_authority_kinds ==
+          Map.get(command, :system_authority_kinds, decision.system_authority_kinds) and
+        decision.system_authority_kinds ==
+          Map.get(command, :current_system_authority_kinds, decision.system_authority_kinds)
 
     if matches? and Membership.valid_conversation_authority_signature?(decision),
       do: :ok,
@@ -489,18 +635,58 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
       authority_decision_id: command.authority_decision_id,
       source: command.source,
       club_membership_id: command.club_membership_id,
+      club_stream_version: command.club_stream_version,
       group_membership_ids: command.group_membership_ids,
+      system_authority_kinds: command.system_authority_kinds,
       status: :open
     }
 
     case Map.get(subscriptions.intents, command.subscription_intent_id) do
       nil ->
-        :ok
+        if command.source == :root and
+             Enum.any?(subscriptions.unfollows, fn {_id, unfollow} ->
+               unfollow.conversation_id == command.conversation_id
+             end),
+           do: {:error, :subscription_intent_cancelled},
+           else: :ok
 
       intent ->
         if Map.drop(intent, [:status]) == Map.drop(expected, [:status]),
           do: :exact_retry,
           else: {:error, :subscription_intent_id_conflict}
+    end
+  end
+
+  defp validate_system_authority_tombstones(subscriptions, command) do
+    blocked? =
+      Enum.any?(command.system_authority_kinds, fn authority_kind ->
+        system_authority_revoked?(
+          subscriptions,
+          command.club_id,
+          command.club_membership_id,
+          authority_kind,
+          command.club_stream_version
+        )
+      end)
+
+    if blocked?, do: {:error, :conversation_subscription_authority_ended}, else: :ok
+  end
+
+  defp system_authority_revoked?(
+         subscriptions,
+         club_id,
+         club_membership_id,
+         authority_kind,
+         club_stream_version
+       ) do
+    key = {club_id, club_membership_id, authority_kind}
+
+    case Map.get(subscriptions.revoked_system_authorities, key) do
+      %{authority_through_club_stream_version: cutoff} ->
+        not is_integer(club_stream_version) or club_stream_version <= cutoff
+
+      nil ->
+        false
     end
   end
 
@@ -522,19 +708,44 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   defp validate_authority_decision(_intent, _decision_id),
     do: {:error, :authority_decision_mismatch}
 
-  defp grantable_group_memberships(subscriptions, intent, command) do
-    current = MapSet.new(command.current_group_membership_ids)
-    bound = MapSet.new(intent.group_membership_ids)
+  defp grantable_authorities(subscriptions, intent, command) do
+    current_groups = MapSet.new(command.current_group_membership_ids)
+    bound_groups = MapSet.new(intent.group_membership_ids)
+    current_system = MapSet.new(command.current_system_authority_kinds)
+    bound_system = MapSet.new(intent.system_authority_kinds)
 
-    if MapSet.subset?(current, bound) do
-      grantable =
+    if MapSet.subset?(current_groups, bound_groups) and
+         MapSet.subset?(current_system, bound_system) do
+      custom =
         intent.group_membership_ids
-        |> Enum.filter(&MapSet.member?(current, &1))
+        |> Enum.filter(&MapSet.member?(current_groups, &1))
         |> Enum.reject(&Map.has_key?(subscriptions.revoked_group_memberships, &1))
-        |> Enum.reject(fn group_membership_id ->
+        |> Enum.map(&{"group_membership", &1})
+
+      system =
+        intent.system_authority_kinds
+        |> Enum.filter(&MapSet.member?(current_system, &1))
+        |> Enum.reject(fn authority_kind ->
+          system_authority_revoked?(
+            subscriptions,
+            intent.club_id,
+            intent.club_membership_id,
+            authority_kind,
+            intent.club_stream_version
+          )
+        end)
+        |> Enum.map(&{&1, nil})
+
+      grantable =
+        (custom ++ system)
+        |> Enum.reject(fn {authority_kind, group_membership_id} ->
           Map.has_key?(
             subscriptions.grants,
-            authorization_id(intent.subscription_intent_id, group_membership_id)
+            authorization_id(
+              intent.subscription_intent_id,
+              authority_kind,
+              group_membership_id
+            )
           )
         end)
 
@@ -549,10 +760,14 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   end
 
   defp previously_granted?(subscriptions, intent) do
-    Enum.any?(intent.group_membership_ids, fn group_membership_id ->
+    authorities =
+      Enum.map(intent.group_membership_ids, &{"group_membership", &1}) ++
+        Enum.map(intent.system_authority_kinds, &{&1, nil})
+
+    Enum.any?(authorities, fn {authority_kind, group_membership_id} ->
       Map.has_key?(
         subscriptions.grants,
-        authorization_id(intent.subscription_intent_id, group_membership_id)
+        authorization_id(intent.subscription_intent_id, authority_kind, group_membership_id)
       )
     end)
   end
@@ -581,6 +796,22 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
       nil -> :ok
       ^expected -> :exact_retry
       _other -> {:error, :unfollow_id_conflict}
+    end
+  end
+
+  defp validate_system_revocation_retry(subscriptions, command) do
+    expected = %{
+      club_id: command.club_id,
+      club_membership_id: command.club_membership_id,
+      authority_kind: command.authority_kind,
+      authority_through_club_stream_version: command.authority_through_club_stream_version,
+      completed: true
+    }
+
+    case Map.get(subscriptions.system_revocations, command.revocation_id) do
+      nil -> :ok
+      ^expected -> :exact_retry
+      _different -> {:error, :revocation_id_conflict}
     end
   end
 
@@ -613,7 +844,7 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   defp normalize_source("reply"), do: :reply
   defp normalize_source(source) when source in @sources, do: source
 
-  defp validate_group_memberships(group_membership_ids, opts \\ [])
+  defp validate_group_memberships(group_membership_ids, opts)
 
   defp validate_group_memberships(group_membership_ids, opts)
        when is_list(group_membership_ids) do
@@ -633,6 +864,14 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
 
   defp validate_group_memberships(_group_membership_ids, _opts),
     do: {:error, :invalid_group_membership_ids}
+
+  defp validate_system_authority_kinds(kinds) when is_list(kinds) do
+    if kinds == Enum.sort(Enum.uniq(kinds)) and Enum.all?(kinds, &(&1 in ["admin", "everyone"])),
+      do: :ok,
+      else: {:error, :invalid_system_authority_kinds}
+  end
+
+  defp validate_system_authority_kinds(_kinds), do: {:error, :invalid_system_authority_kinds}
 
   defp validate_reason(reason) when is_binary(reason) and byte_size(reason) > 0, do: :ok
   defp validate_reason(_reason), do: {:error, :invalid_cancellation_reason}

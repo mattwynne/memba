@@ -22,6 +22,7 @@ defmodule Memba.Messaging.Message do
   alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Membership.ConversationSubscriptionAuthorityDecision
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.ConversationAccess
@@ -47,6 +48,10 @@ defmodule Memba.Messaging.Message do
     :sender_id,
     :conversation_id,
     :reply_to_message_id,
+    :subscription_intent_id,
+    :authority_request_id,
+    :authority_decision_id,
+    :root_subscription_authority_decision,
     :subject,
     :body,
     delivery_statuses: %{},
@@ -161,6 +166,11 @@ defmodule Memba.Messaging.Message do
         sender_id: event.sender_id,
         conversation_id: event.conversation_id || event.message_id,
         reply_to_message_id: event.reply_to_message_id,
+        subscription_intent_id: event.subscription_intent_id,
+        authority_request_id: event.authority_request_id,
+        authority_decision_id: event.authority_decision_id,
+        root_subscription_authority_decision:
+          normalize_root_authority_decision(event.root_subscription_authority_decision),
         subject: event.subject,
         body: event.body
     }
@@ -290,6 +300,57 @@ defmodule Memba.Messaging.Message do
     current_access_level in ConversationAccess.grant_levels_including(requested_access_level)
   end
 
+  defp validate_root_authority_decision(command, conversation_id, nil)
+       when conversation_id == command.message_id do
+    case Map.get(command, :root_subscription_authority_decision) do
+      nil ->
+        :ok
+
+      %ConversationSubscriptionAuthorityDecision{} = decision ->
+        matches? =
+          decision.club_id == command.club_id and decision.person_id == command.sender_id and
+            decision.conversation_id == command.message_id and decision.source == :root and
+            decision.subscription_intent_id == command.subscription_intent_id and
+            decision.authority_request_id == command.authority_request_id and
+            decision.authority_decision_id == command.authority_decision_id
+
+        if matches?,
+          do:
+            Memba.Membership.revalidate_unrecorded_conversation_subscription_authority(decision),
+          else: {:error, :invalid_conversation_subscription_authority}
+
+      _invalid ->
+        {:error, :invalid_conversation_subscription_authority}
+    end
+  end
+
+  defp validate_root_authority_decision(command, _conversation_id, _reply_to_message_id) do
+    if is_nil(Map.get(command, :root_subscription_authority_decision)),
+      do: :ok,
+      else: {:error, :invalid_conversation_subscription_authority}
+  end
+
+  defp normalize_root_authority_decision(nil), do: nil
+
+  defp normalize_root_authority_decision(%ConversationSubscriptionAuthorityDecision{} = decision),
+    do: decision
+
+  defp normalize_root_authority_decision(decision) when is_map(decision) do
+    attrs =
+      Enum.reduce(decision, %{}, fn {key, value}, attrs ->
+        atom_key = if is_binary(key), do: String.to_existing_atom(key), else: key
+        Map.put(attrs, atom_key, value)
+      end)
+
+    attrs =
+      Map.update(attrs, :source, :root, fn
+        "root" -> :root
+        source -> source
+      end)
+
+    struct!(ConversationSubscriptionAuthorityDecision, attrs)
+  end
+
   defp validate_message_sent(%__MODULE__{message_id: nil}), do: {:error, :message_not_sent}
   defp validate_message_sent(%__MODULE__{}), do: :ok
 
@@ -304,16 +365,25 @@ defmodule Memba.Messaging.Message do
            normalize_command_audience_group_id(command, conversation_id, reply_to_message_id),
          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
          {:ok, body} <- normalize_text(command.body, :invalid_body),
-         {:ok, recipients} <- normalize_command_recipients(command) do
+         {:ok, recipients} <- normalize_command_recipients(command),
+         :ok <- validate_root_authority_decision(command, conversation_id, reply_to_message_id) do
       message_sent = %MessageSent{
         message_id: command.message_id,
         club_id: command.club_id,
         sender_id: command.sender_id,
         conversation_id: conversation_id,
         reply_to_message_id: reply_to_message_id,
+        subscription_intent_id: Map.get(command, :subscription_intent_id),
+        authority_request_id: Map.get(command, :authority_request_id),
+        authority_decision_id: Map.get(command, :authority_decision_id),
+        root_subscription_authority_decision:
+          Map.get(command, :root_subscription_authority_decision),
         subject: subject,
         body: body,
-        sender_follows_conversation: sender_follows_conversation?(command, recipients)
+        # Canonical follow state is written only through the person-owned ledger.
+        # The field remains false on new facts so the legacy projector can still
+        # replay historic MessageSent events without receiving new writes.
+        sender_follows_conversation: false
       }
 
       [message_sent] ++
@@ -418,7 +488,14 @@ defmodule Memba.Messaging.Message do
       delivery_id: recipient.delivery_id,
       recipient_id: recipient.person_id,
       recipient_name: recipient.name,
-      recipient_email: recipient.email
+      recipient_email: recipient.email,
+      subscription_authorization_id: recipient.subscription_authorization_id,
+      authority_decision_id: recipient.authority_decision_id,
+      authority_kind: recipient.authority_kind,
+      authority_club_id: recipient.authority_club_id,
+      authority_club_membership_id: recipient.authority_club_membership_id,
+      authority_group_membership_id: recipient.authority_group_membership_id,
+      authority_club_stream_version: recipient.authority_club_stream_version
     }
   end
 
@@ -585,11 +662,6 @@ defmodule Memba.Messaging.Message do
       {:error, error}
     end
   end
-
-  defp sender_follows_conversation?(%SendMessage{sender_id: sender_id}, recipients),
-    do: Enum.any?(recipients, &(&1.person_id == sender_id))
-
-  defp sender_follows_conversation?(%PostMessageReply{}, _recipients), do: true
 
   defp validate_reply_author_excluded(sender_id, recipients) do
     if Enum.any?(recipients, &(&1.person_id == sender_id)) do

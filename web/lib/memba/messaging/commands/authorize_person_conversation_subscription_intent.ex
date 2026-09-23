@@ -12,6 +12,7 @@ defmodule Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
     :subscription_intent_id,
     :authority_decision_id,
     :current_group_membership_ids,
+    :current_system_authority_kinds,
     :authority_decision
   ]
   defstruct @enforce_keys
