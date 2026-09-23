@@ -13,7 +13,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
-  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
@@ -394,7 +393,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Memba.Membership.active_member_of_club?(club_id, carol.person_id)
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
-    refute Messaging.following_conversation?(private_message_id, carol.person_id)
+    assert Messaging.following_conversation?(private_message_id, carol.person_id)
 
     departed_reply_id = Memba.ID.generate(:message)
 
@@ -681,7 +680,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     ])
   end
 
-  test "does not create a reply delivery when access projection lag makes departure follow cleanup miss the conversation" do
+  test "a preserved follow does not create reply delivery without current group participation" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
 
@@ -736,8 +735,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     await_restarted_subscribers!([
       MembershipProjector,
       GroupMembershipProjector,
-      SystemGroupMembership,
-      ClearRemovedGroupMemberFollows
+      SystemGroupMembership
     ])
 
     assert :ok =

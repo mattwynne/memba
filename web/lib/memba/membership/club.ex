@@ -16,6 +16,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -56,6 +57,7 @@ defmodule Memba.Membership.Club do
     group_keys: %{},
     group_name_keys: %{},
     group_memberships: %{},
+    removal_operations: %{},
     native_membership_ids: MapSet.new(),
     roles: %{},
     role_keys: %{},
@@ -160,6 +162,38 @@ defmodule Memba.Membership.Club do
              command.person_id
            ) do
       add_custom_group_member_decision(club, command)
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %RemoveCustomGroupMember{}),
+    do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %RemoveCustomGroupMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
+         :ok <- validate_operation_id(command.removal_operation_id),
+         :new <- removal_operation_status(club, command),
+         :ok <- ensure_custom_group(club, command.group_id),
+         :ok <-
+           authorize_custom_group_admission_actor(
+             club,
+             command.group_id,
+             command.actor_person_id
+           ),
+         :ok <-
+           ensure_active_custom_group_target(
+             club,
+             command.membership_id,
+             command.person_id
+           ),
+         :ok <- ensure_current_group_target(club, command) do
+      custom_group_member_removed_event(command)
+    else
+      :exact_retry -> []
+      {:error, _reason} = error -> error
     end
   end
 
@@ -470,7 +504,8 @@ defmodule Memba.Membership.Club do
       %__MODULE__{
         club
         | group_memberships:
-            Map.put(club.group_memberships, group_membership_key, group_membership)
+            Map.put(club.group_memberships, group_membership_key, group_membership),
+          removal_operations: record_removal_operation(club.removal_operations, event)
       }
 
     apply_everyone_compatibility_membership(club, event, :deactivate)
@@ -578,6 +613,13 @@ defmodule Memba.Membership.Club do
 
   defp validate_optional_id(type, value, error) do
     validate_id(type, value, error)
+  end
+
+  defp validate_operation_id(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, ^value} -> :ok
+      _other -> {:error, :invalid_removal_operation_id}
+    end
   end
 
   defp add_member_decision(%__MODULE__{} = club, %AddClubMember{} = command) do
@@ -1247,6 +1289,60 @@ defmodule Memba.Membership.Club do
       :error ->
         group_member_added_event(command)
     end
+  end
+
+  defp removal_operation_status(%__MODULE__{} = club, %RemoveCustomGroupMember{} = command) do
+    fingerprint = removal_operation_fingerprint(command)
+
+    case Map.fetch(club.removal_operations, command.removal_operation_id) do
+      {:ok, ^fingerprint} -> :exact_retry
+      {:ok, _different_fingerprint} -> {:error, :removal_operation_conflict}
+      :error -> :new
+    end
+  end
+
+  defp ensure_current_group_target(%__MODULE__{} = club, command) do
+    case Map.get(
+           club.group_memberships,
+           group_membership_key(command.group_id, command.membership_id)
+         ) do
+      %{active: true, person_id: person_id} when person_id == command.person_id ->
+        :ok
+
+      %{person_id: person_id} when person_id != command.person_id ->
+        {:error, :group_membership_person_mismatch}
+
+      _missing_or_inactive ->
+        {:error, :group_member_not_active}
+    end
+  end
+
+  defp custom_group_member_removed_event(command) do
+    %GroupMemberRemoved{
+      club_id: command.club_id,
+      group_id: command.group_id,
+      membership_id: command.membership_id,
+      person_id: command.person_id,
+      actor_person_id: command.actor_person_id,
+      removal_operation_id: command.removal_operation_id
+    }
+  end
+
+  defp record_removal_operation(operations, %GroupMemberRemoved{removal_operation_id: nil}),
+    do: operations
+
+  defp record_removal_operation(operations, %GroupMemberRemoved{} = event) do
+    Map.put(operations, event.removal_operation_id, removal_operation_fingerprint(event))
+  end
+
+  defp removal_operation_fingerprint(removal) do
+    {
+      removal.club_id,
+      removal.group_id,
+      removal.membership_id,
+      removal.person_id,
+      removal.actor_person_id
+    }
   end
 
   defp remove_group_member_decision(%__MODULE__{} = club, %RemoveGroupMember{} = command) do

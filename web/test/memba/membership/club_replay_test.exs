@@ -4,6 +4,7 @@ defmodule Memba.Membership.ClubReplayTest do
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
@@ -104,6 +105,61 @@ defmodule Memba.Membership.ClubReplayTest do
                  active: true
                }
              } = club.group_memberships
+    end
+  end
+
+  describe "custom-group removal operation replay" do
+    test "rehydrates new operation identities while accepting legacy removal facts" do
+      ids = replay_ids()
+      group_id = Memba.ID.generate(:group)
+      operation_id = Ecto.UUID.generate()
+
+      events = [
+        %GroupMemberAdded{
+          club_id: ids.club_id,
+          group_id: group_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        },
+        %GroupMemberRemoved{
+          club_id: ids.club_id,
+          group_id: group_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id,
+          actor_person_id: ids.second_person_id,
+          removal_operation_id: operation_id
+        },
+        %GroupMemberAdded{
+          club_id: ids.club_id,
+          group_id: group_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        }
+      ]
+
+      club = replay(ids.club_id, events)
+
+      command = %RemoveCustomGroupMember{
+        club_id: ids.club_id,
+        group_id: group_id,
+        membership_id: ids.first_membership_id,
+        person_id: ids.first_person_id,
+        actor_person_id: ids.second_person_id,
+        removal_operation_id: operation_id
+      }
+
+      assert [] = Club.execute(club, command)
+      assert club.group_memberships[{group_id, ids.first_membership_id}].active
+
+      legacy =
+        Club.apply(club, %GroupMemberRemoved{
+          club_id: ids.club_id,
+          group_id: group_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        })
+
+      assert legacy.removal_operations == club.removal_operations
     end
   end
 

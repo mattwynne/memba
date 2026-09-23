@@ -6,6 +6,7 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateGroup
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
@@ -82,6 +83,23 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
            } ==
              struct!(AddCustomGroupMember, Map.put(ids, :actor_person_id, actor_person_id))
 
+    removal_operation_id = Ecto.UUID.generate()
+
+    assert %RemoveCustomGroupMember{
+             club_id: ids.club_id,
+             group_id: ids.group_id,
+             membership_id: ids.membership_id,
+             person_id: ids.person_id,
+             actor_person_id: actor_person_id,
+             removal_operation_id: removal_operation_id
+           } ==
+             struct!(
+               RemoveCustomGroupMember,
+               ids
+               |> Map.put(:actor_person_id, actor_person_id)
+               |> Map.put(:removal_operation_id, removal_operation_id)
+             )
+
     assert %RemoveGroupMember{
              club_id: ids.club_id,
              group_id: ids.group_id,
@@ -114,14 +132,21 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
     assert_json_encodable(struct!(GroupMemberAdded, ids))
     assert_json_encodable(struct!(GroupMemberRemoved, ids))
 
-    for event_module <- [
-          GroupCreated,
-          GroupEmailSlugAssigned,
-          GroupMemberAdded,
-          GroupMemberRemoved
-        ] do
+    assert_json_encodable(
+      struct!(
+        GroupMemberRemoved,
+        ids
+        |> Map.put(:actor_person_id, ID.generate(:person))
+        |> Map.put(:removal_operation_id, Ecto.UUID.generate())
+      )
+    )
+
+    for event_module <- [GroupCreated, GroupEmailSlugAssigned, GroupMemberAdded] do
       refute Map.has_key?(event_module.__struct__(), :actor_person_id)
     end
+
+    assert Map.has_key?(GroupMemberRemoved.__struct__(), :actor_person_id)
+    assert Map.has_key?(GroupMemberRemoved.__struct__(), :removal_operation_id)
   end
 
   defp group_membership_ids do

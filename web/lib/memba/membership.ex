@@ -23,6 +23,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
@@ -30,13 +31,14 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.CustomGroupAdmission
+  alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
-  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
@@ -112,6 +114,24 @@ defmodule Memba.Membership do
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_custom_group_member_command(attrs) do
       dispatch_custom_group_admission(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Remove a current participant from a custom group as an authenticated actor.
+
+  The caller supplies a stable UUID `:removal_operation_id` and must reuse it
+  when retrying an uncertain dispatch. An exact retry returns the same
+  `CustomGroupRemoval` outcome without another event. Reusing the operation ID
+  with different actor, target, group, or club data is rejected. A current
+  participant may remove any current participant (including themselves), and a
+  current club member with `club.manage_members` may do so from outside the
+  group. System groups are not writable through this use case.
+  """
+  def remove_custom_group_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- remove_custom_group_member_command(attrs) do
+      dispatch_custom_group_removal(command, dispatch_opts)
     end
   end
 
@@ -1803,6 +1823,25 @@ defmodule Memba.Membership do
     end
   end
 
+  defp remove_custom_group_member_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+         {:ok, removal_operation_id} <- fetch_required(attrs, :removal_operation_id) do
+      {:ok,
+       %RemoveCustomGroupMember{
+         club_id: club_id,
+         group_id: group_id,
+         membership_id: membership_id,
+         person_id: person_id,
+         actor_person_id: actor_person_id,
+         removal_operation_id: removal_operation_id
+       }}
+    end
+  end
+
   defp update_club_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, club_id} <- cast_club_id(club_id),
@@ -2584,6 +2623,22 @@ defmodule Memba.Membership do
     end
   end
 
+  defp dispatch_custom_group_removal(command, dispatch_opts) do
+    if explicit_commanded_returning_mode?(dispatch_opts) do
+      dispatch(command, dispatch_opts)
+    else
+      dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
+
+      case dispatch(command, dispatch_opts) do
+        {:ok, %Commanded.Commands.ExecutionResult{} = result} ->
+          {:ok, custom_group_removal(command, result)}
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
   defp explicit_commanded_returning_mode?(dispatch_opts) do
     Keyword.has_key?(dispatch_opts, :returning) or
       Keyword.get(dispatch_opts, :include_execution_result) == true or
@@ -2620,13 +2675,31 @@ defmodule Memba.Membership do
     }
   end
 
+  defp custom_group_removal(command, %Commanded.Commands.ExecutionResult{events: events}) do
+    unless Enum.empty?(events) or
+             Enum.any?(events, fn
+               %GroupMemberRemoved{removal_operation_id: operation_id} ->
+                 operation_id == command.removal_operation_id
+
+               _event ->
+                 false
+             end) do
+      raise "custom-group removal dispatch returned an unexpected event set"
+    end
+
+    %CustomGroupRemoval{
+      club_id: command.club_id,
+      group_id: command.group_id,
+      membership_id: command.membership_id,
+      person_id: command.person_id,
+      actor_person_id: command.actor_person_id,
+      removal_operation_id: command.removal_operation_id,
+      transition: :member_removed
+    }
+  end
+
   defp member_lifecycle_consistency(dispatch_opts) do
-    dispatch_opts
-    |> system_group_membership_consistency()
-    |> Keyword.update!(
-      :consistency,
-      &include_removed_group_member_follows_consistency/1
-    )
+    system_group_membership_consistency(dispatch_opts)
   end
 
   defp system_group_membership_consistency(dispatch_opts) do
@@ -2658,26 +2731,6 @@ defmodule Memba.Membership do
   end
 
   defp system_group_membership_handler?(_handler), do: false
-
-  defp include_removed_group_member_follows_consistency(:strong), do: :strong
-
-  defp include_removed_group_member_follows_consistency(handlers) when is_list(handlers) do
-    if Enum.any?(handlers, &removed_group_member_follows_handler?/1) do
-      handlers
-    else
-      [ClearRemovedGroupMemberFollows | handlers]
-    end
-  end
-
-  defp include_removed_group_member_follows_consistency(consistency), do: consistency
-
-  defp removed_group_member_follows_handler?(ClearRemovedGroupMemberFollows), do: true
-
-  defp removed_group_member_follows_handler?(handler) when is_binary(handler) do
-    handler == inspect(ClearRemovedGroupMemberFollows)
-  end
-
-  defp removed_group_member_follows_handler?(_handler), do: false
 
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do

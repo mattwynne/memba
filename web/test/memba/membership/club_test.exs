@@ -12,6 +12,7 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -1758,6 +1759,98 @@ defmodule Memba.Membership.ClubTest do
         assert {:error, :system_group_not_allowed} =
                  Club.execute(system_group_club, %{command | group_id: system_group_id})
       end
+    end
+  end
+
+  describe "execute/2 RemoveCustomGroupMember authorization and retries" do
+    test "records an authorized removal operation and does not replay it against a re-add" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      actor_membership_id = Memba.ID.generate(:membership)
+      actor_person_id = Memba.ID.generate(:person)
+      target_membership_id = Memba.ID.generate(:membership)
+      target_person_id = Memba.ID.generate(:person)
+      operation_id = Ecto.UUID.generate()
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, nil, "Board")
+        |> activate_member(actor_membership_id, actor_person_id)
+        |> activate_member(target_membership_id, target_person_id)
+        |> add_group_member(group_id, actor_membership_id, actor_person_id)
+        |> add_group_member(group_id, target_membership_id, target_person_id)
+
+      command = %RemoveCustomGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: target_membership_id,
+        person_id: target_person_id,
+        actor_person_id: actor_person_id,
+        removal_operation_id: operation_id
+      }
+
+      assert %GroupMemberRemoved{
+               actor_person_id: ^actor_person_id,
+               removal_operation_id: ^operation_id
+             } = event = Club.execute(club, command)
+
+      removed = Club.apply(club, event)
+      assert [] = Club.execute(removed, command)
+
+      readded = add_group_member(removed, group_id, target_membership_id, target_person_id)
+      assert [] = Club.execute(readded, command)
+
+      assert {:error, :removal_operation_conflict} =
+               Club.execute(readded, %{command | person_id: actor_person_id})
+
+      assert {:error, :group_member_not_active} =
+               Club.execute(removed, %{command | removal_operation_id: Ecto.UUID.generate()})
+    end
+
+    test "allows self-removal and rejects an ordinary active outsider and system groups" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      member_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+      outsider_id = Memba.ID.generate(:membership)
+      outsider_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, nil, "Board")
+        |> activate_member(member_id, person_id)
+        |> activate_member(outsider_id, outsider_person_id)
+        |> add_group_member(group_id, member_id, person_id)
+
+      command = %RemoveCustomGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: member_id,
+        person_id: person_id,
+        actor_person_id: person_id,
+        removal_operation_id: Ecto.UUID.generate()
+      }
+
+      assert %GroupMemberRemoved{} = Club.execute(club, command)
+
+      assert {:error, :unauthorized} =
+               Club.execute(club, %{
+                 command
+                 | actor_person_id: outsider_person_id,
+                   removal_operation_id: Ecto.UUID.generate()
+               })
+
+      system_group_id = SystemGroups.everyone_group_id(club_id)
+      system_club = create_group(club, system_group_id, "everyone", "Everyone")
+
+      assert {:error, :system_group_not_allowed} =
+               Club.execute(system_club, %{
+                 command
+                 | group_id: system_group_id,
+                   removal_operation_id: Ecto.UUID.generate()
+               })
     end
   end
 
