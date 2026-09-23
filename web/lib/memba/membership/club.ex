@@ -205,7 +205,21 @@ defmodule Memba.Membership.Club do
              command.club_membership_id,
              command.person_id
            ) do
-      start_group_membership_decision(club, command)
+      case start_group_membership_decision(club, command) do
+        %GroupMembershipStarted{} = event ->
+          [
+            %GroupMemberAdded{
+              club_id: command.club_id,
+              group_id: command.group_id,
+              membership_id: command.club_membership_id,
+              person_id: command.person_id
+            },
+            event
+          ]
+
+        other_result ->
+          other_result
+      end
     end
   end
 
@@ -227,7 +241,21 @@ defmodule Memba.Membership.Club do
          :ok <- validate_non_empty_string(command.idempotency_key, :invalid_idempotency_key),
          :ok <- validate_non_empty_string(command.reason, :invalid_reason),
          :ok <- ensure_custom_group(club, command.group_id) do
-      end_group_membership_decision(club, command)
+      case end_group_membership_decision(club, command) do
+        %GroupMembershipEnded{} = event ->
+          [
+            event,
+            %GroupMemberRemoved{
+              club_id: command.club_id,
+              group_id: command.group_id,
+              membership_id: command.club_membership_id,
+              person_id: command.person_id
+            }
+          ]
+
+        other_result ->
+          other_result
+      end
     end
   end
 

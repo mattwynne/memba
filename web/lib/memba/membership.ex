@@ -38,11 +38,13 @@ defmodule Memba.Membership do
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
+  alias Memba.Membership.Projectors.FirstClassGroupMembershipV1
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroups
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
+  alias Memba.Membership.Projections.FirstClassGroupMembership
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -56,7 +58,11 @@ defmodule Memba.Membership do
   alias Memba.Repo
 
   @person_email_address_verification_token_ttl_seconds 15 * 60
-  @group_access_projectors [GroupMembershipProjector, MembershipProjector]
+  @group_access_projectors [
+    FirstClassGroupMembershipV1,
+    GroupMembershipProjector,
+    MembershipProjector
+  ]
 
   @doc """
   Create a club through the Membership Commanded application.
@@ -627,6 +633,38 @@ defmodule Memba.Membership do
         email_slug: group.email_slug,
         group_key: group.group_key,
         name: group.name
+      })
+      |> Repo.one()
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Fetch the current first-class custom GroupMembership for a group and club membership.
+
+  The plain-map result exposes the exact `group_membership_id` together with its
+  club, group, existing club-membership, and person identities. The qualified
+  `club_membership_id` is read from the established `membership_id` storage
+  column; no second club-membership identity is created. Invalid IDs, legacy-only
+  relations, ended memberships, and unknown pairs return `nil`.
+  """
+  def get_current_group_membership(group_id, club_membership_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, club_membership_id} <- ID.cast(:membership, club_membership_id) do
+      FirstClassGroupMembership
+      |> where([membership], membership.group_id == ^group_id)
+      |> where(
+        [membership],
+        membership.club_membership_id == ^club_membership_id
+      )
+      |> where([membership], membership.active == true)
+      |> select([membership], %{
+        group_membership_id: membership.group_membership_id,
+        club_membership_id: membership.club_membership_id,
+        club_id: membership.club_id,
+        group_id: membership.group_id,
+        person_id: membership.person_id
       })
       |> Repo.one()
     else

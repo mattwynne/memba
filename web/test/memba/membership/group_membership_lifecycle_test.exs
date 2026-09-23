@@ -119,8 +119,13 @@ defmodule Memba.Membership.GroupMembershipLifecycleTest do
       person_id: ids.target_person_id
     }
 
-    assert %GroupMembershipStarted{} = event = Club.execute(club, command)
-    club = Club.apply(club, event)
+    assert [
+             %GroupMemberAdded{membership_id: club_membership_id},
+             %GroupMembershipStarted{}
+           ] = events = Club.execute(club, command)
+
+    assert club_membership_id == ids.target_club_membership_id
+    club = apply_events(club, events)
 
     assert [] = Club.execute(club, command)
 
@@ -140,17 +145,21 @@ defmodule Memba.Membership.GroupMembershipLifecycleTest do
     club = custom_group_with_target(ids)
     command = end_target_command(ids, ids.second_group_membership_id, "remove-target-1")
 
-    assert %GroupMembershipEnded{
-             group_membership_id: group_membership_id,
-             club_membership_id: club_membership_id,
-             idempotency_key: "remove-target-1",
-             reason: "removed_by_group_member"
-           } = event = Club.execute(club, command)
+    assert [
+             %GroupMembershipEnded{
+               group_membership_id: group_membership_id,
+               club_membership_id: club_membership_id,
+               idempotency_key: "remove-target-1",
+               reason: "removed_by_group_member"
+             },
+             %GroupMemberRemoved{membership_id: removed_club_membership_id}
+           ] = events = Club.execute(club, command)
 
     assert group_membership_id == ids.second_group_membership_id
     assert club_membership_id == ids.target_club_membership_id
+    assert removed_club_membership_id == ids.target_club_membership_id
 
-    club = Club.apply(club, event)
+    club = apply_events(club, events)
 
     assert %GroupMembership{status: :ended} =
              club.first_class_group_memberships[ids.second_group_membership_id]
@@ -302,8 +311,11 @@ defmodule Memba.Membership.GroupMembershipLifecycleTest do
     club = custom_group_with_target(ids)
     admin_role_id = Roles.membership_administrator_role_id(ids.club_id)
     role_assignments_before = club.role_assignments
-    end_event = Club.execute(club, end_target_command(ids, ids.second_group_membership_id, "end"))
-    club = Club.apply(club, end_event)
+
+    end_events =
+      Club.execute(club, end_target_command(ids, ids.second_group_membership_id, "end"))
+
+    club = apply_events(club, end_events)
 
     assert club.role_assignments == role_assignments_before
     assert Map.has_key?(club.role_assignments, {ids.creator_club_membership_id, admin_role_id})

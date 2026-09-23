@@ -16,6 +16,7 @@ defmodule Memba.EventSourcedCase do
     Memba.Membership.Projectors.Membership,
     Memba.Membership.Projectors.Group,
     Memba.Membership.Projectors.GroupMembership,
+    Memba.Membership.Projectors.FirstClassGroupMembershipV1,
     Memba.Membership.Projectors.Role,
     Memba.Membership.Projectors.Person,
     Memba.Messaging.Projectors.Message,

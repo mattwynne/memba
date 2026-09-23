@@ -75,6 +75,7 @@ defmodule Memba.Release do
     Memba.Accounts.SignInToken,
     Memba.Membership.EmailAddressVerificationToken,
     Memba.Membership.Projections.Club,
+    Memba.Membership.Projections.FirstClassGroupMembership,
     Memba.Membership.Projections.Group,
     Memba.Membership.Projections.GroupMembership,
     Memba.Membership.Projections.MemberPermission,
