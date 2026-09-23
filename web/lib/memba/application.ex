@@ -21,6 +21,7 @@ defmodule Memba.Application do
       Memba.Messaging.Projectors.Message,
       Memba.Messaging.Projectors.ConversationGroupAccess,
       Memba.Messaging.Projectors.ConversationFollow,
+      Memba.Messaging.Projectors.PersonConversationSubscriptionsV1,
       Memba.Messaging.Projectors.EmailDelivery,
       Memba.Messaging.Projectors.MemberEmailDelivery,
       Memba.Messaging.Projectors.MembaStaffEmailDelivery,

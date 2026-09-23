@@ -5,6 +5,9 @@ defmodule Memba.Messaging.AppTest do
 
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
+  alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
+  alias Memba.Messaging.Commands.EndPersonConversationSubscription
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
@@ -16,11 +19,17 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
+  alias Memba.Messaging.Commands.RevokeGroupMembershipConversationSubscriptions
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
   alias Memba.Messaging.EmailDeliveryDispatcher
+
+  alias Memba.Messaging.Projectors.PersonConversationSubscriptionsV1,
+    as: PersonConversationSubscriptionsProjector
+
   alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
   alias Memba.Messaging.Router
 
@@ -46,6 +55,16 @@ defmodule Memba.Messaging.AppTest do
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {{ConversationFollowProjector, _opts}, pid, :worker, [ConversationFollowProjector]}
+             when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{PersonConversationSubscriptionsProjector, _opts}, pid, :worker,
+              [PersonConversationSubscriptionsProjector]}
              when is_pid(pid) ->
                true
 
@@ -92,7 +111,12 @@ defmodule Memba.Messaging.AppTest do
         ReportEmailDeliveryDelivered,
         ReportEmailDeliveryDelayed,
         ReportEmailDeliveryBounced,
-        ReportEmailDeliverySpamComplaint
+        ReportEmailDeliverySpamComplaint,
+        StartPersonConversationSubscriptionIntent,
+        AuthorizePersonConversationSubscriptionIntent,
+        CancelPersonConversationSubscriptionIntent,
+        EndPersonConversationSubscription,
+        RevokeGroupMembershipConversationSubscriptions
       ])
 
     assert MapSet.new(App.__registered_commands__()) == expected_commands

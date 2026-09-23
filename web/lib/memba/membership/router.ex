@@ -27,6 +27,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.DecideConversationSubscriptionAuthority
   alias Memba.Membership.Commands.EndGroupMembership
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
@@ -60,6 +61,7 @@ defmodule Memba.Membership.Router do
   dispatch(CreateGroup, to: Club)
   dispatch(CreatePerson, to: Person)
   dispatch(DefineClubRole, to: Club)
+  dispatch(DecideConversationSubscriptionAuthority, to: Club)
   dispatch(EndGroupMembership, to: Club)
   dispatch(GrantClubRolePermission, to: Club)
   dispatch(InviteClubMember, to: ClubInvitation)

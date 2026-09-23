@@ -16,6 +16,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.DecideConversationSubscriptionAuthority
   alias Memba.Membership.Commands.EndGroupMembership
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
@@ -113,6 +114,7 @@ defmodule Memba.Membership.AppTest do
         CreateGroup,
         CreatePerson,
         DefineClubRole,
+        DecideConversationSubscriptionAuthority,
         EndGroupMembership,
         GrantClubRolePermission,
         InviteClubMember,

@@ -9,6 +9,8 @@ defmodule Memba.Messaging do
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
+  alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
@@ -21,8 +23,10 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationAccess
+  alias Memba.Messaging.ConversationAuthorityDescriptor
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
@@ -36,6 +40,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
+  alias Memba.Messaging.PersonConversationSubscriptions
   alias Memba.Messaging.OutboundMessageID
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
@@ -46,6 +51,9 @@ defmodule Memba.Messaging do
 
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
+  alias Memba.Messaging.Projections.ConversationSubscriptionAuthorization
+  alias Memba.Messaging.Projections.GroupMembershipSubscriptionRevocationReceipt
+  alias Memba.Messaging.Projections.PersonConversationSubscription
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -58,6 +66,125 @@ defmodule Memba.Messaging do
   import Ecto.Query
 
   @default_authorization_stability_timeout 5_000
+
+  @doc """
+  Begin and authorize a person-owned conversation subscription.
+
+  This is the product-facing boundary for the new model. It accepts no club,
+  membership, GroupMembership, decision, authorization, or subscription IDs.
+  Messaging reads canonical conversation access from the root Message aggregate;
+  Membership then issues and signs the exact canonical authority decision.
+  """
+  def begin_person_conversation_subscription(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with :ok <- reject_subscription_provenance(attrs),
+         {:ok, person_id} <- fetch_and_cast(attrs, :person_id, :person),
+         {:ok, conversation_id} <- fetch_and_cast(attrs, :conversation_id, :message),
+         {:ok, subscription_intent_id} <-
+           fetch_and_cast(attrs, :subscription_intent_id, :subscription_intent),
+         {:ok, source} <- subscription_source(attrs),
+         {:ok, decision} <-
+           resolve_subscription_authority_decision(
+             person_id,
+             conversation_id,
+             subscription_intent_id,
+             source
+           ),
+         :ok <- run_subscription_authority_issued_hook(decision),
+         :ok <-
+           dispatch_subscription_with_revalidation(
+             %StartPersonConversationSubscriptionIntent{
+               person_id: person_id,
+               club_id: decision.club_id,
+               conversation_id: conversation_id,
+               conversation_group_ids: decision.conversation_group_ids,
+               conversation_stream_version: decision.conversation_stream_version,
+               subscription_id:
+                 PersonConversationSubscriptions.subscription_id(person_id, conversation_id),
+               subscription_intent_id: subscription_intent_id,
+               authority_decision_id: decision.authority_decision_id,
+               source: source,
+               club_membership_id: decision.club_membership_id,
+               group_membership_ids: decision.group_membership_ids,
+               authority_decision: decision
+             },
+             decision,
+             dispatch_opts
+           ),
+         :ok <-
+           authorize_subscription_intent(
+             person_id,
+             subscription_intent_id,
+             decision,
+             dispatch_opts
+           ) do
+      :ok
+    else
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc false
+  def valid_conversation_authority_descriptor?(%ConversationAuthorityDescriptor{} = descriptor) do
+    expected = conversation_authority_descriptor_signature(descriptor)
+
+    is_binary(descriptor.signature) and
+      byte_size(descriptor.signature) == byte_size(expected) and
+      Plug.Crypto.secure_compare(descriptor.signature, expected)
+  end
+
+  def valid_conversation_authority_descriptor?(_descriptor), do: false
+
+  @doc "Return the canonical subscription for one person and conversation."
+  def get_person_conversation_subscription(person_id, conversation_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
+      Repo.get_by(PersonConversationSubscription,
+        person_id: person_id,
+        conversation_id: conversation_id
+      )
+    else
+      :error -> nil
+    end
+  end
+
+  @doc "List a person's effective canonical conversation subscriptions."
+  def list_effective_person_conversation_subscriptions(person_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id) do
+      PersonConversationSubscription
+      |> where([subscription], subscription.person_id == ^person_id and subscription.effective)
+      |> order_by([subscription], asc: subscription.conversation_id)
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc "List canonical grants for a person's conversation subscription."
+  def list_person_conversation_subscription_grants(person_id, conversation_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
+      ConversationSubscriptionAuthorization
+      |> where(
+        [authorization],
+        authorization.person_id == ^person_id and
+          authorization.conversation_id == ^conversation_id
+      )
+      |> order_by([authorization], asc: authorization.authorization_id)
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc "Return a durable GroupMembership subscription-revocation receipt."
+  def get_group_membership_subscription_revocation_receipt(revocation_id) do
+    with {:ok, revocation_id} <- ID.cast(:subscription_revocation, revocation_id) do
+      Repo.get(GroupMembershipSubscriptionRevocationReceipt, revocation_id)
+    else
+      :error -> nil
+    end
+  end
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -2123,6 +2250,248 @@ defmodule Memba.Messaging do
          delivery_id: delivery_id,
          reason: reason
        }}
+    end
+  end
+
+  defp run_subscription_authority_issued_hook(decision) do
+    case Application.get_env(:memba, :conversation_subscription_authority_issued_hook) do
+      hook when is_function(hook, 1) -> hook.(decision)
+      _no_hook -> :ok
+    end
+  end
+
+  defp resolve_subscription_authority_decision(person_id, conversation_id, intent_id, source) do
+    with {:ok, club_id} <- canonical_conversation_club_id(conversation_id) do
+      case Membership.conversation_subscription_authority_decision_for_intent(club_id, intent_id) do
+        {:ok, decision} ->
+          validate_recorded_subscription_authority_decision(
+            decision,
+            person_id,
+            conversation_id,
+            source
+          )
+
+        {:error, :authority_decision_not_found} ->
+          with {:ok, descriptor} <-
+                 canonical_conversation_authority_descriptor(
+                   conversation_id,
+                   person_id,
+                   intent_id,
+                   source
+                 ),
+               :ok <- run_conversation_authority_descriptor_issued_hook(descriptor) do
+            Membership.decide_conversation_subscription_authority(descriptor)
+          end
+      end
+    end
+  end
+
+  defp canonical_conversation_club_id(conversation_id) do
+    case App.aggregate_state(Message, conversation_id) do
+      %Message{message_id: ^conversation_id, club_id: club_id} when is_binary(club_id) ->
+        {:ok, club_id}
+
+      _missing_conversation ->
+        {:error, :conversation_not_found}
+    end
+  end
+
+  defp validate_recorded_subscription_authority_decision(
+         decision,
+         person_id,
+         conversation_id,
+         source
+       ) do
+    if decision.person_id == person_id and decision.conversation_id == conversation_id and
+         decision.source == source do
+      {:ok, decision}
+    else
+      {:error, :subscription_intent_id_conflict}
+    end
+  end
+
+  defp run_conversation_authority_descriptor_issued_hook(descriptor) do
+    case Application.get_env(:memba, :conversation_authority_descriptor_issued_hook) do
+      hook when is_function(hook, 1) -> hook.(descriptor)
+      _no_hook -> :ok
+    end
+  end
+
+  defp canonical_conversation_authority_descriptor(
+         conversation_id,
+         person_id,
+         intent_id,
+         source
+       ) do
+    with {:ok, before_version} <- conversation_stream_version(conversation_id),
+         %Message{club_id: club_id, group_access: group_access} <-
+           App.aggregate_state(Message, conversation_id),
+         {:ok, after_version} <- conversation_stream_version(conversation_id),
+         true <- before_version == after_version,
+         conversation_group_ids when conversation_group_ids != [] <-
+           canonical_subscription_group_ids(group_access) do
+      descriptor = %ConversationAuthorityDescriptor{
+        club_id: club_id,
+        person_id: person_id,
+        subscription_intent_id: intent_id,
+        source: source,
+        conversation_id: conversation_id,
+        conversation_group_ids: conversation_group_ids,
+        conversation_stream_version: after_version,
+        signature: ""
+      }
+
+      {:ok, %{descriptor | signature: conversation_authority_descriptor_signature(descriptor)}}
+    else
+      [] ->
+        {:error, :conversation_has_no_subscription_groups}
+
+      false ->
+        canonical_conversation_authority_descriptor(
+          conversation_id,
+          person_id,
+          intent_id,
+          source
+        )
+
+      _missing ->
+        {:error, :conversation_not_found}
+    end
+  end
+
+  defp conversation_stream_version(conversation_id) do
+    version =
+      Memba.Messaging.App
+      |> Commanded.EventStore.stream_forward(conversation_id)
+      |> Enum.reduce(0, fn event, _version -> event.stream_version end)
+
+    if version > 0, do: {:ok, version}, else: {:error, :conversation_not_found}
+  end
+
+  defp conversation_authority_descriptor_signature(descriptor) do
+    payload =
+      [
+        descriptor.club_id,
+        descriptor.person_id,
+        descriptor.subscription_intent_id,
+        descriptor.source,
+        descriptor.conversation_id,
+        descriptor.conversation_group_ids,
+        descriptor.conversation_stream_version
+      ]
+      |> :erlang.term_to_binary()
+
+    :crypto.mac(:hmac, :sha256, conversation_authority_descriptor_signing_key(), payload)
+  end
+
+  defp conversation_authority_descriptor_signing_key do
+    :memba
+    |> Application.fetch_env!(MembaWeb.Endpoint)
+    |> Keyword.fetch!(:secret_key_base)
+    |> then(&:crypto.mac(:hmac, :sha256, &1, "messaging-conversation-authority"))
+  end
+
+  defp reject_subscription_provenance(attrs) do
+    allowed = MapSet.new([:person_id, :conversation_id, :subscription_intent_id, :source])
+
+    supplied =
+      attrs
+      |> Map.keys()
+      |> Enum.map(fn key -> if is_binary(key), do: key, else: Atom.to_string(key) end)
+      |> Enum.map(&String.to_existing_atom/1)
+      |> MapSet.new()
+
+    if MapSet.subset?(supplied, allowed),
+      do: :ok,
+      else: {:error, :trusted_subscription_provenance_not_accepted}
+  rescue
+    ArgumentError -> {:error, :unknown_subscription_attribute}
+  end
+
+  defp fetch_and_cast(attrs, key, type) do
+    with {:ok, value} <- fetch_required(attrs, key),
+         {:ok, ^value} <- ID.cast(type, value) do
+      {:ok, value}
+    else
+      :error -> {:error, subscription_id_error(key)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp subscription_id_error(:person_id), do: :invalid_person_id
+  defp subscription_id_error(:conversation_id), do: :invalid_conversation_id
+  defp subscription_id_error(:subscription_intent_id), do: :invalid_subscription_intent_id
+
+  defp subscription_source(attrs) do
+    with {:ok, source} <- fetch_required(attrs, :source) do
+      case source do
+        :manual -> {:ok, :manual}
+        :root -> {:ok, :root}
+        :reply -> {:ok, :reply}
+        "manual" -> {:ok, :manual}
+        "root" -> {:ok, :root}
+        "reply" -> {:ok, :reply}
+        _invalid -> {:error, :invalid_subscription_source}
+      end
+    end
+  end
+
+  defp canonical_subscription_group_ids(group_access) do
+    group_access
+    |> Enum.filter(fn {_group_id, access_level} -> access_level in ["read", "write"] end)
+    |> Enum.map(fn {group_id, _access_level} -> group_id end)
+    |> Enum.sort()
+  end
+
+  defp authorize_subscription_intent(person_id, intent_id, decision, dispatch_opts) do
+    command = %AuthorizePersonConversationSubscriptionIntent{
+      person_id: person_id,
+      subscription_intent_id: intent_id,
+      authority_decision_id: decision.authority_decision_id,
+      current_group_membership_ids: decision.group_membership_ids,
+      authority_decision: decision
+    }
+
+    case dispatch_subscription_with_revalidation(command, decision, dispatch_opts) do
+      :ok ->
+        :ok
+
+      {:error, :conversation_subscription_authority_ended} = error ->
+        _ =
+          App.dispatch(
+            %CancelPersonConversationSubscriptionIntent{
+              person_id: person_id,
+              subscription_intent_id: intent_id,
+              cancellation_id: Ecto.UUID.generate(),
+              reason: "authority_ended"
+            },
+            Keyword.put(dispatch_opts, :retry_attempts, 0)
+          )
+
+        error
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp dispatch_subscription_with_revalidation(command, decision, dispatch_opts, attempts \\ 1) do
+    dispatch_opts = Keyword.put(dispatch_opts, :retry_attempts, 0)
+
+    case App.dispatch(command, dispatch_opts) do
+      :ok ->
+        :ok
+
+      {:ok, _dispatch_result} ->
+        :ok
+
+      {:error, :too_many_attempts} when attempts > 0 ->
+        with :ok <- Membership.revalidate_conversation_subscription_authority(decision) do
+          dispatch_subscription_with_revalidation(command, decision, dispatch_opts, attempts - 1)
+        end
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

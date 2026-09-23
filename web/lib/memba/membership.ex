@@ -20,6 +20,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.DecideConversationSubscriptionAuthority
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveClubMember
@@ -29,6 +30,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
+  alias Memba.Membership.ConversationSubscriptionAuthorityDecision
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
@@ -42,6 +44,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.ConversationAuthorityDescriptor
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.FirstClassGroupMembership
@@ -1391,6 +1394,98 @@ defmodule Memba.Membership do
       :error -> false
     end
   end
+
+  @doc false
+  def decide_conversation_subscription_authority(%ConversationAuthorityDescriptor{} = descriptor) do
+    command = %DecideConversationSubscriptionAuthority{
+      conversation_authority_descriptor: descriptor,
+      club_id: descriptor.club_id,
+      person_id: descriptor.person_id,
+      subscription_intent_id: descriptor.subscription_intent_id,
+      source: descriptor.source,
+      conversation_id: descriptor.conversation_id,
+      conversation_group_ids: descriptor.conversation_group_ids,
+      conversation_stream_version: descriptor.conversation_stream_version,
+      authority_request_id: Ecto.UUID.generate(),
+      authority_decision_id: ID.generate(:authority_decision)
+    }
+
+    with true <- Memba.Messaging.valid_conversation_authority_descriptor?(descriptor),
+         :ok <- App.dispatch(command, retry_attempts: 10),
+         %Memba.Membership.Club{} = club <-
+           App.aggregate_state(Memba.Membership.Club, descriptor.club_id),
+         decision_id when is_binary(decision_id) <-
+           Map.get(
+             club.conversation_authority_intents,
+             descriptor.subscription_intent_id
+           ),
+         decision when is_map(decision) <-
+           Map.get(club.conversation_authority_decisions, decision_id) do
+      {:ok, sign_conversation_authority_decision(decision)}
+    else
+      false -> {:error, :invalid_conversation_authority_descriptor}
+      {:error, _reason} = error -> error
+      _missing_decision -> {:error, :authority_decision_not_recorded}
+    end
+  end
+
+  def decide_conversation_subscription_authority(_descriptor),
+    do: {:error, :invalid_conversation_authority_descriptor}
+
+  @doc false
+  def conversation_subscription_authority_decision_for_intent(club_id, subscription_intent_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, subscription_intent_id} <-
+           ID.cast(:subscription_intent, subscription_intent_id),
+         %Memba.Membership.Club{} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id),
+         decision_id when is_binary(decision_id) <-
+           Map.get(club.conversation_authority_intents, subscription_intent_id),
+         decision when is_map(decision) <-
+           Map.get(club.conversation_authority_decisions, decision_id) do
+      {:ok, sign_conversation_authority_decision(decision)}
+    else
+      _invalid_or_missing -> {:error, :authority_decision_not_found}
+    end
+  end
+
+  @doc """
+  Revalidate one signed decision against current canonical Club aggregate state.
+
+  Exact identities are checked; a later GroupMembership can never satisfy an
+  older decision.
+  """
+  def revalidate_conversation_subscription_authority(
+        %ConversationSubscriptionAuthorityDecision{} = decision
+      ) do
+    with true <- valid_conversation_authority_signature?(decision),
+         %Memba.Membership.Club{} = club <-
+           App.aggregate_state(Memba.Membership.Club, decision.club_id),
+         true <- recorded_authority_decision?(club, decision),
+         true <-
+           Map.get(club.active_memberships, decision.club_membership_id) == decision.person_id,
+         true <- exact_group_memberships_current?(club, decision) do
+      :ok
+    else
+      _invalid_or_ended -> {:error, :conversation_subscription_authority_ended}
+    end
+  end
+
+  def revalidate_conversation_subscription_authority(_forged),
+    do: {:error, :invalid_conversation_subscription_authority}
+
+  @doc "Verify that a decision was issued unchanged by this server."
+  def valid_conversation_authority_signature?(
+        %ConversationSubscriptionAuthorityDecision{} = decision
+      ) do
+    expected = authority_signature(decision)
+
+    is_binary(decision.signature) and
+      byte_size(decision.signature) == byte_size(expected) and
+      Plug.Crypto.secure_compare(decision.signature, expected)
+  end
+
+  def valid_conversation_authority_signature?(_forged), do: false
 
   @doc """
   Return whether a person is currently an active member of a conversation group.
@@ -2940,5 +3035,86 @@ defmodule Memba.Membership do
       membership_execution_result: add_member_result,
       invitation_execution_result: accept_result
     }
+  end
+
+  defp sign_conversation_authority_decision(decision) do
+    unsigned =
+      struct!(ConversationSubscriptionAuthorityDecision, Map.put(decision, :signature, ""))
+
+    %{unsigned | signature: authority_signature(unsigned)}
+  end
+
+  defp authority_signature(decision) do
+    payload =
+      [
+        decision.club_id,
+        decision.person_id,
+        decision.subscription_intent_id,
+        decision.source,
+        decision.conversation_id,
+        decision.conversation_group_ids,
+        decision.conversation_stream_version,
+        decision.authority_request_id,
+        decision.authority_decision_id,
+        decision.club_membership_id,
+        decision.group_membership_ids,
+        decision.club_stream_version
+      ]
+      |> :erlang.term_to_binary()
+
+    :crypto.mac(:hmac, :sha256, authority_signing_key(), payload)
+  end
+
+  defp authority_signing_key do
+    :memba
+    |> Application.fetch_env!(MembaWeb.Endpoint)
+    |> Keyword.fetch!(:secret_key_base)
+  end
+
+  defp recorded_authority_decision?(club, decision) do
+    case Map.get(club.conversation_authority_decisions, decision.authority_decision_id) do
+      nil ->
+        false
+
+      recorded ->
+        Enum.all?(
+          [
+            :club_id,
+            :person_id,
+            :subscription_intent_id,
+            :source,
+            :conversation_id,
+            :conversation_group_ids,
+            :conversation_stream_version,
+            :authority_request_id,
+            :authority_decision_id,
+            :club_membership_id,
+            :group_membership_ids,
+            :club_stream_version
+          ],
+          &(Map.get(recorded, &1) == Map.get(decision, &1))
+        )
+    end
+  end
+
+  defp exact_group_memberships_current?(club, decision) do
+    Enum.all?(decision.group_membership_ids, fn group_membership_id ->
+      case Map.get(club.first_class_group_memberships, group_membership_id) do
+        %{
+          club_membership_id: club_membership_id,
+          person_id: person_id,
+          group_id: group_id,
+          status: :current
+        } ->
+          club_membership_id == decision.club_membership_id and
+            person_id == decision.person_id and
+            group_id in decision.conversation_group_ids and
+            Map.get(club.current_group_membership_ids, {group_id, club_membership_id}) ==
+              group_membership_id
+
+        _ended_or_replaced ->
+          false
+      end
+    end)
   end
 end

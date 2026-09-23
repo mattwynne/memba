@@ -14,6 +14,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.DecideConversationSubscriptionAuthority
   alias Memba.Membership.Commands.EndGroupMembership
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
@@ -26,6 +27,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ConversationSubscriptionAuthorityDecided
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
@@ -51,6 +53,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.ConversationAuthorityDescriptor
 
   @behaviour Aggregate
 
@@ -70,6 +73,9 @@ defmodule Memba.Membership.Club do
     first_class_group_memberships: %{},
     current_group_membership_ids: %{},
     group_membership_endings: %{},
+    conversation_authority_decisions: %{},
+    conversation_authority_requests: %{},
+    conversation_authority_intents: %{},
     legacy_group_membership_reconciliations: %{},
     legacy_group_membership_reconciliation_fence: nil,
     native_membership_ids: MapSet.new(),
@@ -535,6 +541,53 @@ defmodule Memba.Membership.Club do
     end
   end
 
+  def execute(%__MODULE__{club_id: nil}, %DecideConversationSubscriptionAuthority{}),
+    do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %DecideConversationSubscriptionAuthority{} = command) do
+    with :ok <- validate_conversation_authority_descriptor(command),
+         :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <-
+           validate_id(
+             :subscription_intent,
+             command.subscription_intent_id,
+             :invalid_subscription_intent_id
+           ),
+         :ok <- validate_subscription_source(command.source),
+         :ok <- validate_id(:message, command.conversation_id, :invalid_conversation_id),
+         :ok <- validate_uuid(command.authority_request_id, :invalid_authority_request_id),
+         :ok <-
+           validate_id(
+             :authority_decision,
+             command.authority_decision_id,
+             :invalid_authority_decision_id
+           ),
+         :ok <- validate_conversation_group_ids(command.conversation_group_ids),
+         :ok <- validate_conversation_stream_version(command.conversation_stream_version),
+         :ok <- validate_authority_decision_reuse(club, command),
+         {:ok, club_membership_id, group_membership_ids} <-
+           resolve_conversation_subscription_authority(club, command) do
+      %ConversationSubscriptionAuthorityDecided{
+        club_id: command.club_id,
+        person_id: command.person_id,
+        subscription_intent_id: command.subscription_intent_id,
+        source: command.source,
+        conversation_id: command.conversation_id,
+        conversation_group_ids: command.conversation_group_ids,
+        conversation_stream_version: command.conversation_stream_version,
+        authority_request_id: command.authority_request_id,
+        authority_decision_id: command.authority_decision_id,
+        club_membership_id: club_membership_id,
+        group_membership_ids: group_membership_ids,
+        club_stream_version: club.stream_version + 1
+      }
+    else
+      :exact_retry -> []
+      error -> error
+    end
+  end
+
   def execute(%__MODULE__{club_id: nil}, %UpdateClub{}), do: {:error, :not_created}
 
   def execute(%__MODULE__{} = club, %UpdateClub{} = command) do
@@ -546,6 +599,33 @@ defmodule Memba.Membership.Club do
   end
 
   @impl Aggregate
+  def apply(%__MODULE__{} = club, %ConversationSubscriptionAuthorityDecided{} = event) do
+    club = advance_stream_version(club)
+
+    decision =
+      event
+      |> Map.from_struct()
+      |> Map.update!(:source, &normalize_subscription_source/1)
+
+    %__MODULE__{
+      club
+      | conversation_authority_decisions:
+          Map.put(club.conversation_authority_decisions, event.authority_decision_id, decision),
+        conversation_authority_requests:
+          Map.put(
+            club.conversation_authority_requests,
+            event.authority_request_id,
+            event.authority_decision_id
+          ),
+        conversation_authority_intents:
+          Map.put(
+            club.conversation_authority_intents,
+            event.subscription_intent_id,
+            event.authority_decision_id
+          )
+    }
+  end
+
   def apply(%__MODULE__{} = club, %ClubCreated{} = event) do
     club = advance_stream_version(club)
     %__MODULE__{club | club_id: event.club_id, name: event.name, slug: event.slug}
@@ -863,6 +943,162 @@ defmodule Memba.Membership.Club do
       {:ok, ^value} -> :ok
       _other -> {:error, error}
     end
+  end
+
+  defp validate_uuid(value, error) when is_binary(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, ^value} -> :ok
+      _other -> {:error, error}
+    end
+  end
+
+  defp validate_uuid(_value, error), do: {:error, error}
+
+  defp validate_conversation_authority_descriptor(
+         %{
+           conversation_authority_descriptor: %ConversationAuthorityDescriptor{} = descriptor
+         } = command
+       ) do
+    matches? =
+      descriptor.club_id == command.club_id and
+        descriptor.person_id == command.person_id and
+        descriptor.subscription_intent_id == command.subscription_intent_id and
+        descriptor.source == command.source and
+        descriptor.conversation_id == command.conversation_id and
+        descriptor.conversation_group_ids == command.conversation_group_ids and
+        descriptor.conversation_stream_version == command.conversation_stream_version
+
+    if matches? and Memba.Messaging.valid_conversation_authority_descriptor?(descriptor),
+      do: :ok,
+      else: {:error, :invalid_conversation_authority_descriptor}
+  end
+
+  defp validate_conversation_authority_descriptor(_command),
+    do: {:error, :invalid_conversation_authority_descriptor}
+
+  defp validate_conversation_group_ids(group_ids) when is_list(group_ids) and group_ids != [] do
+    cond do
+      group_ids != Enum.sort(Enum.uniq(group_ids)) ->
+        {:error, :conversation_group_ids_not_canonical}
+
+      Enum.all?(group_ids, &ID.valid?(:group, &1)) ->
+        :ok
+
+      true ->
+        {:error, :invalid_group_id}
+    end
+  end
+
+  defp validate_conversation_group_ids(_group_ids), do: {:error, :invalid_conversation_group_ids}
+
+  defp validate_conversation_stream_version(version) when is_integer(version) and version > 0,
+    do: :ok
+
+  defp validate_conversation_stream_version(_version),
+    do: {:error, :invalid_conversation_stream_version}
+
+  defp validate_subscription_source(source) when source in [:manual, :root, :reply], do: :ok
+  defp validate_subscription_source(_source), do: {:error, :invalid_subscription_source}
+
+  defp normalize_subscription_source("manual"), do: :manual
+  defp normalize_subscription_source("root"), do: :root
+  defp normalize_subscription_source("reply"), do: :reply
+  defp normalize_subscription_source(source), do: source
+
+  defp validate_authority_decision_reuse(club, command) do
+    decision_by_intent =
+      case Map.get(club.conversation_authority_intents, command.subscription_intent_id) do
+        nil -> nil
+        decision_id -> Map.fetch!(club.conversation_authority_decisions, decision_id)
+      end
+
+    decision_by_id =
+      Map.get(club.conversation_authority_decisions, command.authority_decision_id)
+
+    decision_by_request =
+      case Map.get(club.conversation_authority_requests, command.authority_request_id) do
+        nil -> nil
+        decision_id -> Map.fetch!(club.conversation_authority_decisions, decision_id)
+      end
+
+    cond do
+      decision_by_intent &&
+          authority_intent_signature(decision_by_intent) == authority_intent_signature(command) ->
+        :exact_retry
+
+      decision_by_intent ->
+        {:error, :subscription_intent_id_conflict}
+
+      is_nil(decision_by_id) and is_nil(decision_by_request) ->
+        :ok
+
+      decision_by_id &&
+        authority_decision_signature(decision_by_id) ==
+          authority_decision_command_signature(command) &&
+          decision_by_request == decision_by_id ->
+        :exact_retry
+
+      decision_by_id ->
+        {:error, :authority_decision_id_conflict}
+
+      true ->
+        {:error, :authority_request_id_conflict}
+    end
+  end
+
+  defp resolve_conversation_subscription_authority(club, command) do
+    club.active_memberships
+    |> Enum.filter(fn {_club_membership_id, person_id} -> person_id == command.person_id end)
+    |> Enum.sort_by(fn {club_membership_id, _person_id} -> club_membership_id end)
+    |> Enum.find_value(fn {club_membership_id, _person_id} ->
+      group_membership_ids =
+        command.conversation_group_ids
+        |> Enum.map(&Map.get(club.current_group_membership_ids, {&1, club_membership_id}))
+        |> Enum.reject(&is_nil/1)
+        |> Enum.filter(fn group_membership_id ->
+          case Map.get(club.first_class_group_memberships, group_membership_id) do
+            %{person_id: person_id, club_membership_id: ^club_membership_id, status: :current}
+            when person_id == command.person_id ->
+              true
+
+            _ended_or_different ->
+              false
+          end
+        end)
+        |> Enum.sort()
+
+      if group_membership_ids == [],
+        do: nil,
+        else: {:ok, club_membership_id, group_membership_ids}
+    end) || {:error, :conversation_subscription_not_authorized}
+  end
+
+  defp authority_decision_command_signature(command) do
+    Map.take(command, authority_decision_signature_fields())
+  end
+
+  defp authority_decision_signature(decision) do
+    Map.take(decision, authority_decision_signature_fields())
+  end
+
+  defp authority_decision_signature_fields do
+    authority_intent_signature_fields() ++ [:authority_request_id, :authority_decision_id]
+  end
+
+  defp authority_intent_signature(value) do
+    Map.take(value, authority_intent_signature_fields())
+  end
+
+  defp authority_intent_signature_fields do
+    [
+      :club_id,
+      :person_id,
+      :subscription_intent_id,
+      :source,
+      :conversation_id,
+      :conversation_group_ids,
+      :conversation_stream_version
+    ]
   end
 
   defp validate_optional_id(_type, nil, _error), do: :ok
