@@ -1,187 +1,186 @@
 defmodule Memba.Messaging.ConversationFollowProjectionTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Commanded.Event.Mapper
-  alias Memba.ConversationSubscriptionFixtures
-  alias Memba.ID
+  alias Commanded.Commands.ExecutionResult
   alias Memba.Messaging
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
-  alias Memba.Messaging.ConversationFollowers
-  alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.Events.ConversationFollowed
+  alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Recipient
 
-  test "manual follow and explicit unfollow use canonical markers and exact retries" do
-    ids = ConversationSubscriptionFixtures.canonical_subscription_fixture!()
-    follow = follow_attrs(ids, ids.intent_id)
+  @sender_follow_replay_projectors [
+    Memba.Messaging.Projectors.Message,
+    ConversationFollowProjector,
+    Memba.Messaging.Projectors.EmailDelivery,
+    Memba.Messaging.Projectors.MemberEmailDelivery,
+    Memba.Messaging.Projectors.MembaStaffEmailDelivery
+  ]
 
-    assert :ok = Messaging.follow_conversation(follow, consistency: :strong)
-    assert Messaging.following_conversation?(ids.conversation_id, ids.person_id)
+  test "follow and unfollow commands are projected as the member's current conversation follow state" do
+    club_id = Memba.ID.generate(:club)
+    conversation_id = Memba.ID.generate(:message)
+    member_id = Memba.ID.generate(:person)
 
-    assert :ok = Messaging.follow_conversation(follow, consistency: :strong)
-
-    unfollow = %{
-      person_id: ids.person_id,
-      conversation_id: ids.conversation_id,
-      unfollow_id: Ecto.UUID.generate()
-    }
-
-    assert :ok = Messaging.unfollow_conversation(unfollow, consistency: :strong)
-    refute Messaging.following_conversation?(ids.conversation_id, ids.person_id)
-    assert :ok = Messaging.unfollow_conversation(unfollow, consistency: :strong)
-
-    assert {:error, :subscription_intent_cancelled} =
-             Messaging.follow_conversation(follow, consistency: :strong)
-
-    assert :ok =
-             Messaging.follow_conversation(
-               follow_attrs(ids, ID.generate(:subscription_intent)),
-               consistency: :strong
-             )
-
-    assert Messaging.following_conversation?(ids.conversation_id, ids.person_id)
-  end
-
-  test "legacy follows fall back only until a canonical unfollow tombstone exists" do
-    club_id = ID.generate(:club)
-    conversation_id = ID.generate(:message)
-    person_id = ID.generate(:person)
-    follow_id = ConversationFollowers.follow_id(conversation_id, person_id)
-
-    legacy = %MessageSent{
-      message_id: conversation_id,
-      club_id: club_id,
-      sender_id: person_id,
-      subject: "Historic system-group message",
-      body: "Historic MessageSent remains readable."
-    }
-
-    :ok =
-      Commanded.EventStore.append_to_stream(
-        App,
-        conversation_id,
-        0,
-        [Mapper.map_to_event_data(legacy)]
-      )
-
-    :ok =
-      Commanded.Subscriptions.wait_for(App, conversation_id, 1,
-        consistency: [ConversationFollowProjector]
-      )
-
-    assert Messaging.following_conversation?(conversation_id, person_id)
-
-    assert :ok =
-             Messaging.unfollow_conversation(
-               %{
-                 person_id: person_id,
-                 conversation_id: conversation_id,
-                 unfollow_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
-
-    refute Messaging.following_conversation?(conversation_id, person_id)
+    refute Messaging.following_conversation?(conversation_id, member_id)
     assert Messaging.list_conversation_followers(conversation_id) == []
 
-    assert %ConversationFollowProjection{following: true} =
-             Repo.get!(ConversationFollowProjection, follow_id)
-  end
-
-  test "paused canonical projector cannot resurrect legacy follow or hide a new grant" do
-    ids = ConversationSubscriptionFixtures.canonical_subscription_fixture!()
-    follow_id = ConversationFollowers.follow_id(ids.conversation_id, ids.person_id)
-
-    :ok =
-      Commanded.EventStore.append_to_stream(
-        App,
-        ids.conversation_id,
-        2,
-        [
-          Mapper.map_to_event_data(%Memba.Messaging.Events.ConversationFollowed{
-            follow_id: follow_id,
-            club_id: ids.club_id,
-            conversation_id: ids.conversation_id,
-            member_id: ids.person_id
-          })
-        ]
-      )
-
-    :ok =
-      Commanded.Subscriptions.wait_for(App, ids.conversation_id, 3,
-        consistency: [ConversationFollowProjector]
-      )
-
-    projector_child_id =
-      stop_projector!(Memba.Messaging.Projectors.PersonConversationSubscriptionsV1)
-
-    assert :ok =
-             Messaging.unfollow_conversation(
-               %{
-                 person_id: ids.person_id,
-                 conversation_id: ids.conversation_id,
-                 unfollow_id: Ecto.UUID.generate()
-               },
-               consistency: :eventual
-             )
-
-    refute Messaging.following_conversation?(ids.conversation_id, ids.person_id)
-
-    unfollow_listing =
-      Task.async(fn -> Messaging.list_conversation_followers(ids.conversation_id) end)
-
-    assert Task.yield(unfollow_listing, 50) == nil
-    restart_projector!(projector_child_id)
-    assert Task.await(unfollow_listing) == []
-
-    projector_child_id =
-      stop_projector!(Memba.Messaging.Projectors.PersonConversationSubscriptionsV1)
-
-    assert :ok =
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %ConversationFollowed{
+                  club_id: ^club_id,
+                  conversation_id: ^conversation_id,
+                  member_id: ^member_id
+                }
+              ]
+            }} =
              Messaging.follow_conversation(
-               follow_attrs(ids, ID.generate(:subscription_intent)),
-               consistency: :eventual
+               %{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: member_id
+               },
+               returning: :execution_result,
+               consistency: :strong
              )
 
-    assert Messaging.following_conversation?(ids.conversation_id, ids.person_id)
+    assert %ConversationFollowProjection{
+             club_id: ^club_id,
+             conversation_id: ^conversation_id,
+             member_id: ^member_id,
+             following: true
+           } = Messaging.get_conversation_follow(conversation_id, member_id)
 
-    follow_listing =
-      Task.async(fn -> Messaging.list_conversation_followers(ids.conversation_id) end)
+    assert [%ConversationFollowProjection{member_id: ^member_id}] =
+             Messaging.list_conversation_followers(conversation_id)
 
-    assert Task.yield(follow_listing, 50) == nil
-    restart_projector!(projector_child_id)
+    assert true == Messaging.following_conversation?(conversation_id, member_id)
 
-    assert [%ConversationFollowProjection{member_id: person_id}] =
-             Task.await(follow_listing)
-
-    assert person_id == ids.person_id
-
-    legacy_projector_child_id = stop_projector!(ConversationFollowProjector)
-
-    assert :ok =
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %ConversationUnfollowed{
+                  club_id: ^club_id,
+                  conversation_id: ^conversation_id,
+                  member_id: ^member_id
+                }
+              ]
+            }} =
              Messaging.unfollow_conversation(
                %{
-                 person_id: ids.person_id,
-                 conversation_id: ids.conversation_id,
-                 unfollow_id: Ecto.UUID.generate()
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: member_id
                },
-               consistency: :eventual
+               returning: :execution_result,
+               consistency: :strong
              )
 
-    legacy_lag_listing =
-      Task.async(fn -> Messaging.list_conversation_followers(ids.conversation_id) end)
+    assert %ConversationFollowProjection{following: false} =
+             Messaging.get_conversation_follow(conversation_id, member_id)
 
-    assert Task.yield(legacy_lag_listing, 50) == nil
-    restart_projector!(legacy_projector_child_id)
-    assert Task.await(legacy_lag_listing) == []
+    refute Messaging.following_conversation?(conversation_id, member_id)
+    assert Messaging.list_conversation_followers(conversation_id) == []
   end
 
-  test "new MessageSent facts do not write canonical or legacy follow state" do
-    club_id = ID.generate(:club)
-    root_message_id = ID.generate(:message)
-    sender_id = ID.generate(:person)
+  test "repeated follow and unfollow commands are idempotent" do
+    club_id = Memba.ID.generate(:club)
+    conversation_id = Memba.ID.generate(:message)
+    member_id = Memba.ID.generate(:person)
+
+    assert {:ok, %ExecutionResult{events: [%ConversationFollowed{}]}} =
+             Messaging.follow_conversation(
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             Messaging.follow_conversation(
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok, %ExecutionResult{events: [%ConversationUnfollowed{}]}} =
+             Messaging.unfollow_conversation(
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             Messaging.unfollow_conversation(
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
+               returning: :execution_result,
+               consistency: :strong
+             )
+  end
+
+  test "MessageSent auto-follows the root sender and each reply author" do
+    club_id = Memba.ID.generate(:club)
+    root_message_id = Memba.ID.generate(:message)
+    alice_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
+    carol_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             App.dispatch(
+               %SendMessage{
+                 message_id: root_message_id,
+                 club_id: club_id,
+                 sender_id: alice_id,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas.",
+                 recipients: [
+                   %Recipient{
+                     delivery_id: Memba.ID.generate(:delivery),
+                     person_id: alice_id,
+                     name: "Alice",
+                     email: "alice@example.com"
+                   }
+                 ]
+               },
+               consistency: :strong
+             )
+
+    assert true == Messaging.following_conversation?(root_message_id, alice_id)
+    refute Messaging.following_conversation?(root_message_id, bob_id)
+
+    assert :ok =
+             App.dispatch(
+               %PostMessageReply{
+                 message_id: Memba.ID.generate(:message),
+                 club_id: club_id,
+                 sender_id: bob_id,
+                 conversation_id: root_message_id,
+                 reply_to_message_id: root_message_id,
+                 subject: "Trip planning night",
+                 body: "I can bring maps.",
+                 recipients: []
+               },
+               consistency: :strong
+             )
+
+    follower_ids =
+      root_message_id
+      |> Messaging.list_conversation_followers()
+      |> Enum.map(& &1.member_id)
+
+    assert Enum.sort(follower_ids) == Enum.sort([alice_id, bob_id])
+
+    refute Messaging.following_conversation?(root_message_id, carol_id)
+  end
+
+  test "a root sender excluded from delivery remains unfollowed after projection replay" do
+    club_id = Memba.ID.generate(:club)
+    root_message_id = Memba.ID.generate(:message)
+    sender_id = Memba.ID.generate(:person)
+    recipient_id = Memba.ID.generate(:person)
 
     assert :ok =
              App.dispatch(
@@ -189,14 +188,14 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
                  message_id: root_message_id,
                  club_id: club_id,
                  sender_id: sender_id,
-                 subject: "Raw internal send",
-                 body: "No implicit follow",
+                 subject: "Private Admin topic",
+                 body: "Please discuss this with the Admin group.",
                  recipients: [
                    %Recipient{
-                     delivery_id: ID.generate(:delivery),
-                     person_id: sender_id,
-                     name: "Sender",
-                     email: "sender@example.com"
+                     delivery_id: Memba.ID.generate(:delivery),
+                     person_id: recipient_id,
+                     name: "Admin Recipient",
+                     email: "admin@example.com"
                    }
                  ]
                },
@@ -204,35 +203,11 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
              )
 
     refute Messaging.following_conversation?(root_message_id, sender_id)
-  end
 
-  defp stop_projector!(projector) do
-    child_id =
-      Supervisor.which_children(Memba.Supervisor)
-      |> Enum.find_value(fn
-        {child_id, _pid, :worker, [^projector]} -> child_id
-        _child -> nil
-      end)
+    projection_positions = event_sourced_projection_positions(@sender_follow_replay_projectors)
+    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
+    await_event_sourced_projection_positions!(projection_positions)
 
-    assert child_id
-    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
-    child_id
-  end
-
-  defp restart_projector!(child_id) do
-    case Supervisor.restart_child(Memba.Supervisor, child_id) do
-      {:ok, _pid} -> :ok
-      {:ok, _pid, _info} -> :ok
-      {:error, :running} -> :ok
-    end
-  end
-
-  defp follow_attrs(ids, intent_id) do
-    %{
-      person_id: ids.person_id,
-      conversation_id: ids.conversation_id,
-      subscription_intent_id: intent_id,
-      source: :manual
-    }
+    refute Messaging.following_conversation?(root_message_id, sender_id)
   end
 end

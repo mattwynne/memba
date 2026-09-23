@@ -11,7 +11,6 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
@@ -46,6 +45,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     unfollow_conversation(club_id, root_message_id, carol.person_id)
     follow_conversation(club_id, root_message_id, dana.person_id)
     follow_conversation(club_id, root_message_id, erin.person_id)
+    follow_conversation(club_id, root_message_id, pat.person_id)
     remove_member(club_id, erin_membership_id, erin.person_id)
 
     reply_message_id = Memba.ID.generate(:message)
@@ -98,15 +98,6 @@ defmodule Memba.Messaging.PostMessageReplyTest do
 
     recipient_ids = Enum.map(delivery_events, & &1.recipient_id)
 
-    assert Enum.all?(delivery_events, fn delivery ->
-             is_binary(delivery.subscription_authorization_id) and
-               is_binary(delivery.authority_decision_id) and
-               is_binary(delivery.authority_kind) and
-               delivery.authority_club_id == club_id and
-               is_binary(delivery.authority_club_membership_id) and
-               is_integer(delivery.authority_club_stream_version)
-           end)
-
     refute bob.person_id in recipient_ids
     refute carol.person_id in recipient_ids
     refute erin.person_id in recipient_ids
@@ -157,7 +148,9 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     add_group_member(club_id, access_group_id, chris_membership_id, chris.person_id)
 
     root_message_id = send_root_message_to_group(club_id, access_group_id, alice)
+    follow_conversation(club_id, root_message_id, alice.person_id)
     follow_conversation(club_id, root_message_id, bob.person_id)
+    follow_conversation(club_id, root_message_id, dana.person_id)
 
     reply_message_id = Memba.ID.generate(:message)
 
@@ -463,18 +456,6 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   defp add_group_member(club_id, group_id, membership_id, person_id) do
     assert :ok =
              MembershipApp.dispatch(
-               %StartGroupMembership{
-                 club_id: club_id,
-                 group_id: group_id,
-                 group_membership_id: Memba.ID.generate(:group_membership),
-                 club_membership_id: membership_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
-
-    assert :ok =
-             MembershipApp.dispatch(
                %AddGroupMember{
                  club_id: club_id,
                  group_id: group_id,
@@ -510,27 +491,18 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              )
   end
 
-  defp follow_conversation(_club_id, conversation_id, member_id) do
+  defp follow_conversation(club_id, conversation_id, member_id) do
     assert :ok =
              Messaging.follow_conversation(
-               %{
-                 person_id: member_id,
-                 conversation_id: conversation_id,
-                 subscription_intent_id: Memba.ID.generate(:subscription_intent),
-                 source: :manual
-               },
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
                consistency: :strong
              )
   end
 
-  defp unfollow_conversation(_club_id, conversation_id, member_id) do
+  defp unfollow_conversation(club_id, conversation_id, member_id) do
     assert :ok =
              Messaging.unfollow_conversation(
-               %{
-                 person_id: member_id,
-                 conversation_id: conversation_id,
-                 unfollow_id: Ecto.UUID.generate()
-               },
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
                consistency: :strong
              )
   end

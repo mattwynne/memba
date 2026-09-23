@@ -49,8 +49,8 @@ defmodule Memba.Membership.PublicApiTest do
 
     refute function_exported?(Membership, :remove_group_member, 1)
     refute function_exported?(Membership, :remove_group_member, 2)
-    assert function_exported?(Membership, :remove_custom_group_member, 1)
-    assert function_exported?(Membership, :remove_custom_group_member, 2)
+    refute function_exported?(Membership, :remove_custom_group_member, 1)
+    refute function_exported?(Membership, :remove_custom_group_member, 2)
   end
 
   test "create_club/2 dispatches CreateClub through the Membership context" do

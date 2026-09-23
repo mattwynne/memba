@@ -10,18 +10,12 @@ defmodule Memba.ID do
     club: "clb",
     club_invitation: "inv",
     group: "grp",
-    group_membership: "gmb",
     person: "per",
     role: "rol",
     membership: "mem",
     message: "msg",
     delivery: "del",
     conversation_follow: "cfl",
-    conversation_subscription: "csu",
-    subscription_intent: "sin",
-    authority_decision: "ath",
-    subscription_authorization: "sau",
-    subscription_revocation: "srv",
     inbound_email: "inb",
     email_address: "ead",
     onboarding_request: "req",
@@ -34,18 +28,12 @@ defmodule Memba.ID do
           :club
           | :club_invitation
           | :group
-          | :group_membership
           | :person
           | :role
           | :membership
           | :message
           | :delivery
           | :conversation_follow
-          | :conversation_subscription
-          | :subscription_intent
-          | :authority_decision
-          | :subscription_authorization
-          | :subscription_revocation
           | :inbound_email
           | :email_address
           | :onboarding_request

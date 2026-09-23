@@ -27,22 +27,16 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
-  alias Memba.Membership.Commands.DecideConversationSubscriptionAuthority
-  alias Memba.Membership.Commands.EndGroupMembership
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
-  alias Memba.Membership.Commands.ReconcileLegacyGroupMembership
-  alias Memba.Membership.Commands.RecordLegacyGroupMembershipReconciliationFence
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
-  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
-  alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
 
@@ -62,22 +56,16 @@ defmodule Memba.Membership.Router do
   dispatch(CreateGroup, to: Club)
   dispatch(CreatePerson, to: Person)
   dispatch(DefineClubRole, to: Club)
-  dispatch(DecideConversationSubscriptionAuthority, to: Club)
-  dispatch(EndGroupMembership, to: Club)
   dispatch(GrantClubRolePermission, to: Club)
   dispatch(InviteClubMember, to: ClubInvitation)
   dispatch(ReconcileLegacyAdminHistory, to: Club)
-  dispatch(ReconcileLegacyGroupMembership, to: Club)
-  dispatch(RecordLegacyGroupMembershipReconciliationFence, to: Club)
   dispatch(MakePersonEmailAddressPrimary, to: Person)
-  dispatch(RemoveCustomGroupMember, to: Club)
   dispatch(RemoveGroupMember, to: Club)
   dispatch(RemoveClubMember, to: Club)
   dispatch(RemoveClubRoleFromMember, to: Club)
   dispatch(RemovePersonEmailAddress, to: Person)
   dispatch(ReplacePersonEmailAddresses, to: Person)
   dispatch(ResendClubMemberInvitation, to: ClubInvitation)
-  dispatch(StartGroupMembership, to: Club)
   dispatch(UpdateClub, to: Club)
   dispatch(VerifyPersonEmailAddress, to: Person)
 end

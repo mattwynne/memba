@@ -16,13 +16,11 @@ defmodule Memba.EventSourcedCase do
     Memba.Membership.Projectors.Membership,
     Memba.Membership.Projectors.Group,
     Memba.Membership.Projectors.GroupMembership,
-    Memba.Membership.Projectors.FirstClassGroupMembershipV1,
     Memba.Membership.Projectors.Role,
     Memba.Membership.Projectors.Person,
     Memba.Messaging.Projectors.Message,
     Memba.Messaging.Projectors.ConversationGroupAccess,
     Memba.Messaging.Projectors.ConversationFollow,
-    Memba.Messaging.Projectors.PersonConversationSubscriptionsV1,
     Memba.Messaging.Projectors.EmailDelivery,
     Memba.Messaging.Projectors.MemberEmailDelivery,
     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
@@ -30,9 +28,7 @@ defmodule Memba.EventSourcedCase do
   ]
   @event_handlers [
     Memba.Membership.Policies.SystemGroupMembership,
-    Memba.Membership.Policies.ClearRemovedGroupMemberFollows,
-    Memba.Membership.Policies.RevokeGroupMembershipConversationSubscriptions,
-    Memba.Membership.Policies.RevokeSystemConversationSubscriptions
+    Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   ]
   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
 

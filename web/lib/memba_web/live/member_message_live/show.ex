@@ -87,10 +87,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
 
   def handle_info(
         {:read_model_changed,
-         %{
-           projector: Memba.Messaging.Projectors.PersonConversationSubscriptionsV1,
-           source_event: event
-         }},
+         %{projector: Memba.Messaging.Projectors.ConversationFollow, source_event: event}},
         %{assigns: %{message: message}} = socket
       ) do
     if event_conversation_id(event) == message.conversation_id do
@@ -245,7 +242,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
   end
 
   defp update_current_member_follow(socket, action) do
-    case current_member_follow_attrs(socket, action) do
+    case current_member_follow_attrs(socket) do
       {:ok, attrs} ->
         dispatch_current_member_follow(socket, action, attrs)
 
@@ -279,24 +276,18 @@ defmodule MembaWeb.MemberMessageLive.Show do
     end
   end
 
-  defp current_member_follow_attrs(socket, action) do
+  defp current_member_follow_attrs(socket) do
     with %{
+           selected_club: %{club_id: club_id},
            message: %{conversation_id: conversation_id},
-           current_member: %{id: person_id}
+           current_member: %{id: member_id}
          } <- socket.assigns do
-      attrs = %{person_id: person_id, conversation_id: conversation_id}
-
-      case action do
-        :follow ->
-          {:ok,
-           Map.merge(attrs, %{
-             subscription_intent_id: Memba.ID.generate(:subscription_intent),
-             source: :manual
-           })}
-
-        :unfollow ->
-          {:ok, Map.put(attrs, :unfollow_id, Ecto.UUID.generate())}
-      end
+      {:ok,
+       %{
+         club_id: club_id,
+         conversation_id: conversation_id,
+         member_id: member_id
+       }}
     else
       _missing_follow_context -> {:error, :forbidden}
     end

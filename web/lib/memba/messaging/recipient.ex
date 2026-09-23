@@ -8,17 +8,5 @@ defmodule Memba.Messaging.Recipient do
   """
 
   @enforce_keys [:delivery_id, :person_id, :name, :email]
-  defstruct [
-    :delivery_id,
-    :person_id,
-    :name,
-    :email,
-    :subscription_authorization_id,
-    :authority_decision_id,
-    :authority_kind,
-    :authority_club_id,
-    :authority_club_membership_id,
-    :authority_group_membership_id,
-    :authority_club_stream_version
-  ]
+  defstruct [:delivery_id, :person_id, :name, :email]
 end

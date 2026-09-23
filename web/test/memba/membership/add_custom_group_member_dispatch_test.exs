@@ -9,7 +9,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.Events.GroupMemberAdded
-  alias Memba.Membership.Events.GroupMembershipStarted
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Roles
@@ -24,7 +23,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
     actor_membership_id = Memba.ID.generate(:membership)
     target_person_id = Memba.ID.generate(:person)
     target_membership_id = Memba.ID.generate(:membership)
-    group_membership_id = Memba.ID.generate(:group_membership)
 
     create_club!(club_id)
     create_member!(club_id, creator_membership_id, creator_person_id)
@@ -47,7 +45,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
     assert %AddCustomGroupMember{
              club_id: ^club_id,
              group_id: ^group_id,
-             group_membership_id: ^group_membership_id,
              membership_id: ^target_membership_id,
              person_id: ^target_person_id,
              actor_person_id: ^actor_person_id
@@ -55,7 +52,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
              struct!(AddCustomGroupMember, %{
                club_id: club_id,
                group_id: group_id,
-               group_membership_id: group_membership_id,
                membership_id: target_membership_id,
                person_id: target_person_id,
                actor_person_id: actor_person_id
@@ -69,12 +65,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                   club_id: ^club_id,
                   group_id: ^group_id,
                   membership_id: ^target_membership_id,
-                  person_id: ^target_person_id
-                },
-                %GroupMembershipStarted{
-                  club_id: ^club_id,
-                  group_id: ^group_id,
-                  club_membership_id: ^target_membership_id,
                   person_id: ^target_person_id
                 }
               ]
@@ -111,7 +101,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
     actor_membership_id = Memba.ID.generate(:membership)
     target_person_id = Memba.ID.generate(:person)
     target_membership_id = Memba.ID.generate(:membership)
-    group_membership_id = Memba.ID.generate(:group_membership)
 
     create_club!(club_id)
     create_member!(club_id, actor_membership_id, actor_person_id)
@@ -123,8 +112,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
               club_id: ^club_id,
               group_id: ^group_id,
               membership_id: ^target_membership_id,
-              club_membership_id: ^target_membership_id,
-              group_membership_id: admitted_group_membership_id,
               person_id: ^target_person_id,
               actor_person_id: ^actor_person_id,
               transition: :member_added
@@ -134,19 +121,14 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                group_id,
                target_membership_id,
                target_person_id,
-               actor_person_id,
-               group_membership_id: group_membership_id
+               actor_person_id
              )
-
-    assert admitted_group_membership_id == group_membership_id
 
     assert {:ok,
             %CustomGroupAdmission{
               club_id: ^club_id,
               group_id: ^group_id,
               membership_id: ^target_membership_id,
-              club_membership_id: ^target_membership_id,
-              group_membership_id: ^admitted_group_membership_id,
               person_id: ^target_person_id,
               actor_person_id: ^actor_person_id,
               transition: :already_member
@@ -156,18 +138,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                group_id,
                target_membership_id,
                target_person_id,
-               actor_person_id,
-               group_membership_id: group_membership_id
-             )
-
-    assert {:error, :group_membership_already_current} =
-             add_custom_group_member(
-               club_id,
-               group_id,
-               target_membership_id,
-               target_person_id,
-               actor_person_id,
-               group_membership_id: Memba.ID.generate(:group_membership)
+               actor_person_id
              )
   end
 
@@ -196,11 +167,6 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                 %GroupMemberAdded{
                   group_id: ^group_id,
                   membership_id: ^target_membership_id,
-                  person_id: ^target_person_id
-                },
-                %GroupMembershipStarted{
-                  group_id: ^group_id,
-                  club_membership_id: ^target_membership_id,
                   person_id: ^target_person_id
                 }
               ]
@@ -486,24 +452,16 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
          actor_person_id,
          opts \\ []
        ) do
-    {group_membership_id, opts} = Keyword.pop(opts, :group_membership_id)
-
-    attrs = %{
-      club_id: club_id,
-      group_id: group_id,
-      membership_id: membership_id,
-      person_id: person_id,
-      actor_person_id: actor_person_id
-    }
-
-    attrs =
-      if group_membership_id do
-        Map.put(attrs, :group_membership_id, group_membership_id)
-      else
-        attrs
-      end
-
-    Membership.add_custom_group_member(attrs, Keyword.put_new(opts, :consistency, :strong))
+    Membership.add_custom_group_member(
+      %{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: membership_id,
+        person_id: person_id,
+        actor_person_id: actor_person_id
+      },
+      Keyword.put_new(opts, :consistency, :strong)
+    )
   end
 
   defp create_member!(club_id, membership_id, person_id) do

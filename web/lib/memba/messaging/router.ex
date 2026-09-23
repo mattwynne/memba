@@ -5,49 +5,29 @@ defmodule Memba.Messaging.Router do
 
   use Commanded.Commands.Router
 
-  alias Memba.Messaging.ConversationSubscriptionCutover
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
-  alias Memba.Messaging.PersonConversationSubscriptions
+  alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
-  alias Memba.Messaging.Commands.AdvanceConversationSubscriptionCutoverCheckpoint
-  alias Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
-  alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
-  alias Memba.Messaging.Commands.EndPersonConversationSubscription
+  alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
-  alias Memba.Messaging.Commands.RevokeGroupMembershipConversationSubscriptions
-  alias Memba.Messaging.Commands.RevokeSystemConversationSubscriptions
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
-  alias Memba.Messaging.Commands.ReconcileLegacyConversationFollow
-  alias Memba.Messaging.Commands.RecordConversationSubscriptionCutoverFence
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
-  alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
+  alias Memba.Messaging.Commands.UnfollowConversation
 
   identify(InboundEmailReceipt, by: :inbound_email_id)
-  identify(ConversationSubscriptionCutover, by: :cutover_id)
-
-  identify(PersonConversationSubscriptions,
-    by: :person_id,
-    prefix: "person-conversation-subscriptions-"
-  )
+  identify(ConversationFollowers, by: :conversation_id)
 
   dispatch([ReceiveInboundEmail, AcceptInboundClubEmail, RejectInboundClubEmail],
     to: InboundEmailReceipt
-  )
-
-  dispatch(RecordConversationSubscriptionCutoverFence, to: ConversationSubscriptionCutover)
-
-  dispatch(AdvanceConversationSubscriptionCutoverCheckpoint,
-    to: ConversationSubscriptionCutover,
-    before_execute: :verify_terminal_marker_before_checkpoint
   )
 
   dispatch(
@@ -73,20 +53,5 @@ defmodule Memba.Messaging.Router do
     identity: :conversation_id
   )
 
-  dispatch(
-    [
-      StartPersonConversationSubscriptionIntent,
-      ReconcileLegacyConversationFollow,
-      CancelPersonConversationSubscriptionIntent,
-      EndPersonConversationSubscription,
-      RevokeGroupMembershipConversationSubscriptions,
-      RevokeSystemConversationSubscriptions
-    ],
-    to: PersonConversationSubscriptions
-  )
-
-  dispatch(AuthorizePersonConversationSubscriptionIntent,
-    to: PersonConversationSubscriptions,
-    before_execute: :revalidate_authority_before_execute
-  )
+  dispatch([FollowConversation, UnfollowConversation], to: ConversationFollowers)
 end

@@ -6,16 +6,11 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateGroup
-  alias Memba.Membership.Commands.EndGroupMembership
-  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.GroupMembershipEnded
-  alias Memba.Membership.Events.GroupMembershipStarted
 
   test "group IDs use the Membership group typed ID prefix and cast by type" do
     group_id = ID.generate(:group)
@@ -24,14 +19,6 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
     assert {:ok, ^group_id} = ID.cast(:group, group_id)
     assert ID.valid?(:group, group_id)
     refute ID.valid?(:club, group_id)
-  end
-
-  test "group membership IDs are distinct typed identities" do
-    group_membership_id = ID.generate(:group_membership)
-
-    assert String.starts_with?(group_membership_id, "gmb_")
-    assert {:ok, ^group_membership_id} = ID.cast(:group_membership, group_membership_id)
-    refute ID.valid?(:membership, group_membership_id)
   end
 
   test "group IDs can be deterministic for system group identities" do
@@ -85,43 +72,15 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
     refute Map.has_key?(AddGroupMember.__struct__(), :actor_person_id)
 
     actor_person_id = ID.generate(:person)
-    group_membership_id = ID.generate(:group_membership)
 
     assert %AddCustomGroupMember{
              club_id: ids.club_id,
              group_id: ids.group_id,
-             group_membership_id: group_membership_id,
              membership_id: ids.membership_id,
              person_id: ids.person_id,
              actor_person_id: actor_person_id
            } ==
-             struct!(
-               AddCustomGroupMember,
-               ids
-               |> Map.put(:actor_person_id, actor_person_id)
-               |> Map.put(:group_membership_id, group_membership_id)
-             )
-
-    removal_operation_id = Ecto.UUID.generate()
-
-    assert %RemoveCustomGroupMember{
-             club_id: ids.club_id,
-             group_id: ids.group_id,
-             group_membership_id: group_membership_id,
-             club_membership_id: ids.membership_id,
-             person_id: ids.person_id,
-             actor_person_id: actor_person_id,
-             removal_operation_id: removal_operation_id
-           } ==
-             struct!(RemoveCustomGroupMember, %{
-               club_id: ids.club_id,
-               group_id: ids.group_id,
-               group_membership_id: group_membership_id,
-               club_membership_id: ids.membership_id,
-               person_id: ids.person_id,
-               actor_person_id: actor_person_id,
-               removal_operation_id: removal_operation_id
-             })
+             struct!(AddCustomGroupMember, Map.put(ids, :actor_person_id, actor_person_id))
 
     assert %RemoveGroupMember{
              club_id: ids.club_id,
@@ -131,27 +90,6 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
            } == struct!(RemoveGroupMember, ids)
 
     refute Map.has_key?(RemoveGroupMember.__struct__(), :actor_person_id)
-  end
-
-  test "first-class custom GroupMembership contracts use qualified club membership identity" do
-    ids = group_membership_ids()
-    group_membership_id = ID.generate(:group_membership)
-
-    attrs = %{
-      club_id: ids.club_id,
-      group_id: ids.group_id,
-      group_membership_id: group_membership_id,
-      club_membership_id: ids.membership_id,
-      person_id: ids.person_id
-    }
-
-    assert %StartGroupMembership{} = struct!(StartGroupMembership, attrs)
-    assert_json_encodable(struct!(GroupMembershipStarted, attrs))
-
-    ending_attrs = Map.merge(attrs, %{idempotency_key: "end-1", reason: "member_left"})
-
-    assert %EndGroupMembership{} = struct!(EndGroupMembership, ending_attrs)
-    assert_json_encodable(struct!(GroupMembershipEnded, ending_attrs))
   end
 
   test "group events carry the same identities and are JSON encodable" do

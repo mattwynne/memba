@@ -1,9 +1,6 @@
 defmodule Memba.Membership.Projectors.GroupMembership do
   @moduledoc """
-  Projects legacy group membership events into the existing current-state read model.
-
-  This subscription name and its compatibility responsibilities are retained so
-  deployed checkpoints and legacy event replay remain unchanged.
+  Projects group membership events into the Membership group-membership read model.
   """
 
   use Commanded.Projections.Ecto,

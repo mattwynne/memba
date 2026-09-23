@@ -15,10 +15,6 @@ defmodule Memba.Messaging.Events.MessageSent do
     :sender_id,
     :conversation_id,
     :reply_to_message_id,
-    :subscription_intent_id,
-    :authority_request_id,
-    :authority_decision_id,
-    :root_subscription_authority_decision,
     :subject,
     :body,
     sender_follows_conversation: true

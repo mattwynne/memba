@@ -495,16 +495,10 @@ defmodule Memba.DevSeeds do
     )
   end
 
-  defp follow_seed_conversation(_club_id, member_id) do
+  defp follow_seed_conversation(club_id, member_id) do
     assert_ok!(
       Messaging.follow_conversation(
-        %{
-          person_id: member_id,
-          conversation_id: @kac_conversation_id,
-          subscription_intent_id:
-            Memba.ID.deterministic(:subscription_intent, ["seed", @kac_conversation_id, member_id]),
-          source: :manual
-        },
+        %{club_id: club_id, conversation_id: @kac_conversation_id, member_id: member_id},
         consistency: :strong
       ),
       "follow seed conversation as #{member_id}"

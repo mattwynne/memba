@@ -14,21 +14,14 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
-  alias Memba.Membership.Commands.DecideConversationSubscriptionAuthority
-  alias Memba.Membership.Commands.EndGroupMembership
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
-  alias Memba.Membership.Commands.ReconcileLegacyGroupMembership
-  alias Memba.Membership.Commands.RecordLegacyGroupMembershipReconciliationFence
-  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
-  alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.Events.ClubCreated
-  alias Memba.Membership.Events.ConversationSubscriptionAuthorityDecided
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
@@ -36,10 +29,6 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.GroupMembershipEnded
-  alias Memba.Membership.Events.GroupMembershipStarted
-  alias Memba.Membership.Events.LegacyGroupMembershipReconciled
-  alias Memba.Membership.Events.LegacyGroupMembershipReconciliationFenceRecorded
   alias Memba.Membership.Events.ClubMemberAdded
   alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.ClubRoleAssignedToMember
@@ -48,13 +37,11 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
-  alias Memba.Membership.GroupMembership
   alias Memba.Membership.GroupName
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging.ConversationAuthorityDescriptor
 
   @behaviour Aggregate
 
@@ -62,7 +49,6 @@ defmodule Memba.Membership.Club do
     :club_id,
     :name,
     :slug,
-    stream_version: 0,
     active_admin_membership_ids: MapSet.new(),
     active_memberships: %{},
     groups: %{},
@@ -70,16 +56,6 @@ defmodule Memba.Membership.Club do
     group_keys: %{},
     group_name_keys: %{},
     group_memberships: %{},
-    legacy_group_memberships: %{},
-    first_class_group_memberships: %{},
-    current_group_membership_ids: %{},
-    group_membership_endings: %{},
-    custom_group_removals: %{},
-    conversation_authority_decisions: %{},
-    conversation_authority_requests: %{},
-    conversation_authority_intents: %{},
-    legacy_group_membership_reconciliations: %{},
-    legacy_group_membership_reconciliation_fence: nil,
     native_membership_ids: MapSet.new(),
     roles: %{},
     role_keys: %{},
@@ -140,12 +116,6 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{} = club, %CreateCustomGroup{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         :ok <-
-           validate_id(
-             :group_membership,
-             command.group_membership_id,
-             :invalid_group_membership_id
-           ),
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
          {:ok, name} <- GroupName.normalize(command.name),
          {:ok, creator_membership_id} <-
@@ -173,12 +143,6 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{} = club, %AddCustomGroupMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         :ok <-
-           validate_id(
-             :group_membership,
-             command.group_membership_id,
-             :invalid_group_membership_id
-           ),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
@@ -196,171 +160,6 @@ defmodule Memba.Membership.Club do
              command.person_id
            ) do
       add_custom_group_member_decision(club, command)
-    end
-  end
-
-  def execute(%__MODULE__{club_id: nil}, %StartGroupMembership{}),
-    do: {:error, :not_created}
-
-  def execute(%__MODULE__{} = club, %StartGroupMembership{} = command) do
-    with :ok <- validate_existing_club_id(club, command.club_id),
-         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         :ok <-
-           validate_id(
-             :group_membership,
-             command.group_membership_id,
-             :invalid_group_membership_id
-           ),
-         :ok <-
-           validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
-         :ok <- ensure_custom_group(club, command.group_id),
-         :ok <-
-           ensure_active_custom_group_target(
-             club,
-             command.club_membership_id,
-             command.person_id
-           ) do
-      case start_group_membership_decision(club, command) do
-        %GroupMembershipStarted{} = event ->
-          [
-            %GroupMemberAdded{
-              club_id: command.club_id,
-              group_id: command.group_id,
-              membership_id: command.club_membership_id,
-              person_id: command.person_id
-            },
-            event
-          ]
-
-        other_result ->
-          other_result
-      end
-    end
-  end
-
-  def execute(%__MODULE__{club_id: nil}, %RecordLegacyGroupMembershipReconciliationFence{}),
-    do: {:error, :not_created}
-
-  def execute(
-        %__MODULE__{} = club,
-        %RecordLegacyGroupMembershipReconciliationFence{} = command
-      ) do
-    with :ok <- validate_existing_club_id(club, command.club_id),
-         :ok <- validate_non_empty_string(command.namespace, :invalid_reconciliation_namespace) do
-      case club.legacy_group_membership_reconciliation_fence do
-        %{namespace: namespace} when namespace == command.namespace ->
-          []
-
-        nil when club.stream_version == command.expected_stream_version ->
-          %LegacyGroupMembershipReconciliationFenceRecorded{
-            club_id: command.club_id,
-            namespace: command.namespace,
-            source_stream_version: club.stream_version
-          }
-
-        nil ->
-          {:error, :reconciliation_source_changed}
-
-        _different_fence ->
-          {:error, :reconciliation_fence_conflict}
-      end
-    end
-  end
-
-  def execute(%__MODULE__{club_id: nil}, %ReconcileLegacyGroupMembership{}),
-    do: {:error, :not_created}
-
-  def execute(%__MODULE__{} = club, %ReconcileLegacyGroupMembership{} = command) do
-    with :ok <- validate_existing_club_id(club, command.club_id),
-         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         :ok <-
-           validate_id(
-             :group_membership,
-             command.group_membership_id,
-             :invalid_group_membership_id
-           ),
-         :ok <-
-           validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
-         :ok <- validate_non_empty_string(command.namespace, :invalid_reconciliation_namespace),
-         :ok <- ensure_custom_group(club, command.group_id) do
-      reconcile_legacy_group_membership_decision(club, command)
-    end
-  end
-
-  def execute(%__MODULE__{club_id: nil}, %RemoveCustomGroupMember{}),
-    do: {:error, :not_created}
-
-  def execute(%__MODULE__{} = club, %RemoveCustomGroupMember{} = command) do
-    with :ok <- validate_existing_club_id(club, command.club_id),
-         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         :ok <-
-           validate_id(
-             :group_membership,
-             command.group_membership_id,
-             :invalid_group_membership_id
-           ),
-         :ok <-
-           validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
-         :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
-         :ok <- validate_uuid(command.removal_operation_id, :invalid_removal_operation_id) do
-      case custom_group_removal_retry(club, command) do
-        :exact_retry ->
-          []
-
-        {:error, _reason} = error ->
-          error
-
-        :new_operation ->
-          with :ok <- ensure_custom_group(club, command.group_id),
-               :ok <-
-                 ensure_active_custom_group_target(
-                   club,
-                   command.club_membership_id,
-                   command.person_id
-                 ),
-               :ok <- ensure_active_actor(club, command.actor_person_id) do
-            remove_new_custom_group_member(club, command)
-          end
-      end
-    end
-  end
-
-  def execute(%__MODULE__{club_id: nil}, %EndGroupMembership{}),
-    do: {:error, :not_created}
-
-  def execute(%__MODULE__{} = club, %EndGroupMembership{} = command) do
-    with :ok <- validate_existing_club_id(club, command.club_id),
-         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         :ok <-
-           validate_id(
-             :group_membership,
-             command.group_membership_id,
-             :invalid_group_membership_id
-           ),
-         :ok <-
-           validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
-         :ok <- validate_non_empty_string(command.idempotency_key, :invalid_idempotency_key),
-         :ok <- validate_non_empty_string(command.reason, :invalid_reason),
-         :ok <- ensure_custom_group(club, command.group_id) do
-      case end_group_membership_decision(club, command) do
-        %GroupMembershipEnded{} = event ->
-          [
-            event,
-            %GroupMemberRemoved{
-              club_id: command.club_id,
-              group_id: command.group_id,
-              membership_id: command.club_membership_id,
-              person_id: command.person_id
-            }
-          ]
-
-        other_result ->
-          other_result
-      end
     end
   end
 
@@ -398,17 +197,9 @@ defmodule Memba.Membership.Club do
         person_id: command.person_id
       }
 
-      group_membership_endings =
-        custom_group_membership_departure_lifecycle_events(club, command.membership_id)
-
-      legacy_group_membership_removals =
-        active_custom_group_membership_removals(club, command.membership_id)
-
-      case group_membership_endings ++
-             [club_member_removed] ++
-             legacy_group_membership_removals do
-        [single_event] -> single_event
-        events -> events
+      case active_custom_group_membership_removals(club, command.membership_id) do
+        [] -> club_member_removed
+        group_membership_removals -> [club_member_removed | group_membership_removals]
       end
     end
   end
@@ -582,89 +373,6 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  def execute(%__MODULE__{club_id: nil}, %DecideConversationSubscriptionAuthority{}),
-    do: {:error, :not_created}
-
-  def execute(
-        %__MODULE__{} = club,
-        %DecideConversationSubscriptionAuthority{
-          source: :legacy_reconciliation,
-          fenced_authority_decision: decision
-        } = command
-      ) do
-    with :ok <- validate_conversation_authority_descriptor(command),
-         :ok <- validate_existing_club_id(club, command.club_id),
-         :ok <- validate_fenced_authority_decision(command, decision),
-         :ok <- validate_authority_decision_reuse(club, command) do
-      %ConversationSubscriptionAuthorityDecided{
-        club_id: decision.club_id,
-        person_id: decision.person_id,
-        subscription_intent_id: decision.subscription_intent_id,
-        source: decision.source,
-        conversation_id: decision.conversation_id,
-        conversation_group_ids: decision.conversation_group_ids,
-        conversation_stream_version: decision.conversation_stream_version,
-        authority_request_id: decision.authority_request_id,
-        authority_decision_id: decision.authority_decision_id,
-        club_membership_id: decision.club_membership_id,
-        group_membership_ids: decision.group_membership_ids,
-        system_authority_kinds: decision.system_authority_kinds,
-        club_stream_version: decision.club_stream_version,
-        reconciliation_fence_id: decision.reconciliation_fence_id,
-        reconciliation_fence_position: decision.reconciliation_fence_position,
-        reconciliation_event_store_schema: decision.reconciliation_event_store_schema
-      }
-    else
-      :exact_retry -> []
-      error -> error
-    end
-  end
-
-  def execute(%__MODULE__{} = club, %DecideConversationSubscriptionAuthority{} = command) do
-    with :ok <- validate_conversation_authority_descriptor(command),
-         :ok <- validate_existing_club_id(club, command.club_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
-         :ok <-
-           validate_id(
-             :subscription_intent,
-             command.subscription_intent_id,
-             :invalid_subscription_intent_id
-           ),
-         :ok <- validate_subscription_source(command.source),
-         :ok <- validate_id(:message, command.conversation_id, :invalid_conversation_id),
-         :ok <- validate_uuid(command.authority_request_id, :invalid_authority_request_id),
-         :ok <-
-           validate_id(
-             :authority_decision,
-             command.authority_decision_id,
-             :invalid_authority_decision_id
-           ),
-         :ok <- validate_conversation_group_ids(command.conversation_group_ids),
-         :ok <- validate_conversation_stream_version(command.conversation_stream_version),
-         :ok <- validate_authority_decision_reuse(club, command),
-         {:ok, club_membership_id, group_membership_ids, system_authority_kinds} <-
-           resolve_conversation_subscription_authority(club, command) do
-      %ConversationSubscriptionAuthorityDecided{
-        club_id: command.club_id,
-        person_id: command.person_id,
-        subscription_intent_id: command.subscription_intent_id,
-        source: command.source,
-        conversation_id: command.conversation_id,
-        conversation_group_ids: command.conversation_group_ids,
-        conversation_stream_version: command.conversation_stream_version,
-        authority_request_id: command.authority_request_id,
-        authority_decision_id: command.authority_decision_id,
-        club_membership_id: club_membership_id,
-        group_membership_ids: group_membership_ids,
-        system_authority_kinds: system_authority_kinds,
-        club_stream_version: club.stream_version + 1
-      }
-    else
-      :exact_retry -> []
-      error -> error
-    end
-  end
-
   def execute(%__MODULE__{club_id: nil}, %UpdateClub{}), do: {:error, :not_created}
 
   def execute(%__MODULE__{} = club, %UpdateClub{} = command) do
@@ -676,41 +384,11 @@ defmodule Memba.Membership.Club do
   end
 
   @impl Aggregate
-  def apply(%__MODULE__{} = club, %ConversationSubscriptionAuthorityDecided{} = event) do
-    club = advance_stream_version(club)
-
-    decision =
-      event
-      |> Map.from_struct()
-      |> Map.update!(:source, &normalize_subscription_source/1)
-      |> Map.update(:system_authority_kinds, [], &(&1 || []))
-
-    %__MODULE__{
-      club
-      | conversation_authority_decisions:
-          Map.put(club.conversation_authority_decisions, event.authority_decision_id, decision),
-        conversation_authority_requests:
-          Map.put(
-            club.conversation_authority_requests,
-            event.authority_request_id,
-            event.authority_decision_id
-          ),
-        conversation_authority_intents:
-          Map.put(
-            club.conversation_authority_intents,
-            event.subscription_intent_id,
-            event.authority_decision_id
-          )
-    }
-  end
-
   def apply(%__MODULE__{} = club, %ClubCreated{} = event) do
-    club = advance_stream_version(club)
     %__MODULE__{club | club_id: event.club_id, name: event.name, slug: event.slug}
   end
 
   def apply(%__MODULE__{} = club, %ClubRoleDefined{} = event) do
-    club = advance_stream_version(club)
     role = %{role_id: event.role_id, role_key: event.role_key, name: event.name}
 
     %__MODULE__{
@@ -721,8 +399,6 @@ defmodule Memba.Membership.Club do
   end
 
   def apply(%__MODULE__{} = club, %ClubRolePermissionGranted{} = event) do
-    club = advance_stream_version(club)
-
     permissions =
       club.role_permissions
       |> Map.get(event.role_id, MapSet.new())
@@ -735,13 +411,10 @@ defmodule Memba.Membership.Club do
   end
 
   def apply(%__MODULE__{} = club, %ClubUpdated{} = event) do
-    club = advance_stream_version(club)
     %__MODULE__{club | name: event.name, slug: event.slug}
   end
 
   def apply(%__MODULE__{} = club, %GroupCreated{} = event) do
-    club = advance_stream_version(club)
-
     group = %{
       email_slug: nil,
       group_id: event.group_id,
@@ -763,8 +436,6 @@ defmodule Memba.Membership.Club do
   end
 
   def apply(%__MODULE__{} = club, %GroupEmailSlugAssigned{} = event) do
-    club = advance_stream_version(club)
-
     group =
       club.groups
       |> Map.fetch!(event.group_id)
@@ -778,194 +449,63 @@ defmodule Memba.Membership.Club do
   end
 
   def apply(%__MODULE__{} = club, %GroupMemberAdded{} = event) do
-    club = advance_stream_version(club)
     group_membership = %{person_id: event.person_id, active: true}
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
-
-    source_membership = Map.put(group_membership, :source_stream_version, club.stream_version)
 
     club =
       %__MODULE__{
         club
         | group_memberships:
-            Map.put(club.group_memberships, group_membership_key, group_membership),
-          legacy_group_memberships:
-            Map.put(club.legacy_group_memberships, group_membership_key, source_membership)
+            Map.put(club.group_memberships, group_membership_key, group_membership)
       }
 
     apply_everyone_compatibility_membership(club, event, :activate)
   end
 
   def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
-    club = advance_stream_version(club)
     group_membership = %{person_id: event.person_id, active: false}
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
-
-    source_membership = Map.put(group_membership, :source_stream_version, club.stream_version)
 
     club =
       %__MODULE__{
         club
         | group_memberships:
-            Map.put(club.group_memberships, group_membership_key, group_membership),
-          legacy_group_memberships:
-            Map.put(club.legacy_group_memberships, group_membership_key, source_membership)
+            Map.put(club.group_memberships, group_membership_key, group_membership)
       }
 
     apply_everyone_compatibility_membership(club, event, :deactivate)
   end
 
-  def apply(%__MODULE__{} = club, %GroupMembershipStarted{} = event) do
-    club = advance_stream_version(club)
-
-    membership = %GroupMembership{
-      club_id: event.club_id,
-      group_id: event.group_id,
-      group_membership_id: event.group_membership_id,
-      club_membership_id: event.club_membership_id,
-      person_id: event.person_id,
-      status: :current
-    }
-
-    relation_key = group_membership_key(event.group_id, event.club_membership_id)
-
-    %__MODULE__{
-      club
-      | first_class_group_memberships:
-          Map.put(club.first_class_group_memberships, event.group_membership_id, membership),
-        current_group_membership_ids:
-          Map.put(club.current_group_membership_ids, relation_key, event.group_membership_id),
-        group_memberships:
-          Map.put(club.group_memberships, relation_key, %{
-            person_id: event.person_id,
-            active: true
-          })
-    }
-  end
-
-  def apply(%__MODULE__{} = club, %GroupMembershipEnded{} = event) do
-    club = advance_stream_version(club)
-    membership = Map.fetch!(club.first_class_group_memberships, event.group_membership_id)
-
-    membership = %GroupMembership{
-      membership
-      | status: :ended,
-        end_idempotency_key: event.idempotency_key,
-        end_reason: event.reason
-    }
-
-    relation_key = group_membership_key(event.group_id, event.club_membership_id)
-
-    {current_group_membership_ids, group_memberships} =
-      case Map.get(club.current_group_membership_ids, relation_key) do
-        current_id when current_id == event.group_membership_id ->
-          {
-            Map.delete(club.current_group_membership_ids, relation_key),
-            Map.put(club.group_memberships, relation_key, %{
-              person_id: event.person_id,
-              active: false
-            })
-          }
-
-        _later_or_missing_membership ->
-          {club.current_group_membership_ids, club.group_memberships}
-      end
-
-    ending_signature = group_membership_ending_signature(event)
-
-    custom_group_removals =
-      case event.removal_operation_id do
-        nil ->
-          club.custom_group_removals
-
-        operation_id ->
-          Map.put(club.custom_group_removals, operation_id, custom_group_removal_signature(event))
-      end
-
-    %__MODULE__{
-      club
-      | first_class_group_memberships:
-          Map.put(club.first_class_group_memberships, event.group_membership_id, membership),
-        current_group_membership_ids: current_group_membership_ids,
-        group_memberships: group_memberships,
-        group_membership_endings:
-          Map.put(club.group_membership_endings, event.idempotency_key, ending_signature),
-        custom_group_removals: custom_group_removals
-    }
-  end
-
-  def apply(
-        %__MODULE__{} = club,
-        %LegacyGroupMembershipReconciliationFenceRecorded{} = event
-      ) do
-    club = advance_stream_version(club)
-
-    %__MODULE__{
-      club
-      | legacy_group_membership_reconciliation_fence: %{
-          namespace: event.namespace,
-          source_stream_version: event.source_stream_version
-        }
-    }
-  end
-
-  def apply(%__MODULE__{} = club, %LegacyGroupMembershipReconciled{} = event) do
-    club = advance_stream_version(club)
-    signature = legacy_group_membership_reconciliation_signature(event)
-
-    %__MODULE__{
-      club
-      | legacy_group_membership_reconciliations:
-          Map.put(
-            club.legacy_group_membership_reconciliations,
-            event.group_membership_id,
-            signature
-          )
-    }
-  end
-
   def apply(%__MODULE__{} = club, %ClubMemberAdded{} = event) do
-    club = advance_stream_version(club)
     apply_club_member_added(club, event)
   end
 
   def apply(%__MODULE__{} = club, %LegacyMemberAdded{} = event) do
-    club = advance_stream_version(club)
     apply_club_member_added(club, event)
   end
 
   def apply(%__MODULE__{} = club, %ClubMemberRemoved{} = event) do
-    club = advance_stream_version(club)
     apply_club_member_removed(club, event)
   end
 
   def apply(%__MODULE__{} = club, %LegacyMemberRemoved{} = event) do
-    club = advance_stream_version(club)
     apply_club_member_removed(club, event)
   end
 
   def apply(%__MODULE__{} = club, %ClubRoleAssignedToMember{} = event) do
-    club = advance_stream_version(club)
     apply_club_role_assigned_to_member(club, event)
   end
 
   def apply(%__MODULE__{} = club, %LegacyMemberRoleAssigned{} = event) do
-    club = advance_stream_version(club)
     apply_club_role_assigned_to_member(club, event)
   end
 
   def apply(%__MODULE__{} = club, %ClubRoleRemovedFromMember{} = event) do
-    club = advance_stream_version(club)
     apply_club_role_removed_from_member(club, event)
   end
 
   def apply(%__MODULE__{} = club, %LegacyMemberRoleRemoved{} = event) do
-    club = advance_stream_version(club)
     apply_club_role_removed_from_member(club, event)
-  end
-
-  defp advance_stream_version(%__MODULE__{} = club) do
-    %__MODULE__{club | stream_version: club.stream_version + 1}
   end
 
   defp apply_club_member_added(%__MODULE__{} = club, event) do
@@ -1033,217 +573,12 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp validate_uuid(value, error) when is_binary(value) do
-    case Ecto.UUID.cast(value) do
-      {:ok, ^value} -> :ok
-      _other -> {:error, error}
-    end
-  end
-
-  defp validate_uuid(_value, error), do: {:error, error}
-
-  defp validate_conversation_authority_descriptor(
-         %{
-           conversation_authority_descriptor: %ConversationAuthorityDescriptor{} = descriptor
-         } = command
-       ) do
-    matches? =
-      descriptor.club_id == command.club_id and
-        descriptor.person_id == command.person_id and
-        descriptor.subscription_intent_id == command.subscription_intent_id and
-        descriptor.source == command.source and
-        descriptor.conversation_id == command.conversation_id and
-        descriptor.conversation_group_ids == command.conversation_group_ids and
-        descriptor.conversation_stream_version == command.conversation_stream_version
-
-    if matches? and Memba.Messaging.valid_conversation_authority_descriptor?(descriptor),
-      do: :ok,
-      else: {:error, :invalid_conversation_authority_descriptor}
-  end
-
-  defp validate_conversation_authority_descriptor(_command),
-    do: {:error, :invalid_conversation_authority_descriptor}
-
-  defp validate_fenced_authority_decision(command, decision) do
-    descriptor = command.conversation_authority_descriptor
-
-    matches? =
-      match?(%Memba.Membership.ConversationSubscriptionAuthorityDecision{}, decision) and
-        decision.club_id == command.club_id and
-        decision.person_id == command.person_id and
-        decision.subscription_intent_id == command.subscription_intent_id and
-        decision.source == command.source and
-        decision.conversation_id == command.conversation_id and
-        decision.conversation_group_ids == command.conversation_group_ids and
-        decision.conversation_stream_version == command.conversation_stream_version and
-        decision.authority_request_id == command.authority_request_id and
-        decision.authority_decision_id == command.authority_decision_id and
-        decision.reconciliation_fence_id == descriptor.reconciliation_fence_id and
-        decision.reconciliation_fence_position == descriptor.reconciliation_fence_position and
-        decision.reconciliation_event_store_schema ==
-          descriptor.reconciliation_event_store_schema
-
-    if matches? and Memba.Membership.valid_conversation_authority_signature?(decision),
-      do: :ok,
-      else: {:error, :invalid_fenced_conversation_subscription_authority}
-  end
-
-  defp validate_conversation_group_ids(group_ids) when is_list(group_ids) and group_ids != [] do
-    cond do
-      group_ids != Enum.sort(Enum.uniq(group_ids)) ->
-        {:error, :conversation_group_ids_not_canonical}
-
-      Enum.all?(group_ids, &ID.valid?(:group, &1)) ->
-        :ok
-
-      true ->
-        {:error, :invalid_group_id}
-    end
-  end
-
-  defp validate_conversation_group_ids(_group_ids), do: {:error, :invalid_conversation_group_ids}
-
-  defp validate_conversation_stream_version(version) when is_integer(version) and version > 0,
-    do: :ok
-
-  defp validate_conversation_stream_version(_version),
-    do: {:error, :invalid_conversation_stream_version}
-
-  defp validate_subscription_source(source)
-       when source in [:manual, :root, :reply, :legacy_reconciliation],
-       do: :ok
-
-  defp validate_subscription_source(_source), do: {:error, :invalid_subscription_source}
-
-  defp normalize_subscription_source("legacy_reconciliation"), do: :legacy_reconciliation
-  defp normalize_subscription_source("manual"), do: :manual
-  defp normalize_subscription_source("root"), do: :root
-  defp normalize_subscription_source("reply"), do: :reply
-  defp normalize_subscription_source(source), do: source
-
-  defp validate_authority_decision_reuse(club, command) do
-    decision_by_intent =
-      case Map.get(club.conversation_authority_intents, command.subscription_intent_id) do
-        nil -> nil
-        decision_id -> Map.fetch!(club.conversation_authority_decisions, decision_id)
-      end
-
-    decision_by_id =
-      Map.get(club.conversation_authority_decisions, command.authority_decision_id)
-
-    decision_by_request =
-      case Map.get(club.conversation_authority_requests, command.authority_request_id) do
-        nil -> nil
-        decision_id -> Map.fetch!(club.conversation_authority_decisions, decision_id)
-      end
-
-    cond do
-      decision_by_intent &&
-          authority_intent_signature(decision_by_intent) == authority_intent_signature(command) ->
-        :exact_retry
-
-      decision_by_intent ->
-        {:error, :subscription_intent_id_conflict}
-
-      is_nil(decision_by_id) and is_nil(decision_by_request) ->
-        :ok
-
-      decision_by_id &&
-        authority_decision_signature(decision_by_id) ==
-          authority_decision_command_signature(command) &&
-          decision_by_request == decision_by_id ->
-        :exact_retry
-
-      decision_by_id ->
-        {:error, :authority_decision_id_conflict}
-
-      true ->
-        {:error, :authority_request_id_conflict}
-    end
-  end
-
-  def resolve_conversation_subscription_authority(club, command) do
-    club.active_memberships
-    |> Enum.filter(fn {_club_membership_id, person_id} -> person_id == command.person_id end)
-    |> Enum.sort_by(fn {club_membership_id, _person_id} -> club_membership_id end)
-    |> Enum.find_value(fn {club_membership_id, _person_id} ->
-      group_membership_ids =
-        command.conversation_group_ids
-        |> Enum.map(&Map.get(club.current_group_membership_ids, {&1, club_membership_id}))
-        |> Enum.reject(&is_nil/1)
-        |> Enum.filter(fn group_membership_id ->
-          case Map.get(club.first_class_group_memberships, group_membership_id) do
-            %{person_id: person_id, club_membership_id: ^club_membership_id, status: :current}
-            when person_id == command.person_id ->
-              true
-
-            _ended_or_different ->
-              false
-          end
-        end)
-        |> Enum.sort()
-
-      system_authority_kinds =
-        command.conversation_group_ids
-        |> Enum.flat_map(fn group_id ->
-          cond do
-            group_id == SystemGroups.everyone_group_id(club.club_id) ->
-              ["everyone"]
-
-            group_id == SystemGroups.admin_group_id(club.club_id) and
-                MapSet.member?(club.active_admin_membership_ids, club_membership_id) ->
-              ["admin"]
-
-            true ->
-              []
-          end
-        end)
-        |> Enum.uniq()
-        |> Enum.sort()
-
-      if group_membership_ids == [] and system_authority_kinds == [],
-        do: nil,
-        else: {:ok, club_membership_id, group_membership_ids, system_authority_kinds}
-    end) || {:error, :conversation_subscription_not_authorized}
-  end
-
-  defp authority_decision_command_signature(command) do
-    Map.take(command, authority_decision_signature_fields())
-  end
-
-  defp authority_decision_signature(decision) do
-    Map.take(decision, authority_decision_signature_fields())
-  end
-
-  defp authority_decision_signature_fields do
-    authority_intent_signature_fields() ++ [:authority_request_id, :authority_decision_id]
-  end
-
-  defp authority_intent_signature(value) do
-    Map.take(value, authority_intent_signature_fields())
-  end
-
-  defp authority_intent_signature_fields do
-    [
-      :club_id,
-      :person_id,
-      :subscription_intent_id,
-      :source,
-      :conversation_id,
-      :conversation_group_ids,
-      :conversation_stream_version
-    ]
-  end
-
   defp validate_optional_id(_type, nil, _error), do: :ok
   defp validate_optional_id(_type, "", _error), do: :ok
 
   defp validate_optional_id(type, value, error) do
     validate_id(type, value, error)
   end
-
-  defp validate_non_empty_string(value, _error) when is_binary(value) and value != "", do: :ok
-  defp validate_non_empty_string(_value, error), do: {:error, error}
 
   defp add_member_decision(%__MODULE__{} = club, %AddClubMember{} = command) do
     case Map.fetch(club.active_memberships, command.membership_id) do
@@ -1492,70 +827,6 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp custom_group_membership_departure_lifecycle_events(
-         %__MODULE__{} = club,
-         departing_club_membership_id
-       ) do
-    current_first_class =
-      club.first_class_group_memberships
-      |> Enum.flat_map(fn
-        {_id,
-         %GroupMembership{
-           status: :current,
-           group_id: group_id,
-           group_membership_id: group_membership_id,
-           club_membership_id: ^departing_club_membership_id,
-           person_id: person_id
-         }} ->
-          if SystemGroups.custom_group?(%{club_id: club.club_id, group_id: group_id}) do
-            events =
-              group_membership_removal_lifecycle(
-                club,
-                group_id,
-                departing_club_membership_id,
-                person_id,
-                "club_membership_ended",
-                "club-membership-ended:"
-              )
-
-            [{group_membership_id, events}]
-          else
-            []
-          end
-
-        {_id, _membership} ->
-          []
-      end)
-
-    fenced_unreconciled =
-      club.group_memberships
-      |> Enum.flat_map(fn
-        {{group_id, ^departing_club_membership_id}, %{active: true, person_id: person_id}} ->
-          case group_membership_removal_lifecycle(
-                 club,
-                 group_id,
-                 departing_club_membership_id,
-                 person_id,
-                 "club_membership_ended",
-                 "club-membership-ended:"
-               ) do
-            [] ->
-              []
-
-            [first_event | _remaining_events] = events ->
-              [{first_event.group_membership_id, events}]
-          end
-
-        {_relation_key, _relation} ->
-          []
-      end)
-
-    (current_first_class ++ fenced_unreconciled)
-    |> Map.new()
-    |> Enum.sort_by(fn {group_membership_id, _events} -> group_membership_id end)
-    |> Enum.flat_map(fn {_group_membership_id, events} -> events end)
-  end
-
   defp active_custom_group_membership_removals(
          %__MODULE__{} = club,
          departing_membership_id
@@ -1635,37 +906,25 @@ defmodule Memba.Membership.Club do
         {:error, :group_already_defined}
 
       :error ->
-        case optional_group_membership_started_events(
-               club,
-               command,
-               creator_membership_id,
-               command.actor_person_id
-             ) do
-          {:error, _reason} = error ->
-            error
-
-          first_class_events ->
-            [
-              %GroupCreated{
-                club_id: command.club_id,
-                group_id: command.group_id,
-                group_key: nil,
-                name: name
-              },
-              %GroupEmailSlugAssigned{
-                club_id: command.club_id,
-                group_id: command.group_id,
-                email_slug: email_slug
-              },
-              %GroupMemberAdded{
-                club_id: command.club_id,
-                group_id: command.group_id,
-                membership_id: creator_membership_id,
-                person_id: command.actor_person_id
-              }
-              | first_class_events
-            ]
-        end
+        [
+          %GroupCreated{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            group_key: nil,
+            name: name
+          },
+          %GroupEmailSlugAssigned{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            email_slug: email_slug
+          },
+          %GroupMemberAdded{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            membership_id: creator_membership_id,
+            person_id: command.actor_person_id
+          }
+        ]
     end
   end
 
@@ -1679,40 +938,9 @@ defmodule Memba.Membership.Club do
            group_membership_key(command.group_id, creator_membership_id)
          ) do
       %{active: true, person_id: actor_person_id} ->
-        relation_key = group_membership_key(command.group_id, creator_membership_id)
-
-        actor_person_id == command.actor_person_id and
-          Map.get(club.current_group_membership_ids, relation_key) ==
-            command.group_membership_id and
-          exact_current_creator_group_membership?(
-            club,
-            command,
-            creator_membership_id
-          )
+        actor_person_id == command.actor_person_id
 
       _group_membership ->
-        false
-    end
-  end
-
-  defp exact_current_creator_group_membership?(
-         %__MODULE__{} = club,
-         %CreateCustomGroup{} = command,
-         creator_club_membership_id
-       ) do
-    case Map.get(club.first_class_group_memberships, command.group_membership_id) do
-      %GroupMembership{
-        status: :current,
-        club_id: club_id,
-        group_id: group_id,
-        club_membership_id: club_membership_id,
-        person_id: person_id
-      } ->
-        club_id == command.club_id and group_id == command.group_id and
-          club_membership_id == creator_club_membership_id and
-          person_id == command.actor_person_id
-
-      _missing_or_ended_membership ->
         false
     end
   end
@@ -1747,16 +975,6 @@ defmodule Memba.Membership.Club do
       end)
 
     if authorized?, do: :ok, else: {:error, :unauthorized}
-  end
-
-  defp ensure_active_actor(%__MODULE__{} = club, actor_person_id) do
-    if Enum.any?(club.active_memberships, fn {_membership_id, person_id} ->
-         person_id == actor_person_id
-       end) do
-      :ok
-    else
-      {:error, :unauthorized}
-    end
   end
 
   defp active_group_membership?(%__MODULE__{} = club, group_id, membership_id, person_id) do
@@ -2021,624 +1239,13 @@ defmodule Memba.Membership.Club do
         {:error, :group_membership_person_mismatch}
 
       {:ok, %{active: true}} ->
-        exact_current_custom_group_admission_retry(club, command)
+        []
 
       {:ok, %{active: false}} ->
-        new_custom_group_admission_decision(club, command)
+        group_member_added_event(command)
 
       :error ->
-        new_custom_group_admission_decision(club, command)
-    end
-  end
-
-  defp exact_current_custom_group_admission_retry(
-         %__MODULE__{} = club,
-         %AddCustomGroupMember{} = command
-       ) do
-    relation_key = group_membership_key(command.group_id, command.membership_id)
-
-    if Map.get(club.current_group_membership_ids, relation_key) == command.group_membership_id and
-         exact_current_group_membership?(club, command.group_membership_id, command) do
-      []
-    else
-      {:error, :group_membership_already_current}
-    end
-  end
-
-  defp new_custom_group_admission_decision(
-         %__MODULE__{} = club,
-         %AddCustomGroupMember{} = command
-       ) do
-    relation_key = group_membership_key(command.group_id, command.membership_id)
-
-    case Map.fetch(club.first_class_group_memberships, command.group_membership_id) do
-      {:ok, %GroupMembership{status: :ended}} ->
-        {:error, :group_membership_already_ended}
-
-      {:ok, %GroupMembership{}} ->
-        {:error, :group_membership_id_already_used}
-
-      :error ->
-        if Map.has_key?(club.current_group_membership_ids, relation_key) do
-          {:error, :group_membership_already_current}
-        else
-          custom_group_admission_events(club, command)
-        end
-    end
-  end
-
-  defp custom_group_admission_events(%__MODULE__{} = club, %AddCustomGroupMember{} = command) do
-    legacy_event = group_member_added_event(command)
-
-    case optional_group_membership_started_events(
-           club,
-           command,
-           command.membership_id,
-           command.person_id
-         ) do
-      [] -> legacy_event
-      {:error, _reason} = error -> error
-      first_class_events -> [legacy_event | first_class_events]
-    end
-  end
-
-  defp optional_group_membership_started_events(_club, %{group_membership_id: nil}, _id, _person),
-    do: []
-
-  defp optional_group_membership_started_events(
-         %__MODULE__{} = club,
-         command,
-         club_membership_id,
-         person_id
-       ) do
-    case start_group_membership_decision(club, %StartGroupMembership{
-           club_id: command.club_id,
-           group_id: command.group_id,
-           group_membership_id: command.group_membership_id,
-           club_membership_id: club_membership_id,
-           person_id: person_id
-         }) do
-      [] -> []
-      %GroupMembershipStarted{} = event -> [event]
-      {:error, _reason} = error -> error
-    end
-  end
-
-  defp reconcile_legacy_group_membership_decision(
-         %__MODULE__{} = club,
-         %ReconcileLegacyGroupMembership{} = command
-       ) do
-    signature = legacy_group_membership_reconciliation_signature(command)
-    relation_key = group_membership_key(command.group_id, command.club_membership_id)
-
-    expected_id =
-      ID.deterministic(:group_membership, [
-        command.namespace,
-        command.club_id,
-        command.group_id,
-        command.club_membership_id
-      ])
-
-    current_membership =
-      case Map.get(club.current_group_membership_ids, relation_key) do
-        nil -> nil
-        group_membership_id -> Map.get(club.first_class_group_memberships, group_membership_id)
-      end
-
-    deterministic_membership =
-      Map.get(club.first_class_group_memberships, command.group_membership_id)
-
-    cond do
-      command.group_membership_id != expected_id ->
-        {:error, :non_deterministic_group_membership_id}
-
-      current_membership &&
-          not exact_reconciliation_relation_identity?(current_membership, command) ->
-        {:error, :reconciliation_identity_conflict}
-
-      not is_nil(current_membership) and
-        current_membership.group_membership_id == command.group_membership_id and
-          Map.get(club.legacy_group_membership_reconciliations, command.group_membership_id) ==
-            signature ->
-        []
-
-      not is_nil(current_membership) and
-        current_membership.group_membership_id == command.group_membership_id and
-          Map.has_key?(club.legacy_group_membership_reconciliations, command.group_membership_id) ->
-        {:error, :reconciliation_identity_conflict}
-
-      current_membership ->
-        {:error, :first_class_relation_current}
-
-      match?(%GroupMembership{status: :ended}, deterministic_membership) and
-          exact_reconciliation_membership_identity?(deterministic_membership, command) ->
-        {:error, :first_class_relation_ended}
-
-      deterministic_membership ->
-        {:error, :reconciliation_identity_conflict}
-
-      Map.get(club.legacy_group_membership_reconciliations, command.group_membership_id) ==
-          signature ->
-        []
-
-      Map.has_key?(club.legacy_group_membership_reconciliations, command.group_membership_id) ->
-        {:error, :reconciliation_identity_conflict}
-
-      club.legacy_group_membership_reconciliation_fence != %{
-        namespace: command.namespace,
-        source_stream_version: command.fence_stream_version
-      } ->
-        {:error, :reconciliation_stale_fence}
-
-      command.source_stream_version > command.fence_stream_version ->
-        {:error, :reconciliation_source_changed}
-
-      Map.get(club.legacy_group_memberships, relation_key) != %{
-        person_id: command.person_id,
-        active: true,
-        source_stream_version: command.source_stream_version
-      } ->
-        {:error, :reconciliation_source_changed}
-
-      true ->
-        with :ok <-
-               ensure_active_custom_group_target(
-                 club,
-                 command.club_membership_id,
-                 command.person_id
-               ) do
-          [
-            %GroupMembershipStarted{
-              club_id: command.club_id,
-              group_id: command.group_id,
-              group_membership_id: command.group_membership_id,
-              club_membership_id: command.club_membership_id,
-              person_id: command.person_id
-            },
-            struct(LegacyGroupMembershipReconciled, Map.from_struct(command))
-          ]
-        end
-    end
-  end
-
-  defp exact_reconciliation_relation_identity?(%GroupMembership{} = membership, command) do
-    membership.club_id == command.club_id and
-      membership.group_id == command.group_id and
-      membership.club_membership_id == command.club_membership_id and
-      membership.person_id == command.person_id
-  end
-
-  defp exact_reconciliation_membership_identity?(%GroupMembership{} = membership, command) do
-    membership.club_id == command.club_id and
-      membership.group_id == command.group_id and
-      membership.group_membership_id == command.group_membership_id and
-      membership.club_membership_id == command.club_membership_id and
-      membership.person_id == command.person_id
-  end
-
-  defp legacy_group_membership_reconciliation_signature(event_or_command) do
-    {
-      event_or_command.club_id,
-      event_or_command.group_id,
-      event_or_command.group_membership_id,
-      event_or_command.club_membership_id,
-      event_or_command.person_id,
-      event_or_command.namespace,
-      event_or_command.source_stream_version
-    }
-  end
-
-  defp start_group_membership_decision(
-         %__MODULE__{} = club,
-         %StartGroupMembership{} = command
-       ) do
-    relation_key = group_membership_key(command.group_id, command.club_membership_id)
-
-    case Map.fetch(club.first_class_group_memberships, command.group_membership_id) do
-      {:ok, %GroupMembership{} = existing} ->
-        if exact_group_membership_start?(existing, command) do
-          []
-        else
-          {:error, :group_membership_id_already_used}
-        end
-
-      :error ->
-        if current_group_membership_relation?(club, relation_key) do
-          {:error, :group_membership_already_current}
-        else
-          %GroupMembershipStarted{
-            club_id: command.club_id,
-            group_id: command.group_id,
-            group_membership_id: command.group_membership_id,
-            club_membership_id: command.club_membership_id,
-            person_id: command.person_id
-          }
-        end
-    end
-  end
-
-  defp current_group_membership_relation?(%__MODULE__{} = club, relation_key) do
-    Map.has_key?(club.current_group_membership_ids, relation_key) or
-      match?(%{active: true}, Map.get(club.group_memberships, relation_key))
-  end
-
-  defp exact_current_group_membership?(%__MODULE__{} = club, group_membership_id, command) do
-    case Map.get(club.first_class_group_memberships, group_membership_id) do
-      %GroupMembership{status: :current} = membership ->
-        exact_group_membership_start?(membership, command)
-
-      _missing_or_ended_membership ->
-        false
-    end
-  end
-
-  defp exact_group_membership_start?(%GroupMembership{} = membership, command) do
-    membership.club_id == command.club_id and
-      membership.group_id == command.group_id and
-      membership.group_membership_id == command.group_membership_id and
-      membership.club_membership_id == command_club_membership_id(command) and
-      membership.person_id == command.person_id
-  end
-
-  defp command_club_membership_id(%{club_membership_id: club_membership_id}),
-    do: club_membership_id
-
-  defp command_club_membership_id(%{membership_id: club_membership_id}),
-    do: club_membership_id
-
-  defp custom_group_removal_retry(%__MODULE__{} = club, command) do
-    signature = custom_group_removal_signature(command)
-
-    case Map.fetch(club.custom_group_removals, command.removal_operation_id) do
-      {:ok, ^signature} -> :exact_retry
-      {:ok, _different_signature} -> {:error, :removal_operation_id_already_used}
-      :error -> :new_operation
-    end
-  end
-
-  defp remove_new_custom_group_member(%__MODULE__{} = club, command) do
-    with {:ok, reason} <- authorize_custom_group_removal_actor(club, command),
-         {:ok, lifecycle_events} <-
-           exact_custom_group_removal_lifecycle(club, command, reason) do
-      lifecycle_events ++
-        [
-          %GroupMemberRemoved{
-            club_id: command.club_id,
-            group_id: command.group_id,
-            membership_id: command.club_membership_id,
-            person_id: command.person_id
-          }
-        ]
-    end
-  end
-
-  defp authorize_custom_group_removal_actor(%__MODULE__{} = club, command) do
-    actor_membership_ids =
-      for {membership_id, person_id} <- club.active_memberships,
-          person_id == command.actor_person_id,
-          do: membership_id
-
-    cond do
-      command.actor_person_id == command.person_id ->
-        {:ok, "member_left"}
-
-      Enum.any?(actor_membership_ids, fn membership_id ->
-        active_group_membership?(
-          club,
-          command.group_id,
-          membership_id,
-          command.actor_person_id
-        )
-      end) ->
-        {:ok, "removed_by_group_member"}
-
-      Enum.any?(actor_membership_ids, fn membership_id ->
-        membership_has_permission?(
-          club,
-          membership_id,
-          command.actor_person_id,
-          Permissions.club_manage_members()
-        )
-      end) ->
-        {:ok, "removed_by_club_admin"}
-
-      true ->
-        {:error, :unauthorized}
-    end
-  end
-
-  defp exact_custom_group_removal_lifecycle(%__MODULE__{} = club, command, reason) do
-    relation_key = group_membership_key(command.group_id, command.club_membership_id)
-
-    case Map.get(club.current_group_membership_ids, relation_key) do
-      current_id when current_id == command.group_membership_id ->
-        case Map.get(club.first_class_group_memberships, current_id) do
-          %GroupMembership{status: :current} = membership ->
-            with :ok <- ensure_group_membership_end_identity(membership, command) do
-              {:ok, [custom_group_membership_ended_event(command, reason)]}
-            end
-
-          _missing_or_ended ->
-            {:error, :group_membership_not_current}
-        end
-
-      nil ->
-        exact_fenced_legacy_custom_group_removal(club, command, reason)
-
-      _later_group_membership_id ->
-        {:error, :group_membership_not_current}
-    end
-  end
-
-  defp exact_fenced_legacy_custom_group_removal(%__MODULE__{} = club, command, reason) do
-    relation_key = group_membership_key(command.group_id, command.club_membership_id)
-    fence = club.legacy_group_membership_reconciliation_fence
-    source_relation = Map.get(club.legacy_group_memberships, relation_key)
-
-    expected_group_membership_id =
-      if fence do
-        ID.deterministic(:group_membership, [
-          fence.namespace,
-          club.club_id,
-          command.group_id,
-          command.club_membership_id
-        ])
-      end
-
-    active_at_fence? =
-      case {fence, source_relation} do
-        {
-          %{source_stream_version: fence_version},
-          %{person_id: person_id, active: true, source_stream_version: source_version}
-        }
-        when person_id == command.person_id and source_version <= fence_version ->
-          true
-
-        _other ->
-          false
-      end
-
-    cond do
-      not active_at_fence? ->
-        {:error, :group_membership_not_current}
-
-      command.group_membership_id != expected_group_membership_id ->
-        {:error, :group_membership_not_current}
-
-      Map.has_key?(club.first_class_group_memberships, expected_group_membership_id) ->
-        {:error, :group_membership_not_current}
-
-      true ->
-        {:ok,
-         [
-           %GroupMembershipStarted{
-             club_id: command.club_id,
-             group_id: command.group_id,
-             group_membership_id: command.group_membership_id,
-             club_membership_id: command.club_membership_id,
-             person_id: command.person_id
-           },
-           custom_group_membership_ended_event(command, reason)
-         ]}
-    end
-  end
-
-  defp custom_group_membership_ended_event(command, reason) do
-    %GroupMembershipEnded{
-      club_id: command.club_id,
-      group_id: command.group_id,
-      group_membership_id: command.group_membership_id,
-      club_membership_id: command.club_membership_id,
-      person_id: command.person_id,
-      idempotency_key: command.removal_operation_id,
-      reason: reason,
-      actor_person_id: command.actor_person_id,
-      removal_operation_id: command.removal_operation_id
-    }
-  end
-
-  defp custom_group_removal_signature(event_or_command) do
-    {
-      event_or_command.club_id,
-      event_or_command.group_id,
-      event_or_command.group_membership_id,
-      event_or_command.club_membership_id,
-      event_or_command.person_id,
-      event_or_command.actor_person_id
-    }
-  end
-
-  defp end_group_membership_decision(%__MODULE__{} = club, %EndGroupMembership{} = command) do
-    signature = group_membership_ending_signature(command)
-
-    case Map.fetch(club.group_membership_endings, command.idempotency_key) do
-      {:ok, ^signature} ->
-        []
-
-      {:ok, _different_signature} ->
-        {:error, :idempotency_key_already_used}
-
-      :error ->
-        end_group_membership_without_recorded_key(club, command)
-    end
-  end
-
-  defp end_group_membership_without_recorded_key(
-         %__MODULE__{} = club,
-         %EndGroupMembership{} = command
-       ) do
-    case Map.fetch(club.first_class_group_memberships, command.group_membership_id) do
-      :error ->
-        {:error, :group_membership_not_found}
-
-      {:ok, %GroupMembership{} = membership} ->
-        with :ok <- ensure_group_membership_end_identity(membership, command) do
-          end_current_group_membership(club, membership, command)
-        end
-    end
-  end
-
-  defp ensure_group_membership_end_identity(%GroupMembership{} = membership, command) do
-    if exact_group_membership_start?(membership, command) do
-      :ok
-    else
-      {:error, :group_membership_identity_mismatch}
-    end
-  end
-
-  defp end_current_group_membership(
-         %__MODULE__{},
-         %GroupMembership{status: :ended},
-         _command
-       ),
-       do: []
-
-  defp end_current_group_membership(
-         %__MODULE__{} = club,
-         %GroupMembership{} = membership,
-         %EndGroupMembership{} = command
-       ) do
-    relation_key = group_membership_key(command.group_id, command.club_membership_id)
-
-    if Map.get(club.current_group_membership_ids, relation_key) == command.group_membership_id do
-      %GroupMembershipEnded{
-        club_id: command.club_id,
-        group_id: command.group_id,
-        group_membership_id: command.group_membership_id,
-        club_membership_id: command.club_membership_id,
-        person_id: command.person_id,
-        idempotency_key: command.idempotency_key,
-        reason: command.reason
-      }
-    else
-      # An exact delayed command can never end a later admission.
-      case membership.status do
-        :ended -> []
-        :current -> {:error, :group_membership_not_current}
-      end
-    end
-  end
-
-  defp group_membership_ending_signature(event_or_command) do
-    {
-      event_or_command.club_id,
-      event_or_command.group_id,
-      event_or_command.group_membership_id,
-      event_or_command.club_membership_id,
-      event_or_command.person_id,
-      event_or_command.reason
-    }
-  end
-
-  defp group_membership_removal_lifecycle(
-         %__MODULE__{} = club,
-         group_id,
-         club_membership_id,
-         person_id,
-         reason,
-         idempotency_key_prefix
-       ) do
-    relation_key = group_membership_key(group_id, club_membership_id)
-
-    case Map.get(club.current_group_membership_ids, relation_key) do
-      nil ->
-        fenced_legacy_relation_materialization(
-          club,
-          group_id,
-          club_membership_id,
-          person_id,
-          reason,
-          idempotency_key_prefix
-        )
-
-      group_membership_id ->
-        case Map.get(club.first_class_group_memberships, group_membership_id) do
-          %GroupMembership{
-            club_id: club_id,
-            group_id: ^group_id,
-            club_membership_id: ^club_membership_id,
-            person_id: ^person_id,
-            status: :current
-          }
-          when club_id == club.club_id ->
-            [
-              %GroupMembershipEnded{
-                club_id: club.club_id,
-                group_id: group_id,
-                group_membership_id: group_membership_id,
-                club_membership_id: club_membership_id,
-                person_id: person_id,
-                idempotency_key: idempotency_key_prefix <> group_membership_id,
-                reason: reason
-              }
-            ]
-
-          _missing_or_conflicting_membership ->
-            []
-        end
-    end
-  end
-
-  defp fenced_legacy_relation_materialization(
-         %__MODULE__{} = club,
-         group_id,
-         club_membership_id,
-         person_id,
-         reason,
-         idempotency_key_prefix
-       ) do
-    relation_key = group_membership_key(group_id, club_membership_id)
-    fence = club.legacy_group_membership_reconciliation_fence
-    source_relation = Map.get(club.legacy_group_memberships, relation_key)
-
-    group_membership_id =
-      if fence do
-        ID.deterministic(:group_membership, [
-          fence.namespace,
-          club.club_id,
-          group_id,
-          club_membership_id
-        ])
-      end
-
-    custom_group? = SystemGroups.custom_group?(%{club_id: club.club_id, group_id: group_id})
-
-    active_at_fence? =
-      case {fence, source_relation} do
-        {
-          %{source_stream_version: fence_version},
-          %{person_id: ^person_id, active: true, source_stream_version: source_version}
-        }
-        when source_version <= fence_version ->
-          true
-
-        _other ->
-          false
-      end
-
-    if custom_group? and active_at_fence? and
-         not Map.has_key?(club.current_group_membership_ids, relation_key) and
-         not Map.has_key?(club.first_class_group_memberships, group_membership_id) do
-      [
-        %GroupMembershipStarted{
-          club_id: club.club_id,
-          group_id: group_id,
-          group_membership_id: group_membership_id,
-          club_membership_id: club_membership_id,
-          person_id: person_id
-        },
-        %GroupMembershipEnded{
-          club_id: club.club_id,
-          group_id: group_id,
-          group_membership_id: group_membership_id,
-          club_membership_id: club_membership_id,
-          person_id: person_id,
-          idempotency_key: idempotency_key_prefix <> group_membership_id,
-          reason: reason
-        }
-      ]
-    else
-      []
+        group_member_added_event(command)
     end
   end
 
@@ -2651,24 +1258,12 @@ defmodule Memba.Membership.Club do
         {:error, :group_membership_person_mismatch}
 
       {:ok, %{active: true}} ->
-        legacy_removal = %GroupMemberRemoved{
+        %GroupMemberRemoved{
           club_id: command.club_id,
           group_id: command.group_id,
           membership_id: command.membership_id,
           person_id: command.person_id
         }
-
-        case group_membership_removal_lifecycle(
-               club,
-               command.group_id,
-               command.membership_id,
-               command.person_id,
-               "legacy_relation_removed",
-               "legacy-group-member-removed:"
-             ) do
-          [] -> legacy_removal
-          lifecycle_events -> lifecycle_events ++ [legacy_removal]
-        end
 
       {:ok, %{active: false}} ->
         []

@@ -4,19 +4,6 @@ defmodule Memba.ReleaseTest do
   alias Memba.Release
   alias Memba.Repo
 
-  @reconciliation_env_vars [
-    "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_MODE",
-    "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_BATCH_SIZE",
-    "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_CLUB_IDS",
-    "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_AFTER",
-    "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_CUTOVER_ACKNOWLEDGEMENT",
-    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_MODE",
-    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_BATCH_SIZE",
-    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_AFTER",
-    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_PROJECTOR_TIMEOUT",
-    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_CUTOVER_ACKNOWLEDGEMENT"
-  ]
-
   @release_steps [
     :load_app,
     :init_event_stores,
@@ -29,15 +16,8 @@ defmodule Memba.ReleaseTest do
 
   setup do
     original_overrides = Application.get_env(:memba, :release_step_overrides)
-    original_env = Map.new(@reconciliation_env_vars, &{&1, System.get_env(&1)})
-    Enum.each(@reconciliation_env_vars, &System.delete_env/1)
 
     on_exit(fn ->
-      Enum.each(original_env, fn
-        {name, nil} -> System.delete_env(name)
-        {name, value} -> System.put_env(name, value)
-      end)
-
       case original_overrides do
         nil -> Application.delete_env(:memba, :release_step_overrides)
         overrides -> Application.put_env(:memba, :release_step_overrides, overrides)
@@ -92,55 +72,6 @@ defmodule Memba.ReleaseTest do
              :await_system_group_backfill_source_projections,
              :run_system_groups_backfill
            ]
-  end
-
-  test "legacy group reconciliation release config fails closed when malformed" do
-    Application.put_env(:memba, :release_step_overrides,
-      load_app: fn -> :ok end,
-      ensure_release_services_started: fn -> :ok end
-    )
-
-    for {name, value} <- [
-          {"MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_MODE", "maybe"},
-          {"MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_BATCH_SIZE", "many"},
-          {"MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_AFTER", "not-json"},
-          {"MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_CLUB_IDS", " , "}
-        ] do
-      Enum.each(@reconciliation_env_vars, &System.delete_env/1)
-      System.put_env(name, value)
-
-      assert_raise ArgumentError, fn ->
-        Release.reconcile_legacy_group_memberships!()
-      end
-    end
-
-    Enum.each(@reconciliation_env_vars, &System.delete_env/1)
-    System.put_env("MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_CLUB_IDS", "not-a-club-id")
-
-    assert_raise RuntimeError, fn ->
-      Release.reconcile_legacy_group_memberships!()
-    end
-  end
-
-  test "legacy conversation-follow reconciliation release config fails closed when malformed" do
-    Application.put_env(:memba, :release_step_overrides,
-      load_app: fn -> :ok end,
-      ensure_release_services_started: fn -> :ok end
-    )
-
-    for {name, value} <- [
-          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_MODE", "maybe"},
-          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_BATCH_SIZE", "many"},
-          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_AFTER", "not-json"},
-          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_PROJECTOR_TIMEOUT", "later"}
-        ] do
-      Enum.each(@reconciliation_env_vars, &System.delete_env/1)
-      System.put_env(name, value)
-
-      assert_raise ArgumentError, fn ->
-        Release.reconcile_legacy_conversation_follows!()
-      end
-    end
   end
 
   test "release schema verification passes when migrated tables match application schemas" do
