@@ -86,7 +86,7 @@ The designs' promise to stop getting group emails “straight away” means mess
 - A person outside the group receives no delivery for messages posted while absent, even if they still follow that conversation.
 - Leaving and removal preserve follow preferences. Rejoining provides history but no backlog for messages posted during the absence. Future messages in conversations the person still follows resume normal delivery after rejoining.
 - Removal changes only group participation. Club membership, club roles, Everyone/Admin policies, and last-Admin protection remain unchanged.
-- Empty-group inbound behaviour remains as already planned: a permitted message can create the conversation, with no group recipient deliveries when there are no participants.
+- Empty custom groups use the ordinary current-participation rule: an outsider's inbound post is rejected with the usual authorization treatment, creates no conversation, and creates no deliveries.
 
 ## Open Business Decisions
 

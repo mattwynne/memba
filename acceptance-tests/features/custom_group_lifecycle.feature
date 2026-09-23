@@ -138,9 +138,9 @@ Feature: Joining and leaving custom groups
       And Carol should be able to read "September agenda" and "Include the hut budget"
       But Dan should still have no access to Board conversations
 
-    Scenario: Eve emails empty Board
+    Scenario: Eve cannot post to empty Board from outside the group
       Given Board has no members
       When Eve emails "Can Board consider a hut repair?" to board@kmc.clubs.memba.io
-      Then Board should have the conversation "Can Board consider a hut repair?"
+      Then Board should not have the conversation "Can Board consider a hut repair?"
+      And Eve should receive the usual authorization rejection
       And no group recipient should receive an email for it
-      And Eve should not gain access to it
