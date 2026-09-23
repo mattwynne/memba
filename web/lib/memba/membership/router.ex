@@ -31,6 +31,8 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
+  alias Memba.Membership.Commands.ReconcileLegacyGroupMembership
+  alias Memba.Membership.Commands.RecordLegacyGroupMembershipReconciliationFence
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
@@ -62,6 +64,8 @@ defmodule Memba.Membership.Router do
   dispatch(GrantClubRolePermission, to: Club)
   dispatch(InviteClubMember, to: ClubInvitation)
   dispatch(ReconcileLegacyAdminHistory, to: Club)
+  dispatch(ReconcileLegacyGroupMembership, to: Club)
+  dispatch(RecordLegacyGroupMembershipReconciliationFence, to: Club)
   dispatch(MakePersonEmailAddressPrimary, to: Person)
   dispatch(RemoveGroupMember, to: Club)
   dispatch(RemoveClubMember, to: Club)
