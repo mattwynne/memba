@@ -33,7 +33,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
-  alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Events.GroupMembershipStarted
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
@@ -75,10 +75,11 @@ defmodule Memba.Membership do
   Create a custom conversation group as an authenticated club member.
 
   The caller supplies the Club aggregate identity, a caller-generated group
-  identity, and the authenticated actor's person identity. The group identity
-  is the creation request's retry key: allocate it once and reuse it when the
-  outcome of a dispatch is uncertain. This application service only translates
-  the use case into an actor-bearing command; the Club aggregate owns the
+  identity, and the authenticated actor's person identity. It may also supply
+  the creator's `group_membership_id`; otherwise this boundary allocates one.
+  Reuse supplied identities when the outcome of a dispatch is uncertain. This
+  application service only translates the use case into an actor-bearing
+  command; the Club aggregate owns the
   authoritative creation decision.
   """
   def create_custom_group(attrs, dispatch_opts \\ [])
@@ -94,8 +95,10 @@ defmodule Memba.Membership do
   Add an existing club membership to a custom group as an authenticated actor.
 
   The caller supplies the Club and group identities, the target
-  membership/person pair, and the authenticated actor's person identity. The
-  application service translates that request into an actor-bearing command.
+  membership/person pair, and the authenticated actor's person identity. It may
+  also supply the new `group_membership_id`; otherwise this boundary allocates
+  one. The application service translates that request into an actor-bearing
+  command.
   The Club aggregate authoritatively requires an active target and an active
   actor who either belongs to the custom group or has its club's
   `club.manage_members` permission. System groups are not writable through this
@@ -1774,12 +1777,14 @@ defmodule Memba.Membership do
   defp create_custom_group_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, group_membership_id} <- group_membership_id(attrs),
          {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
          {:ok, name} <- fetch_required(attrs, :name) do
       {:ok,
        %CreateCustomGroup{
          club_id: club_id,
          group_id: group_id,
+         group_membership_id: group_membership_id,
          actor_person_id: actor_person_id,
          name: name
        }}
@@ -1789,6 +1794,7 @@ defmodule Memba.Membership do
   defp add_custom_group_member_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, group_membership_id} <- group_membership_id(attrs),
          {:ok, membership_id} <- fetch_required(attrs, :membership_id),
          {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
@@ -1796,6 +1802,7 @@ defmodule Memba.Membership do
        %AddCustomGroupMember{
          club_id: club_id,
          group_id: group_id,
+         group_membership_id: group_membership_id,
          membership_id: membership_id,
          person_id: person_id,
          actor_person_id: actor_person_id
@@ -2590,30 +2597,46 @@ defmodule Memba.Membership do
       Keyword.get(dispatch_opts, :include_aggregate_version) == true
   end
 
-  defp custom_group_admission(command, %Commanded.Commands.ExecutionResult{events: events}) do
-    transition =
-      if Enum.any?(events, fn
-           %GroupMemberAdded{
-             club_id: club_id,
-             group_id: group_id,
-             membership_id: membership_id,
-             person_id: person_id
-           } ->
-             club_id == command.club_id and group_id == command.group_id and
-               membership_id == command.membership_id and person_id == command.person_id
+  defp custom_group_admission(
+         command,
+         %Commanded.Commands.ExecutionResult{events: events, aggregate_state: aggregate_state}
+       ) do
+    started_event =
+      Enum.find(events, fn
+        %GroupMembershipStarted{
+          club_id: club_id,
+          group_id: group_id,
+          club_membership_id: club_membership_id,
+          person_id: person_id
+        } ->
+          club_id == command.club_id and group_id == command.group_id and
+            club_membership_id == command.membership_id and person_id == command.person_id
 
-           _event ->
-             false
-         end) do
-        :member_added
-      else
-        :already_member
+        _event ->
+          false
+      end)
+
+    transition = if started_event, do: :member_added, else: :already_member
+
+    group_membership_id =
+      case started_event do
+        %GroupMembershipStarted{group_membership_id: group_membership_id} ->
+          group_membership_id
+
+        nil ->
+          Map.get(
+            aggregate_state.current_group_membership_ids,
+            {command.group_id, command.membership_id},
+            command.group_membership_id
+          )
       end
 
     %CustomGroupAdmission{
       club_id: command.club_id,
       group_id: command.group_id,
       membership_id: command.membership_id,
+      club_membership_id: command.membership_id,
+      group_membership_id: group_membership_id,
       person_id: command.person_id,
       actor_person_id: command.actor_person_id,
       transition: transition
@@ -2752,6 +2775,13 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> {:error, {:missing_required_attribute, key}}
+    end
+  end
+
+  defp group_membership_id(attrs) do
+    case fetch_optional(attrs, :group_membership_id) do
+      {:ok, group_membership_id} -> {:ok, group_membership_id}
+      :error -> {:ok, ID.generate(:group_membership)}
     end
   end
 

@@ -14,11 +14,13 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.EndGroupMembership
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+  alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.Events.ClubCreated
@@ -29,6 +31,8 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Events.GroupMembershipEnded
+  alias Memba.Membership.Events.GroupMembershipStarted
   alias Memba.Membership.Events.ClubMemberAdded
   alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.ClubRoleAssignedToMember
@@ -37,6 +41,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
+  alias Memba.Membership.GroupMembership
   alias Memba.Membership.GroupName
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
@@ -56,6 +61,9 @@ defmodule Memba.Membership.Club do
     group_keys: %{},
     group_name_keys: %{},
     group_memberships: %{},
+    first_class_group_memberships: %{},
+    current_group_membership_ids: %{},
+    group_membership_endings: %{},
     native_membership_ids: MapSet.new(),
     roles: %{},
     role_keys: %{},
@@ -116,6 +124,12 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{} = club, %CreateCustomGroup{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <-
+           validate_id(
+             :group_membership,
+             command.group_membership_id,
+             :invalid_group_membership_id
+           ),
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
          {:ok, name} <- GroupName.normalize(command.name),
          {:ok, creator_membership_id} <-
@@ -143,6 +157,12 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{} = club, %AddCustomGroupMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <-
+           validate_id(
+             :group_membership,
+             command.group_membership_id,
+             :invalid_group_membership_id
+           ),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
          :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
@@ -160,6 +180,54 @@ defmodule Memba.Membership.Club do
              command.person_id
            ) do
       add_custom_group_member_decision(club, command)
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %StartGroupMembership{}),
+    do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %StartGroupMembership{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <-
+           validate_id(
+             :group_membership,
+             command.group_membership_id,
+             :invalid_group_membership_id
+           ),
+         :ok <-
+           validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- ensure_custom_group(club, command.group_id),
+         :ok <-
+           ensure_active_custom_group_target(
+             club,
+             command.club_membership_id,
+             command.person_id
+           ) do
+      start_group_membership_decision(club, command)
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %EndGroupMembership{}),
+    do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %EndGroupMembership{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <-
+           validate_id(
+             :group_membership,
+             command.group_membership_id,
+             :invalid_group_membership_id
+           ),
+         :ok <-
+           validate_id(:membership, command.club_membership_id, :invalid_club_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- validate_non_empty_string(command.idempotency_key, :invalid_idempotency_key),
+         :ok <- validate_non_empty_string(command.reason, :invalid_reason),
+         :ok <- ensure_custom_group(club, command.group_id) do
+      end_group_membership_decision(club, command)
     end
   end
 
@@ -197,9 +265,17 @@ defmodule Memba.Membership.Club do
         person_id: command.person_id
       }
 
-      case active_custom_group_membership_removals(club, command.membership_id) do
-        [] -> club_member_removed
-        group_membership_removals -> [club_member_removed | group_membership_removals]
+      group_membership_endings =
+        current_custom_group_membership_endings(club, command.membership_id)
+
+      legacy_group_membership_removals =
+        active_custom_group_membership_removals(club, command.membership_id)
+
+      case group_membership_endings ++
+             [club_member_removed] ++
+             legacy_group_membership_removals do
+        [single_event] -> single_event
+        events -> events
       end
     end
   end
@@ -476,6 +552,72 @@ defmodule Memba.Membership.Club do
     apply_everyone_compatibility_membership(club, event, :deactivate)
   end
 
+  def apply(%__MODULE__{} = club, %GroupMembershipStarted{} = event) do
+    membership = %GroupMembership{
+      club_id: event.club_id,
+      group_id: event.group_id,
+      group_membership_id: event.group_membership_id,
+      club_membership_id: event.club_membership_id,
+      person_id: event.person_id,
+      status: :current
+    }
+
+    relation_key = group_membership_key(event.group_id, event.club_membership_id)
+
+    %__MODULE__{
+      club
+      | first_class_group_memberships:
+          Map.put(club.first_class_group_memberships, event.group_membership_id, membership),
+        current_group_membership_ids:
+          Map.put(club.current_group_membership_ids, relation_key, event.group_membership_id),
+        group_memberships:
+          Map.put(club.group_memberships, relation_key, %{
+            person_id: event.person_id,
+            active: true
+          })
+    }
+  end
+
+  def apply(%__MODULE__{} = club, %GroupMembershipEnded{} = event) do
+    membership = Map.fetch!(club.first_class_group_memberships, event.group_membership_id)
+
+    membership = %GroupMembership{
+      membership
+      | status: :ended,
+        end_idempotency_key: event.idempotency_key,
+        end_reason: event.reason
+    }
+
+    relation_key = group_membership_key(event.group_id, event.club_membership_id)
+
+    {current_group_membership_ids, group_memberships} =
+      case Map.get(club.current_group_membership_ids, relation_key) do
+        current_id when current_id == event.group_membership_id ->
+          {
+            Map.delete(club.current_group_membership_ids, relation_key),
+            Map.put(club.group_memberships, relation_key, %{
+              person_id: event.person_id,
+              active: false
+            })
+          }
+
+        _later_or_missing_membership ->
+          {club.current_group_membership_ids, club.group_memberships}
+      end
+
+    ending_signature = group_membership_ending_signature(event)
+
+    %__MODULE__{
+      club
+      | first_class_group_memberships:
+          Map.put(club.first_class_group_memberships, event.group_membership_id, membership),
+        current_group_membership_ids: current_group_membership_ids,
+        group_memberships: group_memberships,
+        group_membership_endings:
+          Map.put(club.group_membership_endings, event.idempotency_key, ending_signature)
+    }
+  end
+
   def apply(%__MODULE__{} = club, %ClubMemberAdded{} = event) do
     apply_club_member_added(club, event)
   end
@@ -579,6 +721,9 @@ defmodule Memba.Membership.Club do
   defp validate_optional_id(type, value, error) do
     validate_id(type, value, error)
   end
+
+  defp validate_non_empty_string(value, _error) when is_binary(value) and value != "", do: :ok
+  defp validate_non_empty_string(_value, error), do: {:error, error}
 
   defp add_member_decision(%__MODULE__{} = club, %AddClubMember{} = command) do
     case Map.fetch(club.active_memberships, command.membership_id) do
@@ -827,6 +972,48 @@ defmodule Memba.Membership.Club do
     end
   end
 
+  defp current_custom_group_membership_endings(
+         %__MODULE__{} = club,
+         departing_club_membership_id
+       ) do
+    club.first_class_group_memberships
+    |> Enum.flat_map(fn
+      {_group_membership_id,
+       %GroupMembership{
+         status: :current,
+         group_id: group_id,
+         group_membership_id: group_membership_id,
+         club_membership_id: ^departing_club_membership_id,
+         person_id: person_id
+       }} ->
+        group = %{club_id: club.club_id, group_id: group_id}
+
+        if SystemGroups.custom_group?(group) do
+          [
+            %GroupMembershipEnded{
+              club_id: club.club_id,
+              group_id: group_id,
+              group_membership_id: group_membership_id,
+              club_membership_id: departing_club_membership_id,
+              person_id: person_id,
+              idempotency_key: club_departure_group_membership_end_key(group_membership_id),
+              reason: "club_membership_ended"
+            }
+          ]
+        else
+          []
+        end
+
+      {_group_membership_id, _other_group_membership} ->
+        []
+    end)
+    |> Enum.sort_by(& &1.group_membership_id)
+  end
+
+  defp club_departure_group_membership_end_key(group_membership_id) do
+    "club-membership-ended:" <> group_membership_id
+  end
+
   defp active_custom_group_membership_removals(
          %__MODULE__{} = club,
          departing_membership_id
@@ -906,25 +1093,37 @@ defmodule Memba.Membership.Club do
         {:error, :group_already_defined}
 
       :error ->
-        [
-          %GroupCreated{
-            club_id: command.club_id,
-            group_id: command.group_id,
-            group_key: nil,
-            name: name
-          },
-          %GroupEmailSlugAssigned{
-            club_id: command.club_id,
-            group_id: command.group_id,
-            email_slug: email_slug
-          },
-          %GroupMemberAdded{
-            club_id: command.club_id,
-            group_id: command.group_id,
-            membership_id: creator_membership_id,
-            person_id: command.actor_person_id
-          }
-        ]
+        case optional_group_membership_started_events(
+               club,
+               command,
+               creator_membership_id,
+               command.actor_person_id
+             ) do
+          {:error, _reason} = error ->
+            error
+
+          first_class_events ->
+            [
+              %GroupCreated{
+                club_id: command.club_id,
+                group_id: command.group_id,
+                group_key: nil,
+                name: name
+              },
+              %GroupEmailSlugAssigned{
+                club_id: command.club_id,
+                group_id: command.group_id,
+                email_slug: email_slug
+              },
+              %GroupMemberAdded{
+                club_id: command.club_id,
+                group_id: command.group_id,
+                membership_id: creator_membership_id,
+                person_id: command.actor_person_id
+              }
+              | first_class_events
+            ]
+        end
     end
   end
 
@@ -938,9 +1137,40 @@ defmodule Memba.Membership.Club do
            group_membership_key(command.group_id, creator_membership_id)
          ) do
       %{active: true, person_id: actor_person_id} ->
-        actor_person_id == command.actor_person_id
+        relation_key = group_membership_key(command.group_id, creator_membership_id)
+
+        actor_person_id == command.actor_person_id and
+          Map.get(club.current_group_membership_ids, relation_key) ==
+            command.group_membership_id and
+          exact_current_creator_group_membership?(
+            club,
+            command,
+            creator_membership_id
+          )
 
       _group_membership ->
+        false
+    end
+  end
+
+  defp exact_current_creator_group_membership?(
+         %__MODULE__{} = club,
+         %CreateCustomGroup{} = command,
+         creator_club_membership_id
+       ) do
+    case Map.get(club.first_class_group_memberships, command.group_membership_id) do
+      %GroupMembership{
+        status: :current,
+        club_id: club_id,
+        group_id: group_id,
+        club_membership_id: club_membership_id,
+        person_id: person_id
+      } ->
+        club_id == command.club_id and group_id == command.group_id and
+          club_membership_id == creator_club_membership_id and
+          person_id == command.actor_person_id
+
+      _missing_or_ended_membership ->
         false
     end
   end
@@ -1239,14 +1469,227 @@ defmodule Memba.Membership.Club do
         {:error, :group_membership_person_mismatch}
 
       {:ok, %{active: true}} ->
-        []
+        exact_current_custom_group_admission_retry(club, command)
 
       {:ok, %{active: false}} ->
-        group_member_added_event(command)
+        new_custom_group_admission_decision(club, command)
 
       :error ->
-        group_member_added_event(command)
+        new_custom_group_admission_decision(club, command)
     end
+  end
+
+  defp exact_current_custom_group_admission_retry(
+         %__MODULE__{} = club,
+         %AddCustomGroupMember{} = command
+       ) do
+    relation_key = group_membership_key(command.group_id, command.membership_id)
+
+    if Map.get(club.current_group_membership_ids, relation_key) == command.group_membership_id and
+         exact_current_group_membership?(club, command.group_membership_id, command) do
+      []
+    else
+      {:error, :group_membership_already_current}
+    end
+  end
+
+  defp new_custom_group_admission_decision(
+         %__MODULE__{} = club,
+         %AddCustomGroupMember{} = command
+       ) do
+    relation_key = group_membership_key(command.group_id, command.membership_id)
+
+    case Map.fetch(club.first_class_group_memberships, command.group_membership_id) do
+      {:ok, %GroupMembership{status: :ended}} ->
+        {:error, :group_membership_already_ended}
+
+      {:ok, %GroupMembership{}} ->
+        {:error, :group_membership_id_already_used}
+
+      :error ->
+        if Map.has_key?(club.current_group_membership_ids, relation_key) do
+          {:error, :group_membership_already_current}
+        else
+          custom_group_admission_events(club, command)
+        end
+    end
+  end
+
+  defp custom_group_admission_events(%__MODULE__{} = club, %AddCustomGroupMember{} = command) do
+    legacy_event = group_member_added_event(command)
+
+    case optional_group_membership_started_events(
+           club,
+           command,
+           command.membership_id,
+           command.person_id
+         ) do
+      [] -> legacy_event
+      {:error, _reason} = error -> error
+      first_class_events -> [legacy_event | first_class_events]
+    end
+  end
+
+  defp optional_group_membership_started_events(_club, %{group_membership_id: nil}, _id, _person),
+    do: []
+
+  defp optional_group_membership_started_events(
+         %__MODULE__{} = club,
+         command,
+         club_membership_id,
+         person_id
+       ) do
+    case start_group_membership_decision(club, %StartGroupMembership{
+           club_id: command.club_id,
+           group_id: command.group_id,
+           group_membership_id: command.group_membership_id,
+           club_membership_id: club_membership_id,
+           person_id: person_id
+         }) do
+      [] -> []
+      %GroupMembershipStarted{} = event -> [event]
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp start_group_membership_decision(
+         %__MODULE__{} = club,
+         %StartGroupMembership{} = command
+       ) do
+    relation_key = group_membership_key(command.group_id, command.club_membership_id)
+
+    case Map.fetch(club.first_class_group_memberships, command.group_membership_id) do
+      {:ok, %GroupMembership{} = existing} ->
+        if exact_group_membership_start?(existing, command) do
+          []
+        else
+          {:error, :group_membership_id_already_used}
+        end
+
+      :error ->
+        if current_group_membership_relation?(club, relation_key) do
+          {:error, :group_membership_already_current}
+        else
+          %GroupMembershipStarted{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            group_membership_id: command.group_membership_id,
+            club_membership_id: command.club_membership_id,
+            person_id: command.person_id
+          }
+        end
+    end
+  end
+
+  defp current_group_membership_relation?(%__MODULE__{} = club, relation_key) do
+    Map.has_key?(club.current_group_membership_ids, relation_key) or
+      match?(%{active: true}, Map.get(club.group_memberships, relation_key))
+  end
+
+  defp exact_current_group_membership?(%__MODULE__{} = club, group_membership_id, command) do
+    case Map.get(club.first_class_group_memberships, group_membership_id) do
+      %GroupMembership{status: :current} = membership ->
+        exact_group_membership_start?(membership, command)
+
+      _missing_or_ended_membership ->
+        false
+    end
+  end
+
+  defp exact_group_membership_start?(%GroupMembership{} = membership, command) do
+    membership.club_id == command.club_id and
+      membership.group_id == command.group_id and
+      membership.group_membership_id == command.group_membership_id and
+      membership.club_membership_id == command_club_membership_id(command) and
+      membership.person_id == command.person_id
+  end
+
+  defp command_club_membership_id(%{club_membership_id: club_membership_id}),
+    do: club_membership_id
+
+  defp command_club_membership_id(%{membership_id: club_membership_id}),
+    do: club_membership_id
+
+  defp end_group_membership_decision(%__MODULE__{} = club, %EndGroupMembership{} = command) do
+    signature = group_membership_ending_signature(command)
+
+    case Map.fetch(club.group_membership_endings, command.idempotency_key) do
+      {:ok, ^signature} ->
+        []
+
+      {:ok, _different_signature} ->
+        {:error, :idempotency_key_already_used}
+
+      :error ->
+        end_group_membership_without_recorded_key(club, command)
+    end
+  end
+
+  defp end_group_membership_without_recorded_key(
+         %__MODULE__{} = club,
+         %EndGroupMembership{} = command
+       ) do
+    case Map.fetch(club.first_class_group_memberships, command.group_membership_id) do
+      :error ->
+        {:error, :group_membership_not_found}
+
+      {:ok, %GroupMembership{} = membership} ->
+        with :ok <- ensure_group_membership_end_identity(membership, command) do
+          end_current_group_membership(club, membership, command)
+        end
+    end
+  end
+
+  defp ensure_group_membership_end_identity(%GroupMembership{} = membership, command) do
+    if exact_group_membership_start?(membership, command) do
+      :ok
+    else
+      {:error, :group_membership_identity_mismatch}
+    end
+  end
+
+  defp end_current_group_membership(
+         %__MODULE__{},
+         %GroupMembership{status: :ended},
+         _command
+       ),
+       do: []
+
+  defp end_current_group_membership(
+         %__MODULE__{} = club,
+         %GroupMembership{} = membership,
+         %EndGroupMembership{} = command
+       ) do
+    relation_key = group_membership_key(command.group_id, command.club_membership_id)
+
+    if Map.get(club.current_group_membership_ids, relation_key) == command.group_membership_id do
+      %GroupMembershipEnded{
+        club_id: command.club_id,
+        group_id: command.group_id,
+        group_membership_id: command.group_membership_id,
+        club_membership_id: command.club_membership_id,
+        person_id: command.person_id,
+        idempotency_key: command.idempotency_key,
+        reason: command.reason
+      }
+    else
+      # An exact delayed command can never end a later admission.
+      case membership.status do
+        :ended -> []
+        :current -> {:error, :group_membership_not_current}
+      end
+    end
+  end
+
+  defp group_membership_ending_signature(event_or_command) do
+    {
+      event_or_command.club_id,
+      event_or_command.group_id,
+      event_or_command.group_membership_id,
+      event_or_command.club_membership_id,
+      event_or_command.person_id,
+      event_or_command.reason
+    }
   end
 
   defp remove_group_member_decision(%__MODULE__{} = club, %RemoveGroupMember{} = command) do

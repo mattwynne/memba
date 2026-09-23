@@ -10,6 +10,7 @@ defmodule Memba.ID do
     club: "clb",
     club_invitation: "inv",
     group: "grp",
+    group_membership: "gmb",
     person: "per",
     role: "rol",
     membership: "mem",
@@ -28,6 +29,7 @@ defmodule Memba.ID do
           :club
           | :club_invitation
           | :group
+          | :group_membership
           | :person
           | :role
           | :membership

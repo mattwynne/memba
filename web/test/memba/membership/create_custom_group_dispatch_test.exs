@@ -21,6 +21,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Events.GroupMembershipStarted
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership
@@ -32,6 +33,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   test "create_custom_group/2 atomically creates an addressable group with its Admin creator" do
     club_id = Memba.ID.generate(:club)
     group_id = Memba.ID.generate(:group)
+    group_membership_id = Memba.ID.generate(:group_membership)
     actor_person_id = Memba.ID.generate(:person)
     actor_membership_id = Memba.ID.generate(:membership)
 
@@ -42,12 +44,14 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
     assert %CreateCustomGroup{
              club_id: ^club_id,
              group_id: ^group_id,
+             group_membership_id: ^group_membership_id,
              actor_person_id: ^actor_person_id,
              name: " Board "
            } =
              struct!(CreateCustomGroup, %{
                club_id: club_id,
                group_id: group_id,
+               group_membership_id: group_membership_id,
                actor_person_id: actor_person_id,
                name: " Board "
              })
@@ -71,6 +75,12 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                   club_id: ^club_id,
                   group_id: ^group_id,
                   membership_id: ^actor_membership_id,
+                  person_id: ^actor_person_id
+                },
+                %GroupMembershipStarted{
+                  club_id: ^club_id,
+                  group_id: ^group_id,
+                  club_membership_id: ^actor_membership_id,
                   person_id: ^actor_person_id
                 }
               ]
@@ -98,6 +108,12 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                         data: %GroupMemberAdded{
                           group_id: ^group_id,
                           membership_id: ^actor_membership_id
+                        }
+                      },
+                      %RecordedEvent{
+                        data: %GroupMembershipStarted{
+                          group_id: ^group_id,
+                          club_membership_id: ^actor_membership_id
                         }
                       }
                     ]}
@@ -128,15 +144,17 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
              )
   end
 
-  test "reusing the caller-generated group ID is a successful no-op retry with a stable address" do
+  test "reusing the group and creator GroupMembership identities is an exact no-op retry" do
     club_id = Memba.ID.generate(:club)
     group_id = Memba.ID.generate(:group)
+    creator_group_membership_id = Memba.ID.generate(:group_membership)
     collision_group_id = Memba.ID.generate(:group)
     {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
 
     attrs = %{
       club_id: club_id,
       group_id: group_id,
+      group_membership_id: creator_group_membership_id,
       actor_person_id: actor_person_id,
       name: "Board"
     }
@@ -164,8 +182,15 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
              )
 
     assert %{email_slug: "board", name: "Board"} = retried_club.groups[group_id]
+
+    assert {:error, :group_already_defined} =
+             Membership.create_custom_group(
+               %{attrs | group_membership_id: Memba.ID.generate(:group_membership)},
+               consistency: :strong
+             )
+
     assert group_events(club_id, group_id) == events_before_retry
-    assert length(events_before_retry) == 3
+    assert length(events_before_retry) == 4
 
     assert %GroupProjection{email_slug: "board", name: "Board"} =
              Repo.get(GroupProjection, group_id)

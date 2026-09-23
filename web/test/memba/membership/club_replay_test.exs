@@ -7,6 +7,8 @@ defmodule Memba.Membership.ClubReplayTest do
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Events.GroupMembershipEnded
+  alias Memba.Membership.Events.GroupMembershipStarted
   alias Memba.Membership.Events.ClubMemberAdded
   alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.ClubRoleAssignedToMember
@@ -15,6 +17,7 @@ defmodule Memba.Membership.ClubReplayTest do
   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
+  alias Memba.Membership.GroupMembership
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
@@ -104,6 +107,78 @@ defmodule Memba.Membership.ClubReplayTest do
                  active: true
                }
              } = club.group_memberships
+    end
+  end
+
+  describe "first-class custom GroupMembership replay" do
+    test "club departure ends the replayed current identity and cannot repeat" do
+      ids = replay_ids()
+      custom_group_id = Memba.ID.generate(:group)
+      group_membership_id = Memba.ID.generate(:group_membership)
+
+      historic_events = [
+        %LegacyMemberAdded{
+          club_id: ids.club_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        },
+        %LegacyMemberAdded{
+          club_id: ids.club_id,
+          membership_id: ids.second_membership_id,
+          person_id: ids.second_person_id
+        },
+        %GroupCreated{
+          club_id: ids.club_id,
+          group_id: custom_group_id,
+          group_key: nil,
+          name: "Board"
+        },
+        %GroupMemberAdded{
+          club_id: ids.club_id,
+          group_id: custom_group_id,
+          membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        },
+        %GroupMembershipStarted{
+          club_id: ids.club_id,
+          group_id: custom_group_id,
+          group_membership_id: group_membership_id,
+          club_membership_id: ids.first_membership_id,
+          person_id: ids.first_person_id
+        }
+      ]
+
+      club = replay(ids.club_id, historic_events)
+
+      command = %RemoveClubMember{
+        club_id: ids.club_id,
+        membership_id: ids.first_membership_id,
+        person_id: ids.first_person_id
+      }
+
+      assert [
+               %GroupMembershipEnded{group_membership_id: ^group_membership_id},
+               %ClubMemberRemoved{membership_id: first_membership_id},
+               %GroupMemberRemoved{membership_id: legacy_membership_id}
+             ] = removal_events = Club.execute(club, command)
+
+      assert first_membership_id == ids.first_membership_id
+      assert legacy_membership_id == ids.first_membership_id
+
+      replayed = replay(ids.club_id, historic_events ++ removal_events)
+
+      refute Map.has_key?(
+               replayed.current_group_membership_ids,
+               {custom_group_id, ids.first_membership_id}
+             )
+
+      assert %GroupMembership{status: :ended} =
+               replayed.first_class_group_memberships[group_membership_id]
+
+      assert %{active: false} =
+               replayed.group_memberships[{custom_group_id, ids.first_membership_id}]
+
+      assert {:error, :not_found} = Club.execute(replayed, command)
     end
   end
 

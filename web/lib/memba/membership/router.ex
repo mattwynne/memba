@@ -27,6 +27,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.EndGroupMembership
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
@@ -37,6 +38,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
+  alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
 
@@ -56,6 +58,7 @@ defmodule Memba.Membership.Router do
   dispatch(CreateGroup, to: Club)
   dispatch(CreatePerson, to: Person)
   dispatch(DefineClubRole, to: Club)
+  dispatch(EndGroupMembership, to: Club)
   dispatch(GrantClubRolePermission, to: Club)
   dispatch(InviteClubMember, to: ClubInvitation)
   dispatch(ReconcileLegacyAdminHistory, to: Club)
@@ -66,6 +69,7 @@ defmodule Memba.Membership.Router do
   dispatch(RemovePersonEmailAddress, to: Person)
   dispatch(ReplacePersonEmailAddresses, to: Person)
   dispatch(ResendClubMemberInvitation, to: ClubInvitation)
+  dispatch(StartGroupMembership, to: Club)
   dispatch(UpdateClub, to: Club)
   dispatch(VerifyPersonEmailAddress, to: Person)
 end

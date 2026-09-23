@@ -1610,24 +1610,28 @@ defmodule Memba.Membership.ClubTest do
       command = %AddCustomGroupMember{
         club_id: club_id,
         group_id: group_id,
+        group_membership_id: Memba.ID.generate(:group_membership),
         membership_id: target_membership_id,
         person_id: target_person_id,
         actor_person_id: actor_person_id
       }
 
-      assert %GroupMemberAdded{
-               club_id: ^club_id,
-               group_id: ^group_id,
-               membership_id: ^target_membership_id,
-               person_id: ^target_person_id
-             } = Club.execute(club, command)
+      assert [
+               %GroupMemberAdded{
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 membership_id: ^target_membership_id,
+                 person_id: ^target_person_id
+               },
+               %Memba.Membership.Events.GroupMembershipStarted{}
+             ] = Club.execute(club, command)
 
       club = remove_group_member(club, group_id, actor_membership_id, actor_person_id)
 
       assert {:error, :unauthorized} = Club.execute(club, command)
     end
 
-    test "makes an already-active custom-group admission an idempotent no-op" do
+    test "rejects a fresh identity for an already-active legacy custom-group relation" do
       club_id = Memba.ID.generate(:club)
       group_id = Memba.ID.generate(:group)
       actor_membership_id = Memba.ID.generate(:membership)
@@ -1647,12 +1651,13 @@ defmodule Memba.Membership.ClubTest do
       command = %AddCustomGroupMember{
         club_id: club_id,
         group_id: group_id,
+        group_membership_id: Memba.ID.generate(:group_membership),
         membership_id: target_membership_id,
         person_id: target_person_id,
         actor_person_id: actor_person_id
       }
 
-      assert [] = Club.execute(club, command)
+      assert {:error, :group_membership_already_current} = Club.execute(club, command)
     end
 
     test "uses the actor's current active club membership and manage-members permission" do
@@ -1677,12 +1682,14 @@ defmodule Memba.Membership.ClubTest do
       command = %AddCustomGroupMember{
         club_id: club_id,
         group_id: group_id,
+        group_membership_id: Memba.ID.generate(:group_membership),
         membership_id: target_membership_id,
         person_id: target_person_id,
         actor_person_id: actor_person_id
       }
 
-      assert %GroupMemberAdded{} = Club.execute(club, command)
+      assert [%GroupMemberAdded{}, %Memba.Membership.Events.GroupMembershipStarted{}] =
+               Club.execute(club, command)
 
       inactive_actor_club =
         Club.apply(club, %ClubMemberRemoved{
@@ -1723,6 +1730,7 @@ defmodule Memba.Membership.ClubTest do
       command = %AddCustomGroupMember{
         club_id: club_id,
         group_id: group_id,
+        group_membership_id: Memba.ID.generate(:group_membership),
         membership_id: target_membership_id,
         person_id: target_person_id,
         actor_person_id: actor_person_id
