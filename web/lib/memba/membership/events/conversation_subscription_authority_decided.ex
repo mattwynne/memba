@@ -17,5 +17,10 @@ defmodule Memba.Membership.Events.ConversationSubscriptionAuthorityDecided do
     :system_authority_kinds,
     :club_stream_version
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [
+                :reconciliation_fence_id,
+                :reconciliation_fence_position,
+                :reconciliation_event_store_schema
+              ]
 end

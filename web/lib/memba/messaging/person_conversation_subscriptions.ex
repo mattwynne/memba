@@ -15,6 +15,7 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   alias Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.EndPersonConversationSubscription
+  alias Memba.Messaging.Commands.ReconcileLegacyConversationFollow
   alias Memba.Messaging.Commands.RevokeGroupMembershipConversationSubscriptions
   alias Memba.Messaging.Commands.RevokeSystemConversationSubscriptions
   alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
@@ -25,6 +26,7 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   alias Memba.Messaging.Events.ConversationSubscriptionIntentStarted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationCompleted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationRecorded
+  alias Memba.Messaging.Events.LegacyConversationFollowReconciled
   alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationCompleted
   alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationRecorded
 
@@ -38,6 +40,7 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
             revoked_system_authorities: %{},
             revocations: %{},
             system_revocations: %{},
+            reconciliations: %{},
             unfollows: %{},
             cancellations: %{}
 
@@ -181,6 +184,85 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
             unfollow_id: command.unfollow_id
           }
         ]
+    else
+      :exact_retry -> []
+      error -> error
+    end
+  end
+
+  def execute(%__MODULE__{} = subscriptions, %ReconcileLegacyConversationFollow{} = command) do
+    with :ok <- validate_reconciliation(command),
+         :ok <- validate_person(subscriptions, command.person_id),
+         :ok <- validate_reconciliation_retry(subscriptions, command) do
+      blocked_by_unfollow? =
+        Enum.any?(subscriptions.unfollows, fn {_id, unfollow} ->
+          unfollow.conversation_id == command.conversation_id
+        end)
+
+      authorities =
+        if blocked_by_unfollow? do
+          []
+        else
+          reconciliation_authorities(subscriptions, command)
+        end
+
+      intent = %ConversationSubscriptionIntentStarted{
+        person_id: command.person_id,
+        club_id: command.club_id,
+        conversation_id: command.conversation_id,
+        conversation_group_ids: command.conversation_group_ids,
+        conversation_stream_version: command.fence_position,
+        subscription_id: command.subscription_id,
+        subscription_intent_id: command.subscription_intent_id,
+        authority_decision_id: command.authority_decision_id,
+        source: :legacy_reconciliation,
+        club_membership_id: command.club_membership_id,
+        club_stream_version: command.club_stream_version,
+        group_membership_ids: command.group_membership_ids,
+        system_authority_kinds: command.system_authority_kinds
+      }
+
+      grants =
+        Enum.map(authorities, fn {authority_kind, group_membership_id} ->
+          %ConversationSubscriptionAuthorizationGranted{
+            person_id: command.person_id,
+            conversation_id: command.conversation_id,
+            subscription_id: command.subscription_id,
+            subscription_intent_id: command.subscription_intent_id,
+            authority_decision_id: command.authority_decision_id,
+            authorization_id:
+              authorization_id(
+                command.subscription_intent_id,
+                authority_kind,
+                group_membership_id
+              ),
+            club_id: command.club_id,
+            club_membership_id: command.club_membership_id,
+            club_stream_version: command.club_stream_version,
+            group_membership_id: group_membership_id,
+            authority_kind: authority_kind
+          }
+        end)
+
+      marker = %LegacyConversationFollowReconciled{
+        person_id: command.person_id,
+        conversation_id: command.conversation_id,
+        subscription_id: command.subscription_id,
+        reconciliation_key: command.reconciliation_key,
+        subscription_intent_id: command.subscription_intent_id,
+        authority_decision_id: command.authority_decision_id,
+        fence_position: command.fence_position,
+        club_id: command.club_id,
+        conversation_group_ids: command.conversation_group_ids,
+        club_membership_id: command.club_membership_id,
+        club_stream_version: command.club_stream_version,
+        outcome: if(authorities == [], do: "no_authority", else: "granted"),
+        group_membership_ids: command.group_membership_ids,
+        system_authority_kinds: command.system_authority_kinds
+      }
+
+      intent_and_grants = if authorities == [], do: [], else: [intent | grants]
+      intent_and_grants ++ [marker]
     else
       :exact_retry -> []
       error -> error
@@ -361,6 +443,32 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
     %{subscriptions | unfollows: Map.put(subscriptions.unfollows, event.unfollow_id, unfollow)}
   end
 
+  def apply(%__MODULE__{} = subscriptions, %LegacyConversationFollowReconciled{} = event) do
+    reconciliation =
+      event
+      |> Map.from_struct()
+      |> Map.take([
+        :person_id,
+        :conversation_id,
+        :subscription_id,
+        :subscription_intent_id,
+        :authority_decision_id,
+        :fence_position,
+        :club_id,
+        :conversation_group_ids,
+        :club_membership_id,
+        :club_stream_version,
+        :group_membership_ids,
+        :system_authority_kinds
+      ])
+
+    %{
+      subscriptions
+      | reconciliations:
+          Map.put(subscriptions.reconciliations, event.reconciliation_key, reconciliation)
+    }
+  end
+
   def apply(
         %__MODULE__{} = subscriptions,
         %GroupMembershipSubscriptionRevocationRecorded{} = event
@@ -451,6 +559,15 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   def revocation_id(group_membership_id),
     do: ID.deterministic(:subscription_revocation, [group_membership_id])
 
+  def reconciliation_key(person_id, conversation_id, fence_position) do
+    ID.deterministic(:subscription_intent, [
+      "legacy-conversation-follow-reconciliation/v1",
+      person_id,
+      conversation_id,
+      Integer.to_string(fence_position)
+    ])
+  end
+
   defp authorization_revoked(grant, opts) do
     %ConversationSubscriptionAuthorizationRevoked{
       person_id: grant.person_id,
@@ -462,6 +579,126 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
       unfollow_id: Keyword.get(opts, :unfollow_id),
       reason: Keyword.fetch!(opts, :reason)
     }
+  end
+
+  defp validate_reconciliation(command) do
+    expected_key =
+      reconciliation_key(command.person_id, command.conversation_id, command.fence_position)
+
+    with :ok <- validate_fenced_reconciliation_authority(command),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- validate_id(:message, command.conversation_id, :invalid_conversation_id),
+         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+         :ok <- validate_optional_membership_id(command.club_membership_id),
+         :ok <-
+           validate_id(
+             :conversation_subscription,
+             command.subscription_id,
+             :invalid_subscription_id
+           ),
+         :ok <-
+           validate_id(
+             :subscription_intent,
+             command.subscription_intent_id,
+             :invalid_subscription_intent_id
+           ),
+         :ok <-
+           validate_id(
+             :authority_decision,
+             command.authority_decision_id,
+             :invalid_authority_decision_id
+           ),
+         :ok <- validate_group_memberships(command.group_membership_ids, allow_empty: true),
+         :ok <- validate_system_authority_kinds(command.system_authority_kinds) do
+      cond do
+        command.reconciliation_key != expected_key or
+            command.subscription_intent_id != expected_key ->
+          {:error, :reconciliation_key_mismatch}
+
+        command.subscription_id != subscription_id(command.person_id, command.conversation_id) ->
+          {:error, :subscription_id_mismatch}
+
+        not is_integer(command.fence_position) or command.fence_position < 0 ->
+          {:error, :invalid_fence_position}
+
+        not is_integer(command.club_stream_version) or command.club_stream_version < 1 ->
+          {:error, :invalid_club_stream_version}
+
+        command.group_membership_ids != Enum.sort(Enum.uniq(command.group_membership_ids)) ->
+          {:error, :authorities_not_canonical}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp validate_fenced_reconciliation_authority(command) do
+    decision = command.authority_decision
+
+    matches? =
+      match?(%ConversationSubscriptionAuthorityDecision{source: :legacy_reconciliation}, decision) and
+        decision.person_id == command.person_id and
+        decision.club_id == command.club_id and
+        decision.conversation_id == command.conversation_id and
+        decision.subscription_intent_id == command.subscription_intent_id and
+        decision.authority_decision_id == command.authority_decision_id and
+        decision.conversation_group_ids == command.conversation_group_ids and
+        decision.club_membership_id == command.club_membership_id and
+        decision.club_stream_version == command.club_stream_version and
+        decision.group_membership_ids == command.group_membership_ids and
+        decision.system_authority_kinds == command.system_authority_kinds and
+        decision.reconciliation_fence_position == command.fence_position
+
+    if matches? and
+         Membership.valid_recorded_fenced_conversation_subscription_authority?(decision),
+       do: :ok,
+       else: {:error, :invalid_fenced_conversation_subscription_authority}
+  end
+
+  defp validate_reconciliation_retry(subscriptions, command) do
+    expected = %{
+      person_id: command.person_id,
+      conversation_id: command.conversation_id,
+      subscription_id: command.subscription_id,
+      subscription_intent_id: command.subscription_intent_id,
+      authority_decision_id: command.authority_decision_id,
+      fence_position: command.fence_position,
+      club_id: command.club_id,
+      conversation_group_ids: command.conversation_group_ids,
+      club_membership_id: command.club_membership_id,
+      club_stream_version: command.club_stream_version,
+      group_membership_ids: command.group_membership_ids,
+      system_authority_kinds: command.system_authority_kinds
+    }
+
+    case Map.get(subscriptions.reconciliations, command.reconciliation_key) do
+      nil -> :ok
+      ^expected -> :exact_retry
+      _different -> {:error, :reconciliation_key_conflict}
+    end
+  end
+
+  defp reconciliation_authorities(subscriptions, command) do
+    custom =
+      command.group_membership_ids
+      |> Enum.reject(&Map.has_key?(subscriptions.revoked_group_memberships, &1))
+      |> Enum.map(&{"group_membership", &1})
+
+    system =
+      command.system_authority_kinds
+      |> Enum.reject(fn kind ->
+        system_authority_revoked?(
+          subscriptions,
+          command.club_id,
+          command.club_membership_id,
+          kind,
+          command.club_stream_version
+        )
+      end)
+      |> Enum.map(&{&1, nil})
+
+    custom ++ system
   end
 
   defp validate_start(command) do
@@ -839,9 +1076,11 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   defp validate_source(source) when source in @sources, do: :ok
   defp validate_source(_source), do: {:error, :invalid_subscription_source}
 
+  defp normalize_source("legacy_reconciliation"), do: :legacy_reconciliation
   defp normalize_source("manual"), do: :manual
   defp normalize_source("root"), do: :root
   defp normalize_source("reply"), do: :reply
+  defp normalize_source(:legacy_reconciliation), do: :legacy_reconciliation
   defp normalize_source(source) when source in @sources, do: source
 
   defp validate_group_memberships(group_membership_ids, opts)
@@ -884,6 +1123,11 @@ defmodule Memba.Messaging.PersonConversationSubscriptions do
   end
 
   defp validate_uuid(_value, error), do: {:error, error}
+
+  defp validate_optional_membership_id(nil), do: :ok
+
+  defp validate_optional_membership_id(value),
+    do: validate_id(:membership, value, :invalid_club_membership_id)
 
   defp validate_id(type, value, error) do
     if ID.valid?(type, value), do: :ok, else: {:error, error}

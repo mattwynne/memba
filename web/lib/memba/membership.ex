@@ -37,6 +37,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.Events.ConversationSubscriptionAuthorityDecided
   alias Memba.Membership.Events.GroupMembershipStarted
+  alias Memba.Membership.FencedClubAuthorityState
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
@@ -1457,6 +1458,173 @@ defmodule Memba.Membership do
 
   def decide_conversation_subscription_authority(_descriptor, _opts),
     do: {:error, :invalid_conversation_authority_descriptor}
+
+  @doc false
+  def decide_fenced_conversation_subscription_authority(
+        %ConversationAuthorityDescriptor{source: :legacy_reconciliation} = descriptor,
+        opts
+      ) do
+    with true <- Memba.Messaging.valid_conversation_authority_descriptor?(descriptor),
+         {:ok, club, club_stream_version} <- fenced_club_state(descriptor, opts),
+         {:ok, club_membership_id, group_membership_ids, system_authority_kinds} <-
+           fenced_authority_set(club, descriptor),
+         {:ok, authority_request_id} <- Keyword.fetch(opts, :authority_request_id),
+         {:ok, authority_decision_id} <- Keyword.fetch(opts, :authority_decision_id) do
+      decision =
+        %{
+          club_id: descriptor.club_id,
+          person_id: descriptor.person_id,
+          subscription_intent_id: descriptor.subscription_intent_id,
+          source: descriptor.source,
+          conversation_id: descriptor.conversation_id,
+          conversation_group_ids: descriptor.conversation_group_ids,
+          conversation_stream_version: descriptor.conversation_stream_version,
+          authority_request_id: authority_request_id,
+          authority_decision_id: authority_decision_id,
+          club_membership_id: club_membership_id,
+          group_membership_ids: group_membership_ids,
+          system_authority_kinds: system_authority_kinds,
+          club_stream_version: club_stream_version,
+          reconciliation_fence_id: descriptor.reconciliation_fence_id,
+          reconciliation_fence_position: descriptor.reconciliation_fence_position,
+          reconciliation_event_store_schema: descriptor.reconciliation_event_store_schema
+        }
+        |> sign_conversation_authority_decision()
+
+      command = %DecideConversationSubscriptionAuthority{
+        conversation_authority_descriptor: descriptor,
+        club_id: decision.club_id,
+        person_id: decision.person_id,
+        subscription_intent_id: decision.subscription_intent_id,
+        source: decision.source,
+        conversation_id: decision.conversation_id,
+        conversation_group_ids: decision.conversation_group_ids,
+        conversation_stream_version: decision.conversation_stream_version,
+        authority_request_id: decision.authority_request_id,
+        authority_decision_id: decision.authority_decision_id,
+        fenced_authority_decision: decision
+      }
+
+      with :ok <- App.dispatch(command, retry_attempts: 10),
+           {:ok, recorded} <-
+             conversation_subscription_authority_decision_for_intent(
+               descriptor.club_id,
+               descriptor.subscription_intent_id
+             ) do
+        {:ok, recorded}
+      end
+    else
+      false -> {:error, :invalid_conversation_authority_descriptor}
+      :error -> {:error, :missing_fenced_authority_identity}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  def decide_fenced_conversation_subscription_authority(_descriptor, _opts),
+    do: {:error, :invalid_conversation_authority_descriptor}
+
+  def valid_recorded_fenced_conversation_subscription_authority?(
+        %ConversationSubscriptionAuthorityDecision{source: :legacy_reconciliation} = decision
+      ) do
+    with true <- valid_conversation_authority_signature?(decision),
+         %Memba.Membership.Club{} = club <-
+           App.aggregate_state(Memba.Membership.Club, decision.club_id) do
+      recorded_authority_decision?(club, decision)
+    else
+      _invalid -> false
+    end
+  end
+
+  def valid_recorded_fenced_conversation_subscription_authority?(_decision), do: false
+
+  @doc false
+  def conversation_subscription_club_at_fence(club_id, position) do
+    case Application.get_env(:memba, :conversation_subscription_club_at_fence_hook) do
+      hook when is_function(hook, 1) -> hook.(club_id)
+      _no_hook -> :ok
+    end
+
+    {club, stream_version} =
+      Memba.EventStoreHistory.stream_forward_at_global_position(
+        App,
+        Memba.EventStore,
+        club_id,
+        position
+      )
+      |> Enum.reduce({%Memba.Membership.Club{}, 0}, fn recorded, {club, _version} ->
+        {Memba.Membership.Club.apply(club, recorded.data), recorded.stream_version}
+      end)
+
+    if club.club_id == club_id do
+      state = %FencedClubAuthorityState{
+        club_id: club_id,
+        fence_position: position,
+        stream_version: stream_version,
+        club: club,
+        signature: ""
+      }
+
+      {:ok, %{state | signature: fenced_club_state_signature(state)}}
+    else
+      {:error, :club_not_found_at_fence}
+    end
+  end
+
+  defp fenced_club_state(descriptor, opts) do
+    result =
+      case Keyword.get(opts, :club_at_fence) do
+        %FencedClubAuthorityState{} = state ->
+          {:ok, state}
+
+        nil ->
+          conversation_subscription_club_at_fence(
+            descriptor.club_id,
+            descriptor.reconciliation_fence_position
+          )
+
+        _invalid ->
+          {:error, :invalid_fenced_club_state}
+      end
+
+    with {:ok, state} <- result,
+         true <- state.club_id == descriptor.club_id,
+         true <- state.fence_position == descriptor.reconciliation_fence_position,
+         true <- valid_fenced_club_state_signature?(state) do
+      {:ok, state.club, state.stream_version}
+    else
+      _invalid -> {:error, :invalid_fenced_club_state}
+    end
+  end
+
+  defp fenced_club_state_signature(state) do
+    [state.club_id, state.fence_position, state.stream_version, state.club]
+    |> :erlang.term_to_binary()
+    |> then(&:crypto.mac(:hmac, :sha256, authority_signing_key(), &1))
+  end
+
+  defp valid_fenced_club_state_signature?(state) do
+    expected = fenced_club_state_signature(%{state | signature: ""})
+
+    is_binary(state.signature) and byte_size(state.signature) == byte_size(expected) and
+      Plug.Crypto.secure_compare(state.signature, expected)
+  end
+
+  defp fenced_authority_set(club, descriptor) do
+    case Memba.Membership.Club.resolve_conversation_subscription_authority(club, descriptor) do
+      {:ok, club_membership_id, group_membership_ids, system_authority_kinds} ->
+        {:ok, club_membership_id, group_membership_ids, system_authority_kinds}
+
+      {:error, :conversation_subscription_not_authorized} ->
+        club_membership_id =
+          club.active_memberships
+          |> Enum.filter(fn {_membership_id, person_id} -> person_id == descriptor.person_id end)
+          |> Enum.map(&elem(&1, 0))
+          |> Enum.sort()
+          |> List.first()
+
+        {:ok, club_membership_id, [], []}
+    end
+  end
 
   defp conversation_subscription_authority_command(descriptor, opts) do
     %DecideConversationSubscriptionAuthority{
@@ -3149,23 +3317,35 @@ defmodule Memba.Membership do
   end
 
   defp authority_signature(decision) do
-    payload =
-      [
-        decision.club_id,
-        decision.person_id,
-        decision.subscription_intent_id,
-        decision.source,
-        decision.conversation_id,
-        decision.conversation_group_ids,
-        decision.conversation_stream_version,
-        decision.authority_request_id,
-        decision.authority_decision_id,
-        decision.club_membership_id,
-        decision.group_membership_ids,
-        decision.system_authority_kinds,
-        decision.club_stream_version
-      ]
-      |> :erlang.term_to_binary()
+    fields = [
+      decision.club_id,
+      decision.person_id,
+      decision.subscription_intent_id,
+      decision.source,
+      decision.conversation_id,
+      decision.conversation_group_ids,
+      decision.conversation_stream_version,
+      decision.authority_request_id,
+      decision.authority_decision_id,
+      decision.club_membership_id,
+      decision.group_membership_ids,
+      decision.system_authority_kinds,
+      decision.club_stream_version
+    ]
+
+    fields =
+      if decision.source in [:legacy_reconciliation, "legacy_reconciliation"] do
+        fields ++
+          [
+            decision.reconciliation_fence_id,
+            decision.reconciliation_fence_position,
+            decision.reconciliation_event_store_schema
+          ]
+      else
+        fields
+      end
+
+    payload = :erlang.term_to_binary(fields)
 
     :crypto.mac(:hmac, :sha256, authority_signing_key(), payload)
     |> Base.encode64()
@@ -3212,7 +3392,10 @@ defmodule Memba.Membership do
             :club_membership_id,
             :group_membership_ids,
             :system_authority_kinds,
-            :club_stream_version
+            :club_stream_version,
+            :reconciliation_fence_id,
+            :reconciliation_fence_position,
+            :reconciliation_event_store_schema
           ],
           &(Map.get(recorded, &1) == Map.get(decision, &1))
         )

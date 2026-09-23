@@ -52,6 +52,19 @@ defmodule Memba.Release do
     report
   end
 
+  def reconcile_legacy_conversation_follows! do
+    run_release_step(:load_app, &load_app/0)
+    run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
+
+    report =
+      Memba.Messaging.LegacyConversationFollowReconciliation.run!(
+        legacy_conversation_follow_reconciliation_env_opts()
+      )
+
+    IO.puts(Jason.encode!(report))
+    report
+  end
+
   def verify_source_backed_admin_invariant! do
     run_release_step(:load_app, &load_app/0)
     run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
@@ -357,6 +370,71 @@ defmodule Memba.Release do
     case Jason.decode(value) do
       {:ok, [club_id, group_id, membership_id]} -> {club_id, group_id, membership_id}
       _ -> raise ArgumentError, "invalid reconciliation cursor: #{inspect(value)}"
+    end
+  end
+
+  defp legacy_conversation_follow_reconciliation_env_opts do
+    mode =
+      conversation_follow_reconciliation_mode(
+        System.get_env("MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_MODE")
+      )
+
+    [mode: mode]
+    |> maybe_put_env_opt(
+      :batch_size,
+      parse_positive_integer(
+        System.get_env("MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_BATCH_SIZE")
+      )
+    )
+    |> maybe_put_env_opt(
+      :after,
+      parse_conversation_follow_reconciliation_cursor(
+        System.get_env("MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_AFTER")
+      )
+    )
+    |> maybe_put_env_opt(
+      :projector_timeout,
+      parse_non_negative_integer(
+        System.get_env("MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_PROJECTOR_TIMEOUT")
+      )
+    )
+    |> maybe_put_env_opt(
+      :cutover_acknowledgement,
+      System.get_env("MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_CUTOVER_ACKNOWLEDGEMENT")
+    )
+  end
+
+  defp conversation_follow_reconciliation_mode(nil), do: :dry_run
+  defp conversation_follow_reconciliation_mode("dry_run"), do: :dry_run
+  defp conversation_follow_reconciliation_mode("apply"), do: :apply
+  defp conversation_follow_reconciliation_mode("record_fence"), do: :record_fence
+
+  defp conversation_follow_reconciliation_mode(value) do
+    raise ArgumentError,
+          "invalid MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_MODE: #{inspect(value)}"
+  end
+
+  defp parse_non_negative_integer(nil), do: nil
+
+  defp parse_non_negative_integer(value) do
+    case Integer.parse(value) do
+      {integer, ""} when integer >= 0 -> integer
+      _ -> raise ArgumentError, "invalid reconciliation timeout: #{inspect(value)}"
+    end
+  end
+
+  defp parse_conversation_follow_reconciliation_cursor(nil), do: nil
+
+  defp parse_conversation_follow_reconciliation_cursor("lcfr1." <> _rest = token), do: token
+
+  defp parse_conversation_follow_reconciliation_cursor(value) do
+    case Jason.decode(value) do
+      {:ok, [person_id, conversation_id]} ->
+        {person_id, conversation_id}
+
+      _ ->
+        raise ArgumentError,
+              "invalid conversation-follow reconciliation cursor: #{inspect(value)}"
     end
   end
 

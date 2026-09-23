@@ -544,6 +544,41 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{club_id: nil}, %DecideConversationSubscriptionAuthority{}),
     do: {:error, :not_created}
 
+  def execute(
+        %__MODULE__{} = club,
+        %DecideConversationSubscriptionAuthority{
+          source: :legacy_reconciliation,
+          fenced_authority_decision: decision
+        } = command
+      ) do
+    with :ok <- validate_conversation_authority_descriptor(command),
+         :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_fenced_authority_decision(command, decision),
+         :ok <- validate_authority_decision_reuse(club, command) do
+      %ConversationSubscriptionAuthorityDecided{
+        club_id: decision.club_id,
+        person_id: decision.person_id,
+        subscription_intent_id: decision.subscription_intent_id,
+        source: decision.source,
+        conversation_id: decision.conversation_id,
+        conversation_group_ids: decision.conversation_group_ids,
+        conversation_stream_version: decision.conversation_stream_version,
+        authority_request_id: decision.authority_request_id,
+        authority_decision_id: decision.authority_decision_id,
+        club_membership_id: decision.club_membership_id,
+        group_membership_ids: decision.group_membership_ids,
+        system_authority_kinds: decision.system_authority_kinds,
+        club_stream_version: decision.club_stream_version,
+        reconciliation_fence_id: decision.reconciliation_fence_id,
+        reconciliation_fence_position: decision.reconciliation_fence_position,
+        reconciliation_event_store_schema: decision.reconciliation_event_store_schema
+      }
+    else
+      :exact_retry -> []
+      error -> error
+    end
+  end
+
   def execute(%__MODULE__{} = club, %DecideConversationSubscriptionAuthority{} = command) do
     with :ok <- validate_conversation_authority_descriptor(command),
          :ok <- validate_existing_club_id(club, command.club_id),
@@ -978,6 +1013,30 @@ defmodule Memba.Membership.Club do
   defp validate_conversation_authority_descriptor(_command),
     do: {:error, :invalid_conversation_authority_descriptor}
 
+  defp validate_fenced_authority_decision(command, decision) do
+    descriptor = command.conversation_authority_descriptor
+
+    matches? =
+      match?(%Memba.Membership.ConversationSubscriptionAuthorityDecision{}, decision) and
+        decision.club_id == command.club_id and
+        decision.person_id == command.person_id and
+        decision.subscription_intent_id == command.subscription_intent_id and
+        decision.source == command.source and
+        decision.conversation_id == command.conversation_id and
+        decision.conversation_group_ids == command.conversation_group_ids and
+        decision.conversation_stream_version == command.conversation_stream_version and
+        decision.authority_request_id == command.authority_request_id and
+        decision.authority_decision_id == command.authority_decision_id and
+        decision.reconciliation_fence_id == descriptor.reconciliation_fence_id and
+        decision.reconciliation_fence_position == descriptor.reconciliation_fence_position and
+        decision.reconciliation_event_store_schema ==
+          descriptor.reconciliation_event_store_schema
+
+    if matches? and Memba.Membership.valid_conversation_authority_signature?(decision),
+      do: :ok,
+      else: {:error, :invalid_fenced_conversation_subscription_authority}
+  end
+
   defp validate_conversation_group_ids(group_ids) when is_list(group_ids) and group_ids != [] do
     cond do
       group_ids != Enum.sort(Enum.uniq(group_ids)) ->
@@ -999,9 +1058,13 @@ defmodule Memba.Membership.Club do
   defp validate_conversation_stream_version(_version),
     do: {:error, :invalid_conversation_stream_version}
 
-  defp validate_subscription_source(source) when source in [:manual, :root, :reply], do: :ok
+  defp validate_subscription_source(source)
+       when source in [:manual, :root, :reply, :legacy_reconciliation],
+       do: :ok
+
   defp validate_subscription_source(_source), do: {:error, :invalid_subscription_source}
 
+  defp normalize_subscription_source("legacy_reconciliation"), do: :legacy_reconciliation
   defp normalize_subscription_source("manual"), do: :manual
   defp normalize_subscription_source("root"), do: :root
   defp normalize_subscription_source("reply"), do: :reply
@@ -1048,7 +1111,7 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp resolve_conversation_subscription_authority(club, command) do
+  def resolve_conversation_subscription_authority(club, command) do
     club.active_memberships
     |> Enum.filter(fn {_club_membership_id, person_id} -> person_id == command.person_id end)
     |> Enum.sort_by(fn {club_membership_id, _person_id} -> club_membership_id end)

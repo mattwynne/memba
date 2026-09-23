@@ -22,6 +22,7 @@ defmodule Memba.Messaging.Projectors.PersonConversationSubscriptionsV1 do
   alias Memba.Messaging.Events.ConversationSubscriptionIntentStarted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationCompleted
   alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationRecorded
+  alias Memba.Messaging.Events.LegacyConversationFollowReconciled
   alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationCompleted
   alias Memba.Messaging.Events.SystemAuthoritySubscriptionRevocationRecorded
   alias Memba.Messaging.Projections.ConversationSubscriptionAuthorization
@@ -133,6 +134,26 @@ defmodule Memba.Messaging.Projectors.PersonConversationSubscriptionsV1 do
       on_conflict: [
         set: [effective: false, last_unfollow_id: event.unfollow_id, updated_at: now]
       ],
+      conflict_target: :subscription_id
+    )
+  end)
+
+  project(%LegacyConversationFollowReconciled{} = event, fn multi ->
+    now = DateTime.utc_now(:microsecond)
+
+    Ecto.Multi.insert(
+      multi,
+      {:legacy_conversation_follow_reconciled, event.reconciliation_key},
+      %PersonConversationSubscription{
+        subscription_id: event.subscription_id,
+        person_id: event.person_id,
+        conversation_id: event.conversation_id,
+        effective: event.outcome == "granted",
+        last_intent_id: event.subscription_intent_id,
+        inserted_at: now,
+        updated_at: now
+      },
+      on_conflict: [set: [last_intent_id: event.subscription_intent_id, updated_at: now]],
       conflict_target: :subscription_id
     )
   end)

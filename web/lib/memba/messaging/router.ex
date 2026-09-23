@@ -5,10 +5,12 @@ defmodule Memba.Messaging.Router do
 
   use Commanded.Commands.Router
 
+  alias Memba.Messaging.ConversationSubscriptionCutover
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
   alias Memba.Messaging.PersonConversationSubscriptions
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.AdvanceConversationSubscriptionCutoverCheckpoint
   alias Memba.Messaging.Commands.AuthorizePersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.CancelPersonConversationSubscriptionIntent
   alias Memba.Messaging.Commands.EndPersonConversationSubscription
@@ -23,11 +25,14 @@ defmodule Memba.Messaging.Router do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReconcileLegacyConversationFollow
+  alias Memba.Messaging.Commands.RecordConversationSubscriptionCutoverFence
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.StartPersonConversationSubscriptionIntent
 
   identify(InboundEmailReceipt, by: :inbound_email_id)
+  identify(ConversationSubscriptionCutover, by: :cutover_id)
 
   identify(PersonConversationSubscriptions,
     by: :person_id,
@@ -36,6 +41,13 @@ defmodule Memba.Messaging.Router do
 
   dispatch([ReceiveInboundEmail, AcceptInboundClubEmail, RejectInboundClubEmail],
     to: InboundEmailReceipt
+  )
+
+  dispatch(RecordConversationSubscriptionCutoverFence, to: ConversationSubscriptionCutover)
+
+  dispatch(AdvanceConversationSubscriptionCutoverCheckpoint,
+    to: ConversationSubscriptionCutover,
+    before_execute: :verify_terminal_marker_before_checkpoint
   )
 
   dispatch(
@@ -64,6 +76,7 @@ defmodule Memba.Messaging.Router do
   dispatch(
     [
       StartPersonConversationSubscriptionIntent,
+      ReconcileLegacyConversationFollow,
       CancelPersonConversationSubscriptionIntent,
       EndPersonConversationSubscription,
       RevokeGroupMembershipConversationSubscriptions,

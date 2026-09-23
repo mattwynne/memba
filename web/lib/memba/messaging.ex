@@ -109,6 +109,53 @@ defmodule Memba.Messaging do
 
   def valid_conversation_authority_descriptor?(_descriptor), do: false
 
+  @doc false
+  def issue_fenced_conversation_authority_descriptor(
+        person_id,
+        conversation_id,
+        subscription_intent_id,
+        %{cutover_id: cutover_id, event_store_position: position, event_store_schema: schema}
+      ) do
+    with {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, subscription_intent_id} <- ID.cast(:subscription_intent, subscription_intent_id),
+         true <- is_integer(position) and position >= 0,
+         true <- is_binary(schema) and schema != "" do
+      {message, stream_version} =
+        Memba.EventStoreHistory.stream_forward_at_global_position(
+          Memba.Messaging.App,
+          Memba.Messaging.EventStore,
+          conversation_id,
+          position
+        )
+        |> Enum.reduce({%Memba.Messaging.Message{}, 0}, fn recorded, {message, _version} ->
+          {Memba.Messaging.Message.apply(message, recorded.data), recorded.stream_version}
+        end)
+
+      if message.message_id == conversation_id and stream_version > 0 do
+        descriptor = %ConversationAuthorityDescriptor{
+          club_id: message.club_id,
+          person_id: person_id,
+          subscription_intent_id: subscription_intent_id,
+          source: :legacy_reconciliation,
+          conversation_id: conversation_id,
+          conversation_group_ids: message.group_access |> Map.keys() |> Enum.sort(),
+          conversation_stream_version: stream_version,
+          reconciliation_fence_id: cutover_id,
+          reconciliation_fence_position: position,
+          reconciliation_event_store_schema: schema,
+          signature: ""
+        }
+
+        {:ok, %{descriptor | signature: conversation_authority_descriptor_signature(descriptor)}}
+      else
+        {:error, :conversation_not_found_at_fence}
+      end
+    else
+      _invalid -> {:error, :invalid_fenced_conversation_authority_request}
+    end
+  end
+
   @doc "Return the canonical subscription for one person and conversation."
   def get_person_conversation_subscription(person_id, conversation_id) do
     with {:ok, person_id} <- ID.cast(:person, person_id),
@@ -2671,17 +2718,29 @@ defmodule Memba.Messaging do
   end
 
   defp conversation_authority_descriptor_signature(descriptor) do
-    payload =
-      [
-        descriptor.club_id,
-        descriptor.person_id,
-        descriptor.subscription_intent_id,
-        descriptor.source,
-        descriptor.conversation_id,
-        descriptor.conversation_group_ids,
-        descriptor.conversation_stream_version
-      ]
-      |> :erlang.term_to_binary()
+    fields = [
+      descriptor.club_id,
+      descriptor.person_id,
+      descriptor.subscription_intent_id,
+      descriptor.source,
+      descriptor.conversation_id,
+      descriptor.conversation_group_ids,
+      descriptor.conversation_stream_version
+    ]
+
+    fields =
+      if descriptor.source in [:legacy_reconciliation, "legacy_reconciliation"] do
+        fields ++
+          [
+            descriptor.reconciliation_fence_id,
+            descriptor.reconciliation_fence_position,
+            descriptor.reconciliation_event_store_schema
+          ]
+      else
+        fields
+      end
+
+    payload = :erlang.term_to_binary(fields)
 
     :crypto.mac(:hmac, :sha256, conversation_authority_descriptor_signing_key(), payload)
   end

@@ -26,5 +26,10 @@ defmodule Memba.Membership.ConversationSubscriptionAuthorityDecision do
     :club_stream_version,
     :signature
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [
+                :reconciliation_fence_id,
+                :reconciliation_fence_position,
+                :reconciliation_event_store_schema
+              ]
 end

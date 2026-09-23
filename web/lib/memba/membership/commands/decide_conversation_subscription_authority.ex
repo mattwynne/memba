@@ -15,5 +15,5 @@ defmodule Memba.Membership.Commands.DecideConversationSubscriptionAuthority do
     :authority_request_id,
     :authority_decision_id
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [:fenced_authority_decision]
 end

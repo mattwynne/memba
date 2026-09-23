@@ -9,7 +9,12 @@ defmodule Memba.ReleaseTest do
     "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_BATCH_SIZE",
     "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_CLUB_IDS",
     "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_AFTER",
-    "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_CUTOVER_ACKNOWLEDGEMENT"
+    "MEMBA_GROUP_MEMBERSHIP_RECONCILIATION_CUTOVER_ACKNOWLEDGEMENT",
+    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_MODE",
+    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_BATCH_SIZE",
+    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_AFTER",
+    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_PROJECTOR_TIMEOUT",
+    "MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_CUTOVER_ACKNOWLEDGEMENT"
   ]
 
   @release_steps [
@@ -114,6 +119,27 @@ defmodule Memba.ReleaseTest do
 
     assert_raise RuntimeError, fn ->
       Release.reconcile_legacy_group_memberships!()
+    end
+  end
+
+  test "legacy conversation-follow reconciliation release config fails closed when malformed" do
+    Application.put_env(:memba, :release_step_overrides,
+      load_app: fn -> :ok end,
+      ensure_release_services_started: fn -> :ok end
+    )
+
+    for {name, value} <- [
+          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_MODE", "maybe"},
+          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_BATCH_SIZE", "many"},
+          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_AFTER", "not-json"},
+          {"MEMBA_CONVERSATION_FOLLOW_RECONCILIATION_PROJECTOR_TIMEOUT", "later"}
+        ] do
+      Enum.each(@reconciliation_env_vars, &System.delete_env/1)
+      System.put_env(name, value)
+
+      assert_raise ArgumentError, fn ->
+        Release.reconcile_legacy_conversation_follows!()
+      end
     end
   end
 
