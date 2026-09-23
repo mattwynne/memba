@@ -24,6 +24,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
@@ -32,6 +33,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.ConversationSubscriptionAuthorityDecision
   alias Memba.Membership.CustomGroupAdmission
+  alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
@@ -48,7 +50,9 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging
   alias Memba.Messaging.ConversationAuthorityDescriptor
+  alias Memba.Messaging.PersonConversationSubscriptions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.FirstClassGroupMembership
@@ -128,6 +132,27 @@ defmodule Memba.Membership do
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_custom_group_member_command(attrs) do
       dispatch_custom_group_admission(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Remove a person from one exact current custom GroupMembership.
+
+  The caller supplies a stable UUID `removal_operation_id`, the exact
+  `group_membership_id`, the existing club membership/person identity, and the
+  authenticated actor. `club_membership_id` is preferred; the legacy
+  `membership_id` key is accepted only as the same unchanged identity.
+
+  A current group member may remove themself or another member, and an active
+  club Admin may remove a member without belonging to the group. System groups
+  are rejected. Success is returned only after Messaging's canonical stream
+  contains the durable revocation-completion receipt for the ended
+  GroupMembership.
+  """
+  def remove_custom_group_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- remove_custom_group_member_command(attrs) do
+      dispatch_custom_group_removal(command, dispatch_opts)
     end
   end
 
@@ -2176,6 +2201,27 @@ defmodule Memba.Membership do
     end
   end
 
+  defp remove_custom_group_member_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, group_id} <- fetch_required(attrs, :group_id),
+         {:ok, group_membership_id} <- fetch_required(attrs, :group_membership_id),
+         {:ok, club_membership_id} <- club_membership_id(attrs),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+         {:ok, removal_operation_id} <- fetch_required(attrs, :removal_operation_id) do
+      {:ok,
+       %RemoveCustomGroupMember{
+         club_id: club_id,
+         group_id: group_id,
+         group_membership_id: group_membership_id,
+         club_membership_id: club_membership_id,
+         person_id: person_id,
+         actor_person_id: actor_person_id,
+         removal_operation_id: removal_operation_id
+       }}
+    end
+  end
+
   defp update_club_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, club_id} <- cast_club_id(club_id),
@@ -2957,6 +3003,53 @@ defmodule Memba.Membership do
     end
   end
 
+  defp dispatch_custom_group_removal(command, dispatch_opts) do
+    dispatch_opts =
+      dispatch_opts
+      |> Keyword.drop([:returning, :include_execution_result, :include_aggregate_version])
+      |> Keyword.put(:returning, :execution_result)
+      |> Keyword.update(
+        :consistency,
+        [RevokeGroupMembershipConversationSubscriptions],
+        &custom_group_removal_revocation_consistency/1
+      )
+
+    case dispatch(command, dispatch_opts) do
+      {:ok, %Commanded.Commands.ExecutionResult{}} ->
+        complete_custom_group_removal(command)
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp complete_custom_group_removal(command) do
+    revocation_id = PersonConversationSubscriptions.revocation_id(command.group_membership_id)
+
+    if Messaging.group_membership_subscription_revocation_completed?(
+         command.person_id,
+         command.group_membership_id,
+         revocation_id
+       ) do
+      {:ok,
+       %CustomGroupRemoval{
+         club_id: command.club_id,
+         group_id: command.group_id,
+         membership_id: command.club_membership_id,
+         club_membership_id: command.club_membership_id,
+         group_membership_id: command.group_membership_id,
+         person_id: command.person_id,
+         actor_person_id: command.actor_person_id,
+         removal_operation_id: command.removal_operation_id,
+         revocation_id: revocation_id,
+         subscription_revocation_completed: true,
+         transition: :member_removed
+       }}
+    else
+      {:error, :group_membership_subscription_revocation_incomplete}
+    end
+  end
+
   defp explicit_commanded_returning_mode?(dispatch_opts) do
     Keyword.has_key?(dispatch_opts, :returning) or
       Keyword.get(dispatch_opts, :include_execution_result) == true or
@@ -3066,6 +3159,14 @@ defmodule Memba.Membership do
     do: handler == inspect(RevokeSystemConversationSubscriptions)
 
   defp system_revocation_handler?(_handler), do: false
+
+  defp custom_group_removal_revocation_consistency(:strong), do: :strong
+
+  defp custom_group_removal_revocation_consistency(:eventual),
+    do: [RevokeGroupMembershipConversationSubscriptions]
+
+  defp custom_group_removal_revocation_consistency(handlers),
+    do: include_group_membership_revocation_consistency(handlers)
 
   defp include_group_membership_revocation_consistency(:strong), do: :strong
 
@@ -3185,6 +3286,25 @@ defmodule Memba.Membership do
     case fetch_optional(attrs, :group_membership_id) do
       {:ok, group_membership_id} -> {:ok, group_membership_id}
       :error -> {:ok, ID.generate(:group_membership)}
+    end
+  end
+
+  defp club_membership_id(attrs) do
+    case {fetch_optional(attrs, :club_membership_id), fetch_optional(attrs, :membership_id)} do
+      {{:ok, club_membership_id}, {:ok, club_membership_id}} ->
+        {:ok, club_membership_id}
+
+      {{:ok, _club_membership_id}, {:ok, _membership_id}} ->
+        {:error, :club_membership_identity_mismatch}
+
+      {{:ok, club_membership_id}, :error} ->
+        {:ok, club_membership_id}
+
+      {:error, {:ok, membership_id}} ->
+        {:ok, membership_id}
+
+      {:error, :error} ->
+        {:error, {:missing_required_attribute, :club_membership_id}}
     end
   end
 

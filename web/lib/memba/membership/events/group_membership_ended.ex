@@ -20,6 +20,8 @@ defmodule Memba.Membership.Events.GroupMembershipEnded do
     :club_membership_id,
     :person_id,
     :idempotency_key,
-    :reason
+    :reason,
+    :actor_person_id,
+    :removal_operation_id
   ]
 end

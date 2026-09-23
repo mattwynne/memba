@@ -5,6 +5,7 @@ defmodule Memba.Membership.LegacyGroupMembershipReconciliationTest do
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.ReconcileLegacyGroupMembership
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubMemberAdded
@@ -87,6 +88,37 @@ defmodule Memba.Membership.LegacyGroupMembershipReconciliationTest do
     assert [] = Club.execute(restarted, command(restarted, ids))
     assert restarted.active_memberships == active_memberships
     assert restarted.roles == roles
+  end
+
+  test "public removal materializes and ends an exact fenced unreconciled relation" do
+    {club, ids} = active_legacy_relation()
+
+    group_membership_id =
+      Reconciliation.group_membership_id(ids.club_id, ids.group_id, ids.membership_id)
+
+    command = %RemoveCustomGroupMember{
+      club_id: ids.club_id,
+      group_id: ids.group_id,
+      group_membership_id: group_membership_id,
+      club_membership_id: ids.membership_id,
+      person_id: ids.person_id,
+      actor_person_id: ids.person_id,
+      removal_operation_id: Ecto.UUID.generate()
+    }
+
+    assert [
+             %GroupMembershipStarted{group_membership_id: ^group_membership_id},
+             %GroupMembershipEnded{
+               group_membership_id: ^group_membership_id,
+               removal_operation_id: removal_operation_id
+             },
+             %GroupMemberRemoved{}
+           ] = events = Club.execute(club, command)
+
+    assert removal_operation_id == command.removal_operation_id
+    removed = Enum.reduce(events, club, &Club.apply(&2, &1))
+    assert [] = Club.execute(removed, command)
+    assert removed.first_class_group_memberships[group_membership_id].status == :ended
   end
 
   test "reconciled membership is ended by legacy removal and replayed retry is exact" do

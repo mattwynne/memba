@@ -7,6 +7,7 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.EndGroupMembership
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.StartGroupMembership
   alias Memba.Membership.Events.GroupCreated
@@ -100,6 +101,27 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
                |> Map.put(:actor_person_id, actor_person_id)
                |> Map.put(:group_membership_id, group_membership_id)
              )
+
+    removal_operation_id = Ecto.UUID.generate()
+
+    assert %RemoveCustomGroupMember{
+             club_id: ids.club_id,
+             group_id: ids.group_id,
+             group_membership_id: group_membership_id,
+             club_membership_id: ids.membership_id,
+             person_id: ids.person_id,
+             actor_person_id: actor_person_id,
+             removal_operation_id: removal_operation_id
+           } ==
+             struct!(RemoveCustomGroupMember, %{
+               club_id: ids.club_id,
+               group_id: ids.group_id,
+               group_membership_id: group_membership_id,
+               club_membership_id: ids.membership_id,
+               person_id: ids.person_id,
+               actor_person_id: actor_person_id,
+               removal_operation_id: removal_operation_id
+             })
 
     assert %RemoveGroupMember{
              club_id: ids.club_id,

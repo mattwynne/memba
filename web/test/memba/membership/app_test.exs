@@ -24,6 +24,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
   alias Memba.Membership.Commands.ReconcileLegacyGroupMembership
   alias Memba.Membership.Commands.RecordLegacyGroupMembershipReconciliationFence
+  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
@@ -122,6 +123,7 @@ defmodule Memba.Membership.AppTest do
         ReconcileLegacyAdminHistory,
         ReconcileLegacyGroupMembership,
         RecordLegacyGroupMembershipReconciliationFence,
+        RemoveCustomGroupMember,
         RemoveGroupMember,
         RemoveClubMember,
         RemoveClubRoleFromMember,

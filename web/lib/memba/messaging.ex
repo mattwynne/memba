@@ -30,6 +30,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.EmailDeliveryDispatcher
+  alias Memba.Messaging.Events.GroupMembershipSubscriptionRevocationCompleted
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
@@ -195,6 +196,41 @@ defmodule Memba.Messaging do
       |> Repo.all()
     else
       :error -> []
+    end
+  end
+
+  @doc false
+  def group_membership_subscription_revocation_completed?(
+        person_id,
+        group_membership_id,
+        revocation_id
+      ) do
+    with {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, group_membership_id} <- ID.cast(:group_membership, group_membership_id),
+         {:ok, revocation_id} <- ID.cast(:subscription_revocation, revocation_id) do
+      stream_id = PersonConversationSubscriptions.stream_id(person_id)
+
+      case Commanded.EventStore.stream_forward(App, stream_id) do
+        {:error, _reason} ->
+          false
+
+        stream ->
+          Enum.any?(stream, fn
+            %{
+              data: %GroupMembershipSubscriptionRevocationCompleted{
+                person_id: ^person_id,
+                group_membership_id: ^group_membership_id,
+                revocation_id: ^revocation_id
+              }
+            } ->
+              true
+
+            _recorded_event ->
+              false
+          end)
+      end
+    else
+      :error -> false
     end
   end
 
