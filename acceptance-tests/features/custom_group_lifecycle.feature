@@ -48,7 +48,7 @@ Feature: Joining and leaving custom groups
       But Carol's former conversation follows should not be restored
 
   @iteration-064 @todo-domain @todo-ui
-  Rule: Leaving or removal immediately ends conversation access and future emails
+  Rule: Current group participation controls conversation activity
 
     Scenario Outline: Carol loses access even with an old Board conversation open
       Given Carol belongs to Board and follows "September agenda"
@@ -56,7 +56,9 @@ Feature: Joining and leaving custom groups
       When <membership_change>
       Then Carol should immediately lose access to every Board conversation
       And "September agenda" should no longer be available in her open view or through its link
-      And Carol should no longer be allowed to reply to or follow Board conversations
+      And Carol should no longer be allowed to post, reply to, or follow Board conversations
+      And an email reply from Carol should not be added to "September agenda"
+      And Carol should see the usual authorization error for each stale action
       But Carol should remain an active KMC member and see Board listed
 
       Examples:
@@ -64,17 +66,28 @@ Feature: Joining and leaving custom groups
         | Carol leaves Board           |
         | Bob removes Carol from Board |
 
-    Scenario Outline: Carol's former follow does not deliver future Board emails
+    Scenario Outline: Messages posted while Carol is absent create no delivery for her
       Given Carol belongs to Board and follows "September agenda"
       And <membership_change>
       When Bob replies "The budget is ready" to "September agenda"
       And Bob starts the Board conversation "October agenda"
-      Then Carol should receive neither "The budget is ready" nor "October agenda" by email
+      Then no email delivery should be created for Carol for "The budget is ready" or "October agenda"
 
       Examples:
         | membership_change            |
         | Carol leaves Board           |
         | Bob removes Carol from Board |
+
+  @iteration-064 @todo-domain @todo-ui
+  Rule: A message's email recipients are fixed when it is posted
+
+    Scenario: Removing Carol does not cancel her queued email
+      Given Carol belongs to Board and follows "September agenda"
+      And Bob has posted the reply "The budget is ready" to "September agenda"
+      And Carol's email delivery for "The budget is ready" is queued
+      When Bob removes Carol from Board
+      Then Carol should still receive "The budget is ready" by email
+      But its conversation link should no longer give Carol access
 
     Scenario: Removing Carol cannot withdraw an email she already received
       Given Carol belongs to Board
@@ -84,22 +97,28 @@ Feature: Joining and leaving custom groups
       But its conversation link should no longer give Carol access
 
   @iteration-064 @todo-domain @todo-ui
-  Rule: Being added back does not restore follows cleared when leaving
+  Rule: Follow preferences survive absence without creating a backlog
 
-    Scenario: Carol rejoins Board without resuming her old follow
+    Scenario: Carol's Board follow remains while she is absent
+      Given Carol belongs to Board and follows "September agenda"
+      When Carol leaves Board
+      Then Carol should still follow "September agenda"
+      But the follow should not give Carol access to it
+
+    Scenario: Rejoining does not send messages posted during Carol's absence
       Given Carol belongs to Board and follows "September agenda"
       And Carol leaves Board
-      And Bob adds Carol back to Board
-      When Bob replies "The budget is ready" to "September agenda"
-      Then Carol should be able to read "The budget is ready" on the website
-      But Carol should not receive "The budget is ready" by email
-      And Carol should no longer be following "September agenda"
+      And Bob replies "The budget is ready" to "September agenda"
+      When Bob adds Carol back to Board
+      Then Carol should receive no email or backlog for "The budget is ready"
+      But Carol should be able to read "The budget is ready" on the website
 
-    Scenario: Carol follows again after being added back
-      Given Carol has been added back to Board after leaving
-      And Carol follows "September agenda" again
+    Scenario: Carol's follow resumes for messages posted after she rejoins
+      Given Carol followed "September agenda" before leaving Board
+      And Bob has added Carol back to Board
       When Bob replies "The figures are final" to "September agenda"
       Then Carol should receive "The figures are final" by email
+      And Carol should still be following "September agenda"
 
   @iteration-064 @todo-domain @todo-ui
   Rule: The last member may leave without archiving or deleting the group

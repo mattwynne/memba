@@ -71,7 +71,7 @@ green than before.
 | 061 | 2026-09-13 | merged | Discover club groups without joining them | [plan](061-discover-club-groups/plan.md) — `group_conversations.feature` |
 | 062 | 2026-09-13 | merged | Admins create usable custom groups | [plan](062-create-custom-groups/plan.md) — `custom_group_creation.feature`, `custom_group_conversations.feature`, `custom_group_lifecycle.feature` |
 | 063 | 2026-09-13 | merged | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
-| 064 | 2026-09-13 | implementing | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
+| 064 | 2026-09-13 | implementing | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md); `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 065 | 2026-09-13 | validated | Request custom-group access through an Admin message | [plan](065-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
 | 066 | 2026-08-13 | validated | Members change their own name | [plan](066-member-name-editing/plan.md) — `member_profile.feature` |
 | 067 | 2026-08-13 | validated | Members set their own profile photo | [plan](067-member-profile-photo/plan.md) — `member_profile.feature` |
@@ -91,7 +91,7 @@ Shared acceptance feature files used across these iterations:
 - [`custom_group_creation.feature`](../../acceptance-tests/features/custom_group_creation.feature) — `@iteration-062`; future domain/browser scenarios carry `@todo-domain @todo-ui`; live name/preview examples are `@not-domain @todo-ui`.
 - [`custom_group_conversations.feature`](../../acceptance-tests/features/custom_group_conversations.feature) — `@iteration-062 @todo-domain @todo-ui`, preserving group-aware web/email conversation policy for custom groups.
 - [`custom_group_membership.feature`](../../acceptance-tests/features/custom_group_membership.feature) — 063 additions and 064 removals/system guards, with per-rule iteration and runner-debt tags.
-- [`custom_group_lifecycle.feature`](../../acceptance-tests/features/custom_group_lifecycle.feature) — 062 club-departure safety, 063 history/welcome, 064 removal/follow-reset/empty-group behaviour; per-rule iteration and runner-debt tags.
+- [`custom_group_lifecycle.feature`](../../acceptance-tests/features/custom_group_lifecycle.feature) — 062 club-departure safety, 063 history/welcome, 064 removal/delivery-fixation/follow-preservation/empty-group behaviour; per-rule iteration and runner-debt tags.
 - [`custom_group_access_requests.feature`](../../acceptance-tests/features/custom_group_access_requests.feature) — `@iteration-065 @todo-domain @todo-ui`; requests are ordinary Admin messages, not an approval workflow.
 
 - [`authentication.feature`](../../acceptance-tests/features/authentication.feature) (iteration 032 adds `@iteration-032 @todo-domain @todo-ui` planning scenarios for privacy-preserving auth email delivery progress)
