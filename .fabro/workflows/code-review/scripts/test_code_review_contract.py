@@ -3,12 +3,21 @@
 from pathlib import Path
 import json
 import re
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOW = ROOT / ".fabro/workflows/code-review"
 graph = (WORKFLOW / "workflow.fabro").read_text()
 prompt = (WORKFLOW / "prompts/review.md").read_text()
 dev = (ROOT / "bin/dev").read_text()
+config = tomllib.loads((WORKFLOW / "workflow.toml").read_text())
+
+# Slack is an optional delivery surface for the existing web-backed interviewer.
+# The human gate remains available in Fabro web/CLI if Slack delivery is unavailable.
+assert config["run"]["interviews"] == {
+    "provider": "slack",
+    "slack": {"channel": "#memba"},
+}
 
 # Provider/design policy that cannot be inferred from command-only runtime fixtures.
 assert '#focused_reviewer { provider: openai; model: gpt-5.6-terra;' in graph
