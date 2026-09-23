@@ -393,7 +393,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Memba.Membership.active_member_of_club?(club_id, carol.person_id)
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
-    assert Messaging.following_conversation?(private_message_id, carol.person_id)
+    refute Messaging.following_conversation?(private_message_id, carol.person_id)
 
     departed_reply_id = Memba.ID.generate(:message)
 
@@ -648,12 +648,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :strong
              )
 
-    remove_group_member(
-      club_id,
-      board_group_id,
-      carol_membership_id,
-      carol.person_id
-    )
+    assert {:ok, %Memba.Membership.CustomGroupRemoval{transition: :member_removed}} =
+             Memba.Membership.remove_custom_group_member(
+               %{
+                 club_id: club_id,
+                 group_id: board_group_id,
+                 membership_id: carol_membership_id,
+                 person_id: carol.person_id,
+                 actor_person_id: alice.person_id,
+                 removal_operation_id: Ecto.UUID.generate()
+               },
+               consistency: :strong
+             )
 
     absent_reply_id = Memba.ID.generate(:message)
 

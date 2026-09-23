@@ -445,7 +445,7 @@ Then(
   }
 );
 
-When(/^(\w+) directly tries to ((?!add ).+)$/, async function (personName, action) {
+When(/^(\w+) directly tries to ((?!add |remove ).+)$/, async function (personName, action) {
   const message = messageFor(this, "September agenda");
   const boardId = groupIdFor(this, kootenayClubName, "Board");
   const before = directActionSnapshot(this, personName, message, boardId);

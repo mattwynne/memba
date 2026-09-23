@@ -110,6 +110,73 @@ defmodule MembaWeb.MemberComponentsTest do
 
       refute_selector(html, "#active-members-empty-state")
     end
+
+    test "renders an identified leave confirmation without suggesting club removal" do
+      member_id = Memba.ID.generate(:person)
+      membership_id = Memba.ID.generate(:membership)
+      operation_id = Ecto.UUID.generate()
+
+      html =
+        render_member_list(
+          rows: [
+            %{
+              id: member_id,
+              membership_id: membership_id,
+              name: "Alice Adams",
+              initials: "AA",
+              roles: ["Admin"]
+            }
+          ],
+          active_member_count: 1,
+          current_member: %{id: member_id, name: "Alice Adams"},
+          club_name: "Alpine Club",
+          manageable: true,
+          removal: %{
+            person_id: member_id,
+            operation_id: operation_id,
+            status: :pending
+          }
+        )
+
+      assert_selector(
+        html,
+        "#custom-group-member-remove-confirmation-#{member_id}" <>
+          "[aria-label='Confirm leaving Board']"
+      )
+
+      assert_text(html, "#custom-group-member-remove-confirmation-#{member_id}", "Leave Board?")
+      assert_text(html, "#custom-group-member-remove-confirmation-#{member_id}", "Alpine Club")
+      assert_text(html, "#custom-group-member-remove-confirmation-#{member_id}", "last member")
+
+      assert_text(
+        html,
+        "#custom-group-member-remove-confirmation-#{member_id}",
+        "Emails for newly posted messages stop immediately. Emails already queued may still arrive. Delivered emails stay delivered."
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-remove-confirmation-#{member_id}" <>
+          "[phx-window-keydown][phx-key='Escape']"
+      )
+
+      assert_selector(
+        html,
+        "#custom-group-member-remove-confirm-#{member_id}" <>
+          "[phx-value-removal_operation_id='#{operation_id}']"
+      )
+
+      cancel_click =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#custom-group-member-remove-cancel-#{member_id}")
+        |> LazyHTML.attribute("phx-click")
+        |> List.first()
+
+      assert cancel_click =~ "cancel_custom_group_member_removal"
+      assert cancel_click =~ "custom-group-member-remove-start-#{member_id}"
+      refute html =~ "remove you from Alpine Club"
+    end
   end
 
   describe "custom_group_membership_guidance/1" do

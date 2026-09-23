@@ -4,12 +4,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
-  alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging
   alias Memba.Repo
@@ -224,14 +222,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(view, "#member-message-detail", "Private planning details")
 
-    Repo.update_all(
-      from(group_membership in GroupMembership,
-        where:
-          group_membership.group_id == ^private_group.group_id and
-            group_membership.membership_id == ^alice.membership_id
-      ),
-      set: [active: false]
-    )
+    assert {:ok, _removal} =
+             Memba.Membership.remove_custom_group_member(
+               %{
+                 club_id: alice.club_id,
+                 group_id: private_group.group_id,
+                 membership_id: alice.membership_id,
+                 person_id: alice.person_id,
+                 actor_person_id: alice.person_id,
+                 removal_operation_id: Ecto.UUID.generate()
+               },
+               consistency: :strong
+             )
 
     notify_read_model_change(
       view,
@@ -273,13 +275,16 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/messages/#{message.message_id}?#{[group_id: private_group.group_id]}")
 
-    Repo.delete_all(
-      from(access in ConversationGroupAccess,
-        where:
-          access.conversation_id == ^message.message_id and
-            access.group_id == ^private_group.group_id
-      )
-    )
+    assert :ok =
+             Messaging.revoke_conversation_access_from_group(
+               %{
+                 conversation_id: message.message_id,
+                 club_id: alice.club_id,
+                 group_id: private_group.group_id,
+                 access_level: :write
+               },
+               consistency: :strong
+             )
 
     notify_read_model_change(
       view,
@@ -1140,39 +1145,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     |> IO.iodata_to_binary()
   end
 
-  defp create_active_member(attrs) do
-    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
-    person_id = Memba.ID.generate(:person)
-    club_name = Keyword.fetch!(attrs, :club_name)
-
-    club =
-      Repo.get(Club, club_id) ||
-        attrs
-        |> club_attrs(club_id, club_name)
-        |> insert_membership_club!()
-
-    person =
-      insert_membership_person!(
-        person_id: person_id,
-        name: Keyword.get(attrs, :name, "Test Member"),
-        email: Keyword.fetch!(attrs, :email)
-      )
-
-    membership =
-      Repo.insert!(%Membership{
-        membership_id: Memba.ID.generate(:membership),
-        club_id: club_id,
-        person_id: person.person_id,
-        active: true
-      })
-
-    ensure_everyone_group_membership!(club_id, membership, person.person_id)
-
-    club
-    |> Map.from_struct()
-    |> Map.put(:person_id, person.person_id)
-    |> Map.put(:membership_id, membership.membership_id)
-  end
+  defp create_active_member(attrs), do: create_authoritative_active_member(attrs)
 
   defp create_authoritative_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
@@ -1184,7 +1157,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                  %{
                    club_id: club_id,
                    name: Keyword.fetch!(attrs, :club_name),
-                   slug: "alpine-club"
+                   slug: Keyword.get(attrs, :slug, "alpine-club")
                  },
                  consistency: :strong
                )
@@ -1220,24 +1193,40 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   end
 
   defp create_group(club_id, name) do
-    Repo.insert!(%Group{
-      group_id: Memba.ID.generate(:group),
-      club_id: club_id,
-      group_key: "private_planning",
-      email_slug: "private-planning",
-      name: name,
-      name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
-    })
+    group_id = Memba.ID.generate(:group)
+    actor = Repo.get_by!(Membership, club_id: club_id, active: true)
+
+    assert :ok =
+             Memba.Membership.create_custom_group(
+               %{
+                 group_id: group_id,
+                 club_id: club_id,
+                 actor_person_id: actor.person_id,
+                 name: name
+               },
+               consistency: :strong
+             )
+
+    Repo.get!(Group, group_id)
   end
 
   defp add_group_member(group, member) do
-    Repo.insert!(%GroupMembership{
-      club_id: member.club_id,
-      group_id: group.group_id,
-      membership_id: member.membership_id,
-      person_id: member.person_id,
-      active: true
-    })
+    case Memba.Membership.add_custom_group_member(
+           %{
+             club_id: member.club_id,
+             group_id: group.group_id,
+             membership_id: member.membership_id,
+             person_id: member.person_id,
+             actor_person_id: member.person_id
+           },
+           consistency: :strong
+         ) do
+      {:ok, _admission} ->
+        Repo.get_by!(GroupMembership, group_id: group.group_id, person_id: member.person_id)
+
+      {:error, :already_active_group_member} ->
+        Repo.get_by!(GroupMembership, group_id: group.group_id, person_id: member.person_id)
+    end
   end
 
   defp notify_read_model_change(view, projector, source_event) do
@@ -1253,40 +1242,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     )
   end
 
-  defp ensure_everyone_group_membership!(club_id, membership, person_id) do
-    group_id = SystemGroups.everyone_group_id(club_id)
-
-    Repo.get(Group, group_id) ||
-      Repo.insert!(%Group{
-        group_id: group_id,
-        club_id: club_id,
-        group_key: SystemGroups.everyone_key(),
-        email_slug: SystemGroups.everyone_email_slug(),
-        name: SystemGroups.everyone_name(),
-        name_uniqueness_key:
-          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
-      })
-
-    Repo.insert!(%GroupMembership{
-      club_id: club_id,
-      group_id: group_id,
-      membership_id: membership.membership_id,
-      person_id: person_id,
-      active: true
-    })
-  end
-
-  defp club_attrs(attrs, club_id, club_name) do
-    base = [club_id: club_id, name: club_name]
-
-    case Keyword.fetch(attrs, :slug) do
-      {:ok, slug} -> Keyword.put(base, :slug, slug)
-      :error -> base
-    end
-  end
-
   defp create_message(attrs) do
-    insert_group_accessible_message!(attrs)
+    if Keyword.has_key?(attrs, :conversation_id) do
+      insert_group_accessible_message!(attrs)
+    else
+      create_authoritative_message(attrs)
+    end
   end
 
   defp create_authoritative_message(attrs) do
@@ -1299,14 +1260,38 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                  club_id: Keyword.fetch!(attrs, :club_id),
                  sender_id: Keyword.fetch!(attrs, :sender_id),
                  audience_group_id:
-                   SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id)),
+                   Keyword.get_lazy(attrs, :audience_group_id, fn ->
+                     SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id))
+                   end),
                  subject: Keyword.fetch!(attrs, :subject),
                  body: Keyword.get(attrs, :body, "Message body")
                },
                consistency: :strong
              )
 
-    Messaging.get_message(message_id)
+    :ok =
+      Messaging.unfollow_conversation(
+        %{
+          club_id: Keyword.fetch!(attrs, :club_id),
+          conversation_id: message_id,
+          member_id: Keyword.fetch!(attrs, :sender_id)
+        },
+        consistency: :strong
+      )
+
+    Repo.delete_all(
+      from(delivery in MemberEmailDelivery, where: delivery.message_id == ^message_id)
+    )
+
+    message = Messaging.get_message(message_id)
+
+    case Keyword.fetch(attrs, :inserted_at) do
+      {:ok, inserted_at} ->
+        message |> Ecto.Changeset.change(inserted_at: inserted_at) |> Repo.update!()
+
+      :error ->
+        message
+    end
   end
 
   defp create_member_email_delivery(attrs) do

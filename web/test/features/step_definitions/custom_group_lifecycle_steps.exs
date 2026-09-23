@@ -148,6 +148,240 @@ defmodule Memba.Cucumber.CustomGroupLifecycleSteps do
     context
   end
 
+  step "Carol belongs to Board and follows {string}", %{args: [subject]} = context do
+    context
+    |> add_group_member(@board_name, "Carol")
+    |> follow_conversation("Carol", subject)
+  end
+
+  step "Carol belongs to Board", context do
+    add_group_member(context, @board_name, "Carol")
+  end
+
+  step "Carol leaves Board", context do
+    remove_group_member(context, "Carol", "Carol")
+  end
+
+  step "Bob has posted the reply {string} to {string}", %{args: [body, subject]} = context do
+    create_reply(context, subject, "Bob", body)
+  end
+
+  step "Bob starts the Board conversation {string}", %{args: [subject]} = context do
+    create_conversation(context, @board_name, "Bob", subject)
+  end
+
+  step "no email delivery should be created for Carol for {string} or {string}",
+       %{args: [reply_body, subject]} = context do
+    Enum.each([reply_body, subject], fn message_key ->
+      message = message!(context, message_key)
+
+      refute Enum.any?(
+               Messaging.list_recipient_deliveries(message.message_id),
+               &(&1.recipient_id == person_id!(context, "Carol"))
+             )
+    end)
+
+    context
+  end
+
+  step "Carol's email delivery for {string} is queued", %{args: [body]} = context do
+    delivery = carol_delivery!(context, body)
+    assert delivery.status == "pending"
+    Map.put(context, :last_delivery_message, message!(context, body))
+  end
+
+  step "Carol should still receive {string} by email", %{args: [body]} = context do
+    message = message!(context, body)
+    drain_email_deliveries()
+
+    assert Enum.any?(
+             Fake.deliveries(),
+             &(&1.message_id == message.message_id and
+                 &1.recipient_id == person_id!(context, "Carol"))
+           )
+
+    context
+  end
+
+  step "its conversation link should no longer give Carol access", context do
+    context
+    |> Map.fetch!(:last_delivery_message)
+    |> then(&refute_carol_access(context, &1))
+
+    context
+  end
+
+  step "Carol has received the Board message {string} by email", %{args: [subject]} = context do
+    context = create_conversation(context, @board_name, "Bob", subject)
+    message = message!(context, subject)
+    drain_email_deliveries()
+
+    assert Enum.any?(
+             Fake.deliveries(),
+             &(&1.message_id == message.message_id and
+                 &1.recipient_id == person_id!(context, "Carol"))
+           )
+
+    Map.put(context, :received_delivery, carol_delivery!(context, subject))
+  end
+
+  step "Carol's delivered copy of {string} should not be withdrawn",
+       %{args: [subject]} = context do
+    message = message!(context, subject)
+    delivery = carol_delivery!(context, subject)
+    assert delivery.status == "sent"
+    assert delivery.delivery_id == Map.fetch!(context, :received_delivery).delivery_id
+    Map.put(context, :last_delivery_message, message)
+  end
+
+  step "Carol should still follow {string}", %{args: [subject]} = context do
+    assert_carol_follows(context, subject)
+  end
+
+  step "the follow should not give Carol access to it", context do
+    refute_carol_access(context, message!(context, @board_subject))
+    context
+  end
+
+  step "Bob adds Carol back to Board", context do
+    add_custom_group_member(context, "Bob", "Carol")
+  end
+
+  step "Carol should receive no email or backlog for {string}", %{args: [body]} = context do
+    message = message!(context, body)
+
+    refute Enum.any?(
+             Messaging.list_recipient_deliveries(message.message_id),
+             &(&1.recipient_id == person_id!(context, "Carol"))
+           )
+
+    context
+  end
+
+  step "Carol should be able to read {string} on the website", %{args: [body]} = context do
+    message = message!(context, body)
+
+    assert Messaging.member_has_conversation_access?(
+             message.message_id,
+             message.club_id,
+             person_id!(context, "Carol"),
+             :read
+           )
+
+    context
+  end
+
+  step "Carol followed {string} before leaving Board", %{args: [subject]} = context do
+    context
+    |> add_group_member(@board_name, "Carol")
+    |> follow_conversation("Carol", subject)
+    |> remove_group_member("Carol", "Carol")
+  end
+
+  step "Bob has added Carol back to Board", context do
+    add_custom_group_member(context, "Bob", "Carol")
+  end
+
+  step "Carol should receive {string} by email", %{args: [body]} = context do
+    message = message!(context, body)
+    drain_email_deliveries()
+
+    assert Enum.any?(
+             Fake.deliveries(),
+             &(&1.message_id == message.message_id and
+                 &1.recipient_id == person_id!(context, "Carol"))
+           )
+
+    context
+  end
+
+  step "Carol should still be following {string}", %{args: [subject]} = context do
+    assert_carol_follows(context, subject)
+  end
+
+  step "Bob is Board's only remaining member", context do
+    context
+    |> remove_group_member("Alice", "Bob")
+    |> snapshot_board()
+  end
+
+  step "Bob leaves Board", context do
+    remove_group_member(context, "Bob", "Bob")
+  end
+
+  step "Board has no members", context do
+    context =
+      Enum.reduce(
+        Membership.list_active_members_of_group(group_id!(context, @board_name)),
+        context,
+        fn
+          member, context -> remove_group_member(context, member.name, member.name)
+        end
+      )
+
+    snapshot_board(context)
+  end
+
+  step "Board should have no members", context do
+    assert Membership.list_active_members_of_group(group_id!(context, @board_name)) == []
+    context
+  end
+
+  step "Board should remain listed for KMC members", context do
+    Enum.each(["Alice", "Bob", "Carol", "Dan", "Eve"], fn person_name ->
+      assert group_id!(context, @board_name) in Enum.map(
+               Membership.list_discoverable_groups_for_member(
+                 club_id!(context),
+                 person_id!(context, person_name)
+               ),
+               & &1.group_id
+             )
+    end)
+
+    context
+  end
+
+  step "its name, email address, and conversation history should be unchanged", context do
+    assert board_snapshot(context) == Map.fetch!(context, :board_snapshot)
+    context
+  end
+
+  step "Board should not be archived", context do
+    assert Membership.get_group(group_id!(context, @board_name)) != nil
+    context
+  end
+
+  step "Carol should be Board's only member", context do
+    assert Enum.map(
+             Membership.list_active_members_of_group(group_id!(context, @board_name)),
+             & &1.name
+           ) ==
+             ["Carol"]
+
+    context
+  end
+
+  step "Board should not have the conversation {string}", %{args: [subject]} = context do
+    refute Enum.any?(
+             Messaging.list_conversations_for_group(group_id!(context, @board_name)),
+             &(&1.subject == subject)
+           )
+
+    context
+  end
+
+  step "Eve should receive the usual authorization rejection", context do
+    assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
+    assert_received {:email, %Swoosh.Email{text_body: text_body}}
+    assert text_body =~ "wasn't posted"
+    context
+  end
+
+  step "no group recipient should receive an email for it", context do
+    assert Fake.deliveries() == []
+    context
+  end
+
   defp ensure_custom_group(context, group_name, email_slug) do
     case get_in(context, [:groups, {@club_name, group_name}]) do
       group_id when is_binary(group_id) ->
@@ -237,7 +471,7 @@ defmodule Memba.Cucumber.CustomGroupLifecycleSteps do
                consistency: :strong
              )
 
-    context
+    put_context(context, :messages, body, Messaging.get_message(reply_id))
   end
 
   defp follow_conversation(context, person_name, subject) do
@@ -254,6 +488,96 @@ defmodule Memba.Cucumber.CustomGroupLifecycleSteps do
              )
 
     context
+  end
+
+  defp remove_group_member(context, target_name, actor_name) do
+    assert {:ok, %Membership.CustomGroupRemoval{transition: :member_removed}} =
+             Membership.remove_custom_group_member(
+               %{
+                 club_id: club_id!(context),
+                 group_id: group_id!(context, @board_name),
+                 membership_id: membership_id!(context, target_name),
+                 person_id: person_id!(context, target_name),
+                 actor_person_id: person_id!(context, actor_name),
+                 removal_operation_id: Ecto.UUID.generate()
+               },
+               consistency: :strong
+             )
+
+    context
+  end
+
+  defp add_custom_group_member(context, actor_name, target_name) do
+    assert {:ok, %Membership.CustomGroupAdmission{}} =
+             Membership.add_custom_group_member(
+               %{
+                 club_id: club_id!(context),
+                 group_id: group_id!(context, @board_name),
+                 membership_id: membership_id!(context, target_name),
+                 person_id: person_id!(context, target_name),
+                 actor_person_id: person_id!(context, actor_name)
+               },
+               consistency: :strong
+             )
+
+    context
+  end
+
+  defp carol_delivery!(context, message_key) do
+    message = message!(context, message_key)
+    carol_id = person_id!(context, "Carol")
+
+    message.message_id
+    |> Messaging.list_recipient_deliveries()
+    |> Enum.find(&(&1.recipient_id == carol_id))
+    |> case do
+      nil -> flunk("Expected Carol delivery for #{inspect(message_key)}")
+      delivery -> delivery
+    end
+  end
+
+  defp refute_carol_access(context, message) do
+    for access_level <- [:read, :write] do
+      refute Messaging.member_has_conversation_access?(
+               message.message_id,
+               message.club_id,
+               person_id!(context, "Carol"),
+               access_level
+             )
+    end
+  end
+
+  defp assert_carol_follows(context, subject) do
+    assert Messaging.following_conversation?(
+             message!(context, subject).message_id,
+             person_id!(context, "Carol")
+           )
+
+    context
+  end
+
+  defp snapshot_board(context), do: Map.put(context, :board_snapshot, board_snapshot(context))
+
+  defp board_snapshot(context) do
+    group = Membership.get_group(group_id!(context, @board_name))
+
+    %{
+      name: group.name,
+      email_slug: group.email_slug,
+      conversation_ids:
+        context
+        |> group_id!(@board_name)
+        |> Messaging.list_conversations_for_group()
+        |> Enum.map(& &1.message_id)
+        |> Enum.sort(),
+      history:
+        context
+        |> message!(@board_subject)
+        |> Map.fetch!(:message_id)
+        |> Messaging.list_conversation_messages()
+        |> Enum.map(&{&1.message_id, &1.body})
+        |> Enum.sort()
+    }
   end
 
   defp end_carol_membership(context) do
@@ -384,7 +708,23 @@ defmodule Memba.Cucumber.CustomGroupLifecycleSteps do
     fetch_context!(context, :groups, {@club_name, group_name})
   end
 
-  defp message!(context, subject), do: fetch_context!(context, :messages, subject)
+  defp message!(context, key) do
+    case get_in(context, [:messages, key]) do
+      nil ->
+        context
+        |> Map.fetch!(:messages)
+        |> Map.values()
+        |> Enum.flat_map(&Messaging.list_conversation_messages(&1.message_id))
+        |> Enum.find(&(&1.body == key))
+        |> case do
+          nil -> flunk("Expected message for #{inspect(key)}")
+          message -> message
+        end
+
+      message ->
+        message
+    end
+  end
 
   defp fetch_context!(context, collection_key, item_key) do
     context

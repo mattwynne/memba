@@ -66,7 +66,7 @@ Feature: Managing custom group membership
       Then Eve should not belong to Admin
       And Eve should remain an ordinary club member
 
-  @iteration-064 @todo-domain @todo-ui
+  @iteration-064 @todo-ui
   Rule: Group members and club admins may remove group members
 
     Scenario: Bob removes Alice without removing her club authority
@@ -83,10 +83,10 @@ Feature: Managing custom group membership
       But Dan should not belong to Board
 
     Scenario: Eve cannot remove Bob while outside Board
-      When Eve directly tries to remove Bob from Board
+      When Eve attempts to remove Bob from Board
       Then Alice and Bob should remain Board's only members
 
-  @iteration-064 @todo-domain @todo-ui
+  @iteration-064 @todo-ui
   Rule: Group removal never bypasses system-group membership protections
 
     Scenario: Bob cannot leave Everyone while remaining an active club member

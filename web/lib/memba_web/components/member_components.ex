@@ -142,6 +142,9 @@ defmodule MembaWeb.MemberComponents do
   attr :active_member_count, :integer, required: true
   attr :current_member, :map, default: nil
   attr :group_name, :string, required: true
+  attr :club_name, :string, default: ""
+  attr :manageable, :boolean, default: false
+  attr :removal, :map, default: nil
 
   def member_list(assigns) do
     ~H"""
@@ -155,48 +158,145 @@ defmodule MembaWeb.MemberComponents do
         <strong>{@group_name} has no members.</strong>
         Its conversations and emails are kept; whoever you add next will see them all.
       </p>
-      <.member_row :for={row <- @rows} row={row} current_member={@current_member} />
+      <.member_row
+        :for={row <- @rows}
+        row={row}
+        current_member={@current_member}
+        group_name={@group_name}
+        club_name={@club_name}
+        manageable={@manageable}
+        confirming={pending_removal_target?(@removal, row)}
+        removal_operation_id={removal_operation_id(@removal, row)}
+        last_member={@active_member_count == 1}
+      />
     </div>
     """
   end
 
   attr :row, :map, required: true
   attr :current_member, :map, default: nil
+  attr :group_name, :string, required: true
+  attr :club_name, :string, required: true
+  attr :manageable, :boolean, default: false
+  attr :confirming, :boolean, default: false
+  attr :removal_operation_id, :string, default: nil
+  attr :last_member, :boolean, default: false
 
   def member_row(assigns) do
+    assigns =
+      assign(assigns, :self?, current_dashboard_member?(assigns.row, assigns.current_member))
+
     ~H"""
     <div
       id={"club-member-#{@row.id}"}
       data-testid="club-member-row"
       data-member-id={@row.id}
-      data-current-member={to_string(current_dashboard_member?(@row, @current_member))}
-      class="member-row"
+      data-current-member={to_string(@self?)}
+      class={["member-row", @self? && "is-you", @confirming && "is-confirming"]}
     >
       <div class="member-row__avatar" aria-hidden="true">
         {@row.initials}
       </div>
 
       <div class="member-row__body">
-        <div class="member-row__name">
-          {@row.name}
-        </div>
+        <div class="member-row__name">{@row.name}</div>
         <div class="member-row__meta">
-          <span
-            :if={current_dashboard_member?(@row, @current_member)}
-            data-testid="club-member-current-indicator"
-          >
-            You
-          </span>
+          <span :if={@self?} data-testid="club-member-current-indicator">You</span>
         </div>
       </div>
 
-      <div :if={member_roles(@row) != []} class="flex flex-none flex-wrap justify-end gap-2">
+      <div class="member-row__actions">
         <span
           :for={role <- member_roles(@row)}
           class="member-row__role badge badge-primary badge-soft"
         >
           {role}
         </span>
+        <.button
+          :if={@manageable}
+          id={"custom-group-member-remove-start-#{@row.id}"}
+          type="button"
+          variant="ghost"
+          size="sm"
+          phx-click="confirm_custom_group_member_removal"
+          phx-value-membership_id={@row.membership_id}
+          phx-value-person_id={@row.id}
+          data-custom-group-member-action={if(@self?, do: "leave", else: "remove")}
+        >
+          <%= if @self? do %>
+            Leave {@group_name}
+          <% else %>
+            Remove from {@group_name}
+          <% end %>
+        </.button>
+      </div>
+    </div>
+    <div
+      :if={@confirming}
+      id={"custom-group-member-remove-confirmation-#{@row.id}"}
+      class="member-confirm"
+      role="group"
+      aria-label={
+        if(@self?,
+          do: "Confirm leaving #{@group_name}",
+          else: "Confirm removing #{@row.name} from #{@group_name}"
+        )
+      }
+      phx-window-keydown={cancel_custom_group_member_removal(@row.id)}
+      phx-key="Escape"
+    >
+      <%= if @self? do %>
+        <p>
+          Leave <strong>{@group_name}</strong>?<%= if @last_member do %>
+            You're its last member.
+          <% end %>
+        </p>
+        <p>
+          <%= if @last_member do %>
+            {@group_name} stays listed for the club with nobody in it, and a club admin can add people to it later. You'll still be a member of {@club_name}.
+          <% else %>
+            You'll lose access to {@group_name}'s conversations. You'll still be a member of {@club_name}, and anyone in {@group_name}—or a club admin—can add you back.
+          <% end %>
+        </p>
+      <% else %>
+        <p>Remove {@row.name} from <strong>{@group_name}</strong>?</p>
+        <p>
+          They'll lose access to {@group_name}'s conversations. They stay a member of {@club_name}, and anyone in {@group_name} can add them back.<%= if "Admin" in member_roles(@row) do %>
+            They remain a club admin and can still manage {@group_name}'s members.
+          <% end %>
+        </p>
+      <% end %>
+      <p>
+        Emails for newly posted messages stop immediately. Emails already queued may still arrive. Delivered emails stay delivered.
+      </p>
+      <div class="member-confirm__actions">
+        <.button
+          id={"custom-group-member-remove-confirm-#{@row.id}"}
+          type="button"
+          variant="danger"
+          size="sm"
+          phx-click="remove_custom_group_member"
+          phx-value-membership_id={@row.membership_id}
+          phx-value-person_id={@row.id}
+          phx-value-removal_operation_id={@removal_operation_id}
+          phx-disable-with={if(@self?, do: "Leaving…", else: "Removing…")}
+          phx-mounted={JS.focus()}
+        >
+          <%= if @self? do %>
+            Leave {@group_name}
+          <% else %>
+            Remove from {@group_name}
+          <% end %>
+        </.button>
+        <.button
+          id={"custom-group-member-remove-cancel-#{@row.id}"}
+          type="button"
+          variant="ghost"
+          size="sm"
+          phx-click={cancel_custom_group_member_removal(@row.id)}
+        >
+          Cancel
+        </.button>
       </div>
     </div>
     """
@@ -219,10 +319,10 @@ defmodule MembaWeb.MemberComponents do
       <%= if @viewer_access == :participating_member do %>
         {@group_name} members can read every {@group_name} conversation and get its emails.
         Anyone in {@group_name} can add other <strong>{@club_name}</strong>
-        members—that never changes their club membership.
+        members or remove people from {@group_name}—that never changes their club membership.
       <% else %>
         Anyone in {@group_name} can add other <strong>{@club_name}</strong>
-        members. As a club admin you can too—that never changes anyone's club membership.
+        members or remove people from {@group_name}. As a club admin you can too—that never changes anyone's club membership.
       <% end %>
     </p>
     """
@@ -363,6 +463,27 @@ defmodule MembaWeb.MemberComponents do
       </div>
     </div>
     """
+  end
+
+  defp pending_removal_target?(
+         %{person_id: person_id, status: :pending},
+         %{id: person_id}
+       ),
+       do: true
+
+  defp pending_removal_target?(_removal, _row), do: false
+
+  defp removal_operation_id(
+         %{person_id: person_id, operation_id: operation_id, status: :pending},
+         %{id: person_id}
+       ),
+       do: operation_id
+
+  defp removal_operation_id(_removal, _row), do: nil
+
+  defp cancel_custom_group_member_removal(person_id) do
+    JS.push("cancel_custom_group_member_removal")
+    |> JS.focus(to: "#custom-group-member-remove-start-#{person_id}")
   end
 
   defp active_members_state(0), do: "empty"

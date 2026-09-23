@@ -234,7 +234,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
          event,
          socket
        ) do
-    event_conversation_id(event) == socket.assigns.message.conversation_id
+    event_conversation_id(event) ==
+      (socket.assigns.message.conversation_id || socket.assigns.message.message_id)
   end
 
   defp access_change_relevant?(_membership_projector, event, socket) do

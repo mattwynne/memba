@@ -247,6 +247,32 @@ test("iteration 062 custom-group lifecycle scenarios run in both acceptance laye
   );
 });
 
+test("iteration 064 custom-group lifecycle scenarios run in both acceptance layers", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "custom_group_lifecycle.feature"
+  );
+  const iterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-064")
+  );
+  const domainScenarioNames = iterationScenarios
+    .filter((scenario) => !scenario.tags.includes("@not-domain"))
+    .map((scenario) => scenario.name);
+  const browserScenarioNames = iterationScenarios
+    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+    .map((scenario) => scenario.name);
+
+  assert.equal(iterationScenarios.length, 10);
+  assert.deepEqual(domainScenarioNames, iterationScenarios.map((scenario) => scenario.name));
+  assert.deepEqual(browserScenarioNames, iterationScenarios.map((scenario) => scenario.name));
+  assert.deepEqual(
+    iterationScenarios.filter(
+      (scenario) =>
+        scenario.tags.includes("@todo-domain") || scenario.tags.includes("@todo-ui")
+    ),
+    []
+  );
+});
+
 test("iteration 063 custom-group membership and lifecycle scenarios run in both acceptance layers", () => {
   const iterationScenarios = browserFeatures()
     .filter(({ name }) =>

@@ -1,13 +1,11 @@
 defmodule MembaWeb.ClubSiteShellSurfacesTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Permissions
-  alias Memba.Membership.Projections.Group
-  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
-  alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Person
   alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -16,7 +14,7 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
   test "signed-in club shell falls back to email identity when the member name is blank", %{
     conn: conn
   } do
-    club = insert_membership_club!(name: "Blank Name Shell Club", slug: "blank-name-shell")
+    club = create_club(name: "Blank Name Shell Club", slug: "blank-name-shell")
 
     member =
       create_active_member(club,
@@ -40,7 +38,7 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
   end
 
   test "every club_site surface renders inside the shared app shell", %{conn: conn} do
-    club = insert_membership_club!(name: "Shared Shell Club", slug: "shared-shell")
+    club = create_club(name: "Shared Shell Club", slug: "shared-shell")
 
     alice =
       create_active_member(club,
@@ -194,69 +192,97 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
     Map.put(conn, :host, host)
   end
 
+  defp create_club(attrs) do
+    club_id = Memba.ID.generate(:club)
+
+    assert :ok =
+             Memba.Membership.create_club(
+               %{
+                 club_id: club_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 slug: Keyword.fetch!(attrs, :slug)
+               },
+               consistency: :strong
+             )
+
+    Memba.Membership.get_club(club_id)
+  end
+
   defp create_active_member(club, attrs) do
-    person =
-      insert_membership_person!(
-        person_id: Memba.ID.generate(:person),
-        name: Keyword.fetch!(attrs, :name),
-        email: Keyword.fetch!(attrs, :email)
-      )
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
 
-    membership =
-      Repo.insert!(%Membership{
-        membership_id: Memba.ID.generate(:membership),
-        club_id: club.club_id,
-        person_id: person.person_id,
-        active: true
-      })
+    requested_name = Keyword.fetch!(attrs, :name)
 
-    insert_everyone_group_membership!(club.club_id, membership.membership_id, person.person_id)
+    assert :ok =
+             Memba.Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name:
+                   if(String.trim(requested_name) == "",
+                     do: "Temporary Member",
+                     else: requested_name
+                   ),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
+
+    if String.trim(requested_name) == "" do
+      Repo.get!(Person, person_id)
+      |> Ecto.Changeset.change(name: requested_name)
+      |> Repo.update!()
+    end
+
+    assert :ok =
+             Memba.Membership.add_member(
+               %{membership_id: membership_id, club_id: club.club_id, person_id: person_id},
+               consistency: :strong
+             )
 
     club
     |> Map.from_struct()
     |> Map.merge(%{
-      membership_id: membership.membership_id,
-      person_id: person.person_id,
-      name: person.name,
-      email: person.email
-    })
-  end
-
-  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
-    group_id = SystemGroups.everyone_group_id(club_id)
-
-    Repo.insert!(
-      %Group{
-        club_id: club_id,
-        group_id: group_id,
-        group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name(),
-        name_uniqueness_key:
-          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
-      },
-      on_conflict: :nothing
-    )
-
-    Repo.insert!(%GroupMembership{
-      club_id: club_id,
-      group_id: group_id,
       membership_id: membership_id,
       person_id: person_id,
-      active: true
+      name: Keyword.fetch!(attrs, :name),
+      email: Keyword.fetch!(attrs, :email)
     })
   end
 
   defp grant_manage_members!(member) do
-    Repo.insert!(%MemberPermission{
+    Repo.get_by(MemberPermission,
       club_id: member.club_id,
       membership_id: member.membership_id,
       person_id: member.person_id,
-      permission: Permissions.club_manage_members(),
-      grant_count: 1
-    })
+      permission: Permissions.club_manage_members()
+    ) ||
+      Repo.insert!(%MemberPermission{
+        club_id: member.club_id,
+        membership_id: member.membership_id,
+        person_id: member.person_id,
+        permission: Permissions.club_manage_members(),
+        grant_count: 1
+      })
   end
 
   defp create_message(attrs) do
-    insert_group_accessible_message!(attrs)
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Memba.Messaging.send_club_message_as_current_member(
+               %{
+                 message_id: message_id,
+                 club_id: Keyword.fetch!(attrs, :club_id),
+                 sender_id: Keyword.fetch!(attrs, :sender_id),
+                 audience_group_id:
+                   SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id)),
+                 subject: Keyword.fetch!(attrs, :subject),
+                 body: Keyword.get(attrs, :body, "Message body")
+               },
+               consistency: :strong
+             )
+
+    Memba.Messaging.get_message(message_id)
   end
 end

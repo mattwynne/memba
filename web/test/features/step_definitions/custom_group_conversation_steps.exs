@@ -170,6 +170,19 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     context
   end
 
+  step "no email delivery should be created for {string}", %{args: [subject]} = context do
+    board_id = group_id!(context, @club_name, @board_name)
+
+    refute Enum.any?(
+             Messaging.list_conversations_for_group(board_id),
+             &(&1.subject == subject)
+           )
+
+    dispatch_pending_email_deliveries()
+    assert Fake.deliveries() == []
+    context
+  end
+
   step ~r/^(\w+) tries to reply "([^"]+)" to that conversation (on the website|by email)$/,
        %{args: [person_name, body, channel]} = context do
     subject = last_subject!(context)

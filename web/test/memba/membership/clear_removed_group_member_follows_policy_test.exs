@@ -33,7 +33,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     assert Keyword.fetch!(opts, :start_from) == :origin
   end
 
-  test "the retired handler is an idempotent no-op that never unfollows" do
+  test "club-departure group removal idempotently clears follows" do
     club_id = Memba.ID.generate(:club)
     group_id = Memba.ID.generate(:group)
     membership_id = Memba.ID.generate(:membership)
@@ -52,8 +52,8 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
     assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
 
-    assert Messaging.following_conversation?(conversation_id, person_id)
-    assert count_unfollow_events(conversation_id, person_id) == 0
+    refute Messaging.following_conversation?(conversation_id, person_id)
+    assert count_unfollow_events(conversation_id, person_id) == 1
   end
 
   test "custom-group removal preserves a dormant follow while ending participation" do

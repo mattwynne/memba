@@ -37,7 +37,7 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
     source = read_source!("lib/memba_web/member_dashboard_presentation.ex")
 
     assert source =~ "Membership.list_discoverable_groups_for_member("
-    assert source =~ "Membership.list_active_groups_for_member("
+    assert source =~ "Membership.list_active_groups_for_member_authoritatively("
     assert source =~ "Messaging.list_conversations_for_group("
   end
 

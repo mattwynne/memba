@@ -20,14 +20,13 @@ Feature: Conversations within custom groups
       But Dan and Eve should neither be able to read it nor receive its email
       And it should not appear among Everyone's conversations
 
-  Rule: Active club members can email a group to start a conversation without joining it
+  Rule: Current group participation is required to email a custom group
 
-    Scenario: Eve emails Board while remaining outside it
+    Scenario: Eve cannot email Board while remaining outside it
       When Eve emails "Could you fund new ropes?" to board@kmc.clubs.memba.io
-      Then Board should have the conversation "Could you fund new ropes?"
-      And Alice, Bob, and Carol should each receive its initial email
-      But Eve should not receive its initial email or become its follower
-      And Eve should neither belong to Board nor gain permission to read or reply to the conversation
+      Then no Board conversation named "Could you fund new ropes?" should be created
+      And Eve should receive the existing message-not-posted rejection email
+      And no email delivery should be created for "Could you fund new ropes?"
 
     Scenario: Bob receives the ordinary recipient copy of his own Board email
       When Bob emails "September agenda" to board@kmc.clubs.memba.io
@@ -46,10 +45,10 @@ Feature: Conversations within custom groups
         | Robin  | Robin has no club membership                              |
         | Eve    | Eve is no longer an active member of KMC                  |
 
-  Rule: Replies require conversation write access, even when starting a new email conversation is allowed
+  Rule: Replies require current group participation
 
-    Scenario Outline: Sending Board an email does not let Eve or Dan reply to it
-      Given <person> emailed "Could you fund new ropes?" to board@kmc.clubs.memba.io
+    Scenario Outline: Eve and Dan cannot reply to Bob's Board conversation
+      Given Bob emailed "Could you fund new ropes?" to board@kmc.clubs.memba.io
       When <person> tries to reply "Here are the prices" to that conversation <channel>
       Then "Here are the prices" should not be added to that conversation
       And <person> should not gain access to that conversation

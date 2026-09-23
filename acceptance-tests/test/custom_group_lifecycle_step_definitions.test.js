@@ -3,7 +3,7 @@ const test = require("node:test");
 
 const { loadConfiguration, runCucumber } = require("@cucumber/cucumber/api");
 
-test("browser-backed iteration-062 custom-group lifecycle scenarios have executable step plumbing", async () => {
+test("browser-backed custom-group lifecycle scenarios have executable step plumbing", async () => {
   let scenarioCount = 0;
   const statuses = [];
   const { runConfiguration } = await loadConfiguration({
@@ -14,7 +14,7 @@ test("browser-backed iteration-062 custom-group lifecycle scenarios have executa
       paths: ["features/custom_group_lifecycle.feature"],
       publishQuiet: true,
       require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
-      tags: "@iteration-062 and not @not-ui"
+      tags: "(@iteration-062 or @iteration-064) and not @not-ui"
     }
   });
 
@@ -28,7 +28,7 @@ test("browser-backed iteration-062 custom-group lifecycle scenarios have executa
     }
   });
 
-  assert.equal(scenarioCount, 2);
+  assert.equal(scenarioCount, 14);
   assert.deepEqual(
     [...new Set(statuses)],
     ["SKIPPED"],

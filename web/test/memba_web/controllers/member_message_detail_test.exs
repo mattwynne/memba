@@ -1,8 +1,9 @@
 defmodule MembaWeb.MemberMessageDetailTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.ConnCase, async: false
 
-  alias Memba.Membership.Projections.Club
-  alias Memba.Membership.Projections.Group
+  import Ecto.Query
+
+  alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.SystemGroups
@@ -87,17 +88,25 @@ defmodule MembaWeb.MemberMessageDetailTest do
     end
 
     test "returns not found for an Admin-only conversation in the selected club", %{conn: conn} do
+      admin =
+        create_member(
+          email: "admin@example.com",
+          name: "Admin Adams",
+          club_name: "Alpine Club"
+        )
+
       alice =
         create_member(
           email: "alice@example.com",
           name: "Alice Adams",
-          club_name: "Alpine Club"
+          club_name: "Alpine Club",
+          club_id: admin.club_id
         )
 
       message =
         create_message(
           club_id: alice.club_id,
-          sender_id: alice.person_id,
+          sender_id: admin.person_id,
           subject: "Private Admin route notes",
           body: "These details must remain email-only.",
           audience_group_id: SystemGroups.admin_group_id(alice.club_id)
@@ -278,70 +287,110 @@ defmodule MembaWeb.MemberMessageDetailTest do
   end
 
   defp create_member(attrs) do
-    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
-    person_id = Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
-
-    club =
-      Repo.get(Club, club_id) ||
-        insert_membership_club!(
-          club_id: club_id,
-          name: Keyword.fetch!(attrs, :club_name)
-        )
-
-    person =
-      insert_membership_person!(
-        person_id: person_id,
-        name: Keyword.fetch!(attrs, :name),
-        email: Keyword.fetch!(attrs, :email)
-      )
-
-    membership =
-      Repo.insert!(%Membership{
-        membership_id: Memba.ID.generate(:membership),
-        club_id: club_id,
-        person_id: person.person_id,
-        active: Keyword.get(attrs, :active, true)
-      })
-
-    ensure_everyone_group_membership!(
-      club_id,
-      membership,
-      person.person_id,
-      Keyword.get(attrs, :active, true)
-    )
-
-    club
-    |> Map.from_struct()
-    |> Map.put(:person_id, person.person_id)
-    |> Map.put(:name, Keyword.fetch!(attrs, :name))
-    |> Map.put(:email, Keyword.fetch!(attrs, :email))
+    if Keyword.get(attrs, :active, true) do
+      create_authoritative_member(attrs)
+    else
+      create_inactive_member(attrs)
+    end
   end
 
-  defp ensure_everyone_group_membership!(club_id, membership, person_id, active) do
-    group_id = SystemGroups.everyone_group_id(club_id)
+  defp create_authoritative_member(attrs) do
+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+    person = Repo.get_by(Person, email: Keyword.fetch!(attrs, :email))
 
-    Repo.get(Group, group_id) ||
-      Repo.insert!(%Group{
-        group_id: group_id,
-        club_id: club_id,
-        group_key: SystemGroups.everyone_key(),
-        email_slug: SystemGroups.everyone_email_slug(),
-        name: SystemGroups.everyone_name(),
-        name_uniqueness_key:
-          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
-      })
+    person_id =
+      (person && person.person_id) ||
+        Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
 
-    Repo.insert!(%GroupMembership{
-      club_id: club_id,
-      group_id: group_id,
-      membership_id: membership.membership_id,
+    unless Memba.Membership.get_club(club_id) do
+      assert :ok =
+               Memba.Membership.create_club(
+                 %{
+                   club_id: club_id,
+                   name: Keyword.fetch!(attrs, :club_name),
+                   slug: "club-#{String.slice(club_id, -8, 8)}"
+                 },
+                 consistency: :strong
+               )
+    end
+
+    unless person do
+      assert :ok =
+               Memba.Membership.create_person(
+                 %{
+                   person_id: person_id,
+                   name: Keyword.fetch!(attrs, :name),
+                   email: Keyword.fetch!(attrs, :email)
+                 },
+                 consistency: :strong
+               )
+    end
+
+    membership_id = Memba.ID.generate(:membership)
+
+    assert :ok =
+             Memba.Membership.add_member(
+               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+               consistency: :strong
+             )
+
+    club_id
+    |> Memba.Membership.get_club()
+    |> Map.from_struct()
+    |> Map.merge(%{
       person_id: person_id,
-      active: active
+      membership_id: membership_id,
+      name: Keyword.fetch!(attrs, :name),
+      email: Keyword.fetch!(attrs, :email)
     })
   end
 
+  defp create_inactive_member(attrs) do
+    member = create_authoritative_member(attrs)
+
+    Repo.update_all(
+      from(membership in Membership, where: membership.membership_id == ^member.membership_id),
+      set: [active: false]
+    )
+
+    Repo.update_all(
+      from(group_membership in GroupMembership,
+        where: group_membership.membership_id == ^member.membership_id
+      ),
+      set: [active: false]
+    )
+
+    member
+  end
+
   defp create_message(attrs) do
-    insert_group_accessible_message!(attrs)
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Memba.Messaging.send_club_message_as_current_member(
+               %{
+                 message_id: message_id,
+                 club_id: Keyword.fetch!(attrs, :club_id),
+                 sender_id: Keyword.fetch!(attrs, :sender_id),
+                 audience_group_id:
+                   Keyword.get_lazy(attrs, :audience_group_id, fn ->
+                     SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id))
+                   end),
+                 subject: Keyword.fetch!(attrs, :subject),
+                 body: Keyword.get(attrs, :body, "Message body")
+               },
+               consistency: :strong
+             )
+
+    Repo.delete_all(
+      from(delivery in MemberEmailDelivery, where: delivery.message_id == ^message_id)
+    )
+
+    Repo.delete_all(
+      from(delivery in MembaStaffEmailDelivery, where: delivery.message_id == ^message_id)
+    )
+
+    Memba.Messaging.get_message(message_id)
   end
 
   defp create_member_email_delivery(attrs) do

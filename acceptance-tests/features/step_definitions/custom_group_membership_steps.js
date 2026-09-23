@@ -15,8 +15,15 @@ const {
   endCarolMembership,
   ensureInvitedRobin,
   prepareReturnedCarol,
-  pushForgedAdmission
+  pushForgedAdmission,
+  pushForgedRemoval,
+  removeThroughBrowser,
+  memberAuthorityState
 } = require("../support/custom_group_membership");
+const {
+  ensureOnlyMembershipAdministrator,
+  removeMembershipAdministrator
+} = require("../support/membership_administration");
 
 When(/^(\w+) adds (\w+) to Board$/, async function (actorName, targetText) {
   const targetName = reflexiveTarget(actorName, targetText);
@@ -55,6 +62,16 @@ When(
     await pushForgedAdmission(this, actorName, targetName, "Admin");
   }
 );
+
+Given("Alice is the only remaining club admin", function () {
+  removeMembershipAdministrator(
+    this,
+    "Alice",
+    "Dan",
+    "Kootenay Mountaineering Club"
+  );
+  ensureOnlyMembershipAdministrator(this, "Alice", "Kootenay Mountaineering Club");
+});
 
 Given("Robin has been invited to KMC but has not joined", function () {
   ensureInvitedRobin(this);
@@ -109,6 +126,54 @@ Then(/^(\w+) should not belong to Admin$/, function (personName) {
 
 Then("Eve should remain an ordinary club member", function () {
   assertOrdinaryClubMember(this, "Eve");
+});
+
+When(/^(\w+) removes (\w+) from Board$/, async function (actorName, targetName) {
+  await removeThroughBrowser(this, actorName, targetName);
+});
+
+When(/^(\w+) directly tries to remove (\w+) from Board$/, async function (actorName, targetName) {
+  await pushForgedRemoval(this, actorName, targetName);
+});
+
+When(/^(\w+) tries to leave (Everyone|Admin) as though it were a custom group$/, async function (actorName, groupName) {
+  await pushForgedRemoval(this, actorName, actorName, groupName);
+});
+
+Then(/^(\w+) should no longer belong to Board$/, function (personName) {
+  assertGroupMembership(this, "Board", personName, false);
+});
+
+Then("Alice should still be a club admin", function () {
+  const state = memberAuthorityState(this, "Alice");
+  require("node:assert/strict").equal(state.clubAdmin, true);
+});
+
+Then("Alice should still be able to manage Board's membership", function () {
+  const state = memberAuthorityState(this, "Alice");
+  require("node:assert/strict").equal(state.clubAdmin, true);
+});
+
+Then("Alice should no longer be able to read Board conversations", function () {
+  assertNoBoardConversationAccess(this, "Alice");
+});
+
+Then("Bob should remain an active KMC member", function () {
+  require("node:assert/strict").equal(memberAuthorityState(this, "Bob").activeClubMember, true);
+});
+
+Then("Bob should remain in Everyone", function () {
+  assertGroupMembership(this, "Everyone", "Bob", true);
+});
+
+Then("Bob should remain an active club member", function () {
+  require("node:assert/strict").equal(memberAuthorityState(this, "Bob").activeClubMember, true);
+});
+
+Then("Alice should remain a club admin and a member of Admin", function () {
+  const state = memberAuthorityState(this, "Alice");
+  require("node:assert/strict").equal(state.clubAdmin, true);
+  require("node:assert/strict").equal(state.adminGroupMember, true);
 });
 
 Then(

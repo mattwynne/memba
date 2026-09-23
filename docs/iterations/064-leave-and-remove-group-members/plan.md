@@ -13,6 +13,8 @@ Group members and club admins can remove people from a custom group, and members
 
 This iteration depends on [063](../063-add-custom-group-members/plan.md), including the creation and club-departure safeguards from 062. It exposes the matching removal operation using the same custom-group manager policy. Empty groups remain available for later repopulation.
 
+This plan explicitly supersedes iteration 062's earlier acceptance statement that any active club member may email a custom group without joining it. The current-participation rule is authoritative: only current custom-group participants may create a root conversation by inbound email, including when the group is empty. Rejected attempts create no conversation and no recipient deliveries, and use the existing message-not-posted response.
+
 A club membership is the enduring relationship between a person and a club. For this iteration, group participation is simply the person's current inclusion in a group. Ending that participation controls access and new activity for the group; it does not end club membership, alter club roles, or delete the person's conversation follow preferences.
 
 Each conversation currently belongs to exactly one group. The model should not prevent later support for conversations associated with more than one group, but this iteration does not combine authorization from multiple groups or introduce machinery for that future possibility.
@@ -55,7 +57,7 @@ BDD decision: Required.
 - `acceptance-tests/features/custom_group_membership.feature`: removal by a group member or outside club admin, ordinary non-member refusal, club status preservation, and system-group guards.
 - `acceptance-tests/features/custom_group_lifecycle.feature`: immediate access loss, fixed delivery recipients, no delivery or backlog while absent, follow preference resumption after rejoining, and last-member departure/repopulation.
 
-Only iteration-064 scenarios are revised for this decision. They retain `@iteration-064 @todo-domain @todo-ui`. Earlier 062/063 scenarios and tags are not part of this planning revision. The updated scenarios use observable business language and are stakeholder-approved.
+Iteration-064 scenarios keep a runner-debt tag until that runner genuinely exercises the behaviour. Domain-covered removal, delivery, follow, and empty-group scenarios retain only `@todo-ui`; the stale-view scenario retains both tags until it uses a real LiveView/browser session and the inbound webhook adapter. The superseded iteration-062 outsider-root scenario in `custom_group_conversations.feature` is updated to the current participant-only rule. Other 062/063 scenarios and tags are unchanged.
 
 ## Allowed acceptance feature changes
 

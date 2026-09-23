@@ -215,6 +215,20 @@ function tryMakeMembershipAdministrator(world, actorName, targetName, clubName) 
   world.lastMembershipAdministrationResult = result;
 }
 
+function removeMembershipAdministrator(world, actorName, targetName, clubName) {
+  const actor = memberStatus(world, actorName, clubName);
+  const target = memberStatus(world, targetName, clubName);
+
+  const result = membershipAdministratorCommand("remove", {
+    actorPersonId: actor.personId,
+    clubId: target.clubId,
+    membershipId: target.membershipId,
+    personId: target.personId
+  });
+
+  assert.deepEqual(result, { status: "ok" });
+}
+
 function tryRemoveClubMembershipAdministrator(world, actorName, targetName, clubName) {
   const actor = memberStatus(world, actorName, clubName);
   const target = memberStatus(world, targetName, clubName);
@@ -527,6 +541,7 @@ module.exports = {
   ensureOrdinaryMember,
   makeMembershipAdministrator,
   removeMemberAsStaff,
+  removeMembershipAdministrator,
   tryMakeMembershipAdministrator,
   tryRemoveClubMembershipAdministrator
 };

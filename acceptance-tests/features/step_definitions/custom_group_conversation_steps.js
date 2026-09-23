@@ -13,6 +13,7 @@ const {
   assertMessageNotPostedRejection,
   assertNoBoardConversation,
   assertNoBoardMembershipOrConversationAccess,
+  assertNoConversationEmailDelivery,
   assertNoConversationAccess,
   assertNoInitialEmailOrFollow,
   assertReplyDelivered,
@@ -111,6 +112,10 @@ Given("Eve is no longer an active member of KMC", function () {
 
 Then(/^no Board conversation named "([^"]+)" should be created$/, function (subject) {
   assertNoBoardConversation(this, subject);
+});
+
+Then(/^no email delivery should be created for "([^"]+)"$/, function (subject) {
+  assertNoConversationEmailDelivery(this, subject);
 });
 
 Then(

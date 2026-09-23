@@ -90,7 +90,7 @@ defmodule Memba.DomainCucumberRunnerTest do
       |> Enum.map(& &1.scenario.name)
 
     assert "Bob starts a Board discussion without addressing Everyone" in selected_names
-    assert "Eve emails Board while remaining outside it" in selected_names
+    assert "Eve cannot email Board while remaining outside it" in selected_names
     assert "Bob receives the ordinary recipient copy of his own Board email" in selected_names
     assert "Carol's email reply stays in Bob's Board conversation" in selected_names
     assert "Carol follows Board's agenda while Alice does not" in selected_names
@@ -108,7 +108,7 @@ defmodule Memba.DomainCucumberRunnerTest do
              selected_names,
              &String.starts_with?(
                &1,
-               "Sending Board an email does not let Eve or Dan reply to it"
+               "Eve and Dan cannot reply to Bob's Board conversation"
              )
            ) == 4
   end

@@ -247,6 +247,17 @@ function assertNoBoardConversation(world, subject) {
   assert.equal(groupConversationSubjects(boardId(world)).includes(subject), false);
 }
 
+function assertNoConversationEmailDelivery(world, subject) {
+  assertNoBoardConversation(world, subject);
+  serverCommands.dispatchPendingEmailDeliveries();
+
+  const matchingDeliveries = serverCommands
+    .listLocalDeliveryFacts()
+    .filter((delivery) => delivery.subject.includes(subject));
+
+  assert.deepEqual(matchingDeliveries, []);
+}
+
 async function assertMessageNotPostedRejection(world, personName) {
   await assertInboundRejectionEmail(world, personName, "wasn't posted");
 }
@@ -639,6 +650,7 @@ module.exports = {
   assertMessageNotPostedRejection,
   assertNoBoardConversation,
   assertNoBoardMembershipOrConversationAccess,
+  assertNoConversationEmailDelivery,
   assertNoConversationAccess,
   assertNoInitialEmailOrFollow,
   assertReplyDelivered,

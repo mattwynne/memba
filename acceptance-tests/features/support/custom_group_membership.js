@@ -53,6 +53,58 @@ async function admitThroughBrowser(world, actorName, targetName, groupName = boa
   });
 }
 
+async function removeThroughBrowser(world, actorName, targetName, groupName = boardName) {
+  const groupId = groupIdFor(world, groupName);
+  const target = personFor(world, targetName);
+
+  await withMemberHarness(world, actorName, async (member) => {
+    await openGroupMembers(member, world, groupId);
+    await member.page
+      .locator(`#custom-group-member-remove-start-${target.personId}`)
+      .click();
+    await expect(
+      member.page.locator(`#custom-group-member-remove-confirmation-${target.personId}`)
+    ).toBeVisible();
+    await member.page
+      .locator(`#custom-group-member-remove-confirm-${target.personId}`)
+      .click();
+    await expect(member.page.locator(`#club-member-${target.personId}`)).toHaveCount(0);
+  });
+}
+
+async function pushForgedRemoval(world, actorName, targetName, groupName = boardName) {
+  const groupId = groupIdFor(world, groupName);
+  const actor = personFor(world, actorName);
+  const target = personFor(world, targetName);
+  const membershipId = admissionMembershipId(world, targetName);
+
+  return serverCommands.runCommand(
+    `
+result =
+  Memba.Membership.remove_custom_group_member(
+    %{
+      club_id: Map.fetch!(payload, "clubId"),
+      group_id: Map.fetch!(payload, "groupId"),
+      membership_id: Map.fetch!(payload, "membershipId"),
+      person_id: Map.fetch!(payload, "personId"),
+      actor_person_id: Map.fetch!(payload, "actorPersonId"),
+      removal_operation_id: Ecto.UUID.generate()
+    },
+    consistency: :strong
+  )
+
+%{result: inspect(result)}
+`,
+    {
+      actorPersonId: actor.personId,
+      clubId: clubFor(world).clubId,
+      groupId,
+      membershipId,
+      personId: target.personId
+    }
+  );
+}
+
 async function pushForgedAdmission(world, actorName, targetName, groupName = boardName) {
   await rememberWelcomeBaseline(world);
   const groupId = groupIdFor(world, groupName);
@@ -433,17 +485,20 @@ async function openGroupMembers(member, world, groupId) {
 }
 
 function groupIdFor(world, groupName) {
-  if (groupName === "Admin") {
+  if (["Admin", "Everyone"].includes(groupName)) {
     return serverCommands.runCommand(
       `
-%{
-  groupId:
-    Memba.Membership.SystemGroups.admin_group_id(
-      Map.fetch!(payload, "clubId")
-    )
-}
+kind = Map.fetch!(payload, "kind")
+group_id =
+  if kind == "Admin" do
+    Memba.Membership.SystemGroups.admin_group_id(Map.fetch!(payload, "clubId"))
+  else
+    Memba.Membership.SystemGroups.everyone_group_id(Map.fetch!(payload, "clubId"))
+  end
+
+%{groupId: group_id}
 `,
-      { clubId: clubFor(world).clubId }
+      { clubId: clubFor(world).clubId, kind: groupName }
     ).groupId;
   }
 
@@ -505,5 +560,8 @@ module.exports = {
   endCarolMembership,
   ensureInvitedRobin,
   prepareReturnedCarol,
-  pushForgedAdmission
+  pushForgedAdmission,
+  pushForgedRemoval,
+  removeThroughBrowser,
+  memberAuthorityState
 };

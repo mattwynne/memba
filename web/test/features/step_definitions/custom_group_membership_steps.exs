@@ -44,6 +44,36 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     attempt_admission(context, actor_name, target_name, "Admin")
   end
 
+  step ~r/^(\w+) removes (\w+) from Board$/,
+       %{args: [actor_name, target_name]} = context do
+    remove!(context, actor_name, target_name, @board_name)
+  end
+
+  step ~r/^(\w+) attempts to remove (\w+) from Board$/,
+       %{args: [actor_name, target_name]} = context do
+    attempt_removal(context, actor_name, target_name, @board_name)
+  end
+
+  step ~r/^(\w+) tries to leave (Everyone|Admin) as though it were a custom group$/,
+       %{args: [actor_name, group_name]} = context do
+    attempt_removal(context, actor_name, actor_name, group_name)
+  end
+
+  step "Alice is the only remaining club admin", context do
+    assert :ok =
+             Membership.remove_membership_administrator_as_club_member(
+               %{
+                 club_id: club_id!(context, @club_name),
+                 membership_id: membership_id!(context, @club_name, "Dan"),
+                 person_id: person_id!(context, "Dan"),
+                 actor_person_id: person_id!(context, "Alice")
+               },
+               consistency: :strong
+             )
+
+    context
+  end
+
   step "Robin has been invited to KMC but has not joined", context do
     context = ensure_person(context, "Robin")
     email = person!(context, "Robin").email
@@ -193,6 +223,55 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     context
   end
 
+  step ~r/^(\w+) should no longer belong to Board$/,
+       %{args: [person_name]} = context do
+    refute group_member?(context, @board_name, person_name)
+    context
+  end
+
+  step "Alice should still be a club admin", context do
+    assert club_admin?(context, "Alice")
+    context
+  end
+
+  step "Alice should still be able to manage Board's membership", context do
+    assert club_admin?(context, "Alice")
+    context
+  end
+
+  step "Alice should no longer be able to read Board conversations", context do
+    refute_group_conversation_access(context, "Alice")
+  end
+
+  step "Bob should remain an active KMC member", context do
+    assert Membership.active_member_of_club?(
+             club_id!(context, @club_name),
+             person_id!(context, "Bob")
+           )
+
+    context
+  end
+
+  step "Bob should remain in Everyone", context do
+    assert group_member?(context, "Everyone", "Bob")
+    context
+  end
+
+  step "Bob should remain an active club member", context do
+    assert Membership.active_member_of_club?(
+             club_id!(context, @club_name),
+             person_id!(context, "Bob")
+           )
+
+    context
+  end
+
+  step "Alice should remain a club admin and a member of Admin", context do
+    assert club_admin?(context, "Alice")
+    assert group_member?(context, "Admin", "Alice")
+    context
+  end
+
   step "Eve should remain an ordinary club member", context do
     eve_id = person_id!(context, "Eve")
     club_id = club_id!(context, @club_name)
@@ -259,6 +338,29 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
            )
 
     context
+  end
+
+  defp remove!(context, actor_name, target_name, group_name) do
+    context = attempt_removal(context, actor_name, target_name, group_name)
+    assert {:ok, %Memba.Membership.CustomGroupRemoval{}} = context.last_removal_result
+    context
+  end
+
+  defp attempt_removal(context, actor_name, target_name, group_name) do
+    result =
+      Membership.remove_custom_group_member(
+        %{
+          club_id: club_id!(context, @club_name),
+          group_id: group_id!(context, group_name),
+          membership_id: membership_id!(context, @club_name, target_name),
+          person_id: person_id!(context, target_name),
+          actor_person_id: person_id!(context, actor_name),
+          removal_operation_id: Ecto.UUID.generate()
+        },
+        consistency: :strong
+      )
+
+    Map.put(context, :last_removal_result, result)
   end
 
   defp admit!(context, actor_name, target_name, group_name, opts \\ []) do
@@ -449,10 +551,38 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     SystemGroups.admin_group_id(club_id!(context, @club_name))
   end
 
+  defp group_id!(context, "Everyone") do
+    SystemGroups.everyone_group_id(club_id!(context, @club_name))
+  end
+
   defp group_id!(context, group_name) do
     context
     |> Map.fetch!(:groups)
     |> Map.fetch!({@club_name, group_name})
+  end
+
+  defp club_admin?(context, person_name) do
+    Membership.person_has_club_permission?(
+      club_id!(context, @club_name),
+      person_id!(context, person_name),
+      Permissions.club_manage_members()
+    )
+  end
+
+  defp refute_group_conversation_access(context, person_name) do
+    Enum.each(
+      Messaging.list_conversations_for_group(group_id!(context, @board_name)),
+      fn message ->
+        refute Messaging.member_has_conversation_access?(
+                 message.message_id,
+                 club_id!(context, @club_name),
+                 person_id!(context, person_name),
+                 :read
+               )
+      end
+    )
+
+    context
   end
 
   defp person_id!(context, person_name), do: person!(context, person_name).person_id

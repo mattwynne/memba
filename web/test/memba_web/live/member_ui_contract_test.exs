@@ -1,15 +1,12 @@
 defmodule MembaWeb.MemberUIContractTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
-  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
-  alias Memba.Membership.Projections.Membership
-  alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -221,88 +218,85 @@ defmodule MembaWeb.MemberUIContractTest do
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
 
-    Repo.get(Club, club_id) ||
-      attrs
-      |> club_attrs(club_id, club_name)
-      |> insert_membership_club!()
+    unless Repo.get(Club, club_id) do
+      assert :ok =
+               Memba.Membership.create_club(
+                 Map.new(club_attrs(attrs, club_id, club_name)),
+                 consistency: :strong
+               )
+    end
 
-    person =
-      insert_membership_person!(
-        person_id: person_id,
-        name: Keyword.fetch!(attrs, :name),
-        email: Keyword.fetch!(attrs, :email)
-      )
+    assert :ok =
+             Memba.Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
 
-    membership_id = Memba.ID.generate(:membership)
+    assert :ok =
+             Memba.Membership.add_member(
+               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+               consistency: :strong
+             )
 
-    Repo.insert!(%Membership{
-      membership_id: membership_id,
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
-    })
-
-    insert_everyone_group_membership!(club_id, membership_id, person.person_id)
-
-    %{club_id: club_id, membership_id: membership_id, person_id: person.person_id}
-  end
-
-  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
-    group_id = SystemGroups.everyone_group_id(club_id)
-
-    Repo.insert!(
-      %Group{
-        club_id: club_id,
-        group_id: group_id,
-        group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name(),
-        name_uniqueness_key:
-          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
-      },
-      on_conflict: :nothing
-    )
-
-    Repo.insert!(%GroupMembership{
-      club_id: club_id,
-      group_id: group_id,
-      membership_id: membership_id,
-      person_id: person_id,
-      active: true
-    })
+    %{club_id: club_id, membership_id: membership_id, person_id: person_id}
   end
 
   defp create_group(attrs) do
-    Repo.insert!(%Group{
-      club_id: Keyword.fetch!(attrs, :club_id),
-      group_id: Memba.ID.generate(:group),
-      group_key: Keyword.fetch!(attrs, :group_key),
-      email_slug: Keyword.get(attrs, :email_slug),
-      name: Keyword.fetch!(attrs, :name),
-      name_uniqueness_key:
-        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
-    })
+    club_id = Keyword.fetch!(attrs, :club_id)
+    group_id = Memba.ID.generate(:group)
+    actor = club_id |> Memba.Membership.list_active_members_of_club() |> hd()
+
+    assert :ok =
+             Memba.Membership.create_custom_group(
+               %{
+                 club_id: club_id,
+                 group_id: group_id,
+                 actor_person_id: actor.id,
+                 name: Keyword.fetch!(attrs, :name)
+               },
+               consistency: :strong
+             )
+
+    Repo.get!(Group, group_id)
   end
 
   defp add_group_member(group, member) do
-    Repo.insert!(%GroupMembership{
-      club_id: member.club_id,
-      group_id: group.group_id,
-      membership_id: member.membership_id,
-      person_id: member.person_id,
-      active: true
-    })
+    actor = group.group_id |> Memba.Membership.list_active_members_of_group() |> hd()
+
+    assert {:ok, %Memba.Membership.CustomGroupAdmission{}} =
+             Memba.Membership.add_custom_group_member(
+               %{
+                 club_id: member.club_id,
+                 group_id: group.group_id,
+                 membership_id: member.membership_id,
+                 person_id: member.person_id,
+                 actor_person_id: actor.id
+               },
+               consistency: :strong
+             )
   end
 
   defp grant_manage_members!(member) do
-    Repo.insert!(%MemberPermission{
+    Repo.get_by(MemberPermission,
       club_id: member.club_id,
       membership_id: member.membership_id,
       person_id: member.person_id,
-      permission: Permissions.club_manage_members(),
-      grant_count: 1
-    })
+      permission: Permissions.club_manage_members()
+    ) ||
+      Repo.insert!(%MemberPermission{
+        club_id: member.club_id,
+        membership_id: member.membership_id,
+        person_id: member.person_id,
+        permission: Permissions.club_manage_members(),
+        grant_count: 1
+      })
   end
 
   defp group_address(club_id, group_email_slug) do

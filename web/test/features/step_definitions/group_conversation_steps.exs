@@ -303,7 +303,7 @@ defmodule Memba.Cucumber.GroupConversationSteps do
     context
   end
 
-  step ~r/^(\w+) directly tries to ((?!add ).+)$/,
+  step ~r/^(\w+) directly tries to ((?!add |remove ).+)$/,
        %{args: [person_name, action]} = context do
     try_direct_board_action(context, person_name, action)
   end

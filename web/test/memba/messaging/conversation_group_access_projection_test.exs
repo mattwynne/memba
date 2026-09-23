@@ -497,13 +497,15 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
 
     assert Messaging.following_conversation?(conversation_id, bob_person_id)
 
-    assert :ok =
-             Memba.Membership.App.dispatch(
-               %Memba.Membership.Commands.RemoveGroupMember{
+    assert {:ok, %Memba.Membership.CustomGroupRemoval{transition: :member_removed}} =
+             Memba.Membership.remove_custom_group_member(
+               %{
                  club_id: club_id,
                  group_id: group_id,
                  membership_id: bob_membership_id,
-                 person_id: bob_person_id
+                 person_id: bob_person_id,
+                 actor_person_id: alice_person_id,
+                 removal_operation_id: Ecto.UUID.generate()
                },
                consistency: :strong
              )

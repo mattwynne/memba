@@ -336,7 +336,19 @@ defmodule Memba.Messaging.PostMessageReplyTest do
 
     root_message_id = send_root_message_to_group(club_id, group_id, alice)
     follow_conversation(club_id, root_message_id, bob.person_id)
-    remove_group_member(club_id, group_id, bob_membership_id, bob.person_id)
+
+    assert {:ok, %Memba.Membership.CustomGroupRemoval{transition: :member_removed}} =
+             Memba.Membership.remove_custom_group_member(
+               %{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob.person_id,
+                 actor_person_id: alice.person_id,
+                 removal_operation_id: Ecto.UUID.generate()
+               },
+               consistency: :strong
+             )
 
     absent_reply_id = Memba.ID.generate(:message)
 

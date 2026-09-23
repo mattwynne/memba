@@ -12,6 +12,7 @@ defmodule MembaWeb.MemberDashboardLive do
   alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Membership.CustomGroupAdmission
+  alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.GroupWelcomeEmail
   alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
@@ -52,6 +53,7 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:selected_group_route_id, selected_group_id)
          |> assign(:active_section, "conversations")
          |> assign(:custom_group_member_picker_open?, false)
+         |> assign(:custom_group_member_removal, nil)
          |> assign_custom_group_member_picker_query("")
          |> assign(dashboard_assigns)}
 
@@ -70,6 +72,7 @@ defmodule MembaWeb.MemberDashboardLive do
     socket =
       socket
       |> assign(:custom_group_member_picker_open?, false)
+      |> assign(:custom_group_member_removal, nil)
       |> assign_custom_group_member_picker_query("")
       |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
 
@@ -145,6 +148,100 @@ defmodule MembaWeb.MemberDashboardLive do
     {:noreply, put_flash(socket, :error, "We couldn't add that member. Refresh and try again.")}
   end
 
+  def handle_event(
+        "confirm_custom_group_member_removal",
+        %{"membership_id" => membership_id, "person_id" => person_id},
+        %{assigns: %{can_add_custom_group_members?: true}} = socket
+      ) do
+    {:noreply,
+     assign(socket, :custom_group_member_removal, %{
+       action_key: {membership_id, person_id},
+       membership_id: membership_id,
+       person_id: person_id,
+       operation_id: Ecto.UUID.generate(),
+       status: :pending
+     })}
+  end
+
+  def handle_event("confirm_custom_group_member_removal", _params, socket),
+    do: {:noreply, socket}
+
+  def handle_event("cancel_custom_group_member_removal", _params, socket) do
+    {:noreply, assign(socket, :custom_group_member_removal, nil)}
+  end
+
+  def handle_event(
+        "remove_custom_group_member",
+        %{
+          "membership_id" => membership_id,
+          "person_id" => person_id,
+          "removal_operation_id" => submitted_operation_id
+        },
+        socket
+      ) do
+    with {:ok, operation_id} <-
+           removal_operation_id(socket, membership_id, person_id, submitted_operation_id) do
+      attrs = %{
+        club_id: socket.assigns.selected_club.club_id,
+        group_id: socket.assigns.selected_group.group_id,
+        membership_id: membership_id,
+        person_id: person_id,
+        actor_person_id: socket.assigns.current_member.id,
+        removal_operation_id: operation_id
+      }
+
+      case Membership.remove_custom_group_member(attrs, consistency: :strong) do
+        {:ok, %CustomGroupRemoval{}} ->
+          self_leave? = person_id == socket.assigns.current_member.id
+
+          completed_removal = %{
+            action_key: {membership_id, person_id},
+            membership_id: membership_id,
+            person_id: person_id,
+            operation_id: operation_id,
+            status: :completed
+          }
+
+          refreshed =
+            socket
+            |> assign(:custom_group_member_removal, completed_removal)
+            |> refresh_dashboard(
+              socket.assigns.selected_club.club_id,
+              socket.assigns.selected_group_route_id
+            )
+
+          refreshed =
+            if self_leave? do
+              put_flash(
+                refreshed,
+                :info,
+                "You're no longer in #{socket.assigns.selected_group.name}. You still belong to #{socket.assigns.selected_club.name}."
+              )
+            else
+              refreshed
+            end
+
+          {:noreply, refreshed}
+
+        {:error, _reason} ->
+          {:noreply,
+           socket
+           |> refresh_dashboard(
+             socket.assigns.selected_club.club_id,
+             socket.assigns.selected_group_route_id
+           )
+           |> put_flash(:error, "You are not authorized to access that page.")}
+      end
+    else
+      :error ->
+        {:noreply, put_flash(socket, :error, "You are not authorized to access that page.")}
+    end
+  end
+
+  def handle_event("remove_custom_group_member", _params, socket) do
+    {:noreply, put_flash(socket, :error, "You are not authorized to access that page.")}
+  end
+
   @impl Phoenix.LiveView
   def handle_event(
         "restore_remembered_group",
@@ -214,6 +311,22 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp active_section(:members), do: "members"
   defp active_section(_live_action), do: "conversations"
+
+  defp removal_operation_id(socket, membership_id, person_id, submitted_operation_id) do
+    action_key = {membership_id, person_id}
+
+    case socket.assigns[:custom_group_member_removal] do
+      %{action_key: ^action_key, operation_id: operation_id}
+      when operation_id == submitted_operation_id ->
+        {:ok, operation_id}
+
+      %{action_key: ^action_key} ->
+        :error
+
+      _reconnected_action ->
+        Ecto.UUID.cast(submitted_operation_id)
+    end
+  end
 
   defp assign_custom_group_member_picker_query(socket, query) do
     socket

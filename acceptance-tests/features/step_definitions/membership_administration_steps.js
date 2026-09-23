@@ -68,7 +68,7 @@ When(/^(\w+) tries to remove (\w+) from (.+)$/, async function (_actorName, targ
   await removeMemberAsStaff(this, targetName, clubName);
 });
 
-When(/^(\w+) removes (\w+) from (.+)$/, async function (_actorName, targetName, clubName) {
+When(/^(\w+) removes (\w+) from ((?!Board$).+)$/, async function (_actorName, targetName, clubName) {
   await removeMemberAsStaff(this, targetName, clubName);
 });
 

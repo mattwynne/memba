@@ -261,7 +261,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
          event,
          socket
        ) do
-    Map.get(event, :conversation_id) == socket.assigns.message.conversation_id
+    Map.get(event, :conversation_id) == conversation_message_id(socket.assigns.message)
   end
 
   defp access_change_relevant?(_membership_projector, event, socket) do

@@ -19,15 +19,20 @@ defmodule Memba.CustomGroupMembershipStepsTest do
     end
   end
 
-  test "all iteration-063 membership examples are selected" do
+  test "implemented membership examples are selected" do
     selected_names = Enum.map(@selected_scenarios, & &1.scenario.name)
 
-    assert length(selected_names) == 10
+    assert length(selected_names) == 15
     assert "Bob adds Carol without becoming a club admin" in selected_names
     assert "Dan adds Carol without joining Board himself" in selected_names
     assert "Dan adds himself before reading Board's discussions" in selected_names
     assert "Adding Carol again does not welcome her a second time" in selected_names
     assert "Board membership cannot grant Eve club-admin authority" in selected_names
+    assert "Bob removes Alice without removing her club authority" in selected_names
+    assert "Dan removes Bob without joining Board himself" in selected_names
+    assert "Eve cannot remove Bob while outside Board" in selected_names
+    assert "Bob cannot leave Everyone while remaining an active club member" in selected_names
+    assert "The last club admin cannot leave Admin using custom-group controls" in selected_names
 
     assert Enum.count(
              selected_names,
