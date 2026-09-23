@@ -323,7 +323,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [%{message_id: ^message_id}] = Messaging.list_conversations_for_group(trips_group_id)
   end
 
-  test "does not hand private email to a departed member who has rejoined only Everyone" do
+  test "sends an already-created private delivery after departure but creates no later delivery" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
 
@@ -415,13 +415,14 @@ defmodule Memba.Messaging.SendClubMessageTest do
              %EmailDeliveryProjection{
                delivery_id: ^carol_delivery_id,
                recipient_id: ^carol_id,
-               status: "failed",
-               latest_error: "recipient_access_ended",
-               attempt_count: 1
+               status: "sent",
+               latest_error: nil,
+               attempt_count: 0
              }
            ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-    assert [%EmailDeliveryRequest{recipient_id: ^alice_id}] = Fake.deliveries()
+    assert Enum.sort(Enum.map(Fake.deliveries(), & &1.recipient_id)) ==
+             Enum.sort([alice_id, carol_id])
 
     later_message_id = Memba.ID.generate(:message)
 
@@ -443,7 +444,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
   end
 
-  test "startup recovers a projection-timeout deferral after dispatcher restart" do
+  test "membership projection lag does not reauthorize a fixed delivery at handoff" do
     Application.put_env(:memba, :email_delivery_projection_timeout, 25)
     Application.put_env(:memba, :authorization_stability_timeout, 25)
 
@@ -483,7 +484,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
     carol_delivery_id = carol_delivery.delivery_id
     membership_projector_child_id = stop_projector!(MembershipProjector)
     group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
-    conversation_access_projector_child_id = stop_projector!(ConversationGroupAccessProjector)
 
     assert :ok =
              MembershipApp.dispatch(
@@ -546,7 +546,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              &match?(
                %EmailDeliveryProjection{
                  delivery_id: ^carol_delivery_id,
-                 status: "pending",
+                 status: "sent",
                  attempt_count: 0,
                  latest_error: nil,
                  failed_at: nil
@@ -555,66 +555,168 @@ defmodule Memba.Messaging.SendClubMessageTest do
              )
            )
 
-    assert Fake.deliveries() == []
-
-    dispatcher_name = :"#{__MODULE__}.lag_recovery"
-
-    dispatcher_opts = [
-      name: dispatcher_name,
-      dispatch_enabled: true,
-      dispatch_observer: self(),
-      projection_catch_up_retry_interval: 60_000
-    ]
-
-    dispatcher_pid = start_supervised!({EmailDeliveryDispatcher, dispatcher_opts})
-
-    assert_receive {:email_delivery_dispatch_requested,
-                    %{
-                      source: :startup,
-                      claimed_delivery_ids: initially_claimed_delivery_ids
-                    }},
-                   1_000
-
-    assert carol_delivery_id in initially_claimed_delivery_ids
-
-    dispatcher_monitor = Process.monitor(dispatcher_pid)
-    assert :ok = stop_supervised(EmailDeliveryDispatcher)
-    assert_receive {:DOWN, ^dispatcher_monitor, :process, ^dispatcher_pid, :shutdown}
+    assert Enum.any?(Fake.deliveries(), &(&1.recipient_id == carol.person_id))
 
     restart_projector!(membership_projector_child_id)
     restart_projector!(group_membership_projector_child_id)
-    restart_projector!(conversation_access_projector_child_id)
+  end
 
-    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+  test "a newly joined participant receives a root while the group projection is stale" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
 
-    Memba.ProjectionBarrier.await!(
-      [MembershipProjector, GroupMembershipProjector, ConversationGroupAccessProjector],
-      checkpoint: checkpoint,
-      timeout: 1_000
-    )
+    alice = create_person(name: "Alice Admin", email: "alice@example.com")
+    carol = create_person(name: "Carol Member", email: "carol@example.com")
+    alice_membership_id = add_member(club_id, alice.person_id)
+    carol_membership_id = add_member(club_id, carol.person_id)
+    board_group_id = create_group(club_id, "Board")
+
+    add_group_member(club_id, board_group_id, alice_membership_id, alice.person_id)
+    group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: board_group_id,
+                 membership_id: carol_membership_id,
+                 person_id: carol.person_id
+               },
+               consistency: :eventual
+             )
 
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
 
-    start_supervised!({EmailDeliveryDispatcher, dispatcher_opts})
+    message_id = Memba.ID.generate(:message)
 
-    assert_receive {:email_delivery_dispatch_requested,
-                    %{
-                      source: :startup,
-                      claimed_delivery_ids: retried_delivery_ids
-                    }},
-                   1_000
+    assert {:ok, %ExecutionResult{events: events}} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Board update",
+                 body: "Carol joined before this was posted."
+               },
+               returning: :execution_result,
+               consistency: [MessageProjector]
+             )
 
-    assert carol_delivery_id in retried_delivery_ids
+    carol_id = carol.person_id
+    assert Enum.any?(events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
 
-    assert %EmailDeliveryProjection{
-             delivery_id: ^carol_delivery_id,
-             status: "failed",
-             attempt_count: 1,
-             latest_error: "recipient_access_ended"
-           } = Repo.get!(EmailDeliveryProjection, carol_delivery_id)
+    restart_projector!(group_membership_projector_child_id)
+    await_restarted_subscribers!([GroupMembershipProjector])
+  end
 
-    assert [%EmailDeliveryRequest{recipient_id: alice_id}] = Fake.deliveries()
-    assert alice_id == alice.person_id
+  test "a rejoined follower receives future replies despite projection lag and no backlog" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice Admin", email: "alice@example.com")
+    carol = create_person(name: "Carol Member", email: "carol@example.com")
+    alice_membership_id = add_member(club_id, alice.person_id)
+    carol_membership_id = add_member(club_id, carol.person_id)
+    board_group_id = create_group(club_id, "Board")
+
+    add_group_member(club_id, board_group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, board_group_id, carol_membership_id, carol.person_id)
+
+    conversation_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: conversation_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: board_group_id,
+                 subject: "Board update",
+                 body: "Initial discussion."
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 club_id: club_id,
+                 conversation_id: conversation_id,
+                 member_id: carol.person_id
+               },
+               consistency: :strong
+             )
+
+    remove_group_member(
+      club_id,
+      board_group_id,
+      carol_membership_id,
+      carol.person_id
+    )
+
+    absent_reply_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: absent_reply_id,
+                 conversation_id: conversation_id,
+                 sender_id: alice.person_id,
+                 body: "Posted while Carol is absent."
+               },
+               consistency: :strong
+             )
+
+    refute Enum.any?(
+             pending_deliveries_for_message(absent_reply_id),
+             &(&1.recipient_id == carol.person_id)
+           )
+
+    group_membership_projector_child_id = stop_projector!(GroupMembershipProjector)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: board_group_id,
+                 membership_id: carol_membership_id,
+                 person_id: carol.person_id
+               },
+               consistency: :eventual
+             )
+
+    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    assert Messaging.following_conversation?(conversation_id, carol.person_id)
+
+    resumed_reply_id = Memba.ID.generate(:message)
+
+    assert {:ok, %ExecutionResult{events: resumed_events}} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: resumed_reply_id,
+                 conversation_id: conversation_id,
+                 sender_id: alice.person_id,
+                 body: "Posted after Carol rejoins."
+               },
+               returning: :execution_result,
+               consistency: [MessageProjector]
+             )
+
+    carol_id = carol.person_id
+
+    assert Enum.any?(
+             resumed_events,
+             &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1)
+           )
+
+    refute Enum.any?(
+             pending_deliveries_for_message(absent_reply_id),
+             &(&1.recipient_id == carol.person_id)
+           )
+
+    restart_projector!(group_membership_projector_child_id)
+    await_restarted_subscribers!([GroupMembershipProjector])
   end
 
   test "does not create a new-message delivery for a departure hidden by recipient projection lag" do

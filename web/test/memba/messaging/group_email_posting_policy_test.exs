@@ -63,6 +63,60 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                )
     end
 
+    test "custom-group roots require current participation while system-group semantics stay club-wide" do
+      club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      alice = create_person!(name: "Alice Admin", email: "alice@example.com")
+      eve = create_person!(name: "Eve Member", email: "eve@example.com")
+      _alice_membership_id = add_member!(club.club_id, alice.person_id)
+      eve_membership_id = add_member!(club.club_id, eve.person_id)
+      group_id = Memba.ID.generate(:group)
+
+      assert :ok =
+               Membership.create_custom_group(
+                 %{
+                   club_id: club.club_id,
+                   group_id: group_id,
+                   actor_person_id: alice.person_id,
+                   name: "Board"
+                 },
+                 consistency: :strong
+               )
+
+      custom_destination = %InboundClubDestination{
+        club_id: club.club_id,
+        club_slug: club.slug,
+        club_name: club.name,
+        group_id: group_id,
+        group_email_slug: "board",
+        group_name: "Board",
+        to_address: "board@kmc.clubs.memba.io"
+      }
+
+      assert {:error, :sender_not_active_member, _details} =
+               Messaging.authorize_inbound_club_email_sender(
+                 sender(eve, "eve@example.com"),
+                 custom_destination
+               )
+
+      assert {:ok, _admission} =
+               Membership.add_custom_group_member(
+                 %{
+                   club_id: club.club_id,
+                   group_id: group_id,
+                   membership_id: eve_membership_id,
+                   person_id: eve.person_id,
+                   actor_person_id: alice.person_id
+                 },
+                 consistency: :strong
+               )
+
+      assert :ok =
+               Messaging.authorize_inbound_club_email_sender(
+                 sender(eve, "eve@example.com"),
+                 custom_destination
+               )
+    end
+
     test "rejects a resolved sender with an inactive destination-club membership" do
       club = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
       bob = create_person!(name: "Bob Admin", email: "bob@example.com")

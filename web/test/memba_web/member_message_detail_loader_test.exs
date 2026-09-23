@@ -1,12 +1,16 @@
 defmodule MembaWeb.MemberMessageDetailLoaderTest do
-  use MembaWeb.ConnCase, async: true
+  use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership.Projections.Club
-  alias Memba.Membership.Projections.Group
-  alias Memba.Membership.Projections.GroupMembership
-  alias Memba.Membership.Projections.Membership
+  import Memba.MessagingFixtures
+
+  alias Memba.Membership
+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.App, as: MessagingApp
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.MemberEmailDelivery
+  alias Memba.Messaging.Recipient
   alias Memba.Repo
   alias MembaWeb.MemberMessageDetail
 
@@ -211,8 +215,6 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
         club_id: alice.club_id
       )
 
-    add_to_group(alice, SystemGroups.admin_group_id(alice.club_id), "Admin")
-
     admin_conversation =
       create_message(
         club_id: alice.club_id,
@@ -245,6 +247,88 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
              )
   end
 
+  test "committed custom-group removal denies direct detail reads while participation projection is stale" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             Membership.create_custom_group(
+               %{
+                 club_id: alice.club_id,
+                 group_id: group_id,
+                 actor_person_id: alice.person_id,
+                 name: "Board"
+               },
+               consistency: :strong
+             )
+
+    assert {:ok, _admission} =
+             Membership.add_custom_group_member(
+               %{
+                 club_id: alice.club_id,
+                 group_id: group_id,
+                 membership_id: bob.membership_id,
+                 person_id: bob.person_id,
+                 actor_person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Private Board planning",
+        audience_group_id: group_id
+      )
+
+    projector_child_id = stop_projector!(GroupMembershipProjector)
+
+    assert {:ok, _removal} =
+             Membership.remove_custom_group_member(
+               %{
+                 club_id: alice.club_id,
+                 group_id: group_id,
+                 membership_id: bob.membership_id,
+                 person_id: bob.person_id,
+                 actor_person_id: alice.person_id,
+                 removal_operation_id: Ecto.UUID.generate()
+               },
+               consistency: :eventual
+             )
+
+    assert Membership.active_member_of_group?(group_id, bob.person_id)
+
+    assert {:error, :not_found} =
+             MemberMessageDetail.load(
+               %{"club_id" => bob.club_id, "message_id" => message.message_id},
+               [bob],
+               %{email: "bob@example.com"}
+             )
+
+    restart_projector!(projector_child_id)
+
+    Memba.ProjectionBarrier.await!(
+      [GroupMembershipProjector],
+      checkpoint: Memba.ProjectionBarrier.current_checkpoint(),
+      timeout: 5_000
+    )
+  end
+
   defp create_club(attrs) do
     insert_membership_club!(attrs)
   end
@@ -254,37 +338,108 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     person_id = Memba.ID.generate(:person)
     club_name = Keyword.fetch!(attrs, :club_name)
 
-    club =
-      Repo.get(Club, club_id) ||
-        insert_membership_club!(
-          club_id: club_id,
-          name: club_name
-        )
+    if is_nil(Membership.get_club(club_id)) do
+      assert :ok =
+               Membership.create_club(
+                 membership_club_attrs(club_id: club_id, name: club_name),
+                 consistency: :strong
+               )
+    end
 
-    person =
-      insert_membership_person!(
-        person_id: person_id,
-        name: Keyword.get(attrs, :name, "Test Member"),
-        email: Keyword.fetch!(attrs, :email)
-      )
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.get(attrs, :name, "Test Member"),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
 
-    membership =
-      Repo.insert!(%Membership{
-        membership_id: Memba.ID.generate(:membership),
-        club_id: club_id,
-        person_id: person.person_id,
-        active: true
-      })
+    membership_id = Memba.ID.generate(:membership)
 
-    club
+    assert :ok =
+             Membership.add_member(
+               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+               consistency: :strong
+             )
+
+    club_id
+    |> Membership.get_club()
     |> Map.from_struct()
-    |> Map.put(:person_id, person.person_id)
-    |> Map.put(:membership_id, membership.membership_id)
-    |> tap(&add_to_group(&1, SystemGroups.everyone_group_id(club_id), "Everyone"))
+    |> Map.put(:person_id, person_id)
+    |> Map.put(:membership_id, membership_id)
   end
 
   defp create_message(attrs) do
-    insert_group_accessible_message!(attrs)
+    if is_nil(Keyword.get(attrs, :conversation_id)) do
+      message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+      club_id = Keyword.fetch!(attrs, :club_id)
+
+      assert :ok =
+               MessagingApp.dispatch(
+                 %SendMessage{
+                   message_id: message_id,
+                   club_id: club_id,
+                   sender_id: Keyword.fetch!(attrs, :sender_id),
+                   subject: Keyword.get(attrs, :subject, "Message subject"),
+                   body: Keyword.get(attrs, :body, "Message body"),
+                   recipients: [
+                     %Recipient{
+                       delivery_id: Memba.ID.generate(:delivery),
+                       person_id: Keyword.fetch!(attrs, :sender_id),
+                       name: "Sender",
+                       email: "sender@example.com"
+                     }
+                   ]
+                 },
+                 consistency: :strong
+               )
+
+      assert :ok =
+               MessagingApp.dispatch(
+                 %GrantConversationAccessToGroup{
+                   conversation_id: message_id,
+                   club_id: club_id,
+                   group_id:
+                     Keyword.get_lazy(attrs, :audience_group_id, fn ->
+                       SystemGroups.everyone_group_id(club_id)
+                     end),
+                   access_level: :write
+                 },
+                 consistency: :strong
+               )
+
+      Repo.delete_all(
+        from(delivery in MemberEmailDelivery, where: delivery.message_id == ^message_id)
+      )
+
+      Repo.get!(Memba.Messaging.Projections.Message, message_id)
+    else
+      insert_group_accessible_message!(attrs)
+    end
+  end
+
+  defp stop_projector!(projector) do
+    child_id =
+      Supervisor.which_children(Memba.Supervisor)
+      |> Enum.find_value(fn
+        {child_id, _pid, :worker, [^projector]} -> child_id
+        _child -> nil
+      end)
+
+    assert child_id
+    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+    on_exit(fn -> restart_projector!(child_id) end)
+    child_id
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+    end
   end
 
   defp create_member_email_delivery(attrs) do
@@ -294,26 +449,6 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
-    })
-  end
-
-  defp add_to_group(member, group_id, name) do
-    Repo.get(Group, group_id) ||
-      Repo.insert!(%Group{
-        group_id: group_id,
-        club_id: member.club_id,
-        group_key: String.downcase(name),
-        email_slug: String.downcase(name),
-        name: name,
-        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(name)
-      })
-
-    Repo.insert!(%GroupMembership{
-      club_id: member.club_id,
-      group_id: group_id,
-      membership_id: member.membership_id,
-      person_id: member.person_id,
-      active: true
     })
   end
 end

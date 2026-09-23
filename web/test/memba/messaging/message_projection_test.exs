@@ -365,7 +365,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
   end
 
   describe "list_conversations_for_group/1" do
-    test "returns only conversations with a read-capable grant for the supplied group" do
+    test "returns only conversations whose one canonical group has a read-capable grant" do
       club_id = Memba.ID.generate(:club)
       everyone_group_id = Memba.ID.generate(:group)
       admin_group_id = Memba.ID.generate(:group)
@@ -379,11 +379,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
       )
 
       everyone_root =
-        insert_message_projection!(
+        insert_canonical_root!(
           club_id: club_id,
           sender_id: sender_id,
-          subject: "Everyone conversation",
-          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
+          subject: "Everyone conversation"
         )
 
       _everyone_reply =
@@ -397,19 +396,17 @@ defmodule Memba.Messaging.MessageProjectionTest do
         )
 
       admin_root =
-        insert_message_projection!(
+        insert_canonical_root!(
           club_id: club_id,
           sender_id: sender_id,
-          subject: "Admin conversation",
-          inserted_at: ~U[2026-06-05 11:00:00.000000Z]
+          subject: "Admin conversation"
         )
 
       shared_root =
-        insert_message_projection!(
+        insert_canonical_root!(
           club_id: club_id,
           sender_id: sender_id,
-          subject: "Shared conversation",
-          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+          subject: "Shared conversation"
         )
 
       _ungranted_root =
@@ -420,13 +417,12 @@ defmodule Memba.Messaging.MessageProjectionTest do
           inserted_at: ~U[2026-06-05 13:00:00.000000Z]
         )
 
-      grant_group_access!(everyone_root, everyone_group_id, "write")
-      grant_group_access!(admin_root, admin_group_id, "write")
-      grant_group_access!(shared_root, everyone_group_id, "read")
-      grant_group_access!(shared_root, admin_group_id, "write")
+      grant_canonical_group_access!(everyone_root, everyone_group_id, "write")
+      grant_canonical_group_access!(admin_root, admin_group_id, "write")
+      grant_canonical_group_access!(shared_root, everyone_group_id, "read")
+      grant_canonical_group_access!(shared_root, admin_group_id, "write")
 
       assert [
-               %{message_id: shared_root_id, reply_count: 0, latest_replier_name: nil},
                %{
                  message_id: everyone_root_id,
                  reply_count: 1,
@@ -435,16 +431,14 @@ defmodule Memba.Messaging.MessageProjectionTest do
                }
              ] = Messaging.list_conversations_for_group(everyone_group_id)
 
-      assert shared_root_id == shared_root.message_id
       assert everyone_root_id == everyone_root.message_id
 
-      assert [
-               %{message_id: shared_root_id},
-               %{message_id: admin_root_id}
-             ] = Messaging.list_conversations_for_group(admin_group_id)
+      assert [%{message_id: admin_root_id}] =
+               Messaging.list_conversations_for_group(admin_group_id)
 
-      assert shared_root_id == shared_root.message_id
       assert admin_root_id == admin_root.message_id
+
+      refute shared_root.message_id in [everyone_root_id, admin_root_id]
     end
 
     test "does not expose a conversation through a cross-club access row" do
@@ -585,11 +579,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
       other_group_id = Memba.ID.generate(:group)
 
       root =
-        insert_message_projection!(
+        insert_canonical_root!(
           club_id: club_id,
           sender_id: Memba.ID.generate(:person),
-          subject: "Private trip planning",
-          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+          subject: "Private trip planning"
         )
 
       reply =
@@ -602,7 +595,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
           inserted_at: ~U[2026-06-05 12:01:00.000000Z]
         )
 
-      grant_group_access!(root, group_id, "read")
+      grant_canonical_group_access!(root, group_id, "read")
 
       assert [
                %MessageProjection{message_id: root_id},
@@ -712,6 +705,43 @@ defmodule Memba.Messaging.MessageProjectionTest do
     end
   end
 
+  defp insert_canonical_root!(attrs) do
+    message_id = Memba.ID.generate(:message)
+    sender_id = Keyword.fetch!(attrs, :sender_id)
+
+    assert :ok =
+             App.dispatch(
+               %SendMessage{
+                 message_id: message_id,
+                 club_id: Keyword.fetch!(attrs, :club_id),
+                 sender_id: sender_id,
+                 subject: Keyword.fetch!(attrs, :subject),
+                 body: Keyword.get(attrs, :body, "Message body."),
+                 recipients: [
+                   %Recipient{
+                     delivery_id: Memba.ID.generate(:delivery),
+                     person_id: sender_id,
+                     name: "Sender",
+                     email: "sender@example.com"
+                   }
+                 ]
+               },
+               consistency: :strong
+             )
+
+    Repo.get!(MessageProjection, message_id)
+  end
+
+  defp grant_canonical_group_access!(conversation, group_id, access_level) do
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(%{
+               conversation_id: conversation.message_id,
+               club_id: conversation.club_id,
+               group_id: group_id,
+               access_level: access_level
+             })
+  end
+
   defp insert_message_projection!(attrs) when is_list(attrs) do
     inserted_at = Keyword.fetch!(attrs, :inserted_at)
     message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
@@ -729,7 +759,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
     })
   end
 
-  defp grant_group_access!(conversation, group_id, access_level, opts \\ []) do
+  defp grant_group_access!(conversation, group_id, access_level, opts) do
     Repo.insert!(%ConversationGroupAccessProjection{
       conversation_id: conversation.message_id,
       club_id: Keyword.get(opts, :club_id, conversation.club_id),

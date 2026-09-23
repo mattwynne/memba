@@ -85,7 +85,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
       participating_groups_by_id =
         club_id
-        |> Membership.list_active_groups_for_member(current_member.id)
+        |> Membership.list_active_groups_for_member_authoritatively(current_member.id)
         |> Map.new(&{&1.group_id, &1})
 
       groups = mark_group_participation(groups, participating_groups_by_id)
@@ -126,6 +126,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
           selected_group,
           Map.get(participating_groups_by_id, selected_group_id),
           selected_club,
+          current_member,
           current_member_can_manage_members?
         )
 
@@ -189,12 +190,20 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp load_permitted_surface(
          _discovered_group,
          participating_group,
-         _selected_club,
+         selected_club,
+         current_member,
          _current_member_can_manage_members?
        )
        when is_map(participating_group) do
     members = load_group_members(participating_group.group_id)
-    messages = load_messages(participating_group.group_id)
+
+    messages =
+      load_messages(
+        selected_club.club_id,
+        participating_group.group_id,
+        current_member.id
+      )
+
     member_names_by_id = Map.new(members, &{&1.id, &1.name})
 
     {participating_group,
@@ -209,7 +218,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
      }}
   end
 
-  defp load_permitted_surface(selected_group, nil, selected_club, true) do
+  defp load_permitted_surface(selected_group, nil, selected_club, _current_member, true) do
     members = load_group_members(selected_group.group_id)
     member_names_by_id = Map.new(members, &{&1.id, &1.name})
 
@@ -230,7 +239,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
      }}
   end
 
-  defp load_permitted_surface(selected_group, nil, _selected_club, false) do
+  defp load_permitted_surface(selected_group, nil, _selected_club, _current_member, false) do
     selected_group =
       selected_group
       |> Map.put(:active_member_count, nil)
@@ -321,7 +330,13 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   defp can_manage_members?(_club_id, _current_member), do: false
 
-  defp load_messages(group_id), do: Messaging.list_conversations_for_group(group_id)
+  defp load_messages(club_id, group_id, person_id) do
+    if Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id) do
+      Messaging.list_conversations_for_group(group_id)
+    else
+      []
+    end
+  end
 
   @doc """
   Shapes recent conversation rows for dashboard rendering.

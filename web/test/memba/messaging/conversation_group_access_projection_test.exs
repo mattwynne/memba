@@ -5,13 +5,17 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging
+  alias Memba.Messaging.App, as: MessagingApp
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.Message
+  alias Memba.Messaging.Recipient
 
-  test "projects a write grant and exposes read-through-write in the Messaging query API" do
+  test "projects a write grant" do
     conversation_id = Memba.ID.generate(:message)
     club_id = Memba.ID.generate(:club)
     group_id = Memba.ID.generate(:group)
@@ -37,11 +41,6 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                updated_at: %DateTime{}
              }
            ] = Repo.all(ConversationGroupAccessProjection)
-
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, "write")
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, "read")
   end
 
   test "a read grant does not imply write access" do
@@ -59,9 +58,6 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                },
                projector_metadata(1)
              )
-
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
-    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
   end
 
   test "read grants can be upgraded to write grants" do
@@ -99,9 +95,6 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                access_level: "write"
              }
            ] = Repo.all(ConversationGroupAccessProjection)
-
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
   end
 
   test "repeated grants keep one current row per conversation and group" do
@@ -159,8 +152,15 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                projector_metadata(3)
              )
 
-    refute Messaging.group_has_conversation_access?(conversation_id, revoked_group_id, :read)
-    assert Messaging.group_has_conversation_access?(conversation_id, retained_group_id, :write)
+    refute Repo.get_by(ConversationGroupAccessProjection,
+             conversation_id: conversation_id,
+             group_id: revoked_group_id
+           )
+
+    assert Repo.get_by(ConversationGroupAccessProjection,
+             conversation_id: conversation_id,
+             group_id: retained_group_id
+           )
   end
 
   test "invalid access levels are rejected by the projector and query API" do
@@ -181,22 +181,75 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
 
     assert Repo.all(ConversationGroupAccessProjection) == []
     refute Messaging.group_has_conversation_access?(conversation_id, group_id, "admin")
+    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
     refute Messaging.group_has_conversation_access?("not-a-message-id", group_id, :read)
     refute Messaging.group_has_conversation_access?(conversation_id, "not-a-group-id", :read)
   end
 
-  test "member access resolves replies through an active group and honors the required level" do
-    club = insert_membership_club!(name: "Alpine Club")
-    person = insert_membership_person!(name: "Alice Adams", email: "alice@example.com")
-    group = insert_group!(club.club_id, "Trip planners")
-    insert_active_group_member!(club.club_id, group.group_id, person.person_id)
+  test "member access resolves replies through authoritative participation and honors the required level" do
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
+    group_id = Memba.ID.generate(:group)
 
-    root =
-      insert_message!(
-        club_id: club.club_id,
-        sender_id: person.person_id,
-        subject: "Private trip planning"
-      )
+    assert :ok =
+             Memba.Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Alpine Club"),
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.create_person(
+               %{person_id: person_id, name: "Alice Adams", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.add_member(
+               %{
+                 club_id: club_id,
+                 membership_id: Memba.ID.generate(:membership),
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.create_custom_group(
+               %{
+                 club_id: club_id,
+                 group_id: group_id,
+                 actor_person_id: person_id,
+                 name: "Trip planners"
+               },
+               consistency: :strong
+             )
+
+    club = Memba.Membership.get_club(club_id)
+    person = Memba.Membership.get_person(person_id)
+
+    root_message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             MessagingApp.dispatch(
+               %SendMessage{
+                 message_id: root_message_id,
+                 club_id: club.club_id,
+                 sender_id: person.person_id,
+                 subject: "Private trip planning",
+                 body: "Message body",
+                 recipients: [
+                   %Recipient{
+                     delivery_id: Memba.ID.generate(:delivery),
+                     person_id: person.person_id,
+                     name: person.name,
+                     email: person.email
+                   }
+                 ]
+               },
+               consistency: :strong
+             )
+
+    root = Repo.get!(Message, root_message_id)
 
     reply =
       insert_message!(
@@ -207,12 +260,16 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
         subject: root.subject
       )
 
-    Repo.insert!(%ConversationGroupAccessProjection{
-      conversation_id: root.message_id,
-      club_id: club.club_id,
-      group_id: group.group_id,
-      access_level: "read"
-    })
+    assert :ok =
+             MessagingApp.dispatch(
+               %GrantConversationAccessToGroup{
+                 conversation_id: root.message_id,
+                 club_id: club.club_id,
+                 group_id: group_id,
+                 access_level: :read
+               },
+               consistency: :eventual
+             )
 
     assert Messaging.member_has_conversation_access?(
              reply.message_id,
@@ -236,7 +293,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
            )
   end
 
-  test "member access composes grants across every active group on a shared conversation" do
+  test "member access fails closed when a conversation has more than one group" do
     club = insert_membership_club!(name: "Alpine Club")
     reader = insert_membership_person!(name: "Riley Reader", email: "riley@example.com")
     writer = insert_membership_person!(name: "Wendy Writer", email: "wendy@example.com")
@@ -267,40 +324,23 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
       })
     end
 
-    assert Messaging.member_has_conversation_access?(
-             root.message_id,
-             club.club_id,
-             reader.person_id,
-             :read
-           )
+    for {person_id, access_level} <- [
+          {reader.person_id, :read},
+          {reader.person_id, :write},
+          {writer.person_id, :read},
+          {writer.person_id, :write},
+          {outsider.person_id, :read}
+        ] do
+      refute Messaging.member_has_conversation_access?(
+               root.message_id,
+               club.club_id,
+               person_id,
+               access_level
+             )
+    end
 
-    refute Messaging.member_has_conversation_access?(
-             root.message_id,
-             club.club_id,
-             reader.person_id,
-             :write
-           )
-
-    assert Messaging.member_has_conversation_access?(
-             root.message_id,
-             club.club_id,
-             writer.person_id,
-             :read
-           )
-
-    assert Messaging.member_has_conversation_access?(
-             root.message_id,
-             club.club_id,
-             writer.person_id,
-             :write
-           )
-
-    refute Messaging.member_has_conversation_access?(
-             root.message_id,
-             club.club_id,
-             outsider.person_id,
-             :read
-           )
+    assert Messaging.list_conversations_for_group(readers_group.group_id) == []
+    assert Messaging.list_conversations_for_group(writers_group.group_id) == []
   end
 
   test "discovering a group does not confer member access or permit in-app follow actions" do
@@ -471,7 +511,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     assert {:error, :not_current_member} =
              Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
 
-    refute Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert Messaging.following_conversation?(conversation_id, bob_person_id)
   end
 
   defp projector_metadata(event_number) do

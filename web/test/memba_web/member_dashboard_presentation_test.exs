@@ -1,18 +1,25 @@
 defmodule MembaWeb.MemberDashboardPresentationTest do
-  use Memba.DataCase, async: true
+  use Memba.DataCase, async: false
 
   alias Memba.ClubInboundEmailAddress
+  alias Memba.Membership
+  alias Memba.Membership.App
+  alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
-  alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Role
   alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.App, as: MessagingApp
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
+  alias Memba.Messaging.Recipient
   alias MembaWeb.MemberDashboardPresentation
 
   test "loads selected-club dashboard assigns with grouped conversation row data" do
@@ -793,12 +800,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     person_id = Memba.ID.generate(:person)
     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
 
-    club =
-      Repo.get(Club, club_id) ||
-        insert_membership_club!(
-          club_id: club_id,
-          name: club_name
-        )
+    club = ensure_authoritative_club(club_id, club_name)
 
     person =
       insert_membership_person!(
@@ -809,18 +811,17 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     membership_id = Memba.ID.generate(:membership)
 
-    Repo.insert!(%Membership{
-      membership_id: membership_id,
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
-    })
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: membership_id,
+                 club_id: club_id,
+                 person_id: person.person_id
+               },
+               consistency: :strong
+             )
 
-    add_group_member(ensure_everyone_group(club_id), %{
-      club_id: club_id,
-      membership_id: membership_id,
-      person_id: person.person_id
-    })
+    preserve_projection_display_fixtures(club_id, membership_id)
 
     %{
       club: club,
@@ -830,44 +831,75 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     }
   end
 
-  defp ensure_everyone_group(club_id) do
-    group_id = SystemGroups.everyone_group_id(club_id)
+  defp ensure_authoritative_club(club_id, club_name) do
+    case Membership.get_club(club_id) do
+      %Club{} = club ->
+        club
 
-    Repo.insert!(
-      %Group{
-        club_id: club_id,
-        group_id: group_id,
-        group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name(),
-        name_uniqueness_key:
-          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
-      },
-      on_conflict: :nothing
-    )
+      nil ->
+        club_attrs = membership_club_attrs(club_id: club_id, name: club_name)
+        assert :ok = Membership.create_club(club_attrs, consistency: :strong)
+        Membership.get_club(club_id)
+    end
+  end
+
+  defp preserve_projection_display_fixtures(club_id, membership_id) do
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+
+    GroupMembership
+    |> where([membership], membership.membership_id == ^membership_id)
+    |> where([membership], membership.group_id == ^admin_group_id)
+    |> Repo.delete_all()
+
+    RoleAssignment
+    |> where([assignment], assignment.membership_id == ^membership_id)
+    |> Repo.delete_all()
+
+    MemberPermission
+    |> where([permission], permission.membership_id == ^membership_id)
+    |> Repo.delete_all()
+
+    Group
+    |> where([group], group.group_id == ^admin_group_id)
+    |> Repo.delete_all()
+  end
+
+  defp create_group(attrs) do
+    group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             App.dispatch(
+               %CreateGroup{
+                 club_id: Keyword.fetch!(attrs, :club_id),
+                 group_id: group_id,
+                 group_key: Keyword.fetch!(attrs, :group_key),
+                 email_slug:
+                   Keyword.get(attrs, :email_slug) ||
+                     Memba.Membership.Slug.default_from_name(Keyword.fetch!(attrs, :name)),
+                 name: Keyword.fetch!(attrs, :name)
+               },
+               consistency: :strong
+             )
 
     Repo.get!(Group, group_id)
   end
 
-  defp create_group(attrs) do
-    Repo.insert!(%Group{
-      club_id: Keyword.fetch!(attrs, :club_id),
-      group_id: Memba.ID.generate(:group),
-      group_key: Keyword.fetch!(attrs, :group_key),
-      email_slug: Keyword.get(attrs, :email_slug),
-      name: Keyword.fetch!(attrs, :name),
-      name_uniqueness_key:
-        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
-    })
-  end
-
   defp add_group_member(group, member) do
-    Repo.insert!(%GroupMembership{
-      club_id: member.club_id,
+    assert :ok =
+             App.dispatch(
+               %AddGroupMember{
+                 club_id: member.club_id,
+                 group_id: group.group_id,
+                 membership_id: member.membership_id,
+                 person_id: member.person_id
+               },
+               consistency: :strong
+             )
+
+    Repo.get_by!(GroupMembership,
       group_id: group.group_id,
-      membership_id: member.membership_id,
-      person_id: member.person_id,
-      active: true
-    })
+      membership_id: member.membership_id
+    )
   end
 
   defp grant_manage_members!(member) do
@@ -900,9 +932,55 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   end
 
   defp create_message(attrs) do
-    attrs
-    |> Keyword.put_new_lazy(:inserted_at, &DateTime.utc_now/0)
-    |> insert_group_accessible_message!()
+    if is_nil(Keyword.get(attrs, :conversation_id)) do
+      message_id = Memba.ID.generate(:message)
+      club_id = Keyword.fetch!(attrs, :club_id)
+      sender_id = Keyword.fetch!(attrs, :sender_id)
+
+      assert :ok =
+               MessagingApp.dispatch(
+                 %SendMessage{
+                   message_id: message_id,
+                   club_id: club_id,
+                   sender_id: sender_id,
+                   subject: Keyword.get(attrs, :subject, "Message subject"),
+                   body: Keyword.get(attrs, :body, "Message body"),
+                   recipients: [
+                     %Recipient{
+                       delivery_id: Memba.ID.generate(:delivery),
+                       person_id: sender_id,
+                       name: "Sender",
+                       email: "sender@example.com"
+                     }
+                   ]
+                 },
+                 consistency: :strong
+               )
+
+      assert :ok =
+               MessagingApp.dispatch(
+                 %GrantConversationAccessToGroup{
+                   conversation_id: message_id,
+                   club_id: club_id,
+                   group_id:
+                     Keyword.get_lazy(attrs, :audience_group_id, fn ->
+                       SystemGroups.everyone_group_id(club_id)
+                     end),
+                   access_level: :write
+                 },
+                 consistency: :strong
+               )
+
+      Repo.delete_all(
+        from(delivery in MemberEmailDelivery, where: delivery.message_id == ^message_id)
+      )
+
+      Repo.get!(Message, message_id)
+    else
+      attrs
+      |> Keyword.put_new_lazy(:inserted_at, &DateTime.utc_now/0)
+      |> insert_group_accessible_message!()
+    end
   end
 
   defp create_member_email_delivery(attrs) do

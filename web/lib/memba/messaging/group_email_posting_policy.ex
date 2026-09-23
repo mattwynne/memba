@@ -2,9 +2,10 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   @moduledoc """
   Fixed posting policy for new group-email conversations.
 
-  The policy is named `:club_members_only`: only active members of the
-  destination club may start a conversation by email. It is deliberately fixed
-  in code rather than persisted or configurable.
+  The policy is named `:club_members_only`: active club members may post to
+  system groups, while custom-group roots additionally require current
+  participation in the destination group. It is deliberately fixed in code
+  rather than persisted or configurable.
 
   Authorization uses Membership's public authoritative API so Messaging can
   enforce the policy without coupling to Membership aggregate or projection
@@ -12,6 +13,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   """
 
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
 
@@ -34,11 +36,12 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   @doc """
   Authorize a resolved sender under the fixed group-email posting policy.
 
-  Returns `:ok` only when the sender person currently has an active membership
-  in the destination club. Membership of the addressed group is deliberately
-  irrelevant when starting a conversation. Known people who are active only in
-  other clubs, inactive destination-club members, and invalid inputs are
-  rejected without relying on Messaging-owned membership state.
+  Returns `:ok` when the sender is active in the destination club and, for a
+  custom group, currently participates in that group. Existing Everyone and
+  Admin posting semantics remain club-members-only. Known people who are active
+  only in other clubs, inactive destination-club members, absent custom-group
+  members, and invalid inputs are rejected without relying on Messaging-owned
+  membership state.
   """
   @spec authorize(InboundClubSender.t() | term(), InboundClubDestination.t() | term()) ::
           :ok | rejection()
@@ -46,10 +49,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
         %InboundClubSender{} = sender,
         %InboundClubDestination{} = destination
       ) do
-    if Membership.active_member_of_club_authoritatively?(
-         destination.club_id,
-         sender.person_id
-       ) do
+    if authorized_sender?(sender, destination) do
       :ok
     else
       {:error, :sender_not_active_member, rejection_details(sender, destination)}
@@ -57,6 +57,16 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   end
 
   def authorize(_sender, _destination), do: {:error, :invalid_inbound_authorization, nil}
+
+  defp authorized_sender?(sender, destination) do
+    Membership.active_member_of_club_authoritatively?(destination.club_id, sender.person_id) and
+      (not SystemGroups.custom_group?(destination) or
+         Membership.active_member_of_group_authoritatively?(
+           destination.club_id,
+           destination.group_id,
+           sender.person_id
+         ))
+  end
 
   defp rejection_details(%InboundClubSender{} = sender, %InboundClubDestination{} = destination) do
     %{

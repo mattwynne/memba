@@ -284,6 +284,98 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     refute Repo.get(MessageProjection, reply_message_id)
   end
 
+  test "a conversation with multiple group grants denies replies instead of unioning access" do
+    club_id = Memba.ID.generate(:club)
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    alice_membership_id = add_member(club_id, alice.person_id)
+    first_group_id = create_group(club_id, "Trip planners")
+    second_group_id = create_group(club_id, "Route reviewers")
+
+    add_group_member(club_id, first_group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, second_group_id, alice_membership_id, alice.person_id)
+
+    root_message_id = send_root_message_to_group(club_id, first_group_id, alice)
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(
+               %{
+                 conversation_id: root_message_id,
+                 club_id: club_id,
+                 group_id: second_group_id,
+                 access_level: :write
+               },
+               consistency: :strong
+             )
+
+    reply_message_id = Memba.ID.generate(:message)
+
+    assert {:error, :not_current_member} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: root_message_id,
+                 sender_id: alice.person_id,
+                 body: "Ambiguous audiences must fail closed."
+               },
+               consistency: :strong
+             )
+
+    refute Repo.get(MessageProjection, reply_message_id)
+  end
+
+  test "a dormant follow resumes after rejoin without creating absence backlog" do
+    club_id = Memba.ID.generate(:club)
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    alice_membership_id = add_member(club_id, alice.person_id)
+    bob_membership_id = add_member(club_id, bob.person_id)
+    group_id = create_group(club_id, "Board")
+
+    add_group_member(club_id, group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, group_id, bob_membership_id, bob.person_id)
+
+    root_message_id = send_root_message_to_group(club_id, group_id, alice)
+    follow_conversation(club_id, root_message_id, bob.person_id)
+    remove_group_member(club_id, group_id, bob_membership_id, bob.person_id)
+
+    absent_reply_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: absent_reply_id,
+                 conversation_id: root_message_id,
+                 sender_id: alice.person_id,
+                 body: "Posted while Bob is absent."
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(root_message_id, bob.person_id)
+    assert pending_deliveries_for_message(absent_reply_id) == []
+
+    add_group_member(club_id, group_id, bob_membership_id, bob.person_id)
+
+    resumed_reply_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: resumed_reply_id,
+                 conversation_id: root_message_id,
+                 sender_id: alice.person_id,
+                 body: "Posted after Bob rejoins."
+               },
+               consistency: :strong
+             )
+
+    assert [%EmailDeliveryProjection{recipient_id: bob_id}] =
+             pending_deliveries_for_message(resumed_reply_id)
+
+    assert bob_id == bob.person_id
+    assert pending_deliveries_for_message(absent_reply_id) == []
+  end
+
   test "a reply body cannot be blank" do
     club_id = Memba.ID.generate(:club)
     alice = create_person(name: "Alice", email: "alice@example.com")

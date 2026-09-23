@@ -17,6 +17,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
   alias Memba.Messaging
+  alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
@@ -24,6 +26,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
+  alias Memba.Messaging.Recipient
   alias Memba.ReadModelChanges
 
   setup do
@@ -44,10 +47,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
     test "subscribes to read-model changes and nudges dispatch for committed email delivery creation" do
       name = :"#{__MODULE__}.email_delivery_created"
 
-      start_supervised!(
-        {EmailDeliveryDispatcher, name: name, dispatch_enabled: true, dispatch_observer: self()}
-      )
-
       club =
         insert_membership_club!(
           name: "Kootenay Mountaineering Club",
@@ -67,6 +66,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           subject: "Dispatch nudge",
           body: "Dispatch this message."
         )
+
+      start_supervised!(
+        {EmailDeliveryDispatcher, name: name, dispatch_enabled: true, dispatch_observer: self()}
+      )
 
       recipient_id = Memba.ID.generate(:person)
 
@@ -461,6 +464,24 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert references_outbound_message_ids == [root_delivery.outbound_message_id]
     end
 
+    test "fails closed when the delivery conversation has an ambiguous audience" do
+      %{message: message, delivery: delivery} =
+        insert_dispatchable_delivery!(status: "dispatching")
+
+      assert :ok =
+               Messaging.grant_conversation_access_to_group(%{
+                 conversation_id: message.conversation_id,
+                 club_id: message.club_id,
+                 group_id: Memba.ID.generate(:group),
+                 access_level: :write
+               })
+
+      assert {:error, :ambiguous_conversation_audience} =
+               EmailDeliveryDispatcher.deliver_to_provider(delivery)
+
+      assert Fake.deliveries() == []
+    end
+
     test "does not call the provider when the delivery's message projection is missing" do
       message_id = Memba.ID.generate(:message)
 
@@ -505,7 +526,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
     end
 
-    test "does not hand off a pending delivery after the recipient's access ends" do
+    test "hands off a queued delivery after the recipient's access ends" do
       %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
 
       {1, nil} =
@@ -519,16 +540,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert [
                %EmailDeliveryProjection{
                  delivery_id: delivery_id,
-                 status: "failed",
-                 attempt_count: 1,
-                 latest_error: "recipient_access_ended",
-                 sent_at: nil,
-                 failed_at: %DateTime{}
+                 status: "sent",
+                 attempt_count: 0,
+                 latest_error: nil,
+                 sent_at: %DateTime{},
+                 failed_at: nil
                }
              ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
       assert delivery_id == delivery.delivery_id
-      assert Fake.deliveries() == []
+
+      assert [%EmailDeliveryRequest{delivery_id: ^delivery_id}] = Fake.deliveries()
     end
 
     test "preserves a sent delivery after the recipient's access ends" do
@@ -914,18 +936,49 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   defp insert_message_projection!(attrs) when is_list(attrs) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
     message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+    conversation_id = Keyword.get(attrs, :conversation_id, message_id)
 
-    Repo.insert!(%MessageProjection{
-      message_id: message_id,
-      club_id: Keyword.fetch!(attrs, :club_id),
-      sender_id: Keyword.fetch!(attrs, :sender_id),
-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
-      subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.fetch!(attrs, :body),
-      inserted_at: Keyword.get(attrs, :inserted_at, now),
-      updated_at: Keyword.get(attrs, :updated_at, now)
-    })
+    if conversation_id == message_id do
+      sender_id = Keyword.fetch!(attrs, :sender_id)
+
+      assert :ok =
+               App.dispatch(
+                 %SendMessage{
+                   message_id: message_id,
+                   club_id: Keyword.fetch!(attrs, :club_id),
+                   sender_id: sender_id,
+                   subject: Keyword.fetch!(attrs, :subject),
+                   body: Keyword.fetch!(attrs, :body),
+                   recipients: [
+                     %Recipient{
+                       delivery_id: Memba.ID.generate(:delivery),
+                       person_id: sender_id,
+                       name: "Sender",
+                       email: "sender@example.com"
+                     }
+                   ]
+                 },
+                 consistency: :strong
+               )
+
+      Repo.delete_all(
+        from(delivery in EmailDeliveryProjection, where: delivery.message_id == ^message_id)
+      )
+
+      Repo.get!(MessageProjection, message_id)
+    else
+      Repo.insert!(%MessageProjection{
+        message_id: message_id,
+        club_id: Keyword.fetch!(attrs, :club_id),
+        sender_id: Keyword.fetch!(attrs, :sender_id),
+        conversation_id: conversation_id,
+        reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+        subject: Keyword.fetch!(attrs, :subject),
+        body: Keyword.fetch!(attrs, :body),
+        inserted_at: Keyword.get(attrs, :inserted_at, now),
+        updated_at: Keyword.get(attrs, :updated_at, now)
+      })
+    end
   end
 
   defp ensure_delivery_recipient_access!(%EmailDeliveryProjection{} = delivery) do
@@ -960,12 +1013,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           })
         end
 
-        Repo.insert!(%ConversationGroupAccess{
-          conversation_id: message.conversation_id,
-          club_id: message.club_id,
-          group_id: group_id,
-          access_level: "write"
-        })
+        assert :ok =
+                 Messaging.grant_conversation_access_to_group(%{
+                   conversation_id: message.conversation_id,
+                   club_id: message.club_id,
+                   group_id: group_id,
+                   access_level: :write
+                 })
 
         group_id
     end

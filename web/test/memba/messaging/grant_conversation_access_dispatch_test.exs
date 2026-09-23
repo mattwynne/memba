@@ -12,6 +12,7 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Message
+  alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Recipient
 
   test "Messaging app dispatch routes GrantConversationAccessToGroup to the root Message stream" do
@@ -156,6 +157,68 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
              )
   end
 
+  test "an unprojected second canonical grant makes the audience ambiguous and denies access" do
+    conversation_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    first_group_id = Memba.ID.generate(:group)
+    second_group_id = Memba.ID.generate(:group)
+    send_root_conversation(conversation_id, club_id)
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(%{
+               conversation_id: conversation_id,
+               club_id: club_id,
+               group_id: first_group_id,
+               access_level: :write
+             })
+
+    stop_projector!(ConversationGroupAccessProjector)
+
+    assert :ok =
+             App.dispatch(
+               grant_command(conversation_id, club_id, second_group_id, "write"),
+               consistency: :eventual
+             )
+
+    refute Messaging.group_has_conversation_access?(conversation_id, first_group_id, :read)
+    refute Messaging.group_has_conversation_access?(conversation_id, second_group_id, :read)
+
+    assert {:error, :ambiguous_conversation_audience} =
+             Messaging.resolve_conversation_audience(conversation_id)
+  end
+
+  test "an unprojected canonical revocation denies stale projected access" do
+    conversation_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    send_root_conversation(conversation_id, club_id)
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(%{
+               conversation_id: conversation_id,
+               club_id: club_id,
+               group_id: group_id,
+               access_level: :write
+             })
+
+    stop_projector!(ConversationGroupAccessProjector)
+
+    assert :ok =
+             App.dispatch(
+               %RevokeConversationAccessFromGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id
+               },
+               consistency: :eventual
+             )
+
+    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
+
+    assert {:error, :conversation_audience_not_found} =
+             Messaging.resolve_conversation_audience(conversation_id)
+  end
+
   test "public API revokes access, projects the removal, and is idempotent" do
     conversation_id = Memba.ID.generate(:message)
     club_id = Memba.ID.generate(:club)
@@ -253,6 +316,26 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
       },
       consistency: :strong
     )
+  end
+
+  defp stop_projector!(projector) do
+    child_id =
+      Supervisor.which_children(Memba.Supervisor)
+      |> Enum.find_value(fn
+        {child_id, _pid, :worker, [^projector]} -> child_id
+        _child -> nil
+      end)
+
+    assert child_id
+    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+
+    on_exit(fn ->
+      case Supervisor.restart_child(Memba.Supervisor, child_id) do
+        {:ok, _pid} -> :ok
+        {:ok, _pid, _info} -> :ok
+        {:error, :running} -> :ok
+      end
+    end)
   end
 
   defp grant_command(conversation_id, club_id, group_id, access_level) do

@@ -1442,6 +1442,81 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List the Club aggregate's current groups for a participating person.
+
+  Group inclusion and member counts come from event-sourced Club state. Group
+  display fields are taken from that same state, so stale group-membership
+  projections cannot retain a private dashboard surface after removal.
+  """
+  def list_active_groups_for_member_authoritatively(club_id, person_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         %Memba.Membership.Club{club_id: ^club_id} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id) do
+      club.groups
+      |> Map.values()
+      |> Enum.filter(&authoritative_group_member?(club, &1.group_id, person_id))
+      |> Enum.map(fn group ->
+        group
+        |> Map.put(:club_id, club.club_id)
+        |> Map.put(
+          :active_member_count,
+          club |> authoritative_group_memberships(group.group_id) |> Enum.count()
+        )
+        |> Map.put(:email_address, authoritative_group_email_address(club, group))
+      end)
+      |> Enum.sort_by(&{&1.name, &1.group_id})
+    else
+      _invalid_or_missing -> []
+    end
+  end
+
+  @doc """
+  List the Club aggregate's current participants in a conversation group.
+
+  Participation is decided entirely from the event-sourced Club state, so a
+  committed add, rejoin, or removal is visible even while Membership projections
+  lag. Person contact details and role names are projected display data only;
+  a participant without available contact details is omitted from recipient
+  results. Invalid IDs, missing clubs, and missing groups return an empty list.
+  """
+  def list_active_members_of_group_authoritatively(club_id, group_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         %Memba.Membership.Club{club_id: ^club_id} = club <-
+           App.aggregate_state(Memba.Membership.Club, club_id),
+         true <- Map.has_key?(club.groups, group_id) do
+      memberships = authoritative_group_memberships(club, group_id)
+      contact_summaries = memberships |> Enum.map(&elem(&1, 1)) |> list_person_contact_summaries()
+
+      role_names_by_membership =
+        memberships |> Enum.map(&elem(&1, 0)) |> active_role_names_by_membership()
+
+      memberships
+      |> Enum.flat_map(fn {membership_id, person_id} ->
+        case Map.get(contact_summaries, person_id) do
+          %{name: name, primary_email: email} when is_binary(email) ->
+            [
+              %{
+                membership_id: membership_id,
+                id: person_id,
+                name: name,
+                email: email,
+                roles: Map.get(role_names_by_membership, membership_id, [])
+              }
+            ]
+
+          _missing_contact ->
+            []
+        end
+      end)
+      |> Enum.sort_by(&{&1.name, &1.id})
+    else
+      _invalid_or_missing -> []
+    end
+  end
+
+  @doc """
   Wait until the Membership read models used by `active_member_of_group?/2`
   have processed every event committed before this call.
 
@@ -1450,6 +1525,43 @@ defmodule Memba.Membership do
   """
   def await_group_access_projections(opts \\ []) when is_list(opts) do
     ProjectionBarrier.await(@group_access_projectors, opts)
+  end
+
+  defp authoritative_group_email_address(club, %{email_slug: email_slug})
+       when is_binary(email_slug) do
+    ClubInboundEmailAddress.address(club.slug, email_slug)
+  end
+
+  defp authoritative_group_email_address(_club, _group), do: nil
+
+  defp authoritative_group_memberships(club, group_id) do
+    club.active_memberships
+    |> Enum.filter(fn {membership_id, person_id} ->
+      authoritative_group_member_for_membership?(
+        club,
+        group_id,
+        membership_id,
+        person_id
+      )
+    end)
+    |> Enum.sort_by(fn {membership_id, person_id} -> {person_id, membership_id} end)
+    |> Enum.uniq_by(&elem(&1, 1))
+  end
+
+  defp authoritative_group_member_for_membership?(club, group_id, membership_id, person_id) do
+    cond do
+      group_id == SystemGroups.everyone_group_id(club.club_id) ->
+        true
+
+      group_id == SystemGroups.admin_group_id(club.club_id) ->
+        MapSet.member?(club.active_admin_membership_ids, membership_id)
+
+      true ->
+        case Map.get(club.group_memberships, {group_id, membership_id}) do
+          %{person_id: ^person_id, active: true} -> true
+          _inactive_or_different_person -> false
+        end
+    end
   end
 
   defp authoritative_group_member?(club, group_id, person_id) do

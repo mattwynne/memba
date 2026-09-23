@@ -363,7 +363,8 @@ defmodule Memba.Messaging do
   Applies the fixed, named `:club_members_only` group-email posting policy. Known
   people who belong only to another club or whose destination-club membership is
   inactive receive a typed rejection reason for later rejection-email handling.
-  Membership of the addressed group is not required to start a conversation.
+  Custom-group roots additionally require current participation in that group;
+  system-group posting retains its existing club-wide semantics.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
     case authorize_at_stable_checkpoint(fn ->
@@ -487,6 +488,7 @@ defmodule Memba.Messaging do
       group_id
       |> conversations_for_group_query()
       |> Repo.all()
+      |> Enum.filter(&conversation_has_canonical_group?(&1.conversation_id, group_id))
       |> add_latest_replier_names()
     else
       :error -> []
@@ -527,9 +529,10 @@ defmodule Memba.Messaging do
          {:ok, group_id} <- ID.cast(:group, group_id),
          %MessageProjection{} = message <- Repo.get(MessageProjection, message_id),
          {:ok, conversation_id} <- conversation_id_for_message(message),
-         %MessageProjection{} = root <- fetch_conversation_root_projection(conversation_id),
-         true <- conversation_readable_through_group?(root, group_id) do
-      list_projected_conversation_messages(conversation_id, root.club_id)
+         %MessageProjection{club_id: club_id} <-
+           fetch_conversation_root_projection(conversation_id),
+         true <- conversation_has_canonical_group?(conversation_id, group_id) do
+      list_projected_conversation_messages(conversation_id, club_id)
     else
       _invalid_missing_or_inaccessible -> []
     end
@@ -570,20 +573,41 @@ defmodule Memba.Messaging do
   satisfies only read checks. Invalid IDs or access levels return `false`.
   """
   def group_has_conversation_access?(conversation_id, group_id, access_level) do
-    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
-         {:ok, group_id} <- ID.cast(:group, group_id),
-         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
-      grant_levels = ConversationAccess.grant_levels_including(access_level)
-
-      ConversationGroupAccessProjection
-      |> where(
-        [access],
-        access.conversation_id == ^conversation_id and access.group_id == ^group_id and
-          access.access_level in ^grant_levels
-      )
-      |> Repo.exists?()
+    with {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level),
+         {:ok, %{group_id: ^group_id, access_level: granted_access_level}} <-
+           resolve_conversation_audience(conversation_id) do
+      granted_access_level in ConversationAccess.grant_levels_including(access_level)
     else
-      _invalid -> false
+      _invalid_missing_or_ambiguous -> false
+    end
+  end
+
+  @doc """
+  Resolve a conversation's one current group audience from its root aggregate.
+
+  Association projections may be used to find candidates, but authorization and
+  dispatch use this event-sourced decision. Missing and multi-group audiences
+  fail closed.
+  """
+  def resolve_conversation_audience(conversation_id) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         %Message{
+           message_id: ^conversation_id,
+           club_id: club_id,
+           group_access: group_access
+         } <- App.aggregate_state(Message, conversation_id),
+         {:ok, group_id, access_level} <- canonical_group_access(group_access) do
+      {:ok,
+       %{
+         conversation_id: conversation_id,
+         club_id: club_id,
+         group_id: group_id,
+         access_level: access_level
+       }}
+    else
+      {:error, _reason} = error -> error
+      _invalid_or_missing -> {:error, :conversation_audience_not_found}
     end
   end
 
@@ -610,17 +634,11 @@ defmodule Memba.Messaging do
          {:ok, conversation_id} <- conversation_id_for_message(message),
          %MessageProjection{club_id: ^club_id} <-
            fetch_conversation_root_projection(conversation_id),
-         active_group_ids when active_group_ids != [] <-
-           active_group_ids_for_member(club_id, person_id) do
-      grant_levels = ConversationAccess.grant_levels_including(access_level)
-
-      ConversationGroupAccessProjection
-      |> where(
-        [access],
-        access.conversation_id == ^conversation_id and access.club_id == ^club_id and
-          access.group_id in ^active_group_ids and access.access_level in ^grant_levels
-      )
-      |> Repo.exists?()
+         {:ok, %{club_id: ^club_id, group_id: group_id, access_level: granted_access_level}} <-
+           resolve_conversation_audience(conversation_id),
+         true <-
+           Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id) do
+      granted_access_level in ConversationAccess.grant_levels_including(access_level)
     else
       _invalid_missing_or_inaccessible -> false
     end
@@ -668,7 +686,8 @@ defmodule Memba.Messaging do
   List current projected followers for a conversation.
 
   This is the raw Messaging follow state. Delivery eligibility that depends on
-  current club membership is applied by reply-delivery code.
+  current participation in the conversation's group is applied when a reply is
+  posted.
   """
   def list_conversation_followers(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
@@ -1139,29 +1158,21 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp conversation_readable_through_group?(
-         %MessageProjection{
-           message_id: conversation_id,
-           conversation_id: conversation_id,
-           club_id: club_id
-         },
-         group_id
-       ) do
-    read_grant_levels = ConversationAccess.grant_levels_including("read")
-
-    ConversationGroupAccessProjection
-    |> where(
-      [access],
-      access.conversation_id == ^conversation_id and access.club_id == ^club_id and
-        access.group_id == ^group_id and access.access_level in ^read_grant_levels
-    )
-    |> Repo.exists?()
+  defp conversation_has_canonical_group?(conversation_id, group_id) do
+    case resolve_conversation_audience(conversation_id) do
+      {:ok, %{group_id: ^group_id}} -> true
+      _missing_or_ambiguous -> false
+    end
   end
 
-  defp active_group_ids_for_member(club_id, person_id) do
-    club_id
-    |> Membership.list_active_groups_for_member(person_id)
-    |> Enum.map(& &1.group_id)
+  defp authoritative_conversation_group_id_for_posting(conversation_id, club_id) do
+    with %Message{club_id: ^club_id, group_access: group_access} <-
+           App.aggregate_state(Message, conversation_id),
+         {:ok, group_id, _access_level} <- canonical_group_access(group_access) do
+      {:ok, group_id}
+    else
+      _missing_or_ambiguous -> {:error, :not_current_member}
+    end
   end
 
   defp list_projected_conversation_messages(conversation_id, club_id) do
@@ -2036,7 +2047,12 @@ defmodule Memba.Messaging do
          {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
          {:ok, body} <- fetch_required(attrs, :body),
-         {:ok, root_message} <- fetch_conversation_root(conversation_id) do
+         {:ok, root_message} <- fetch_conversation_root(conversation_id),
+         {:ok, group_id} <-
+           authoritative_conversation_group_id_for_posting(
+             conversation_id,
+             root_message.club_id
+           ) do
       {:ok,
        %PostMessageReply{
          message_id: message_id,
@@ -2047,7 +2063,7 @@ defmodule Memba.Messaging do
          subject: root_message.subject,
          body: body,
          recipients:
-           resolve_reply_recipients(root_message.club_id, conversation_id,
+           resolve_reply_recipients(root_message.club_id, conversation_id, group_id,
              except_person_id: sender_id
            )
        }}
@@ -2270,21 +2286,27 @@ defmodule Memba.Messaging do
            message_id: ^conversation_id,
            club_id: ^club_id,
            group_access: group_access
-         } <- App.aggregate_state(Message, conversation_id) do
+         } <- App.aggregate_state(Message, conversation_id),
+         {:ok, group_id, granted_access_level} <- canonical_group_access(group_access) do
       grant_levels = ConversationAccess.grant_levels_including(access_level)
 
-      Enum.any?(group_access, fn {group_id, granted_access_level} ->
-        granted_access_level in grant_levels and
-          Membership.active_member_of_group_authoritatively?(
-            club_id,
-            group_id,
-            person_id
-          )
-      end)
+      granted_access_level in grant_levels and
+        Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id)
     else
       _invalid_missing_or_inaccessible -> false
     end
   end
+
+  defp canonical_group_access(group_access) when map_size(group_access) == 1 do
+    [{group_id, access_level}] = Map.to_list(group_access)
+    {:ok, group_id, access_level}
+  end
+
+  defp canonical_group_access(group_access) when map_size(group_access) == 0,
+    do: {:error, :conversation_audience_not_found}
+
+  defp canonical_group_access(_ambiguous),
+    do: {:error, :ambiguous_conversation_audience}
 
   defp require_conversation_in_club(%MessageProjection{club_id: club_id}, club_id), do: :ok
 
@@ -2325,29 +2347,20 @@ defmodule Memba.Messaging do
   defp resolve_group_recipients(club_id, group_id, opts \\ []) do
     except_person_id = Keyword.get(opts, :except_person_id)
 
-    group_id
-    |> Membership.list_active_members_of_group()
+    club_id
+    |> Membership.list_active_members_of_group_authoritatively(group_id)
     |> Enum.reject(&(&1.id == except_person_id))
-    |> Enum.filter(&Membership.active_member_of_group_authoritatively?(club_id, group_id, &1.id))
     |> Enum.map(&resolved_recipient/1)
   end
 
-  defp resolve_reply_recipients(club_id, conversation_id, opts) do
+  defp resolve_reply_recipients(club_id, conversation_id, group_id, opts) do
     except_person_id = Keyword.get(opts, :except_person_id)
     follower_ids = current_follower_ids(club_id, conversation_id)
 
     club_id
-    |> Membership.list_active_members_of_club()
+    |> Membership.list_active_members_of_group_authoritatively(group_id)
     |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
     |> Enum.reject(&(&1.id == except_person_id))
-    |> Enum.filter(
-      &member_has_authoritative_conversation_access?(
-        conversation_id,
-        club_id,
-        &1.id,
-        :read
-      )
-    )
     |> Enum.map(&resolved_recipient/1)
   end
 

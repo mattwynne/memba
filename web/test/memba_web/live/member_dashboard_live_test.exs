@@ -1,9 +1,13 @@
 defmodule MembaWeb.MemberDashboardLiveTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.ConnCase, async: false
 
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.CreateGroup
+  alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
@@ -13,10 +17,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Membership.Projections.Role
   alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.App, as: MessagingApp
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Messaging.Projections.ConversationGroupAccess
+  alias Memba.Messaging.Recipient
   alias Memba.Repo
   alias MembaWeb.MemberDashboardPresentation
   alias MembaWeb.ClubSite
@@ -122,7 +130,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "1 member"
            )
 
-    refute has_element?(view, "#member-group-email-address")
+    assert has_element?(view, "#member-group-email-address")
   end
 
   test "Everyone fallback exposes browser-local group restoration metadata", %{conn: conn} do
@@ -417,8 +425,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         name: "New Planning"
       )
 
-    refute has_element?(view, "#member-group-link-#{new_group.group_id}")
-
     notify_read_model_change(
       view,
       Memba.Membership.Projectors.Group,
@@ -481,14 +487,24 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-message-#{secret_conversation.message_id}")
     assert has_element?(view, "#club-member-#{bob.person_id}")
 
-    Repo.update_all(
-      from(group_membership in GroupMembership,
-        where:
-          group_membership.group_id == ^private_group.group_id and
-            group_membership.membership_id == ^alice.membership_id
-      ),
-      set: [active: false]
-    )
+    group_membership_projector_child_id =
+      stop_projector!(Memba.Membership.Projectors.GroupMembership)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveGroupMember{
+                 club_id: alice.club_id,
+                 group_id: private_group.group_id,
+                 membership_id: alice.membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Memba.Membership.active_member_of_group?(
+             private_group.group_id,
+             alice.person_id
+           )
 
     notify_read_model_change(
       view,
@@ -510,6 +526,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-tabs")
     refute has_element?(view, "#member-message-#{secret_conversation.message_id}")
     refute has_element?(view, "#club-member-#{bob.person_id}")
+
+    restart_projector!(group_membership_projector_child_id)
+    assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
   end
 
   test "a direct section patch rechecks selected-group access before its notification arrives", %{
@@ -553,14 +572,24 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/groups/#{private_group.group_id}")
 
-    Repo.update_all(
-      from(group_membership in GroupMembership,
-        where:
-          group_membership.group_id == ^private_group.group_id and
-            group_membership.membership_id == ^alice.membership_id
-      ),
-      set: [active: false]
-    )
+    group_membership_projector_child_id =
+      stop_projector!(Memba.Membership.Projectors.GroupMembership)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveGroupMember{
+                 club_id: alice.club_id,
+                 group_id: private_group.group_id,
+                 membership_id: alice.membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :eventual
+             )
+
+    assert Memba.Membership.active_member_of_group?(
+             private_group.group_id,
+             alice.person_id
+           )
 
     view
     |> element("#member-section-tab-members")
@@ -571,6 +600,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-tabs")
     refute has_element?(view, "#member-message-#{secret_conversation.message_id}")
     refute has_element?(view, "#club-member-#{bob.person_id}")
+
+    restart_projector!(group_membership_projector_child_id)
+    assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
   end
 
   test "a committed role change removes the outside-admin member surface", %{conn: conn} do
@@ -2836,11 +2868,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+    active? = Keyword.get(attrs, :active, true)
 
-    Repo.get(Club, club_id) ||
-      attrs
-      |> club_attrs(club_id, club_name)
-      |> insert_membership_club!()
+    if active? do
+      ensure_authoritative_club(attrs, club_id, club_name)
+    else
+      Repo.get(Club, club_id) ||
+        attrs
+        |> club_attrs(club_id, club_name)
+        |> insert_membership_club!()
+    end
 
     person =
       insert_membership_person!(
@@ -2851,17 +2888,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     membership_id = Memba.ID.generate(:membership)
 
-    active? = Keyword.get(attrs, :active, true)
-
-    Repo.insert!(%Membership{
-      membership_id: membership_id,
-      club_id: club_id,
-      person_id: person.person_id,
-      active: active?
-    })
-
     if active? do
-      insert_everyone_group_membership!(club_id, membership_id, person.person_id)
+      assert :ok =
+               Memba.Membership.add_member(
+                 %{
+                   membership_id: membership_id,
+                   club_id: club_id,
+                   person_id: person.person_id
+                 },
+                 consistency: :strong
+               )
+
+      preserve_projection_display_fixtures(club_id, membership_id)
+    else
+      Repo.insert!(%Membership{
+        membership_id: membership_id,
+        club_id: club_id,
+        person_id: person.person_id,
+        active: false
+      })
     end
 
     %{
@@ -2871,50 +2916,77 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     }
   end
 
-  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
-    group_id = SystemGroups.everyone_group_id(club_id)
+  defp ensure_authoritative_club(attrs, club_id, club_name) do
+    unless Memba.Membership.get_club(club_id) do
+      club_attrs = attrs |> club_attrs(club_id, club_name) |> membership_club_attrs()
+      assert :ok = Memba.Membership.create_club(club_attrs, consistency: :strong)
+    end
+  end
 
-    Repo.insert!(
-      %Group{
-        club_id: club_id,
-        group_id: group_id,
-        group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name(),
-        name_uniqueness_key:
-          Memba.Membership.GroupName.uniqueness_key(SystemGroups.everyone_name())
-      },
-      on_conflict: :nothing
-    )
+  defp preserve_projection_display_fixtures(club_id, membership_id) do
+    admin_group_id = SystemGroups.admin_group_id(club_id)
 
-    Repo.insert!(%GroupMembership{
-      club_id: club_id,
-      group_id: group_id,
-      membership_id: membership_id,
-      person_id: person_id,
-      active: true
-    })
+    GroupMembership
+    |> where([membership], membership.membership_id == ^membership_id)
+    |> where([membership], membership.group_id == ^admin_group_id)
+    |> Repo.delete_all()
+
+    RoleAssignment
+    |> where([assignment], assignment.membership_id == ^membership_id)
+    |> Repo.delete_all()
+
+    MemberPermission
+    |> where([permission], permission.membership_id == ^membership_id)
+    |> Repo.delete_all()
+
+    Group
+    |> where([group], group.group_id == ^admin_group_id)
+    |> Repo.delete_all()
   end
 
   defp create_group(attrs) do
-    Repo.insert!(%Group{
-      club_id: Keyword.fetch!(attrs, :club_id),
-      group_id: Memba.ID.generate(:group),
-      group_key: Keyword.fetch!(attrs, :group_key),
-      email_slug: Keyword.get(attrs, :email_slug),
-      name: Keyword.fetch!(attrs, :name),
-      name_uniqueness_key:
-        attrs |> Keyword.fetch!(:name) |> Memba.Membership.GroupName.uniqueness_key()
-    })
+    group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %CreateGroup{
+                 club_id: Keyword.fetch!(attrs, :club_id),
+                 group_id: group_id,
+                 group_key: Keyword.fetch!(attrs, :group_key),
+                 email_slug:
+                   Keyword.get(attrs, :email_slug) ||
+                     Memba.Membership.Slug.default_from_name(Keyword.fetch!(attrs, :name)),
+                 name: Keyword.fetch!(attrs, :name)
+               },
+               consistency: :strong
+             )
+
+    Repo.get!(Group, group_id)
   end
 
   defp add_group_member(group, member) do
-    Repo.insert!(%GroupMembership{
-      club_id: member.club_id,
+    assert :ok =
+             MembershipApp.dispatch(
+               %AddGroupMember{
+                 club_id: member.club_id,
+                 group_id: group.group_id,
+                 membership_id: member.membership_id,
+                 person_id: member.person_id
+               },
+               consistency: :strong
+             )
+
+    Repo.get_by(GroupMembership,
       group_id: group.group_id,
-      membership_id: member.membership_id,
-      person_id: member.person_id,
-      active: true
-    })
+      membership_id: member.membership_id
+    ) ||
+      Repo.insert!(%GroupMembership{
+        club_id: member.club_id,
+        group_id: group.group_id,
+        membership_id: member.membership_id,
+        person_id: member.person_id,
+        active: true
+      })
   end
 
   defp notify_read_model_change(view, projector, source_event) do
@@ -2947,12 +3019,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp create_role(attrs) do
-    Repo.insert!(%Role{
-      role_id: Memba.ID.generate(:role),
-      club_id: Keyword.fetch!(attrs, :club_id),
-      role_key: Keyword.fetch!(attrs, :role_key),
-      name: Keyword.fetch!(attrs, :name)
-    })
+    club_id = Keyword.fetch!(attrs, :club_id)
+    role_key = Keyword.fetch!(attrs, :role_key)
+
+    Repo.get_by(Role, club_id: club_id, role_key: role_key) ||
+      Repo.insert!(%Role{
+        role_id: Memba.ID.generate(:role),
+        club_id: club_id,
+        role_key: role_key,
+        name: Keyword.fetch!(attrs, :name)
+      })
   end
 
   defp assign_role(member, role) do
@@ -2978,9 +3054,62 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp create_message(attrs) do
-    attrs
-    |> Keyword.put_new_lazy(:inserted_at, &DateTime.utc_now/0)
-    |> insert_group_accessible_message!()
+    if is_nil(Keyword.get(attrs, :conversation_id)) do
+      message_id = Memba.ID.generate(:message)
+      club_id = Keyword.fetch!(attrs, :club_id)
+      sender_id = Keyword.fetch!(attrs, :sender_id)
+
+      assert :ok =
+               MessagingApp.dispatch(
+                 %SendMessage{
+                   message_id: message_id,
+                   club_id: club_id,
+                   sender_id: sender_id,
+                   subject: Keyword.get(attrs, :subject, "Message subject"),
+                   body: Keyword.get(attrs, :body, "Message body"),
+                   recipients: [
+                     %Recipient{
+                       delivery_id: Memba.ID.generate(:delivery),
+                       person_id: sender_id,
+                       name: "Sender",
+                       email: "sender@example.com"
+                     }
+                   ]
+                 },
+                 consistency: :strong
+               )
+
+      assert :ok =
+               MessagingApp.dispatch(
+                 %GrantConversationAccessToGroup{
+                   conversation_id: message_id,
+                   club_id: club_id,
+                   group_id:
+                     Keyword.get_lazy(attrs, :audience_group_id, fn ->
+                       SystemGroups.everyone_group_id(club_id)
+                     end),
+                   access_level: :write
+                 },
+                 consistency: :strong
+               )
+
+      Repo.delete_all(
+        from(delivery in MemberEmailDelivery, where: delivery.message_id == ^message_id)
+      )
+
+      if inserted_at = Keyword.get(attrs, :inserted_at) do
+        Repo.update_all(
+          from(message in Message, where: message.message_id == ^message_id),
+          set: [inserted_at: inserted_at, updated_at: inserted_at]
+        )
+      end
+
+      Repo.get!(Message, message_id)
+    else
+      attrs
+      |> Keyword.put_new_lazy(:inserted_at, &DateTime.utc_now/0)
+      |> insert_group_accessible_message!()
+    end
   end
 
   defp create_member_email_delivery(attrs) do
@@ -3176,6 +3305,40 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#member-message-#{message_id} [data-testid='message-participant-avatar']")
     |> LazyHTML.attribute("data-participant-name")
+  end
+
+  defp stop_projector!(projector) do
+    child_id = projector_child_id!(projector)
+
+    case Supervisor.terminate_child(Memba.Supervisor, child_id) do
+      :ok ->
+        on_exit(fn -> restart_projector!(child_id) end)
+        child_id
+
+      {:error, :not_found} ->
+        flunk("Expected #{inspect(projector)} to be supervised")
+    end
+  end
+
+  defp projector_child_id!(projector) do
+    Supervisor.which_children(Memba.Supervisor)
+    |> Enum.find_value(fn
+      {child_id, _pid, :worker, [module]} when module == projector -> child_id
+      _child -> nil
+    end)
+    |> case do
+      nil -> flunk("Expected #{inspect(projector)} to be supervised")
+      child_id -> child_id
+    end
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+      {:error, :not_found} -> :ok
+    end
   end
 
   defp html_has_selector?(html, selector) do

@@ -4,7 +4,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   The dispatcher checks for pending work on startup and subscribes to committed
   read-model changes, treating new `EmailDelivery` records as nudges to look
-  again. An authorization-timeout deferral schedules one coalesced, bounded-delay
+  again. A projection-timeout deferral schedules one coalesced, bounded-delay
   catch-up retry; repeated deferrals replace that timer until the required
   projections catch up, including when they acknowledge only irrelevant events
   and publish no read-model change. The startup check restores that pending-work
@@ -32,7 +32,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.Message, as: MessageProjector
-  alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.ProjectionBarrier
@@ -48,10 +47,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
   @default_projection_timeout 5_000
   @default_projection_catch_up_retry_interval 100
-  @projection_timeout_errors [
-    :delivery_context_projection_timeout,
-    :recipient_access_projection_timeout
-  ]
+  @projection_timeout_errors [:delivery_context_projection_timeout]
 
   @doc """
   Atomically claim one pending email delivery for provider dispatch.
@@ -114,13 +110,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   Provider acceptance marks a claimed delivery as `sent`. Provider/request
   errors mark the individual delivery as `failed`, increment the persisted
   attempt count, and store the latest error diagnostics. If the projections
-  required for a final authorization read have not caught up before the short
+  needed to build the provider request have not caught up before the short
   timeout, the claim is released back to `pending` without calling the provider
-  or recording a terminal failure. Once provider acceptance has marked a
-  delivery `sent`, later access loss does not recall, fail, or retry that
-  already-handed-off email. Each claimed delivery is handled independently so
-  one unavailable recipient does not prevent later claimed deliveries from
-  being considered.
+  or recording a terminal failure. Recipient eligibility was fixed when the
+  delivery was created and is not reauthorized at handoff. Each claimed delivery
+  is handled independently so one unavailable recipient does not prevent later
+  claimed deliveries from being considered.
   """
   def dispatch_pending_email_deliveries do
     claim_pending_email_deliveries()
@@ -168,14 +163,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   Hand email delivery work to the configured provider.
 
   For normal asynchronous dispatch, the dispatcher builds provider requests from
-  committed read-model state: the `EmailDelivery` projection supplies
+  committed read-model state: the `EmailDelivery` projection supplies the fixed
   per-recipient delivery data and the `Message` projection supplies message,
   club, and sender IDs. Membership's public query API enriches the request with
-  sender and club display context. Immediately before provider handoff, the
-  recipient must still have read access to the conversation; a delivery resolved
-  before membership ended is failed without exposing its private content. The
-  final stable authorization read is the handoff boundary: a departure ordered
-  after it has raced with a provider call that has already begun.
+  sender and club display context. Current membership and follow state are not
+  rechecked here: creation of the delivery is the recipient-selection boundary.
   """
   def deliver_to_provider(work)
 
@@ -453,39 +445,41 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          {:ok, channel} <- request_channel(delivery.channel),
          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
       club = Membership.get_club(message.club_id)
-      audience_group_id = audience_group_id(message)
-      audience_group = Membership.get_group(audience_group_id)
-      reply_context = reply_context(message, club, delivery)
 
-      {:ok,
-       %EmailDeliveryRequest{
-         message_id: message.message_id,
-         club_id: message.club_id,
-         delivery_id: delivery.delivery_id,
-         outbound_message_id: delivery.outbound_message_id,
-         recipient_id: delivery.recipient_id,
-         recipient_name: delivery.recipient_name,
-         recipient_address: delivery.recipient_address,
-         audience_group_id: audience_group_id,
-         audience_group_name: audience_group_name(audience_group),
-         club_name: club_name(club),
-         club_slug: club_slug(club),
-         sender_name: sender_name,
-         sender_address: sender_address,
-         conversation_id: message.conversation_id,
-         reply_to_message_id: message.reply_to_message_id,
-         in_reply_to_outbound_message_id:
-           Map.get(reply_context, :in_reply_to_outbound_message_id),
-         references_outbound_message_ids:
-           Map.get(reply_context, :references_outbound_message_ids),
-         conversation_url: Map.get(reply_context, :conversation_url),
-         stop_follow_url: Map.get(reply_context, :stop_follow_url),
-         reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),
-         reply_to_body: Map.get(reply_context, :reply_to_body),
-         channel: channel,
-         subject: message.subject,
-         body: message.body
-       }}
+      with {:ok, audience_group_id} <- audience_group_id(message) do
+        audience_group = Membership.get_group(audience_group_id)
+        reply_context = reply_context(message, club, delivery)
+
+        {:ok,
+         %EmailDeliveryRequest{
+           message_id: message.message_id,
+           club_id: message.club_id,
+           delivery_id: delivery.delivery_id,
+           outbound_message_id: delivery.outbound_message_id,
+           recipient_id: delivery.recipient_id,
+           recipient_name: delivery.recipient_name,
+           recipient_address: delivery.recipient_address,
+           audience_group_id: audience_group_id,
+           audience_group_name: audience_group_name(audience_group),
+           club_name: club_name(club),
+           club_slug: club_slug(club),
+           sender_name: sender_name,
+           sender_address: sender_address,
+           conversation_id: message.conversation_id,
+           reply_to_message_id: message.reply_to_message_id,
+           in_reply_to_outbound_message_id:
+             Map.get(reply_context, :in_reply_to_outbound_message_id),
+           references_outbound_message_ids:
+             Map.get(reply_context, :references_outbound_message_ids),
+           conversation_url: Map.get(reply_context, :conversation_url),
+           stop_follow_url: Map.get(reply_context, :stop_follow_url),
+           reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),
+           reply_to_body: Map.get(reply_context, :reply_to_body),
+           channel: channel,
+           subject: message.subject,
+           body: message.body
+         }}
+      end
     else
       nil -> {:error, {:missing_message_projection, delivery.message_id}}
       {:error, _reason} = error -> error
@@ -499,62 +493,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     end
   end
 
-  defp await_recipient_access_projections(checkpoint, timeout) do
-    with {:ok, _result} <-
-           ProjectionBarrier.await(@delivery_context_projectors,
-             checkpoint: checkpoint,
-             timeout: timeout
-           ),
-         {:ok, _result} <-
-           Membership.await_group_access_projections(
-             checkpoint: checkpoint,
-             timeout: timeout
-           ) do
-      :ok
-    else
-      {:error, :timeout, _result} -> {:error, :recipient_access_projection_timeout}
-    end
-  end
-
-  defp authorize_recipient_for_handoff(request, delivery) do
-    deadline = System.monotonic_time(:millisecond) + projection_timeout()
-    authorize_recipient_for_handoff(request, delivery, deadline)
-  end
-
-  defp authorize_recipient_for_handoff(request, delivery, deadline) do
-    checkpoint = ProjectionBarrier.current_checkpoint()
-    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
-
-    if timeout == 0 do
-      {:error, :recipient_access_projection_timeout}
-    else
-      with :ok <- await_recipient_access_projections(checkpoint, timeout),
-           :ok <- authorize_recipient_access(request, delivery) do
-        if ProjectionBarrier.current_checkpoint() == checkpoint do
-          :ok
-        else
-          authorize_recipient_for_handoff(request, delivery, deadline)
-        end
-      end
-    end
-  end
-
-  defp authorize_recipient_access(
-         %EmailDeliveryRequest{} = request,
-         %EmailDeliveryProjection{} = delivery
-       ) do
-    if Memba.Messaging.member_has_conversation_access?(
-         request.message_id,
-         request.club_id,
-         delivery.recipient_id,
-         :read
-       ) do
-      :ok
-    else
-      {:error, :recipient_access_ended}
-    end
-  end
-
   defp request_channel("email"), do: {:ok, :email}
   defp request_channel(channel), do: {:error, {:unsupported_delivery_channel, channel}}
 
@@ -562,9 +500,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          %EmailDeliveryRequest{} = request,
          %EmailDeliveryProjection{} = delivery
        ) do
-    with :ok <- authorize_recipient_for_handoff(request, delivery) do
-      EmailDeliveryProvider.deliver(request)
-    end
+    EmailDeliveryProvider.deliver(request)
   rescue
     exception ->
       stacktrace = __STACKTRACE__
@@ -615,12 +551,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp audience_group_name(_group), do: nil
 
   defp audience_group_id(%MessageProjection{conversation_id: conversation_id}) do
-    ConversationGroupAccess
-    |> where([access], access.conversation_id == ^conversation_id)
-    |> order_by([access], asc: access.group_id)
-    |> select([access], access.group_id)
-    |> limit(1)
-    |> Repo.one()
+    case Memba.Messaging.resolve_conversation_audience(conversation_id) do
+      {:ok, %{group_id: group_id}} -> {:ok, group_id}
+      {:error, _reason} = error -> error
+    end
   end
 
   defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club, _delivery), do: %{}

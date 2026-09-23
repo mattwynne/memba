@@ -20,7 +20,6 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.Events.InboundEmailReceived
   alias Memba.Messaging.Events.MessageSent
-  alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -214,12 +213,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert :ok = Messaging.authorize_inbound_club_email_sender(sender, destination)
   end
 
-  test "a custom-group address lets an active club non-member start a private conversation without gaining access" do
+  test "an empty custom-group address rejects an ordinary outsider without creating a message" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Admin", email: "alice@example.com")
     eve = create_person!(name: "Eve Member", email: "eve@example.com")
 
-    add_member!(kmc.club_id, alice.person_id)
+    alice_membership_id = add_member!(kmc.club_id, alice.person_id)
     add_member!(kmc.club_id, eve.person_id)
 
     board_group_id = Memba.ID.generate(:group)
@@ -235,42 +234,33 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert %{
-             club_id: club_id,
-             group_id: ^board_group_id,
-             email_slug: "board",
-             group_key: nil,
-             name: "Board"
-           } = Membership.get_group_by_email_slug(kmc.club_id, "board")
+    assert {:ok, _removal} =
+             Membership.remove_custom_group_member(
+               %{
+                 club_id: kmc.club_id,
+                 group_id: board_group_id,
+                 membership_id: alice_membership_id,
+                 person_id: alice.person_id,
+                 actor_person_id: alice.person_id,
+                 removal_operation_id: Ecto.UUID.generate()
+               },
+               consistency: :strong
+             )
 
-    assert club_id == kmc.club_id
-    assert Membership.active_member_of_group?(board_group_id, alice.person_id)
+    assert Membership.list_active_members_of_group(board_group_id) == []
     refute Membership.active_member_of_group?(board_group_id, eve.person_id)
 
     assert {:ok,
-            %InboundClubDestination{
-              club_id: ^club_id,
-              group_id: ^board_group_id,
-              group_email_slug: "board",
-              group_name: "Board",
-              to_address: "board@kmc.clubs.memba.io"
-            }} =
-             Messaging.resolve_inbound_club_email_destination([
-               "board@kmc.clubs.memba.io"
-             ])
-
-    assert {:ok,
             %{
-              message_id: conversation_id,
-              club_id: ^club_id,
-              sender_id: eve_id,
+              status: :rejected,
+              rejection_reason: "sender_not_active_member",
               to_address: "board@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
-                 provider_message_id: "task-062-custom-group-root",
-                 provider_event_id: "task-062-custom-group-root-event",
+                 provider_message_id: "task-064-custom-group-outsider-root",
+                 provider_event_id: "task-064-custom-group-outsider-root-event",
                  from_address: "eve@example.com",
                  recipient_addresses: ["board@kmc.clubs.memba.io"],
                  subject: "Could you fund new ropes?",
@@ -279,96 +269,18 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert eve_id == eve.person_id
-    assert Messaging.group_has_conversation_access?(conversation_id, board_group_id, :write)
-
-    refute Messaging.group_has_conversation_access?(
-             conversation_id,
-             SystemGroups.everyone_group_id(kmc.club_id),
-             :read
-           )
-
-    assert Messaging.member_has_conversation_access?(
-             conversation_id,
-             kmc.club_id,
-             alice.person_id,
-             :write
-           )
-
-    refute Messaging.member_has_conversation_access?(
-             conversation_id,
-             kmc.club_id,
-             eve.person_id,
-             :read
-           )
-
-    assert [%{message_id: ^conversation_id, recipient_id: alice_id}] =
-             Messaging.list_recipient_deliveries(conversation_id)
-
-    assert alice_id == alice.person_id
-    assert is_nil(Messaging.get_member_email_delivery(conversation_id, eve.person_id))
-    refute Messaging.following_conversation?(conversation_id, eve.person_id)
-
-    assert [%{message_id: ^conversation_id, subject: "Could you fund new ropes?"}] =
-             Messaging.list_conversations_for_group(board_group_id)
-
-    assert [] =
-             Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(kmc.club_id))
-
-    website_reply_id = Memba.ID.generate(:message)
-
-    assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: website_reply_id,
-                 conversation_id: conversation_id,
-                 sender_id: eve.person_id,
-                 body: "Here are the prices."
-               },
-               consistency: :strong
-             )
-
-    assert is_nil(Messaging.get_message(website_reply_id))
-
-    alice_outbound_message_id =
-      outbound_message_id_for_recipient!(conversation_id, alice.person_id)
-
-    assert {:ok,
-            %{
-              status: :rejected,
-              rejection_reason: "not_current_member",
-              to_address: "board@kmc.clubs.memba.io"
-            }} =
-             Messaging.receive_inbound_club_email(
-               %{
-                 provider: "resend",
-                 provider_message_id: "task-062-custom-group-reply",
-                 provider_event_id: "task-062-custom-group-reply-event",
-                 from_address: "eve@example.com",
-                 recipient_addresses: ["board@kmc.clubs.memba.io"],
-                 subject: "Re: Could you fund new ropes?",
-                 text_body: "Here are the prices.",
-                 in_reply_to_message_ids: [alice_outbound_message_id]
-               },
-               consistency: :strong
-             )
-
     assert %InboundEmailSourceProjection{
              status: "rejected",
              message_id: nil,
-             rejection_reason: "not_current_member",
-             to_address: "board@kmc.clubs.memba.io"
+             rejection_reason: "sender_not_active_member"
            } =
-             Messaging.get_inbound_email_source("resend", "task-062-custom-group-reply")
-
-    assert [%{message_id: ^conversation_id}] =
-             Messaging.list_conversation_messages_for_group(
-               conversation_id,
-               board_group_id
+             Messaging.get_inbound_email_source(
+               "resend",
+               "task-064-custom-group-outsider-root"
              )
 
-    refute Messaging.following_conversation?(conversation_id, eve.person_id)
-    assert 1 == count_events(MessageSent)
+    assert Messaging.list_conversations_for_group(board_group_id) == []
+    assert count_events(MessageSent) == 0
   end
 
   test "an inbound root message carries the resolved Admin audience group into SendMessage" do
