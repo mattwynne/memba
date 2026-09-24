@@ -35,5 +35,5 @@ The index is the incident-status ledger. Its open-follow-up count must agree wit
 
 | Date | Incident | Impact | Status | Open follow-ups |
 | --- | --- | --- | --- | ---: |
-| 2026-09-15 | [Database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md) | Two short database recovery windows; two deployments safely aborted; no data loss observed. | Mitigated — unsafe gate placement removed; infrastructure cause open | 4 |
+| 2026-09-15 | [Database restarted during release-command invariant checks](2026-09-15-release-invariant-database-restarts.md) | Database process later remained unavailable inside a started machine; at least one Internal Server Error observed; three deployments safely blocked; no data loss observed. | Resolved 2026-09-24 — database restarted, health and iteration 064 deployment verified; follow-ups open | 4 |
 | 2026-09-14 | [Custom-group creation rejected for legacy clubs](2026-09-14-custom-group-creation-forbidden.md) | Projected Admins in 2 of 5 populated production clubs could not create custom groups; no data loss or privacy breach observed. | Resolved 2026-09-15 — repaired and customer path verified; follow-ups open | 3 |
