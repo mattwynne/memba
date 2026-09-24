@@ -1,78 +1,87 @@
 ---
 name: ensemble-review
-description: Run a read-only role-based review, independently where delegation is available, of a behaviour map, technical scope, Gherkin, domain model, technical design, ADR, or complete iteration plan.
+description: Run a generic read-only review by up to three independent model families using a caller-supplied artifact, focus, rubric, questions, and constraints.
 ---
 
 # Ensemble Review
 
-Use this skill only when a parent planning session delegates a specific artifact and review mode. The parent remains responsible for the planning conversation and all decisions with Matt.
+Use this skill when a caller needs independent perspectives on a bounded artifact. This skill knows how to assemble and synthesize reviewers; it does not know what makes any particular artifact good. The caller owns the review brief and all decisions.
 
 ## Contract
 
-- Review only; do not edit repository files or the supplied artifact.
-- Preserve the product goal while looking for unnecessary rules, missing examples, incoherent modelling, and avoidable scope.
-- Raise questions, alternatives, disagreements, and evidence. Do not decide product policy or architecture for Matt.
-- Do not turn a reviewer suggestion into accepted scope. Return findings to the parent, which discusses consequential choices with Matt.
-- Prefer three independent reviewers when the available harness supports child threads or subagents. In BB, use BB child threads. If independent delegation is unavailable, perform the roles sequentially and say that the result is not independent ensemble evidence.
+- Review only. Neither reviewers nor synthesizer edit files or rewrite the artifact.
+- Do not infer a domain-specific rubric. Reject an incomplete brief instead of inventing quality criteria.
+- Reviewers provide evidence, alternatives, disagreements, and questions. They do not decide product policy, architecture, scope, wording, or acceptance.
+- The caller routes findings to the responsible specialist and discusses consequential choices with Matt.
+- Run at most one bounded review round unless the caller explicitly requests another after revising the artifact.
 
-## Inputs
+## Required Review Brief
 
-The parent must provide:
+Require the caller to supply all of:
 
-- mode: `example-map`, `technical-scope`, `gherkin`, `domain-model`, `technical-design`, `adr`, or `final-plan`;
-- the artifact or exact paths to inspect;
-- the intended product outcome and known scope boundaries;
-- unresolved questions already identified.
+- **Subject** — what is being reviewed and why.
+- **Artifact** — inline content or exact paths and relevant source context.
+- **Focus** — the distinct perspective each reviewer should apply.
+- **Rubric** — concrete questions or criteria for this artifact.
+- **Known questions** — uncertainties reviewers should investigate, including `None` when there are none.
+- **Constraints** — agreed outcome, boundaries, non-goals, decision owners, and prohibited actions.
+- **Feedback route** — the caller or specialist that owns revisions.
 
-## Review roles
+The focus may define one common perspective or up to three complementary lenses. Artifact-specific knowledge belongs in this brief, not in this skill.
 
-Run these roles independently and in parallel where possible:
+## Discover a Diverse Panel
 
-1. **Simplicity and scope challenger** — find assumptions that can be removed, weaker adequate rules, independent slices, and work that can be deferred without losing the intended outcome.
-2. **Counterexample challenger** — find missing actors, states, transitions, timings, failures, retries, and examples that contradict or leave the model ambiguous.
-3. **Coherence challenger** — check vocabulary, traceability and internal consistency. In Gherkin mode, check fidelity to the agreed map. In domain-model mode, focus on concepts, invariants, commands, events, lifecycle, responsibility and context boundaries. In ADR mode, check fidelity to the agreed model, alternatives and consequences. In final-plan mode, check that features, design, domain model, ADRs, scope and validation agree.
+Prefer three independent reviewers from three model families when they are available:
 
-Give every reviewer the same source context plus its role. Instruct it not to edit files and to distinguish observed gaps from optional ideas.
+1. one Anthropic Claude model;
+2. one OpenAI GPT model;
+3. one Google Gemini model.
 
-## Mode focus
+Discover current providers and model catalogs in the execution environment; do not hardcode model versions. In BB, inspect `bb provider list` and `bb provider models <provider-id>` for the current environment, then spawn child threads with explicit provider and model selections. A provider's name alone is not proof of model family; use its reported catalog/model identity.
 
-### Example map
+Choose a current suitable reasoning-capable model from each family. Use no more than one reviewer from a family. Dispatch all selected reviewers independently and in parallel with the same artifact, constraints, and known questions; give each only its assigned focus/lens and the shared rubric. Explicitly instruct each reviewer to remain read-only, cite evidence, separate defects from optional ideas, and report uncertainty.
 
-Challenge the value and necessity of important rules, not only the completeness of examples within them. Look for conflated preference, eligibility, timing, side effect and failure policies. Treat questions and deferred stories as successful outputs.
+When a requested family, provider, model catalog, or independent delegation mechanism is unavailable:
 
-### Technical scope
+- continue with the remaining distinct families rather than substituting a duplicate family;
+- state which family is missing and why;
+- label the result with the actual panel used;
+- never claim three-family or independent consensus when it was not obtained.
 
-Challenge whether the iteration names one useful engineering capability, preserves observable behaviour, has concrete proof, and defers adjacent cleanup. Expose hidden product changes instead of treating them as refactoring.
+If no independent delegation is available, perform at most three clearly separated passes, disclose that they are not independent, and retain the family limitation in the result.
 
-### Gherkin
+## Reviewer Output
 
-Check that each scenario expresses an agreed rule in stakeholder language, covers the important examples and does not add or lose policy during formulation. Route product questions back to example mapping rather than answering them in scenario prose.
+Ask each reviewer for:
 
-### Domain model
+- significant findings ordered by impact;
+- evidence tied to the supplied artifact or context;
+- rubric question(s) implicated;
+- a concise alternative or question where useful;
+- confidence and material uncertainty;
+- `No significant findings` when appropriate.
 
-Check that the model implements only the agreed behaviour or technical capability and preserves the stated non-regression contract. Identify accidental complexity, missing invariants, unclear ownership, commands/events that do not use business language, and consequential choices that need Matt. ADR candidates should emerge from the model; reviewers must not authoritatively select them.
-
-### Technical design
-
-Check that responsibilities, interfaces, data flow, migration/compatibility, operations and proof are sufficient for the agreed technical capability without broadening scope or changing behaviour. Identify accidental complexity and consequential choices requiring Matt.
-
-### ADR
-
-Check that the draft records a consequential choice from the agreed domain model or technical design, represents viable alternatives fairly, states consequences plainly, and does not introduce new product behaviour or architecture that Matt has not considered. Findings return to ADR collaboration before Matt accepts the record.
-
-### Final plan
-
-For a behaviour plan, check traceability and consistency across the agreed examples, UI design, domain model, accepted ADRs, implementation boundaries and validation. For a technical plan, check the agreed capability, behaviour-preservation contract, technical/domain model, accepted ADRs, migration and operational boundaries, implementation scope and proof. Do not introduce new product or architecture decisions at this stage; route discoveries back to the appropriate earlier planning step.
+Reviewers must not broaden the brief, silently resolve an open question, or turn preferences into requirements.
 
 ## Synthesis
 
-The parent reads all reports and presents a concise synthesis to Matt:
+Record the actual provider/model family for each completed report. Then:
 
-- agreements;
-- disagreements;
-- high-confidence holes or contradictions;
-- simpler alternatives and possible deferrals;
-- questions requiring Matt;
-- which earlier planning step to revisit, if any.
+1. normalize findings around the caller's rubric;
+2. deduplicate findings that share the same evidence and consequence;
+3. prioritize significant contradictions, risks, missing evidence, and unanswered questions;
+4. preserve substantive disagreement and family-specific uncertainty rather than voting or averaging it away;
+5. separate high-confidence findings from optional suggestions;
+6. identify the supplied feedback route for each finding.
 
-Do not average away disagreement or silently choose a reviewer recommendation. Planning proceeds only after Matt resolves consequential findings or explicitly removes/defers them from this iteration.
+Return:
+
+- panel used and any degraded coverage;
+- significant agreements;
+- significant disagreements;
+- prioritized evidence-backed findings;
+- questions for the decision owner;
+- optional ideas, clearly labelled;
+- feedback route for each actionable item.
+
+The synthesis is advice. The caller and Matt retain ownership of product policy, architecture, vocabulary, scope, and acceptance decisions.

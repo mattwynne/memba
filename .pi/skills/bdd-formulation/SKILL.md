@@ -1,6 +1,6 @@
 ---
 name: bdd-formulation
-description: Use when writing or reviewing Gherkin scenarios, especially after discovering examples or edge cases that reveal a business rule
+description: Write or review Gherkin scenarios after discovery, using Memba's agreed problem-domain vocabulary and concrete examples of business rules.
 ---
 
 # BDD Formulation
@@ -19,6 +19,12 @@ In Memba, use the native Gherkin `Rule:` keyword for rule headings.
 Both the browser Cucumber runner and the Elixir/domain Cucumber parser
 support it now, so commented rule headings are no longer needed.
 
+## Naming Checkpoint
+
+Names are part of formulation, not cosmetic cleanup after modelling. Read `docs/problem-domain-terms.md`, extract the important nouns and verbs from the example map, and invoke `domain-vocabulary` with those terms and their concrete examples. Use its output to apply canonical problem-domain terms consistently in `Feature`, `Rule`, `Example`, and step wording. Keep solution mechanisms out of scenarios unless the mechanism itself is agreed observable behaviour.
+
+Do not treat a proposed addition, replacement, or changed meaning as accepted until Matt agrees through `domain-vocabulary`. Apply accepted lexicon changes to the scenarios; keep unresolved naming questions explicit. Return the formulated scenarios with the vocabulary record produced by that skill.
+
 ```gherkin
 Rule: Manual blockers replace the existing manual blocker
 
@@ -28,6 +34,22 @@ Rule: Manual blockers replace the existing manual blocker
     When I add manual blocker to "deploy" with reason "waiting on review"
     Then the JSON yak "deploy" should have exactly one manual blocker with reason "waiting on review"
 ```
+
+## Temporal Formulation
+
+Use concrete `Given`/`When`/`Then` sequences to make **when** a rule applies visible. Formulation should expose temporal policy, not merely restate outcomes.
+
+For behaviour involving membership, preferences, permissions, messages, deliveries, lifecycle changes, or other delayed effects, ask:
+
+- What relevant state existed before the action?
+- At what action or event is the decision made?
+- Does a later state change alter an already-made decision or only future decisions?
+- What happens while someone or something is temporarily absent, inactive, pending, or in transition?
+- What resumes, persists, expires, queues, or is deliberately not backfilled?
+- Which ordering of otherwise valid actions changes the outcome?
+- What boundary examples just before, during, and after the transition distinguish the rule?
+
+Write the smallest scenarios that reveal these distinctions. Keep business-significant ordering explicit, but avoid clocks, queues, jobs, database state, and other implementation timing unless stakeholders actually observe them. If concrete sequencing reveals a missing or unnecessarily expensive rule, return it to discovery and Matt rather than encoding an accidental policy in Gherkin.
 
 ## BRIEF Check
 
@@ -68,3 +90,11 @@ When a scenario feels long, do not shorten it mechanically. First ask what makes
 - Is the data concrete and business-readable?
 - Are repeated steps revealing a named domain concept that should become one higher-level step?
 - Would a feature with no `Rule:` sections be clearer if its rules were extracted?
+- Do its nouns and verbs match `docs/problem-domain-terms.md`?
+- Is any solution-domain mechanism masquerading as stakeholder language?
+- Does any proposed vocabulary change still need Matt's agreement?
+- Is the rule's decision point clear: what was true before, what action happens, and when the outcome becomes fixed?
+- Could a later state change affect past/queued work, only future work, or neither—and do examples make that policy explicit?
+- Are important orderings, temporary states, persistence, expiry, resumption, and no-backfill cases concrete without leaking implementation mechanics?
+
+If later domain modelling finds that a command, event, or invariant has a more natural problem-domain noun or verb, reopen formulation through `domain-vocabulary`; update the agreed scenarios and lexicon before treating the model term as settled.

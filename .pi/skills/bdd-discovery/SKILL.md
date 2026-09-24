@@ -84,34 +84,22 @@ that belongs in `bdd-formulation`.
 
 ## Bounded Adversarial Review
 
-Near the end of discovery, run one adversarial review round using the Three
-Amigos lenses. Give the current map and its source constraints to three
-subagents in parallel, one for each lens:
+Near the end of discovery, invoke `ensemble-review` once with this caller-owned brief:
 
-- **Product/business**: challenge the present value of every rule, distinguish
-  outcomes from mechanisms, and suggest rules to remove, weaken, or defer.
-- **Development**: look for missed lifecycle, state, timing, integration,
-  ownership, and cross-context consequences; flag disproportionate complexity.
-- **Testing**: aggressively seek counterexamples, boundaries, reversals,
-  failure paths, and rule interactions within the retained scope.
+- **Subject:** whether the map is the smallest sufficiently understood slice.
+- **Artifact:** current story, rules, examples, questions, sliced-out stories, source evidence, and agreed constraints.
+- **Focus:** three complementary Three Amigos lenses:
+  1. **Product/business** — challenge present value, distinguish outcomes from mechanisms, and identify rules to remove, weaken, or defer.
+  2. **Development** — look for missed lifecycle, state, timing, integration, ownership, and cross-context consequences; flag disproportionate complexity.
+  3. **Testing** — seek counterexamples, boundaries, reversals, failure paths, and rule interactions within retained scope.
+- **Rubric:** Which retained rules lack current value? Which assumptions or examples are missing? What is the smallest coherent slice? Which lifecycle, timing, boundary, reversal, failure, or interaction examples would materially change understanding?
+- **Known questions:** the map's red cards, or `None`.
+- **Constraints:** read-only; do not rewrite the map, decide policy, accept scope, or turn optional ideas into requirements. The stakeholder and team own decisions.
+- **Feedback route:** this discovery conversation and its stakeholder/team.
 
-Ask each reviewer for only its highest-value questions, examples,
-alternatives, assumptions, and evidence. They must not rewrite the map or make
-product decisions. Synthesize their findings into:
+The generic ensemble discovers up to three independent model families and synthesizes only the highest-value questions, examples, alternatives, assumptions, evidence, agreements, and disagreements. The stakeholder and team decide before the map is updated or declared ready.
 
-- missed cases and assumptions;
-- possible removals or simpler slices;
-- agreements and disagreements; and
-- trade-offs for the stakeholder and team to decide.
-
-The synthesizer presents findings and alternatives without changing agreed
-rules or scope. The stakeholder and team decide before the map is updated or
-the story is declared ready.
-
-This is one review round, not an automatic revision loop: do not respawn or
-iterate reviewers automatically. The subagents apply the Three Amigos lenses;
-they do not replace the collaborative Three Amigos conversation, stakeholder
-judgment, or prove that every unknown unknown has been found.
+This is one review round, not an automatic revision loop. The model panel applies the supplied Three Amigos lenses; it does not replace the collaborative Three Amigos conversation, stakeholder judgment, or prove that every unknown unknown has been found.
 
 ## Reading the Map
 

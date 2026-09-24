@@ -10,7 +10,7 @@ description: Plan a behaviour-changing iteration through adversarial example map
 Starting from the intake supplied by `iteration-planning`, turn an intended behaviour change into a published, validated implementation plan. Challenge and agree behaviour before modelling it; agree the model before recording consequential ADRs.
 
 <HARD-GATE>
-Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, or UI. Planning may edit only iteration-planning artifacts in that iteration's `docs/iterations/` folder, acceptance feature files/scenarios that are part of planning, and ADRs plus `docs/adr/README.md` that record architecture decisions Matt explicitly made during the modelling session. Feature files and the agreed ADRs are seeds for implementation; step definitions and executable test plumbing are implementation. Never create or accept a consequential ADR autonomously. This skill's terminal state is a committed, pushed and validated behaviour plan; a question returned to Matt; or a clear planning, publication or validation blocker. Fabro launch belongs to `iteration-delivery`.
+Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, or UI. Planning may edit only iteration-planning artifacts in that iteration's `docs/iterations/` folder, acceptance feature files/scenarios that are part of planning, `docs/problem-domain-terms.md` for vocabulary changes Matt explicitly agrees, and ADRs plus `docs/adr/README.md` that record architecture decisions Matt explicitly made during the modelling session. Feature files and the agreed ADRs are seeds for implementation; step definitions and executable test plumbing are implementation. Never create or accept a consequential ADR autonomously. This skill's terminal state is a committed, pushed and validated behaviour plan; a question returned to Matt; or a clear planning, publication or validation blocker. Fabro launch belongs to `iteration-delivery`.
 </HARD-GATE>
 
 ## Runtime Compatibility
@@ -29,16 +29,53 @@ Create a task for each item and complete them in order:
 1. **Explore targeted context** — now that intake has identified the behaviour, inspect only the relevant existing behaviour, code, plans, accepted ADRs, problem notes and designs.
 2. **Clarify intake** — ask Matt one question at a time only where the routed problem, outcome, beneficiary or boundary remains unclear.
 3. **Example map and slice** — use `bdd-discovery` to map rules, examples, questions and deferred stories. Aggressively look for holes and unnecessary rules; split or defer scope before choosing architecture.
-4. **Review and agree the map** — run `ensemble-review` in `example-map` mode. Present agreements, disagreements, simpler alternatives and questions to Matt. Revise until Matt agrees the behaviour and deferrals.
-5. **Formulate features and check design** — use `bdd-formulation` for shared scenarios and apply the Design Check for visible surfaces.
-6. **Review and agree features** — run `ensemble-review` in `gherkin` mode. Return policy gaps to discovery and formulation defects to `bdd-formulation`. Matt agrees the reviewed scenarios and design coverage before modelling.
-7. **Model the domain** — use `domain-modelling` in the current conversation. If modelling exposes an unnecessary or unclear rule, return to example mapping.
-8. **Review and agree the model** — run `ensemble-review` in `domain-model` mode. Resolve findings through `domain-modelling`, then obtain Matt's agreement.
-9. **Draft, review and accept ADRs** — draft only ADRs required by the agreed model, run `ensemble-review` in `adr` mode, revise with Matt, update `docs/adr/README.md`, and obtain Matt's explicit acceptance.
-10. **Assemble the plan** — compose the agreed features, design, domain model, ADRs, scope/deferrals and validation without introducing new decisions.
-11. **Check consistency** — run `ensemble-review` in `final-plan` mode. Return substantive issues to the owning skill and repeat that ingredient's review and Matt-agreement checkpoint. No separate plan-approval ceremony is required.
+4. **Review and agree the map** — run `ensemble-review` with the Example-map brief below. Present agreements, disagreements, simpler alternatives and questions to Matt. Revise until Matt agrees the behaviour and deferrals.
+5. **Formulate features, names, and design** — use `bdd-formulation` and `domain-vocabulary` for shared scenarios and problem-domain names; apply the Design Check for visible surfaces. Matt explicitly agrees any lexicon addition, replacement, or changed meaning.
+6. **Review and agree features** — run `ensemble-review` with the Formulated-feature brief below. Return policy gaps to discovery, formulation defects to `bdd-formulation`, and naming issues to `domain-vocabulary`. Matt agrees the reviewed scenarios, vocabulary, and design coverage before modelling.
+7. **Model the domain** — use `domain-modelling` in the current conversation. If modelling exposes an unnecessary or unclear rule, return to example mapping. If commands, events, or invariants reveal a more natural problem-domain noun or verb, return to `bdd-formulation` and `domain-vocabulary`; after Matt's decision, repeat the formulated-feature ensemble and agreement checkpoint before revising the model.
+8. **Review and agree the model** — run `ensemble-review` with the Domain-model brief below. Resolve findings through `domain-modelling` and vocabulary findings through the formulation loop, then obtain Matt's agreement.
+9. **Resolve architecture decisions** — use `architecture-decision-records` for consequential choices emerging from the agreed model. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance.
+10. **Assemble the plan** — compose the agreed features, vocabulary, design, domain model, ADRs, scope/deferrals and validation without introducing new decisions.
+11. **Check consistency** — run `ensemble-review` with the Final-plan brief below. Return substantive issues to the owning skill and repeat that ingredient's review and Matt-agreement checkpoint. No separate plan-approval ceremony is required.
 12. **Publish and validate** — write the iteration artifacts and indexes, run targeted planning checks, commit and push, then run `bin/dev fabro validate-plan <plan_path>`. Route substantive findings back through their owning skill and checkpoint.
 13. **Return the result** — give `iteration-planning` the validated plan path and commit, or the exact question/blocker. Do not launch delivery.
+
+## Caller-Owned Ensemble Briefs
+
+Every brief below also includes:
+
+- **Known questions:** the artifact's current open questions, or `None`.
+- **Constraints:** the agreed outcome, boundaries and non-goals; read-only review; no product-policy, architecture, vocabulary or acceptance decisions; Matt is decision owner.
+
+Use the named feedback route in each brief. `ensemble-review` only discovers the diverse panel and synthesizes its reports.
+
+### Example-map brief
+
+- **Subject/artifact:** the current story, rules, examples, questions, and deferred stories.
+- **Focus:** (1) value/scope simplification, (2) counterexamples and missing states/timings, (3) coherence of rules, examples, and problem-domain language.
+- **Rubric:** Is each retained rule necessary now? What can be weakened, split, or deferred? Which actors, boundaries, reversals, failures, or rule interactions are missing? Do examples actually distinguish the rules?
+- **Feedback route:** `bdd-discovery` and Matt.
+
+### Formulated-feature brief
+
+- **Subject/artifact:** agreed map, formulated scenarios, vocabulary record and applicable design references.
+- **Focus:** (1) fidelity to agreed policy, (2) concrete counterexamples, temporal boundaries and BRIEF quality, (3) naming/design coherence.
+- **Rubric:** Does each scenario express exactly one agreed rule without adding or losing policy? Are examples concrete and stakeholder-readable? Do they expose when decisions become fixed, significant orderings, temporary states, persistence/resumption/expiry, and effects on past versus future work where relevant? Do nouns and verbs match `docs/problem-domain-terms.md` and avoid solution language? Does visible behaviour have design coverage?
+- **Feedback route:** policy gaps to `bdd-discovery`; scenario defects to `bdd-formulation`; naming proposals to `domain-vocabulary`; design gaps to the Design Check; decisions to Matt.
+
+### Domain-model brief
+
+- **Subject/artifact:** agreed scenarios/vocabulary, draft domain model, current constraints and deferrals.
+- **Focus:** (1) simplicity and accidental complexity, (2) invariants/lifecycle/temporal counterexamples, (3) language, ownership and traceability.
+- **Rubric:** Does the model implement only agreed behaviour? Are lifecycle, commands, events, invariants, authorization and responsibility boundaries coherent? Does it reuse canonical problem-domain language while separating solution terms? Which consequential choices need Matt and perhaps an ADR?
+- **Feedback route:** `domain-modelling`; naming conflicts through `bdd-formulation` plus `domain-vocabulary`; policy issues through `bdd-discovery`; decisions to Matt.
+
+### Final-plan brief
+
+- **Subject/artifact:** all agreed ingredients and assembled plan.
+- **Focus:** (1) scope/implementation boundary consistency, (2) missing validation and failure evidence, (3) end-to-end traceability and vocabulary coherence.
+- **Rubric:** Does the plan compose the agreed map, scenarios, vocabulary, design, model, accepted ADRs, implementation boundaries and validation without a new decision or contradiction? Can implementation proceed without inventing policy, names, or consequential architecture?
+- **Feedback route:** the specialist owning each affected ingredient; repeat that ingredient's ensemble and Matt checkpoint.
 
 ## Process Flow
 
@@ -50,19 +87,19 @@ digraph behaviour_iteration_planning {
   intake [label="Routed behaviour-change intake"];
   context [label="Targeted context exploration"];
   map [label="bdd-discovery\nexample map · slice · defer"];
-  map_review [label="ensemble-review\nexample-map mode"];
+  map_review [label="ensemble-review\ncaller-owned map brief"];
   behaviour [shape=diamond, label="Matt agrees behaviour?"];
-  formulate [label="bdd-formulation + design"];
-  gherkin_review [label="ensemble-review\ngherkin mode"];
+  formulate [label="bdd-formulation + domain-vocabulary + design"];
+  vocabulary [shape=diamond, label="Matt agrees vocabulary changes?"];
+  gherkin_review [label="ensemble-review\ncaller-owned feature brief"];
   features [shape=diamond, label="Matt agrees features?"];
   model [label="domain-modelling"];
-  model_review [label="ensemble-review\ndomain-model mode"];
+  model_review [label="ensemble-review\ncaller-owned model brief"];
   model_agreed [shape=diamond, label="Matt agrees model?"];
-  adr [label="Draft required ADRs"];
-  adr_review [label="ensemble-review\nadr mode"];
+  adr [label="architecture-decision-records\ncollaborate + review"];
   adr_accept [shape=diamond, label="Matt accepts ADRs?"];
   assemble [label="Assemble plan from agreed ingredients"];
-  final_review [label="ensemble-review\nfinal-plan consistency"];
+  final_review [label="ensemble-review\ncaller-owned final-plan brief"];
   consistent [shape=diamond, label="Plan consistent?"];
   publish [label="Publish and validate plan"];
   validated [shape=diamond, label="Validation ready?"];
@@ -72,13 +109,18 @@ digraph behaviour_iteration_planning {
   intake -> context -> map -> map_review -> behaviour;
   behaviour -> map [label="no", style=dashed];
   behaviour -> formulate [label="yes"];
-  formulate -> gherkin_review -> features;
+  formulate -> vocabulary;
+  vocabulary -> formulate [label="no", style=dashed];
+  vocabulary -> gherkin_review [label="yes / none proposed"];
+  gherkin_review -> features;
   features -> formulate [label="no", style=dashed];
   features -> model [label="yes"];
-  model -> model_review -> model_agreed;
+  model -> formulate [label="better problem-domain term", style=dashed];
+  model -> model_review [label="language coherent"];
+  model_review -> model_agreed;
   model_agreed -> model [label="no", style=dashed];
   model_agreed -> adr [label="yes / if required"];
-  adr -> adr_review -> adr_accept;
+  adr -> adr_accept;
   adr_accept -> adr [label="no", style=dashed];
   adr_accept -> assemble [label="yes"];
   model_agreed -> assemble [label="yes / no ADR", style=dotted];
@@ -222,6 +264,10 @@ Apply the Design Check. For each user-facing surface the iteration adds or chang
 
 ## Open Business Decisions
 
+## Domain Vocabulary
+
+List canonical terms reused, Matt-agreed additions/changes recorded in `docs/problem-domain-terms.md`, deliberately separate solution-domain terms, and unresolved naming questions.
+
 ## Domain Model
 
 Document the agreed concepts and vocabulary, lifecycle/state changes, invariants, commands, events, actors, aggregate/context ownership, responsibility boundaries, important temporal examples, changes from the current model, and deliberately deferred modelling questions.
@@ -253,7 +299,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Maintain `docs/iterations/README.md` as the iteration index.
 - Read `docs/problems/README.md` if it exists, plus any relevant `docs/problems/*.md` notes. If the directory exists but no README exists, inspect the problem files directly.
 - Include a `## Related Problems` section in the plan. Link each relevant problem note and say whether the iteration should resolve it, partially address it, depend on it, or intentionally leave it unresolved. If there are no relevant captured problems, write `None known.`
-- Include `## Domain Model` and `## Architecture Decisions`. The domain model records the decisions agreed with Matt during modelling; it is not a placeholder for the implementor to design later. Link every required accepted ADR, and do not mark a consequential architecture decision resolved unless Matt participated in and accepted it.
+- Include `## Domain Vocabulary`, `## Domain Model`, and `## Architecture Decisions`. Vocabulary changes must be agreed by Matt and recorded in `docs/problem-domain-terms.md`; the model records decisions agreed during modelling and is not a placeholder for the implementor. Link every required accepted ADR, and do not mark a consequential architecture decision resolved unless Matt participated in and accepted it through `architecture-decision-records`.
 - Create one folder per iteration using the next sequential zero-padded iteration number and a lowercase hyphenated topic slug.
 - Determine the next number by inspecting existing `docs/iterations/NNN-*` folders; start at `001` if none exist.
 - Save the plan as `plan.md` inside that folder.
@@ -270,7 +316,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Add or update the index entry in `docs/iterations/README.md` with the iteration number, title/topic, plan link, date, status, and any acceptance feature files changed.
 - Do not update Fabro workflow code or problem-note status files during ordinary iteration planning. The relevant problems belong in the plan's `## Related Problems` section. Only edit `docs/problems/*.md` or `docs/problems/README.md` if Matt explicitly asks for problem-note maintenance as part of the planning task.
 - Example: `docs/iterations/001-member-import/plan.md`.
-- Commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, ADRs explicitly accepted by Matt, and `docs/adr/README.md` before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or carry the relevant `@todo-domain` and/or `@todo-ui` tags and are excluded from the planning-time checks. Then run `bin/dev fabro validate-plan <plan_path>`, route feedback through the owning planning step, and return the validated plan.
+- Commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, Matt-agreed `docs/problem-domain-terms.md` changes, ADRs explicitly accepted by Matt, and `docs/adr/README.md` before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or carry the relevant `@todo-domain` and/or `@todo-ui` tags and are excluded from the planning-time checks. Then run `bin/dev fabro validate-plan <plan_path>`, route feedback through the owning planning step, and return the validated plan.
 - Include workflow/skill changes in that commit only when they are needed for planning or validation.
 - Do not commit or push unrelated changes or implementation work.
 
@@ -289,8 +335,8 @@ When complete, return the plan path, pushed commit, validation result, related p
 ## Key Principles
 
 - One question at a time.
-- Example-map and defer before modelling; agree formulated features before modelling; model before writing ADRs; accept ADRs before implementation.
-- Compose planning from the `bdd-discovery`, `bdd-formulation`, `domain-modelling`, and `ensemble-review` skills rather than duplicating their specialist procedures.
+- Example-map and defer before modelling; agree formulated features and vocabulary before modelling; model before invoking `architecture-decision-records`; accept ADRs before implementation.
+- Compose planning from the `bdd-discovery`, `bdd-formulation`, `domain-vocabulary`, `domain-modelling`, `architecture-decision-records`, and `ensemble-review` skills rather than duplicating their specialist procedures.
 - Ensemble reviewers challenge and advise; Matt agrees behaviour, formulated features, domain models and ADRs. The assembled plan needs no separate approval ceremony.
 - One iteration is one slice: one rule, or one piece of engineering. Split anything bigger.
 - Make business decisions explicit.

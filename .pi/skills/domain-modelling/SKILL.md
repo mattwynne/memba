@@ -18,8 +18,9 @@ This is collaborative modelling, not autonomous architecture design and not impl
 Read:
 
 - the agreed example map or technical capability map;
-- formulated feature scenarios when applicable;
-- relevant current code and domain vocabulary;
+- formulated feature scenarios and their vocabulary record when applicable;
+- `docs/problem-domain-terms.md`, consulted through `domain-vocabulary`;
+- relevant current code and clearly separated solution-domain terminology;
 - existing accepted ADRs and reference guidance;
 - explicit scope deferrals.
 
@@ -29,7 +30,7 @@ Do not reopen agreed product behaviour merely to suit the current implementation
 
 Work through one focused question at a time with Matt to develop and record a draft model:
 
-1. **Concepts and language** — entities, value concepts and terms the business recognizes.
+1. **Concepts and language** — entities, value concepts, nouns, and verbs the business recognizes; reuse the canonical problem-domain vocabulary and label solution-domain terms separately.
 2. **Lifecycle and state** — relevant states and permitted transitions.
 3. **Invariants and policies** — what must always be true and when each decision is made.
 4. **Commands** — intent, actor, target, authorization and owning boundary.
@@ -42,6 +43,8 @@ Work through one focused question at a time with Matt to develop and record a dr
 
 Use business language before framework language. Commands and events should express the agreed model, not implementation plumbing.
 
+If a command, event, invariant, or lifecycle discussion reveals that a different problem-domain noun or verb is more natural than the formulated wording, do not silently choose either term. Return the concrete evidence to `bdd-formulation` and `domain-vocabulary` for Matt's decision. When he agrees a change, update `docs/problem-domain-terms.md` and the scenarios first, repeat their caller-defined ensemble review and Matt-agreement checkpoint, and only then revise this model. Keep solution-domain names available for technical design without adding them to the problem-domain lexicon.
+
 ## Decision boundary
 
 - Matt decides the domain model and consequential responsibility boundaries.
@@ -53,7 +56,8 @@ Use business language before framework language. Commands and events should expr
 
 Return a concise proposed `## Domain Model` section containing:
 
-- concepts and vocabulary;
+- canonical problem-domain concepts and vocabulary;
+- separately labelled solution-domain terms;
 - lifecycle/state changes;
 - invariants and decision points;
 - commands and events;
@@ -65,4 +69,4 @@ Return a concise proposed `## Domain Model` section containing:
 - unresolved questions, if any;
 - ADR candidates, if any.
 
-The parent submits this output to `ensemble-review` in `domain-model` mode, discusses the findings with Matt, revises through this skill as needed, and only then obtains Matt's agreement on the model.
+The calling planning skill submits this output to `ensemble-review` with an explicit domain-model subject, artifact, focus, rubric, questions, constraints, and feedback route. It discusses findings with Matt, revises through this skill as needed, and only then obtains Matt's agreement on the model.
