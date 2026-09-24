@@ -36,11 +36,30 @@ Cards:
 
 Traditional colours: yellow story, blue rules, green examples, red questions.
 
+## Record the Map
+
+Record the map as a lightweight Gherkin outline using keyword and name only:
+
+```gherkin
+Feature: Withdraw cash
+
+  Rule: The account must have enough funds
+
+    Example: Withdrawal is within the available balance
+
+    Example: Withdrawal exceeds the available balance
+```
+
+Use `Feature:` for the story, `Rule:` for each rule, and `Example:` for each
+concrete example. Keep questions and sliced-out new stories alongside the
+outline as lists. Do not add `Given`/`When`/`Then` steps during discovery;
+that belongs in `bdd-formulation`.
+
 ## How to Run It
 
 1. Start with the story and the rules people already know.
 2. Ask for concrete examples for each rule.
-3. Put each example under the rule it illustrates.
+3. Record each example under the rule it illustrates in the Gherkin outline.
 4. Capture uncertainty as questions; do not solve everything in the room.
 5. Challenge whether each rule describes a needed outcome or assumes a
    mechanism. Remove, weaken, or defer rules that are not needed now.
