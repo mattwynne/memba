@@ -1,15 +1,15 @@
 ---
 name: domain-modelling
-description: Collaboratively model an iteration's agreed behaviour with Matt before implementation, covering concepts, invariants, commands, events, lifecycle, ownership, and responsibility boundaries.
+description: Collaboratively model agreed behaviour or a technical capability with Matt before implementation, covering concepts, invariants, commands, events, lifecycle, ownership, and responsibility boundaries.
 ---
 
 # Domain Modelling
 
-Use this skill only after behaviour-facing examples have been formulated and agreed, or after a technical capability and its observable proof have been agreed. The parent `iteration-planning` session owns sequencing and publication.
+Use this skill only after behaviour-facing examples have been formulated and agreed, or after a technical capability and its observable proof have been agreed. The calling specialist planning skill owns sequencing and publication.
 
 ## Purpose
 
-Turn agreed behaviour into an explicit domain model with Matt. The output becomes the iteration plan's `## Domain Model` section and may identify consequential decisions that need ADRs.
+Turn agreed behaviour or an agreed technical capability into an explicit domain model with Matt. The output becomes the iteration plan's `## Domain Model` section and may identify consequential decisions that need ADRs.
 
 This is collaborative modelling, not autonomous architecture design and not implementation.
 

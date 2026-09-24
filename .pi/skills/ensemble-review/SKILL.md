@@ -1,6 +1,6 @@
 ---
 name: ensemble-review
-description: Run a read-only role-based review, independently where delegation is available, of an example map, Gherkin, domain model, ADR, or complete iteration plan during collaborative planning.
+description: Run a read-only role-based review, independently where delegation is available, of a behaviour map, technical scope, Gherkin, domain model, technical design, ADR, or complete iteration plan.
 ---
 
 # Ensemble Review
@@ -19,7 +19,7 @@ Use this skill only when a parent planning session delegates a specific artifact
 
 The parent must provide:
 
-- mode: `example-map`, `gherkin`, `domain-model`, `adr`, or `final-plan`;
+- mode: `example-map`, `technical-scope`, `gherkin`, `domain-model`, `technical-design`, `adr`, or `final-plan`;
 - the artifact or exact paths to inspect;
 - the intended product outcome and known scope boundaries;
 - unresolved questions already identified.
@@ -40,21 +40,29 @@ Give every reviewer the same source context plus its role. Instruct it not to ed
 
 Challenge the value and necessity of important rules, not only the completeness of examples within them. Look for conflated preference, eligibility, timing, side effect and failure policies. Treat questions and deferred stories as successful outputs.
 
+### Technical scope
+
+Challenge whether the iteration names one useful engineering capability, preserves observable behaviour, has concrete proof, and defers adjacent cleanup. Expose hidden product changes instead of treating them as refactoring.
+
 ### Gherkin
 
 Check that each scenario expresses an agreed rule in stakeholder language, covers the important examples and does not add or lose policy during formulation. Route product questions back to example mapping rather than answering them in scenario prose.
 
 ### Domain model
 
-Check that the model implements only the agreed behaviour. Identify accidental complexity, missing invariants, unclear ownership, commands/events that do not use business language, and consequential choices that need Matt. ADR candidates should emerge from the model; reviewers must not authoritatively select them.
+Check that the model implements only the agreed behaviour or technical capability and preserves the stated non-regression contract. Identify accidental complexity, missing invariants, unclear ownership, commands/events that do not use business language, and consequential choices that need Matt. ADR candidates should emerge from the model; reviewers must not authoritatively select them.
+
+### Technical design
+
+Check that responsibilities, interfaces, data flow, migration/compatibility, operations and proof are sufficient for the agreed technical capability without broadening scope or changing behaviour. Identify accidental complexity and consequential choices requiring Matt.
 
 ### ADR
 
-Check that the draft records a consequential choice from the agreed domain model, represents viable alternatives fairly, states consequences plainly, and does not introduce new product behaviour or architecture that Matt has not considered. Findings return to ADR collaboration before Matt accepts the record.
+Check that the draft records a consequential choice from the agreed domain model or technical design, represents viable alternatives fairly, states consequences plainly, and does not introduce new product behaviour or architecture that Matt has not considered. Findings return to ADR collaboration before Matt accepts the record.
 
 ### Final plan
 
-Check traceability and consistency across the agreed examples, UI design, domain model, accepted ADRs, implementation boundaries and validation. Do not introduce new product or architecture decisions at this stage; route discoveries back to the appropriate earlier planning step.
+For a behaviour plan, check traceability and consistency across the agreed examples, UI design, domain model, accepted ADRs, implementation boundaries and validation. For a technical plan, check the agreed capability, behaviour-preservation contract, technical/domain model, accepted ADRs, migration and operational boundaries, implementation scope and proof. Do not introduce new product or architecture decisions at this stage; route discoveries back to the appropriate earlier planning step.
 
 ## Synthesis
 
