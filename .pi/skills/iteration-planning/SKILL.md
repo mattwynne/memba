@@ -30,26 +30,28 @@ Create a task for each item and complete them in order:
 2. **Quick interview** — ask Matt one question at a time to establish the intended outcome, beneficiary and rough boundary. Do not prematurely turn the first description into fixed scope.
 3. **Map and slice** — for behaviour-facing work, use `bdd-discovery` to map rules, examples, questions and deferred stories. For purely technical work, map the intended engineering capability, observable proof, questions, risks and deferrals instead. Aggressively look for holes and unnecessary scope before choosing architecture.
 4. **Run the map ensemble** — delegate a read-only `example-map` review to the local `ensemble-review` skill, supplying the behaviour map or technical capability map as appropriate. Present its agreements, disagreements, simpler alternatives and questions to Matt. Reviewers advise; Matt decides. Revise until the intended outcome and deferrals are agreed.
-5. **Formulate examples and check design** — for behaviour-facing work, use `bdd-formulation` for shared feature scenarios and apply the Design Check for visible surfaces. Invite Matt to review the domain language and design coverage. For purely technical work, record why Gherkin and UI design are not applicable.
-6. **Model the domain with Matt** — agree the concepts and vocabulary, state/lifecycle changes, invariants, commands, events, actors, aggregate/context ownership and responsibility boundaries. Document changes from the current model and important temporal examples. If modelling exposes an unnecessary or unclear rule, return to example mapping rather than designing around it.
-7. **Run the model ensemble** — delegate a read-only `domain-model-adr` review to `ensemble-review`. Bring conflicts, accidental complexity, missing invariants and ADR candidates back to Matt. Do not let reviewers or the planning agent settle consequential architecture decisions silently.
-8. **Write and review required ADRs** — ADRs emerge from the agreed domain model. Write only ADRs needed for consequential decisions, include alternatives and consequences, update `docs/adr/README.md`, and obtain Matt's explicit acceptance before implementation. Existing conflicting ADRs must be resolved with Matt, not worked around.
-9. **Draft and review the plan** — systematically record the agreed features, design, domain model, accepted ADRs, scope/deferrals and validation. Present the complete draft to Matt for correction.
-10. **Run final ensemble review** — delegate a read-only `final-plan` review to `ensemble-review`. It checks consistency and traceability; any new product or architecture issue returns to the appropriate earlier step. Resolve findings with Matt before publishing.
-11. **Write and publish planning artifacts** — save the plan under `docs/iterations/<iteration-number>-<topic>/plan.md`, maintain the iteration and ADR indexes, and include agreed acceptance scenarios, supporting artifacts and ADRs. Verify planning-only acceptance changes remain safely excluded or pass their targeted checks, then commit and push only the planning artifacts.
-12. **Validate the published plan** — run `bin/dev fabro validate-plan <plan_path>`. Validation may check readiness and consistency but must not invent product or architecture decisions. Discuss any such decision with Matt, revise, publish and re-run until ready or explicitly blocked.
-13. **Ask whether to launch delivery** — do not launch automatically. After validation passes, show `bin/dev fabro deliver <plan_path>` and ask whether Matt wants this session to run it. Without explicit approval, stop.
+5. **Formulate examples and check design** — for behaviour-facing work, use `bdd-formulation` for shared feature scenarios and apply the Design Check for visible surfaces. For purely technical work, record why Gherkin and UI design are not applicable.
+6. **Run the Gherkin ensemble and agree features** — for behaviour-facing work, delegate a read-only `gherkin` review to `ensemble-review`. Return policy gaps to example mapping and formulation defects to `bdd-formulation`; do not patch either silently. Present the reviewed scenarios and design coverage to Matt and obtain his agreement before modelling. For purely technical work, confirm the capability map and proof instead.
+7. **Model the domain with Matt** — use the local `domain-modelling` skill in the current planning conversation. It collaborates with Matt on concepts, lifecycle, invariants, commands, events, actors, ownership and responsibility boundaries, and drafts the plan's Domain Model section. If modelling exposes an unnecessary or unclear rule, return to example mapping rather than designing around it.
+8. **Run the model ensemble and agree the model** — delegate a read-only `domain-model` review to `ensemble-review`. Bring conflicts, accidental complexity, missing invariants and ADR candidates back through `domain-modelling`; then obtain Matt's agreement on the model.
+9. **Write, review and accept required ADRs** — ADRs emerge from the agreed domain model. Draft only ADRs needed for consequential decisions, including alternatives and consequences, then delegate a read-only `adr` review to `ensemble-review`. Revise findings with Matt, update `docs/adr/README.md`, and obtain Matt's explicit acceptance before implementation. Existing conflicting ADRs must be resolved with Matt, not worked around.
+10. **Assemble the plan** — systematically compose the already-agreed features, design, domain model, accepted ADRs, scope/deferrals and validation. Do not add another plan-approval ceremony or introduce new decisions while assembling it.
+11. **Run final ensemble review** — delegate a read-only `final-plan` review to `ensemble-review`. It checks consistency and traceability only; any substantive issue returns to the specialist skill that owns the ingredient. After correction, repeat that ingredient's ensemble review and Matt-agreement/acceptance checkpoint before assembling and reviewing the plan again.
+12. **Write and publish planning artifacts** — save the plan under `docs/iterations/<iteration-number>-<topic>/plan.md`, maintain the iteration and ADR indexes, and include agreed acceptance scenarios, supporting artifacts and ADRs. Verify planning-only acceptance changes remain safely excluded or pass their targeted checks, then commit and push only the planning artifacts.
+13. **Validate the published plan** — run `bin/dev fabro validate-plan <plan_path>`. Validation may check readiness and consistency but must not invent product or architecture decisions. Route any substantive issue back to its owning specialist skill, repeat that ingredient's ensemble and Matt-agreement/acceptance checkpoint, then reassemble, publish and re-run validation until ready or explicitly blocked.
+14. **Ask whether to launch delivery** — do not launch automatically. After validation passes, show `bin/dev fabro deliver <plan_path>` and ask whether Matt wants this session to run it. Without explicit approval, stop.
 
 ## Process Flow
 
 ```text
-Context → quick interview → example map → ensemble challenge → Matt agrees behaviour
-  → feature formulation/design → domain modelling → ensemble challenge
-  → Matt agrees model → required ADRs accepted by Matt → complete plan
-  → final ensemble consistency review → publish → validate → optional delivery launch
+Context → quick interview → example map → ensemble review → Matt agrees behaviour
+  → feature formulation/design → ensemble review → Matt agrees features
+  → domain-modelling skill → ensemble review → Matt agrees model
+  → draft ADRs → ensemble review → Matt accepts ADRs
+  → assemble plan → final consistency review → publish → validate → optional delivery launch
 ```
 
-A finding may move planning backwards. In particular, domain modelling returns to example mapping when it exposes an unnecessary rule, and final review returns to modelling when it exposes an undecided architecture choice.
+A finding moves planning back to the specialist skill that owns it. Domain modelling returns to example mapping when it exposes an unnecessary rule; Gherkin findings return to discovery or formulation; ADR findings return to ADR collaboration; final review never patches an upstream ingredient silently. A changed ingredient must pass its ensemble and Matt-agreement/acceptance checkpoint again.
 
 ## BDD Scenario Heuristics
 
@@ -248,7 +250,7 @@ If validation reports NOT READY:
 
 1. Summarize the blocking gaps.
 2. Ask Matt one question at a time to resolve them.
-3. Edit, commit, and push the affected planning artifacts. Acceptance scenarios or ADRs may change only through the same Matt-reviewed discovery/modelling decisions required above.
+3. Return each substantive issue to its owning specialist skill, repeat that ingredient's ensemble and Matt-agreement/acceptance checkpoint, then edit, commit, and push the affected planning artifacts. Acceptance scenarios or ADRs may change only through the same Matt-reviewed discovery/modelling decisions required above.
 4. Re-run `bin/dev fabro validate-plan <plan_path>`.
 5. Repeat until validation reports ready or validation is blocked by an unavailable local Fabro service or another explicit external blocker.
 
@@ -284,8 +286,9 @@ When planning is complete, report:
 ## Key Principles
 
 - One question at a time.
-- Example-map and defer before modelling; model before writing ADRs; accept ADRs before implementation.
-- Ensemble reviewers challenge and advise; Matt makes product, domain-model and architecture decisions.
+- Example-map and defer before modelling; agree formulated features before modelling; model before writing ADRs; accept ADRs before implementation.
+- Compose planning from the `bdd-discovery`, `bdd-formulation`, `domain-modelling`, and `ensemble-review` skills rather than duplicating their specialist procedures.
+- Ensemble reviewers challenge and advise; Matt agrees behaviour, formulated features, domain models and ADRs. The assembled plan needs no separate approval ceremony.
 - One iteration is one slice: one rule, or one piece of engineering. Split anything bigger.
 - Make business decisions explicit.
 - Document the agreed domain model systematically rather than leaving commands, events, invariants or ownership for implementation to invent.
