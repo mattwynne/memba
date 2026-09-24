@@ -17,7 +17,7 @@ Map one story with the Three Amigos perspectives: product, development,
 and testing. Keep it small, low-tech, and time-boxed.
 
 The goal is the simplest set of rules that is good enough for now, while
-being thorough about achieving shared understanding everything that remains in scope:
+being thorough about achieving shared understanding of everything that remains in scope:
 
 > “Perfection is achieved, not when there is nothing more to add, but when
 > there is nothing left to take away.”
