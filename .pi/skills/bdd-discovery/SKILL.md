@@ -1,6 +1,6 @@
 ---
 name: bdd-discovery
-description: Use before writing Gherkin when exploring a story's behaviour, rules, examples, questions, scope, or readiness with stakeholders
+description: Use before formulating Gherkin scenarios when exploring a story's behaviour, rules, examples, questions, scope, or readiness with stakeholders
 ---
 
 # BDD Discovery
@@ -9,7 +9,8 @@ Discovery is the conversation before formulation. Use it to build
 shared understanding of a story: the rules, examples, questions, and
 scope boundaries that matter.
 
-For writing or refining Gherkin, use `bdd-formulation`.
+Discovery may record a lightweight Gherkin skeleton of names. For formulating
+or refining full scenarios and their steps, use `bdd-formulation`.
 
 ## Example Mapping
 
@@ -38,7 +39,7 @@ Traditional colours: yellow story, blue rules, green examples, red questions.
 
 ## Record the Map
 
-Record the map as a lightweight Gherkin outline using keyword and name only:
+Record the map as a lightweight Gherkin skeleton using keyword and name only:
 
 ```gherkin
 Feature: Withdraw cash
@@ -52,14 +53,14 @@ Feature: Withdraw cash
 
 Use `Feature:` for the story, `Rule:` for each rule, and `Example:` for each
 concrete example. Keep questions and sliced-out new stories alongside the
-outline as lists. Do not add `Given`/`When`/`Then` steps during discovery;
+skeleton as lists. Do not add `Given`/`When`/`Then` steps during discovery;
 that belongs in `bdd-formulation`.
 
 ## How to Run It
 
 1. Start with the story and the rules people already know.
 2. Ask for concrete examples for each rule.
-3. Record each example under the rule it illustrates in the Gherkin outline.
+3. Record each example under the rule it illustrates in the Gherkin skeleton.
 4. Capture uncertainty as questions; do not solve everything in the room.
 5. Challenge whether each rule describes a needed outcome or assumes a
    mechanism. Remove, weaken, or defer rules that are not needed now.

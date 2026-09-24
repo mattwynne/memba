@@ -104,6 +104,7 @@ Root cause: Example mapping encouraged concrete examples and slicing, but did no
 Fix applied:
 
 - `.pi/skills/bdd-discovery/SKILL.md`: made the goal the simplest rule set that is good enough for now while thoroughly exploring retained scope; added outcome-versus-mechanism challenges and one bounded parallel adversarial review using the product, development, and testing Three Amigos lenses.
+- The skill now records the map as a lightweight Gherkin skeleton using `Feature:`, `Rule:`, and `Example:` names. Questions and sliced stories remain alongside it as lists, while scenario steps stay in `bdd-formulation`.
 - The review returns missed cases, possible removals, disagreements, and trade-offs without changing agreed rules or scope. The stakeholder and team retain the decisions, and the review does not loop automatically.
 
 Validation:
@@ -111,6 +112,7 @@ Validation:
 - `git diff --check` — passed.
 - `python3 scripts/check_kaizen_ledger.py` — passed.
 - Independent review found the simplicity/thoroughness balance, generic framing, one-round bound, and lack of iteration-064-specific answers sound. Its blocking stakeholder-ownership ambiguity was corrected by constraining the synthesizer as well as the reviewers.
+- Follow-up independent review confirmed that native `Rule:` and zero-step `Example:` skeletons are accepted by the project's browser and Elixir Gherkin parsers. Its blocking discovery/formulation wording conflict was corrected by distinguishing the discovery skeleton from scenario and step formulation.
 - `dev check` was not run because this is a skill/documentation-only change with no executable examples.
 
 Effectiveness and follow-up:
