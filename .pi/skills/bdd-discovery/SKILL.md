@@ -47,8 +47,8 @@ Traditional colours: yellow story, blue rules, green examples, red questions.
 6. Probe boundaries, transitions, reversals, failure paths, and interactions
    for the behaviour that remains in scope.
 7. Capture tangents or large discoveries as new stories.
-8. Before declaring the story ready, run the bounded Three Amigos review
-   below.
+8. Before declaring the story ready, run the bounded adversarial review
+   below using the Three Amigos lenses.
 9. Stop when the story is clear enough to pull, or the time-box expires.
 
 ## Discovery Habits
@@ -62,11 +62,11 @@ Traditional colours: yellow story, blue rules, green examples, red questions.
 - Seek both minimality and completeness: take away accidental scope without
   leaving retained behaviour underexplored.
 
-## Bounded Three Amigos Review
+## Bounded Adversarial Review
 
-Near the end of discovery, run one adversarial review round. Give the current
-map and its source constraints to three subagents in parallel, one for each
-lens:
+Near the end of discovery, run one adversarial review round using the Three
+Amigos lenses. Give the current map and its source constraints to three
+subagents in parallel, one for each lens:
 
 - **Product/business**: challenge the present value of every rule, distinguish
   outcomes from mechanisms, and suggest rules to remove, weaken, or defer.
@@ -75,18 +75,23 @@ lens:
 - **Testing**: aggressively seek counterexamples, boundaries, reversals,
   failure paths, and rule interactions within the retained scope.
 
-Ask each reviewer for concise questions, examples, alternatives, assumptions,
-and evidence. They must not rewrite the map or make product decisions.
-Synthesize their findings into:
+Ask each reviewer for only its highest-value questions, examples,
+alternatives, assumptions, and evidence. They must not rewrite the map or make
+product decisions. Synthesize their findings into:
 
 - missed cases and assumptions;
 - possible removals or simpler slices;
 - agreements and disagreements; and
-- material trade-offs for the stakeholder to decide.
+- trade-offs for the stakeholder and team to decide.
 
-This is one review round, not an automatic revision loop. Subagents supply the
-Three Amigos perspectives; they do not replace stakeholder judgment or prove
-that every unknown unknown has been found.
+The synthesizer presents findings and alternatives without changing agreed
+rules or scope. The stakeholder and team decide before the map is updated or
+the story is declared ready.
+
+This is one review round, not an automatic revision loop: do not respawn or
+iterate reviewers automatically. The subagents apply the Three Amigos lenses;
+they do not replace the collaborative Three Amigos conversation, stakeholder
+judgment, or prove that every unknown unknown has been found.
 
 ## Reading the Map
 

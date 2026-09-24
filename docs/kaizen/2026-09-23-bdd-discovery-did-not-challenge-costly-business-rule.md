@@ -94,3 +94,28 @@ Open evaluation questions include whether to use blinded pre-implementation arti
 - Follow the agreed example map with a collaborative domain-modelling session covering concepts, commands, events, invariants and context ownership.
 - Record the agreed domain model systematically in the iteration plan and require Matt's involvement before accepting consequential ADRs.
 - Use iteration 064 as one retrospective eval fixture while explicitly treating eval realism and overfitting as unresolved, and supplement it with unrelated cases and human evidence before claiming effectiveness.
+
+## Resolution
+
+Date: 2026-09-24
+
+Root cause: Example mapping encouraged concrete examples and slicing, but did not make simplification an explicit goal or require an adversarial challenge before readiness. A map could therefore thoroughly explain the consequences of an assumed rule without asking whether that rule or its mechanism was needed.
+
+Fix applied:
+
+- `.pi/skills/bdd-discovery/SKILL.md`: made the goal the simplest rule set that is good enough for now while thoroughly exploring retained scope; added outcome-versus-mechanism challenges and one bounded parallel adversarial review using the product, development, and testing Three Amigos lenses.
+- The review returns missed cases, possible removals, disagreements, and trade-offs without changing agreed rules or scope. The stakeholder and team retain the decisions, and the review does not loop automatically.
+
+Validation:
+
+- `git diff --check` — passed.
+- `python3 scripts/check_kaizen_ledger.py` — passed.
+- Independent review found the simplicity/thoroughness balance, generic framing, one-round bound, and lack of iteration-064-specific answers sound. Its blocking stakeholder-ownership ambiguity was corrected by constraining the synthesizer as well as the reviewers.
+- `dev check` was not run because this is a skill/documentation-only change with no executable examples.
+
+Effectiveness and follow-up:
+
+- This validates that the agreed instruction is present; it does not demonstrate better real-world discovery outcomes.
+- Iteration 064 supplied causal evidence but is contaminated by hindsight and was not used as an effectiveness test. Passing a replay could reward known words or answers rather than useful discovery.
+- No blinded unrelated case, live stakeholder session, or prospective planning sample has yet measured useful questions, false challenges, decision burden, or material simplification. Related-model subagents also do not provide fully independent evidence.
+- Keep this note open for representative unrelated or prospective evidence. Do not start a second experiment while the ledger's current experiment occupies the WIP limit.

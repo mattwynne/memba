@@ -15,7 +15,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 
 | First observed | Kaizen note | Status | Review due |
 | --- | --- | --- | --- |
-| 2026-09-23 | [Problem: BDD discovery did not challenge a costly business rule before iteration planning](2026-09-23-bdd-discovery-did-not-challenge-costly-business-rule.md) | New | — |
+| 2026-09-23 | [Problem: BDD discovery did not challenge a costly business rule before iteration planning](2026-09-23-bdd-discovery-did-not-challenge-costly-business-rule.md) | Open | — |
 | 2026-09-20 | [Problem: Postgres validation failure did not block merge](2026-09-20-postgres-validation-failure-did-not-block-merge.md) | Open | — |
 | 2026-09-14 | [Problem: Test feedback cost outgrew the implementation loop](2026-09-14-test-feedback-cost-outgrew-implementation-loop.md) | Open | — |
 | 2026-09-14 | [Just-in-time delivery planner](2026-09-14-just-in-time-delivery-planner.md) | Open | — |
