@@ -103,7 +103,7 @@ Unknowns:
 | --- | --- | --- | --- | --- | --- |
 | Correct | P0 | Remove the invariant from the temporary release-command application while retaining external blocking checks. | Engineering | Completed | `v290` release command and pre/post checks all passed. |
 | Detect | P0 | Retain each pre/post attempt as a protected CI artifact and retry bounded transient check failures. | Engineering | Completed | CI artifact exists and failed attempts remain visible. |
-| Prevent | P1 | Keep release-command work limited to services actually required by migrations/backfills. | Engineering | In progress | A release-task design shows which pools/processes can be omitted and passes deployment tests. |
+| Prevent | P1 | Keep release-command work limited to services actually required by migrations/backfills, and isolate the external Admin gate from the live application Repo pool. | Engineering | Implemented 2026-09-24; awaiting production pre/post gate rerun | The gate now uses a bounded release `eval` VM with one isolated Repo connection; focused shell and Elixir contract tests cover minimal startup, pool bounds, cleanup, JSON evidence, timeout, and blocking failures. Production resolution is not claimed until CI/CD runs the gate. |
 | Prevent | P1 | Investigate the PostgreSQL server-process failure using Fly diagnostics/support and resource history. | Operator | In progress | A supported cause or bounded set of causes is recorded. |
 | Prevent | P1 | Plan and explicitly approve upgrading the Fly Postgres image from 17.2/v0.1.0 to the supported current image. | Matt + operator | In progress; production mutation still requires approval of the exact plan | Backup/recovery plan reviewed; upgrade completes with health and invariant checks green. |
 | Detect | P2 | Add database restart/recovery alerting. | Engineering | In progress | A controlled signal produces an operator notification. |
@@ -113,3 +113,9 @@ Unknowns:
 Customer-facing database availability recovered automatically after each restart. The risky release-machine gate placement was removed, and release `v290` deployed successfully with blocking pre-deploy and post-deploy invariant checks and retained evidence.
 
 This incident remains `Mitigated`, not `Resolved`, until the database-process failure is better understood or an approved infrastructure countermeasure is completed.
+
+## Follow-up — 2026-09-24
+
+The source-backed Admin deployment gate has been changed in source so it no longer sends an RPC into the running application's `Memba.Repo` pool. Each shell attempt now invokes release `eval`, which creates a short-lived BEAM, loads only SSL/Postgrex/Ecto SQL support, starts a dedicated Repo with `pool_size: 1` and `pool_count: 1`, runs the existing repeatable-read/read-only invariant, emits JSON evidence, and stops the Repo. The shell retains bounded retries and now places an explicit timeout around every eval attempt.
+
+Source and contract-test evidence is in `bin/verify-production-admin-invariant`, `Memba.ReleaseAdminInvariant`, `Memba.ReleaseAdminInvariantRepo`, and their focused shell/Elixir tests. Infrastructure/query failures and invariant violations both block but have distinct diagnostics. This action is implemented and tested locally only; it must remain **awaiting production verification**, and this incident must not be marked resolved, until CI/CD deploys the committed change and retained pre/post artifacts confirm the new execution model in production.

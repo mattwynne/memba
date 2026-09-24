@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the read-only source-backed Admin invariant against the current Fly release.
+# Run the read-only source-backed Admin invariant in an isolated release eval VM.
 
 set -euo pipefail
 
@@ -10,27 +10,89 @@ if [ -z "$phase" ]; then
   exit 2
 fi
 
+if ! [[ "$phase" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "Invariant phase may contain only letters, numbers, dots, underscores, and hyphens." >&2
+  exit 2
+fi
+
 artifact_dir="${2:-${TMPDIR:-/tmp}/memba-admin-invariant}"
 app="${MEMBA_FLY_APP:-memba}"
 attempts="${MEMBA_ADMIN_INVARIANT_ATTEMPTS:-3}"
+attempt_timeout="${MEMBA_ADMIN_INVARIANT_ATTEMPT_TIMEOUT_SECONDS:-180}"
+remote_timeout="${MEMBA_ADMIN_INVARIANT_REMOTE_TIMEOUT_SECONDS:-170}"
 
 if ! [[ "$attempts" =~ ^[1-9][0-9]*$ ]]; then
   echo "MEMBA_ADMIN_INVARIANT_ATTEMPTS must be a positive integer: $attempts" >&2
   exit 2
 fi
 
+if ! [[ "$attempt_timeout" =~ ^[1-9][0-9]*$ ]]; then
+  echo "MEMBA_ADMIN_INVARIANT_ATTEMPT_TIMEOUT_SECONDS must be a positive integer: $attempt_timeout" >&2
+  exit 2
+fi
+
+if ! [[ "$remote_timeout" =~ ^[1-9][0-9]*$ ]] || [ "$remote_timeout" -ge "$attempt_timeout" ]; then
+  echo "MEMBA_ADMIN_INVARIANT_REMOTE_TIMEOUT_SECONDS must be a positive integer smaller than the outer attempt timeout: $remote_timeout" >&2
+  exit 2
+fi
+
 mkdir -p "$artifact_dir"
+
+# This expression deliberately uses only modules present in the release that
+# predates the isolated runner. That makes the first pre-deploy check compatible
+# with the old image while still giving the eval VM its own one-connection Repo.
+eval_expression=$(cat <<EOF
+Application.ensure_loaded(:memba)
+Enum.each([:ssl, :postgrex, :ecto_sql], fn application ->
+  {:ok, _started} = Application.ensure_all_started(application)
+end)
+repo_config =
+  Application.fetch_env!(:memba, Memba.Repo)
+  |> Keyword.merge(
+    pool: DBConnection.ConnectionPool,
+    pool_size: 1,
+    pool_count: 1,
+    connect_timeout: 10_000,
+    timeout: 60_000,
+    queue_target: 10_000,
+    queue_interval: 10_000
+  )
+{:ok, repo} = Memba.Repo.start_link(repo_config)
+try do
+  report = Memba.Membership.SourceBackedAdminInvariant.check!(phase: "$phase")
+  IO.puts(Jason.encode!(report))
+after
+  Supervisor.stop(repo, :normal, 5_000)
+end
+EOF
+)
 
 for ((attempt = 1; attempt <= attempts; attempt++)); do
   output="$artifact_dir/${phase}-attempt-${attempt}.txt"
 
   echo "Source-backed Admin invariant phase=$phase attempt=$attempt/$attempts"
 
-  if flyctl ssh console \
-    --app "$app" \
-    --command "/app/bin/memba rpc 'report = Memba.Membership.SourceBackedAdminInvariant.check!(phase: \"$phase\"); IO.puts(Jason.encode!(report))'" \
-    2>&1 | tee "$output"; then
+  set +e
+  timeout --signal=TERM --kill-after=10s "${attempt_timeout}s" \
+    flyctl ssh console \
+      --app "$app" \
+      --command "timeout --signal=TERM --kill-after=10s ${remote_timeout}s /app/bin/memba eval '$eval_expression'" \
+      2>&1 | tee "$output"
+  pipeline_status=("${PIPESTATUS[@]}")
+  set -e
+  fly_status="${pipeline_status[0]}"
+  tee_status="${pipeline_status[1]}"
+
+  if [ "$fly_status" -eq 0 ] && [ "$tee_status" -eq 0 ]; then
     exit 0
+  fi
+
+  if [ "$tee_status" -ne 0 ]; then
+    echo "Invariant evidence artifact write failed (tee status=$tee_status); blocking deployment." >&2
+  elif [ "$fly_status" -eq 124 ] || [ "$fly_status" -eq 137 ]; then
+    echo "Invariant infrastructure failure: isolated release eval hit its remote ${remote_timeout}s or outer ${attempt_timeout}s timeout." | tee -a "$output" >&2
+  else
+    echo "Invariant eval exited nonzero (status=$fly_status); JSON/exception evidence above distinguishes invariant violations from infrastructure failures." | tee -a "$output" >&2
   fi
 
   if [ "$attempt" -lt "$attempts" ]; then

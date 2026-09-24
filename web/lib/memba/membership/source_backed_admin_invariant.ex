@@ -14,7 +14,8 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
   @spec check(keyword()) :: report()
   def check(opts \\ []) when is_list(opts) do
     phase = opts[:phase]
-    transaction_runner = Keyword.get(opts, :transaction_runner, &run_transaction/1)
+    repo = Keyword.get(opts, :repo, Repo)
+    transaction_runner = Keyword.get(opts, :transaction_runner, &run_transaction(repo, &1))
 
     case transaction_runner.(phase) do
       {:ok, report} ->
@@ -51,6 +52,10 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
     end
   end
 
+  @doc false
+  @spec validate!(report()) :: report()
+  def validate!(report), do: validate_report!(report)
+
   defp validate_report!(report) do
     cond do
       Map.has_key?(report, "error") ->
@@ -74,24 +79,25 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
     end
   end
 
-  defp run_transaction(phase) do
-    Repo.transaction(
+  defp run_transaction(repo, phase) do
+    repo.transaction(
       fn ->
-        Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [],
+        repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", [],
           timeout: @query_timeout
         )
 
-        preflight = one_row!(preflight_sql())
-        columns = columns!()
+        preflight = one_row!(repo, preflight_sql())
+        columns = columns!(repo)
 
         checks =
           if bytea_columns?(columns) do
             %{
-              "active_membership_source_facts" => check_result!(active_membership_source_sql()),
+              "active_membership_source_facts" =>
+                check_result!(repo, active_membership_source_sql()),
               "populated_club_complete_admin_source_backing" =>
-                check_result!(populated_club_admin_sql()),
+                check_result!(repo, populated_club_admin_sql()),
               "projected_admin_assignment_source_backing" =>
-                check_result!(projected_admin_assignment_source_sql())
+                check_result!(repo, projected_admin_assignment_source_sql())
             }
           else
             %{
@@ -111,7 +117,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
           transaction_read_only?(preflight) and bytea_columns?(columns) and checks_pass?(checks)
         )
       end,
-      timeout: :infinity
+      timeout: @query_timeout
     )
   rescue
     exception -> {:error, %{type: exception.__struct__, message: Exception.message(exception)}}
@@ -131,8 +137,8 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
     """
   end
 
-  defp columns! do
-    Repo.query!(
+  defp columns!(repo) do
+    repo.query!(
       ~S"""
       SELECT
         column_name,
@@ -644,17 +650,17 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
     """
   end
 
-  defp one_row!(sql) do
+  defp one_row!(repo, sql) do
     sql
-    |> Repo.query!([], timeout: @query_timeout)
+    |> repo.query!([], timeout: @query_timeout)
     |> Map.fetch!(:rows)
     |> case do
       [row] -> row
     end
   end
 
-  defp check_result!(sql) do
-    [violation_count, violations] = one_row!(sql)
+  defp check_result!(repo, sql) do
+    [violation_count, violations] = one_row!(repo, sql)
 
     %{
       "violation_count" => violation_count,
@@ -681,6 +687,7 @@ defmodule Memba.Membership.SourceBackedAdminInvariant do
   defp execution_error_report(error, phase) do
     %{
       "pass" => false,
+      "failure_kind" => "infrastructure_or_connection",
       "git_sha" => git_sha(),
       "error" => %{
         "type" => inspect(error.type),
