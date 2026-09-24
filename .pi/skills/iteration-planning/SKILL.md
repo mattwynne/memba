@@ -7,10 +7,10 @@ description: Interview Matt about the next product/dev iteration, turn the discu
 
 ## Overview
 
-Help Matt turn an early idea for the next iteration into an implementation-ready iteration plan. Interview him through natural collaborative dialogue, write the plan down, publish it, validate it, then ask Matt whether he wants the current LLM session to launch the Fabro delivery workflow that runs implementation and review.
+Help Matt turn an early idea for the next iteration into an implementation-ready iteration plan. Move from a quick interview through adversarial example mapping, collaborative domain modelling, any required ADR decisions, plan writing and validation, then ask Matt whether he wants the current LLM session to launch the Fabro delivery workflow.
 
 <HARD-GATE>
-Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, UI, or production docs except for iteration-planning artifacts in that iteration's `docs/iterations/` folder and acceptance feature files/scenarios when they are part of planning. Feature files are domain modelling and acceptance criteria; step definitions and executable test plumbing are implementation. This skill's terminal state is either committed, pushed, and plan-validated planning artifacts followed by Matt's explicit choice about launching `bin/dev fabro deliver <plan_path>`; a revised plan after validation feedback; or a clear explanation of why publishing, validation, or delivery launch was blocked.
+Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, or UI. Planning may edit only iteration-planning artifacts in that iteration's `docs/iterations/` folder, acceptance feature files/scenarios that are part of planning, and ADRs plus `docs/adr/README.md` that record architecture decisions Matt explicitly made during the modelling session. Feature files and the agreed ADRs are seeds for implementation; step definitions and executable test plumbing are implementation. Never create or accept a consequential ADR autonomously. This skill's terminal state is either committed, pushed, and plan-validated planning artifacts followed by Matt's explicit choice about launching `bin/dev fabro deliver <plan_path>`; a revised plan after review feedback; or a clear explanation of why planning, publication, validation, or delivery launch was blocked.
 </HARD-GATE>
 
 ## Runtime Compatibility
@@ -26,61 +26,30 @@ This skill is intended to work in both Pi and Claude Code. Claude Code is advise
 
 Create a task for each item and complete them in order:
 
-1. **Explore project context** — read relevant project docs, current plans, ADRs, recent commits, code only as needed to understand the iteration, and `docs/problems/README.md` plus relevant `docs/problems/*.md` notes.
-2. **Identify relevant problems** — decide which captured problems the iteration might resolve, partially address, depend on, or deliberately leave unresolved. Bring those problems into brainstorming and slicing rather than treating the iteration as a standalone idea.
-3. **Interview Matt** — ask clarifying questions one at a time about goal, relevant problems, scope, acceptance criteria, business decisions, implementation shape, and validation.
-4. **Size and slice** — decide whether the work is one shippable slice or several. If it is more than one, split it into separate iteration plans before going further (see Sizing and Slicing). Use the related problem notes to avoid bundling several unrelated problems into one iteration.
-5. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. Present the related problems and planned status changes alongside the draft plan. For every behaviour-facing iteration, present the BDD decision explicitly: either the acceptance feature files/scenarios to draft or update, or the reason Gherkin would not add useful stakeholder-readable examples for this slice. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done. Also present the **design decision** (see Design Check): for each user-facing surface, the existing design that covers it, or — if one is needed and missing — a reminder to create it. If new or changed design work is needed and the current session is not Claude Code with `DesignSync`, stop and hand off to Claude Code instead of presenting a draft.
-6. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Include a `Related Problems` section, an `Iteration Type` section, an `Acceptance Scenarios / Feature Files` section, and a `Designs` section. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration; for behaviour-facing iterations, do not leave this section silent. If no Gherkin changes are useful, state the rationale. Tag every new or changed scenario (or the whole feature if all scenarios are new/changed for the iteration) with `@iteration-NNN` matching the iteration number; preserve existing iteration tags, because a scenario may evolve through multiple iterations. If feature changes are intentionally ahead of implementation and may fail today, mark each affected scenario with the project’s runner-debt tags: `@todo-domain` when the domain runner cannot yet execute it, and `@todo-ui` when the browser runner cannot yet execute it. Maintain `docs/iterations/README.md` as an index.
-7. **Publish planning artifacts** — before committing, verify the checkout is not left red by planning-only acceptance changes; run `dev check` when practical, or at least the targeted test/configuration checks that would discover the changed feature files. If a planning feature is expected to fail until implementation, confirm it has the relevant `@todo-domain` and/or `@todo-ui` tags and that the relevant runner excludes them. Then commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
-8. **Validate the published plan** — after the planning artifacts are committed and pushed, run:
-   ```bash
-   bin/dev fabro validate-plan <plan_path>
-   ```
-   Use the validation feedback to revise the plan when needed. If validation reports `NOT READY`, summarize the blocking gaps, ask Matt one question at a time to resolve them, edit the plan, commit and push the revision, and re-run validation. Do not call the plan ready until validation passes or validation is blocked/unavailable with the exact reason recorded.
-9. **Ask whether to launch delivery** — do not launch delivery automatically. After validation passes, ask Matt whether he wants this LLM session to run the implementation-and-review delivery workflow now, or whether he wants to run it himself later. Use the `question` tool when available. Always show the exact command:
-   ```bash
-   bin/dev fabro deliver <plan_path>
-   ```
-   If Matt chooses to proceed, run that command. If he declines or does not answer, stop after reporting the command.
+1. **Explore context** — inspect relevant behaviour, code, plans, accepted ADRs, problem notes and designs only far enough to support discovery.
+2. **Quick interview** — ask Matt one question at a time to establish the intended outcome, beneficiary and rough boundary. Do not prematurely turn the first description into fixed scope.
+3. **Map and slice** — for behaviour-facing work, use `bdd-discovery` to map rules, examples, questions and deferred stories. For purely technical work, map the intended engineering capability, observable proof, questions, risks and deferrals instead. Aggressively look for holes and unnecessary scope before choosing architecture.
+4. **Run the map ensemble** — delegate a read-only `example-map` review to the local `ensemble-review` skill, supplying the behaviour map or technical capability map as appropriate. Present its agreements, disagreements, simpler alternatives and questions to Matt. Reviewers advise; Matt decides. Revise until the intended outcome and deferrals are agreed.
+5. **Formulate examples and check design** — for behaviour-facing work, use `bdd-formulation` for shared feature scenarios and apply the Design Check for visible surfaces. Invite Matt to review the domain language and design coverage. For purely technical work, record why Gherkin and UI design are not applicable.
+6. **Model the domain with Matt** — agree the concepts and vocabulary, state/lifecycle changes, invariants, commands, events, actors, aggregate/context ownership and responsibility boundaries. Document changes from the current model and important temporal examples. If modelling exposes an unnecessary or unclear rule, return to example mapping rather than designing around it.
+7. **Run the model ensemble** — delegate a read-only `domain-model-adr` review to `ensemble-review`. Bring conflicts, accidental complexity, missing invariants and ADR candidates back to Matt. Do not let reviewers or the planning agent settle consequential architecture decisions silently.
+8. **Write and review required ADRs** — ADRs emerge from the agreed domain model. Write only ADRs needed for consequential decisions, include alternatives and consequences, update `docs/adr/README.md`, and obtain Matt's explicit acceptance before implementation. Existing conflicting ADRs must be resolved with Matt, not worked around.
+9. **Draft and review the plan** — systematically record the agreed features, design, domain model, accepted ADRs, scope/deferrals and validation. Present the complete draft to Matt for correction.
+10. **Run final ensemble review** — delegate a read-only `final-plan` review to `ensemble-review`. It checks consistency and traceability; any new product or architecture issue returns to the appropriate earlier step. Resolve findings with Matt before publishing.
+11. **Write and publish planning artifacts** — save the plan under `docs/iterations/<iteration-number>-<topic>/plan.md`, maintain the iteration and ADR indexes, and include agreed acceptance scenarios, supporting artifacts and ADRs. Verify planning-only acceptance changes remain safely excluded or pass their targeted checks, then commit and push only the planning artifacts.
+12. **Validate the published plan** — run `bin/dev fabro validate-plan <plan_path>`. Validation may check readiness and consistency but must not invent product or architecture decisions. Discuss any such decision with Matt, revise, publish and re-run until ready or explicitly blocked.
+13. **Ask whether to launch delivery** — do not launch automatically. After validation passes, show `bin/dev fabro deliver <plan_path>` and ask whether Matt wants this session to run it. Without explicit approval, stop.
 
 ## Process Flow
 
-```dot
-digraph iteration_planning {
-    "Explore project context" [shape=box];
-    "Identify relevant problems" [shape=box];
-    "Interview Matt" [shape=box];
-    "Size and slice" [shape=box];
-    "Present draft plan" [shape=box];
-    "Matt approves draft?" [shape=diamond];
-    "Write plan file" [shape=box];
-    "Commit planning artifacts" [shape=box];
-    "Validate published plan" [shape=box];
-    "Plan validation ready?" [shape=diamond];
-    "Revise plan from feedback" [shape=box];
-    "Ask Matt about delivery launch" [shape=box];
-    "Launch delivery if approved" [shape=box];
-    "Stop: delivery launched or handed off" [shape=doublecircle];
-
-    "Explore project context" -> "Identify relevant problems";
-    "Identify relevant problems" -> "Interview Matt";
-    "Interview Matt" -> "Size and slice";
-    "Size and slice" -> "Present draft plan";
-    "Present draft plan" -> "Matt approves draft?";
-    "Matt approves draft?" -> "Interview Matt" [label="no / unclear"];
-    "Matt approves draft?" -> "Write plan file" [label="yes"];
-    "Write plan file" -> "Commit planning artifacts";
-    "Commit planning artifacts" -> "Validate published plan";
-    "Validate published plan" -> "Plan validation ready?";
-    "Plan validation ready?" -> "Revise plan from feedback" [label="no / unclear"];
-    "Revise plan from feedback" -> "Commit planning artifacts";
-    "Plan validation ready?" -> "Ask Matt about delivery launch" [label="yes"];
-    "Ask Matt about delivery launch" -> "Launch delivery if approved" [label="yes"];
-    "Ask Matt about delivery launch" -> "Stop: delivery launched or handed off" [label="no / later"];
-    "Launch delivery if approved" -> "Stop: delivery launched or handed off";
-}
+```text
+Context → quick interview → example map → ensemble challenge → Matt agrees behaviour
+  → feature formulation/design → domain modelling → ensemble challenge
+  → Matt agrees model → required ADRs accepted by Matt → complete plan
+  → final ensemble consistency review → publish → validate → optional delivery launch
 ```
+
+A finding may move planning backwards. In particular, domain modelling returns to example mapping when it exposes an unnecessary rule, and final review returns to modelling when it exposes an undecided architecture choice.
 
 ## BDD Scenario Heuristics
 
@@ -140,7 +109,7 @@ Cover these topics:
 - **Design** — does this iteration touch a screen, page, component, email, or visible state? If so, prefer Claude Code and `DesignSync`; when this session is not Claude Code, check existing checked-in design sources and stop only if new or changed design work is needed without a sufficient existing design source. Also check whether there is an existing sketch. (see Design Check)
 - **Validation** — automated tests, acceptance tests, shared Cucumber scenarios, manual demo, stakeholder review, or operational checks.
 
-Stop interviewing when you can write a plan that an engineer could start without inventing material product or technical decisions.
+The quick interview stops when there is enough shared context to begin example mapping, not when the plan is already specified. Discovery and modelling continue until the plan can be written without an implementor inventing material product, domain-model or architecture decisions.
 
 ## Sizing and Slicing
 
@@ -213,6 +182,14 @@ Apply the Design Check. For each user-facing surface the iteration adds or chang
 
 ## Open Business Decisions
 
+## Domain Model
+
+Document the agreed concepts and vocabulary, lifecycle/state changes, invariants, commands, events, actors, aggregate/context ownership, responsibility boundaries, important temporal examples, changes from the current model, and deliberately deferred modelling questions.
+
+## Architecture Decisions
+
+Link the accepted ADRs produced or confirmed during planning. State `None required` when the agreed model introduces no consequential architecture decision. Never use this section to defer an ADR decision to implementation.
+
 ## Implementation Plan
 
 ## Open Technical Decisions
@@ -236,6 +213,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Maintain `docs/iterations/README.md` as the iteration index.
 - Read `docs/problems/README.md` if it exists, plus any relevant `docs/problems/*.md` notes. If the directory exists but no README exists, inspect the problem files directly.
 - Include a `## Related Problems` section in the plan. Link each relevant problem note and say whether the iteration should resolve it, partially address it, depend on it, or intentionally leave it unresolved. If there are no relevant captured problems, write `None known.`
+- Include `## Domain Model` and `## Architecture Decisions`. The domain model records the decisions agreed with Matt during modelling; it is not a placeholder for the implementor to design later. Link every required accepted ADR, and do not mark a consequential architecture decision resolved unless Matt participated in and accepted it.
 - Create one folder per iteration using the next sequential zero-padded iteration number and a lowercase hyphenated topic slug.
 - Determine the next number by inspecting existing `docs/iterations/NNN-*` folders; start at `001` if none exist.
 - Save the plan as `plan.md` inside that folder.
@@ -252,7 +230,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Add or update the index entry in `docs/iterations/README.md` with the iteration number, title/topic, plan link, date, status, and any acceptance feature files changed.
 - Do not update Fabro workflow code or problem-note status files during ordinary iteration planning. The relevant problems belong in the plan's `## Related Problems` section. Only edit `docs/problems/*.md` or `docs/problems/README.md` if Matt explicitly asks for problem-note maintenance as part of the planning task.
 - Example: `docs/iterations/001-member-import/plan.md`.
-- Commit and push the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or carry the relevant `@todo-domain` and/or `@todo-ui` tags and are excluded from the planning-time checks. Then run `bin/dev fabro validate-plan <plan_path>` and use the feedback to revise the plan before asking Matt about delivery.
+- Commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, ADRs explicitly accepted by Matt, and `docs/adr/README.md` before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or carry the relevant `@todo-domain` and/or `@todo-ui` tags and are excluded from the planning-time checks. Then run `bin/dev fabro validate-plan <plan_path>` and use the feedback to revise the plan before asking Matt about delivery.
 - Include workflow/skill changes in that commit only when they are needed for planning or validation.
 - Do not commit or push unrelated changes or implementation work.
 
@@ -270,7 +248,7 @@ If validation reports NOT READY:
 
 1. Summarize the blocking gaps.
 2. Ask Matt one question at a time to resolve them.
-3. Edit, commit, and push the plan.
+3. Edit, commit, and push the affected planning artifacts. Acceptance scenarios or ADRs may change only through the same Matt-reviewed discovery/modelling decisions required above.
 4. Re-run `bin/dev fabro validate-plan <plan_path>`.
 5. Repeat until validation reports ready or validation is blocked by an unavailable local Fabro service or another explicit external blocker.
 
@@ -306,8 +284,11 @@ When planning is complete, report:
 ## Key Principles
 
 - One question at a time.
+- Example-map and defer before modelling; model before writing ADRs; accept ADRs before implementation.
+- Ensemble reviewers challenge and advise; Matt makes product, domain-model and architecture decisions.
 - One iteration is one slice: one rule, or one piece of engineering. Split anything bigger.
 - Make business decisions explicit.
+- Document the agreed domain model systematically rather than leaving commands, events, invariants or ownership for implementation to invent.
 - Make technical decisions explicit enough to start.
 - Make acceptance criteria testable.
 - Make validation observable.
