@@ -137,7 +137,10 @@ for name, content in {
 require(formulation, ["Temporal Formulation", "decision", "later state change", "ordering", "temporary", "backfilled"], "bdd-formulation temporal checks")
 if "membership, preferences, permissions, messages, deliveries" in formulation:
     raise AssertionError("bdd-formulation temporal guidance is over-fitted to Memba examples")
-require(discovery, ["smallest useful, coherent slice we could deliver"], "bdd-discovery product challenge")
+require(discovery, ["smallest useful, coherent slice we could deliver", "invoke `ensemble-review` once"], "bdd-discovery product challenge and review ownership")
+require(behaviour, ["Do not run a second ensemble when the map is unchanged"], "single example-map review checkpoint")
+if "### Example-map brief" in behaviour or "map_review" in behaviour:
+    raise AssertionError("behaviour planning duplicates bdd-discovery's example-map ensemble")
 require(modelling, ["bdd-formulation", "domain-vocabulary", "solution-domain", "repeat", "Model the problem well enough"], "domain-model vocabulary feedback loop")
 require(vocabulary, ["problem-domain", "solution-domain", "explicit agreement", "bdd-formulation"], "domain-vocabulary boundary")
 require(behaviour, ["record-architectural-decisions", "domain-vocabulary", "ux-design", "planning-progress", "session/thread storage", "repeat the formulated-feature ensemble"], "behaviour planning composition")

@@ -20,8 +20,8 @@ Create a task for each item and complete them in order. Use `planning-progress` 
 1. **Open the progress map** — initialize the complete behaviour-planning flow, mark targeted context as current, and link artifacts as they appear.
 2. **Explore targeted context** — now that intake has identified the behaviour, inspect only the relevant existing behaviour, code, plans, accepted ADRs, problem notes and designs.
 3. **Clarify intake** — ask Matt one question at a time only where the routed problem, outcome, beneficiary or boundary remains unclear.
-4. **Example map and slice** — use `bdd-discovery` to map rules, examples, questions and deferred stories. Aggressively look for holes and unnecessary rules; split or defer scope before choosing architecture.
-5. **Review and agree the map** — run `ensemble-review` with the Example-map brief below. Present agreements, disagreements, simpler alternatives and questions to Matt. Revise until Matt agrees the behaviour and deferrals.
+4. **Example map, review, and slice** — use `bdd-discovery` to map rules, examples, questions and deferred stories and run its one bounded adversarial ensemble. Aggressively look for holes and unnecessary rules; split or defer scope before choosing architecture.
+5. **Agree the map** — present the evidence, agreements, disagreements, simpler alternatives and questions returned by `bdd-discovery` to Matt. Do not run a second ensemble when the map is unchanged. Revise through `bdd-discovery` until Matt agrees the behaviour and deferrals.
 6. **Formulate features, names, and UX** — use `bdd-formulation` and `domain-vocabulary` for shared scenarios and problem-domain names; invoke `ux-design` for visible surfaces. Matt explicitly agrees any lexicon addition, replacement, changed meaning, and material UX decision. If `ux-design` returns a blocking environment handoff, stop before drafting, publishing, or validating the plan.
 7. **Review and agree features** — run `ensemble-review` with the Formulated-feature brief below. Return policy gaps to discovery, formulation defects to `bdd-formulation`, naming issues to `domain-vocabulary`, and design issues to `ux-design`. Matt agrees the reviewed scenarios, vocabulary, and design coverage before modelling.
 8. **Model the domain** — use `domain-modelling` in the current conversation. If modelling exposes an unnecessary or unclear rule, return to example mapping. If commands, events, or invariants reveal a more natural problem-domain noun or verb, return to `bdd-formulation` and `domain-vocabulary`; after Matt's decision, repeat the formulated-feature ensemble and agreement checkpoint before revising the model.
@@ -40,13 +40,6 @@ Every brief below also includes:
 - **Constraints:** the agreed outcome, boundaries and non-goals; read-only review; no product-policy, architecture, vocabulary or acceptance decisions; Matt is decision owner.
 
 Use the named feedback route in each brief. `ensemble-review` only discovers the diverse panel and synthesizes its reports.
-
-### Example-map brief
-
-- **Subject/artifact:** the current story, rules, examples, questions, and deferred stories.
-- **Focus:** (1) value/scope simplification, (2) counterexamples and missing states/timings, (3) coherence of rules, examples, and problem-domain language.
-- **Rubric:** Is each retained rule necessary now? What can be weakened, split, or deferred? Which actors, boundaries, reversals, failures, or rule interactions are missing? Do examples actually distinguish the rules?
-- **Feedback route:** `bdd-discovery` and Matt.
 
 ### Formulated-feature brief
 
@@ -79,8 +72,7 @@ digraph behaviour_iteration_planning {
   intake [label="Routed behaviour-change intake"];
   progress [label="planning-progress\nlive HTML map"];
   context [label="Targeted context exploration"];
-  map [label="bdd-discovery\nexample map · slice · defer"];
-  map_review [label="ensemble-review\ncaller-owned map brief"];
+  map [label="bdd-discovery\nmap · bounded ensemble · slice"];
   behaviour [shape=diamond, label="Matt agrees behaviour?"];
   formulate [label="bdd-formulation + domain-vocabulary + ux-design"];
   vocabulary [shape=diamond, label="Matt agrees vocabulary changes?"];
@@ -100,7 +92,7 @@ digraph behaviour_iteration_planning {
   result [shape=doublecircle, label="Return validated plan\nto iteration-planning"];
   blocker [shape=doublecircle, label="Return question or blocker"];
 
-  intake -> progress -> context -> map -> map_review -> behaviour;
+  intake -> progress -> context -> map -> behaviour;
   behaviour -> map [label="no", style=dashed];
   behaviour -> formulate [label="yes"];
   formulate -> vocabulary;
