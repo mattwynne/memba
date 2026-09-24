@@ -81,6 +81,7 @@ Evidence:
 Unknowns:
 
 - What caused the PostgreSQL server process to stop, whether query memory, connection pressure, a PostgreSQL/Fly image defect, or another resource limit contributed, and why the image's process supervision did not restart it.
+- Whether the previous Chicago database machine had more memory or different PostgreSQL settings than the 256 MB Toronto replacement.
 - Whether database unavailability was continuous from the `last known up` timestamp or began later.
 - How many customer requests failed; a user observed at least one Internal Server Error, but no database-backed availability history was retained.
 
@@ -146,6 +147,7 @@ The causal chain stops here: retained evidence does not establish why the Postgr
 - The release task starts more application services and database pools than this read-only check needs.
 - Production uses one PostgreSQL machine, so a restart has no failover node.
 - The database is on `flyio/postgres-flex:17.2 (v0.1.0)` while Fly reports a newer `17.7 (v0.2.1)` image available.
+- The Toronto region migration recreated the database volume and machine on September 12. The new machine has only 256 MB RAM, no swap, and PostgreSQL `shared_buffers = 128MB`; whether the previous Chicago machine had the same sizing is unknown.
 - Initial retries handled transient client errors but could not help while the database process was absent.
 - Machine state alone was misleading: Fly reported `started` while two database-specific checks were critical.
 - The public root path does not prove database availability.
@@ -161,7 +163,7 @@ The causal chain stops here: retained evidence does not establish why the Postgr
 | Detect | P0 | Retain each pre/post attempt as a protected CI artifact and retry bounded transient check failures. | Engineering | Completed | CI artifact exists and failed attempts remain visible. |
 | Prevent | P1 | Keep release-command work limited to services actually required by migrations/backfills, and isolate the external Admin gate from the live application Repo pool. | Engineering | Completed 2026-09-24 | Run `35969030433` passed the isolated gate before and after release `v293`; focused shell and Elixir tests cover minimal startup, pool bounds, cleanup, JSON evidence, timeout, and blocking failures. |
 | Detect | P0 | Implement the [database-backed production availability monitoring plan](2026-09-15-database-availability-monitoring-plan.md), with independent email and Red Donkey Slack outage/recovery notifications. | Engineering | Planned; deferred by Matt on 2026-09-24 | Application failure tests plus provider test notifications prove that a database failure produces generic `503`, an operator email, and a Red Donkey Slack message while the non-database root may remain healthy. |
-| Prevent | P1 | Investigate the PostgreSQL server-process failure using Fly diagnostics/support and available resource history. | Operator | In progress | A supported cause or explicitly bounded set of unknowns is recorded. |
+| Prevent | P1 | Investigate the PostgreSQL server-process failure using Fly diagnostics/support, region-migration records, and available resource history; determine whether the new 256 MB database machine was undersized or OOM-affected. | Operator | In progress | Fly evidence or an explicitly bounded set of unknowns is recorded, and the old/new database sizing is compared if records exist. |
 | Prevent | P1 | Plan and explicitly approve upgrading the Fly Postgres image from 17.2/v0.1.0 to the supported current image. | Matt + operator | Proposed; production mutation requires approval of the exact plan | Backup/recovery plan reviewed; upgrade completes with database health, data checks, and the Admin invariant green. |
 | Prevent | P1 | Decide whether single-node database risk is acceptable or add a tested failover/recovery mechanism. | Matt + operator | Proposed | The accepted risk or chosen topology is recorded; any implemented recovery path is exercised and timed. |
 
@@ -184,3 +186,17 @@ The same investigation established that the gate failures were accurately report
 ## Follow-up — availability-monitoring decision, 2026-09-24
 
 Matt approved the design direction but deferred implementation. The agreed design is an external monitor checking a bounded database-backed `/health/ready` endpoint, with both email and Red Donkey Slack outage and recovery notifications. It should start on a free plan if current provider features meet the requirements; any paid subscription requires separate approval. The endpoint, monitor policy, notification content, security constraints, response runbook, verification approach, and implementation checklist are recorded in the [availability monitoring plan](2026-09-15-database-availability-monitoring-plan.md).
+
+## Follow-up — region-migration hypothesis, 2026-09-24
+
+Read-only Fly and repository inspection established that the region migration was a material infrastructure change, not only an application routing change:
+
+- commit `e68019eae70d9c98b4dddbd3e27f0a0c5fb64d06` changed the application primary region from `ord` to `yyz` on September 12;
+- the current `memba-db` volume was created in `yyz` at `2026-09-12 21:23 UTC`;
+- database machine `8e7009f769616d` was created at `21:25 UTC` and first started at `21:26 UTC`;
+- no machine-level stop or restart was recorded between that start and the operator-approved September 24 restart; and
+- PostgreSQL recovery later reported the database last known up at `2026-09-15 04:39:38 UTC`, roughly 55 hours after the new machine started.
+
+This makes the region migration a plausible **contributing condition**, but does not prove that migration activity directly stopped PostgreSQL. The lack of a machine event on September 15 argues against a delayed Fly VM move or restart at the failure time.
+
+A stronger migration-related hypothesis is resource sizing or new-machine configuration. The Toronto database machine has 256 MB RAM, no swap, and currently shows roughly 207 MB available to the guest; PostgreSQL reserves `shared_buffers = 128MB` alongside the Fly monitor, proxy, exporter, replication manager, and application connections. That is a tight memory envelope. If the migration recreated the database at a smaller/default size, connection and query load could have triggered memory pressure or a process-level OOM while leaving the VM and monitor alive. Retained evidence does not contain a September 15 OOM record, and the previous Chicago machine's size is not yet known, so this remains a hypothesis rather than a root-cause claim.
