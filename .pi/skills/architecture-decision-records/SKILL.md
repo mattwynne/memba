@@ -19,7 +19,7 @@ Use this skill after Matt has agreed the domain model or technical design. It is
 
 Require:
 
-- the agreed behaviour/domain model or technical design;
+- the relevant behaviour/domain model or technical design;
 - relevant accepted ADRs and `docs/adr/README.md`;
 - the decision pressure and constraints;
 - viable options already identified, including the status quo;
