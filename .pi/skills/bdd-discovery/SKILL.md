@@ -89,7 +89,7 @@ Near the end of discovery, invoke `ensemble-review` once with this caller-owned 
 - **Subject:** whether the map is the smallest sufficiently understood slice.
 - **Artifact:** current story, rules, examples, questions, sliced-out stories, source evidence, and agreed constraints.
 - **Focus:** three complementary Three Amigos lenses:
-  1. **Product/business** — challenge present value, distinguish outcomes from mechanisms, and identify rules to remove, weaken, or defer.
+  1. **Product/business** — challenge present value, distinguish outcomes from mechanisms, and identify rules to remove, weaken, or defer. Your goal is to make this the smallest useful, coherent slice we could deliver.
   2. **Development** — look for missed lifecycle, state, timing, integration, ownership, and cross-context consequences; flag disproportionate complexity.
   3. **Testing** — seek counterexamples, boundaries, reversals, failure paths, and rule interactions within retained scope.
 - **Rubric:** Which retained rules lack current value? Which assumptions or examples are missing? What is the smallest coherent slice? Which lifecycle, timing, boundary, reversal, failure, or interaction examples would materially change understanding?

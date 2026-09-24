@@ -10,35 +10,27 @@ description: Plan a behaviour-changing iteration through adversarial example map
 Starting from the intake supplied by `iteration-planning`, turn an intended behaviour change into a published, validated implementation plan. Challenge and agree behaviour before modelling it; agree the model before recording consequential ADRs.
 
 <HARD-GATE>
-Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, or UI. Planning may edit only iteration-planning artifacts in that iteration's `docs/iterations/` folder, acceptance feature files/scenarios that are part of planning, `docs/problem-domain-terms.md` for vocabulary changes Matt explicitly agrees, and ADRs plus `docs/adr/README.md` that record architecture decisions Matt explicitly made during the modelling session. Feature files and the agreed ADRs are seeds for implementation; step definitions and executable test plumbing are implementation. Never create or accept a consequential ADR autonomously. This skill's terminal state is a committed, pushed and validated behaviour plan; a question returned to Matt; or a clear planning, publication or validation blocker. Fabro launch belongs to `iteration-delivery`.
+Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, or UI. Planning may edit only iteration-planning artifacts in that iteration's `docs/iterations/` folder, acceptance feature files/scenarios that are part of planning, `docs/problem-domain-terms.md` for vocabulary changes Matt explicitly agrees, and ADRs plus `docs/adr/README.md` that record architecture decisions Matt explicitly made during the modelling session. It may also maintain the live `planning-progress` report in session/thread storage outside the repository. Feature files and the agreed ADRs are seeds for implementation; step definitions and executable test plumbing are implementation. Never create or accept a consequential ADR autonomously. This skill's terminal state is a committed, pushed and validated behaviour plan; a question returned to Matt; or a clear planning, publication or validation blocker. Fabro launch belongs to `iteration-delivery`.
 </HARD-GATE>
-
-## Runtime Compatibility
-
-This skill is intended to work in both Pi and Claude Code. Claude Code is advised when the iteration needs new or changed design-system work.
-
-- **Pi is fine** when the behaviour-facing iteration can reference sufficient existing checked-in design sources.
-- **Claude Code is advised** when the iteration adds or changes a screen, page, component, email, or visible state, because the design system lives at `claude.ai/design` and can be inspected with Claude Code's `DesignSync` tool.
-- If you are not running in Claude Code and discover that new or changed design work is needed and no sufficient existing checked-in design source is available, stop before drafting, writing, committing, or validating the plan. Tell Matt the iteration should continue in Claude Code, summarize the context gathered so far, and give him a concise restart prompt. Do not skip or fake the design check.
-- Only call `DesignSync` when running in Claude Code and the tool is available. In Pi or any other environment, treat `DesignSync` as unavailable and cite only checked-in design sources you actually inspected.
 
 ## Checklist
 
-Create a task for each item and complete them in order:
+Create a task for each item and complete them in order. Use `planning-progress` to update and present the live HTML map after every item, decision checkpoint, rework loop, blocker, and new artifact.
 
-1. **Explore targeted context** — now that intake has identified the behaviour, inspect only the relevant existing behaviour, code, plans, accepted ADRs, problem notes and designs.
-2. **Clarify intake** — ask Matt one question at a time only where the routed problem, outcome, beneficiary or boundary remains unclear.
-3. **Example map and slice** — use `bdd-discovery` to map rules, examples, questions and deferred stories. Aggressively look for holes and unnecessary rules; split or defer scope before choosing architecture.
-4. **Review and agree the map** — run `ensemble-review` with the Example-map brief below. Present agreements, disagreements, simpler alternatives and questions to Matt. Revise until Matt agrees the behaviour and deferrals.
-5. **Formulate features, names, and design** — use `bdd-formulation` and `domain-vocabulary` for shared scenarios and problem-domain names; apply the Design Check for visible surfaces. Matt explicitly agrees any lexicon addition, replacement, or changed meaning.
-6. **Review and agree features** — run `ensemble-review` with the Formulated-feature brief below. Return policy gaps to discovery, formulation defects to `bdd-formulation`, and naming issues to `domain-vocabulary`. Matt agrees the reviewed scenarios, vocabulary, and design coverage before modelling.
-7. **Model the domain** — use `domain-modelling` in the current conversation. If modelling exposes an unnecessary or unclear rule, return to example mapping. If commands, events, or invariants reveal a more natural problem-domain noun or verb, return to `bdd-formulation` and `domain-vocabulary`; after Matt's decision, repeat the formulated-feature ensemble and agreement checkpoint before revising the model.
-8. **Review and agree the model** — run `ensemble-review` with the Domain-model brief below. Resolve findings through `domain-modelling` and vocabulary findings through the formulation loop, then obtain Matt's agreement.
-9. **Resolve architecture decisions** — use `architecture-decision-records` for consequential choices emerging from the agreed model. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance.
-10. **Assemble the plan** — compose the agreed features, vocabulary, design, domain model, ADRs, scope/deferrals and validation without introducing new decisions.
-11. **Check consistency** — run `ensemble-review` with the Final-plan brief below. Return substantive issues to the owning skill and repeat that ingredient's review and Matt-agreement checkpoint. No separate plan-approval ceremony is required.
-12. **Publish and validate** — write the iteration artifacts and indexes, run targeted planning checks, commit and push, then run `bin/dev fabro validate-plan <plan_path>`. Route substantive findings back through their owning skill and checkpoint.
-13. **Return the result** — give `iteration-planning` the validated plan path and commit, or the exact question/blocker. Do not launch delivery.
+1. **Open the progress map** — initialize the complete behaviour-planning flow, mark targeted context as current, and link artifacts as they appear.
+2. **Explore targeted context** — now that intake has identified the behaviour, inspect only the relevant existing behaviour, code, plans, accepted ADRs, problem notes and designs.
+3. **Clarify intake** — ask Matt one question at a time only where the routed problem, outcome, beneficiary or boundary remains unclear.
+4. **Example map and slice** — use `bdd-discovery` to map rules, examples, questions and deferred stories. Aggressively look for holes and unnecessary rules; split or defer scope before choosing architecture.
+5. **Review and agree the map** — run `ensemble-review` with the Example-map brief below. Present agreements, disagreements, simpler alternatives and questions to Matt. Revise until Matt agrees the behaviour and deferrals.
+6. **Formulate features, names, and UX** — use `bdd-formulation` and `domain-vocabulary` for shared scenarios and problem-domain names; invoke `ux-design` for visible surfaces. Matt explicitly agrees any lexicon addition, replacement, changed meaning, and material UX decision. If `ux-design` returns a blocking environment handoff, stop before drafting, publishing, or validating the plan.
+7. **Review and agree features** — run `ensemble-review` with the Formulated-feature brief below. Return policy gaps to discovery, formulation defects to `bdd-formulation`, naming issues to `domain-vocabulary`, and design issues to `ux-design`. Matt agrees the reviewed scenarios, vocabulary, and design coverage before modelling.
+8. **Model the domain** — use `domain-modelling` in the current conversation. If modelling exposes an unnecessary or unclear rule, return to example mapping. If commands, events, or invariants reveal a more natural problem-domain noun or verb, return to `bdd-formulation` and `domain-vocabulary`; after Matt's decision, repeat the formulated-feature ensemble and agreement checkpoint before revising the model.
+9. **Review and agree the model** — run `ensemble-review` with the Domain-model brief below. Resolve findings through `domain-modelling` and vocabulary findings through the formulation loop, then obtain Matt's agreement.
+10. **Resolve architecture decisions** — use `record-architectural-decisions` for consequential choices emerging from the agreed model. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance.
+11. **Assemble the plan** — compose the agreed features, vocabulary, design, domain model, ADRs, scope/deferrals and validation without introducing new decisions.
+12. **Check consistency** — run `ensemble-review` with the Final-plan brief below. Return substantive issues to the owning skill and repeat that ingredient's review and Matt-agreement checkpoint. No separate plan-approval ceremony is required.
+13. **Publish and validate** — write the iteration artifacts and indexes, run targeted planning checks, commit and push, then run `bin/dev fabro validate-plan <plan_path>`. Route substantive findings back through their owning skill and checkpoint.
+14. **Return the result** — mark the progress map complete or blocked, then give `iteration-planning` the validated plan path and commit, or the exact question/blocker. Do not launch delivery.
 
 ## Caller-Owned Ensemble Briefs
 
@@ -61,7 +53,7 @@ Use the named feedback route in each brief. `ensemble-review` only discovers the
 - **Subject/artifact:** agreed map, formulated scenarios, vocabulary record and applicable design references.
 - **Focus:** (1) fidelity to agreed policy, (2) concrete counterexamples, temporal boundaries and BRIEF quality, (3) naming/design coherence.
 - **Rubric:** Does each scenario express exactly one agreed rule without adding or losing policy? Are examples concrete and stakeholder-readable? Do they expose when decisions become fixed, significant orderings, temporary states, persistence/resumption/expiry, and effects on past versus future work where relevant? Do nouns and verbs match `docs/problem-domain-terms.md` and avoid solution language? Does visible behaviour have design coverage?
-- **Feedback route:** policy gaps to `bdd-discovery`; scenario defects to `bdd-formulation`; naming proposals to `domain-vocabulary`; design gaps to the Design Check; decisions to Matt.
+- **Feedback route:** policy gaps to `bdd-discovery`; scenario defects to `bdd-formulation`; naming proposals to `domain-vocabulary`; design gaps to `ux-design`; decisions to Matt.
 
 ### Domain-model brief
 
@@ -85,28 +77,30 @@ digraph behaviour_iteration_planning {
   node [shape=box, style="rounded"];
 
   intake [label="Routed behaviour-change intake"];
+  progress [label="planning-progress\nlive HTML map"];
   context [label="Targeted context exploration"];
   map [label="bdd-discovery\nexample map · slice · defer"];
   map_review [label="ensemble-review\ncaller-owned map brief"];
   behaviour [shape=diamond, label="Matt agrees behaviour?"];
-  formulate [label="bdd-formulation + domain-vocabulary + design"];
+  formulate [label="bdd-formulation + domain-vocabulary + ux-design"];
   vocabulary [shape=diamond, label="Matt agrees vocabulary changes?"];
   gherkin_review [label="ensemble-review\ncaller-owned feature brief"];
   features [shape=diamond, label="Matt agrees features?"];
   model [label="domain-modelling"];
   model_review [label="ensemble-review\ncaller-owned model brief"];
   model_agreed [shape=diamond, label="Matt agrees model?"];
-  adr [label="architecture-decision-records\ncollaborate + review"];
+  adr [label="record-architectural-decisions\ncollaborate + review"];
   adr_accept [shape=diamond, label="Matt accepts ADRs?"];
   assemble [label="Assemble plan from agreed ingredients"];
   final_review [label="ensemble-review\ncaller-owned final-plan brief"];
   consistent [shape=diamond, label="Plan consistent?"];
   publish [label="Publish and validate plan"];
   validated [shape=diamond, label="Validation ready?"];
+  validation_route [shape=diamond, label="Which ingredient owns\nthe validation finding?"];
   result [shape=doublecircle, label="Return validated plan\nto iteration-planning"];
   blocker [shape=doublecircle, label="Return question or blocker"];
 
-  intake -> context -> map -> map_review -> behaviour;
+  intake -> progress -> context -> map -> map_review -> behaviour;
   behaviour -> map [label="no", style=dashed];
   behaviour -> formulate [label="yes"];
   formulate -> vocabulary;
@@ -133,7 +127,11 @@ digraph behaviour_iteration_planning {
   publish -> validated;
   validated -> result [label="yes"];
   validated -> blocker [label="blocked"];
-  validated -> map [label="substantive issue", style=dashed];
+  validated -> validation_route [label="substantive finding"];
+  validation_route -> map [label="behaviour/scope", style=dashed];
+  validation_route -> formulate [label="scenario/vocabulary/UX", style=dashed];
+  validation_route -> model [label="model", style=dashed];
+  validation_route -> adr [label="architecture decision", style=dashed];
 }
 ```
 
@@ -158,24 +156,6 @@ Use `bdd-formulation` when drafting or reviewing Gherkin scenarios so feature fi
 
 When deciding not to add or change feature files for a behaviour-facing iteration, write a short rationale in the plan. A good rationale names the existing scenario that already covers the rule, or explains why the behaviour is too internal/obvious for a useful stakeholder example. `Covered by ExUnit/controller tests` is not sufficient by itself for business-facing behaviour.
 
-## Design Check
-
-The design system (claude.ai/design) is the source of truth for design and is meant to mirror the running app (see `CLAUDE.md`). For any iteration with a user-facing surface, make an explicit design decision during planning — the way you make a BDD decision — and write it into `## Designs`.
-
-Environment gate:
-
-- If the behaviour change has no visible surface, no design-system access is needed; record why.
-- If the iteration adds or changes a screen, page, component, email, or visible state, prefer running the planning session in Claude Code with `DesignSync` available. If it is not, use existing checked-in design sources when they are sufficient, record that `DesignSync` was not available in this session, and stop only when new or changed design work is needed and no sufficient existing checked-in design source is available.
-- Do not call, mention output from, or pretend to have checked `DesignSync` outside Claude Code.
-
-Decide three things:
-
-1. **Does this iteration need a design?** Yes if it adds or changes a screen, page, component, email, or a visible state (empty / first-run / loading / error / success). If the behaviour has no visible surface, record `No design needed` and why.
-2. **Do we already have it?** In Claude Code, check the design system with `DesignSync` (`list_files`, then `get_file`). In any environment, check existing checked-in design sources such as `design-system/` and `docs/specs/*` sketches for each affected surface. Reference what exists by path (e.g. a DS card `wireframes/*.html`, `ui_kits/*/index.html`, `emails/*.html`, or a sketch section). A design that is close but missing the new elements still counts as the base to extend — say so.
-3. **If it's needed and missing, remind to create it.** Do not leave a user-facing surface with no referenced design and no reminder. The reminder is: mock the surface as a self-contained design-system preview, render-verify it (headless render), and push it to the DS via `DesignSync` in Claude Code — done before implementation where possible. If the iteration is already building, record it as a **fast-follow** design to align the in-flight build/review to.
-
-Write the outcome in `## Designs`: for each affected surface, the design that covers it (with path) or the reminder to create one. When a feature spans several iterations, design the **final** version once and note which elements earlier slices omit, rather than a separate design per slice. Default to "needs a design" whenever the iteration changes anything a user sees; `No design needed` is only for behaviour with no visible surface.
-
 ## Interview Guidance
 
 Ask only one question per message. Prefer multiple choice when it lowers effort, but use open questions when needed. When asking a multiple-choice question, use the `question` tool rather than writing A/B/C/D options in prose. Use normal chat only for open-ended questions or when the tool cannot express the choice clearly.
@@ -192,7 +172,7 @@ Cover these topics:
 - **Acceptance criteria** — concrete behaviours, examples, edge cases, permissions, and error states.
 - **Business decisions** — domain, policy, copy, workflow, pricing, privacy, or support questions.
 - **Technical shape** — likely modules, data, events/commands, integrations, UI, background work, and migration concerns.
-- **Design** — does this iteration touch a screen, page, component, email, or visible state? If so, prefer Claude Code and `DesignSync`; when this session is not Claude Code, check existing checked-in design sources and stop only if new or changed design work is needed without a sufficient existing design source. Also check whether there is an existing sketch. (see Design Check)
+- **UX design** — does this iteration alter a visible surface, state, interaction, content journey, or email? If so, invoke `ux-design` and use its design record.
 - **Validation** — automated tests, acceptance tests, shared Cucumber scenarios, manual demo, stakeholder review, or operational checks.
 
 Intake clarification stops when there is enough shared context to begin example mapping. Discovery and modelling continue until the plan can be written without an implementor inventing material product, domain-model or architecture decisions.
@@ -258,7 +238,7 @@ State the BDD decision: `Required`, `Useful but not required`, or `Not useful fo
 
 ## Designs
 
-Apply the Design Check. For each user-facing surface the iteration adds or changes, name the design that covers it (a design-system card or a `docs/specs` sketch, by path), or note that no design exists yet and must be created in Claude Code (a reminder to mock + render-verify + push to the DS there; mark it a fast-follow if the iteration is already building). Write `No design needed` only when this behaviour change has no visible surface.
+Use the `ux-design` output. List each affected surface and state with exact design paths, agreed decisions, slice omissions, accessibility/responsive considerations, and any required handoff or fast-follow. Write `No design needed` with the skill's reason only when nothing visible changes.
 
 ## Acceptance Criteria
 
@@ -299,7 +279,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Maintain `docs/iterations/README.md` as the iteration index.
 - Read `docs/problems/README.md` if it exists, plus any relevant `docs/problems/*.md` notes. If the directory exists but no README exists, inspect the problem files directly.
 - Include a `## Related Problems` section in the plan. Link each relevant problem note and say whether the iteration should resolve it, partially address it, depend on it, or intentionally leave it unresolved. If there are no relevant captured problems, write `None known.`
-- Include `## Domain Vocabulary`, `## Domain Model`, and `## Architecture Decisions`. Vocabulary changes must be agreed by Matt and recorded in `docs/problem-domain-terms.md`; the model records decisions agreed during modelling and is not a placeholder for the implementor. Link every required accepted ADR, and do not mark a consequential architecture decision resolved unless Matt participated in and accepted it through `architecture-decision-records`.
+- Include `## Domain Vocabulary`, `## Domain Model`, and `## Architecture Decisions`. Vocabulary changes must be agreed by Matt and recorded in `docs/problem-domain-terms.md`; the model records decisions agreed during modelling and is not a placeholder for the implementor. Link every required accepted ADR, and do not mark a consequential architecture decision resolved unless Matt participated in and accepted it through `record-architectural-decisions`.
 - Create one folder per iteration using the next sequential zero-padded iteration number and a lowercase hyphenated topic slug.
 - Determine the next number by inspecting existing `docs/iterations/NNN-*` folders; start at `001` if none exist.
 - Save the plan as `plan.md` inside that folder.
@@ -307,7 +287,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Classify the iteration as behaviour-facing and fill in `## Acceptance Scenarios / Feature Files` with a BDD decision of `Required`, `Useful but not required`, or `Not useful for this slice`, plus either the feature file(s)/scenario summaries that express the business rules or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples. Do not rely on low-level ExUnit/controller tests as a substitute for this BDD decision.
 - Apply the BDD scenario heuristics above before deciding. If two or more “default to Gherkin” signals apply, draft scenarios unless Matt explicitly decides otherwise.
 - Draft or update shared Cucumber feature files/scenarios when they clarify the iteration's domain behaviour. Use `bdd-discovery` first if the rules/examples are unclear, and `bdd-formulation` when writing or reviewing the Gherkin. Keep scenarios abstract from test infrastructure: no CSS selectors, route names, button-click choreography, database setup, or adapter configuration.
-- Include a `## Designs` section and apply the Design Check: for each user-facing surface, reference an existing design (a design-system card or a sketch, by path — check the DS with `DesignSync` only in Claude Code, otherwise cite checked-in design sources you inspected) or record a reminder to create one (mock + render-verify + push to the DS in Claude Code, or a fast-follow if already building). If new or changed design work is needed and no sufficient existing checked-in design source is available, stop and hand off instead of continuing. Write `No design needed` only when the behaviour has no visible surface. Design the final version once for multi-iteration features and note what earlier slices omit. Do not author the design during ordinary planning unless Matt asks — the planning deliverable is the decision and the reminder, not the mock.
+- Include the `## Designs` record returned by `ux-design`. Do not duplicate or weaken that skill's source, environment, handoff, review, or Matt-decision boundaries.
 - Tag every scenario created or changed during planning with the iteration tag `@iteration-NNN`, where `NNN` is the zero-padded iteration number. If every scenario in a new or changed feature belongs to that iteration, a feature-level `@iteration-NNN` tag is acceptable. Do not remove older iteration tags from existing scenarios; multiple iteration tags are allowed and useful when a scenario evolves across iterations.
 - Preserve a green mainline while planning. Existing executable scenarios should keep passing. If planning deliberately rewrites or adds scenarios that describe future behaviour and would fail before implementation catches up, tag each affected scenario with the project’s runner-debt tags: `@todo-domain` when domain support is pending, and `@todo-ui` when browser support is pending. If every scenario in a changed feature has the same pending runner support, feature-level tags are acceptable. Prefer scenario-level tags when only part of a feature is unfinished. Do not leave untagged future-facing scenarios that make `dev check` fail.
 - When feature files/scenarios are created or changed, show Matt the feature file path, which scenarios are tagged with `@iteration-NNN`, which have `@todo-domain` and/or `@todo-ui`, and a concise summary of the scenarios. Explicitly ask him to review the language/examples before treating the plan as final.
@@ -335,8 +315,8 @@ When complete, return the plan path, pushed commit, validation result, related p
 ## Key Principles
 
 - One question at a time.
-- Example-map and defer before modelling; agree formulated features and vocabulary before modelling; model before invoking `architecture-decision-records`; accept ADRs before implementation.
-- Compose planning from the `bdd-discovery`, `bdd-formulation`, `domain-vocabulary`, `domain-modelling`, `architecture-decision-records`, and `ensemble-review` skills rather than duplicating their specialist procedures.
+- Example-map and defer before modelling; agree formulated features and vocabulary before modelling; model before invoking `record-architectural-decisions`; accept ADRs before implementation.
+- Compose planning from the `bdd-discovery`, `bdd-formulation`, `domain-vocabulary`, `ux-design`, `domain-modelling`, `record-architectural-decisions`, and `ensemble-review` skills rather than duplicating their specialist procedures.
 - Ensemble reviewers challenge and advise; Matt agrees behaviour, formulated features, domain models and ADRs. The assembled plan needs no separate approval ceremony.
 - One iteration is one slice: one rule, or one piece of engineering. Split anything bigger.
 - Make business decisions explicit.
@@ -344,5 +324,5 @@ When complete, return the plan path, pushed commit, validation result, related p
 - Make technical decisions explicit enough to start.
 - Make acceptance criteria testable.
 - Make validation observable.
-- If a user sees it, it needs a design: check the design system for an existing one, and if it is missing, record a reminder to create it (fast-follow if already building).
+- If a person sees it, invoke `ux-design` and carry its agreed design record into the plan.
 - Do not implement or launch delivery in this skill; return the validated plan to `iteration-planning`.

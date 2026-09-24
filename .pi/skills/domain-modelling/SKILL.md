@@ -7,6 +7,9 @@ description: Collaboratively model agreed behaviour or a technical capability wi
 
 Use this skill only after behaviour-facing examples have been formulated and agreed, or after a technical capability and its observable proof have been agreed. The calling specialist planning skill owns sequencing and publication.
 
+> “Model the problem well enough, and the solution takes care of itself.”
+> — Dr David West, *Object Thinking*
+
 ## Purpose
 
 Turn agreed behaviour or an agreed technical capability into an explicit domain model with Matt. The output becomes the iteration plan's `## Domain Model` section and may identify consequential decisions that need ADRs.

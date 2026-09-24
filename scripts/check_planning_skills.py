@@ -21,19 +21,57 @@ def require(content: str, needles: list[str], subject: str) -> None:
         raise AssertionError(f"{subject} missing: {', '.join(missing)}")
 
 
-# Every project-local skill must remain discoverable and named after its directory.
-for path in sorted(SKILLS.glob("*/SKILL.md")):
-    content = path.read_text()
+def frontmatter_values(path: Path, content: str) -> dict[str, str]:
     match = re.match(r"---\n(.*?)\n---\n", content, re.DOTALL)
     if not match:
-        raise AssertionError(f"invalid frontmatter: {path.relative_to(ROOT)}")
-    frontmatter = match.group(1)
-    name = re.search(r"^name:\s*(.+)$", frontmatter, re.MULTILINE)
-    description = re.search(r"^description:\s*(.+)$", frontmatter, re.MULTILINE)
-    if not name or not description:
+        raise AssertionError(f"invalid frontmatter delimiters: {path.relative_to(ROOT)}")
+    values: dict[str, str] = {}
+    parent_key: str | None = None
+    for line in match.group(1).splitlines():
+        if not line.strip() or "\t" in line:
+            raise AssertionError(f"invalid frontmatter line: {path.relative_to(ROOT)}: {line!r}")
+        if line.startswith(" "):
+            if parent_key is None or not re.match(r"^  [A-Za-z][A-Za-z0-9_-]*:\s*\S.*$", line):
+                raise AssertionError(f"invalid nested frontmatter: {path.relative_to(ROOT)}: {line!r}")
+            continue
+        item = re.match(r"^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$", line)
+        if not item or item.group(1) in values:
+            raise AssertionError(f"invalid frontmatter entry: {path.relative_to(ROOT)}: {line!r}")
+        parent_key, value = item.groups()
+        if value[:1] in {'"', "'"} and (len(value) < 2 or value[-1] != value[0]):
+            raise AssertionError(f"unclosed frontmatter quote: {path.relative_to(ROOT)}: {line!r}")
+        values[parent_key] = value.strip().strip('"\'')
+    return values
+
+
+def validate_dot(path: Path, content: str) -> None:
+    for index, graph in enumerate(re.findall(r"```dot\n(.*?)```", content, re.DOTALL), start=1):
+        if graph.count("{") != graph.count("}") or "->" not in graph:
+            raise AssertionError(f"invalid or edgeless DOT graph: {path.relative_to(ROOT)} #{index}")
+        definitions = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\[", graph, re.MULTILINE))
+        references: set[str] = set()
+        for line in graph.splitlines():
+            if "->" in line:
+                references.update(re.findall(r"(?:^|->)\s*([A-Za-z_][A-Za-z0-9_]*)", line))
+        missing = references - definitions
+        if missing:
+            raise AssertionError(f"undefined DOT nodes in {path.relative_to(ROOT)} #{index}: {sorted(missing)}")
+
+
+# Every project-local skill must remain discoverable, structurally valid, and named after its directory.
+all_skill_text = ""
+for path in sorted(SKILLS.glob("*/SKILL.md")):
+    content = path.read_text()
+    values = frontmatter_values(path, content)
+    if not values.get("name") or not values.get("description"):
         raise AssertionError(f"incomplete frontmatter: {path.relative_to(ROOT)}")
-    if name.group(1).strip() != path.parent.name:
+    if values["name"] != path.parent.name:
         raise AssertionError(f"skill name/directory mismatch: {path.relative_to(ROOT)}")
+    validate_dot(path, content)
+    all_skill_text += content
+
+if "architecture-decision-records" in all_skill_text or (SKILLS / "architecture-decision-records").exists():
+    raise AssertionError("obsolete architecture-decision-records skill reference remains")
 
 ensemble = text("ensemble-review")
 require(
@@ -68,7 +106,8 @@ callers = {
     "bdd-discovery": ["Subject", "Artifact", "Focus", "Rubric", "Known questions", "Constraints", "Feedback route"],
     "behaviour-iteration-planning": ["Subject/artifact", "Focus", "Rubric", "Known questions", "Constraints", "Feedback route"],
     "technical-iteration-planning": ["Subject/artifact", "Focus", "Rubric", "Known questions", "Constraints", "Feedback route"],
-    "architecture-decision-records": ["Subject", "Artifact", "Focus", "Rubric", "Known questions", "Constraints", "Feedback route"],
+    "record-architectural-decisions": ["Subject", "Artifact", "Focus", "Rubric", "Known questions", "Constraints", "Feedback route"],
+    "ux-design": ["Subject", "Artifact", "Focus", "Rubric", "Known questions", "Constraints", "Feedback route"],
 }
 for name, fields in callers.items():
     content = text(name)
@@ -81,7 +120,11 @@ formulation = text("bdd-formulation")
 modelling = text("domain-modelling")
 vocabulary = text("domain-vocabulary")
 technical = text("technical-iteration-planning")
-adr = text("architecture-decision-records")
+adr = text("record-architectural-decisions")
+ux = text("ux-design")
+progress = text("planning-progress")
+router = text("iteration-planning")
+discovery = text("bdd-discovery")
 
 for name, content in {
     "behaviour-iteration-planning": behaviour,
@@ -92,10 +135,20 @@ for name, content in {
     require(content, ["docs/problem-domain-terms.md", "Matt"], f"{name} vocabulary ownership")
 
 require(formulation, ["Temporal Formulation", "decision", "later state change", "ordering", "temporary", "backfilled"], "bdd-formulation temporal checks")
-require(modelling, ["bdd-formulation", "domain-vocabulary", "solution-domain", "repeat"], "domain-model vocabulary feedback loop")
+if "membership, preferences, permissions, messages, deliveries" in formulation:
+    raise AssertionError("bdd-formulation temporal guidance is over-fitted to Memba examples")
+require(discovery, ["smallest useful, coherent slice we could deliver"], "bdd-discovery product challenge")
+require(modelling, ["bdd-formulation", "domain-vocabulary", "solution-domain", "repeat", "Model the problem well enough"], "domain-model vocabulary feedback loop")
 require(vocabulary, ["problem-domain", "solution-domain", "explicit agreement", "bdd-formulation"], "domain-vocabulary boundary")
-require(behaviour, ["architecture-decision-records", "domain-vocabulary", "repeat the formulated-feature ensemble"], "behaviour planning composition")
-require(technical, ["architecture-decision-records", "domain-vocabulary", "problem-domain lexicon"], "technical planning composition")
-require(adr, ["agreed behaviour/domain model or technical design", "explicit acceptance", "None required"], "shared ADR collaboration")
+require(behaviour, ["record-architectural-decisions", "domain-vocabulary", "ux-design", "planning-progress", "session/thread storage", "repeat the formulated-feature ensemble"], "behaviour planning composition")
+require(technical, ["record-architectural-decisions", "domain-vocabulary", "planning-progress", "session/thread storage", "problem-domain lexicon"], "technical planning composition")
+if "DesignSync" in behaviour or "## Design Check" in behaviour:
+    raise AssertionError("behaviour planning duplicates ux-design procedure")
+require(ux, ["`DesignSync` is unavailable", "checked-in sources are insufficient", "blocking handoff", "stop before drafting, publishing, or validating", "visible state", "Matt", "## Designs"], "standalone UX design")
+require(progress, ["iteration-planning-progress.html", "pending", "current", "complete", "rework", "blocked", "artifact links", "flow diagram", "inline SVG"], "live planning progress")
+require(router, ["planning-progress"], "planning router progress handoff")
+require(adr, ["stands alone", "understanding of the context", "one or more ADRs", "explicit acceptance", "None required"], "standalone ADR collaboration")
+require(behaviour, ["validated -> validation_route", "validation_route -> map", "validation_route -> formulate", "validation_route -> model", "validation_route -> adr"], "behaviour validation feedback routes")
+require(technical, ["validated -> validation_route", "validation_route -> capability", "validation_route -> design", "validation_route -> adr"], "technical validation feedback routes")
 
 print("Planning skill structural check passed")

@@ -29,7 +29,7 @@ Choose exactly one route:
 
 If classification is unclear, ask Matt. Do not inspect implementation and infer the product classification silently. If a proposed technical iteration changes business behaviour, route it as behaviour-changing.
 
-Pass the specialist the intake summary and Matt's wording. The specialist performs targeted context exploration only after routing.
+Pass the specialist the intake summary and Matt's wording. The specialist initializes `planning-progress` with its complete flow, then performs targeted context exploration.
 
 ## Completion
 

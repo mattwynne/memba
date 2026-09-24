@@ -8,22 +8,25 @@ description: Plan a technical or refactoring iteration that preserves observable
 Starting from the intake supplied by `iteration-planning`, produce a focused, published and validated engineering plan without importing the behaviour-planning ceremony.
 
 <HARD-GATE>
-Do not implement the iteration or launch delivery. Do not edit application code, tests, migrations, dependencies or workflow machinery while planning. Planning may edit iteration artifacts, `docs/problem-domain-terms.md` only for vocabulary changes Matt explicitly agrees, and ADRs plus `docs/adr/README.md` only when Matt explicitly accepts the decisions. Return the validated plan to `iteration-planning`; `iteration-delivery` owns Fabro launch.
+Do not implement the iteration or launch delivery. Do not edit application code, tests, migrations, dependencies or workflow machinery while planning. Planning may edit iteration artifacts, `docs/problem-domain-terms.md` only for vocabulary changes Matt explicitly agrees, and ADRs plus `docs/adr/README.md` only when Matt explicitly accepts the decisions. It may also maintain the live `planning-progress` report in session/thread storage outside the repository. Return the validated plan to `iteration-planning`; `iteration-delivery` owns Fabro launch.
 </HARD-GATE>
 
 ## Flow
 
-1. **Explore targeted context** — after routing has identified the engineering problem, inspect relevant code, tests, tooling, ADRs, problems and operational evidence.
-2. **Clarify the capability** — with Matt, define the current limitation, desired engineering capability, behaviour that must remain unchanged, beneficiaries, constraints and observable proof.
-3. **Slice and defer** — map technical prerequisites, risks, questions and independently useful capabilities. Keep one engineering capability per iteration; defer adjacent cleanup.
-4. **Review and agree scope** — run `ensemble-review` with the Technical-scope brief below. Present simpler approaches, hidden behaviour changes, missing evidence and deferrals to Matt. Revise until he agrees the capability and boundaries.
-5. **Model architecture only where needed** — if the work changes domain concepts, commands, events, invariants or ownership, use `domain-modelling`, `domain-vocabulary`, and the canonical lexicon; otherwise document affected solution-domain responsibilities, interfaces, data flow and operational boundaries directly. Do not invent product behaviour or put solution terms into the problem-domain lexicon.
-6. **Review and agree architecture** — run `ensemble-review` with the Domain-model or Technical-design brief below. Resolve findings with Matt; route any problem-domain naming issue through `domain-vocabulary` and, when behaviour wording changes, back to behaviour planning.
-7. **Resolve architecture decisions** — use `architecture-decision-records` for consequential choices emerging from the agreed model/design. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance.
-8. **Assemble the plan** — compose the agreed capability, non-regression contract, technical/domain design, vocabulary decisions, ADRs, implementation boundaries and validation without introducing new decisions.
-9. **Check consistency** — run `ensemble-review` with the Technical final-plan brief below. Return substantive findings to the owning step and repeat its review/Matt-agreement checkpoint.
-10. **Publish and validate** — update the iteration index, run appropriate planning checks, commit and push, then run `bin/dev fabro validate-plan <plan_path>`. Route substantive findings back through the owning step.
-11. **Return the result** — give `iteration-planning` the validated plan path and commit, or the exact question/blocker. Do not launch delivery.
+Use `planning-progress` to update and present the live HTML map after every item, decision checkpoint, rework loop, blocker, and new artifact.
+
+1. **Open the progress map** — initialize the complete technical-planning flow, mark targeted context as current, and link artifacts as they appear.
+2. **Explore targeted context** — after routing has identified the engineering problem, inspect relevant code, tests, tooling, ADRs, problems and operational evidence.
+3. **Clarify the capability** — with Matt, define the current limitation, desired engineering capability, behaviour that must remain unchanged, beneficiaries, constraints and observable proof.
+4. **Slice and defer** — map technical prerequisites, risks, questions and independently useful capabilities. Keep one engineering capability per iteration; defer adjacent cleanup.
+5. **Review and agree scope** — run `ensemble-review` with the Technical-scope brief below. Present simpler approaches, hidden behaviour changes, missing evidence and deferrals to Matt. Revise until he agrees the capability and boundaries.
+6. **Model architecture only where needed** — if the work changes domain concepts, commands, events, invariants or ownership, use `domain-modelling`, `domain-vocabulary`, and the canonical lexicon; otherwise document affected solution-domain responsibilities, interfaces, data flow and operational boundaries directly. Do not invent product behaviour or put solution terms into the problem-domain lexicon.
+7. **Review and agree architecture** — run `ensemble-review` with the Domain-model or Technical-design brief below. Resolve findings with Matt; route any problem-domain naming issue through `domain-vocabulary` and, when behaviour wording changes, back to behaviour planning.
+8. **Resolve architecture decisions** — use `record-architectural-decisions` for consequential choices emerging from the agreed model/design. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance.
+9. **Assemble the plan** — compose the agreed capability, non-regression contract, technical/domain design, vocabulary decisions, ADRs, implementation boundaries and validation without introducing new decisions.
+10. **Check consistency** — run `ensemble-review` with the Technical final-plan brief below. Return substantive findings to the owning step and repeat its review/Matt-agreement checkpoint.
+11. **Publish and validate** — update the iteration index, run appropriate planning checks, commit and push, then run `bin/dev fabro validate-plan <plan_path>`. Route substantive findings back through the owning step.
+12. **Return the result** — mark the progress map complete or blocked, then give `iteration-planning` the validated plan path and commit, or the exact question/blocker. Do not launch delivery.
 
 ## Caller-Owned Ensemble Briefs
 
@@ -70,6 +73,7 @@ digraph technical_iteration_planning {
   node [shape=box, style="rounded"];
 
   intake [label="Routed technical/refactoring intake"];
+  progress [label="planning-progress\nlive HTML map"];
   context [label="Targeted context and evidence"];
   capability [label="Define capability + non-regression contract"];
   scope_review [label="ensemble-review\ncaller-owned scope brief"];
@@ -77,17 +81,18 @@ digraph technical_iteration_planning {
   design [label="Model technical/domain design as needed"];
   design_review [label="ensemble-review\ncaller-owned design/model brief"];
   design_agreed [shape=diamond, label="Matt agrees design?"];
-  adr [label="architecture-decision-records\ncollaborate + review"];
+  adr [label="record-architectural-decisions\ncollaborate + review"];
   adr_accept [shape=diamond, label="Matt accepts ADRs?"];
   assemble [label="Assemble plan from agreed ingredients"];
   final_review [label="ensemble-review\ncaller-owned final-plan brief"];
   consistent [shape=diamond, label="Plan consistent?"];
   publish [label="Publish and validate plan"];
   validated [shape=diamond, label="Validation ready?"];
+  validation_route [shape=diamond, label="Which ingredient owns\nthe validation finding?"];
   result [shape=doublecircle, label="Return validated plan\nto iteration-planning"];
   blocker [shape=doublecircle, label="Return question or blocker"];
 
-  intake -> context -> capability -> scope_review -> scope;
+  intake -> progress -> context -> capability -> scope_review -> scope;
   scope -> capability [label="no", style=dashed];
   scope -> design [label="yes"];
   design -> design_review -> design_agreed;
@@ -105,7 +110,10 @@ digraph technical_iteration_planning {
   publish -> validated;
   validated -> result [label="yes"];
   validated -> blocker [label="blocked"];
-  validated -> capability [label="substantive issue", style=dashed];
+  validated -> validation_route [label="substantive finding"];
+  validation_route -> capability [label="scope/capability", style=dashed];
+  validation_route -> design [label="model/design", style=dashed];
+  validation_route -> adr [label="architecture decision", style=dashed];
 }
 ```
 
@@ -127,7 +135,7 @@ Use these exact sections unless an existing validated template requires addition
 - **Designs** — `No design needed` with a reason. If the work changes a visible surface, return to the router to reconsider classification.
 - **Technical Model** — responsibilities, interfaces, data flow, lifecycle, compatibility, migration, rollback and operational boundaries. Use `## Domain Model` instead when domain concepts, commands, events, invariants or ownership change.
 - **Domain Vocabulary** — when domain concepts change, list canonical terms reused, Matt-agreed lexicon changes, separately labelled solution terms, and unresolved naming questions; otherwise `No problem-domain vocabulary change`.
-- **Architecture Decisions** — links to every required Matt-accepted ADR produced through `architecture-decision-records`, or `None required` with a reason. Do not defer a consequential choice to implementation.
+- **Architecture Decisions** — links to every required Matt-accepted ADR produced through `record-architectural-decisions`, or `None required` with a reason. Do not defer a consequential choice to implementation.
 - **Implementation Plan** — ordered, bounded steps, naming likely areas without prescribing speculative machinery.
 - **Validation Plan** — focused proof of the capability, non-regression evidence, migration/rollback and operational checks where relevant, and `dev check` as the final project gate for implementation.
 - **Risks / Follow-ups** — concrete failure modes, mitigations and deferred work.

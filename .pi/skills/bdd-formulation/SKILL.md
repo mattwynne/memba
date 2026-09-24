@@ -39,7 +39,7 @@ Rule: Manual blockers replace the existing manual blocker
 
 Use concrete `Given`/`When`/`Then` sequences to make **when** a rule applies visible. Formulation should expose temporal policy, not merely restate outcomes.
 
-For behaviour involving membership, preferences, permissions, messages, deliveries, lifecycle changes, or other delayed effects, ask:
+For any behaviour whose outcome may depend on sequence or time—such as changing eligibility, preferences, permissions, lifecycle state, scheduled work, or asynchronous effects—ask:
 
 - What relevant state existed before the action?
 - At what action or event is the decision made?
