@@ -141,17 +141,19 @@ require(discovery, ["smallest useful, coherent slice we could deliver", "invoke 
 require(behaviour, ["Do not run a second ensemble when the map is unchanged"], "single example-map review checkpoint")
 if "### Example-map brief" in behaviour or "map_review" in behaviour:
     raise AssertionError("behaviour planning duplicates bdd-discovery's example-map ensemble")
-require(modelling, ["bdd-formulation", "domain-vocabulary", "solution-domain", "repeat", "Model the problem well enough"], "domain-model vocabulary feedback loop")
-require(vocabulary, ["problem-domain", "solution-domain", "explicit agreement", "bdd-formulation"], "domain-vocabulary boundary")
+require(modelling, ["bdd-formulation", "domain-vocabulary", "solution-domain", "any scenarios that use the changed concept", "when Gherkin changed", "Model the problem well enough"], "domain-model vocabulary feedback loop")
+require(vocabulary, ["problem-domain", "solution-domain", "explicit agreement", "bdd-formulation", "If no scenario uses the changed term", "preserving behaviour"], "domain-vocabulary boundary")
 require(behaviour, ["record-architectural-decisions", "domain-vocabulary", "ux-design", "planning-progress", "session/thread storage", "repeat the formulated-feature ensemble"], "behaviour planning composition")
-require(technical, ["record-architectural-decisions", "domain-vocabulary", "planning-progress", "session/thread storage", "problem-domain lexicon"], "technical planning composition")
+require(technical, ["record-architectural-decisions", "domain-vocabulary", "planning-progress", "session/thread storage", "problem-domain lexicon", "acceptance Gherkin wording only", "Vocabulary-coherence brief", "rules, examples, timing, actors, and outcomes are preserved"], "technical planning composition")
 if "DesignSync" in behaviour or "## Design Check" in behaviour:
     raise AssertionError("behaviour planning duplicates ux-design procedure")
 require(ux, ["`DesignSync` is unavailable", "checked-in sources are insufficient", "blocking handoff", "stop before drafting, publishing, or validating", "visible state", "Matt", "## Designs"], "standalone UX design")
 require(progress, ["iteration-planning-progress.html", "pending", "current", "complete", "rework", "blocked", "artifact links", "flow diagram", "inline SVG"], "live planning progress")
 require(router, ["planning-progress"], "planning router progress handoff")
+require(router, ["docs/iterations/roadmap.md", "docs/iterations/README.md", "docs/problem-domain-terms.md", "docs/problems/README.md", "current problem records", "recent or related iteration plans", "acceptance features", "With that context"], "context-informed router interview")
 require(adr, ["stands alone", "understanding of the context", "one or more ADRs", "explicit acceptance", "None required"], "standalone ADR collaboration")
 require(behaviour, ["validated -> validation_route", "validation_route -> map", "validation_route -> formulate", "validation_route -> model", "validation_route -> adr"], "behaviour validation feedback routes")
 require(technical, ["validated -> validation_route", "validation_route -> capability", "validation_route -> design", "validation_route -> adr"], "technical validation feedback routes")
+require(technical, ["naming -> vocabulary", "vocabulary -> vocabulary_agreed", "vocabulary_agreed -> vocabulary_policy", "vocabulary_policy -> behaviour_route", "vocabulary_policy -> gherkin_affected", "gherkin_affected -> design", "gherkin_affected -> formulation", "formulation -> policy_changed", "policy_changed -> behaviour_route", "policy_changed -> wording_agreed", "wording_agreed -> formulation", "wording_agreed -> design"], "technical vocabulary feedback route")
 
 print("Planning skill structural check passed")

@@ -5,13 +5,15 @@ description: Start planning a product or engineering iteration, classify it as b
 
 # Iteration Planning Router
 
-Use this skill as the single entry point for iteration planning. Keep this layer thin: establish what Matt wants to change, classify the work, invoke the specialist skill, then hand a validated plan to `iteration-delivery`.
+Use this skill as the single entry point for iteration planning. Keep this layer thin: understand the product context, establish what Matt wants to change, classify the work, invoke the specialist skill, then hand a validated plan to `iteration-delivery`.
 
-Do not explore the repository before the initial interview establishes the problem. Do not write the plan, formulate scenarios, model the domain, author ADRs, validate the plan, or launch Fabro in this router; those responsibilities belong to lower-level skills.
+Before interviewing, make a short, read-only context pass so questions are informed rather than generic. Read the current product direction in `docs/iterations/roadmap.md`, the iteration history in `docs/iterations/README.md`, the canonical language in `docs/problem-domain-terms.md`, and `docs/problems/README.md` plus current problem records relevant to Matt's opening request. Inspect relevant recent or related iteration plans and acceptance features when they clarify what has already been tried or agreed. Summarize the likely context and uncertainties internally; do not infer Matt's present intent from repository history.
+
+Do not write the plan, formulate scenarios, model the domain, author ADRs, validate the plan, or launch Fabro in this router; those responsibilities belong to lower-level skills. Keep this context pass targeted: broad implementation exploration belongs to the selected specialist.
 
 ## Intake
 
-Ask Matt one focused question at a time until you know:
+With that context, ask Matt one focused question at a time until you know:
 
 - the problem or opportunity;
 - the intended outcome;
@@ -29,7 +31,7 @@ Choose exactly one route:
 
 If classification is unclear, ask Matt. Do not inspect implementation and infer the product classification silently. If a proposed technical iteration changes business behaviour, route it as behaviour-changing.
 
-Pass the specialist the intake summary and Matt's wording. The specialist initializes `planning-progress` with its complete flow, then performs targeted context exploration.
+Pass the specialist the context summary, intake summary, relevant source links, and Matt's wording. The specialist initializes `planning-progress` with its complete flow, then performs deeper targeted context exploration.
 
 ## Completion
 
@@ -49,7 +51,8 @@ digraph iteration_planning {
   node [shape=box, style="rounded"];
 
   start [label="Matt brings a problem or opportunity"];
-  intake [label="Quick intake interview\nproblem · outcome · beneficiary"];
+  context [label="Read product direction · problems\npast iterations · canonical language"];
+  intake [label="Context-informed interview\nproblem · outcome · beneficiary"];
   classify [shape=diamond, label="Changes observable\nbehaviour?"];
   behaviour [label="behaviour-iteration-planning"];
   technical [label="technical-iteration-planning"];
@@ -58,7 +61,7 @@ digraph iteration_planning {
   delivery [label="iteration-delivery\nasks whether to launch Fabro"];
   stop [shape=doublecircle, label="Stop or launch only\nwith explicit approval"];
 
-  start -> intake -> classify;
+  start -> context -> intake -> classify;
   classify -> behaviour [label="yes"];
   classify -> technical [label="no"];
   behaviour -> result;

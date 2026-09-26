@@ -8,7 +8,7 @@ description: Plan a technical or refactoring iteration that preserves observable
 Starting from the intake supplied by `iteration-planning`, produce a focused, published and validated engineering plan without importing the behaviour-planning ceremony.
 
 <HARD-GATE>
-Do not implement the iteration or launch delivery. Do not edit application code, tests, migrations, dependencies or workflow machinery while planning. Planning may edit iteration artifacts, `docs/problem-domain-terms.md` only for vocabulary changes Matt explicitly agrees, and ADRs plus `docs/adr/README.md` only when Matt explicitly accepts the decisions. It may also maintain the live `planning-progress` report in session/thread storage outside the repository. Return the validated plan to `iteration-planning`; `iteration-delivery` owns Fabro launch.
+Do not implement the iteration or launch delivery. Do not edit application code, step definitions, low-level tests, migrations, dependencies or workflow machinery while planning. Planning may edit iteration artifacts, `docs/problem-domain-terms.md` and acceptance Gherkin wording only for vocabulary changes Matt explicitly agrees, and ADRs plus `docs/adr/README.md` only when Matt explicitly accepts the decisions. Vocabulary edits must preserve agreed behaviour; a policy change requires behaviour planning. It may also maintain the live `planning-progress` report in session/thread storage outside the repository. Return the validated plan to `iteration-planning`; `iteration-delivery` owns Fabro launch.
 </HARD-GATE>
 
 ## Flow
@@ -20,8 +20,8 @@ Use `planning-progress` to update and present the live HTML map after every item
 3. **Clarify the capability** — with Matt, define the current limitation, desired engineering capability, behaviour that must remain unchanged, beneficiaries, constraints and observable proof.
 4. **Slice and defer** — map technical prerequisites, risks, questions and independently useful capabilities. Keep one engineering capability per iteration; defer adjacent cleanup.
 5. **Review and agree scope** — run `ensemble-review` with the Technical-scope brief below. Present simpler approaches, hidden behaviour changes, missing evidence and deferrals to Matt. Revise until he agrees the capability and boundaries.
-6. **Model architecture only where needed** — if the work changes domain concepts, commands, events, invariants or ownership, use `domain-modelling`, `domain-vocabulary`, and the canonical lexicon; otherwise document affected solution-domain responsibilities, interfaces, data flow and operational boundaries directly. Do not invent product behaviour or put solution terms into the problem-domain lexicon.
-7. **Review and agree architecture** — run `ensemble-review` with the Domain-model or Technical-design brief below. Resolve findings with Matt; route any problem-domain naming issue through `domain-vocabulary` and, when behaviour wording changes, back to behaviour planning.
+6. **Model architecture and maintain vocabulary where needed** — if the work changes domain concepts, commands, events, invariants or ownership, use `domain-modelling`, `domain-vocabulary`, and the canonical lexicon; otherwise document affected solution-domain responsibilities, interfaces, data flow and operational boundaries directly. Do not invent product behaviour or put solution terms into the problem-domain lexicon. When modelling reveals better problem-domain language, ask Matt through `domain-vocabulary`. After he agrees, update affected Gherkin with `bdd-formulation` only when existing scenarios use the changed concept, preserving every rule, example, timing, actor, and outcome. Run `ensemble-review` with the Vocabulary-coherence brief and obtain Matt's agreement on the resulting wording before resuming modelling. If no scenario is affected, resume without formulation. If naming exposes a product-policy change rather than wording, return to `iteration-planning` for behaviour planning instead of editing it here.
+7. **Review and agree architecture** — run `ensemble-review` with the Domain-model or Technical-design brief below. Resolve findings with Matt and repeat any affected review checkpoint.
 8. **Resolve architecture decisions** — use `record-architectural-decisions` for consequential choices emerging from the agreed model/design. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance.
 9. **Assemble the plan** — compose the agreed capability, non-regression contract, technical/domain design, vocabulary decisions, ADRs, implementation boundaries and validation without introducing new decisions.
 10. **Check consistency** — run `ensemble-review` with the Technical final-plan brief below. Return substantive findings to the owning step and repeat its review/Matt-agreement checkpoint.
@@ -43,6 +43,15 @@ Use the named feedback route in each brief.
 - **Focus:** (1) simpler/smaller capability, (2) hidden behaviour change and failure risk, (3) evidence and proof coherence.
 - **Rubric:** Is this one useful engineering capability? Can prerequisites or cleanup be removed or deferred? Does any proposal actually change observable behaviour? Are constraints and proof concrete enough to distinguish success?
 - **Feedback route:** technical capability shaping and Matt; hidden product changes return to `iteration-planning` for reclassification.
+
+### Vocabulary-coherence brief
+
+Use only when this technical iteration changes acceptance Gherkin to apply vocabulary Matt already agreed.
+
+- **Subject/artifact:** Matt's vocabulary decision, `docs/problem-domain-terms.md`, and the affected scenarios before and after the wording change.
+- **Focus:** (1) semantic preservation, (2) canonical noun/verb consistency, (3) readability without solution-language leakage.
+- **Rubric:** Do the scenarios express exactly the same rules, examples, timing, actors, and outcomes? Is only problem-domain wording changed? Does every changed term match the canonical lexicon? Did any edit accidentally create or remove policy?
+- **Feedback route:** wording defects to `bdd-formulation`; vocabulary questions to `domain-vocabulary` and Matt; any policy change to behaviour planning.
 
 ### Domain-model brief
 
@@ -79,6 +88,15 @@ digraph technical_iteration_planning {
   scope_review [label="ensemble-review\ncaller-owned scope brief"];
   scope [shape=diamond, label="Matt agrees scope?"];
   design [label="Model technical/domain design as needed"];
+  naming [shape=diamond, label="Better problem-domain term?"];
+  vocabulary [label="domain-vocabulary\npropose coherent wording"];
+  vocabulary_agreed [shape=diamond, label="Matt agrees vocabulary?"];
+  vocabulary_policy [shape=diamond, label="Vocabulary decision\nchanges policy?"];
+  gherkin_affected [shape=diamond, label="Existing Gherkin affected?"];
+  formulation [label="bdd-formulation + ensemble\nwording-only coherence"];
+  policy_changed [shape=diamond, label="Policy changed?"];
+  wording_agreed [shape=diamond, label="Matt agrees wording?"];
+  behaviour_route [label="iteration-planning\nbehaviour route"];
   design_review [label="ensemble-review\ncaller-owned design/model brief"];
   design_agreed [shape=diamond, label="Matt agrees design?"];
   adr [label="record-architectural-decisions\ncollaborate + review"];
@@ -95,7 +113,22 @@ digraph technical_iteration_planning {
   intake -> progress -> context -> capability -> scope_review -> scope;
   scope -> capability [label="no", style=dashed];
   scope -> design [label="yes"];
-  design -> design_review -> design_agreed;
+  design -> naming;
+  naming -> design_review [label="no"];
+  naming -> vocabulary [label="yes"];
+  vocabulary -> vocabulary_agreed;
+  vocabulary_agreed -> vocabulary [label="no", style=dashed];
+  vocabulary_agreed -> vocabulary_policy [label="yes"];
+  vocabulary_policy -> behaviour_route [label="yes"];
+  vocabulary_policy -> gherkin_affected [label="no"];
+  gherkin_affected -> design [label="no · resume", style=dashed];
+  gherkin_affected -> formulation [label="yes"];
+  formulation -> policy_changed;
+  policy_changed -> behaviour_route [label="yes"];
+  policy_changed -> wording_agreed [label="no"];
+  wording_agreed -> formulation [label="no", style=dashed];
+  wording_agreed -> design [label="yes · resume", style=dashed];
+  design_review -> design_agreed;
   design_agreed -> design [label="no", style=dashed];
   design_agreed -> adr [label="yes / if required"];
   adr -> adr_accept;
@@ -119,7 +152,7 @@ digraph technical_iteration_planning {
 
 ## Writing the Plan
 
-Inspect existing `docs/iterations/NNN-*` folders and use the next sequential zero-padded number, starting at `001`. Create `docs/iterations/NNN-lowercase-topic/plan.md`; keep supporting planning artifacts in the same folder. Do not edit implementation, test, migration, dependency or workflow files.
+Inspect existing `docs/iterations/NNN-*` folders and use the next sequential zero-padded number, starting at `001`. Create `docs/iterations/NNN-lowercase-topic/plan.md`; keep supporting planning artifacts in the same folder. Do not edit implementation, test, migration, dependency or workflow files, except for the Matt-approved vocabulary-only acceptance Gherkin edits defined above.
 
 Use these exact sections unless an existing validated template requires additional metadata:
 
@@ -131,7 +164,7 @@ Use these exact sections unless an existing validated template requires addition
 - **Scope** — one technical capability and its implementation boundary.
 - **Out of Scope** — explicit deferrals, especially adjacent cleanup and product changes.
 - **Related Problems** — inspect `docs/problems/README.md` and relevant notes; link each and state whether the iteration resolves, partially addresses, depends on or leaves it unresolved. Write `None known.` when appropriate; do not change problem-note status unless Matt asks.
-- **Acceptance Scenarios / Feature Files** — normally `Not applicable`, with a reason and links to existing scenarios that protect unchanged behaviour where useful. A needed new product scenario means returning to the router for behaviour planning.
+- **Acceptance Scenarios / Feature Files** — normally `Not applicable`, with a reason and links to existing scenarios that protect unchanged behaviour where useful. When Matt-approved vocabulary changes require wording-only Gherkin edits, name every affected file/scenario and state that rules, examples, timing, actors, and outcomes are preserved. A needed new or behaviour-changing scenario means returning to the router for behaviour planning.
 - **Designs** — `No design needed` with a reason. If the work changes a visible surface, return to the router to reconsider classification.
 - **Technical Model** — responsibilities, interfaces, data flow, lifecycle, compatibility, migration, rollback and operational boundaries. Use `## Domain Model` instead when domain concepts, commands, events, invariants or ownership change.
 - **Domain Vocabulary** — when domain concepts change, list canonical terms reused, Matt-agreed lexicon changes, separately labelled solution terms, and unresolved naming questions; otherwise `No problem-domain vocabulary change`.
@@ -146,7 +179,7 @@ The plan must be specific enough to implement without inventing product policy o
 
 1. Maintain `docs/iterations/README.md` with number, title, plan link, date and `Planned` status.
 2. Create or update ADRs only after Matt's explicit acceptance, and maintain `docs/adr/README.md`.
-3. Run structural checks appropriate to the changed planning artifacts, including `git diff --check`. These are docs/skill-only planning edits, so do not run `dev check` unless executable examples or scripts were also changed.
+3. Run structural checks appropriate to the changed planning artifacts, including `git diff --check`. Run `dev check` whenever acceptance Gherkin changed, even for vocabulary-only edits; for docs/skill-only planning edits, do not run it unless executable examples or scripts also changed.
 4. Commit only agreed planning artifacts, including any Matt-agreed `docs/problem-domain-terms.md` change and accepted ADRs; do not include unrelated or implementation work.
 5. Push the commit so clone-based validation sees the exact plan state.
 6. Run:
