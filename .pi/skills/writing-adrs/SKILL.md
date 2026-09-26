@@ -30,7 +30,8 @@ may not have considered, and help them articulate the trade-offs.
 Read `docs/adr/README.md` to scan the existing decisions.
 Read in detail any ADRs that relate to the current decision —
 does this amend, supersede, or build on something already
-recorded?
+recorded? Check their consequences too: they may assert a constraint
+that the new decision changes even when the decision paragraph does not.
 
 If the project doesn't have `docs/adr/README.md` yet, help
 the human set it up. Every project should index its ADRs there.
@@ -108,9 +109,11 @@ add, but when there is nothing left to take away."*
 — Antoine de Saint-Exupéry
 
 A good ADR is well thought out, concise, and honest about
-trade-offs. Every sentence should earn its place. If a detail
-doesn't help a future reader understand the *why* or the
-*trade-offs*, cut it.
+trade-offs. Every sentence should earn its place. Lead with the
+actual decision pressure; cut implementation history and repeated
+background that does not explain the choice. If a risk is only
+hypothetical, say so or remove it rather than inventing a reason
+to justify the decision.
 
 ### Intent, not implementation instructions
 
@@ -149,8 +152,8 @@ what exists — explain the forces that led here.
 
 ### Consequences are trade-offs
 
-Split consequences into two lists: what becomes easier and what
-becomes harder; include material neutral effects where relevant.
+Use bullet-point lists for what becomes easier and what becomes
+harder; include material neutral effects where relevant.
 Be honest about both sides and describe the resulting constraints,
 not just the hoped-for benefits.
 
