@@ -1,6 +1,6 @@
 ---
 name: bdd-formulation
-description: Use when writing or reviewing Gherkin scenarios, especially after discovering examples or edge cases that reveal a business rule
+description: Write or review Gherkin scenarios after discovery, using Memba's agreed problem-domain vocabulary and concrete examples of business rules.
 ---
 
 # BDD Formulation
@@ -8,6 +8,8 @@ description: Use when writing or reviewing Gherkin scenarios, especially after d
 Formulation is the craft of writing Gherkin that serves as
 living documentation. Good scenarios are concrete examples
 of business rules, not test scripts.
+
+When formulation follows `bdd-discovery`, continue its existing Three Amigos collaboration through `agent-collaboration`. Do not replace the live collaborators with a post-hoc review panel.
 
 ## Core Habit
 
@@ -19,6 +21,12 @@ In Memba, use the native Gherkin `Rule:` keyword for rule headings.
 Both the browser Cucumber runner and the Elixir/domain Cucumber parser
 support it now, so commented rule headings are no longer needed.
 
+## Naming Checkpoint
+
+Names are part of formulation, not cosmetic cleanup after modelling. Read `docs/problem-domain-terms.md`, extract the important nouns and verbs from the example map, and invoke `domain-vocabulary` with those terms and their concrete examples. Use its output to apply canonical problem-domain terms consistently in `Feature`, `Rule`, `Example`, and step wording. Keep solution mechanisms out of scenarios unless the mechanism itself is agreed observable behaviour.
+
+Do not treat a proposed addition, replacement, or changed meaning as accepted until Matt agrees through `domain-vocabulary`. Apply accepted lexicon changes to the scenarios; keep unresolved naming questions explicit. Return the formulated scenarios with the vocabulary record produced by that skill.
+
 ```gherkin
 Rule: Manual blockers replace the existing manual blocker
 
@@ -28,6 +36,36 @@ Rule: Manual blockers replace the existing manual blocker
     When I add manual blocker to "deploy" with reason "waiting on review"
     Then the JSON yak "deploy" should have exactly one manual blocker with reason "waiting on review"
 ```
+
+## Temporal Formulation
+
+Use concrete `Given`/`When`/`Then` sequences to make **when** a rule applies visible. Formulation should expose temporal policy, not merely restate outcomes.
+
+For any behaviour whose outcome may depend on sequence or time—such as changing eligibility, preferences, permissions, lifecycle state, scheduled work, or asynchronous effects—ask:
+
+- What relevant state existed before the action?
+- At what action or event is the decision made?
+- Does a later state change alter an already-made decision or only future decisions?
+- What happens while someone or something is temporarily absent, inactive, pending, or in transition?
+- What resumes, persists, expires, queues, or is deliberately not backfilled?
+- Which ordering of otherwise valid actions changes the outcome?
+- What boundary examples just before, during, and after the transition distinguish the rule?
+
+Write the smallest scenarios that reveal these distinctions. Keep business-significant ordering explicit, but avoid clocks, queues, jobs, database state, and other implementation timing unless stakeholders actually observe them. If concrete sequencing reveals a missing or unnecessarily expensive rule, return it to discovery and Matt rather than encoding an accidental policy in Gherkin.
+
+## Collaborate While Formulating
+
+Wake the existing Product/business, Development, and Testing collaborators at natural pauses when a scenario makes a rule, name, decision point, ordering, or boundary concrete. Let them inspect the actual facilitator conversation in BB; in standalone Pi, send the new turns verbatim. Ask for only significant evidence-backed questions or counterexamples that could change shared understanding.
+
+Use their roles continuously:
+
+- **Product/business** challenges whether the scenario preserves the smallest valuable rule rather than smuggling deferred policy back in.
+- **Development** flags domain distinctions, timing assumptions, or responsibility consequences that need clarification before modelling.
+- **Testing** proposes concrete counterexamples and boundary sequences that reveal what the rule actually means.
+
+The facilitator deduplicates and filters observations, brings Matt only questions requiring domain knowledge or a consequential decision, and records his answers in the scenarios, vocabulary record, map, or deferrals. Collaborators advise; they do not edit the feature, decide wording or policy, or require unanimity.
+
+Before formulation is treated as agreed, give each available collaborator one final catch-up through the latest conversation event, process outstanding significant observations, and disclose any degraded participation. Then end the collaboration unless the caller explicitly needs the same team for another conversational activity. This boundary catch-up is not a separate ensemble review.
 
 ## BRIEF Check
 
@@ -68,3 +106,11 @@ When a scenario feels long, do not shorten it mechanically. First ask what makes
 - Is the data concrete and business-readable?
 - Are repeated steps revealing a named domain concept that should become one higher-level step?
 - Would a feature with no `Rule:` sections be clearer if its rules were extracted?
+- Do its nouns and verbs match `docs/problem-domain-terms.md`?
+- Is any solution-domain mechanism masquerading as stakeholder language?
+- Does any proposed vocabulary change still need Matt's agreement?
+- Is the rule's decision point clear: what was true before, what action happens, and when the outcome becomes fixed?
+- Could a later state change affect past/queued work, only future work, or neither—and do examples make that policy explicit?
+- Are important orderings, temporary states, persistence, expiry, resumption, and no-backfill cases concrete without leaking implementation mechanics?
+
+If later domain modelling finds that a command, event, or invariant has a more natural problem-domain noun or verb, reopen formulation through `domain-vocabulary`; update the agreed scenarios and lexicon before treating the model term as settled. A later bounded correction may use fresh collaborators if useful, but does not require recreating the original live team or running a post-hoc ensemble.

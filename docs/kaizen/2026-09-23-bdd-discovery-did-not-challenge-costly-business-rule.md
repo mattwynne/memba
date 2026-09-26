@@ -89,7 +89,7 @@ Open evaluation questions include whether to use blinded pre-implementation arti
 
 ## Possible prevention ideas
 
-- Add an adversarial subagent review loop to `bdd-discovery` that challenges rule value, missing examples and scope before formulation.
+- Add adversarial agent collaboration to `bdd-discovery` that challenges rule value, missing examples and scope while mapping and formulation are happening.
 - Require the review to produce questions and simpler alternatives, not silently rewrite the map or decide for Matt.
 - Follow the agreed example map with a collaborative domain-modelling session covering concepts, commands, events, invariants and context ownership.
 - Record the agreed domain model systematically in the iteration plan and require Matt's involvement before accepting consequential ADRs.
@@ -103,9 +103,11 @@ Root cause: Example mapping encouraged concrete examples and slicing, but did no
 
 Fix applied:
 
-- `.pi/skills/bdd-discovery/SKILL.md`: made the goal the simplest rule set that is good enough for now while thoroughly exploring retained scope; added outcome-versus-mechanism challenges and one bounded parallel adversarial review using the product, development, and testing Three Amigos lenses.
-- The skill now records the map as a lightweight Gherkin skeleton using `Feature:`, `Rule:`, and `Example:` names. Questions and sliced stories remain alongside it as lists, while scenario steps stay in `bdd-formulation`.
-- The review returns missed cases, possible removals, disagreements, and trade-offs without changing agreed rules or scope. The stakeholder and team retain the decisions, and the review does not loop automatically.
+- `.pi/skills/bdd-discovery/SKILL.md`: made the goal the simplest rule set that is good enough for now while thoroughly exploring retained scope; added outcome-versus-mechanism challenges and live Product/business, Development, and Testing collaborators.
+- `.pi/skills/bdd-formulation/SKILL.md`: continues the same Three Amigos collaboration as concrete Given/When/Then scenarios expose language, timing, and boundary questions.
+- `.pi/skills/agent-collaboration/SKILL.md`: provides persistent BB-thread coordination with actual facilitator-timeline access and a standalone Pi fallback using verbatim updates.
+- The skill records the map as a lightweight Gherkin skeleton using `Feature:`, `Rule:`, and `Example:` names. Questions and sliced stories remain alongside it as lists, while scenario steps stay in `bdd-formulation`.
+- Collaborators return significant questions, counterexamples, and simpler alternatives while understanding is evolving. They do not change agreed rules or scope; the facilitator filters observations and Matt retains decisions. A boundary catch-up replaces a separate post-hoc review panel.
 
 Validation:
 
