@@ -5,11 +5,11 @@ description: Start planning a product or engineering iteration, classify it as b
 
 # Iteration Planning Router
 
-Use this skill as the single entry point for iteration planning. Keep this layer thin: understand the product context, establish what Matt wants to change, classify the work, invoke the specialist skill, then hand a validated plan to `iteration-delivery`.
+Use this skill as the single entry point for iteration planning. Keep this layer thin: understand the product context, establish what Matt wants to change, classify the work, invoke the specialist skill, then hand a published ready plan to `iteration-delivery`.
 
 Before interviewing, make a short, read-only context pass so questions are informed rather than generic. Read the current product direction in `docs/iterations/roadmap.md`, the iteration history in `docs/iterations/README.md`, the canonical language in `docs/problem-domain-terms.md`, and `docs/problems/README.md` plus current problem records relevant to Matt's opening request. Inspect relevant recent or related iteration plans and acceptance features when they clarify what has already been tried or agreed. Summarize the likely context and uncertainties internally; do not infer Matt's present intent from repository history.
 
-Do not write the plan, formulate scenarios, model the domain, author ADRs, validate the plan, or launch Fabro in this router; those responsibilities belong to lower-level skills. Keep this context pass targeted: broad implementation exploration belongs to the selected specialist.
+Do not write the plan, formulate scenarios, model the domain, author ADRs, run Fabro validation, or launch Fabro in this router; those responsibilities belong to lower-level skills. Keep this context pass targeted: broad implementation exploration belongs to the selected specialist.
 
 ## Intake
 
@@ -31,17 +31,18 @@ Choose exactly one route:
 
 If classification is unclear, ask Matt. Do not inspect implementation and infer the product classification silently. If a proposed technical iteration changes business behaviour, route it as behaviour-changing.
 
-Pass the specialist the context summary, intake summary, relevant source links, and Matt's wording. The specialist initializes `planning-progress` with its complete flow, then performs deeper targeted context exploration.
+Pass the specialist the context summary, intake summary, relevant source links, and Matt's wording. The specialist performs deeper targeted context exploration.
 
 ## Completion
 
 The selected specialist returns either:
 
-- a published, validated plan path and commit;
+- a published ready plan path and pushed commit;
+- an already validated plan path and pushed commit when Matt explicitly chose validation-only before launch;
 - a question or decision for Matt; or
-- a precise planning/validation blocker.
+- a precise planning, publication, or optional-validation blocker.
 
-For a validated plan, invoke `iteration-delivery`. That skill owns the explicit launch decision and any Fabro command. Planning does not imply launch approval.
+For a published ready or validated plan, invoke `iteration-delivery`. That skill owns the single explicit launch decision and the Fabro command. Planning, publication, or validation-only success does not imply launch approval.
 
 ## Process Flow
 
@@ -56,10 +57,10 @@ digraph iteration_planning {
   classify [shape=diamond, label="Changes observable\nbehaviour?"];
   behaviour [label="behaviour-iteration-planning"];
   technical [label="technical-iteration-planning"];
-  result [shape=diamond, label="Published and\nvalidated plan?"];
+  result [shape=diamond, label="Published ready or\nvalidated plan?"];
   blocked [label="Return question or blocker to Matt"];
-  delivery [label="iteration-delivery\nasks whether to launch Fabro"];
-  stop [shape=doublecircle, label="Stop or launch only\nwith explicit approval"];
+  delivery [label="iteration-delivery\nasks: validate and, if it passes, implement?"];
+  stop [shape=doublecircle, label="Stop, validation-only, or implement\nonly with explicit approval"];
 
   start -> context -> intake -> classify;
   classify -> behaviour [label="yes"];

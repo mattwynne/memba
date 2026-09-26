@@ -41,7 +41,7 @@ Commands, events, and invariants often expose a more natural business noun or ve
 2. return the evidence to `bdd-formulation` and this skill;
 3. ask Matt whether the behaviour wording and lexicon should change;
 4. if agreed, update the lexicon and any formulated scenarios that use the changed concept; do not edit unrelated Gherkin;
-5. when Gherkin changed, repeat the caller-defined formulation review and Matt-agreement checkpoint while preserving behaviour;
+5. when Gherkin changes, use a live collaborator catch-up if that collaboration is active; otherwise check the wording-only diff for coherence without adding another approval ceremony;
 6. then revise and review the model.
 
 If no scenario uses the changed term, update the lexicon and model without manufacturing a formulation step. If applying the term would change a rule, example, timing, actor, or outcome, stop vocabulary maintenance and return the policy question to behaviour planning.

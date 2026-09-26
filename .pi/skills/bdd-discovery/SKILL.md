@@ -58,18 +58,18 @@ that belongs in `bdd-formulation`.
 
 ## How to Run It
 
-1. Start with the story and the rules people already know.
-2. Ask for concrete examples for each rule.
-3. Record each example under the rule it illustrates in the Gherkin skeleton.
-4. Capture uncertainty as questions; do not solve everything in the room.
-5. Challenge whether each rule describes a needed outcome or assumes a
+1. Start the live Three Amigos collaboration below.
+2. Start with the story and the rules people already know.
+3. Ask for concrete examples for each rule.
+4. Record each example under the rule it illustrates in the Gherkin skeleton.
+5. Capture uncertainty as questions; do not solve everything in the room.
+6. Challenge whether each rule describes a needed outcome or assumes a
    mechanism. Remove, weaken, or defer rules that are not needed now.
-6. Probe boundaries, transitions, reversals, failure paths, and interactions
+7. Probe boundaries, transitions, reversals, failure paths, and interactions
    for the behaviour that remains in scope.
-7. Capture tangents or large discoveries as new stories.
-8. Before declaring the story ready, run the bounded adversarial review
-   below using the Three Amigos lenses.
-9. Stop when the story is clear enough to pull, or the time-box expires.
+8. Capture tangents or large discoveries as new stories.
+9. Wake the collaborators at natural pauses as rules and examples become concrete.
+10. Stop when the story is clear enough to formulate, or the time-box expires.
 
 ## Discovery Habits
 
@@ -82,24 +82,19 @@ that belongs in `bdd-formulation`.
 - Seek both minimality and completeness: take away accidental scope without
   leaving retained behaviour underexplored.
 
-## Bounded Adversarial Review
+## Live Three Amigos Collaboration
 
-Near the end of discovery, invoke `ensemble-review` once with this caller-owned brief:
+Invoke `agent-collaboration` at the start of mapping with three persistent, read-only roles:
 
-- **Subject:** whether the map is the smallest sufficiently understood slice.
-- **Artifact:** current story, rules, examples, questions, sliced-out stories, source evidence, and agreed constraints.
-- **Focus:** three complementary Three Amigos lenses:
-  1. **Product/business** — challenge present value, distinguish outcomes from mechanisms, and identify rules to remove, weaken, or defer. Your goal is to make this the smallest useful, coherent slice we could deliver.
-  2. **Development** — look for missed lifecycle, state, timing, integration, ownership, and cross-context consequences; flag disproportionate complexity.
-  3. **Testing** — seek counterexamples, boundaries, reversals, failure paths, and rule interactions within retained scope.
-- **Rubric:** Which retained rules lack current value? Which assumptions or examples are missing? What is the smallest coherent slice? Which lifecycle, timing, boundary, reversal, failure, or interaction examples would materially change understanding?
-- **Known questions:** the map's red cards, or `None`.
-- **Constraints:** read-only; do not rewrite the map, decide policy, accept scope, or turn optional ideas into requirements. The stakeholder and team own decisions.
-- **Feedback route:** this discovery conversation and its stakeholder/team.
+1. **Product/business** — keep asking whether a rule has present value, whether it describes an outcome or assumes a mechanism, and what can be removed, weakened, or deferred to make this the smallest useful coherent slice.
+2. **Development** — look for lifecycle, state, timing, integration, ownership, and cross-context consequences that expose ambiguity or disproportionate complexity.
+3. **Testing** — offer concrete counterexamples around boundaries, reversals, failure paths, ordering, and interactions among retained rules.
 
-The generic ensemble discovers up to three independent model families and synthesizes only the highest-value questions, examples, alternatives, assumptions, evidence, agreements, and disagreements. The stakeholder and team decide before the map is updated or declared ready.
+The shared artifacts are the facilitator conversation, current map, red questions, sliced-out stories, source evidence, and agreed constraints. An observation is significant only when a concrete question, counterexample, contradiction, or simpler alternative could materially change shared understanding. Reviewers must not edit artifacts, decide policy, accept scope, or turn optional ideas into requirements.
 
-This is one review round, not an automatic revision loop. The model panel applies the supplied Three Amigos lenses; it does not replace the collaborative Three Amigos conversation, stakeholder judgment, or prove that every unknown unknown has been found.
+In BB, let collaborators inspect the actual facilitator timeline incrementally. In standalone Pi, send them verbatim new turns at the same natural pauses. The facilitator filters and introduces significant observations while mapping is still in progress, then returns Matt's decisions and deferrals to collaborators. Do not make the agents debate until they agree.
+
+Keep these collaborators alive when moving into `bdd-formulation`; formulation continues the same conversation rather than launching a post-hoc review panel. Before leaving discovery, request one catch-up through the latest conversation event and process any outstanding significant observations. This completes the discovery phase of the live collaboration; it is not a separate artifact review.
 
 ## Reading the Map
 
@@ -119,7 +114,9 @@ Move to `bdd-formulation` when:
 - Open questions are captured and owned.
 - Unneeded behaviour is removed or explicitly sliced out.
 - Material trade-offs remain with the stakeholder rather than being silently
-  decided by reviewers.
+  decided by collaborators.
+- The live collaborators have caught up through the latest discovery decision;
+  their handles are available to continue into formulation.
 
 ## Source
 

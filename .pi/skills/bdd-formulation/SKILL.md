@@ -9,6 +9,8 @@ Formulation is the craft of writing Gherkin that serves as
 living documentation. Good scenarios are concrete examples
 of business rules, not test scripts.
 
+When formulation follows `bdd-discovery`, continue its existing Three Amigos collaboration through `agent-collaboration`. Do not replace the live collaborators with a post-hoc review panel.
+
 ## Core Habit
 
 When examples reveal a rule, make the rule visible in the
@@ -50,6 +52,20 @@ For any behaviour whose outcome may depend on sequence or time—such as changin
 - What boundary examples just before, during, and after the transition distinguish the rule?
 
 Write the smallest scenarios that reveal these distinctions. Keep business-significant ordering explicit, but avoid clocks, queues, jobs, database state, and other implementation timing unless stakeholders actually observe them. If concrete sequencing reveals a missing or unnecessarily expensive rule, return it to discovery and Matt rather than encoding an accidental policy in Gherkin.
+
+## Collaborate While Formulating
+
+Wake the existing Product/business, Development, and Testing collaborators at natural pauses when a scenario makes a rule, name, decision point, ordering, or boundary concrete. Let them inspect the actual facilitator conversation in BB; in standalone Pi, send the new turns verbatim. Ask for only significant evidence-backed questions or counterexamples that could change shared understanding.
+
+Use their roles continuously:
+
+- **Product/business** challenges whether the scenario preserves the smallest valuable rule rather than smuggling deferred policy back in.
+- **Development** flags domain distinctions, timing assumptions, or responsibility consequences that need clarification before modelling.
+- **Testing** proposes concrete counterexamples and boundary sequences that reveal what the rule actually means.
+
+The facilitator deduplicates and filters observations, brings Matt only questions requiring domain knowledge or a consequential decision, and records his answers in the scenarios, vocabulary record, map, or deferrals. Collaborators advise; they do not edit the feature, decide wording or policy, or require unanimity.
+
+Before formulation is treated as agreed, give each available collaborator one final catch-up through the latest conversation event, process outstanding significant observations, and disclose any degraded participation. Then end the collaboration unless the caller explicitly needs the same team for another conversational activity. This boundary catch-up is not a separate ensemble review.
 
 ## BRIEF Check
 
@@ -97,4 +113,4 @@ When a scenario feels long, do not shorten it mechanically. First ask what makes
 - Could a later state change affect past/queued work, only future work, or neither—and do examples make that policy explicit?
 - Are important orderings, temporary states, persistence, expiry, resumption, and no-backfill cases concrete without leaking implementation mechanics?
 
-If later domain modelling finds that a command, event, or invariant has a more natural problem-domain noun or verb, reopen formulation through `domain-vocabulary`; update the agreed scenarios and lexicon before treating the model term as settled.
+If later domain modelling finds that a command, event, or invariant has a more natural problem-domain noun or verb, reopen formulation through `domain-vocabulary`; update the agreed scenarios and lexicon before treating the model term as settled. A later bounded correction may use fresh collaborators if useful, but does not require recreating the original live team or running a post-hoc ensemble.
