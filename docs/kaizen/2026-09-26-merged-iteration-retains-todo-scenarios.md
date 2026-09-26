@@ -12,7 +12,7 @@ By the end of an *implemented* iteration, its agreed acceptance scenarios should
 
 ## What happened
 
-Iteration **064 is marked merged**, yet `custom_group_lifecycle.feature` contains ten iteration-064 scenario AST nodes under `@todo-ui` (including two also under `@todo-domain`); `custom_group_membership.feature` also has iteration-064 `@todo-ui` rules. The default browser profile excludes all of these lifecycle scenarios. The two `@todo-domain` lifecycle outlines are excluded from the domain runner too. The browser-configuration inventory test had an outdated expectation that all ten ran in both layers; inspecting the inherited tags exposed the mismatch. We have not established whether these scenarios represent undelivered behaviour, obsolete planning examples, or a tag-cleanup oversight.
+Iteration **064 is marked merged**, yet `custom_group_lifecycle.feature` contains ten iteration-064 scenario AST nodes under `@todo-ui` (including two also under `@todo-domain`); `custom_group_membership.feature` has another five iteration-064 scenario AST nodes under `@todo-ui`: **15 disabled nodes** in the merged iteration in total. The default browser profile excludes all of these lifecycle scenarios. The two `@todo-domain` lifecycle outlines are excluded from the domain runner too. The browser-configuration inventory test had an outdated expectation that all ten ran in both layers; inspecting the inherited tags exposed the mismatch. We have not established whether these scenarios represent undelivered behaviour, obsolete planning examples, or a tag-cleanup oversight.
 
 Iterations **065–067 are validated, not merged**, and their disabled planning scenarios are expected at this stage. A repository-wide ban on `@todo` would therefore block valid planning.
 
