@@ -1,0 +1,287 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+index 527acf3..b8bfddb 100644
+--- a/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
++++ b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+@@ -1,111 +1,146 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "004-fe933712-1",
+-  "task_id": "004",
+-  "todo_line": "- [ ] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship.",
++  "packet_id": "005-aa0da3c-1",
++  "task_id": "005",
++  "todo_line": "- [ ] 005 Wire one-click Request access on the ordinary non-member placeholder with single-submit sending and concise sent feedback; remove the helper and Admin email only from that placeholder and sent state; preserve the access barrier and Admin contact elsewhere; and update the two authorised existing placeholder assertions.",
+   "attempt": "implementation",
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "fe933712d61c6012641f1d6ca5d5dee29c823865",
+-  "outcome": "Render the fixed request body's validated current-club targeted-add URL as an escaped `Add Eve to Board` primary action in root member-message HTML while preserving the exact plain-text body and safe ordinary-message behavior.",
++  "source_baseline": "aa0da3c72e6e34197f4f9d516d1991bec7fd42c5",
++  "outcome": "Let an active club member outside a custom group send the accepted fixed Admin request from that group's private placeholder, with one-click sending and local sent feedback, while preserving all private-data barriers and the separate built-in Admin contact placeholder.",
+   "scope": [
+-    "Extend root member-message HTML presentation to recognise the stored body's add-action line and URL, validate the URL against the request's current club origin and exact `/groups/:group_id/members/add/:person_id` route shape, and render the action with `EmailTemplates.primary_action/3`.",
+-    "Keep all body prose as escaped plain-text-derived HTML; only the validated action line/URL may become trusted component markup, and the helper must escape both the derived button label and URL.",
+-    "Add focused `MemberMessageEmail` tests proving the expected current-club URL becomes an `Add Eve to Board` action, root text email remains byte-for-byte the stored body, unrelated subject text cannot trigger an action, and malformed or unsafe origin/route candidates remain escaped non-action text."
++    "Add an idle/sending/sent request-access interaction to the existing ordinary-non-member custom-group placeholder. The idle state has one `Request access` action, LiveView's submit state disables it with concise sending copy, and accepted message dispatch replaces it with an accessible `Your request has been sent.` status plus an explicit `Send another request` action.",
++    "Handle the request in `MemberDashboardLive` by generating a fresh typed message ID and calling `Messaging.request_group_access/2` with only the selected club ID, authenticated current person's ID, and selected group ID from socket assigns. Treat both ordinary successful return shapes as accepted-for-send; use existing generic error feedback for a rejected/failed dispatch and leave a safe retry path.",
++    "Keep the private-group title and privacy barrier copy, but remove the superseded `Think you should be? Ask the club admins.` helper and Admin mailto line from the custom-group request and sent states. Keep the existing Admin email guidance for a non-member viewing the built-in Admin Group, where Request access must not be offered.",
++    "Add focused routed LiveView coverage for eligibility, server-owned dispatch facts, single-submit/sent/repeat states, failure safety, and continued non-disclosure/non-membership. Prove request acceptance does not expose conversations, members, group email, a composer, or add the requester.",
++    "Update only the superseded Board-placeholder assertion in `acceptance-tests/features/group_conversations.feature` and `acceptance-tests/features/journeys/custom_group_admission.feature`, plus the exact domain/browser step plumbing those changed assertions require. Add `@iteration-066` to each altered scenario while retaining its existing provenance and journey selection."
+   ],
+   "scope_exclusions": [
+-    "Do not change `RequestGroupAccess`, its accepted server-owned subject/body/recipient construction, message events, delivery dispatch, provider behavior, or the general web composition policy.",
+-    "Do not add an HTML body to the domain model, action metadata, a request entity/status, arbitrary rich text, general URL linkification, or a subject-line marker for trusted/system messages.",
+-    "Do not implement the Request access placeholder, sending/sent feedback, targeted-add route, explicit addition, welcome flow, browser journey, or placeholder assertion updates; those remain tasks 005 through 008.",
+-    "Do not edit acceptance feature files, step definitions, application UI, routes, iteration planning documents, ADRs, or planner-owned delivery artifacts.",
+-    "Do not run `dev check`, `dev check --quick`, `dev ci`, browser acceptance, or another unscoped full-suite command in this packet."
++    "Do not change the accepted `RequestGroupAccess` command/API, authoritative Membership resolver, fixed subject/body/recipient construction, email renderer, general web composition policy, or ordinary Admin conversation behavior.",
++    "Do not add a request entity, pending/approved state, deduplication, editable composer, client-supplied sender/destination/subject/body, provider-delivery claim, automatic group membership, new conversation access, or follow rights.",
++    "Do not offer Request access for built-in Everyone or Admin groups. Do not remove or alter the existing Admin Group contact assertion or its mailto behavior; only custom-group ordinary-non-member placeholders lose that alternative contact line.",
++    "Do not add the `/groups/:group_id/members/add/:person_id` route, targeted person presentation, explicit Add interaction, welcome behavior, or any task-006/007 behavior.",
++    "Do not implement or enable `acceptance-tests/features/journeys/custom_group_access_request.feature`; its `@todo` browser journey and dedicated step plumbing remain task 008.",
++    "Do not edit other acceptance scenarios, acceptance criteria, iteration planning files, ADRs, or project reference docs. Do not weaken existing name/privacy/non-joining assertions in either authorised regression scenario.",
++    "Do not run `dev check`, `dev check --quick`, `dev ci`, or another unscoped full-suite command in this packet."
+   ],
+   "references": [
+     {
+-      "path": "web/lib/memba/messaging/member_message_email.ex",
++      "path": "web/lib/memba_web/live/member_dashboard_live.ex",
+       "symbols": [
+-        "text_body/1",
+-        "message_html_body/1",
+-        "message_section/2"
++        "mount/3",
++        "handle_params/3",
++        "handle_event/3",
++        "refresh_dashboard/3"
+       ],
+-      "facts": "Root text output currently returns `request.body` unchanged. Root HTML sends the whole body through `EmailTemplates.plaintext_to_html/2`; keep that escaping baseline and introduce only a narrowly validated component action."
++      "facts": "This LiveView already owns selected-group interaction state and has authoritative `selected_club`, `selected_group`, `selected_group_access`, and `current_member.id` assigns. Picker state is initialized and reset across route changes here; request UI state should likewise not leak to another selected group."
+     },
+     {
+-      "path": "web/lib/memba/email_templates.ex",
++      "path": "web/lib/memba_web/controllers/page_html/club.html.heex",
+       "symbols": [
+-        "plaintext_to_html/2",
+-        "primary_action/3",
+-        "escaped_text/1"
++        "ordinary_non_member?",
++        "member-group-access-guidance",
++        "member-group-access-title",
++        "member-group-admin-email"
+       ],
+-      "facts": "`plaintext_to_html/2` escapes body text and `primary_action/3` already escapes its label and URL while rendering the approved table-backed button plus printed fallback URL."
++      "facts": "The ordinary non-member branch currently preserves privacy but uses one placeholder for both custom and built-in groups. Its first copy block is the access barrier; the later `Think you should be?` helper and Admin mailto are the superseded custom-group copy. Add stable IDs and semantic status markup for the new interaction."
+     },
+     {
+-      "path": "web/lib/memba/messaging/email_delivery_request.ex",
++      "path": "web/lib/memba_web/member_dashboard_presentation.ex",
+       "symbols": [
+-        "Memba.Messaging.EmailDeliveryRequest"
++        "load_selected_group/6",
++        "load_permitted_surface/5",
++        "custom_group_admission_assigns/3"
+       ],
+-      "facts": "The renderer receives the stored `body` and authoritative projected `club_slug`; no new action metadata is required."
++      "facts": "An ordinary outsider receives `selected_group_access: :ordinary_non_member`, empty message/member rows, and no member count or group address. Existing code distinguishes custom groups with `SystemGroups.custom_group?/1`; request eligibility must combine custom-group identity with ordinary non-member access without broadening loaded data."
+     },
+     {
+-      "path": "web/lib/memba_web/club_site.ex",
++      "path": "web/lib/memba/messaging.ex",
+       "symbols": [
+-        "url/2",
+-        "safe_club_url?/1"
++        "request_group_access/2"
+       ],
+-      "facts": "`url/2` builds the configured scheme, host, and port for the specific club slug. `safe_club_url?/1` accepts any configured club subdomain, so it is not sufficient by itself for the required expected-current-club-origin check."
++      "facts": "The accepted application service expects `message_id`, `club_id`, `requester_person_id`, and `group_id`, reauthorizes at a stable checkpoint, derives every message fact server-side, rejects built-in/cross-club/inactive/already-member targets, and returns the existing send dispatch result."
+     },
+     {
+-      "path": "web/lib/memba/messaging.ex",
++      "path": "web/test/memba_web/live/member_dashboard_live_test.exs",
+       "symbols": [
+-        "request_group_access_body/1"
++        "canonical group routes resolve same-club group identity without private rows"
+       ],
+-      "facts": "The accepted body format contains `Add <person name> to <group name>:` immediately followed by the server-generated current-club `/groups/<group id>/members/add/<person id>` URL; preserve this producer unchanged."
++      "facts": "This routed test currently proves the custom-group outsider's title, Admin email placeholder, absent private rows, and malformed-route privacy. Evolve the superseded custom-group contact assertion and add interaction tests here while retaining every privacy assertion."
+     },
+     {
+-      "path": "web/lib/memba/id.ex",
++      "path": "acceptance-tests/features/group_conversations.feature",
+       "symbols": [
+-        "cast/2"
++        "Alice follows an Admin group link",
++        "Alice can find Board but cannot read its discussions"
+       ],
+-      "facts": "Use the existing typed-ID contract when validating the route's group and person path segments rather than accepting arbitrary non-empty segments."
++      "facts": "Only the Board scenario's Admin-email expectation is superseded; retain its name, privacy and no-membership assertions, retain `@iteration-061`, add `@iteration-066`, and leave the separate Admin Group contact scenario unchanged and runnable."
+     },
+     {
+-      "path": "web/test/memba/messaging/member_message_email_test.exs",
++      "path": "web/test/features/step_definitions/group_conversation_steps.exs",
++      "facts": "The domain runner's current Board placeholder step asserts the old Admin address from presentation assigns. Replace only the changed Board assertion plumbing with a request-eligibility/presentation assertion; preserve the distinct generic Admin-email step."
++    },
++    {
++      "path": "acceptance-tests/features/journeys/custom_group_admission.feature",
+       "symbols": [
+-        "email_delivery_request/1"
++        "Eve returns to Board after Dan admits her"
+       ],
+-      "facts": "This is the focused renderer test seam and already builds requests with controllable club slug, subject, and body."
++      "facts": "This already-running journey currently expects Eve's Board placeholder to show the Admin email. Change only that expectation to the approved Request access affordance, add `@iteration-066` provenance without removing `@journey`, and retain every creation, privacy, admission, non-joining, and post-admission assertion."
++    },
++    {
++      "path": "acceptance-tests/features/step_definitions/group_conversation_steps.js",
++      "facts": "The browser step for Board name plus Admin email is the focused seam for the authorised journey assertion update. Keep the generic privacy step and group selection behavior intact; do not add the future iteration-066 request journey here beyond what the changed existing assertion needs."
+     },
+     {
+-      "path": "web/test/memba/messaging/request_group_access_test.exs",
+-      "facts": "Accepted coverage fixes the exact stored body and ClubSite-generated target URL; task 004 consumes that representation and must not revise its semantics."
++      "path": "docs/iterations/066-request-group-access/mockup.html",
++      "facts": "Approved states use `Request access`, disabled `Sending your request…`, `Your request has been sent.`, and `Send another request`; sent copy says the admins have the message, the requester is not in the group yet, and a normal welcome email follows only if added."
+     },
+     {
+-      "path": "docs/iterations/066-request-group-access/domain-model.md",
+-      "facts": "Email link presentation requires validation of the management URL itself, not the subject or prose; surrounding text and label remain escaped, and ordinary links to the same safe destination may receive the same presentation."
++      "path": "docs/iterations/066-request-group-access/design-handoff.md",
++      "facts": "The custom-group placeholder has no composer or alternative email contact, uses concise sending/sent feedback, and makes no tracked-status or provider-delivery promise."
+     },
+     {
+-      "path": "docs/iterations/066-request-group-access/mockup.html",
+-      "facts": "The approved email state shows `Add Eve to Board` as the primary action with a printed fallback URL and explains that opening it only reaches later read-only route behavior."
++      "path": "docs/reference/liveview-ui-structure.md",
++      "facts": "Keep the routed LiveView as interaction coordinator, use stable DOM IDs and semantic status markup, and test through those IDs and public route behavior."
++    },
++    {
++      "path": "docs/reference/liveview.md",
++      "facts": "Use LiveView event/form conventions and selector-based tests; `phx-disable-with` is the existing project mechanism for immediate single-submit feedback."
+     }
+   ],
+   "constraints": [
+-    "Treat the entire member-authored body as untrusted. Parse only enough structure to identify an unambiguous action-label line immediately associated with its candidate URL, and pass the label and URL through existing escaping helpers.",
+-    "A valid candidate must have the exact configured origin for `request.club_slug` (scheme, host, and effective port), no userinfo, query, or fragment, and exactly `/groups/:group_id/members/add/:person_id` with valid typed group and person IDs. A sibling club host, lookalike host, root Memba host, scheme/port mismatch, extra or missing path segment, wrong ID type, encoded route confusion, or relative/external URL must not become an action.",
+-    "Do not infer trust from `Access request:` or any other subject. Prove both directions: matching subject without a valid URL produces no action, while a valid same-club route in the supported body shape does not require a magic subject.",
+-    "For rejected candidates, render the original material only through escaped plaintext HTML and do not emit an `href` or primary-action markup for that candidate.",
+-    "Keep root `text_body/1` exactly equal to `request.body`, including the URL. Preserve existing root/reply headers, body copy, reply hints, footers, and ordinary bodies without a matching action.",
+-    "Use existing `MembaWeb.ClubSite`, `Memba.ID`, and `Memba.EmailTemplates` behavior; do not duplicate club-host configuration or hand-roll ID syntax.",
+-    "Do not use `Process.sleep/1`; keep the focused renderer tests pure and deterministic."
++    "Eligibility is server-owned: show and handle the action only when the selected group is a custom group, the current active club member has `:ordinary_non_member` access, and the local request state is idle. Recheck through `Messaging.request_group_access/2`; never trust event params for identity, club, group, destination, subject, or body, and make forged/repeated direct events outside idle a no-op.",
++    "Generate a fresh `Memba.ID.generate(:message)` for each deliberate request dispatch. Client-side disabling prevents accidental rapid resubmission, while `Send another request` deliberately returns to idle and permits a new ordinary message; do not persist or infer a pending request.",
++    "Accepted/sent means the ordinary message command was accepted, not that provider email delivery occurred or membership was granted. The sent state must continue to state or demonstrate that the requester is outside the target group.",
++    "Use one local placeholder status region with stable IDs and `role=\"status\"` or equivalent accessible live semantics. Preserve a usable action after an error and use existing generic error presentation rather than inventing request-specific infrastructure.",
++    "Keep the custom-group privacy barrier intact: no member count, member list, group email address, conversation subject/body, tabs, New message action, or composer may appear before admission.",
++    "When the selected group is built-in Admin, retain the existing helper/Admin mailto contact and do not render a Request access action. Existing Admin rights for a requester must not be removed or contradicted.",
++    "Keep styling aligned with the existing `.access` panel, shared button component, design tokens, and responsive layout. Add only narrowly necessary styles and no new component system or inline script.",
++    "The two feature edits are assertion migrations, not scenario rewrites. Preserve all old privacy/non-joining coverage and tags, add iteration-066 provenance, and do not apply `@todo` to either already-running scenario.",
++    "Do not use `Process.sleep/1`; synchronize through strong command consistency, projections, or existing test helpers."
+   ],
+   "focused_validation": [
+-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/member_message_email_test.exs test/memba/email_templates_test.exs"
++    "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
++    "PATH=\"$PWD/bin:$PATH\" dev test test/features/domain_cucumber_acceptance_test.exs --only 'scenario_name:Alice can find Board but cannot read its discussions' --only 'scenario_name:Alice follows an Admin group link'",
++    "PATH=\"$PWD/bin:$PATH\" dev acceptance features/journeys/custom_group_admission.feature"
+   ],
+   "completion_evidence_required": [
+-    "Return every changed path and identify the renderer boundary where validation occurs.",
+-    "Show that a supported body with the current club's typed targeted-add URL produces escaped `Add Eve to Board` primary-action markup and a printed fallback URL, while `text_body/1` remains exactly the stored body.",
+-    "List the unsafe cases covered, including at least sibling/lookalike or external origin, malformed/wrong route or typed IDs, injected label/body HTML, and subject-only spoofing; confirm rejected candidates have no action href and remain escaped text.",
+-    "Confirm ordinary root/reply member-message rendering and the accepted `RequestGroupAccess` body producer were not changed.",
+-    "Record the focused validation command, working directory, exit status, and test/failure counts; list any unresolved issue."
++    "Return every changed path and identify the LiveView event/state boundary and exact server-owned arguments passed to `Messaging.request_group_access/2`.",
++    "Show focused tests for custom-group outsider eligibility, disabled sending copy, accepted local status, deliberate repeat request with a fresh message, and safe generic failure/retry behavior.",
++    "Show that an accepted request creates the ordinary Admin message while leaving the requester outside the group and exposing no conversations, member rows, group email, compose surface, request record, or provider-delivery claim.",
++    "Show that forged event attributes cannot change requester, club, group, destination, subject, or body, and that built-in Admin retains its mailto guidance without a Request access action.",
++    "Identify the exact two existing feature assertions changed, confirm both retain their original privacy/non-joining semantics and gain `@iteration-066`, and confirm the future `custom_group_access_request.feature` remains `@todo` and unchanged.",
++    "Record each focused validation command, working directory, exit status, and scenario/test/failure counts; list any unresolved issue."
+   ],
+-  "candidate_origins": []
++  "candidate_origins": [],
++  "latest_review": {
++    "packet_id": "004-fe933712-1",
++    "decision": "accept",
++    "summary": "The predecessor email-rendering task was accepted with no gaps or unresolved candidate origins; this packet begins the next independent placeholder obligation."
++  },
++  "latest_worker_result": {
++    "packet_id": "004-fe933712-1",
++    "result": "ready_for_review",
++    "summary": "The accepted predecessor changed only member-message email rendering/tests and reported its focused 16-test validation passing; none of its candidate work is carried into task 005."
++  }
+ }
+diff --git a/docs/iterations/066-request-group-access/.delivery/execution-state.json b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+index 2de0345..20770d9 100644
+--- a/docs/iterations/066-request-group-access/.delivery/execution-state.json
++++ b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+@@ -2,34 +2,19 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "fe933712d61c6012641f1d6ca5d5dee29c823865",
++  "source_baseline": "aa0da3c72e6e34197f4f9d516d1991bec7fd42c5",
+   "accepted_tasks": [
+     "- [x] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
+     "- [x] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.",
+-    "- [x] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance."
++    "- [x] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance.",
++    "- [x] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship."
+   ],
+   "pending_obligations": [
+-    {
+-      "task_id": "004",
+-      "todo_line": "- [ ] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship.",
+-      "origin": "Combined plan.md Implementation Plan step 2 and its focused safe-rendering validation.",
+-      "status": "prepared",
+-      "coverage": [
+-        "Plain-text URL retention and safe styled HTML management action using the existing primary-action helper.",
+-        "Expected origin/route validation and escaping without arbitrary rich text, action metadata, or subject-based trust."
+-      ],
+-      "replaces": [
+-        "- [ ] 004 Present the stored body URL in text email and as a safe styled link in HTML using the existing primary-action helper.",
+-        "- [ ] 005 Recognise/validate the route and origin, escape all untrusted body text, and do not infer system authorship from a subject line or enable arbitrary HTML.",
+-        "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
+-      ],
+-      "candidate_origins": []
+-    },
+     {
+       "task_id": "005",
+       "todo_line": "- [ ] 005 Wire one-click Request access on the ordinary non-member placeholder with single-submit sending and concise sent feedback; remove the helper and Admin email only from that placeholder and sent state; preserve the access barrier and Admin contact elsewhere; and update the two authorised existing placeholder assertions.",
+       "origin": "Combined plan.md Implementation Plan step 3 with its two explicitly authorised regression-assertion updates.",
+-      "status": "pending",
++      "status": "prepared",
+       "coverage": [
+         "Approved non-member placeholder request, sending, sent, and repeat-request states with no composer or alternative Admin-email line.",
+         "Existing privacy barrier and Admin contact elsewhere, including the iteration-061 domain example and existing custom-group admission journey."
+@@ -121,10 +106,10 @@
+     },
+     {
+       "scope": "Safe HTML primary action and plain-text management URL with origin/route validation and escaping.",
+-      "pending_task_ids": [
+-        "004"
+-      ],
+-      "accepted_task_lines": []
++      "pending_task_ids": [],
++      "accepted_task_lines": [
++        "- [x] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship."
++      ]
+     },
+     {
+       "scope": "Non-member Request access UI, sending/sent feedback, removed helper/contact copy, and preserved privacy/contact regressions.",
+@@ -162,5 +147,5 @@
+       "accepted_task_lines": []
+     }
+   ],
+-  "planner_note": "Task 003 is now accepted at the trusted checkpoint and its prior revision candidate is resolved, so no candidate origin remains. Kept the established semantic split and prepared task 004 next because the existing member-message renderer already has the stored body, club slug, escaped plaintext renderer, and primary-action helper needed for a bounded safe-presentation change."
++  "planner_note": "The latest review accepted task 004 at the trusted checkpoint with no unresolved candidate origin. Kept the established semantic split and prepared task 005 next: it is the bounded non-member placeholder slice, including only the two plan-authorised superseded placeholder assertions; targeted add and the new iteration-066 browser journey remain later tasks."
+ }
+diff --git a/docs/iterations/066-request-group-access/.delivery/planner-result.json b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+index de26ccb..5740f11 100644
+--- a/docs/iterations/066-request-group-access/.delivery/planner-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+@@ -2,6 +2,6 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "fe933712d61c6012641f1d6ca5d5dee29c823865",
++  "source_baseline": "aa0da3c72e6e34197f4f9d516d1991bec7fd42c5",
+   "decision": "ready"
+ }
