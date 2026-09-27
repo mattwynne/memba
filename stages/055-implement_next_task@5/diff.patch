@@ -1,0 +1,713 @@
+diff --git a/acceptance-tests/features/group_conversations.feature b/acceptance-tests/features/group_conversations.feature
+index 15a3b08..42f3b5e 100644
+--- a/acceptance-tests/features/group_conversations.feature
++++ b/acceptance-tests/features/group_conversations.feature
+@@ -59,13 +59,13 @@ Feature: Group-scoped club conversations
+       And Alice should see the club Admin email address
+       But Alice should see neither Admin conversations nor its membership list
+ 
+-    @iteration-061
++    @iteration-061 @iteration-066
+     Scenario: Alice can find Board but cannot read its discussions
+       Given Alice is not a club admin
+       And Bob and Carol are members of the Kootenay Mountaineering Club Board group
+       And Board has the conversation "September agenda"
+       When Alice opens Board
+-      Then Alice should see Board's name and the club Admin email address
++      Then Alice should see Board's name and be offered Request access
+       But Alice should see neither Board conversations nor its membership list
+       And Alice should not become a member of Board
+ 
+diff --git a/acceptance-tests/features/journeys/custom_group_admission.feature b/acceptance-tests/features/journeys/custom_group_admission.feature
+index 72424e0..52e95bc 100644
+--- a/acceptance-tests/features/journeys/custom_group_admission.feature
++++ b/acceptance-tests/features/journeys/custom_group_admission.feature
+@@ -1,4 +1,4 @@
+-@journey
++@journey @iteration-066
+ Feature: Finding and joining a newly created Board
+   Creating a private group does not make it readable to every club member.
+   A club admin can admit someone without joining the group themselves.
+@@ -11,7 +11,7 @@ Feature: Finding and joining a newly created Board
+     Then Alice should be its only member
+     And Dan should not belong to Board
+     When Eve selects the Board group
+-    Then Eve should see Board's name and the club Admin email address
++    Then Eve should see Board's name and be offered Request access
+     But Eve should see neither Board conversations nor its membership list
+     When Dan adds Eve to Board
+     Then Eve should belong to Board
+diff --git a/acceptance-tests/features/step_definitions/group_conversation_steps.js b/acceptance-tests/features/step_definitions/group_conversation_steps.js
+index 8dfe820..e4f42ee 100644
+--- a/acceptance-tests/features/step_definitions/group_conversation_steps.js
++++ b/acceptance-tests/features/step_definitions/group_conversation_steps.js
+@@ -54,13 +54,14 @@ Then(
+ );
+ 
+ Then(
+-  /^(\w+) should see Board's name and the club Admin email address$/,
++  /^(\w+) should see Board's name and be offered Request access$/,
+   async function (personName) {
+-    const adminEmail = clubAdminEmailAddress(this, kootenayClubName);
+-
+     await withMemberHarness(this, personName, async (member) => {
+       await expect(member.page.locator("#member-group-name")).toHaveText("Board");
+-      await expect(member.page.locator("#member-group-admin-email")).toHaveText(adminEmail);
++      await expect(member.page.locator("#member-group-request-access")).toHaveText(
++        "Request access"
++      );
++      await expect(member.page.locator("#member-group-admin-email")).toHaveCount(0);
+     });
+   }
+ );
+@@ -190,24 +191,6 @@ group_id = Map.fetch!(payload, "groupId")
+   ).names;
+ }
+ 
+-function clubAdminEmailAddress(world, clubName) {
+-  const club = clubFor(world, clubName);
+-
+-  return serverCommands.runCommand(
+-    `
+-slug = Map.fetch!(payload, "slug")
+-%{
+-  email:
+-    Memba.ClubInboundEmailAddress.address(
+-      slug,
+-      Memba.Membership.SystemGroups.admin_email_slug()
+-    )
+-}
+-`,
+-    { slug: club.slug }
+-  ).email;
+-}
+-
+ function groupKeyForWorld(clubName, groupName) {
+   return `${clubName}:${groupName}`;
+ }
+diff --git a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+index 0b5bc9c..43b28c7 100644
+--- a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+@@ -1,27 +1,45 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "004-fe933712-1",
+-  "task_id": "004",
+-  "todo_line": "- [ ] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship.",
++  "packet_id": "005-aa0da3c-1",
++  "task_id": "005",
++  "todo_line": "- [ ] 005 Wire one-click Request access on the ordinary non-member placeholder with single-submit sending and concise sent feedback; remove the helper and Admin email only from that placeholder and sent state; preserve the access barrier and Admin contact elsewhere; and update the two authorised existing placeholder assertions.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba/messaging/member_message_email.ex",
+-    "web/test/memba/messaging/member_message_email_test.exs"
++    "acceptance-tests/features/group_conversations.feature",
++    "acceptance-tests/features/journeys/custom_group_admission.feature",
++    "acceptance-tests/features/step_definitions/group_conversation_steps.js",
++    "web/lib/memba_web/controllers/page_html/club.html.heex",
++    "web/lib/memba_web/live/member_dashboard_live.ex",
++    "web/lib/memba_web/member_dashboard_presentation.ex",
++    "web/test/features/step_definitions/group_conversation_steps.exs",
++    "web/test/memba_web/live/member_dashboard_live_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "mix format --check-formatted lib/memba/messaging/member_message_email.ex test/memba/messaging/member_message_email_test.exs",
++      "command": "mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex lib/memba_web/member_dashboard_presentation.ex lib/memba_web/controllers/page_html/club.html.heex test/features/step_definitions/group_conversation_steps.exs test/memba_web/live/member_dashboard_live_test.exs",
+       "working_directory": "/workspace/memba/web",
+       "exit_status": 0,
+-      "evidence": "The changed renderer and focused test file are formatted."
++      "evidence": "All changed Elixir and HEEx files are formatted."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/member_message_email_test.exs test/memba/email_templates_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
+       "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "16 tests passed with 0 failures. A supported current-club typed targeted-add URL renders an escaped Add Eve to Board primary action and printed fallback while root text remains the exact stored body. Rejected coverage includes sibling, lookalike, external and root hosts; scheme and port mismatches; relative URLs; userinfo, query and fragment; malformed, extra and wrong-typed routes; encoded route confusion; injected label/body HTML; subject-only spoofing; reply bodies; and ambiguous duplicate actions."
++      "evidence": "47 tests passed with 0 failures. Focused routed coverage proves custom-group eligibility, sending copy, accepted/sent/repeat states with distinct messages, forged-param isolation, no-op repeated direct events, generic failure/retry, ordinary Admin-message persistence, continued non-membership/non-disclosure, and built-in Admin mailto preservation."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/features/domain_cucumber_acceptance_test.exs --only 'scenario_name:Alice can find Board but cannot read its discussions' --only 'scenario_name:Alice follows an Admin group link'",
++      "working_directory": "/workspace/memba",
++      "exit_status": 0,
++      "evidence": "2 selected scenarios passed with 0 failures; 177 unrelated scenarios were excluded. Board now asserts Request access while retaining privacy and non-joining coverage, and the separate Admin contact scenario remains passing."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev acceptance features/journeys/custom_group_admission.feature",
++      "working_directory": "/workspace/memba",
++      "exit_status": 0,
++      "evidence": "1 browser scenario passed with 16 of 16 steps passing. Eve sees Request access without the Admin mailto, remains outside Board until Dan uses the existing admission flow, and all original journey assertions remain active."
+     }
+   ],
+-  "notes": "Validation occurs at the root MemberMessageEmail renderer boundary before EmailTemplates.primary_action/3: it requires one adjacent Add-label/URL pair, the exact ClubSite origin for the request club, no userinfo/query/fragment, the exact targeted-add path shape, and IDs accepted by Memba.ID. Rejected and ordinary bodies continue through plaintext_to_html/2, and replies are unchanged. RequestGroupAccess and its body producer were not changed. The initial TDD run failed as expected with 8 tests and 1 missing-action failure, then was superseded by the successful final runs. The pre-existing untracked Fabro __pycache__ file was preserved untouched.",
++  "notes": "MemberDashboardLive owns transient :idle/:sending/:sent state, resets it on routed group changes, ignores request events outside eligible idle state, generates a fresh typed message ID, and passes only message_id, selected_club.club_id, current_member.id as requester_person_id, and selected_group.group_id to Messaging.request_group_access/2 with strong consistency. Presentation eligibility requires a custom group plus :ordinary_non_member access; the application service remains the authoritative recheck. The initial TDD run failed on the absent affordance as expected and was superseded by the successful final runs; a first formatting check found one blank-line issue and was superseded by the successful check. Only the existing Board assertions in group_conversations.feature and custom_group_admission.feature changed, both retained privacy/non-joining semantics and gained @iteration-066; the future custom_group_access_request.feature remains @todo and unchanged. Per packet constraints, dev check was not run; the deterministic workflow's later dev_check node owns that gate. The pre-existing untracked Fabro __pycache__ directory was preserved untouched.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 2755715..3928a3a 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -221,18 +221,59 @@
+             Only people in {@selected_group.name} can read its conversations, get its emails,
+             or see who's in it. You're a member of {@selected_club.name}, but not of {@selected_group.name}.
+           </p>
+-          <p class="access__copy">
+-            Think you should be? Ask the club admins.
+-          </p>
+-          <p class="access__admin">
+-            Email the admins:
+-            <.link
+-              id="member-group-admin-email"
+-              href={"mailto:#{@club_admin_email_address}"}
+-            >
+-              {@club_admin_email_address}
+-            </.link>
+-          </p>
++
++          <div :if={@can_request_group_access?} id="member-group-request-access-panel">
++            <%= if @group_access_request_state == :sent do %>
++              <div
++                id="member-group-request-status"
++                class="mt-5 rounded-xl border border-sage-200 bg-sage-50 p-4"
++                role="status"
++                aria-live="polite"
++              >
++                <p class="font-semibold text-ink">Your request has been sent.</p>
++                <p class="mt-1 text-sm text-ink-2">
++                  The club admins have your message. You're not in {@selected_group.name} yet.
++                  If they add you, you'll receive a welcome email with a link to the group.
++                </p>
++              </div>
++              <.button
++                id="member-group-request-another"
++                type="button"
++                variant="secondary"
++                class="mt-4"
++                phx-click="reset_group_access_request"
++              >
++                Send another request
++              </.button>
++            <% else %>
++              <p class="access__copy">
++                You can ask the club admins to add you.
++              </p>
++              <.button
++                id="member-group-request-access"
++                type="button"
++                phx-click="request_group_access"
++                phx-disable-with="Sending your request…"
++              >
++                Request access
++              </.button>
++            <% end %>
++          </div>
++
++          <div :if={not @can_request_group_access?}>
++            <p class="access__copy">
++              Think you should be? Ask the club admins.
++            </p>
++            <p class="access__admin">
++              Email the admins:
++              <.link
++                id="member-group-admin-email"
++                href={"mailto:#{@club_admin_email_address}"}
++              >
++                {@club_admin_email_address}
++              </.link>
++            </p>
++          </div>
+         </section>
+ 
+         <section
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 208bb86..3231b83 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -9,11 +9,14 @@ defmodule MembaWeb.MemberDashboardLive do
+ 
+   require Logger
+ 
++  alias Commanded.Commands.ExecutionResult
+   alias Memba.Accounts
++  alias Memba.ID
+   alias Memba.Membership
+   alias Memba.Membership.CustomGroupAdmission
+   alias Memba.Membership.CustomGroupRemoval
+   alias Memba.Membership.GroupWelcomeEmail
++  alias Memba.Messaging
+   alias Memba.ReadModelChanges
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -54,6 +57,7 @@ defmodule MembaWeb.MemberDashboardLive do
+          |> assign(:active_section, "conversations")
+          |> assign(:custom_group_member_picker_open?, false)
+          |> assign(:custom_group_member_removal, nil)
++         |> assign(:group_access_request_state, :idle)
+          |> assign_custom_group_member_picker_query("")
+          |> assign(dashboard_assigns)}
+ 
+@@ -73,6 +77,7 @@ defmodule MembaWeb.MemberDashboardLive do
+       socket
+       |> assign(:custom_group_member_picker_open?, false)
+       |> assign(:custom_group_member_removal, nil)
++      |> assign(:group_access_request_state, :idle)
+       |> assign_custom_group_member_picker_query("")
+       |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
+ 
+@@ -80,6 +85,61 @@ defmodule MembaWeb.MemberDashboardLive do
+   end
+ 
+   @impl Phoenix.LiveView
++  def handle_event(
++        "request_group_access",
++        _params,
++        %{
++          assigns: %{
++            can_request_group_access?: true,
++            group_access_request_state: :idle
++          }
++        } = socket
++      ) do
++    socket = assign(socket, :group_access_request_state, :sending)
++
++    result =
++      Messaging.request_group_access(
++        %{
++          message_id: ID.generate(:message),
++          club_id: socket.assigns.selected_club.club_id,
++          requester_person_id: socket.assigns.current_member.id,
++          group_id: socket.assigns.selected_group.group_id
++        },
++        consistency: :strong
++      )
++
++    case result do
++      :ok ->
++        {:noreply, assign(socket, :group_access_request_state, :sent)}
++
++      {:ok, %ExecutionResult{}} ->
++        {:noreply, assign(socket, :group_access_request_state, :sent)}
++
++      {:error, _reason} ->
++        {:noreply,
++         socket
++         |> assign(:group_access_request_state, :idle)
++         |> put_flash(:error, "We couldn't send your request. Refresh and try again.")}
++    end
++  end
++
++  def handle_event("request_group_access", _params, socket), do: {:noreply, socket}
++
++  def handle_event(
++        "reset_group_access_request",
++        _params,
++        %{
++          assigns: %{
++            can_request_group_access?: true,
++            group_access_request_state: :sent
++          }
++        } = socket
++      ) do
++    {:noreply, assign(socket, :group_access_request_state, :idle)}
++  end
++
++  def handle_event("reset_group_access_request", _params, socket), do: {:noreply, socket}
++
+   def handle_event(
+         "open_custom_group_member_picker",
+         _params,
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index 2c6b100..aaaec14 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -169,6 +169,10 @@ defmodule MembaWeb.MemberDashboardPresentation do
+ 
+     can_add_self? = can_add_members? and selected_group_access == :outside_admin
+ 
++    can_request_group_access? =
++      SystemGroups.custom_group?(selected_group) and
++        selected_group_access == :ordinary_non_member
++
+     candidates =
+       if can_add_members? do
+         active_group_member_ids = MapSet.new(members, & &1.id)
+@@ -183,6 +187,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     %{
+       can_add_custom_group_members?: can_add_members?,
+       can_add_self_to_custom_group?: can_add_self?,
++      can_request_group_access?: can_request_group_access?,
+       custom_group_member_candidates: candidates
+     }
+   end
+diff --git a/web/test/features/step_definitions/group_conversation_steps.exs b/web/test/features/step_definitions/group_conversation_steps.exs
+index 0cd8963..881dce1 100644
+--- a/web/test/features/step_definitions/group_conversation_steps.exs
++++ b/web/test/features/step_definitions/group_conversation_steps.exs
+@@ -248,12 +248,10 @@ defmodule Memba.Cucumber.GroupConversationSteps do
+     context
+   end
+ 
+-  step ~r/^(\w+) should see Board's name and the club Admin email address$/,
++  step ~r/^(\w+) should see Board's name and be offered Request access$/,
+        %{args: [_person_name]} = context do
+     assert Map.fetch!(context, :selected_group).name == "Board"
+-
+-    assert Map.fetch!(context, :club_admin_email_address) ==
+-             club_admin_email_address(context, @club_name)
++    assert Map.fetch!(context, :can_request_group_access?)
+ 
+     context
+   end
+@@ -478,6 +476,10 @@ defmodule Memba.Cucumber.GroupConversationSteps do
+         true -> :ordinary_non_member
+       end
+ 
++    can_request_group_access? =
++      current_group_access == :ordinary_non_member and
++        SystemGroups.custom_group?(selected_group)
++
+     members =
+       if current_group_access in [:participating_member, :outside_admin] do
+         Membership.list_active_members_of_group(selected_group.group_id)
+@@ -497,6 +499,7 @@ defmodule Memba.Cucumber.GroupConversationSteps do
+     |> Map.put(:visible_groups, groups)
+     |> Map.put(:selected_group, selected_group)
+     |> Map.put(:current_group_access, current_group_access)
++    |> Map.put(:can_request_group_access?, can_request_group_access?)
+     |> Map.put(:club_admin_email_address, club_admin_email_address(context, club_name))
+     |> Map.put(:current_group_members, members)
+     |> Map.put(:current_group_conversations, conversations)
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index ae1a7f5..7a9cc4b 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -20,10 +20,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projections.ConversationGroupAccess
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+-  alias Memba.Messaging.Projections.ConversationGroupAccess
+   alias Memba.Messaging.Recipient
+   alias Memba.Repo
+   alias MembaWeb.MemberDashboardPresentation
+@@ -936,9 +936,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-group-admin-email[href='mailto:#{group_address(alice.club_id, SystemGroups.admin_email_slug())}']"
++             "#member-group-request-access[phx-click='request_group_access']" <>
++               "[phx-disable-with='Sending your request…']",
++             "Request access"
+            )
+ 
++    refute has_element?(view, "#member-group-admin-email")
++    refute has_element?(view, "#member-group-access-guidance", "Think you should be?")
+     refute has_element?(view, "#member-group-member-count")
+     refute has_element?(view, "#member-group-email-address")
+     refute has_element?(view, "#member-section-tabs")
+@@ -957,6 +961,300 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute malformed_response =~ private_group.name
+   end
+ 
++  test "a custom-group outsider can send, see accepted feedback, and deliberately send another request",
++       %{conn: conn} do
++    admin =
++      create_active_member(
++        email: "admin@example.com",
++        name: "Ada Admin",
++        club_name: "Alpine Club",
++        slug: "alpine"
++      )
++
++    eve =
++      create_active_member(
++        email: "eve@example.com",
++        name: "Eve Example",
++        club_name: "Alpine Club",
++        club_id: admin.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: admin.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, admin)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("eve@example.com", eve)
++      |> live(~p"/groups/#{private_group.group_id}")
++
++    assert has_element?(
++             view,
++             "#member-group-request-access[phx-click='request_group_access']" <>
++               "[phx-disable-with='Sending your request…']",
++             "Request access"
++           )
++
++    refute has_element?(view, "#member-group-request-status")
++    refute has_element?(view, "#member-group-admin-email")
++    refute has_element?(view, "#member-section-tabs")
++    refute has_element?(view, "#member-section-action-new-message")
++    refute has_element?(view, "#member-section-panel-conversations")
++    refute has_element?(view, "#member-section-panel-members")
++    refute has_element?(view, "[data-testid='club-message-row']")
++    refute has_element?(view, "[data-testid='club-member-row']")
++
++    view
++    |> element("#member-group-request-access")
++    |> render_click(%{
++      "club_id" => Memba.ID.generate(:club),
++      "requester_person_id" => admin.person_id,
++      "group_id" => SystemGroups.admin_group_id(admin.club_id),
++      "subject" => "Forged subject",
++      "body" => "Forged body"
++    })
++
++    assert has_element?(
++             view,
++             "#member-group-request-status[role='status']",
++             "Your request has been sent."
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-request-status",
++             "The club admins have your message."
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-request-status",
++             "You're not in Private Planning yet."
++           )
++
++    assert has_element?(
++             view,
++             "#member-group-request-another[phx-click='reset_group_access_request']",
++             "Send another request"
++           )
++
++    refute has_element?(view, "#member-group-request-access")
++    refute has_element?(view, "#member-group-admin-email")
++    refute has_element?(view, "#member-section-tabs")
++    refute has_element?(view, "#member-section-action-new-message")
++    refute has_element?(view, "[data-testid='club-message-row']")
++    refute has_element?(view, "[data-testid='club-member-row']")
++
++    [first_request] =
++      Repo.all(
++        from(message in Message,
++          where:
++            message.club_id == ^admin.club_id and
++              message.sender_id == ^eve.person_id
++        )
++      )
++
++    assert first_request.subject == "Access request: Private Planning"
++    assert first_request.body =~ "Eve Example would like to join Private Planning."
++
++    assert first_request.body =~
++             "/groups/#{private_group.group_id}/members/add/#{eve.person_id}"
++
++    refute first_request.body =~ "Forged"
++
++    assert Repo.get_by(ConversationGroupAccess,
++             conversation_id: first_request.message_id,
++             group_id: SystemGroups.admin_group_id(admin.club_id),
++             access_level: "write"
++           )
++
++    refute Memba.Membership.active_member_of_group_authoritatively?(
++             admin.club_id,
++             private_group.group_id,
++             eve.person_id
++           )
++
++    refute Memba.Messaging.member_has_conversation_access?(
++             first_request.message_id,
++             admin.club_id,
++             eve.person_id,
++             :read
++           )
++
++    render_hook(view, "request_group_access", %{
++      "club_id" => admin.club_id,
++      "requester_person_id" => eve.person_id,
++      "group_id" => private_group.group_id
++    })
++
++    assert Repo.aggregate(
++             from(message in Message,
++               where:
++                 message.club_id == ^admin.club_id and
++                   message.sender_id == ^eve.person_id
++             ),
++             :count
++           ) == 1
++
++    view
++    |> element("#member-group-request-another")
++    |> render_click()
++
++    assert has_element?(view, "#member-group-request-access", "Request access")
++    refute has_element?(view, "#member-group-request-status")
++
++    view
++    |> element("#member-group-request-access")
++    |> render_click()
++
++    request_ids =
++      Repo.all(
++        from(message in Message,
++          where:
++            message.club_id == ^admin.club_id and
++              message.sender_id == ^eve.person_id,
++          order_by: message.message_id,
++          select: message.message_id
++        )
++      )
++
++    assert length(request_ids) == 2
++    assert Enum.uniq(request_ids) == request_ids
++
++    refute Memba.Membership.active_member_of_group_authoritatively?(
++             admin.club_id,
++             private_group.group_id,
++             eve.person_id
++           )
++  end
++
++  test "a rejected custom-group request uses generic error feedback and keeps a retry action",
++       %{conn: conn} do
++    admin =
++      create_active_member(
++        email: "admin@example.com",
++        name: "Ada Admin",
++        club_name: "Alpine Club"
++      )
++
++    eve =
++      create_active_member(
++        email: "eve@example.com",
++        name: "Eve Example",
++        club_name: "Alpine Club",
++        club_id: admin.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: admin.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, admin)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("eve@example.com", eve)
++      |> live(~p"/groups/#{private_group.group_id}")
++
++    group_membership_projector_child_id =
++      stop_projector!(Memba.Membership.Projectors.GroupMembership)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddGroupMember{
++                 club_id: admin.club_id,
++                 group_id: private_group.group_id,
++                 membership_id: eve.membership_id,
++                 person_id: eve.person_id
++               },
++               consistency: :eventual
++             )
++
++    refute Memba.Membership.active_member_of_group?(
++             private_group.group_id,
++             eve.person_id
++           )
++
++    view
++    |> element("#member-group-request-access")
++    |> render_click()
++
++    assert has_element?(
++             view,
++             "#flash-error",
++             "We couldn't send your request. Refresh and try again."
++           )
++
++    assert has_element?(view, "#member-group-request-access", "Request access")
++    refute has_element?(view, "#member-group-request-status")
++
++    assert Repo.aggregate(
++             from(message in Message,
++               where:
++                 message.club_id == ^admin.club_id and
++                   message.sender_id == ^eve.person_id
++             ),
++             :count
++           ) == 0
++
++    restart_projector!(group_membership_projector_child_id)
++    assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
++  end
++
++  test "an ordinary non-member keeps Admin contact guidance without a request action",
++       %{conn: conn} do
++    admin =
++      create_active_member(
++        email: "admin@example.com",
++        name: "Ada Admin",
++        club_name: "Alpine Club"
++      )
++
++    eve =
++      create_active_member(
++        email: "eve@example.com",
++        name: "Eve Example",
++        club_name: "Alpine Club",
++        club_id: admin.club_id
++      )
++
++    admin_group_id = SystemGroups.admin_group_id(admin.club_id)
++
++    admin_group =
++      Repo.insert!(%Group{
++        club_id: admin.club_id,
++        group_id: admin_group_id,
++        group_key: SystemGroups.admin_key(),
++        name: SystemGroups.admin_name(),
++        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
++      })
++
++    add_group_member(admin_group, admin)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("eve@example.com", eve)
++      |> live(~p"/groups/#{admin_group_id}")
++
++    assert has_element?(
++             view,
++             "#member-group-admin-email[href='mailto:#{group_address(admin.club_id, SystemGroups.admin_email_slug())}']"
++           )
++
++    assert has_element?(view, "#member-group-access-guidance", "Think you should be?")
++    refute has_element?(view, "#member-group-request-access")
++    refute has_element?(view, "#member-group-request-another")
++    refute has_element?(view, "#member-group-request-status")
++  end
++
+   test "an outside admin receives the selected group's Members-only composition", %{conn: conn} do
+     alice =
+       create_active_member(
