@@ -1,0 +1,333 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+index 954fc46..d70cb72 100644
+--- a/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
++++ b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+@@ -1,177 +1,156 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "006-8d42dd1-1",
++  "packet_id": "006-d1d7555-2",
+   "task_id": "006",
+   "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.",
+-  "attempt": "implementation",
++  "attempt": "revision",
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "8d42dd1c6ec60529fa17cb041d27b602b8df77cd",
+-  "outcome": "An authorised signed-in group participant or club admin can open `/groups/:group_id/members/add/:person_id` and see that active same-club person in a focused Members-page targeted-add panel, or a clear already-member state, while every GET remains read-only and unauthorised or invalid targets disclose no protected person details.",
++  "source_baseline": "d1d755586b5958bfad6fad7d439fed0569e9a9e9",
++  "outcome": "The existing read-only targeted-add route authorizes the current actor from Club aggregate state before resolving or rendering the target, denies actors whose club membership or management authority has been committed away even while projections lag, and labels the panel with the authoritative resolver's group name.",
+   "scope": [
+-    "Route `GET /groups/:group_id/members/add/:person_id` through the existing `:club_member` LiveView session to `MemberDashboardLive` with a distinct action that selects the Members section and preserves both opaque route identities across initial mount and live navigation.",
+-    "Load the ordinary dashboard/group surface first, then permit targeted presentation only when the current actor has the existing current authority to add custom-group members: current authoritative participation in that custom group or current club member-management authority. An ordinary group outsider must not receive the targeted person state.",
+-    "Resolve the route's person and group together through `Membership.resolve_custom_group_target_authoritatively/3` using the host-selected club ID. Use only its server-owned person, membership, group, and `active_group_member?` facts for the targeted panel; collapse invalid, missing, built-in, cross-club, inactive-person, mismatched-group, and unauthorised cases into existing generic forbidden/not-found handling without rendering the target name or membership identity.",
+-    "Present a single targeted person within the existing Members page. For an active person outside the group, show the approved `Add to <group>` panel, person name/initials, club-member context, and explanatory admission/welcome copy. For a person already in the group, show the approved accessible `already a member` status and their existing member row without an actionable Add control.",
+-    "Focus the targeted panel heading on arrival using the project's existing LiveView `JS.focus` pattern and a focusable heading/stable DOM IDs. Keep the ordinary member list and permitted group metadata visible beneath the panel, including the outside-admin privacy boundary that withholds conversations.",
+-    "Add focused route, request, and LiveView tests covering routing and sign-in return, participant and outside-admin access, ordinary-outsider denial, invalid/cross-club/inactive targets without protected disclosure, selected-person and already-member rendering, focus markup, and scanner-safe GET/mount behavior that creates no group membership and sends no welcome."
++    "Retain the task-006 candidate route and read-only Members-page presentation, but replace its targeted-route reliance on projected `can_add_custom_group_members?` with a narrow public Membership query backed by the Club aggregate. Its decision must match `Memba.Membership.Club` admission authority: the actor must be an active club member and either currently participate in the selected custom group or currently hold `club.manage_members` through authoritative Club role state.",
++    "Run the aggregate-backed actor check for `:targeted_add` before calling `Membership.resolve_custom_group_target_authoritatively/3` or assigning the target. Keep the host-selected club ID and the signed-in actor's resolved person ID as inputs; a false/invalid/missing result must use the existing generic denial path and must not render target details or the private member surface.",
++    "Preserve the existing authoritative target resolver call after actor authorization. Carry its `group` summary into `targeted_group_member` and render the targeted panel heading, already-member status, and consequence copy from the resolver-returned group name instead of `@selected_group.name` from the projection-backed dashboard surface.",
++    "Add focused stale-projection regressions. With the relevant Membership and/or Role projectors deliberately stopped, prove a committed actor club departure and a committed Admin-role revocation both deny the targeted GET even though projected membership/permission rows still appear active. Assert generic denial and absence of the target name/identity and existing member names; safely restart and synchronize projectors using established test helpers.",
++    "Focused-test the narrow aggregate-backed actor query itself for current custom-group participation, current Admin/manage-members authority, inactive/departed actors, revoked authority, ordinary outsiders, invalid IDs, missing/cross-club groups, and built-in-group rejection as appropriate to its public contract. Keep the existing participant, outside-admin, already-member, sign-in-return, invalid-target, focus, privacy, and scanner-safe GET coverage passing."
+   ],
+   "scope_exclusions": [
+-    "Do not dispatch `Membership.add_custom_group_member/2`, add the target, send a welcome, or wire a functioning targeted Add event in this packet. Confirmation-time actor/target rechecks, idempotent mutation, and welcome behavior belong to task 007.",
+-    "Do not implement targeted Cancel or Escape handling, return-focus to ordinary Add member, success announcements, or post-add member-row focus; those interaction transitions remain task 007.",
+-    "Do not change the accepted Membership resolver contract, the existing admission command/aggregate rules, request-access message/UI behavior, email rendering, or general custom-group picker/removal behavior.",
+-    "Do not expose a target through projected club-member candidate lists before the authoritative target resolution and actor-display authorization succeed. Do not reveal target names, IDs, membership state, group member rows, or conversation data in a denial response.",
+-    "Do not permit built-in group targeting, cross-club host/route combinations, inactive targets, inactive actors, arbitrary query/body identities, or authority derived from the emailed URL. The URL identifies a candidate only.",
+-    "Do not implement or enable the iteration-066 browser journey, edit acceptance feature files, or remove its `@todo`; browser plumbing remains task 008.",
+-    "Do not edit the approved plan, ADRs, iteration acceptance criteria, or project reference docs. Do not run `dev check`, `dev check --quick`, `dev ci`, or another unscoped full-suite command in this packet."
++    "Do not replace or discard the existing task-006 candidate wholesale. Limit production changes to the authoritative actor boundary, propagation of resolver-owned group facts, and any minimal supporting public Membership API.",
++    "Do not dispatch `Membership.add_custom_group_member/2`, add the target, send a welcome, or add a functioning targeted Add event. Confirmation-time mutation, idempotence, and welcome behavior remain task 007.",
++    "Do not implement targeted Cancel/Escape handling, return focus, success announcements, or post-add row focus; those transitions remain task 007.",
++    "Do not broaden the ordinary dashboard's projected presentation policy beyond what is required to secure the targeted route. Do not expose the Club aggregate itself or query Ecto schemas directly from the LiveView.",
++    "Do not alter request-access messaging/UI, email rendering, route shape, general custom-group picker/removal behavior, accepted feature files, or the iteration-066 browser journey.",
++    "Do not edit the approved plan, ADRs, iteration acceptance criteria, or project reference docs. Do not run `dev check`, `dev check --quick`, `dev ci`, or another unscoped full-suite command in this revision."
+   ],
+   "references": [
+-    {
+-      "path": "web/lib/memba_web/router.ex",
+-      "symbols": [
+-        "live_session :club_member",
+-        "live \"/groups/:group_id/members\""
+-      ],
+-      "facts": "The targeted path belongs beside the existing dashboard group routes in the browser plus club-member-required pipeline; this preserves host-selected club context, authentication, and sign-in return behavior."
+-    },
+     {
+       "path": "web/lib/memba_web/live/member_dashboard_live.ex",
+       "symbols": [
+-        "mount/3",
+-        "handle_params/3",
+-        "active_section/1",
+-        "refresh_dashboard/3"
++        "refresh_dashboard/3",
++        "assign_targeted_group_member/1",
++        "present_targeted_group_member/1"
+       ],
+-      "facts": "The existing routed LiveView coordinates selected group state, resets transient picker/request state in `handle_params/3`, and delegates protected surface loading to `MemberDashboardPresentation`. Add route-specific target state without allowing it to leak when navigating to another group or ordinary Members route."
++      "facts": "The candidate currently gates `:targeted_add` on projected `can_add_custom_group_members?`, then calls the accepted target resolver; `present_targeted_group_member/1` discards `target.group`. Revise this seam so aggregate-backed actor authority precedes target resolution and the resolver-owned group summary reaches presentation."
+     },
+     {
+       "path": "web/lib/memba_web/member_dashboard_presentation.ex",
+       "symbols": [
+-        "load/4",
+-        "load_selected_group/7",
++        "load_authorized_group/4",
+         "custom_group_admission_assigns/3",
+-        "load_permitted_surface/5"
++        "can_manage_members?/2"
+       ],
+-      "facts": "Current authoritative group participation plus current member-management permission produce `can_add_custom_group_members?`; ordinary outsiders receive no private members, while outside admins receive Members-only data. Reuse this established actor-display boundary before assigning a targeted person."
++      "facts": "This ordinary dashboard loader combines authoritative group-participation summaries with projected active membership and `MemberPermission` authorization. It may continue shaping the normal surface, but its `can_add_custom_group_members?` value is not sufficient for the privacy-sensitive targeted route when Membership or Role projections lag."
+     },
+     {
+       "path": "web/lib/memba/membership.ex",
+       "symbols": [
+-        "resolve_custom_group_target_authoritatively/3"
++        "active_member_of_club_authoritatively?/2",
++        "resolve_custom_group_target_authoritatively/3",
++        "authoritative_club/1",
++        "authoritative_active_membership_id/2",
++        "authoritative_custom_group/2"
+       ],
+-      "facts": "The accepted public resolver casts all three typed IDs, reads the Club aggregate for active membership identity, custom same-club group ownership, and current participation, then returns a narrow person display summary. It already rejects invalid/missing/cross-club/built-in/inactive targets and remains the target source of truth."
++      "facts": "Membership already centralizes narrow public aggregate-backed reads and typed-ID error handling. Add the smallest public actor-authority query here, returning no aggregate/projection schema, and reuse the existing private helpers where practical."
+     },
+     {
+-      "path": "web/lib/memba_web/controllers/page_html/club.html.heex",
++      "path": "web/lib/memba/membership/club.ex",
+       "symbols": [
+-        "MemberDashboardGroupTabs.group_tabs",
+-        "member-section-panel-members",
+-        "custom_group_member_picker",
+-        "member_list"
++        "authorize_custom_group_admission_actor/3",
++        "active_admin_membership_ids",
++        "role_assignments"
+       ],
+-      "facts": "The targeted state must remain the existing Members-page surface, not a separate approval screen. Place its focused panel before the ordinary picker/guidance/list and preserve the outside-admin lack of a Conversations tab."
++      "facts": "The existing private aggregate decision is the semantic authority to mirror: an active actor membership may manage a custom group through current participation or a current aggregate-held `club.manage_members` grant. Keep the public read aligned with this rule rather than narrowing authority to the built-in Admin label or trusting flattened projections."
+     },
+     {
+-      "path": "web/lib/memba_web/components/member_components.ex",
++      "path": "web/lib/memba/membership/authorization.ex",
+       "symbols": [
+-        "custom_group_member_picker/1",
+-        "member_list/1",
+-        "member_row/1"
++        "authorize_manage_members/2",
++        "has_permission?/3"
+       ],
+-      "facts": "Reuse the picker/person visual language, stable IDs, design tokens, and existing `phx-mounted={JS.focus()}` pattern. Avoid a new LiveComponent; a stateless targeted presentation component is sufficient if extraction improves clarity."
++      "facts": "These functions read `MemberPermission` projections and are the source of the stale-authority gap. They must not decide targeted-route authority after a committed revocation or departure."
+     },
+     {
+-      "path": "web/lib/memba_web/identity_auth.ex",
++      "path": "web/lib/memba_web/controllers/page_html/club.html.heex",
+       "symbols": [
+-        "require_active_club_member/2",
+-        "redirect_to_auth/1",
+-        "current_return_path/1"
++        "targeted_group_member_panel"
+       ],
+-      "facts": "Unauthenticated club-host GETs already store the full safe club URL before redirecting to `/auth`; add a focused regression proving the new target path survives that flow rather than introducing new auth mechanics."
++      "facts": "The candidate currently passes projected `@selected_group.name`. Pass the resolver-owned targeted group name instead while preserving the established Members-page placement and outside-admin conversation privacy."
+     },
+     {
+-      "path": "web/test/memba/membership/authoritative_custom_group_target_test.exs",
++      "path": "web/lib/memba_web/components/member_components.ex",
+       "symbols": [
+-        "resolve_custom_group_target_authoritatively/3"
++        "targeted_group_member_panel/1"
+       ],
+-      "facts": "Accepted focused coverage proves server-owned facts, current already-member/non-member state despite stale group projections, and rejection of malformed, missing, cross-club, built-in, and departed targets. Route tests should prove safe mapping and disclosure behavior, not duplicate the resolver's internals."
++      "facts": "The candidate component already has stable target/focus/status IDs. Preserve those semantics; only adjust its group-name input shape if needed to ensure all targeted copy comes from the authoritative target summary."
+     },
+     {
+-      "path": "web/test/memba_web/live/member_dashboard_admission_live_test.exs",
+-      "facts": "Existing admission tests establish that participants and outside club admins can manage a custom group, ordinary outsiders cannot, stale projected group participation grants no controls, and GET-driven member management uses the existing Members page. Keep task-006 route tests in a focused sibling file if that keeps cases isolated."
++      "path": "web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
++      "facts": "The seven candidate tests cover route display, ordinary denial, inactive actor after projections catch up, invalid targets, already-member state, focus, privacy, and inert GET. Add stale Role/Membership projection cases that demonstrate the reviewed gap, following supervised-projector stop/restart patterns already used elsewhere."
+     },
+     {
+-      "path": "web/test/memba_web/router_test.exs",
++      "path": "web/test/memba/membership/authoritative_custom_group_target_test.exs",
+       "symbols": [
+-        "member dashboard routes"
++        "stop_projector!/1",
++        "restart_projector!/1"
+       ],
+-      "facts": "Extend the focused route contract with both route parameters and the new LiveView action under `[:browser, :club_member_required]`."
+-    },
+-    {
+-      "path": "docs/iterations/066-request-group-access/mockup.html",
+-      "facts": "The approved target scene shows `Add to Board`, one identified active club member, admission/welcome consequences, current members underneath, and an already-member status with no Add action. The link itself changes nothing."
+-    },
+-    {
+-      "path": "docs/iterations/066-request-group-access/design-handoff.md",
+-      "facts": "Opening the signed-in authorised target page is read-only, scanners are safe, narrow layouts retain person/action readability, and arrival focus lands on the targeted heading."
+-    },
+-    {
+-      "path": "docs/adr/0023-use-url-addressable-liveview-state.md",
+-      "facts": "The selected person is meaningful, refreshable LiveView state and therefore belongs in the route and `handle_params/3`, not client-only DOM state."
++      "facts": "This focused file establishes accepted aggregate-read and stale-projection testing conventions. Extend it for the new narrow actor query or add a comparably focused sibling test without weakening target-resolver coverage."
+     },
+     {
+       "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+-      "facts": "Active club membership and Admin authority remain Club-owned facts; the read route confers no write authority and must align with current membership rules."
++      "facts": "Active membership and role authority are Club-owned facts; projected preflight state cannot be the final privacy-sensitive authority after a committed departure or revocation."
+     },
+     {
+       "path": "docs/adr/0025-use-current-group-participation-for-access-and-delivery.md",
+-      "facts": "Current group participation, not stale preference or projected UI state, governs participant access; an absent ordinary member receives no private group surface."
+-    },
+-    {
+-      "path": "docs/reference/liveview-ui-structure.md",
+-      "facts": "Keep the LiveView as route/screen coordinator, use stateless presentation components and stable semantic IDs, and keep authorization decisions out of HEEx."
++      "facts": "Current aggregate-held group participation, not stale projected state, governs a participant's access."
+     },
+     {
+       "path": "docs/reference/liveview.md",
+-      "facts": "Use route-driven `handle_params/3`, `JS.focus`, and selector-based LiveView tests against stable IDs rather than raw HTML."
++      "facts": "Keep authorization in the LiveView/domain boundary and retain selector-based tests and the candidate's route-driven state."
+     }
+   ],
+   "constraints": [
+-    "The host-selected club remains the club authority. Never derive club context from the person ID, group projection, query params, email body, or referer.",
+-    "Resolve actor surface authorization before assigning target details, and resolve the target through `Membership.resolve_custom_group_target_authoritatively/3`; do not query Ecto person/membership/group schemas directly from the LiveView.",
+-    "Treat the targeted URL as identity only. A participant or outside club admin may see the target panel under existing rules; an ordinary outsider, inactive actor, or actor lacking current authority gets existing generic denial behavior.",
+-    "The route is GET/read-only on both disconnected render and connected LiveView mount. It must not dispatch any membership command, emit a group-membership event, send a welcome email, create pending state, or alter conversation/follow access.",
+-    "Use the resolver's `active_group_member?` value for the already-member decision so stale projections cannot offer a target already admitted or hide a target just removed from the group while still active in the club.",
+-    "Do not rely on the broad projected candidate collection to validate the routed person. It may be used only for ordinary picker behavior after route authorization and authoritative target resolution are complete.",
+-    "Use stable IDs for the targeted panel, heading, person row, status, and future action seam. The heading must be programmatically focusable and receive `JS.focus` on arrival without inline JavaScript.",
+-    "Preserve existing group privacy: an outside admin may manage Members but still sees no Conversations tab/content; denial responses must not contain the target name, membership ID, member list, group email, message subject/body, or compose controls.",
+-    "Keep targeted presentation responsive and aligned with the existing picker/member-row classes and design tokens. Do not add a new component system or inline script.",
+-    "Do not use `Process.sleep/1`; synchronize through LiveView rendering, strong command helpers, projection barriers, or `_ = :sys.get_state/1` where necessary."
++    "Use `d1d755586b5958bfad6fad7d439fed0569e9a9e9` as the revision baseline and preserve task identity 006 and candidate origin `006-8d42dd1-1`.",
++    "The host-selected club remains authoritative; never derive club context or actor authority from the URL, projected selected group, target identity, email body, referer, or client input.",
++    "The aggregate-backed read must mirror the Club command rule for current participation or current `club.manage_members` permission, including custom roles that grant that permission; do not hard-code only the Admin role name.",
++    "Deny before target resolution/assignment. A stale projected membership, permission, member list, or candidate list must not make a departed or revoked actor eligible for targeted display.",
++    "Use only `Membership.resolve_custom_group_target_authoritatively/3` output for the target person, membership, group, and current already-member facts. In particular, targeted copy must not use the projection-backed selected-group name.",
++    "Keep both disconnected GET and connected mount read-only: no membership command, group event, welcome, pending state, follow change, or conversation access change.",
++    "Generic denial evidence must omit the target name, person ID, membership ID, member-list names, group email, messages, and compose controls.",
++    "Projector-lag tests must use supervised stop/restart and deterministic synchronization such as projection barriers or `_ = :sys.get_state/1`; do not use `Process.sleep/1`."
+   ],
+   "focused_validation": [
+-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/router_test.exs",
++    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs",
+     "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
+-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs"
++    "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/router_test.exs"
+   ],
+   "completion_evidence_required": [
+-    "Return every changed path and identify the new route/action, route-param lifecycle, actor authorization boundary, and exact call to `Membership.resolve_custom_group_target_authoritatively/3`.",
+-    "Show participant and outside-admin target pages rendering only the server-resolved active same-club person, with the Members section selected, stable targeted IDs, focusable/focused heading markup, and outside-admin conversation privacy preserved.",
+-    "Show the already-member state uses authoritative current participation, renders no targeted Add control, and leaves the existing member row visible.",
+-    "Show malformed/missing IDs, cross-club person/group combinations, built-in groups, inactive targets, ordinary outsiders, and actors without current display authority receive generic denial/not-found behavior whose response omits protected target details.",
+-    "Show an unauthenticated club-host GET redirects to sign-in and stores the complete targeted URL for return.",
+-    "Show direct HTTP GET plus connected LiveView mount perform no membership mutation, emit no group-add event or welcome email, and leave an outside target outside the group.",
+-    "Confirm no targeted admission event, welcome dispatch, Cancel/Escape behavior, success status, post-add focus, acceptance-feature change, or browser-journey enablement was included.",
++    "Return every changed path and identify the public aggregate-backed actor query, how it matches `Club.authorize_custom_group_admission_actor/3`, and where `MemberDashboardLive` invokes it before target resolution.",
++    "Show focused tests where projected membership/permission data remains stale after a committed actor departure and after a committed management-role revocation, yet each targeted GET receives generic denial with no target or member-list details.",
++    "Show both authority branches still succeed: a current custom-group participant and a current outside club member with aggregate-held `club.manage_members` authority can view the targeted Members state.",
++    "Show the targeted heading, already-member status, and consequence copy receive the group name returned by `Membership.resolve_custom_group_target_authoritatively/3`, not `@selected_group.name`.",
++    "Confirm all pre-existing task-006 cases remain passing and GET/mount still emit no group-add event or welcome email.",
++    "Confirm no targeted admission event, welcome dispatch, Cancel/Escape behavior, success transition, acceptance-feature change, or browser-journey enablement was included.",
+     "Record each focused validation command, working directory, exit status, and test/failure counts; list any unresolved issue."
+   ],
+-  "candidate_origins": [],
++  "candidate_origins": [
++    {
++      "base_sha": "8d42dd1c6ec60529fa17cb041d27b602b8df77cd",
++      "head_sha": "521adc473cfd125bc716ab311fe91da36d03a567",
++      "packet_id": "006-8d42dd1-1",
++      "reason": "review_revise",
++      "task_id": "006",
++      "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation."
++    }
++  ],
+   "latest_review": {
+-    "packet_id": "005-aa0da3c-1",
+-    "decision": "accept",
+-    "summary": "Task 005 was accepted with all focused LiveView, selected domain, and existing admission-browser checks passing; it left no review gap or unresolved candidate origin."
++    "packet_id": "006-8d42dd1-1",
++    "decision": "revise",
++    "summary": "The route and read-only targeted state were otherwise accepted, but targeted display still trusted projection-backed actor authority after committed role revocation or departure, and the panel used projected `selected_group.name` instead of the resolver-returned authoritative group facts."
+   },
+   "latest_worker_result": {
+-    "packet_id": "005-aa0da3c-1",
++    "packet_id": "006-8d42dd1-1",
+     "result": "ready_for_review",
+-    "summary": "The accepted predecessor added only the fixed Request access placeholder interaction and its two authorised assertion migrations. It did not add the targeted route, person presentation, explicit admission, or iteration-066 browser journey."
++    "summary": "The candidate added the targeted route, focusable read-only panel, authoritative target resolution, already-member state, generic target denials, sign-in return, and mutation-free focused coverage; its recorded router, LiveView, and resolver validations passed."
+   }
+ }
+diff --git a/docs/iterations/066-request-group-access/.delivery/execution-state.json b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+index 24b93f6..3737a28 100644
+--- a/docs/iterations/066-request-group-access/.delivery/execution-state.json
++++ b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+@@ -2,7 +2,7 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "8d42dd1c6ec60529fa17cb041d27b602b8df77cd",
++  "source_baseline": "d1d755586b5958bfad6fad7d439fed0569e9a9e9",
+   "accepted_tasks": [
+     "- [x] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
+     "- [x] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.",
+@@ -27,7 +27,16 @@
+         "- [ ] 012 The explicit Add invokes the existing membership command and application welcome flow; keep sign-in return and keyboard/focus states.",
+         "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
+       ],
+-      "candidate_origins": []
++      "candidate_origins": [
++        {
++          "base_sha": "8d42dd1c6ec60529fa17cb041d27b602b8df77cd",
++          "head_sha": "521adc473cfd125bc716ab311fe91da36d03a567",
++          "packet_id": "006-8d42dd1-1",
++          "reason": "review_revise",
++          "task_id": "006",
++          "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation."
++        }
++      ]
+     },
+     {
+       "task_id": "007",
+@@ -72,7 +81,16 @@
+       "candidate_origins": []
+     }
+   ],
+-  "candidate_origins": [],
++  "candidate_origins": [
++    {
++      "base_sha": "8d42dd1c6ec60529fa17cb041d27b602b8df77cd",
++      "head_sha": "521adc473cfd125bc716ab311fe91da36d03a567",
++      "packet_id": "006-8d42dd1-1",
++      "reason": "review_revise",
++      "task_id": "006",
++      "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation."
++    }
++  ],
+   "coverage_map": [
+     {
+       "scope": "Authoritative Membership boundary for requester/target identity, active club membership, custom-group ownership/type, and current participation.",
+@@ -132,5 +150,5 @@
+       "accepted_task_lines": []
+     }
+   ],
+-  "planner_note": "The latest review accepted task 005 with no gaps or unresolved candidate origins. Preserved the established read/write split for targeted admission and prepared task 006 next: add only the signed-in, authorised, scanner-safe targeted Members-page route and read-only person/already-member presentation; explicit admission, welcome delivery, Cancel/Escape, and post-add focus remain task 007."
++  "planner_note": "Prepared a bounded revision of task 006 without changing its identity or read/write split. The first implementation remains an unaccepted candidate: retain its route and read-only presentation, but close the review's two gaps by making targeted-display actor authority aggregate-backed despite stale Membership/Role projections and by rendering the targeted group name from the accepted authoritative resolver result. Explicit admission, welcome delivery, Cancel/Escape, and post-add focus remain task 007."
+ }
+diff --git a/docs/iterations/066-request-group-access/.delivery/planner-result.json b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+index 692130b..3ad7833 100644
+--- a/docs/iterations/066-request-group-access/.delivery/planner-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+@@ -2,6 +2,6 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "8d42dd1c6ec60529fa17cb041d27b602b8df77cd",
++  "source_baseline": "d1d755586b5958bfad6fad7d439fed0569e9a9e9",
+   "decision": "ready"
+ }
