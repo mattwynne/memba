@@ -1,0 +1,283 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+index 1cd02e1..82cf5ec 100644
+--- a/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
++++ b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+@@ -1,113 +1,134 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "002-589c4603-1",
+-  "task_id": "002",
+-  "todo_line": "- [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.",
++  "packet_id": "003-0140c00d-1",
++  "task_id": "003",
++  "todo_line": "- [ ] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance.",
+   "attempt": "implementation",
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "589c4603ca25977129111bdcc2ec66c1a32781b8",
+-  "outcome": "Messaging accepts a narrow RequestGroupAccess intent for an active same-club member outside a custom group and, at a stable authorization checkpoint, dispatches one fixed ordinary Admin root message with current Admin recipients and the club-hosted targeted-add URL.",
++  "source_baseline": "0140c00d1bdceb924aed185d7840fb03cd02a6e6",
++  "outcome": "The approved custom-group access-request feature runs at the domain layer and proves that an active KMC member can create the fixed ordinary Admin request message while a foreign or departed member creates no request message or group access.",
+   "scope": [
+-    "Add a plain application-layer `Memba.Messaging.Commands.RequestGroupAccess` intent and a public `Memba.Messaging.request_group_access/2` orchestration API. Keep caller-owned input to stable `message_id`, authenticated `club_id` and requester person identity, and target `group_id`; derive every message field server-side.",
+-    "Within the existing stable-checkpoint pattern, call accepted `Membership.resolve_custom_group_target_authoritatively/3`, require an active same-club requester and custom-group target, and reject a requester who already currently participates in that target group.",
+-    "Derive the destination as `SystemGroups.admin_group_id(club_id)`, resolve current Admin recipients through the existing authoritative Membership recipient path, and preserve ordinary sender delivery/follow semantics when the requester independently belongs to Admin.",
+-    "Build a root `SendMessage` whose sender is the resolved requester, audience is Admin, subject is `Access request: <group name>`, and fixed plain-text body identifies the resolved requester, group, and club and contains `MembaWeb.ClubSite.url/2` for `/groups/:group_id/members/add/:person_id`.",
+-    "Dispatch only the constituent `SendMessage` through the existing Messaging application path after the successful checkpoint and propagate its normal `:ok`, execution-result, and error outcomes. Do not perform provider handoff inline.",
+-    "Add focused tests for the successful ordinary Admin conversation and fixed URL/content; Admin-only current recipients; requester remaining outside the target group; forged extra sender/audience/content facts having no effect; invalid, missing, cross-club, built-in, inactive, and already-participating targets producing no MessageSent; stale-projection departure rejection; ordinary behavior for a requester already in Admin; and exact dispatch-result propagation.",
+-    "Update Messaging's existing public-API/no-CRUD inventory test only as needed to recognize the new intent API while retaining its current architectural assertions."
++    "Implement Elixir domain-runner step plumbing for every currently missing step in `acceptance-tests/features/custom_group_access_requests.feature`, reusing compatible existing steps and the shared scenario context shape where they already exist.",
++    "Set up KMC, Alice and Dan as current club admins, Eve as an ordinary active member, and custom Board with Alice participating. Keep generated identities and emails scenario-local and use existing public Membership APIs with strong consistency.",
++    "For `Eve requests access to Board`, generate and remember one message ID, call accepted `Memba.Messaging.request_group_access/2` with only authenticated club/requester/target identities, and remember the result and resulting message for later assertions.",
++    "Prove the successful message is the ordinary root Admin conversation: subject and body identify Eve and Board, the body contains the club-hosted `/groups/:group_id/members/add/:person_id` URL, the Admin Group has write access, and projected email recipients are exactly Alice and Dan. This layer asserts accepted-for-send/projected recipients, not provider handoff.",
++    "Prove Eve remains outside Board after requesting and receives no new Board membership, Admin conversation access, or follow right from the request.",
++    "Implement both rejection rows in the scenario outline. Pat is a Nelson member with no KMC membership; Eve's KMC membership is ended before the attempt. Preserve each attempted message ID/result and prove the request is rejected, no message or Admin conversation/delivery is projected for that ID, and the actor gains no KMC custom/system-group participation or conversation access from the attempt.",
++    "Add a focused ExUnit wrapper for this feature, following the existing per-feature step-definition test pattern. It must execute the successful scenario and both expanded rejection examples and assert that the feature is selected by the domain runner.",
++    "Enable this feature by removing only its `@todo` tag. Retain `@iteration-066`, the feature/rule/scenario wording, examples, and all existing assertions unchanged."
+   ],
+   "scope_exclusions": [
+-    "Do not route RequestGroupAccess through `Memba.Messaging.Router`, add it to the aggregate command registry, persist a request, or add request events, status, deduplication, approval/denial, schemas, projections, or migrations.",
+-    "Do not change the Message aggregate, SendMessage event model, recipient-fixing semantics, async provider delivery, conversation access, or sender-follow rules.",
+-    "Do not relax or repurpose `send_club_message_as_current_member/2`, the member composer, or inbound email posting policy; general non-Admin web composition to Admin must remain unavailable.",
+-    "Do not implement email HTML action rendering or text-template changes owned by task 004.",
+-    "Do not implement the Request access LiveView action, targeted-add route or confirmation flow, welcome behavior, acceptance steps, feature-tag changes, or placeholder assertion updates owned by later tasks.",
+-    "Do not edit `todo.md`, `plan.md`, ADRs, project documentation, or planner-owned delivery artifacts; only return the required worker result through the workflow's normal result artifact."
++    "Do not change application behavior, the accepted Membership resolver, `RequestGroupAccess`, message/event semantics, email delivery dispatch, or general web composition policy to make the scenarios pass.",
++    "Do not edit the browser journey or JavaScript browser steps; browser plumbing remains task 008.",
++    "Do not implement HTML email action rendering, the Request access LiveView affordance, placeholder copy/assertion changes, the targeted-add route, explicit Add, welcome behavior, or focus transitions; those remain tasks 004 through 007.",
++    "Do not edit `group_conversations.feature`, `journeys/custom_group_admission.feature`, any other feature semantics/tags, `plan.md`, `todo.md`, ADRs, project documentation, or planner-owned delivery artifacts.",
++    "Do not assert synchronous provider delivery or weaken the rejection/access assertions. Do not add request records, status, deduplication, or special test-only application APIs.",
++    "Do not run `dev check`, `dev check --quick`, `dev ci`, the browser acceptance suite, or another unscoped full-suite command in this packet."
+   ],
+   "references": [
+     {
+-      "path": "docs/iterations/066-request-group-access/plan.md",
+-      "facts": "Implementation Plan step 1 and the acceptance criteria define a server-owned composite request, stable authorization ordering, fixed Admin root message and recipients, ordinary SendMessage dispatch, and unchanged general composition policy."
++      "path": "acceptance-tests/features/custom_group_access_requests.feature",
++      "facts": "This is the approved domain contract. Keep `@iteration-066`, remove only `@todo`, and implement its successful scenario plus both rows of its rejection outline without rewriting the Gherkin."
+     },
+     {
+-      "path": "docs/iterations/066-request-group-access/domain-model.md",
+-      "facts": "RequestGroupAccess is handled in the Messaging application layer and is not routed or persisted as its own aggregate command; the stored body carries the ordinary club-hosted targeted Members URL."
++      "path": "acceptance-tests/README.md",
++      "facts": "Untagged non-journey scenarios run at the Elixir domain layer; `@todo` is removed only when that intended layer executes the examples."
++    },
++    {
++      "path": "web/test/support/domain_cucumber_runner.ex",
++      "symbols": [
++        "Memba.DomainCucumberRunner.selected_scenarios/1",
++        "Memba.DomainCucumberRunner.run_scenario/3"
++      ],
++      "facts": "The domain runner excludes `@journey` and `@todo`, expands outlines, merges shared context, and executes feature/rule backgrounds before scenario steps."
++    },
++    {
++      "path": "web/test/features/custom_group_creation_steps_test.exs",
++      "facts": "Use this per-feature ExUnit wrapper pattern to execute selected Cucumber scenarios and assert intended selection."
+     },
+     {
+-      "path": "docs/iterations/066-request-group-access/mockup.html",
+-      "facts": "The approved message copy identifies the requester, group, and club, uses subject `Access request: Board`, and links to `/groups/:group_id/members/add/:person_id`; task 002 stores plain text and does not implement styled rendering."
++      "path": "web/test/features/step_definitions/custom_group_creation_steps.exs",
++      "facts": "The existing `Alice and Dan are its club admins` step and helpers establish the context conventions: canonical KMC name, `:clubs`, `:people`, `:memberships`, and strong-consistency public Membership operations."
+     },
+     {
+-      "path": "web/lib/memba/membership.ex",
+-      "symbol": "Memba.Membership.resolve_custom_group_target_authoritatively/3",
+-      "facts": "Accepted task 001 returns authoritative same-club membership, custom-group, person, club, and current participation summaries with typed rejection reasons; consume this public API rather than Membership schemas or projections."
++      "path": "web/test/features/step_definitions/custom_group_conversation_steps.exs",
++      "facts": "The existing `Pat belongs to Nelson Paddling Club but not KMC` step is reusable and demonstrates compatible club/person/membership context plus projected conversation, recipient, and access assertions."
+     },
+     {
+       "path": "web/lib/memba/messaging.ex",
+       "symbols": [
+-        "send_club_message_as_current_member/2",
+-        "authorize_at_stable_checkpoint/1",
+-        "resolve_group_recipients/3",
+-        "dispatch_command/2"
++        "Memba.Messaging.request_group_access/2",
++        "Memba.Messaging.get_message/1",
++        "Memba.Messaging.list_conversations_for_group/1",
++        "Memba.Messaging.list_recipient_deliveries/1",
++        "Memba.Messaging.member_has_conversation_access?/4",
++        "Memba.Messaging.following_conversation?/2"
+       ],
+-      "facts": "These are the established stable ordering, authoritative recipient construction, fresh delivery-ID, and normalized dispatch-result patterns. Build the request-specific SendMessage directly within that pattern rather than calling generic projected-audience composition."
++      "facts": "Accepted task 002 supplies the composite request API and ordinary projected-message queries needed to drive and assert the feature without private storage access."
+     },
+     {
+-      "path": "web/lib/memba/messaging/commands/send_message.ex",
+-      "facts": "The existing root command carries caller-generated message identity, resolved sender/audience/content, and pre-resolved recipients; only this constituent command belongs in the Messaging router."
++      "path": "web/test/memba/messaging/request_group_access_test.exs",
++      "facts": "Accepted focused tests show the public input, fixed subject/body and ClubSite URL, exact Admin recipient/access shape, requester non-membership, and inactive/cross-club rejection behavior that the higher-level domain steps should express without duplicating forged-input permutations."
+     },
+     {
+       "path": "web/lib/memba_web/club_site.ex",
+       "symbol": "MembaWeb.ClubSite.url/2",
+-      "facts": "Build the absolute club-hosted URL from the resolver's server-owned club slug and the typed group/person IDs. A verified route is not yet available because task 006 owns route creation."
++      "facts": "Use the server-owned KMC club summary and typed Board/Eve identities to form the expected absolute targeted-add URL contained in the stored body."
+     },
+     {
+-      "path": "web/test/memba/messaging/send_club_message_test.exs",
+-      "facts": "Existing tests demonstrate Admin recipient resolution, root Admin access, stable-checkpoint stale-membership rejection, authoritative recipient selection, and projector lifecycle helpers."
+-    },
+-    {
+-      "path": "docs/adr/0005-message-send-commands-include-resolved-recipients.md",
+-      "facts": "Resolve recipients before SendMessage dispatch so MessageSent and delivery creation remain one existing aggregate decision."
++      "path": "docs/iterations/066-request-group-access/plan.md",
++      "facts": "The acceptance contract requires one successful standard Admin request and rejection for someone who is not an active member of that club, while requesting grants no membership, follow, or conversation access."
+     },
+     {
+-      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
+-      "facts": "Messaging depends only on Membership's public APIs and does not query Membership aggregate or projection storage directly."
++      "path": "docs/iterations/066-request-group-access/domain-model.md",
++      "facts": "A request is ordinary correspondence represented by MessageSent and fixed recipients; it has no request entity or lifecycle and does not add the requester to Board."
+     },
+     {
+-      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+-      "facts": "The Club write model is authoritative for current club membership and Admin role facts."
++      "path": "docs/adr/0005-message-send-commands-include-resolved-recipients.md",
++      "facts": "Recipient deliveries are fixed with the ordinary SendMessage decision, so domain assertions can inspect the existing projected deliveries."
+     },
+     {
+-      "path": "docs/adr/0025-use-current-group-participation-for-access-and-delivery.md",
+-      "facts": "Use current participation and fix recipients at posting time; later changes do not rewrite already-created deliveries."
++      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
++      "facts": "Acceptance plumbing should exercise public Membership and Messaging APIs rather than query aggregates or context-owned storage directly."
+     },
+     {
+       "path": "docs/reference/elixir-mix-tests.md",
+-      "facts": "Use supervised deterministic test-process synchronization and do not use sleep-based projector coordination."
++      "facts": "Use deterministic strong-consistency/projection synchronization and avoid sleeps or unsupervised process setup."
+     }
+   ],
+   "constraints": [
+-    "Treat `message_id` as the stable caller-generated identity for uncertain retries; do not generate a replacement during orchestration.",
+-    "Do not accept or trust caller-supplied sender, Admin destination, recipients, names, slug, membership identity, participation claim, subject, body, or URL. Extra map keys must not alter server-derived facts.",
+-    "Keep authoritative eligibility resolution, current-participation rejection, Admin destination and recipient derivation, and SendMessage construction inside one successful stable-checkpoint callback; dispatch afterward so a later departure has the existing documented race semantics.",
+-    "Use `SystemGroups.admin_group_id/1` and current authoritative Admin participation. Do not identify Admin by display text or use stale projected recipient membership.",
+-    "Do not specially exclude the requester from recipients: an ordinary requester outside Admin gets no Admin delivery/access/follow, while an existing Admin requester retains normal Admin rights and behavior.",
+-    "The successful result confirms command acceptance, not provider delivery or group admission; requesting must not mutate target-group membership.",
+-    "Only fixed plain text is in scope. Safe HTML button recognition and rendering remain task 004.",
+-    "Do not use `Process.sleep/1`; reuse existing deterministic projection/subscriber synchronization.",
+-    "Do not run `dev check`, `dev check --quick`, `dev ci`, acceptance suites, or another unscoped full-suite command in this packet."
++    "Keep feature wording and semantics exact; only remove the feature-level `@todo` token while preserving `@iteration-066` provenance.",
++    "Treat the scenario outline as one approved rejection example with two required expanded executions: Pat in another club and departed Eve.",
++    "Use public context APIs and existing projected read APIs. Do not query event-store tables or Membership/Messaging Ecto schemas from the new step plumbing.",
++    "Use the accepted fixed subject `Access request: Board` and assert meaningful body facts and the exact ClubSite targeted-add URL; do not duplicate every lower-level command test.",
++    "Use the generated attempted message ID as the primary proof that rejected attempts persisted no message, access grant, follow, or deliveries; also retain the Gherkin's broader no-KMC-access outcome.",
++    "Do not dispatch pending email deliveries merely to prove recipient selection. The scenario says recipients, and accepted-for-send does not claim provider delivery.",
++    "Keep the new step module cohesive and avoid duplicating step expressions already registered by another module.",
++    "Do not use `Process.sleep/1`; all dispatches and assertions must use deterministic consistency options or existing barriers.",
++    "If the unchanged Gherkin cannot be implemented against the accepted public APIs, return the exact unresolved mismatch instead of changing scenario semantics or broadening into later obligations."
+   ],
+   "focused_validation": [
+-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/request_group_access_test.exs test/memba/messaging/send_message_dispatch_test.exs test/memba/messaging/no_crud_spike_test.exs test/memba/messaging/app_test.exs",
+-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs test/memba/messaging/send_club_message_test.exs test/memba/messaging/group_email_posting_policy_test.exs"
++    "PATH=\"$PWD/bin:$PATH\" dev test test/features/custom_group_access_request_steps_test.exs test/features/cucumber_configuration_test.exs",
++    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/request_group_access_test.exs"
+   ],
+   "completion_evidence_required": [
+-    "Return all changed paths and the public RequestGroupAccess input shape in `.delivery/latest-worker-result.json`; explicitly state that RequestGroupAccess was not added to the Messaging router.",
+-    "Report the exact fixed subject/body shape and an example generated targeted-add URL, identifying which values came from the accepted authoritative resolver.",
+-    "Name the focused tests proving Admin-only current recipients, requester non-membership after send, forged extra fields having no effect, built-in/cross-club/inactive/already-member rejection without MessageSent, stale-projection departure rejection, and existing-Admin requester behavior.",
+-    "Show that successful dispatch produces the ordinary MessageSent/Admin write-access/delivery event shape and that requested returning/error outcomes propagate without synchronous provider delivery.",
+-    "Record each focused validation command, exit status, and test/failure counts; list any unresolved issue without broadening into later todo obligations."
++    "Return every changed path and confirm that the only Gherkin change was removal of `@todo` while `@iteration-066`, all wording, both example rows, and provenance remained intact.",
++    "List the new/reused step expressions and identify which public Membership/Messaging APIs they exercise; report any deliberate reuse of existing registered steps.",
++    "Report the selected scenario names/count and show that the successful scenario plus both expanded rejection rows executed.",
++    "Summarize evidence for the ordinary Admin root conversation, fixed subject/body and targeted-add URL, exact Alice/Dan projected recipients, Eve remaining outside Board, and no request-granted access/follow.",
++    "Summarize evidence that both Pat and departed Eve are rejected and that each attempted message ID has no projected message, Admin conversation/access, follow, or delivery and grants no KMC group participation.",
++    "Record each focused validation command, exit status, and test/failure counts; list any unresolved issue without editing application behavior or later-task surfaces."
+   ],
+-  "candidate_origins": []
++  "candidate_origins": [],
++  "latest_review": {
++    "packet_id": "002-589c4603-1",
++    "decision": "accept",
++    "summary": "Task 002 was accepted with focused evidence that RequestGroupAccess creates the fixed ordinary Admin message and recipients, rejects inactive/cross-club actors, leaves the requester outside Board, and does not change feature files."
++  },
++  "latest_worker_result": {
++    "packet_id": "002-589c4603-1",
++    "result": "ready_for_review",
++    "summary": "The accepted implementation added the public application-layer request API and focused tests; its exact fixed content, URL, ordinary message events, rejection behavior, and projected recipient semantics are the implementation baseline for these domain steps."
++  }
+ }
+diff --git a/docs/iterations/066-request-group-access/.delivery/execution-state.json b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+index a61358c..9ec65e9 100644
+--- a/docs/iterations/066-request-group-access/.delivery/execution-state.json
++++ b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+@@ -2,34 +2,17 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "589c4603ca25977129111bdcc2ec66c1a32781b8",
++  "source_baseline": "0140c00d1bdceb924aed185d7840fb03cd02a6e6",
+   "accepted_tasks": [
+-    "- [x] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships."
++    "- [x] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
++    "- [x] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged."
+   ],
+   "pending_obligations": [
+-    {
+-      "task_id": "002",
+-      "todo_line": "- [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.",
+-      "origin": "Combined plan.md Implementation Plan step 1 with the ordinary Admin-conversation requirement from step 2.",
+-      "status": "prepared",
+-      "coverage": [
+-        "Fixed one-click request command with authenticated server-owned sender, club, custom-group target, Admin destination, content, URL, and recipients.",
+-        "Ordinary Admin root conversation and email-delivery facts through existing SendMessage, including send-result propagation and no global composition-policy widening."
+-      ],
+-      "replaces": [
+-        "- [ ] 001 Handle the composite `RequestGroupAccess` command in the Messaging application layer.",
+-        "- [ ] 002 Authenticate identity and club context, resolve the target through Membership's public authoritative API at the established stable ordering point, reject built-in/cross-club/non-active targets, compose subject/body and club-hosted link server-side, resolve Admin Group recipients and dispatch existing `SendMessage`.",
+-        "- [ ] 003 Propagate send result; do not bypass normal web compose restrictions globally.",
+-        "- [ ] 006 Display the request as an ordinary Admin conversation.",
+-        "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
+-      ],
+-      "candidate_origins": []
+-    },
+     {
+       "task_id": "003",
+       "todo_line": "- [ ] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance.",
+       "origin": "Domain-acceptance portion split from plan.md Implementation Plan step 5.",
+-      "status": "pending",
++      "status": "prepared",
+       "coverage": [
+         "Focused domain acceptance for a successful ordinary Admin request message and rejection of non-active/non-club requesters."
+       ],
+@@ -141,12 +124,13 @@
+       ]
+     },
+     {
+-      "scope": "Fixed ordinary Admin request message, recipients, conversation semantics, server-owned link/content, stable ordering, and unchanged general composition policy.",
++      "scope": "Fixed ordinary Admin request message, recipients, conversation semantics, server-owned link/content, stable ordering, unchanged general composition policy, and focused domain acceptance.",
+       "pending_task_ids": [
+-        "002",
+         "003"
+       ],
+-      "accepted_task_lines": []
++      "accepted_task_lines": [
++        "- [x] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged."
++      ]
+     },
+     {
+       "scope": "Safe HTML primary action and plain-text management URL with origin/route validation and escaping.",
+@@ -191,5 +175,5 @@
+       "accepted_task_lines": []
+     }
+   ],
+-  "planner_note": "Accepted task 001 exactly as recorded in todo.md after the latest accept review, removed its now-resolved candidate origin, and retained the approved nine-task split and ordering. Prepared task 002 as a normal implementation packet because its authoritative Membership prerequisite is accepted; no todo lines changed."
++  "planner_note": "Accepted task 002 exactly as checked in todo.md after its accept review and preserved the existing split and replacement records. Task 003 is now first and prepared as a bounded domain-acceptance plumbing packet; no todo lines were changed, no candidate origins remain unresolved, and later email, UI, route, browser, and full-gate work remains separate."
+ }
+diff --git a/docs/iterations/066-request-group-access/.delivery/planner-result.json b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+index 0bc31f2..b192f5f 100644
+--- a/docs/iterations/066-request-group-access/.delivery/planner-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+@@ -2,6 +2,6 @@
+   "schema_version": 1,
+   "plan_path": "docs/iterations/066-request-group-access/plan.md",
+   "todo_path": "docs/iterations/066-request-group-access/todo.md",
+-  "source_baseline": "589c4603ca25977129111bdcc2ec66c1a32781b8",
++  "source_baseline": "0140c00d1bdceb924aed185d7840fb03cd02a6e6",
+   "decision": "ready"
+ }
