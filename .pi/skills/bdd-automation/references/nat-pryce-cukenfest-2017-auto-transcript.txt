@@ -1,0 +1,859 @@
+Source: https://www.youtube.com/watch?v=Fk4rCn4YLLU
+YouTube English auto-generated captions (ASR), downloaded via yt-dlp; NOT a verified human transcript. Timestamps refer to caption cue starts. Consecutive duplicate rolling captions collapsed; wording uncorrected. Retrieved from YouTube's English auto-generated caption track; not independently checked against the audio.
+
+[00:00:00.050] [Applause]
+[00:00:05.440] so this talk came out well it I'm here
+[00:00:07.680] because of a tweet I tweeted who wants
+[00:00:09.480] to know you know if would anyone be
+[00:00:11.120] interested in a talk about running n2n
+[00:00:13.120] tests in milliseconds and and and and uh
+[00:00:16.880] and and Matt responded Yes do it at cuup
+[00:00:19.480] so here I am um so it's really a case
+[00:00:22.000] study of uh a project we're on how we
+[00:00:24.480] approached functional and endtoend uh
+[00:00:26.720] system testing it's going to be warts
+[00:00:28.519] and all um but it is about if I can use
+[00:00:31.560] a a phrase It's about the logistics of
+[00:00:34.040] testing so I guess quick show of hands
+[00:00:37.399] who here would call themselves a
+[00:00:40.200] tester okay 50 software
+[00:00:44.480] developer some of those are the same
+[00:00:46.399] people so that's probably the ideal talk
+[00:00:48.199] for you um so uh yeah so so it's about
+[00:00:52.719] our testing strategy but let's let's
+[00:00:54.520] start with uh how we got to the what I'm
+[00:00:57.480] going to talk about um which was
+[00:01:01.680] uh let's
+[00:01:03.879] see computers e
+[00:01:07.000] um let's try that brilliant okay so a
+[00:01:11.240] familiar story right uh this is a new
+[00:01:14.759] project that we were on it was uh the
+[00:01:17.240] first sort of project that was starting
+[00:01:19.280] a large program of work for the
+[00:01:20.600] organization I worked for which is a
+[00:01:22.439] publisher um annoyingly this story
+[00:01:25.320] happened even though I've seen it before
+[00:01:27.720] um so the the the organization when we
+[00:01:30.040] started project had quite a siloed
+[00:01:31.920] culture um you know front end devs and
+[00:01:35.280] backend devs were different qas were
+[00:01:37.920] responsible for testing uh and so on and
+[00:01:41.520] and so when we joined you know this is
+[00:01:43.360] one of the sort of cultural uh
+[00:01:44.799] impediments that we were trying to
+[00:01:46.000] overcome as well as deliver a new uh uh
+[00:01:49.200] important like first product of an of a
+[00:01:51.840] product suite for the company um so we
+[00:01:55.360] were trying to get in uh sort of bdd
+[00:01:58.200] stuff we were inspired by the screenplay
+[00:02:01.159] pattern that anony Marano uh has written
+[00:02:03.560] about does anyone recognize that when I
+[00:02:05.880] say screenplay pattern okay few few
+[00:02:07.960] people put their hands up the screenplay
+[00:02:09.640] patter is nice because it it models the
+[00:02:11.520] users of your software in the test uh as
+[00:02:14.920] actors who can who can sort of perform
+[00:02:17.080] tasks and ask questions and examine the
+[00:02:19.280] outputs of your software and and that
+[00:02:21.560] sort of like helps you think about uh
+[00:02:24.000] about about your users while writing the
+[00:02:25.920] test it's a really nice way of also
+[00:02:27.920] decomposing all the complic complexity
+[00:02:30.680] all the all the technological jiba Jabba
+[00:02:32.920] that goes into a functional test Suite
+[00:02:34.680] uh into sort of a nice object model of
+[00:02:36.640] actors and tasks and things like that so
+[00:02:38.840] we were sort of talking about this in
+[00:02:40.239] the team um uh but the qas in the sort
+[00:02:43.920] of Silo model that we initially had they
+[00:02:46.680] they were basically responsible for
+[00:02:47.879] writing functional tests for for testing
+[00:02:49.800] but also automating those
+[00:02:51.720] tests and and so they they went out and
+[00:02:54.560] they found a framework a bdd framework
+[00:02:56.840] they did lots of things did lots of
+[00:02:58.319] things uh but it all also did the
+[00:03:00.599] screenplay pattern which is why they
+[00:03:02.040] picked it um uh and started writing
+[00:03:05.959] tests um but this framework was very
+[00:03:09.120] sort of heavy on the magic it was full
+[00:03:11.319] of uh reflection and mutable State and
+[00:03:15.080] thread local variables and Global
+[00:03:16.799] variables and and and and we had a a
+[00:03:19.080] development team who wanted to write
+[00:03:21.280] pure functional code have type safety
+[00:03:24.560] null safety immutable data um and so
+[00:03:27.920] there was a real disconnect between
+[00:03:29.519] these two sides of the project we had uh
+[00:03:33.840] like the functional test being written
+[00:03:35.920] in one sort of culture of coding and the
+[00:03:39.360] main code being written in another
+[00:03:40.959] culture of coding and they didn't
+[00:03:42.560] interact very
+[00:03:43.959] much uh and and so you know when when uh
+[00:03:47.439] this this caused a problem because we
+[00:03:49.319] started getting less feedback between
+[00:03:50.920] the tests uh and the development code
+[00:03:53.959] because every time the developers
+[00:03:55.239] started looking at this test code they
+[00:03:57.920] would sort of throw their hands up in
+[00:03:59.040] horror and sort of step away from it um
+[00:04:01.599] because it was very reflection heavy
+[00:04:03.360] they couldn't use their Ides to quickly
+[00:04:04.959] learn about the code that was being
+[00:04:06.400] written uh by QA um and so so we became
+[00:04:10.480] more and more siloed uh and with all the
+[00:04:12.920] problems that that you'd expect when
+[00:04:14.560] that happens the the the the the QA
+[00:04:17.680] writing functional tests were were
+[00:04:19.160] modeling the the user modeling the
+[00:04:21.199] application and building domain models
+[00:04:23.919] that were exactly the same that the
+[00:04:25.120] developers were Building inside the
+[00:04:26.479] applications but were just had been
+[00:04:28.199] written all over again um in Java uh
+[00:04:31.560] rather than in cotland um uh then it got
+[00:04:37.039] worse that the sort of the qas
+[00:04:38.880] themselves became solos some focused on
+[00:04:40.560] sort of manual and exploratory testing
+[00:04:42.680] and it ended up being just one person
+[00:04:44.360] focusing on the development of the
+[00:04:46.039] functional tests um and because there
+[00:04:48.560] was no feedback back into the
+[00:04:49.919] development of the system and the design
+[00:04:51.400] of the system they became less and less
+[00:04:53.080] reliable because we weren't making the
+[00:04:55.360] system easy to test based on the
+[00:04:57.199] feedback from The Experience trying to
+[00:04:58.759] write system tests
+[00:05:00.160] and so then they start becoming brittle
+[00:05:01.680] because we weren't building in the
+[00:05:02.720] appropriate hooks to allow it to
+[00:05:04.280] synchronize with the system when the
+[00:05:06.120] user interface changed these tests would
+[00:05:08.199] all break uh and it just became
+[00:05:10.440] incredibly expensive they were read all
+[00:05:12.400] the time no one really cared uh because
+[00:05:15.440] they knew that the tests were buggy
+[00:05:16.759] rather than the system because all the
+[00:05:18.160] exploratory testing was finding this
+[00:05:19.479] thing was like working really well the
+[00:05:21.560] the development team were doing tdd on
+[00:05:23.280] their bits it was just the enter and
+[00:05:25.120] functional test that were read and
+[00:05:26.199] eventually they just got turned off it's
+[00:05:28.400] not a great situation to be in well we
+[00:05:30.319] didn't turn them off we took them off
+[00:05:31.880] the build monitor right um so like
+[00:05:35.440] disaster so we knew at this point like
+[00:05:37.440] you know this has really got into a bad
+[00:05:39.319] State we've got to do something about
+[00:05:40.680] this and so we basically all got
+[00:05:42.720] together and we like right we're going
+[00:05:43.759] to have a new approach to the way we do
+[00:05:45.960] functional
+[00:05:48.120] testing so this is what we basically all
+[00:05:51.319] agreed on uh which was right any
+[00:05:53.880] automation is a software development job
+[00:05:56.120] developers do it with input from qas um
+[00:05:59.319] but qas are responsible for exploratory
+[00:06:02.680] manual and qualitative testing so
+[00:06:05.560] automated testing is great it gives you
+[00:06:07.720] numbers 20 out of 20 test of passing or
+[00:06:11.120] 95% passing or whatever it is but it
+[00:06:13.840] doesn't tell you anything about like
+[00:06:15.160] what's it like to use this as a user
+[00:06:17.360] right so QA became responsible for
+[00:06:20.520] deeply understanding the constraints the
+[00:06:22.599] pressures that the user was were in and
+[00:06:24.560] feeding that back to the development
+[00:06:25.880] team as they were using the software
+[00:06:28.199] like and trying different roots based on
+[00:06:30.120] their understanding so they started
+[00:06:32.199] becoming much more closely aligned with
+[00:06:34.319] the ux team as well as the development
+[00:06:36.039] team they uh and with project managers
+[00:06:38.360] and the product designers um and and and
+[00:06:41.560] and we we're bringing really great input
+[00:06:44.080] uh when the developers were able to work
+[00:06:45.840] on the Automation and feed that back
+[00:06:48.280] into the design of the system to make
+[00:06:49.840] the automation become cheaper and
+[00:06:52.120] cheaper and then the other uh rule that
+[00:06:55.520] we came up with was right we don't want
+[00:06:57.919] any duplication of of modeling between
+[00:07:01.039] the production system and the tests if I
+[00:07:03.680] want to model an author who wants to
+[00:07:05.840] publish something the model of what an
+[00:07:08.639] author is represented as is going to be
+[00:07:10.919] the same so we actually want to write
+[00:07:12.360] our endtoend functional tests purely in
+[00:07:14.759] terms of the domain model we don't want
+[00:07:16.720] to talk about the user interface or the
+[00:07:18.879] technical infrastructure or the
+[00:07:20.440] deployment architecture we just want to
+[00:07:22.520] be able to talk about the domain model
+[00:07:23.879] in the tests and have that drive the
+[00:07:26.080] system end to end if we want
+[00:07:28.120] to how do we go about doing that was
+[00:07:31.039] then the
+[00:07:36.000] challenge so so we picked uh what people
+[00:07:41.039] call the hexagonal architecture or the
+[00:07:42.800] ports and adapters architecture our
+[00:07:44.800] system was actually made up of lot of
+[00:07:46.000] services so we had lots of little
+[00:07:47.240] hexagons being deployed inside Services
+[00:07:50.400] um and and we had an Insight which is
+[00:07:54.039] well all the domain logic lives in the
+[00:07:56.280] middle of this hexagon that's what we
+[00:07:57.680] want to test the adap to layer and all
+[00:08:00.400] the technical jibber jabber on the
+[00:08:01.960] outside of that hexagon is not
+[00:08:04.240] performing any business logic at all all
+[00:08:06.560] it's doing is a linear mapping uh here's
+[00:08:10.960] some pseudo maths to make it look
+[00:08:12.960] intellectual uh so like so like a
+[00:08:16.400] mapping from some technical events over
+[00:08:19.479] here into the business logic or some
+[00:08:23.800] like business logic stuff here into like
+[00:08:26.080] SQL queries and updates
+[00:08:29.639] so this can be
+[00:08:33.039] generated uh right so we are generating
+[00:08:37.039] this mapping here but what we want to do
+[00:08:39.599] is given a do things from the domain
+[00:08:41.599] model we want to create actions here so
+[00:08:45.480] that's just inverse the mapping
+[00:08:48.200] right so what we want to be able to do
+[00:08:50.640] is given mappings here have inverse
+[00:08:53.320] mappings here for any point in the
+[00:08:55.839] system that we want to interact with but
+[00:08:59.440] model it model that interaction only
+[00:09:01.279] with the domain model so here's like
+[00:09:04.200] what what it would look like if we had
+[00:09:05.360] our thing running in an HTTP service so
+[00:09:08.200] our test driver might be interacting at
+[00:09:10.000] the service interface and it would just
+[00:09:13.600] invert the like a mo a mapping from
+[00:09:16.640] actions on the domain model into HTTP
+[00:09:19.120] posts and gets and things like that and
+[00:09:21.600] then the job of the actual service
+[00:09:24.079] interface itself would be to map HTTP
+[00:09:26.640] post and get and things into actions on
+[00:09:28.440] the domain model
+[00:09:33.920] and this applies at wider and wider
+[00:09:35.480] scales of the system no matter how wide
+[00:09:37.399] you go these mappings into the domain
+[00:09:40.079] logic don't add any more business logic
+[00:09:42.880] themselves so once we deployed it into
+[00:09:45.120] our
+[00:09:46.240] Cloud well there's a whole lot of other
+[00:09:48.200] bits and Bobs in here doing replication
+[00:09:50.200] load balancing security and what have
+[00:09:52.480] you but it's still the same mapping uh
+[00:09:54.800] there's no extra business logic that we
+[00:09:56.399] w't want to test
+[00:09:59.519] and wider we might now when we actually
+[00:10:01.240] deploying as a web application we'll
+[00:10:02.880] have a front end cluster that is
+[00:10:04.839] generating HTML and JavaScript assets
+[00:10:06.920] that are then run in a web browser and
+[00:10:09.440] they're just doing a linear mapping of
+[00:10:12.120] user interaction events via a web
+[00:10:14.680] browser
+[00:10:16.240] uh all the way through into like the
+[00:10:19.519] HTTP service interactions at the service
+[00:10:21.920] cluster but they're still not doing any
+[00:10:23.760] domain
+[00:10:24.680] logic they're just adding usability
+[00:10:28.800] right
+[00:10:30.360] and so if we want to test via the
+[00:10:32.279] browser through the user interface we
+[00:10:33.920] want to basically take another inverse
+[00:10:35.800] mapping right and apply that and we can
+[00:10:39.600] take the same way of thinking about our
+[00:10:41.839] test exactly the same test code was the
+[00:10:43.680] goal right that just talks in terms of
+[00:10:45.920] domain model objects inversus mappings
+[00:10:49.040] like in the test and then map them back
+[00:10:52.320] again into the domain model in the
+[00:10:53.480] system and we should be able to test
+[00:10:54.600] that
+[00:10:57.600] logic and then when we deploy into
+[00:10:59.839] production we put in features that will
+[00:11:02.480] allow us to test the system when it's
+[00:11:04.240] deployed into production and there's a
+[00:11:06.200] whole load of stuff that that happens
+[00:11:08.240] out here in the you know in the global
+[00:11:10.600] CDN uh caching rules that are being
+[00:11:12.920] updated by who knows who and when which
+[00:11:16.519] can interfere with your system so it's
+[00:11:17.959] great to be able to actually run a
+[00:11:19.040] system test to check that does the whole
+[00:11:21.760] system still hang together even
+[00:11:23.760] when the infrastructure which is totally
+[00:11:26.360] out of our control is being monkeyed
+[00:11:27.680] around with without us ever knowing
+[00:11:28.839] about it
+[00:11:29.880] and again it's the same mapping same
+[00:11:32.120] mappings in and out of the domain model
+[00:11:34.639] uh whether you're going globally through
+[00:11:37.200] CDN with like you know geographically
+[00:11:39.920] low balance across different data
+[00:11:41.920] centers and all the way into the tiny
+[00:11:43.720] little domain model objects that are
+[00:11:45.440] running in those data centers uh or
+[00:11:47.680] whether you're actually just doing it
+[00:11:49.519] right there uh in your
+[00:11:55.200] IDE so all of this technical stuff it
+[00:11:58.880] adds non cross functional requirement
+[00:12:01.639] support right it implements security
+[00:12:04.120] scalability
+[00:12:05.560] availability uh
+[00:12:07.240] usability um but it's not adding any
+[00:12:09.320] more business logic but it can really
+[00:12:10.760] interfere with your business logic if
+[00:12:12.800] caching rules change here and you've not
+[00:12:15.000] done your caching properly then it could
+[00:12:17.320] actually affect the way that you know
+[00:12:18.839] users see pages and interfere with their
+[00:12:20.440] ability to make use of that business
+[00:12:21.839] logic but none of it is adding
+[00:12:27.760] anymore so given that we want to be able
+[00:12:30.440] to write a test that just uses our
+[00:12:33.279] domain model
+[00:12:35.279] here um but we'll be able to apply these
+[00:12:38.600] mappings and so we we basically took the
+[00:12:41.360] the screenplay pattern and we just took
+[00:12:43.959] the metaphor of a screenplay uh of
+[00:12:46.639] actors and we just sort of turned it up
+[00:12:48.760] to 11 we're like well what else do we
+[00:12:51.000] see in screen plays right so we actually
+[00:12:53.440] have a production of a film let's say uh
+[00:12:57.560] and and the production of a film is
+[00:12:59.199] basically decides how am I interfacing
+[00:13:01.560] with the system a production uh basic
+[00:13:05.079] creates scenarios so each test is a
+[00:13:07.480] scenario there are some roles in this
+[00:13:09.920] scenario there are some authors there
+[00:13:11.120] are some editors an author might want to
+[00:13:12.839] submit a manuscript an editor reviews it
+[00:13:15.279] and decides whether it needs Amendment
+[00:13:16.600] or not and but but the roles which are
+[00:13:20.600] the tests care about are implemented by
+[00:13:22.920] different actors in our system so we
+[00:13:24.800] separated out these two concepts an
+[00:13:27.279] actor is responsible for interfacing
+[00:13:29.760] with the system through some system
+[00:13:32.519] interface and uh implementing the tasks
+[00:13:36.000] that a role can
+[00:13:37.440] perform um by acting upon the system
+[00:13:40.399] interface which will then cause an
+[00:13:41.920] action to occur on the domain
+[00:13:44.320] model very abstract I know uh I will
+[00:13:48.160] show a picture of some actual
+[00:13:51.360] code okay so can anyone read that it's a
+[00:13:54.360] bit of a blurry screen I'm afraid
+[00:13:56.560] and I I'll put these up online and you
+[00:13:59.120] can all have a look but um I pointed it
+[00:14:01.360] with a little laser and maybe that will
+[00:14:02.839] help uh so we create a scenario here's a
+[00:14:06.199] test an editor can request an amendment
+[00:14:08.399] you create a scenario by talking to the
+[00:14:10.360] production and asking for a scenario and
+[00:14:11.880] the scenario defines the roles that are
+[00:14:14.720] going to be playing being played by
+[00:14:16.519] actors in a scenario I want a new author
+[00:14:18.759] called Alice I want a new editorial
+[00:14:20.560] staff member called Ed and and behind
+[00:14:23.279] the scenes these will be played by an
+[00:14:24.519] actor that is actually introduced by the
+[00:14:27.079] production uh then Alice has submitted
+[00:14:30.360] some some
+[00:14:31.639] manuscript uh then Ed can request an
+[00:14:34.240] amendment of that manuscript Alice can
+[00:14:36.000] review and change her manuscript and
+[00:14:38.440] then Ed can see the new Amendment
+[00:14:40.600] appearing in the peer review system for
+[00:14:42.320] further review okay very very simple
+[00:14:44.480] test um but but that can drive a lot of
+[00:14:48.120] systemwide logic or it can run directly
+[00:14:50.839] against the domain model so uh in this
+[00:14:53.440] case like the submission details here
+[00:14:55.680] that's an actual domain model object
+[00:14:57.839] that's used in production
+[00:14:59.920] and the production code um as is you
+[00:15:02.880] know all of these constants and
+[00:15:04.000] everything else these are all just
+[00:15:05.320] straight out the domain model so if we
+[00:15:07.120] wanted to this would be like you know in
+[00:15:09.600] the quick tests these are running
+[00:15:11.800] against just objects they're just
+[00:15:13.000] testing the behavior of the
+[00:15:14.639] objects um but they can also map through
+[00:15:18.120] the sort of the back background uh or
+[00:15:20.920] the actors in the background uh they can
+[00:15:23.320] map uh into HTTP requests or driving a
+[00:15:26.680] browser or whatever we want to do
+[00:15:29.079] against our Cloud against the system
+[00:15:31.920] running on our local developer
+[00:15:33.199] workstation or what have you depending
+[00:15:35.079] on how much of the system we want to
+[00:15:37.000] test so this allows us to to write a
+[00:15:39.680] system test but also when we're working
+[00:15:42.440] in the domain logic run the system test
+[00:15:44.319] very very fast to get quick
+[00:15:50.000] feedback so what the benefits we got
+[00:15:53.399] here were well it was we were able to
+[00:15:56.759] run our test very quickly against the
+[00:15:58.319] against the domain model entirely in
+[00:15:59.720] memory but we were also be able to take
+[00:16:01.440] the exactly the same test code and run
+[00:16:03.000] it against a deployed system in various
+[00:16:05.639] configurations and at various points in
+[00:16:07.519] the system against the service API
+[00:16:09.160] against the browser the tests were quick
+[00:16:11.600] to write and they got quicker and
+[00:16:12.720] quicker to write because we were writing
+[00:16:14.560] the tests uh and driving the the design
+[00:16:17.720] of the domain model uh and the the
+[00:16:20.000] design of the system the feedback from
+[00:16:22.000] the tests meant that we were able to
+[00:16:23.759] build more uh testability into the
+[00:16:26.279] system as a whole uh which meant that
+[00:16:28.680] like they became faster and faster to
+[00:16:30.160] write more and more reliable um the uh
+[00:16:33.680] the API is type safe so we get lots of
+[00:16:35.680] IDE support refactoring support uh
+[00:16:38.279] writing a new test drives out the domain
+[00:16:40.360] model for you so that when you come to
+[00:16:42.360] implement it the domain model is already
+[00:16:43.959] what you want it to be the tests were
+[00:16:46.759] easy to read given that it's code
+[00:16:48.519] admittedly it's not natural language um
+[00:16:51.160] but behind the scenes we have some
+[00:16:52.360] reporting as well that report some uh
+[00:16:54.639] some business rules in natural language
+[00:16:56.000] when we want to show them to business
+[00:16:57.440] analysts um but the the tests are very
+[00:17:00.040] concise they do a lot of logic but they
+[00:17:02.440] can do it in a small amount of code
+[00:17:04.000] because we're able to refactor higher
+[00:17:05.679] and higher
+[00:17:07.000] abstractions and they don't have any
+[00:17:08.679] user interface details in
+[00:17:10.559] them and no technical details you don't
+[00:17:13.079] know in a test whether you're running
+[00:17:14.480] against a Json API or against a web
+[00:17:17.559] browser it's the same test you're just
+[00:17:19.679] looking at the logic of of what can
+[00:17:21.679] happen in the system and there was no
+[00:17:24.120] duplication in the test code between the
+[00:17:25.919] production code and the test code which
+[00:17:28.039] was you very useful so we could change
+[00:17:30.919] the the them both much more rapidly
+[00:17:38.160] together but whats in all it was uh it
+[00:17:41.919] was a challenge it was more complicated
+[00:17:43.919] than people were used to it was a
+[00:17:45.440] different way of testing than people
+[00:17:46.799] were used to where people initially uh
+[00:17:50.440] had an a bit of a there was a bit of a
+[00:17:52.240] sort of a hump where uh we didn't really
+[00:17:54.679] know what to do with this capability of
+[00:17:57.240] being able to run tests in different
+[00:17:58.480] scales
+[00:18:01.360] maybe it will you know there's a lot of
+[00:18:02.720] debate is it too complicated do we just
+[00:18:04.480] not care uh so one of the thing was the
+[00:18:08.320] what is the process of tdd now that we
+[00:18:10.679] can write tests like this do we start
+[00:18:13.200] from the outside like just start by uh
+[00:18:16.840] thinking about the the the the HTML the
+[00:18:19.919] the HTTP
+[00:18:21.240] interfaces um and start writing mappings
+[00:18:24.440] uh all the way down until we get to the
+[00:18:26.520] point where we start writing the
+[00:18:27.480] business logic or do we start with the
+[00:18:29.919] business logic because we can run that
+[00:18:31.159] really really fast and then decide to
+[00:18:33.240] map it out uh write all the mapping so
+[00:18:36.120] we can deploy it into a into a live
+[00:18:38.159] environment um and this was like what do
+[00:18:40.880] we do we have a you the the the growing
+[00:18:44.600] object software book has a very nice
+[00:18:46.440] strict methodology in it and this kind
+[00:18:48.200] of like threw that up in the
+[00:18:50.120] air uh we do both uh there isn't a right
+[00:18:54.600] answer uh sometimes uh we're working
+[00:18:57.280] purely in the domain model and all the
+[00:18:58.799] mappings already there so we write the
+[00:19:00.799] the domain model uh we run the tests and
+[00:19:03.520] they run in the system scale as well
+[00:19:05.559] because because the mappings are been
+[00:19:06.919] written sometimes we're writing new
+[00:19:08.520] interfaces uh to services or new HTML
+[00:19:11.480] interfaces and at that point we have we
+[00:19:14.640] we work the other way we think right
+[00:19:16.320] what's the interface going to be let's
+[00:19:17.880] write the mappings to and from the
+[00:19:19.000] domain model and drive out the domain
+[00:19:20.760] model as we go from that way and you
+[00:19:23.640] know different stories have have
+[00:19:25.360] different processes uh whatever fits
+[00:19:27.919] best
+[00:19:32.039] the other problem we accounted pretty
+[00:19:33.679] soon was a combinational combin com com
+[00:19:37.960] there was a lot of mappings to WR uh so
+[00:19:41.960] can imagine like there's a whole bunch
+[00:19:43.320] of actions that that an actor can
+[00:19:45.320] perform on the interfaces of the system
+[00:19:47.400] or on the domain model and there's a lot
+[00:19:50.400] of different interfaces into the system
+[00:19:52.840] right here's like there's a you know can
+[00:19:55.080] directly talk to The Domain model you
+[00:19:56.720] can hit a service API you can hit a
+[00:19:59.559] browser uh with the JavaScript turned on
+[00:20:02.360] then you got to also worry about the
+[00:20:04.039] JavaScript turned off then right suppose
+[00:20:06.039] you want to add a add an Android app
+[00:20:07.960] right uh suddenly we've got to write all
+[00:20:10.760] those mappings for a new interface um
+[00:20:13.400] and what happens every this is this
+[00:20:14.880] changes more often what happens every
+[00:20:16.400] time we add uh a new action that the
+[00:20:18.760] user is performing in the system we've
+[00:20:20.520] got to write mappings for all of these
+[00:20:23.200] uh all of these system interfaces and
+[00:20:25.520] that's just explodes the amount of work
+[00:20:27.200] just is is crazy
+[00:20:29.840] so we solved it by coming up with a
+[00:20:31.919] linga franer a sort of a common
+[00:20:34.360] representation of all of the
+[00:20:36.919] interactions that a user can have with
+[00:20:38.480] the system apart from the domain model
+[00:20:41.600] which is well you don't need to map to
+[00:20:43.720] that you just call it directly we we
+[00:20:47.240] defined a model of user interaction and
+[00:20:50.200] then inside any actors are interfaced
+[00:20:53.280] with a uh with a system interface that
+[00:20:55.679] was remote in some kind of way uh the
+[00:20:58.880] would uh use common mappings from the
+[00:21:01.760] domain model actions into a model of
+[00:21:03.320] user interaction and then the active
+[00:21:05.320] responsibility was to map user
+[00:21:06.880] interactions onto a service interface
+[00:21:09.080] and so that then meant that instead of
+[00:21:10.480] having you know M * n uh mappings to
+[00:21:14.600] write you had like M plus n and these
+[00:21:18.760] would be often you know these would be
+[00:21:21.320] ready so you write these you You' just
+[00:21:24.000] say oh well you know to enter to submit
+[00:21:26.840] a manuscript you have to enter the title
+[00:21:28.640] that's entering text the title enter an
+[00:21:31.120] abstract enter text so You' just be
+[00:21:32.919] using things that already existed that
+[00:21:34.400] already had mappings so this made it
+[00:21:36.559] faster and faster to basically add new
+[00:21:39.159] actions into
+[00:21:44.600] systems and then as you go further and
+[00:21:48.200] further out through the system you know
+[00:21:50.039] especially when you hit user interface
+[00:21:51.320] you find that actually there's multiple
+[00:21:53.120] ways of mapping from a user interaction
+[00:21:55.840] or for or for a domain action into do an
+[00:21:58.880] interaction at a service interface if
+[00:22:00.679] you think about user interface there's
+[00:22:02.440] multiple ways that you might navigate
+[00:22:03.919] through a user interface to get to the
+[00:22:05.320] screens that you need to use to input
+[00:22:07.000] data you might see the data being
+[00:22:09.760] presented in different places in the
+[00:22:11.159] screen what do we do about
+[00:22:13.279] that so there's sort of two options you
+[00:22:16.760] could we could right uh choose uh and
+[00:22:19.440] the one we choose we just uh we chose
+[00:22:22.919] the the bottom one but like one of them
+[00:22:24.159] would just pick a random one right uh
+[00:22:27.000] every test run pick a random navigation
+[00:22:29.080] and a random thing to look out on the
+[00:22:30.760] screen um and over a lot of runs just
+[00:22:34.440] run it all the time over a lot of runs
+[00:22:36.039] you'll have tested a huge amount of your
+[00:22:38.360] your code right you you'll get you know
+[00:22:41.120] a run through doesn't tell you that it's
+[00:22:42.799] absolutely correct but just checking
+[00:22:44.720] exactly the same thing all the time
+[00:22:46.080] usually doesn't tell you it's correct um
+[00:22:48.200] so this is like a sort of property
+[00:22:49.480] testing just continually shaking down
+[00:22:51.480] the application with a random inputs
+[00:22:53.720] which should all behave the same way uh
+[00:22:56.200] can sort of Chase out sort of uh
+[00:22:58.080] accident bugs that have slipped through
+[00:23:01.640] um uh but the because of the sort of
+[00:23:04.400] limitations of our continuous
+[00:23:06.039] integration pipeline system we didn't
+[00:23:08.200] pick that one we actually uh put in a
+[00:23:10.320] lot of unit tests to make sure that any
+[00:23:13.080] any different ways of doing the same
+[00:23:15.080] thing all behave the same way and then
+[00:23:17.080] in our functional test we just pick
+[00:23:25.120] one computers do that work ah
+[00:23:29.200] so so uh you it's been uh interesting
+[00:23:33.360] and useful um let go back a bit
+[00:23:39.360] more so one of the one of the sort of
+[00:23:42.559] issues we had with it uh was was was uh
+[00:23:47.200] complexity particularly here where we
+[00:23:49.279] have a one way of mapping through user
+[00:23:52.640] actions into service interfaces and then
+[00:23:55.799] the domain model the direct domain model
+[00:23:57.520] one is is different right and there's a
+[00:23:59.880] lot of discussion in the team like is it
+[00:24:02.720] worth keeping the in-memory mappings why
+[00:24:05.200] don't we just have system tests and not
+[00:24:07.440] have functional tests that run against
+[00:24:08.799] the domain model because they're
+[00:24:10.279] different there's a little bit of sort
+[00:24:12.200] of mental overhead in dealing with all
+[00:24:13.760] of this extra complexity but every time
+[00:24:17.000] we dug into like a a case where it
+[00:24:20.400] looked like hitting the domain model
+[00:24:22.400] directly was a was was actually
+[00:24:24.679] inappropriate we would find that either
+[00:24:27.399] our application was conforming to its
+[00:24:29.279] architectural conventions so there was
+[00:24:30.880] business logic being done in an adapter
+[00:24:32.520] layer for example um or our domain model
+[00:24:35.600] was just wrong right uh and so it it
+[00:24:38.679] turned out that every time we were
+[00:24:40.039] having this debate fixing the design of
+[00:24:42.640] our system uh made the problem go away
+[00:24:45.640] so we were actually happy to keep
+[00:24:51.240] it um but this you know it is system
+[00:24:54.120] testing uh and I guess like system
+[00:24:57.200] testing the testing pyramid is on
+[00:24:58.960] everyone's mind um you know why are we
+[00:25:01.760] bothering system testing uh haven't you
+[00:25:04.039] heard about the testing pyramid
+[00:25:05.159] shouldn't you be doing everything with
+[00:25:06.039] unit tests and everything yes we do have
+[00:25:08.600] a lot of unit tests and we definitely
+[00:25:10.279] have more unit tests than system tests
+[00:25:12.840] um but in our in our application we
+[00:25:14.520] deploy into the cloud uh we have uh you
+[00:25:18.120] know a public cloud and a CDN there's
+[00:25:20.080] lots and lots of technical technical
+[00:25:22.000] jibba jaaba between the business logic
+[00:25:24.440] that we want to let the users access and
+[00:25:27.640] uh their ability to access it and and so
+[00:25:30.240] but none of that technical stuff is
+[00:25:31.960] easily isolatable some of it is owned by
+[00:25:33.840] other companies some of it is inside
+[00:25:36.039] networking equipment um and so we do
+[00:25:38.520] want to be able to test uh that like
+[00:25:41.320] none of it is interfering with the
+[00:25:43.000] ability of users to use the
+[00:25:45.720] application and by a by running that
+[00:25:48.440] through in production we get like a way
+[00:25:50.440] of production monitoring uh and
+[00:25:52.399] detecting this stuff even in our live
+[00:25:54.679] environment which you know takes design
+[00:25:57.159] of the system in order to let you do
+[00:25:59.360] that safely in production so we created
+[00:26:01.320] sort of you know fake fake users fake
+[00:26:04.399] journals fake you know uh uh sort of
+[00:26:07.559] configurations where they're not going
+[00:26:09.480] to affect real users but they can be
+[00:26:11.360] used by automated
+[00:26:14.720] tests but I think the real reason like a
+[00:26:19.000] really valuable reason to do this uh and
+[00:26:22.080] and to think about system testing
+[00:26:24.360] because we don't just want to System
+[00:26:25.480] test we want a test drive the designer
+[00:26:28.720] at the system scale so so this is uh
+[00:26:32.840] this is a a diagram from the goose book
+[00:26:36.760] um and and this encapsulates what I
+[00:26:38.679] think s test room development one of its
+[00:26:40.480] key feedback loops which is you when we
+[00:26:43.320] come to write a test and try and make it
+[00:26:45.480] fail if it's hard to write that test you
+[00:26:48.960] go back and you refactor the system
+[00:26:50.679] until it's easy to write the
+[00:26:52.520] test um if it's hard to
+[00:26:55.360] diagnose uh what's gone wrong when the
+[00:26:57.440] test has failed you go back and you
+[00:26:59.960] change the design of the system until
+[00:27:01.320] your test can produce a good diagnostic
+[00:27:03.520] output okay at the system scale that
+[00:27:06.480] means adjusting the architecture to
+[00:27:08.559] support systemwide
+[00:27:11.720] testing so at to test a a system as a
+[00:27:16.600] whole there's five things that we that
+[00:27:20.440] our system tests we our automated system
+[00:27:22.440] test we as to be able to do as to know
+[00:27:24.559] what the system is doing is it actually
+[00:27:26.760] doing what I think it's doing uh
+[00:27:28.720] otherwise it's it's failing this test it
+[00:27:31.120] has to know when it's stopped doing it
+[00:27:32.600] so it can run the next test it has to
+[00:27:35.039] know when it's failed right and uh and
+[00:27:38.799] be able to report that failure
+[00:27:40.799] nicely uh by explaining what has gone
+[00:27:43.240] wrong with the system and then it's got
+[00:27:44.919] to be able to somehow get the system
+[00:27:46.039] back into a good state so that we can
+[00:27:48.120] then start running the next test and
+[00:27:50.600] what we found is that this applies to
+[00:27:53.720] supporting the system as well and if I
+[00:27:56.159] am supporting a system with l users I
+[00:27:59.200] need to be able to know that it's what
+[00:28:00.559] it's doing and that and that people are
+[00:28:02.039] using it successfully I need to know uh
+[00:28:05.159] when you know it's having downtime that
+[00:28:07.120] I can do an upgrade or whatever um I
+[00:28:09.919] need to know uh if the system has failed
+[00:28:12.279] and me as an as an administrator has to
+[00:28:14.080] get in and do something uh to fix it I
+[00:28:16.960] have to be able to understand what's G
+[00:28:18.640] wrong with it so I can fix it and I have
+[00:28:20.480] to be able to get the system back into a
+[00:28:21.880] good state so what we found is that as
+[00:28:24.480] by test driving at the system scale
+[00:28:26.559] we've made our system more and more
+[00:28:28.880] supportable right uh where like test
+[00:28:31.760] driving at the unit scale makes the code
+[00:28:33.919] more and more maintainable at the system
+[00:28:36.360] scale we get more and more management
+[00:28:38.039] support in the system appropriate
+[00:28:39.679] interfaces that can be used with
+[00:28:41.519] management tools management user
+[00:28:42.880] interfaces and things like
+[00:28:46.679] that that's the end uh how am I doing
+[00:28:50.320] for time is there
+[00:28:52.559] any yeah
+[00:28:59.080] how you doing for time is uh that we've
+[00:29:01.600] got time for a few questions while we
+[00:29:03.600] switch the excellent video over okay so
+[00:29:09.640] what questions do we have for Nat in the
+[00:29:12.440] room have I got these the right way
+[00:29:14.480] around is the not green the green one's
+[00:29:16.640] mine this one's
+[00:29:19.720] Tom's is it on yes that's good you may
+[00:29:24.480] now ask your question thank you Matt um
+[00:29:28.679] that was a a brilliant talk thank you
+[00:29:30.320] very much thank you
+[00:29:32.559] um so do you run all of your functional
+[00:29:35.440] tests like four times do you run the
+[00:29:37.720] whole Suite like at each scale or do you
+[00:29:40.279] have some kind of like what what happens
+[00:29:42.320] there on every test run so so yeah from
+[00:29:45.159] on every commit so we we have a number
+[00:29:47.720] of scales that we can run at uh we like
+[00:29:50.880] on the developer workstation we run it
+[00:29:52.320] in memory uh and we can also run it with
+[00:29:54.480] all the services spun up in the same
+[00:29:56.559] process so a whole bunch of HTP Services
+[00:29:58.799] talking to each other but in the same
+[00:30:00.320] process so that allows us to reproduce
+[00:30:03.000] things we see when running against a
+[00:30:04.320] cloud right but debuggable so that's a
+[00:30:07.120] really handy thing but we don't run that
+[00:30:09.399] in the cicd pipelines in in the CD
+[00:30:12.120] pipelines we deploy the whole thing into
+[00:30:13.480] an internal cloud and then we run the
+[00:30:16.080] system test against that so yeah and
+[00:30:18.760] then we have some that like just
+[00:30:20.919] occasionally hit the live system to
+[00:30:22.240] check things are
+[00:30:25.120] happy I've got a question what do you do
+[00:30:27.279] about a sing synchrony n so where where
+[00:30:30.559] do you allow asynchrony within the sort
+[00:30:33.120] of layers of what you test good yeah so
+[00:30:36.960] so one of the differences between our
+[00:30:39.880] interpretation of the screenplay pattern
+[00:30:41.880] and the one that Anthony has published
+[00:30:44.799] is that we don't allow actors to ask
+[00:30:46.880] questions so if you ask the system a
+[00:30:50.519] question and then assert on its answer
+[00:30:53.960] you don't know when the syst in an
+[00:30:57.159] asynchronous system you don't know when
+[00:30:58.440] the system has finished Computing that
+[00:31:00.080] answer right um and so uh we only allow
+[00:31:04.519] the the actors to do things and they
+[00:31:07.399] might fail right uh or to to do
+[00:31:11.519] something that they're not allowed to do
+[00:31:12.720] and assert that they weren't allowed to
+[00:31:13.960] do it uh and so that allows particular
+[00:31:16.559] actor implementations to implement
+[00:31:19.760] asynchrony uh as appropriate for the
+[00:31:22.120] system interface and then for the
+[00:31:24.440] inmemory model we run all the hexagons
+[00:31:27.240] with a sort of memory simulation of what
+[00:31:29.320] that asynchronous behavior between the
+[00:31:31.000] components would be so but how do you
+[00:31:32.720] assert anything then if the actors can't
+[00:31:34.159] ask questions how do you check so so
+[00:31:37.679] something like right uh I'm going to say
+[00:31:40.279] I can check like the actor the the
+[00:31:42.600] author can uh amend the title of their
+[00:31:46.000] paper right uh and in memory you just go
+[00:31:50.679] set the title and you've got a unit test
+[00:31:53.000] that says well if I set the title on a
+[00:31:55.080] sing it works um but in the HTTP
+[00:32:00.159] implementation you would do an HTTP
+[00:32:02.679] request and then you would like check
+[00:32:04.519] that it did the right thing right and in
+[00:32:07.360] the browser you would navigate to the
+[00:32:10.120] appropriate field enter the data and
+[00:32:12.039] check and submit and check that when I
+[00:32:14.600] went back and looked at it it was
+[00:32:15.880] already there so as wider and wider
+[00:32:18.120] scales you have to deal with the
+[00:32:19.279] asynchrony you have to but it's the act
+[00:32:21.639] of being able to perform something that
+[00:32:24.720] matters and and you write your test so
+[00:32:28.080] that what you're saying you want to
+[00:32:29.639] perform also make allows you to ask the
+[00:32:32.159] appropriate questions okay so there
+[00:32:34.720] wouldn't be thens in the same context as
+[00:32:37.000] a cucumber where you'd say then the user
+[00:32:40.240] gets an email or something we have
+[00:32:41.919] things like yeah I mean you would say
+[00:32:43.360] then the user can you know read the
+[00:32:47.760] response from the editor and that would
+[00:32:49.880] be waiting for it to turn up on an email
+[00:32:52.320] and then like check that the text was
+[00:32:54.080] appropriate
+[00:32:56.039] yeah what other questions do we have for
+[00:33:03.120] that there's
+[00:33:06.960] one um you mentioned that you uh were
+[00:33:11.120] using this in life system as well with
+[00:33:13.320] fake
+[00:33:14.279] accounts um if you're coupled with third
+[00:33:17.840] parties that do expensive things how do
+[00:33:21.080] you
+[00:33:22.320] yeah we're lucky in that respect yeah um
+[00:33:26.440] we don't we have reference data from
+[00:33:29.159] third parties but we don't have we don't
+[00:33:31.360] interact with them so internal
+[00:33:34.360] yeah uh oh well apart from we we've got
+[00:33:37.039] an internal Downstream system so our
+[00:33:38.679] fake our fake Journal would have rather
+[00:33:42.760] than going to the real publishing system
+[00:33:44.840] which would which we wouldn't want for
+[00:33:46.760] tests it goes into a fake publishing
+[00:33:48.600] system so so at the very very edges
+[00:33:50.519] where we can because it's internal uh we
+[00:33:53.279] can like root so we've actually you know
+[00:33:55.120] it's changing the design of the system
+[00:33:56.440] this is a requirement that's not needed
+[00:33:57.880] we don't have more than one publishing
+[00:33:59.159] system but for testing purposes we've
+[00:34:01.120] added in support for
+[00:34:09.240] that how did you get permission to do
+[00:34:13.200] all of this work to just make great
+[00:34:17.480] testing infrastructure from the people
+[00:34:19.760] who presumably didn't really care about
+[00:34:21.839] having testing infrastructure so much as
+[00:34:24.240] having great features on the application
+[00:34:26.639] that you're I never asked
+[00:34:33.610] [Applause]
