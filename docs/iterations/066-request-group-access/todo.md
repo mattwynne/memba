@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.
+- [x] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.
 - [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.
 - [ ] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance.
 - [ ] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship.
