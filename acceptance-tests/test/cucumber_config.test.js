@@ -161,14 +161,22 @@ test("custom-group rules and their distinct Board journey retain iteration 062 p
   assert.equal(rules.has(journey.name), false);
 });
 
-test("unfinished lifecycle rules and future access requests remain deferred", () => {
+test("unfinished lifecycle rules remain deferred", () => {
   const lifecycle = scenariosNamed("custom_group_lifecycle.feature");
   assert.ok(lifecycle.get("Carol loses access even with an old Board conversation open").tags.includes("@todo"));
   assert.ok(!selectedByDomain(lifecycle.get("Carol loses access even with an old Board conversation open").tags));
   assert.ok(selectedByDomain(lifecycle.get("Removing Carol does not cancel her queued email").tags));
+});
+
+test("iteration 066 access requests run only in the domain runner", () => {
   const requests = scenariosNamed("custom_group_access_requests.feature");
   assert.ok(requests.size > 0);
-  assert.ok([...requests.values()].every(({ tags }) => tags.includes("@todo") && !selectedByDomain(tags) && !selectedByBrowser(tags)));
+  assert.ok([...requests.values()].every(({ tags }) =>
+    tags.includes("@iteration-066") &&
+    !tags.includes("@todo") &&
+    selectedByDomain(tags) &&
+    !selectedByBrowser(tags)
+  ));
 });
 
 test("concurrent first-admin invitation remains a domain-only regression", () => {
