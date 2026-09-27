@@ -10,7 +10,7 @@ The helper runs the real workflows directly from the CLI, so approval stays at t
 
 1. `plan-validation` validates the plan at `plan_path` with `--auto-approve` only when the plan status is `ready`. A plan already marked `validated` reuses that result and skips validation. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
 2. `bin/dev` checks that all earlier-numbered iterations are `merged`, then waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the predecessor and WIP checks pass, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
-3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, marks the iteration `merged`, and pushes that commit directly to `main`.
+3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, marks the iteration `merged`, and pushes that commit directly to `main`. A blocked verdict or the third revision verdict pauses at a Slack freeform discussion before Fabro's iteration-wide revision visit limit. This is for either business examples or architectural/technical constraints, not an automatic scope change. The discussion stops without accepting the task or publishing; recovery from the preserved checkpoint is a separate decision. Implementation launches must not use `--auto-approve`.
 4. `code-review` is launched detached after that publication. One focused OpenAI reviewer classifies the merged diff as clean, bounded heal, durable non-urgent record, or consequential human judgement. It is a healer, not a delivery gate: failures and unanswered human gates remain on the review run and never rewrite successful implementation delivery. A bounded code/config/test heal gets one pass and an exact-state `dev check` before a separate commit; a docs-only code-health record is published without an unnecessary full gate.
 
 Canonical commands:
@@ -40,7 +40,7 @@ Manual split-phase escape hatches remain available:
 fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
 .fabro/workflows/scripts/iteration_status.py check-predecessors docs/iterations/NNN-topic/plan.md
 .fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/NNN-topic/plan.md
-fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
+fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
 bin/dev fabro code-review <branch> docs/iterations/NNN-topic/plan.md <base-sha>
 ```
 
@@ -103,7 +103,7 @@ Resume from the failed run's pushed Fabro run branch, using a new `fabro run` wi
 ```bash
 git fetch origin fabro/run/<failed-run-id>
 git switch -c resume/<failed-run-id> --track origin/fabro/run/<failed-run-id>
-fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
+fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
 ```
 
 The new Fabro run uses the checked-out branch as its source branch, so it sees durable Fabro checkpoint commits and the iteration `todo.md` from the failed run while using the latest local workflow definition.

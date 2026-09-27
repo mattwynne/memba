@@ -108,7 +108,8 @@ class TaskVerdictTest(unittest.TestCase):
 
     def test_blocked_reports_original_reason_without_checkoff(self):
         result = self.apply("blocked", reason="Product decision needed: should revoked access close the view?")
-        self.assert_unchanged_failure(result)
+        self.assert_route(result, "blocked")
+        self.assertEqual(self.todo.read_text(), TODO)
         self.assertIn("Product decision needed", result.stderr)
         self.assertIn("009", result.stderr)
 

@@ -125,8 +125,9 @@ def apply_verdict(plan: Path, verdict: object) -> None:
     elif decision == "revise":
         write_review_artifact(plan, verdict_dict, packet, result)
     else:
+        # A substantive blocker is a successful review verdict, not a provider
+        # failure. Route it to Matt without accepting or checking off the task.
         write_review_artifact(plan, verdict_dict, packet, result)
-        raise ValueError(f"Task blocked: {task}\n{reason}")
 
     print(f"Task {decision}: {task}\n{reason}", file=sys.stderr)
     print(json.dumps({"preferred_next_label": decision}))

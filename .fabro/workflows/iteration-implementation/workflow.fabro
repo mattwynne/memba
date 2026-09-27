@@ -165,6 +165,37 @@ digraph IterationImplementation {
         timeout="120s"
     ]
 
+    task_escalation [
+        label="Escalate repeated task finding",
+        shape=parallelogram,
+        output_schema="routing",
+        script="python3 -B .fabro/workflows/iteration-implementation/scripts/escalate_task_review.py '{{ inputs.plan_path }}'"
+    ]
+
+    task_discussion [
+        label="The validator has stopped this task; its finding is in the preceding run evidence. Should we repair the candidate to meet the approved plan, or is there a concrete business example or architectural constraint that changes the approach? Reply 'repair as planned' or describe that constraint. This cannot approve publication.",
+        shape=hexagon,
+        question_type="freeform",
+        max_visits=10
+    ]
+    reflect_task_discussion [
+        label="Reflect on Matt's guidance",
+        shape=box,
+        output_schema="routing",
+        prompt="@prompts/reflect_task_discussion.md",
+        max_visits=10
+    ]
+    summarize_task_discussion [
+        label="Record task clarification",
+        shape=box,
+        prompt="@prompts/summarize_task_discussion.md"
+    ]
+    task_clarification_complete [
+        label="Stop: Human Clarification Complete",
+        shape=parallelogram,
+        script="echo 'Task clarification is recorded in this run. Do not publish or restart automatically; review the discussion and resume from the saved implementation checkpoint only after an explicit recovery decision.' >&2\nexit 1"
+    ]
+
     task_stopped [
         label="Stop: Task Processing Failed",
         shape=parallelogram,
@@ -331,8 +362,18 @@ digraph IterationImplementation {
     validate_task -> apply_task_verdict [condition="outcome=succeeded"]
     validate_task -> task_stopped
     apply_task_verdict -> before_delivery_planner [condition="outcome=succeeded && preferred_label=accept"]
-    apply_task_verdict -> before_delivery_planner [condition="outcome=succeeded && preferred_label=revise"]
+    apply_task_verdict -> task_escalation [condition="outcome=succeeded && preferred_label=revise"]
+    apply_task_verdict -> task_escalation [condition="outcome=succeeded && preferred_label=blocked"]
     apply_task_verdict -> task_stopped
+    task_escalation -> before_delivery_planner [condition="outcome=succeeded && preferred_label=continue"]
+    task_escalation -> task_discussion [condition="outcome=succeeded && preferred_label=discuss"]
+    task_escalation -> task_stopped
+    task_discussion -> reflect_task_discussion [freeform=true]
+    reflect_task_discussion -> task_discussion [condition="outcome=succeeded && preferred_label=ask"]
+    reflect_task_discussion -> summarize_task_discussion [condition="outcome=succeeded && preferred_label=finish"]
+    reflect_task_discussion -> task_stopped
+    summarize_task_discussion -> task_clarification_complete
+    // The discussion collects guidance; it cannot check off work or publish.
     // Fabro requires fallback edges. task_stopped fails without reaching normal exit,
     // avoiding an unrelated unsatisfied publish goal gate as the terminal error.
 
