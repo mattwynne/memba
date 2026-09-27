@@ -1,0 +1,19 @@
+digraph IterationClarification {
+    graph [goal="Obtain Matt's guidance on a failed iteration task without publishing code", default_fidelity="summary:high", max_node_visits=30]
+    start [shape=Mdiamond, label="Start"]
+    exit [shape=Msquare, label="Exit"]
+    read_blocker [shape=parallelogram, label="Show validator evidence", script="bash .fabro/workflows/iteration-clarification/scripts/read_blocker.sh '{{ inputs.failed_run_id }}' '{{ inputs.plan_path }}'"]
+    discuss [shape=hexagon, label="Iteration 066: the Add page may expose member details after an admin loses authority because a projection lags. The approved plan requires a current authority check before showing details. Is there an architectural reason NOT to implement that check as specified? Reply 'no, repair as planned' or describe the constraint and a concrete case. This does not approve publication.", question_type="freeform", max_visits=10]
+    reflect [shape=box, label="Reflect on Matt's answer", output_schema="routing", prompt="@prompts/reflect.md", max_visits=10]
+    summary [shape=box, label="Summarize agreed guidance", prompt="@prompts/summary.md"]
+    failed [shape=parallelogram, label="Stop without approval", script="echo 'Clarification unanswered or could not be completed; do not resume delivery.' >&2; exit 1"]
+    start -> read_blocker
+    read_blocker -> discuss [condition="outcome=succeeded"]
+    read_blocker -> failed
+    discuss -> reflect [freeform=true]
+    reflect -> discuss [condition="outcome=succeeded && preferred_label=ask"]
+    reflect -> summary [condition="outcome=succeeded && preferred_label=finish"]
+    reflect -> failed
+    summary -> exit [condition="outcome=succeeded"]
+    summary -> failed
+}
