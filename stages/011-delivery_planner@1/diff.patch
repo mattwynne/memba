@@ -1,0 +1,347 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+new file mode 100644
+index 0000000..10ef0d9
+--- /dev/null
++++ b/docs/iterations/066-request-group-access/.delivery/current-worker-packet.json
+@@ -0,0 +1,82 @@
++{
++  "schema_version": 1,
++  "packet_id": "001-6d7bb960-1",
++  "task_id": "001",
++  "todo_line": "- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
++  "attempt": "implementation",
++  "plan_path": "docs/iterations/066-request-group-access/plan.md",
++  "todo_path": "docs/iterations/066-request-group-access/todo.md",
++  "source_baseline": "6d7bb9606f043155438b49f6a75ae5f4f8b6de51",
++  "outcome": "Membership exposes one narrow, focused-tested authoritative resolver that gives later request and targeted-admission surfaces the current same-club person membership, custom-group identity/display facts, and participation state without leaking aggregate internals.",
++  "scope": [
++    "Add a public Membership query contract for resolving a supplied club, person, and group from `Memba.Membership.Club` aggregate state; return the active membership identity, server-owned club/group facts, projected person display facts only after authoritative identity resolution, and whether that membership currently participates in the group.",
++    "Require typed club/person/group IDs, an existing active membership for that person in the supplied club, and a custom group owned by that same Club aggregate; reject missing or mismatched identities, both deterministic built-in groups, and inactive memberships without relying on lagging membership/group projections for those decisions.",
++    "Keep aggregate loading and interpretation inside the Membership bounded context and return a plain public summary suitable for the later fixed request command and targeted Members-page flow.",
++    "Add focused tests for success outside the group, success already in the group, invalid/missing IDs, cross-club group/person combinations, Everyone/Admin rejection, and a committed departure while projections are deliberately stale; update the Membership public-boundary contract test if its exact API inventory requires it."
++  ],
++  "scope_exclusions": [
++    "Do not implement `RequestGroupAccess`, construct or dispatch `SendMessage`, resolve Admin recipients, or compose the management URL in this packet.",
++    "Do not add routes, LiveView states, email rendering, acceptance step definitions, or feature-file changes.",
++    "Do not add events, commands, projections, schemas, migrations, request records, group lifecycle/archive state, or new authorization policy.",
++    "Do not change custom-group admission/removal behavior or expose the Club aggregate itself."
++  ],
++  "references": [
++    {
++      "path": "docs/iterations/066-request-group-access/plan.md",
++      "facts": "Implementation steps 1 and 4 require public authoritative same-club group/person resolution before request dispatch and before targeted addition; forged IDs and stale membership need focused coverage."
++    },
++    {
++      "path": "docs/iterations/066-request-group-access/domain-model.md",
++      "facts": "Membership owns current club membership, group ownership/participation, and admission authority; the URL carries identity rather than authority."
++    },
++    {
++      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
++      "facts": "Messaging and web consumers must depend on Membership's public API rather than its aggregate or projection storage details."
++    },
++    {
++      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
++      "facts": "The Club aggregate is the accepted consistency boundary for active club membership and role facts."
++    },
++    {
++      "path": "docs/adr/0025-use-current-group-participation-for-access-and-delivery.md",
++      "facts": "Current custom-group participation is the authority; former participation and stale screens must not grant current activity."
++    },
++    {
++      "path": "web/lib/memba/membership.ex",
++      "facts": "`get_group/1` is projection-backed; `active_member_of_club_authoritatively?/2`, `list_active_groups_for_member_authoritatively/2`, and `list_active_members_of_group_authoritatively/2` demonstrate public aggregate-state queries and plain summaries, but no current API resolves this non-participant target tuple."
++    },
++    {
++      "path": "web/lib/memba/membership/club.ex",
++      "facts": "The event-sourced Club state holds club name/slug, active membership identities, custom/system groups, and current group-membership facts; keep its map layout private behind Membership."
++    },
++    {
++      "path": "web/lib/memba/membership/system_groups.ex",
++      "facts": "`custom_group?/1` classifies groups from deterministic Everyone/Admin identities rather than display names or caller-supplied keys."
++    },
++    {
++      "path": "web/test/memba/membership/query_test.exs",
++      "facts": "Existing Membership query tests provide EventSourcedCase setup and same-/cross-club query conventions."
++    },
++    {
++      "path": "web/test/memba/membership/no_crud_spike_test.exs",
++      "facts": "The public Membership API inventory and no-CRUD boundary are asserted explicitly and may need the new query added."
++    }
++  ],
++  "constraints": [
++    "Use test-driven development and follow the existing authoritative-query style; basic projections may supply display data only after aggregate state establishes current identity and ownership.",
++    "Return no protected conversation content and no authority token; this is a read-only Membership summary, and later consumers still perform their own actor authorization.",
++    "Group archiving/activation does not exist in the accepted model and is out of scope; 'inactive' here applies to the person's club membership/current participation, not a newly invented group status.",
++    "Preserve existing public APIs and accepted custom-group add/remove behavior.",
++    "Do not run `dev check`, `dev check --quick`, `dev ci`, acceptance suites, or another unscoped full-suite command in this packet."
++  ],
++  "focused_validation": [
++    "PATH=\"$PWD/bin:$PATH\" dev test web/test/memba/membership/authoritative_custom_group_target_test.exs web/test/memba/membership/no_crud_spike_test.exs web/test/memba/membership/add_custom_group_member_dispatch_test.exs"
++  ],
++  "completion_evidence_required": [
++    "Return the exact public resolver name and result/error contract, plus changed paths, in `.delivery/latest-worker-result.json`.",
++    "Provide passing focused-test evidence for outside-group, already-member, invalid/missing, cross-club, built-in-group, inactive-membership, and stale-projection cases.",
++    "Confirm no command/event/projection/schema/migration was added and no Messaging, web, acceptance-feature, or general admission behavior was changed.",
++    "Record the focused validation command and successful exit status."
++  ],
++  "candidate_origins": []
++}
+diff --git a/docs/iterations/066-request-group-access/.delivery/execution-state.json b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+new file mode 100644
+index 0000000..34958e6
+--- /dev/null
++++ b/docs/iterations/066-request-group-access/.delivery/execution-state.json
+@@ -0,0 +1,209 @@
++{
++  "schema_version": 1,
++  "plan_path": "docs/iterations/066-request-group-access/plan.md",
++  "todo_path": "docs/iterations/066-request-group-access/todo.md",
++  "source_baseline": "6d7bb9606f043155438b49f6a75ae5f4f8b6de51",
++  "accepted_tasks": [],
++  "pending_obligations": [
++    {
++      "task_id": "001",
++      "todo_line": "- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
++      "origin": "Technical prerequisite split from plan.md Implementation Plan steps 1 and 4 and Validation Plan focused command/LiveView checks.",
++      "status": "prepared",
++      "coverage": [
++        "Membership-owned authoritative resolution of the active person, club, and custom group needed by request dispatch and targeted admission.",
++        "Focused invalid-ID, cross-club, built-in-group, inactive-membership, and stale-projection coverage."
++      ],
++      "replaces": [
++        "- [ ] 002 Authenticate identity and club context, resolve the target through Membership's public authoritative API at the established stable ordering point, reject built-in/cross-club/non-active targets, compose subject/body and club-hosted link server-side, resolve Admin Group recipients and dispatch existing `SendMessage`.",
++        "- [ ] 010 Resolve current group/person/club membership; check current authority before display.",
++        "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "002",
++      "todo_line": "- [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.",
++      "origin": "Combined plan.md Implementation Plan step 1 with the ordinary Admin-conversation requirement from step 2.",
++      "status": "pending",
++      "coverage": [
++        "Fixed one-click request command with authenticated server-owned sender, club, custom-group target, Admin destination, content, URL, and recipients.",
++        "Ordinary Admin root conversation and email-delivery facts through existing SendMessage, including send-result propagation and no global composition-policy widening."
++      ],
++      "replaces": [
++        "- [ ] 001 Handle the composite `RequestGroupAccess` command in the Messaging application layer.",
++        "- [ ] 002 Authenticate identity and club context, resolve the target through Membership's public authoritative API at the established stable ordering point, reject built-in/cross-club/non-active targets, compose subject/body and club-hosted link server-side, resolve Admin Group recipients and dispatch existing `SendMessage`.",
++        "- [ ] 003 Propagate send result; do not bypass normal web compose restrictions globally.",
++        "- [ ] 006 Display the request as an ordinary Admin conversation.",
++        "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "003",
++      "todo_line": "- [ ] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance.",
++      "origin": "Domain-acceptance portion split from plan.md Implementation Plan step 5.",
++      "status": "pending",
++      "coverage": [
++        "Focused domain acceptance for a successful ordinary Admin request message and rejection of non-active/non-club requesters."
++      ],
++      "replaces": [
++        "- [ ] 013 Enable the two focused domain examples and one browser journey; update the two existing placeholder assertions without dropping their privacy coverage."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "004",
++      "todo_line": "- [ ] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship.",
++      "origin": "Combined plan.md Implementation Plan step 2 and its focused safe-rendering validation.",
++      "status": "pending",
++      "coverage": [
++        "Plain-text URL retention and safe styled HTML management action using the existing primary-action helper.",
++        "Expected origin/route validation and escaping without arbitrary rich text, action metadata, or subject-based trust."
++      ],
++      "replaces": [
++        "- [ ] 004 Present the stored body URL in text email and as a safe styled link in HTML using the existing primary-action helper.",
++        "- [ ] 005 Recognise/validate the route and origin, escape all untrusted body text, and do not infer system authorship from a subject line or enable arbitrary HTML.",
++        "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "005",
++      "todo_line": "- [ ] 005 Wire one-click Request access on the ordinary non-member placeholder with single-submit sending and concise sent feedback; remove the helper and Admin email only from that placeholder and sent state; preserve the access barrier and Admin contact elsewhere; and update the two authorised existing placeholder assertions.",
++      "origin": "Combined plan.md Implementation Plan step 3 with its two explicitly authorised regression-assertion updates.",
++      "status": "pending",
++      "coverage": [
++        "Approved non-member placeholder request, sending, sent, and repeat-request states with no composer or alternative Admin-email line.",
++        "Existing privacy barrier and Admin contact elsewhere, including the iteration-061 domain example and existing custom-group admission journey."
++      ],
++      "replaces": [
++        "- [ ] 007 Add Request access to the non-member placeholder with single-submit feedback and concise sent status; remove the explanatory line and alternative Admin email from this placeholder/sent state.",
++        "- [ ] 008 Keep the existing access barrier and Admin Group contact behaviour elsewhere.",
++        "- [ ] 013 Enable the two focused domain examples and one browser journey; update the two existing placeholder assertions without dropping their privacy coverage."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "006",
++      "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.",
++      "origin": "Read-only route and display slice from plan.md Implementation Plan step 4 and focused LiveView validation.",
++      "status": "pending",
++      "coverage": [
++        "Signed-in `/groups/:group_id/members/add/:person_id` GET as URL-addressable read-only Members-page state.",
++        "Current authority and same-club target privacy, sign-in return, selected/already-member presentation, focus on arrival, and scanner-safe no-op behavior."
++      ],
++      "replaces": [
++        "- [ ] 009 Add the signed-in read-only `/groups/:group_id/members/add/:person_id` route.",
++        "- [ ] 010 Resolve current group/person/club membership; check current authority before display.",
++        "- [ ] 011 Show a targeted existing Members-page Add confirmation and already-added state.",
++        "- [ ] 012 The explicit Add invokes the existing membership command and application welcome flow; keep sign-in return and keyboard/focus states.",
++        "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "007",
++      "todo_line": "- [ ] 007 Wire explicit targeted Add through the existing admission and welcome flow with confirmation-time actor and target rechecks, idempotent already-member behaviour, no duplicate welcome, and the approved Cancel, Escape, success-announcement, and focus transitions; focused-test lost authority and stale membership.",
++      "origin": "Explicit mutation and interaction slice from plan.md Implementation Plan step 4 and focused LiveView validation.",
++      "status": "pending",
++      "coverage": [
++        "Explicit confirmation through existing custom-group admission and welcome behavior with current actor/target checks.",
++        "Already-added no-op, no duplicate welcome, lost-authority/stale-target denial, cancel/escape recovery, announced success, and member-row focus."
++      ],
++      "replaces": [
++        "- [ ] 011 Show a targeted existing Members-page Add confirmation and already-added state.",
++        "- [ ] 012 The explicit Add invokes the existing membership command and application welcome flow; keep sign-in return and keyboard/focus states.",
++        "- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "008",
++      "todo_line": "- [ ] 008 Implement the approved browser step plumbing and enable the iteration-066 journey, preserving its no-composer, privacy, no-auto-add, welcome, and no-Admin-conversation-access assertions.",
++      "origin": "Browser-acceptance portion split from plan.md Implementation Plan step 5.",
++      "status": "pending",
++      "coverage": [
++        "Selected browser journey from private Board placeholder through request email, read-only targeted page, explicit add, welcome return, and retained Admin-conversation privacy."
++      ],
++      "replaces": [
++        "- [ ] 013 Enable the two focused domain examples and one browser journey; update the two existing placeholder assertions without dropping their privacy coverage."
++      ],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "009",
++      "todo_line": "- [ ] 009 Run both acceptance layers and `dev check` on the exact delivered state and record successful exits.",
++      "origin": "Final validation from plan.md Implementation Plan step 5 and Validation Plan.",
++      "status": "pending",
++      "coverage": [
++        "Exact-state domain acceptance, selected browser journeys/regressions, and full project quality gate."
++      ],
++      "replaces": [
++        "- [ ] 015 Run both acceptance layers and `dev check` on the exact delivered state."
++      ],
++      "candidate_origins": []
++    }
++  ],
++  "candidate_origins": [],
++  "coverage_map": [
++    {
++      "scope": "Authoritative Membership boundary for requester/target identity, active club membership, custom-group ownership/type, and current participation.",
++      "pending_task_ids": [
++        "001"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Fixed ordinary Admin request message, recipients, conversation semantics, server-owned link/content, stable ordering, and unchanged general composition policy.",
++      "pending_task_ids": [
++        "002",
++        "003"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Safe HTML primary action and plain-text management URL with origin/route validation and escaping.",
++      "pending_task_ids": [
++        "004"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Non-member Request access UI, sending/sent feedback, removed helper/contact copy, and preserved privacy/contact regressions.",
++      "pending_task_ids": [
++        "005"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Read-only signed-in targeted Members-page route, current display authorization, no protected disclosure, scanner safety, sign-in return, and already-member state.",
++      "pending_task_ids": [
++        "006"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Explicit existing group-add and welcome flow with confirmation-time authority/membership checks, idempotence, accessibility, and focus behavior.",
++      "pending_task_ids": [
++        "007"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Approved browser acceptance journey and existing privacy behavior after admission.",
++      "pending_task_ids": [
++        "008"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Iteration-wide domain/browser acceptance and exact-state dev check.",
++      "pending_task_ids": [
++        "009"
++      ],
++      "accepted_task_lines": []
++    }
++  ],
++  "planner_note": "No prior worker or review artifacts exist. Replaced the clause-level list with nine bounded obligations, inserted Membership authoritative resolution as the first technical prerequisite, moved focused security/timing checks beside the behavior they prove, separated domain and browser acceptance plumbing, and retained explicit lineage for every replaced baseline line."
++}
+diff --git a/docs/iterations/066-request-group-access/.delivery/planner-result.json b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+new file mode 100644
+index 0000000..f81c84c
+--- /dev/null
++++ b/docs/iterations/066-request-group-access/.delivery/planner-result.json
+@@ -0,0 +1,7 @@
++{
++  "schema_version": 1,
++  "plan_path": "docs/iterations/066-request-group-access/plan.md",
++  "todo_path": "docs/iterations/066-request-group-access/todo.md",
++  "source_baseline": "6d7bb9606f043155438b49f6a75ae5f4f8b6de51",
++  "decision": "ready"
++}
+diff --git a/docs/iterations/066-request-group-access/todo.md b/docs/iterations/066-request-group-access/todo.md
+index 73cd68f..e131e44 100644
+--- a/docs/iterations/066-request-group-access/todo.md
++++ b/docs/iterations/066-request-group-access/todo.md
+@@ -1,17 +1,11 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Handle the composite `RequestGroupAccess` command in the Messaging application layer.
+-- [ ] 002 Authenticate identity and club context, resolve the target through Membership's public authoritative API at the established stable ordering point, reject built-in/cross-club/non-active targets, compose subject/body and club-hosted link server-side, resolve Admin Group recipients and dispatch existing `SendMessage`.
+-- [ ] 003 Propagate send result; do not bypass normal web compose restrictions globally.
+-- [ ] 004 Present the stored body URL in text email and as a safe styled link in HTML using the existing primary-action helper.
+-- [ ] 005 Recognise/validate the route and origin, escape all untrusted body text, and do not infer system authorship from a subject line or enable arbitrary HTML.
+-- [ ] 006 Display the request as an ordinary Admin conversation.
+-- [ ] 007 Add Request access to the non-member placeholder with single-submit feedback and concise sent status; remove the explanatory line and alternative Admin email from this placeholder/sent state.
+-- [ ] 008 Keep the existing access barrier and Admin Group contact behaviour elsewhere.
+-- [ ] 009 Add the signed-in read-only `/groups/:group_id/members/add/:person_id` route.
+-- [ ] 010 Resolve current group/person/club membership; check current authority before display.
+-- [ ] 011 Show a targeted existing Members-page Add confirmation and already-added state.
+-- [ ] 012 The explicit Add invokes the existing membership command and application welcome flow; keep sign-in return and keyboard/focus states.
+-- [ ] 013 Enable the two focused domain examples and one browser journey; update the two existing placeholder assertions without dropping their privacy coverage.
+-- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests.
+-- [ ] 015 Run both acceptance layers and `dev check` on the exact delivered state.
++- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.
++- [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.
++- [ ] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance.
++- [ ] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship.
++- [ ] 005 Wire one-click Request access on the ordinary non-member placeholder with single-submit sending and concise sent feedback; remove the helper and Admin email only from that placeholder and sent state; preserve the access barrier and Admin contact elsewhere; and update the two authorised existing placeholder assertions.
++- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.
++- [ ] 007 Wire explicit targeted Add through the existing admission and welcome flow with confirmation-time actor and target rechecks, idempotent already-member behaviour, no duplicate welcome, and the approved Cancel, Escape, success-announcement, and focus transitions; focused-test lost authority and stale membership.
++- [ ] 008 Implement the approved browser step plumbing and enable the iteration-066 journey, preserving its no-composer, privacy, no-auto-add, welcome, and no-Admin-conversation-access assertions.
++- [ ] 009 Run both acceptance layers and `dev check` on the exact delivered state and record successful exits.
