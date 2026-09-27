@@ -19,6 +19,7 @@ VISIBLE_PATHS=(
   ".fabro/workflows/plan-validation/scripts/publish_ready.sh"
   ".fabro/workflows/scripts/git_identity.sh"
   ".fabro/workflows/scripts/attest_dev_check.sh"
+  ".fabro/workflows/scripts/publish_dev_check_attestation.sh"
   "$PASS_PLAN"
   "$FAIL_PLAN"
 )
@@ -73,7 +74,7 @@ require_publish_attestation_contract() {
 
   grep -Fq 'attest_dev_check.sh' "$publish_script" ||
     fail 'plan publication does not require a dev-check attestation'
-  grep -Fq 'push origin refs/notes/fabro-dev-check' "$publish_script" ||
+  grep -Fq 'publish_dev_check_attestation.sh' "$publish_script" ||
     fail 'plan publication does not record its dev-check attestation before pushing main'
 }
 

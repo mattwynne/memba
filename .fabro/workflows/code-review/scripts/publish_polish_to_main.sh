@@ -150,7 +150,7 @@ fi
 
 published_sha=$(git -C "$publish_worktree" rev-parse HEAD)
 if [ "$docs_only" != true ]; then
-  git -C "$publish_worktree" push origin refs/notes/fabro-dev-check
+  (cd "$publish_worktree" && "$SCRIPT_DIR/../../scripts/publish_dev_check_attestation.sh" "$published_sha")
 fi
 git push origin "$published_sha:main"
 printf '%s\n' "$published_sha" > .fabro/tmp/code-review-published-sha.txt

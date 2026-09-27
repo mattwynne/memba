@@ -170,7 +170,7 @@ fi
 )
 
 published_sha=$(git -C "$publish_worktree" rev-parse HEAD)
-git -C "$publish_worktree" push origin refs/notes/fabro-dev-check
+(cd "$publish_worktree" && "$SCRIPT_DIR/../../scripts/publish_dev_check_attestation.sh" "$published_sha")
 git push origin "$published_sha:main"
 
 echo "Published implementation to main: $published_sha"

@@ -16,6 +16,7 @@ new_fixture() {
   git config user.email test@example.com
   mkdir -p bin .fabro/tmp .fabro/workflows/scripts docs/iterations/001-example docs web/lib
   cp "$scripts_dir/../../scripts/attest_dev_check.sh" .fabro/workflows/scripts/attest_dev_check.sh
+  cp "$scripts_dir/../../scripts/publish_dev_check_attestation.sh" .fabro/workflows/scripts/publish_dev_check_attestation.sh
   cat > bin/dev <<'DEV'
 #!/usr/bin/env bash
 set -euo pipefail

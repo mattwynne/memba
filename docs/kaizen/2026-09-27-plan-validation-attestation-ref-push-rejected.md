@@ -22,7 +22,7 @@ Iteration 066 did not begin implementation despite passing plan review and full 
 
 ## What allowed it to happen
 
-Observed mechanism: `.fabro/workflows/scripts/attest_dev_check.sh` adds a note to the locally available `refs/notes/fabro-dev-check`. Four publication paths then push that single shared ref directly (plan validation, implementation, review polish, review finalization). A clone that has not incorporated the latest remote notes tip cannot fast-forward that ref, even if its note concerns a different commit. The plan-validation publish script has no fetch/merge/retry for the notes ref, and the tests check that a note is present and that push is invoked, but do not model a remote notes ref advancing independently. Whether another run moved the ref during this particular run, or the sandbox clone began without the current notes ref, remains unverified; both expose the same missing synchronization boundary.
+Observed mechanism: `.fabro/workflows/scripts/attest_dev_check.sh` adds a note to the locally available `refs/notes/fabro-dev-check`. Three publication scripts push that single shared ref directly (plan validation, implementation, and code-review healing). The earlier attestation note described four lifecycle paths, but this checkout has three actual raw notes pushes; review finalization is not a separate script here. A clone that has not incorporated the latest remote notes tip cannot fast-forward that ref, even if its note concerns a different commit. The plan-validation publish script has no fetch/merge/retry for the notes ref, and the tests check that a note is present and that push is invoked, but do not model a remote notes ref advancing independently. Whether another run moved the ref during this particular run, or the sandbox clone began without the current notes ref, remains unverified; both expose the same missing synchronization boundary.
 
 ## Observations
 
@@ -43,7 +43,7 @@ A shared attestation ref creates unnecessary contention among otherwise independ
 
 ## Possible prevention ideas
 
-- Synchronize/merge the notes ref before publishing and bound retries for concurrent advances; test with an independently advanced bare remote notes ref across all four publication paths.
+- Synchronize/merge the notes ref before publishing and bound retries for concurrent advances; test with an independently advanced bare remote notes ref across the actual publication paths.
 - Alternatively use per-candidate immutable attestation refs or another concurrency-safe evidence store, with an explicit gate that the candidate has been attested before publishing `main`.
 - Surface the exact failed ref in the command summary so a notes rejection is not mistaken for a `main` rejection.
 
@@ -55,7 +55,7 @@ Root cause: the shared Git notes ref is pushed as though a sandbox's local copy 
 
 Options:
 
-1. Keep Git notes, fetch and merge remote notes into the local ref before pushing, with a bounded race retry and conflict-safe behavior. This preserves the existing attestation format and consumers but adds shared-ref synchronization to all four publishers.
+1. Keep Git notes, fetch and merge remote notes into the local ref before pushing, with a bounded race retry and conflict-safe behavior. This preserves the existing attestation format and consumers but adds shared-ref synchronization to all three publishers.
 2. Use per-candidate immutable attestation refs with a verified lookup rule. This avoids a shared update but changes the evidence contract and needs broader migration and checks.
 3. Contain only: diagnose and manually recover this run, without preventing recurrence. This restores delivery sooner but leaves the same late failure for another run.
 
@@ -63,4 +63,22 @@ Recommendation: option 1 if current notes consumers must remain stable; prove st
 
 Validation plan: reproduce the rejection with a test bare remote whose notes ref advances after clone; verify the chosen publisher merges without losing either attestation, rechecks candidate identity, and publishes `main` only after remote evidence is visible. Run relevant workflow tests and `dev check` on the completed code change. An actual delivery run is still needed to confirm operational effectiveness.
 
-Status: awaiting decision on the attestation publication contract; no workflow fix or run retry applied.
+Status at observation: awaiting decision on the attestation publication contract; no workflow fix or run retry applied.
+
+## Resolution
+
+Date: 2026-09-27
+
+Matt approved the deterministic shared-helper approach after clarifying that Git notes hold only exact-commit `dev check` evidence, not plan status. This correction covers the three actual notes-publishing scripts in this checkout; earlier discussion described four lifecycle paths based on the prior attestation note.
+
+Root cause: the shared notes ref was published without incorporating remote notes updates. An unrelated attestation could make the push non-fast-forward; the workflow reported a failure after the full check had passed.
+
+Fix applied:
+
+- `.fabro/workflows/scripts/publish_dev_check_attestation.sh`: verify the candidate matches `HEAD` and its note, fetch and merge the remote notes ref without choosing between conflicting proofs, and retry a rejected push up to four times. Fail closed without pushing `main` when evidence cannot be preserved. Never force-push the shared ref.
+- The plan-validation, implementation, and code-review publication scripts call that helper after attesting and before pushing `main`.
+- `.fabro/workflows/scripts/test_publish_dev_check_attestation.sh`: exercise sandboxes with initially absent/stale notes, independent attestations, a racing writer between fetch and push, and a mismatched candidate. Existing publisher fixtures and plan-validation contract check the integration.
+
+Validation: the deterministic helper fixture passed stale and racing writer cases; implementation and code-review publisher fixtures passed. A full `bin/dev check` completed with 1,572 ExUnit tests and five browser journeys passing, but unrelated acceptance-test changes appeared unstaged in the shared checkout during that run, so it is not an exact-state attestation. A clean committed-state `dev check` is still required. The fixture validates the concurrency mechanism; prevention in the remote Fabro environment still awaits an authorized representative run.
+
+Remaining follow-up: iteration 066 remains `ready`; this kaizen fix neither retries the failed run nor authorizes a new delivery launch.

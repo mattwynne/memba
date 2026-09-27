@@ -51,5 +51,5 @@ fi
 # loudly on real conflicts instead of overwriting newer main work.
 git pull --rebase origin main
 "$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
-git push origin refs/notes/fabro-dev-check
+"$SCRIPT_DIR/../../scripts/publish_dev_check_attestation.sh" "$(git rev-parse HEAD)"
 git push origin HEAD:main
