@@ -59,13 +59,13 @@ Feature: Group-scoped club conversations
       And Alice should see the club Admin email address
       But Alice should see neither Admin conversations nor its membership list
 
-    @iteration-061
+    @iteration-061 @iteration-066
     Scenario: Alice can find Board but cannot read its discussions
       Given Alice is not a club admin
       And Bob and Carol are members of the Kootenay Mountaineering Club Board group
       And Board has the conversation "September agenda"
       When Alice opens Board
-      Then Alice should see Board's name and the club Admin email address
+      Then Alice should see Board's name and be offered Request access
       But Alice should see neither Board conversations nor its membership list
       And Alice should not become a member of Board
 

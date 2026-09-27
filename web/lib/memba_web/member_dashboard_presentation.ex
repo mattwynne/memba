@@ -169,6 +169,10 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
     can_add_self? = can_add_members? and selected_group_access == :outside_admin
 
+    can_request_group_access? =
+      SystemGroups.custom_group?(selected_group) and
+        selected_group_access == :ordinary_non_member
+
     candidates =
       if can_add_members? do
         active_group_member_ids = MapSet.new(members, & &1.id)
@@ -183,6 +187,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
     %{
       can_add_custom_group_members?: can_add_members?,
       can_add_self_to_custom_group?: can_add_self?,
+      can_request_group_access?: can_request_group_access?,
       custom_group_member_candidates: candidates
     }
   end

@@ -248,12 +248,10 @@ defmodule Memba.Cucumber.GroupConversationSteps do
     context
   end
 
-  step ~r/^(\w+) should see Board's name and the club Admin email address$/,
+  step ~r/^(\w+) should see Board's name and be offered Request access$/,
        %{args: [_person_name]} = context do
     assert Map.fetch!(context, :selected_group).name == "Board"
-
-    assert Map.fetch!(context, :club_admin_email_address) ==
-             club_admin_email_address(context, @club_name)
+    assert Map.fetch!(context, :can_request_group_access?)
 
     context
   end
@@ -478,6 +476,10 @@ defmodule Memba.Cucumber.GroupConversationSteps do
         true -> :ordinary_non_member
       end
 
+    can_request_group_access? =
+      current_group_access == :ordinary_non_member and
+        SystemGroups.custom_group?(selected_group)
+
     members =
       if current_group_access in [:participating_member, :outside_admin] do
         Membership.list_active_members_of_group(selected_group.group_id)
@@ -497,6 +499,7 @@ defmodule Memba.Cucumber.GroupConversationSteps do
     |> Map.put(:visible_groups, groups)
     |> Map.put(:selected_group, selected_group)
     |> Map.put(:current_group_access, current_group_access)
+    |> Map.put(:can_request_group_access?, can_request_group_access?)
     |> Map.put(:club_admin_email_address, club_admin_email_address(context, club_name))
     |> Map.put(:current_group_members, members)
     |> Map.put(:current_group_conversations, conversations)

@@ -54,13 +54,14 @@ Then(
 );
 
 Then(
-  /^(\w+) should see Board's name and the club Admin email address$/,
+  /^(\w+) should see Board's name and be offered Request access$/,
   async function (personName) {
-    const adminEmail = clubAdminEmailAddress(this, kootenayClubName);
-
     await withMemberHarness(this, personName, async (member) => {
       await expect(member.page.locator("#member-group-name")).toHaveText("Board");
-      await expect(member.page.locator("#member-group-admin-email")).toHaveText(adminEmail);
+      await expect(member.page.locator("#member-group-request-access")).toHaveText(
+        "Request access"
+      );
+      await expect(member.page.locator("#member-group-admin-email")).toHaveCount(0);
     });
   }
 );
@@ -188,24 +189,6 @@ group_id = Map.fetch!(payload, "groupId")
 `,
     { groupId }
   ).names;
-}
-
-function clubAdminEmailAddress(world, clubName) {
-  const club = clubFor(world, clubName);
-
-  return serverCommands.runCommand(
-    `
-slug = Map.fetch!(payload, "slug")
-%{
-  email:
-    Memba.ClubInboundEmailAddress.address(
-      slug,
-      Memba.Membership.SystemGroups.admin_email_slug()
-    )
-}
-`,
-    { slug: club.slug }
-  ).email;
 }
 
 function groupKeyForWorld(clubName, groupName) {

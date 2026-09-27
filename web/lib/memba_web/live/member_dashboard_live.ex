@@ -9,11 +9,14 @@ defmodule MembaWeb.MemberDashboardLive do
 
   require Logger
 
+  alias Commanded.Commands.ExecutionResult
   alias Memba.Accounts
+  alias Memba.ID
   alias Memba.Membership
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.GroupWelcomeEmail
+  alias Memba.Messaging
   alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -54,6 +57,7 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:active_section, "conversations")
          |> assign(:custom_group_member_picker_open?, false)
          |> assign(:custom_group_member_removal, nil)
+         |> assign(:group_access_request_state, :idle)
          |> assign_custom_group_member_picker_query("")
          |> assign(dashboard_assigns)}
 
@@ -73,6 +77,7 @@ defmodule MembaWeb.MemberDashboardLive do
       socket
       |> assign(:custom_group_member_picker_open?, false)
       |> assign(:custom_group_member_removal, nil)
+      |> assign(:group_access_request_state, :idle)
       |> assign_custom_group_member_picker_query("")
       |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
 
@@ -80,6 +85,61 @@ defmodule MembaWeb.MemberDashboardLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_event(
+        "request_group_access",
+        _params,
+        %{
+          assigns: %{
+            can_request_group_access?: true,
+            group_access_request_state: :idle
+          }
+        } = socket
+      ) do
+    socket = assign(socket, :group_access_request_state, :sending)
+
+    result =
+      Messaging.request_group_access(
+        %{
+          message_id: ID.generate(:message),
+          club_id: socket.assigns.selected_club.club_id,
+          requester_person_id: socket.assigns.current_member.id,
+          group_id: socket.assigns.selected_group.group_id
+        },
+        consistency: :strong
+      )
+
+    case result do
+      :ok ->
+        {:noreply, assign(socket, :group_access_request_state, :sent)}
+
+      {:ok, %ExecutionResult{}} ->
+        {:noreply, assign(socket, :group_access_request_state, :sent)}
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> assign(:group_access_request_state, :idle)
+         |> put_flash(:error, "We couldn't send your request. Refresh and try again.")}
+    end
+  end
+
+  def handle_event("request_group_access", _params, socket), do: {:noreply, socket}
+
+  def handle_event(
+        "reset_group_access_request",
+        _params,
+        %{
+          assigns: %{
+            can_request_group_access?: true,
+            group_access_request_state: :sent
+          }
+        } = socket
+      ) do
+    {:noreply, assign(socket, :group_access_request_state, :idle)}
+  end
+
+  def handle_event("reset_group_access_request", _params, socket), do: {:noreply, socket}
+
   def handle_event(
         "open_custom_group_member_picker",
         _params,
