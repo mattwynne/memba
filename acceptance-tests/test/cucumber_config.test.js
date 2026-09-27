@@ -113,7 +113,8 @@ test("journey files contain one coherent browser scenario each", () => {
     const feature = parseFile(filePath);
     const scenarios = scenariosIn(feature);
     assert.equal(scenarios.length, 1, `${filePath} must describe one journey`);
-    assert.ok(selectedByBrowser(scenarios[0].tags), `${filePath} must be selected by the browser`);
+    assert.ok(scenarios[0].tags.includes("@journey"), `${filePath} must be a browser journey`);
+    assert.equal(selectedByBrowser(scenarios[0].tags), !scenarios[0].tags.includes("@todo"));
     assert.equal(selectedByDomain(scenarios[0].tags), false);
   }
 });

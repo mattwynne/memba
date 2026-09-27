@@ -22,8 +22,13 @@ Feature: A member's club conversation crosses the website and email boundary
     And Bob views the message "Trip planning night"
     Then Bob should see Bob's status for "Trip planning night" as "Delivered"
     And Bob should see Carol's status for "Trip planning night" as "Delivery problem"
+    Then Carol should not be following the conversation for "Trip planning night"
+    When Carol follows the conversation for "Trip planning night"
+    Then Carol should be following the conversation for "Trip planning night"
     When Bob replies "I can drive, three seats spare" to "Trip planning night"
     Then Alice should see Bob's reply in the conversation for "Trip planning night"
+    When Carol stops following the conversation for "Trip planning night"
+    Then Carol should not be following the conversation for "Trip planning night"
     When Alice emails "Gear swap shelf" to everyone@kmc.clubs.memba.io
     Then Alice should see the message "Gear swap shelf" in Kootenay Mountaineering Club
     And Alice should see the message was addressed to Alice, Bob, Carol, and Dana

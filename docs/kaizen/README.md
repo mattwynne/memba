@@ -32,7 +32,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-05-30 | [Problem: Fabro implementation run required manual rescue after publish failure](2026-05-30-fabro-run-rescue-after-publish-failure.md) | Open | — |
 | 2026-08-12 | [Problem: Fabro workflow model routing inferred the wrong provider after upgrade](2026-08-12-fabro-model-provider-inference-after-upgrade.md) | New | — |
 | 2026-07-13 | [Problem: implementation timeout left only partial artifacts and weak diagnostics](2026-07-13-implementation-timeout-lacks-progress-diagnostics.md) | New | — |
-| 2026-07-09 | [Problem: Feature-level `@not-ui` hides UI coverage gaps](2026-07-09-feature-level-not-ui-hides-ui-coverage-gap.md) | New | — |
+| 2026-07-09 | [Problem: Feature-level `@not-ui` hides UI coverage gaps](2026-07-09-feature-level-not-ui-hides-ui-coverage-gap.md) | Closed | — |
 | 2026-07-09 | [Problem: fresh sandbox Postgres role mismatch, and reset+seed against a reused Phoenix server poisons Commanded aggregates](2026-07-09-gallery-walk-stale-sandbox-postgres-role-and-aggregate-cache.md) | New | — |
 | 2026-07-05 | [Problem: review repair loop repeated without a verified diff](2026-07-05-review-repair-loop-without-diff.md) | New | — |
 | 2026-06-23 | [Problem: dev fabro progress exits before rendering when no tasks are complete](2026-06-23-dev-fabro-progress-zero-completed-exits.md) | New | — |

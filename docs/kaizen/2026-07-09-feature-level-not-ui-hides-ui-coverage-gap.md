@@ -79,3 +79,26 @@ Shared acceptance features are meant to be executable product contracts. If a br
 - Prefer `@todo-ui` for temporary browser gaps so they are visibly pending rather than declared non-UI.
 - Add a check that reports the number of scenarios hidden by each broad tag.
 - Include tag review in iteration planning/review when adding scenarios under an already-tagged feature.
+
+## Resolution
+
+Date: 2026-09-27
+
+Root cause: the inherited feature-level `@not-ui` tag excluded every conversation rule example from browser Cucumber, while the suite had no selection check to reveal a browser-meaningful example trapped under that tag. The follower helper's old selectors had also drifted from the UI. Removing the tag alone did not prove the toggle in a real browser: the later [ADR 0026](../adr/0026-keep-browser-journeys-distinct-from-domain-examples.md) deliberately moved browser selection to a few `@journey` scenarios, leaving conversation rules at the domain layer.
+
+Fix applied:
+
+- Earlier commit `ac757aa27` removed the broad tag and updated the follower helper to the actual checkbox. Commit `553062bed` adopted separate browser journeys; `acceptance-tests/test/cucumber_config.test.js` now rejects the legacy `@not-ui` tag anywhere in feature files, including inherited feature tags.
+- `acceptance-tests/features/journeys/member_messaging.feature`: added Carol's initial not-following state, follow action/state, and unfollow action/state around Bob's existing website reply. This exercises the connected toggle within an existing coherent browser journey without duplicating all domain delivery-rule permutations.
+- `acceptance-tests/features/step_definitions/member_message_steps.js`: bound those steps to the existing browser follow/unfollow helpers and projected-state assertions; no product behaviour changed.
+- `acceptance-tests/test/cucumber_config.test.js`: kept the journey-file structure check compatible with a deliberately deferred `@journey @todo` file; `@todo` journeys must remain unselected, not fail the file-layout check. The original legacy-tag rejection remains in place.
+- `docs/kaizen/README.md`: closed this observation.
+
+Validation:
+
+- Before binding the new steps, `npx cucumber-js --dry-run features/journeys/member_messaging.feature` reported four undefined steps; after binding, it reported none.
+- `dev acceptance features/journeys/member_messaging.feature` — passed with 27/27 steps, including the initial-state assertion.
+- `node --test test/cucumber_config.test.js` — passed 13/13 after the existing journey-file test was corrected. The broader `npm run test:config` run before that correction failed on the already-deferred future journey and four server-command tests invoked outside their required test environment; it is not a full-gate result.
+- `dev check` on a separate worktree with only this candidate staged — passed (1,572 ExUnit tests, 0 failures; 5 browser journeys, 88 steps passed). Repeated after recording this result below so the staged candidate and validated diff match exactly.
+
+Expected versus observed: the focused journey should exercise the real toggle in both directions, and the legacy-tag check should prevent this broad exclusion from returning. The focused browser run passes with the explicit initial-state assertion, and the full gate passes; recurrence prevention beyond these checks has not yet been demonstrated over future runs. Browser email-delivery permutations remain deliberately at the domain layer; this change proves the toggle, not provider delivery through a browser. Review point: the next normal acceptance-suite run on the committed change; further recurrence monitoring belongs in normal acceptance review rather than a separate experiment.

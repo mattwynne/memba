@@ -4,11 +4,13 @@ const {
   assertMemberMessageAddressedTo,
   assertMemberMessageNotAddressedTo,
   assertConversationShowsReply,
+  assertConversationFollowingState,
   assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
   clubSlugFor,
   emailFor,
   ensureClubSlugMatchesInboundAddress,
+  followConversation,
   ensureState,
   kootenayClubName,
   nelsonClubName,
@@ -17,7 +19,8 @@ const {
   recordMembershipProjectionCheckpoint,
   postMemberReply,
   sendInboundClubEmail,
-  sendMemberMessageToKootenayMembers
+  sendMemberMessageToKootenayMembers,
+  unfollowConversation
 } = require("../support/member_message");
 const { ensureAdminGroupMembers } = require("../support/membership_administration");
 const { withMemberHarness, withStaffHarness } = require("../support/member_harness");
@@ -69,6 +72,26 @@ Given(
     await sendMessageToKootenayMembersDirectly(this, senderName, subject);
   }
 );
+
+When("{word} follows the conversation for {string}", async function (memberName, subject) {
+  await withMemberHarness(this, memberName, (member) => followConversation(member, memberName, subject));
+});
+
+When("{word} stops following the conversation for {string}", async function (memberName, subject) {
+  await withMemberHarness(this, memberName, (member) => unfollowConversation(member, memberName, subject));
+});
+
+Then("{word} should be following the conversation for {string}", async function (memberName, subject) {
+  await withMemberHarness(this, memberName, (member) =>
+    assertConversationFollowingState(member, memberName, subject, true)
+  );
+});
+
+Then("{word} should not be following the conversation for {string}", async function (memberName, subject) {
+  await withMemberHarness(this, memberName, (member) =>
+    assertConversationFollowingState(member, memberName, subject, false)
+  );
+});
 
 When("{word} replies {string} to {string}", async function (senderName, body, subject) {
   await withMemberHarness(this, senderName, (member) => postMemberReply(member, senderName, subject, body));
