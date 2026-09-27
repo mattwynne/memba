@@ -1,7 +1,7 @@
 # Ask to join a group
 
 Date: 2026-09-27
-Status: ready
+Status: validated
 
 ## Goal
 
