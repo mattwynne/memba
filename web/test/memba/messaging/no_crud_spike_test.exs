@@ -7,6 +7,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     source = read_source!("lib/memba/messaging.ex")
 
     assert source =~ "def send_club_message("
+    assert source =~ "def request_group_access("
     assert source =~ "def post_message_reply("
     assert source =~ "def follow_conversation("
     assert source =~ "def unfollow_conversation("
