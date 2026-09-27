@@ -1,4 +1,4 @@
-@iteration-066 @todo
+@iteration-066
 Feature: Asking to be added to a group
   A member asks by sending a standard message to the club's Admin Group.
   Adding the member uses existing group membership rules.
