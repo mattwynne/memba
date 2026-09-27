@@ -104,11 +104,3 @@ Feature: Group-scoped club conversations
       And Carol is a member of the Kootenay Mountaineering Club Board group
       When Pat opens a link to Kootenay Mountaineering Club's Board
       Then no KMC group details should be disclosed to Pat
-
-    @iteration-066 @todo
-    Scenario: Alice can request Board access without writing a message
-      Given Alice is not a club admin
-      And Carol is a member of the Kootenay Mountaineering Club Board group
-      When Alice opens Board
-      Then Alice should be offered Request access
-      And Alice should not be asked to compose a message

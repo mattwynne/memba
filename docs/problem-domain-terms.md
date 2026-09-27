@@ -17,6 +17,10 @@ This glossary records Memba’s problem-domain terms: the words we use when talk
 | Person | A human known to Memba. |
 | Club | An organisation using Memba. |
 | Club member | A person who belongs to a club. Use “member” when the club context is clear. |
+| Group | A named set of club members who share conversations. Use “group” normally, without a “custom” qualifier. |
+| Built-in group | A group that comes with every club: Everyone or Admin. Use this distinction only when it matters. |
+| Admin Group | The club’s group of club admins. |
+| Club admin | A club member with authority to administer that club; not Memba staff. |
 | Memba staff | A person acting on behalf of Memba. This is the term for everyone currently using the Memba staff area. |
 | Visitor | Someone who is not signed in. |
 | Public | Available without signing in. |

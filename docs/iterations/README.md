@@ -74,15 +74,15 @@ historical plans, specify current behaviour.
 | 063 | 2026-09-13 | merged | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 064 | 2026-09-13 | merged | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md); `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 065 | 2026-09-27 | merged | Browser journeys distinct from domain rule examples | [delivery log](065-browser-journeys-and-domain-examples/plan.md) — `features/journeys/`, domain features, conditional responsive checks |
-| 066 | 2026-09-13 | validated | Request custom-group access through an Admin message | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
+| 066 | 2026-09-27 | ready | Ask to join a group | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `journeys/custom_group_access_request.feature`, `group_conversations.feature` |
 | 067 | 2026-08-13 | validated | Members change their own name | [plan](067-member-name-editing/plan.md) — `member_profile.feature` |
 | 068 | 2026-08-13 | validated | Members set their own profile photo | [plan](068-member-profile-photo/plan.md) — `member_profile.feature` |
 
 The former 065–067 plans were shifted to 066–068 to make room for the
-browser-suite work recorded at 065. Matt reviewed the group rules and HTML prototype
-during planning; Fabro plan validation for request access is pending. The
-061–064 placeholder intentionally provides the Admin email address before
-066 adds Request access.
+browser-suite work recorded at 065. The re-planned 066 replaces its earlier
+validated draft with a ready plan, new request-email action and reviewed local
+mock-up; Fabro has not validated this replacement. Delivery will update the
+older custom-group Admin-email placeholder assertions when the UI changes.
 
 Status notes:
 
@@ -98,7 +98,7 @@ Shared acceptance feature files used across these iterations (tag descriptions b
 - [`custom_group_conversations.feature`](../../acceptance-tests/features/custom_group_conversations.feature) — `@iteration-062 @todo-domain @todo-ui`, preserving group-aware web/email conversation policy for custom groups.
 - [`custom_group_membership.feature`](../../acceptance-tests/features/custom_group_membership.feature) — 063 additions and 064 removals/system guards, with per-rule iteration and runner-debt tags.
 - [`custom_group_lifecycle.feature`](../../acceptance-tests/features/custom_group_lifecycle.feature) — 062 club-departure safety, 063 history/welcome, 064 removal/delivery-fixation/follow-preservation/empty-group behaviour; per-rule iteration and runner-debt tags.
-- [`custom_group_access_requests.feature`](../../acceptance-tests/features/custom_group_access_requests.feature) — `@iteration-066 @todo`; requests are planned as ordinary Admin messages, not an approval workflow.
+- [`custom_group_access_requests.feature`](../../acceptance-tests/features/custom_group_access_requests.feature) — `@iteration-066 @todo`; one standard Admin Group request and current-club eligibility. [`journeys/custom_group_access_request.feature`](../../acceptance-tests/features/journeys/custom_group_access_request.feature) — `@journey @iteration-066 @todo`; request email link and explicit addition.
 
 - [`authentication.feature`](../../acceptance-tests/features/authentication.feature) (iteration 032 adds `@iteration-032 @todo-domain @todo-ui` planning scenarios for privacy-preserving auth email delivery progress)
 - [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@todo-domain`/`@todo-ui` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@todo-domain`/`@todo-ui` scenarios for slugged email subjects and blank-body compose validation; iteration 042 changes the inbound address convention to `everyone@<club>.clubs.memba.io`)
@@ -115,4 +115,4 @@ Shared acceptance feature files used across these iterations (tag descriptions b
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
 - [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (planned in 067 for self-service name editing and 068 for photo management. Four `@iteration-067 @todo` name examples and seven `@iteration-068 @todo` photo examples remain excluded from both runners until implemented.)
-- [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (058 introduced selected-group scope and composition; 061 added discovery and restricted surfaces. 065 intentionally removed remembered restoration; the explicit group URL remains. 066 plans the `@iteration-066 @todo` request-access affordance. Current rules and tags live in the feature file.)
+- [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (058 introduced selected-group scope and composition; 061 added discovery and restricted surfaces. 065 intentionally removed remembered restoration; the explicit group URL remains. the superseded 066 affordance-only `@todo` example was replaced by the focused request feature and browser journey. Existing Board privacy/placeholder assertions remain executable until delivery changes the UI.)
