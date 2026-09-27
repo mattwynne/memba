@@ -1,0 +1,376 @@
+{
+  "title": "Discuss an iteration implementation blocker with Matt without changing product code or approving ...",
+  "spec": {
+    "run_id": "01M3JDNH638P4VSMX59W96VGV9",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Discuss an iteration implementation blocker with Matt without changing product code or approving publication"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "failed_run_id": "01M3HSZ69HTJN82FD03JR94BVV",
+          "plan_path": "docs/iterations/066-request-group-access/plan.md"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.6-sol",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 1,
+            "memory": "1536MB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": "slack",
+          "slack": {
+            "channel": "#memba"
+          }
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "IterationClarification",
+      "nodes": {
+        "start": {
+          "id": "start",
+          "attrs": {
+            "label": {
+              "String": "Start"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "label": {
+              "String": "Exit"
+            },
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "reflect": {
+          "id": "reflect",
+          "attrs": {
+            "prompt": {
+              "String": "You facilitate a short, generic clarification with Matt about the failed implementation run. The problem may need concrete business examples, an architectural decision, or simply another bounded technical repair. Do not assume it is example mapping. Do not edit files, run commands, waive security constraints, or claim this conversation approves a delivery retry.\n\nRead Matt's latest Slack reply from the immediately preceding human-gate stage, plus the previous validator evidence and discussion in this run's context. If the reply is not visible to you, stop rather than inventing an answer. Preserve Matt's words and distinguish his decisions from your hypotheses. Ask ONE focused follow-up question if material uncertainty remains; return a JSON routing object with `preferred_next_label` set to `ask`, and make the follow-up question visible in your response so it appears in the next Slack message. If Matt explicitly says the discussion is complete and the decision/next action is clear, return `preferred_next_label` = `finish` and a concise summary in your response. A suggestion from you is not Matt's approval. Never route `finish` merely because a single answer sounds plausible. No other label is valid.\n"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "max_visits": {
+              "Integer": 10
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "label": {
+              "String": "Reflect on Matt's answer"
+            }
+          }
+        },
+        "failed": {
+          "id": "failed",
+          "attrs": {
+            "label": {
+              "String": "Stop without approval"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "echo 'Clarification unanswered or could not be completed; do not resume delivery.' >&2; exit 1"
+            }
+          }
+        },
+        "read_blocker": {
+          "id": "read_blocker",
+          "attrs": {
+            "label": {
+              "String": "Show validator evidence"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/iteration-clarification/scripts/read_blocker.sh '01M3HSZ69HTJN82FD03JR94BVV' 'docs/iterations/066-request-group-access/plan.md'"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "discuss": {
+          "id": "discuss",
+          "attrs": {
+            "shape": {
+              "String": "hexagon"
+            },
+            "max_visits": {
+              "Integer": 10
+            },
+            "label": {
+              "String": "Iteration blocker: reply in this Slack thread with examples, constraints, or an architectural question. What should we clarify before another implementation attempt?"
+            },
+            "question_type": {
+              "String": "freeform"
+            }
+          }
+        },
+        "summary": {
+          "id": "summary",
+          "attrs": {
+            "prompt": {
+              "String": "Summarize this Slack clarification for the operator without editing files or resuming implementation. State Matt's exact agreed decision, any concrete examples and open questions, the failed run ID, and what remains to be checked before retry. Do not call an implementation complete, do not publish anything, and do not infer approval to remove current-authority/privacy protections. Keep the run's durable output usable as the handoff for a separately controlled recovery.\n"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "label": {
+              "String": "Summarize agreed guidance"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "read_blocker",
+          "attrs": {}
+        },
+        {
+          "from": "read_blocker",
+          "to": "discuss",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_blocker",
+          "to": "failed",
+          "attrs": {}
+        },
+        {
+          "from": "discuss",
+          "to": "reflect",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            },
+            "freeform": {
+              "Boolean": true
+            }
+          }
+        },
+        {
+          "from": "discuss",
+          "to": "failed",
+          "attrs": {}
+        },
+        {
+          "from": "reflect",
+          "to": "discuss",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=ask"
+            }
+          }
+        },
+        {
+          "from": "reflect",
+          "to": "summary",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=finish"
+            }
+          }
+        },
+        {
+          "from": "reflect",
+          "to": "failed",
+          "attrs": {}
+        },
+        {
+          "from": "summary",
+          "to": "exit",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "summary",
+          "to": "failed",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "default_fidelity": {
+          "String": "summary:high"
+        },
+        "max_node_visits": {
+          "Integer": 30
+        },
+        "goal": {
+          "String": "Discuss an iteration implementation blocker with Matt without changing product code or approving publication"
+        }
+      }
+    },
+    "graph_source": "digraph IterationClarification {\n    graph [goal=\"Obtain Matt's guidance on a failed iteration task without publishing code\", default_fidelity=\"summary:high\", max_node_visits=30]\n    start [shape=Mdiamond, label=\"Start\"]\n    exit [shape=Msquare, label=\"Exit\"]\n    read_blocker [shape=parallelogram, label=\"Show validator evidence\", script=\"bash .fabro/workflows/iteration-clarification/scripts/read_blocker.sh '{{ inputs.failed_run_id }}' '{{ inputs.plan_path }}'\"]\n    discuss [shape=hexagon, label=\"Iteration blocker: reply in this Slack thread with examples, constraints, or an architectural question. What should we clarify before another implementation attempt?\", question_type=\"freeform\", max_visits=10]\n    reflect [shape=box, label=\"Reflect on Matt's answer\", output_schema=\"routing\", prompt=\"@prompts/reflect.md\", max_visits=10]\n    summary [shape=box, label=\"Summarize agreed guidance\", prompt=\"@prompts/summary.md\"]\n    failed [shape=parallelogram, label=\"Stop without approval\", script=\"echo 'Clarification unanswered or could not be completed; do not resume delivery.' >&2; exit 1\"]\n    start -> read_blocker\n    read_blocker -> discuss [condition=\"outcome=succeeded\"]\n    read_blocker -> failed\n    discuss -> reflect [freeform=true, condition=\"outcome=succeeded\"]\n    discuss -> failed\n    reflect -> discuss [condition=\"outcome=succeeded && preferred_label=ask\"]\n    reflect -> summary [condition=\"outcome=succeeded && preferred_label=finish\"]\n    reflect -> failed\n    summary -> exit [condition=\"outcome=succeeded\"]\n    summary -> failed\n}\n",
+    "workflow_slug": "iteration-clarification",
+    "source_directory": "/home/matt/memba",
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "017589672ce1582b8685707ba666d985d70460a6d3ca3b787c3893452c3959ab",
+    "definition_blob": "16e552a36b2dd521eb90a9342ae7a1d355cdcbf23482aec92de15ee7fac14d2c",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "911df39755ce04f924db15f0855c2dae2d861cc9",
+      "dirty": "dirty"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M3JDNH638P4VSMX59W96VGV9",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-09-27T21:52:17.776477904Z",
+  "last_event_at": "2026-09-27T21:52:21.265350702Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:latest"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+      "runtime": {
+        "id": "508ea0b933ce2626ab46914992d678556e1eea86d82e99a56e9bba2582d973d1",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "main",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
