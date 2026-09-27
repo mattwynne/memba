@@ -54,6 +54,8 @@ checks = [
     ("delivery launcher does not auto-answer Slack gates", '--auto-approve \\\n      --no-upgrade-check' not in launcher),
     ("blocked and repeated revisions reach Slack", 'apply_task_verdict -> task_escalation [condition="outcome=succeeded && preferred_label=blocked"]' in graph and 'task_escalation -> task_discussion [condition="outcome=succeeded && preferred_label=discuss"]' in graph and 'provider = "slack"' in (root / "workflow.toml").read_text()),
     ("discussion never publishes automatically", 'summarize_task_discussion -> task_clarification_complete' in graph and 'task_clarification_complete ->' not in graph),
+    ("Slack pings the replying user by ID", '<@U0C3C6Y9ZAR>' in graph and 'task_discussion_follow_up' in graph),
+    ("unfinished discussion still reaches follow-up", 'reflect_task_discussion -> task_discussion_follow_up [condition="outcome=partially_succeeded && preferred_label=ask"]' in graph and 'task_discussion_follow_up -> reflect_task_discussion [freeform=true]' in graph),
     ("bounded revision worker retained", "revise_task [" in graph and "max_visits=3" in graph),
     ("typed task verdict", 'output_schema="@schemas/task-verdict.json"' in graph),
     ("native structured handoff", 'stdin_source="output.validate_task"' in graph),

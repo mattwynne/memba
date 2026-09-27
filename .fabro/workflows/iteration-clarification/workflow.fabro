@@ -3,7 +3,8 @@ digraph IterationClarification {
     start [shape=Mdiamond, label="Start"]
     exit [shape=Msquare, label="Exit"]
     read_blocker [shape=parallelogram, label="Show validator evidence", script="bash .fabro/workflows/iteration-clarification/scripts/read_blocker.sh '{{ inputs.failed_run_id }}' '{{ inputs.plan_path }}'"]
-    discuss [shape=hexagon, label="Iteration 066: the Add page may expose member details after an admin loses authority because a projection lags. The approved plan requires a current authority check before showing details. Is there an architectural reason NOT to implement that check as specified? Reply 'no, repair as planned' or describe the constraint and a concrete case. This does not approve publication.", question_type="freeform", max_visits=10]
+    discuss [shape=hexagon, label="<@U0C3C6Y9ZAR> Iteration 066: the Add page may expose member details after an admin loses authority because a projection lags. The approved plan requires a current authority check before showing details. Is there an architectural reason NOT to implement that check as specified? Reply in the thread with 'no, repair as planned' or describe the constraint and a concrete case. This does not approve publication.", question_type="freeform", max_visits=10]
+    follow_up [shape=hexagon, label="<@U0C3C6Y9ZAR> Follow-up on iteration 066: read the preceding example and question, then reply in this message's thread. This is a clarification, not approval to publish.", question_type="freeform", max_visits=9]
     reflect [shape=box, label="Reflect on Matt's answer", output_schema="routing", prompt="@prompts/reflect.md", max_visits=10]
     summary [shape=box, label="Summarize agreed guidance", prompt="@prompts/summary.md"]
     failed [shape=parallelogram, label="Stop without approval", script="echo 'Clarification unanswered or could not be completed; do not resume delivery.' >&2; exit 1"]
@@ -11,7 +12,9 @@ digraph IterationClarification {
     read_blocker -> discuss [condition="outcome=succeeded"]
     read_blocker -> failed
     discuss -> reflect [freeform=true]
-    reflect -> discuss [condition="outcome=succeeded && preferred_label=ask"]
+    follow_up -> reflect [freeform=true]
+    reflect -> follow_up [condition="outcome=succeeded && preferred_label=ask"]
+    reflect -> follow_up [condition="outcome=partially_succeeded && preferred_label=ask"]
     reflect -> summary [condition="outcome=succeeded && preferred_label=finish"]
     reflect -> failed
     summary -> exit [condition="outcome=succeeded"]
