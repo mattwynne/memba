@@ -9,7 +9,11 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.SystemGroups
 
@@ -64,6 +68,52 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                )
 
       assert membership_id == target.membership_id
+    end
+
+    test "reports current non-participation while the group membership projection is stale" do
+      %{club: club, group_id: group_id, target: target} = setup_target()
+      add_group_member!(club.club_id, group_id, target)
+
+      assert %GroupMembershipProjection{active: true} =
+               Repo.get_by!(GroupMembershipProjection,
+                 group_id: group_id,
+                 membership_id: target.membership_id
+               )
+
+      projector_child_id = stop_projector!(GroupMembershipProjector)
+
+      assert :ok =
+               App.dispatch(
+                 %RemoveGroupMember{
+                   club_id: club.club_id,
+                   group_id: group_id,
+                   membership_id: target.membership_id,
+                   person_id: target.person_id
+                 },
+                 consistency: :eventual
+               )
+
+      assert Membership.active_member_of_club_authoritatively?(
+               club.club_id,
+               target.person_id
+             )
+
+      assert %GroupMembershipProjection{active: true} =
+               Repo.get_by!(GroupMembershipProjection,
+                 group_id: group_id,
+                 membership_id: target.membership_id
+               )
+
+      assert {:ok, %{active_group_member?: false}} =
+               Membership.resolve_custom_group_target_authoritatively(
+                 club.club_id,
+                 target.person_id,
+                 group_id
+               )
+
+      Memba.ProjectionBarrier.await!([ClearRemovedGroupMemberFollows], timeout: 5_000)
+      restart_projector!(projector_child_id)
+      Memba.ProjectionBarrier.await!([GroupMembershipProjector], timeout: 5_000)
     end
 
     test "rejects invalid and missing typed identities" do
