@@ -77,6 +77,23 @@ require_publish_attestation_contract() {
     fail 'plan publication does not record its dev-check attestation before pushing main'
 }
 
+require_publish_environment() {
+  python3 - "$REPO_ROOT/$WORKFLOW" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+config = tomllib.loads(Path(sys.argv[1]).read_text())
+selected = config["run"].get("environment", {}).get("id")
+assert selected, "plan publication requires an explicit devenv-capable environment"
+environment = config["environments"][selected]
+assert environment["provider"] == "docker"
+assert environment["image"]["docker"] == "ghcr.io/mattwynne/memba-fabro-dev:latest", (
+    "plan publication runs bin/dev check; the default buildpack image lacks devenv"
+)
+PY
+}
+
 require_fabro_visible_inputs() {
   cd "$REPO_ROOT"
 
@@ -153,12 +170,19 @@ run_eval() {
   fi
 }
 
-command -v fabro >/dev/null 2>&1 || fail "fabro CLI not found"
-
 cd "$REPO_ROOT"
-fabro validate "$WORKFLOW" --no-upgrade-check
 require_parallel_fan_in
 require_publish_attestation_contract
+require_publish_environment
+
+# Offline regression checks must not start paid reviews or publish anything.
+if [[ "${1:-}" == "--static" ]]; then
+  echo "plan-validation static contracts: OK"
+  exit 0
+fi
+
+command -v fabro >/dev/null 2>&1 || fail "fabro CLI not found"
+fabro validate "$WORKFLOW" --no-upgrade-check
 require_fabro_visible_inputs
 
 run_eval "unanimous-pass" "$PASS_PLAN" success
