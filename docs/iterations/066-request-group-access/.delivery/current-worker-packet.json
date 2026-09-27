@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "packet_id": "001-6d7bb960-1",
+  "task_id": "001",
+  "todo_line": "- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
+  "attempt": "implementation",
+  "plan_path": "docs/iterations/066-request-group-access/plan.md",
+  "todo_path": "docs/iterations/066-request-group-access/todo.md",
+  "source_baseline": "6d7bb9606f043155438b49f6a75ae5f4f8b6de51",
+  "outcome": "Membership exposes one narrow, focused-tested authoritative resolver that gives later request and targeted-admission surfaces the current same-club person membership, custom-group identity/display facts, and participation state without leaking aggregate internals.",
+  "scope": [
+    "Add a public Membership query contract for resolving a supplied club, person, and group from `Memba.Membership.Club` aggregate state; return the active membership identity, server-owned club/group facts, projected person display facts only after authoritative identity resolution, and whether that membership currently participates in the group.",
+    "Require typed club/person/group IDs, an existing active membership for that person in the supplied club, and a custom group owned by that same Club aggregate; reject missing or mismatched identities, both deterministic built-in groups, and inactive memberships without relying on lagging membership/group projections for those decisions.",
+    "Keep aggregate loading and interpretation inside the Membership bounded context and return a plain public summary suitable for the later fixed request command and targeted Members-page flow.",
+    "Add focused tests for success outside the group, success already in the group, invalid/missing IDs, cross-club group/person combinations, Everyone/Admin rejection, and a committed departure while projections are deliberately stale; update the Membership public-boundary contract test if its exact API inventory requires it."
+  ],
+  "scope_exclusions": [
+    "Do not implement `RequestGroupAccess`, construct or dispatch `SendMessage`, resolve Admin recipients, or compose the management URL in this packet.",
+    "Do not add routes, LiveView states, email rendering, acceptance step definitions, or feature-file changes.",
+    "Do not add events, commands, projections, schemas, migrations, request records, group lifecycle/archive state, or new authorization policy.",
+    "Do not change custom-group admission/removal behavior or expose the Club aggregate itself."
+  ],
+  "references": [
+    {
+      "path": "docs/iterations/066-request-group-access/plan.md",
+      "facts": "Implementation steps 1 and 4 require public authoritative same-club group/person resolution before request dispatch and before targeted addition; forged IDs and stale membership need focused coverage."
+    },
+    {
+      "path": "docs/iterations/066-request-group-access/domain-model.md",
+      "facts": "Membership owns current club membership, group ownership/participation, and admission authority; the URL carries identity rather than authority."
+    },
+    {
+      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
+      "facts": "Messaging and web consumers must depend on Membership's public API rather than its aggregate or projection storage details."
+    },
+    {
+      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+      "facts": "The Club aggregate is the accepted consistency boundary for active club membership and role facts."
+    },
+    {
+      "path": "docs/adr/0025-use-current-group-participation-for-access-and-delivery.md",
+      "facts": "Current custom-group participation is the authority; former participation and stale screens must not grant current activity."
+    },
+    {
+      "path": "web/lib/memba/membership.ex",
+      "facts": "`get_group/1` is projection-backed; `active_member_of_club_authoritatively?/2`, `list_active_groups_for_member_authoritatively/2`, and `list_active_members_of_group_authoritatively/2` demonstrate public aggregate-state queries and plain summaries, but no current API resolves this non-participant target tuple."
+    },
+    {
+      "path": "web/lib/memba/membership/club.ex",
+      "facts": "The event-sourced Club state holds club name/slug, active membership identities, custom/system groups, and current group-membership facts; keep its map layout private behind Membership."
+    },
+    {
+      "path": "web/lib/memba/membership/system_groups.ex",
+      "facts": "`custom_group?/1` classifies groups from deterministic Everyone/Admin identities rather than display names or caller-supplied keys."
+    },
+    {
+      "path": "web/test/memba/membership/query_test.exs",
+      "facts": "Existing Membership query tests provide EventSourcedCase setup and same-/cross-club query conventions."
+    },
+    {
+      "path": "web/test/memba/membership/no_crud_spike_test.exs",
+      "facts": "The public Membership API inventory and no-CRUD boundary are asserted explicitly and may need the new query added."
+    }
+  ],
+  "constraints": [
+    "Use test-driven development and follow the existing authoritative-query style; basic projections may supply display data only after aggregate state establishes current identity and ownership.",
+    "Return no protected conversation content and no authority token; this is a read-only Membership summary, and later consumers still perform their own actor authorization.",
+    "Group archiving/activation does not exist in the accepted model and is out of scope; 'inactive' here applies to the person's club membership/current participation, not a newly invented group status.",
+    "Preserve existing public APIs and accepted custom-group add/remove behavior.",
+    "Do not run `dev check`, `dev check --quick`, `dev ci`, acceptance suites, or another unscoped full-suite command in this packet."
+  ],
+  "focused_validation": [
+    "PATH=\"$PWD/bin:$PATH\" dev test web/test/memba/membership/authoritative_custom_group_target_test.exs web/test/memba/membership/no_crud_spike_test.exs web/test/memba/membership/add_custom_group_member_dispatch_test.exs"
+  ],
+  "completion_evidence_required": [
+    "Return the exact public resolver name and result/error contract, plus changed paths, in `.delivery/latest-worker-result.json`.",
+    "Provide passing focused-test evidence for outside-group, already-member, invalid/missing, cross-club, built-in-group, inactive-membership, and stale-projection cases.",
+    "Confirm no command/event/projection/schema/migration was added and no Messaging, web, acceptance-feature, or general admission behavior was changed.",
+    "Record the focused validation command and successful exit status."
+  ],
+  "candidate_origins": []
+}

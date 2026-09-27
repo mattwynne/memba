@@ -1,17 +1,11 @@
 # Implementation TODO
 
-- [ ] 001 Handle the composite `RequestGroupAccess` command in the Messaging application layer.
-- [ ] 002 Authenticate identity and club context, resolve the target through Membership's public authoritative API at the established stable ordering point, reject built-in/cross-club/non-active targets, compose subject/body and club-hosted link server-side, resolve Admin Group recipients and dispatch existing `SendMessage`.
-- [ ] 003 Propagate send result; do not bypass normal web compose restrictions globally.
-- [ ] 004 Present the stored body URL in text email and as a safe styled link in HTML using the existing primary-action helper.
-- [ ] 005 Recognise/validate the route and origin, escape all untrusted body text, and do not infer system authorship from a subject line or enable arbitrary HTML.
-- [ ] 006 Display the request as an ordinary Admin conversation.
-- [ ] 007 Add Request access to the non-member placeholder with single-submit feedback and concise sent status; remove the explanatory line and alternative Admin email from this placeholder/sent state.
-- [ ] 008 Keep the existing access barrier and Admin Group contact behaviour elsewhere.
-- [ ] 009 Add the signed-in read-only `/groups/:group_id/members/add/:person_id` route.
-- [ ] 010 Resolve current group/person/club membership; check current authority before display.
-- [ ] 011 Show a targeted existing Members-page Add confirmation and already-added state.
-- [ ] 012 The explicit Add invokes the existing membership command and application welcome flow; keep sign-in return and keyboard/focus states.
-- [ ] 013 Enable the two focused domain examples and one browser journey; update the two existing placeholder assertions without dropping their privacy coverage.
-- [ ] 014 Test forged IDs, unauthorised GET, lost authority, stale membership, link scanner GET, already-added and safe HTML/text rendering with focused tests.
-- [ ] 015 Run both acceptance layers and `dev check` on the exact delivered state.
+- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.
+- [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.
+- [ ] 003 Implement the approved step plumbing and enable the two focused `custom_group_access_requests.feature` domain examples without changing their semantics or provenance.
+- [ ] 004 Render only a validated expected-club-origin `/groups/:group_id/members/add/:person_id` body URL as an escaped primary action in member-message HTML, retain the URL in text email, and focused-test safe and unsafe rendering without introducing arbitrary HTML or subject-based authorship.
+- [ ] 005 Wire one-click Request access on the ordinary non-member placeholder with single-submit sending and concise sent feedback; remove the helper and Admin email only from that placeholder and sent state; preserve the access barrier and Admin contact elsewhere; and update the two authorised existing placeholder assertions.
+- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.
+- [ ] 007 Wire explicit targeted Add through the existing admission and welcome flow with confirmation-time actor and target rechecks, idempotent already-member behaviour, no duplicate welcome, and the approved Cancel, Escape, success-announcement, and focus transitions; focused-test lost authority and stale membership.
+- [ ] 008 Implement the approved browser step plumbing and enable the iteration-066 journey, preserving its no-composer, privacy, no-auto-add, welcome, and no-Admin-conversation-access assertions.
+- [ ] 009 Run both acceptance layers and `dev check` on the exact delivered state and record successful exits.
