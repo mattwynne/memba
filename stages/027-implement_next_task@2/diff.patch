@@ -1,0 +1,710 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+index e5c4334..011a141 100644
+--- a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+@@ -1,19 +1,32 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "001-c228a6d8-2",
+-  "task_id": "001",
+-  "todo_line": "- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
++  "packet_id": "002-589c4603-1",
++  "task_id": "002",
++  "todo_line": "- [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/test/memba/membership/authoritative_custom_group_target_test.exs"
++    "web/lib/memba/messaging.ex",
++    "web/lib/memba/messaging/commands/request_group_access.ex",
++    "web/test/memba/messaging/request_group_access_test.exs",
++    "web/test/memba/messaging/no_crud_spike_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs test/memba/membership/no_crud_spike_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/request_group_access_test.exs test/memba/messaging/send_message_dispatch_test.exs test/memba/messaging/no_crud_spike_test.exs test/memba/messaging/app_test.exs",
+       "exit_status": 0,
+-      "evidence": "19 tests passed with 0 failures. The new regression `reports current non-participation while the group membership projection is stale` proves the target remains an active club member after committed custom-group removal, the stopped GroupMembership projection still reports active: true, and the authoritative resolver returns active_group_member?: false."
++      "evidence": "17 tests passed with 0 failures. Coverage proves the fixed ordinary Admin MessageSent/access/delivery event shape, authoritative server-owned content and URL, current Admin-only recipients, no target-group admission, forged-field immunity, all specified rejection categories without MessageSent, stale-projection departure rejection, existing-Admin sender delivery/access/follow behavior, no inline Fake-provider handoff, exact :ok/execution-result/error propagation, the public no-CRUD inventory, and the unchanged exact Messaging router registry."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs test/memba/messaging/send_club_message_test.exs test/memba/messaging/group_email_posting_policy_test.exs",
++      "exit_status": 0,
++      "evidence": "30 tests passed with 0 failures, retaining the authoritative Membership resolver, ordinary message-send semantics, stable-checkpoint behavior, and unchanged group email posting policy. The run emitted known asynchronous projector ownership/consistency teardown logs from an existing stale-projection test but exited successfully."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" mix format --check-formatted lib/memba/messaging.ex lib/memba/messaging/commands/request_group_access.ex test/memba/messaging/request_group_access_test.exs test/memba/messaging/no_crud_spike_test.exs",
++      "exit_status": 0,
++      "evidence": "All changed Elixir source and test files are formatted."
+     }
+   ],
+-  "notes": "Added the exact stale custom-group-participation regression requested by review and deterministic subscriber barriers for clean teardown. The existing aggregate-backed resolver passed without repair, so production code did not change; no commands, events, projections, schemas, migrations, Messaging, web, acceptance, or admission behavior changed.",
++  "notes": "The public input is `%{message_id: message_id, club_id: authenticated_club_id, requester_person_id: authenticated_person_id, group_id: target_group_id}` plus normal dispatch options; extra sender, audience, recipient, name, slug, subject, body, and URL facts are ignored. `RequestGroupAccess` is a plain application-layer intent and was not added to `Memba.Messaging.Router`; only its constituent `SendMessage` is dispatched. The accepted authoritative resolver supplies the requester person ID/name, active membership/current participation, club ID/name/slug, and custom-group ID/name. The fixed subject is `Access request: <group name>` and the fixed body is `<requester> would like to join <group>.\\n\\n<requester> asked from <group>'s page in <club>.\\n\\nAdd <requester> to <group>:\\n<club URL>\\n\\nYou'll confirm on the website before <requester> is added.` An example test URL is `http://kmc.lvh.me:4002/groups/grp_<uuid>/members/add/per_<uuid>`. Named focused tests cover fixed ordinary Admin send/non-membership/forged fields, current Admin recipients, all invalid and ineligible targets without MessageSent, stale projected departure, existing-Admin ordinary behavior, and dispatch-result propagation. Initial TDD runs failed as expected before the API existed and once on a test-only trailing-newline expectation; both were superseded by the successful final runs.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 1444130..02357cf 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -20,6 +20,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.Commands.RequestGroupAccess
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Commands.UnfollowConversation
+   alias Memba.Messaging.ConversationAccess
+@@ -54,6 +55,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Recipient
+   alias Memba.ProjectionBarrier
+   alias Memba.Repo
++  alias MembaWeb.ClubSite
+ 
+   import Ecto.Query
+ 
+@@ -78,6 +80,32 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Ask the club's Admin group to add an active member to a custom group.
++
++  The caller supplies only a stable `:message_id`, authenticated `:club_id` and
++  `:requester_person_id`, and target `:group_id`. At a stable authorization
++  checkpoint, Membership authoritatively resolves the current requester, club,
++  target, participation, and current Admin recipients. Messaging then derives
++  the fixed subject, body, club-hosted targeted-add URL, and Admin destination
++  before dispatching the existing `SendMessage` constituent command.
++
++  The request itself is not routed or persisted. Provider delivery remains
++  asynchronous, and a successful result confirms only ordinary message
++  acceptance.
++  """
++  def request_group_access(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, request} <- request_group_access_command(attrs),
++         {:ok, command} <-
++           authorize_at_stable_checkpoint(fn ->
++             request_group_access_send_command(request)
++           end),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
+   @doc """
+   Send a club message from an in-app current-member surface.
+ 
+@@ -2021,6 +2049,67 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp request_group_access_command(attrs) do
++    with {:ok, message_id} <- fetch_required_id(attrs, :message_id, :message),
++         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
++         {:ok, requester_person_id} <-
++           fetch_required_id(attrs, :requester_person_id, :person),
++         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group) do
++      {:ok,
++       %RequestGroupAccess{
++         message_id: message_id,
++         club_id: club_id,
++         requester_person_id: requester_person_id,
++         group_id: group_id
++       }}
++    end
++  end
++
++  defp request_group_access_send_command(%RequestGroupAccess{} = request) do
++    with {:ok, target} <-
++           Membership.resolve_custom_group_target_authoritatively(
++             request.club_id,
++             request.requester_person_id,
++             request.group_id
++           ),
++         :ok <- reject_current_group_member(target) do
++      admin_group_id = SystemGroups.admin_group_id(target.club.club_id)
++
++      {:ok,
++       %SendMessage{
++         message_id: request.message_id,
++         club_id: target.club.club_id,
++         sender_id: target.person.person_id,
++         audience_group_id: admin_group_id,
++         subject: "Access request: #{target.group.name}",
++         body: request_group_access_body(target),
++         recipients: resolve_group_recipients(target.club.club_id, admin_group_id)
++       }}
++    end
++  end
++
++  defp reject_current_group_member(%{active_group_member?: false}), do: :ok
++  defp reject_current_group_member(%{active_group_member?: true}), do: {:error, :already_member}
++
++  defp request_group_access_body(target) do
++    add_url =
++      ClubSite.url(
++        target.club,
++        "/groups/#{target.group.group_id}/members/add/#{target.person.person_id}"
++      )
++
++    """
++    #{target.person.name} would like to join #{target.group.name}.
++
++    #{target.person.name} asked from #{target.group.name}'s page in #{target.club.name}.
++
++    Add #{target.person.name} to #{target.group.name}:
++    #{add_url}
++
++    You'll confirm on the website before #{target.person.name} is added.
++    """
++  end
++
+   defp resolve_audience_group(attrs, club_id) do
+     audience_group_id =
+       optional_audience_group_id(attrs, SystemGroups.everyone_group_id(club_id))
+@@ -2162,8 +2251,10 @@ defmodule Memba.Messaging do
+   end
+ 
+   defp invalid_id_reason(:conversation_id), do: :invalid_conversation_id
++  defp invalid_id_reason(:message_id), do: :invalid_message_id
+   defp invalid_id_reason(:club_id), do: :invalid_club_id
+   defp invalid_id_reason(:group_id), do: :invalid_group_id
++  defp invalid_id_reason(:requester_person_id), do: :invalid_person_id
+ 
+   defp fetch_conversation_root(conversation_id) do
+     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
+diff --git a/web/lib/memba/messaging/commands/request_group_access.ex b/web/lib/memba/messaging/commands/request_group_access.ex
+new file mode 100644
+index 0000000..d09ba97
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/request_group_access.ex
+@@ -0,0 +1,14 @@
++defmodule Memba.Messaging.Commands.RequestGroupAccess do
++  @moduledoc """
++  Application-layer intent to ask a club's Admin group for custom-group access.
++
++  This composite command is handled by `Memba.Messaging`; it is deliberately
++  not registered with the Messaging router or persisted as its own aggregate.
++  The caller supplies only the stable message identity, authenticated club and
++  requester identities, and target group identity. Messaging derives the
++  constituent `SendMessage` facts server-side.
++  """
++
++  @enforce_keys [:message_id, :club_id, :requester_person_id, :group_id]
++  defstruct [:message_id, :club_id, :requester_person_id, :group_id]
++end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index dfd97b9..156bb7d 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     source = read_source!("lib/memba/messaging.ex")
+ 
+     assert source =~ "def send_club_message("
++    assert source =~ "def request_group_access("
+     assert source =~ "def post_message_reply("
+     assert source =~ "def follow_conversation("
+     assert source =~ "def unfollow_conversation("
+diff --git a/web/test/memba/messaging/request_group_access_test.exs b/web/test/memba/messaging/request_group_access_test.exs
+new file mode 100644
+index 0000000..1c605cc
+--- /dev/null
++++ b/web/test/memba/messaging/request_group_access_test.exs
+@@ -0,0 +1,496 @@
++defmodule Memba.Messaging.RequestGroupAccessTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AddClubMember
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AssignClubRoleToMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.RemoveClubMember
++  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
++  alias Memba.Membership.Policies.SystemGroupMembership
++  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
++  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
++  alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
++  alias Memba.Messaging
++  alias Memba.Messaging.EmailDeliveryProviders.Fake
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
++  alias Memba.Messaging.Events.EmailDeliveryCreated
++  alias Memba.Messaging.Events.MessageSent
++  alias MembaWeb.ClubSite
++
++  setup do
++    dispatcher_was_running? = stop_email_delivery_dispatcher()
++    Fake.reset()
++
++    on_exit(fn ->
++      Fake.reset()
++      restart_email_delivery_dispatcher(dispatcher_was_running?)
++    end)
++
++    :ok
++  end
++
++  test "sends one fixed ordinary Admin message from authoritative facts and leaves the requester outside the target group" do
++    %{club: club, board_id: board_id, alice: alice, dan: dan, eve: eve} =
++      setup_requestable_group()
++
++    message_id = Memba.ID.generate(:message)
++    club_id = club.club_id
++    sender_id = eve.person_id
++    alice_id = alice.person_id
++    dan_id = dan.person_id
++    admin_group_id = SystemGroups.admin_group_id(club.club_id)
++    add_url = ClubSite.url(club, "/groups/#{board_id}/members/add/#{eve.person_id}")
++
++    expected_body =
++      """
++      Eve Ekwueme would like to join Board.
++
++      Eve Ekwueme asked from Board's page in Kootenay Mountaineering Club.
++
++      Add Eve Ekwueme to Board:
++      #{add_url}
++
++      You'll confirm on the website before Eve Ekwueme is added.
++      """
++      |> String.trim_trailing()
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^message_id,
++              aggregate_version: 4,
++              events: [
++                %MessageSent{
++                  message_id: ^message_id,
++                  club_id: ^club_id,
++                  sender_id: ^sender_id,
++                  subject: "Access request: Board",
++                  body: ^expected_body,
++                  sender_follows_conversation: false
++                },
++                %ConversationAccessGrantedToGroup{
++                  conversation_id: ^message_id,
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  access_level: "write"
++                },
++                %EmailDeliveryCreated{recipient_id: ^alice_id},
++                %EmailDeliveryCreated{recipient_id: ^dan_id}
++              ]
++            }} =
++             Messaging.request_group_access(
++               %{
++                 message_id: message_id,
++                 club_id: club.club_id,
++                 requester_person_id: eve.person_id,
++                 group_id: board_id,
++                 sender_id: Memba.ID.generate(:person),
++                 audience_group_id: Memba.ID.generate(:group),
++                 recipients: [],
++                 subject: "Forged subject",
++                 body: "Forged body",
++                 club: %{name: "Forged club", slug: "forged"},
++                 person: %{name: "Forged requester"},
++                 group: %{name: "Forged group"}
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    refute Membership.active_member_of_group_authoritatively?(
++             club.club_id,
++             board_id,
++             eve.person_id
++           )
++
++    refute Messaging.member_has_conversation_access?(
++             message_id,
++             club.club_id,
++             eve.person_id,
++             :read
++           )
++
++    refute Messaging.following_conversation?(message_id, eve.person_id)
++    assert Fake.deliveries() == []
++  end
++
++  test "uses only current Admin recipients" do
++    %{club: club, board_id: board_id, alice: alice, eve: eve} = setup_requestable_group()
++    former_admin = create_person!("Former Admin", "former-admin@example.com")
++    former_membership_id = add_club_member!(club.club_id, former_admin.person_id)
++    assign_admin!(club.club_id, former_membership_id, former_admin.person_id)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveClubMember{
++                 club_id: club.club_id,
++                 membership_id: former_membership_id,
++                 person_id: former_admin.person_id
++               },
++               consistency: :strong
++             )
++
++    message_id = Memba.ID.generate(:message)
++
++    assert {:ok, %ExecutionResult{events: events}} =
++             request_access(club, eve, board_id, message_id,
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    recipient_ids =
++      for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
++
++    assert alice.person_id in recipient_ids
++    refute former_admin.person_id in recipient_ids
++  end
++
++  test "rejects invalid, missing, cross-club, built-in, inactive, and already-participating targets without sending" do
++    %{club: club, board_id: board_id, eve: eve} = setup_requestable_group()
++    other_club = create_club!("nelson", "Nelson Paddling Club")
++    other_board_id = create_group!(other_club.club_id, "Other Board", "other-board")
++    sent_before = count_events(MessageSent)
++
++    assert {:error, :invalid_message_id} =
++             request_access(club, eve, board_id, "not-a-message-id")
++
++    assert {:error, :invalid_club_id} =
++             request_access(%{club | club_id: "not-a-club-id"}, eve, board_id)
++
++    assert {:error, :invalid_person_id} =
++             request_access(club, %{eve | person_id: "not-a-person-id"}, board_id)
++
++    assert {:error, :invalid_group_id} =
++             request_access(club, eve, "not-a-group-id")
++
++    assert {:error, :group_not_defined} =
++             request_access(club, eve, Memba.ID.generate(:group))
++
++    assert {:error, :group_not_defined} =
++             request_access(club, eve, other_board_id)
++
++    for system_group_id <- [
++          SystemGroups.everyone_group_id(club.club_id),
++          SystemGroups.admin_group_id(club.club_id)
++        ] do
++      assert {:error, :system_group_not_allowed} =
++               request_access(club, eve, system_group_id)
++    end
++
++    add_group_member!(club.club_id, board_id, eve)
++
++    assert {:error, :already_member} =
++             request_access(club, eve, board_id)
++
++    inactive = create_person!("Inactive Member", "inactive@example.com")
++    inactive_membership_id = add_club_member!(club.club_id, inactive.person_id)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveClubMember{
++                 club_id: club.club_id,
++                 membership_id: inactive_membership_id,
++                 person_id: inactive.person_id
++               },
++               consistency: :strong
++             )
++
++    assert {:error, :member_not_active} =
++             request_access(club, inactive, board_id)
++
++    assert count_events(MessageSent) == sent_before
++  end
++
++  test "rejects an authoritative departure while the membership projection is stale" do
++    %{club: club, board_id: board_id, eve: eve} = setup_requestable_group()
++    projector_child_id = stop_projector!(MembershipProjector)
++    sent_before = count_events(MessageSent)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveClubMember{
++                 club_id: club.club_id,
++                 membership_id: eve.membership_id,
++                 person_id: eve.person_id
++               },
++               consistency: :eventual
++             )
++
++    assert Membership.active_member_of_club?(club.club_id, eve.person_id)
++
++    assert {:error, :member_not_active} =
++             request_access(club, eve, board_id)
++
++    assert count_events(MessageSent) == sent_before
++
++    await_restarted_subscribers!([
++      ClearRemovedGroupMemberFollows,
++      GroupMembershipProjector,
++      SystemGroupMembership
++    ])
++
++    restart_projector!(projector_child_id)
++
++    await_restarted_subscribers!([
++      GroupMembershipProjector,
++      MembershipProjector,
++      SystemGroupMembership
++    ])
++  end
++
++  test "preserves ordinary recipient access and follow behavior when the requester is already an Admin" do
++    %{club: club, board_id: board_id, alice: alice} = setup_requestable_group()
++    message_id = Memba.ID.generate(:message)
++    admin_group_id = SystemGroups.admin_group_id(club.club_id)
++
++    assert {:ok,
++            %ExecutionResult{
++              events: [
++                %MessageSent{
++                  sender_id: sender_id,
++                  sender_follows_conversation: true
++                },
++                %ConversationAccessGrantedToGroup{group_id: ^admin_group_id}
++                | delivery_events
++              ]
++            }} =
++             request_access(club, alice, board_id, message_id,
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert sender_id == alice.person_id
++
++    assert Enum.any?(
++             delivery_events,
++             &match?(
++               %EmailDeliveryCreated{recipient_id: recipient_id} when recipient_id == sender_id,
++               &1
++             )
++           )
++
++    assert Messaging.member_has_conversation_access?(
++             message_id,
++             club.club_id,
++             alice.person_id,
++             :write
++           )
++
++    assert Messaging.following_conversation?(message_id, alice.person_id)
++  end
++
++  test "propagates ordinary :ok, execution-result, and dispatch-error outcomes" do
++    %{club: club, board_id: board_id, eve: eve} = setup_requestable_group()
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             request_access(club, eve, board_id, message_id, consistency: :strong)
++
++    assert {:error, :already_sent} =
++             request_access(club, eve, board_id, message_id, consistency: :strong)
++
++    execution_result_message_id = Memba.ID.generate(:message)
++
++    assert {:ok, %ExecutionResult{aggregate_uuid: ^execution_result_message_id}} =
++             request_access(club, eve, board_id, execution_result_message_id,
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
++
++  defp setup_requestable_group do
++    club = create_club!("kmc", "Kootenay Mountaineering Club")
++    alice = create_person!("Alice Ahmed", "alice@example.com")
++    dan = create_person!("Dan Davison", "dan@example.com")
++    eve = create_person!("Eve Ekwueme", "eve@example.com")
++
++    alice = Map.put(alice, :membership_id, add_club_member!(club.club_id, alice.person_id))
++    dan = Map.put(dan, :membership_id, add_club_member!(club.club_id, dan.person_id))
++    eve = Map.put(eve, :membership_id, add_club_member!(club.club_id, eve.person_id))
++    assign_admin!(club.club_id, dan.membership_id, dan.person_id)
++    board_id = create_group!(club.club_id, "Board", "board")
++
++    %{club: club, board_id: board_id, alice: alice, dan: dan, eve: eve}
++  end
++
++  defp request_access(
++         club,
++         person,
++         group_id,
++         message_id \\ Memba.ID.generate(:message),
++         opts \\ []
++       ) do
++    Messaging.request_group_access(
++      %{
++        message_id: message_id,
++        club_id: club.club_id,
++        requester_person_id: person.person_id,
++        group_id: group_id
++      },
++      opts
++    )
++  end
++
++  defp create_club!(slug, name) do
++    club = %{club_id: Memba.ID.generate(:club), name: name, slug: slug}
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreateClub{club_id: club.club_id, name: club.name, slug: club.slug},
++               consistency: :strong
++             )
++
++    club
++  end
++
++  defp create_person!(name, email) do
++    person = %{person_id: Memba.ID.generate(:person), name: name, email: email}
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreatePerson{
++                 person_id: person.person_id,
++                 name: person.name,
++                 email: person.email,
++                 email_addresses: [%{email: person.email, is_primary: true}]
++               },
++               consistency: :strong
++             )
++
++    person
++  end
++
++  defp add_club_member!(club_id, person_id) do
++    membership_id = Memba.ID.generate(:membership)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddClubMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    membership_id
++  end
++
++  defp create_group!(club_id, name, key) do
++    group_id = Memba.ID.generate(:group)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreateGroup{
++                 club_id: club_id,
++                 group_id: group_id,
++                 group_key: key,
++                 email_slug: key,
++                 name: name
++               },
++               consistency: :strong
++             )
++
++    group_id
++  end
++
++  defp add_group_member!(club_id, group_id, person) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: person.membership_id,
++                 person_id: person.person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp assign_admin!(club_id, membership_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AssignClubRoleToMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: Roles.membership_administrator_role_id(club_id)
++               },
++               consistency: :strong
++             )
++  end
++
++  defp stop_email_delivery_dispatcher do
++    case Supervisor.terminate_child(Memba.Supervisor, Memba.Messaging.EmailDeliveryDispatcher) do
++      :ok -> true
++      {:error, :not_found} -> false
++    end
++  end
++
++  defp restart_email_delivery_dispatcher(false), do: :ok
++
++  defp restart_email_delivery_dispatcher(true) do
++    case Supervisor.restart_child(Memba.Supervisor, Memba.Messaging.EmailDeliveryDispatcher) do
++      {:ok, _pid} -> :ok
++      {:ok, _pid, _info} -> :ok
++      {:error, :running} -> :ok
++      {:error, :not_found} -> :ok
++    end
++  end
++
++  defp stop_projector!(projector) do
++    child_id =
++      Supervisor.which_children(Memba.Supervisor)
++      |> Enum.find_value(fn
++        {child_id, _pid, :worker, [^projector]} -> child_id
++        _child -> nil
++      end)
++
++    assert child_id
++    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
++    on_exit(fn -> restart_projector!(child_id) end)
++    child_id
++  end
++
++  defp restart_projector!(child_id) do
++    case Supervisor.restart_child(Memba.Supervisor, child_id) do
++      {:ok, _pid} -> :ok
++      {:ok, _pid, _info} -> :ok
++      {:error, :running} -> :ok
++    end
++  end
++
++  defp await_restarted_subscribers!(subscribers) do
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    Memba.ProjectionBarrier.await!(
++      subscribers,
++      checkpoint: checkpoint,
++      timeout: 5_000
++    )
++
++    final_checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    Memba.ProjectionBarrier.await!(
++      subscribers,
++      checkpoint: final_checkpoint,
++      timeout: 5_000
++    )
++  end
++
++  defp count_events(event_module) do
++    %{rows: [[count]]} =
++      Repo.query!(
++        ~S|SELECT count(*) FROM "event_store"."events" WHERE event_type = $1|,
++        [Atom.to_string(event_module)]
++      )
++
++    count
++  end
++end
