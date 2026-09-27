@@ -74,7 +74,7 @@ historical plans, specify current behaviour.
 | 063 | 2026-09-13 | merged | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 064 | 2026-09-13 | merged | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md); `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 065 | 2026-09-27 | merged | Browser journeys distinct from domain rule examples | [delivery log](065-browser-journeys-and-domain-examples/plan.md) — `features/journeys/`, domain features, conditional responsive checks |
-| 066 | 2026-09-27 | validated | Ask to join a group | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `journeys/custom_group_access_request.feature`, `group_conversations.feature` |
+| 066 | 2026-09-27 | implementing | Ask to join a group | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `journeys/custom_group_access_request.feature`, `group_conversations.feature` |
 | 067 | 2026-08-13 | validated | Members change their own name | [plan](067-member-name-editing/plan.md) — `member_profile.feature` |
 | 068 | 2026-08-13 | validated | Members set their own profile photo | [plan](068-member-profile-photo/plan.md) — `member_profile.feature` |
 
