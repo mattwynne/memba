@@ -1,95 +1,113 @@
 {
   "schema_version": 1,
-  "packet_id": "001-c228a6d8-2",
-  "task_id": "001",
-  "todo_line": "- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
-  "attempt": "revision",
+  "packet_id": "002-589c4603-1",
+  "task_id": "002",
+  "todo_line": "- [ ] 002 Implement and focused-test the Messaging `RequestGroupAccess` composite command: derive requester, club, destination, subject, body, and club-hosted add URL server-side at the stable authorization checkpoint; resolve Admin Group recipients; dispatch existing `SendMessage`; propagate its result; and leave general web composition unchanged.",
+  "attempt": "implementation",
   "plan_path": "docs/iterations/066-request-group-access/plan.md",
   "todo_path": "docs/iterations/066-request-group-access/todo.md",
-  "source_baseline": "c228a6d82d3718e647b67a390e3bab502e55c090",
-  "outcome": "Task 001 has direct focused proof that the resolver reports a still-active club member as outside the custom group after a committed group removal even while the GroupMembership projection remains stale and active.",
+  "source_baseline": "589c4603ca25977129111bdcc2ec66c1a32781b8",
+  "outcome": "Messaging accepts a narrow RequestGroupAccess intent for an active same-club member outside a custom group and, at a stable authorization checkpoint, dispatches one fixed ordinary Admin root message with current Admin recipients and the club-hosted targeted-add URL.",
   "scope": [
-    "In `web/test/memba/membership/authoritative_custom_group_target_test.exs`, add the missing focused regression case for stale custom-group participation while leaving the person's club membership active.",
-    "Arrange an active target who belongs to the custom group, stop `Memba.Membership.Projectors.GroupMembership`, dispatch the existing `RemoveGroupMember` to the Club aggregate with eventual consistency, and prove the projected group-membership row still says `active: true`.",
-    "Call `Membership.resolve_custom_group_target_authoritatively/3` and assert it succeeds for the still-active club member while returning `active_group_member?: false`, proving the participation result comes from current Club aggregate state rather than the stale projection.",
-    "Rerun the original packet's focused validation and report the new case explicitly. Change resolver code only if this direct regression test exposes a real defect."
+    "Add a plain application-layer `Memba.Messaging.Commands.RequestGroupAccess` intent and a public `Memba.Messaging.request_group_access/2` orchestration API. Keep caller-owned input to stable `message_id`, authenticated `club_id` and requester person identity, and target `group_id`; derive every message field server-side.",
+    "Within the existing stable-checkpoint pattern, call accepted `Membership.resolve_custom_group_target_authoritatively/3`, require an active same-club requester and custom-group target, and reject a requester who already currently participates in that target group.",
+    "Derive the destination as `SystemGroups.admin_group_id(club_id)`, resolve current Admin recipients through the existing authoritative Membership recipient path, and preserve ordinary sender delivery/follow semantics when the requester independently belongs to Admin.",
+    "Build a root `SendMessage` whose sender is the resolved requester, audience is Admin, subject is `Access request: <group name>`, and fixed plain-text body identifies the resolved requester, group, and club and contains `MembaWeb.ClubSite.url/2` for `/groups/:group_id/members/add/:person_id`.",
+    "Dispatch only the constituent `SendMessage` through the existing Messaging application path after the successful checkpoint and propagate its normal `:ok`, execution-result, and error outcomes. Do not perform provider handoff inline.",
+    "Add focused tests for the successful ordinary Admin conversation and fixed URL/content; Admin-only current recipients; requester remaining outside the target group; forged extra sender/audience/content facts having no effect; invalid, missing, cross-club, built-in, inactive, and already-participating targets producing no MessageSent; stale-projection departure rejection; ordinary behavior for a requester already in Admin; and exact dispatch-result propagation.",
+    "Update Messaging's existing public-API/no-CRUD inventory test only as needed to recognize the new intent API while retaining its current architectural assertions."
   ],
   "scope_exclusions": [
-    "Do not create a new task identity, broaden task 001, or revisit already-covered invalid IDs, cross-club targets, built-in groups, inactive club memberships, result shape, or public API inventory except to repair a regression exposed by the new test.",
-    "Do not implement `RequestGroupAccess`, Messaging behavior, routes, LiveViews, email rendering, acceptance steps, feature changes, or later todo obligations.",
-    "Do not add commands, events, projections, schemas, migrations, request records, authorization policy, or new membership behavior.",
-    "Do not alter `todo.md`, `plan.md`, ADRs, or delivery artifacts."
+    "Do not route RequestGroupAccess through `Memba.Messaging.Router`, add it to the aggregate command registry, persist a request, or add request events, status, deduplication, approval/denial, schemas, projections, or migrations.",
+    "Do not change the Message aggregate, SendMessage event model, recipient-fixing semantics, async provider delivery, conversation access, or sender-follow rules.",
+    "Do not relax or repurpose `send_club_message_as_current_member/2`, the member composer, or inbound email posting policy; general non-Admin web composition to Admin must remain unavailable.",
+    "Do not implement email HTML action rendering or text-template changes owned by task 004.",
+    "Do not implement the Request access LiveView action, targeted-add route or confirmation flow, welcome behavior, acceptance steps, feature-tag changes, or placeholder assertion updates owned by later tasks.",
+    "Do not edit `todo.md`, `plan.md`, ADRs, project documentation, or planner-owned delivery artifacts; only return the required worker result through the workflow's normal result artifact."
   ],
   "references": [
     {
-      "path": "docs/iterations/066-request-group-access/.delivery/latest-review.json",
-      "facts": "The revise verdict accepts the aggregate-backed implementation direction but requires a case that stops GroupMembershipProjector, commits custom-group removal while club membership stays active, proves the projection remains active, and expects `active_group_member?: false`."
+      "path": "docs/iterations/066-request-group-access/plan.md",
+      "facts": "Implementation Plan step 1 and the acceptance criteria define a server-owned composite request, stable authorization ordering, fixed Admin root message and recipients, ordinary SendMessage dispatch, and unchanged general composition policy."
     },
     {
-      "path": "web/test/memba/membership/authoritative_custom_group_target_test.exs",
-      "facts": "The current candidate covers active participation and stale club-membership projection, and already supplies setup, add-member, stop-projector, and restart-projector helpers; it lacks the distinct stale group-participation case."
+      "path": "docs/iterations/066-request-group-access/domain-model.md",
+      "facts": "RequestGroupAccess is handled in the Messaging application layer and is not routed or persisted as its own aggregate command; the stored body carries the ordinary club-hosted targeted Members URL."
+    },
+    {
+      "path": "docs/iterations/066-request-group-access/mockup.html",
+      "facts": "The approved message copy identifies the requester, group, and club, uses subject `Access request: Board`, and links to `/groups/:group_id/members/add/:person_id`; task 002 stores plain text and does not implement styled rendering."
     },
     {
       "path": "web/lib/memba/membership.ex",
-      "facts": "`resolve_custom_group_target_authoritatively/3` computes `active_group_member?` through `authoritative_group_member_for_membership?/4`, which reads `club.group_memberships`; the new test must prove this behavior without accepting the candidate in advance."
+      "symbol": "Memba.Membership.resolve_custom_group_target_authoritatively/3",
+      "facts": "Accepted task 001 returns authoritative same-club membership, custom-group, person, club, and current participation summaries with typed rejection reasons; consume this public API rather than Membership schemas or projections."
     },
     {
-      "path": "web/lib/memba/membership/projections/group_membership.ex",
-      "facts": "The projected row is keyed by group and membership and exposes `active`; use it only to demonstrate that the read model stayed stale."
+      "path": "web/lib/memba/messaging.ex",
+      "symbols": [
+        "send_club_message_as_current_member/2",
+        "authorize_at_stable_checkpoint/1",
+        "resolve_group_recipients/3",
+        "dispatch_command/2"
+      ],
+      "facts": "These are the established stable ordering, authoritative recipient construction, fresh delivery-ID, and normalized dispatch-result patterns. Build the request-specific SendMessage directly within that pattern rather than calling generic projected-audience composition."
+    },
+    {
+      "path": "web/lib/memba/messaging/commands/send_message.ex",
+      "facts": "The existing root command carries caller-generated message identity, resolved sender/audience/content, and pre-resolved recipients; only this constituent command belongs in the Messaging router."
+    },
+    {
+      "path": "web/lib/memba_web/club_site.ex",
+      "symbol": "MembaWeb.ClubSite.url/2",
+      "facts": "Build the absolute club-hosted URL from the resolver's server-owned club slug and the typed group/person IDs. A verified route is not yet available because task 006 owns route creation."
     },
     {
       "path": "web/test/memba/messaging/send_club_message_test.exs",
-      "facts": "Existing tests demonstrate aliases and test setup for `RemoveGroupMember`, `GroupMembershipProjector`, and projector-lag assertions."
+      "facts": "Existing tests demonstrate Admin recipient resolution, root Admin access, stable-checkpoint stale-membership rejection, authoritative recipient selection, and projector lifecycle helpers."
+    },
+    {
+      "path": "docs/adr/0005-message-send-commands-include-resolved-recipients.md",
+      "facts": "Resolve recipients before SendMessage dispatch so MessageSent and delivery creation remain one existing aggregate decision."
+    },
+    {
+      "path": "docs/adr/0007-use-separate-membership-and-messaging-commanded-contexts.md",
+      "facts": "Messaging depends only on Membership's public APIs and does not query Membership aggregate or projection storage directly."
+    },
+    {
+      "path": "docs/adr/0024-use-club-as-membership-admin-consistency-boundary.md",
+      "facts": "The Club write model is authoritative for current club membership and Admin role facts."
     },
     {
       "path": "docs/adr/0025-use-current-group-participation-for-access-and-delivery.md",
-      "facts": "Current custom-group participation is authoritative; a stale projection must not retain activity after removal."
+      "facts": "Use current participation and fix recipients at posting time; later changes do not rewrite already-created deliveries."
     },
     {
       "path": "docs/reference/elixir-mix-tests.md",
-      "facts": "Use supervised test-process conventions and avoid sleep-based synchronization."
+      "facts": "Use supervised deterministic test-process synchronization and do not use sleep-based projector coordination."
     }
   ],
   "constraints": [
-    "Keep task 001's existing public resolver and candidate implementation unaccepted until review; this revision closes only the identified evidence gap.",
-    "Keep the target active in the club throughout the new case so resolution reaches and proves the `active_group_member?` decision.",
-    "Ensure the add has reached the GroupMembership projection before stopping that projector, then dispatch removal without waiting for that projector so the stale `active: true` assertion is meaningful.",
-    "Use the existing projector lifecycle helpers and deterministic command/projection assertions; do not use `Process.sleep/1`.",
+    "Treat `message_id` as the stable caller-generated identity for uncertain retries; do not generate a replacement during orchestration.",
+    "Do not accept or trust caller-supplied sender, Admin destination, recipients, names, slug, membership identity, participation claim, subject, body, or URL. Extra map keys must not alter server-derived facts.",
+    "Keep authoritative eligibility resolution, current-participation rejection, Admin destination and recipient derivation, and SendMessage construction inside one successful stable-checkpoint callback; dispatch afterward so a later departure has the existing documented race semantics.",
+    "Use `SystemGroups.admin_group_id/1` and current authoritative Admin participation. Do not identify Admin by display text or use stale projected recipient membership.",
+    "Do not specially exclude the requester from recipients: an ordinary requester outside Admin gets no Admin delivery/access/follow, while an existing Admin requester retains normal Admin rights and behavior.",
+    "The successful result confirms command acceptance, not provider delivery or group admission; requesting must not mutate target-group membership.",
+    "Only fixed plain text is in scope. Safe HTML button recognition and rendering remain task 004.",
+    "Do not use `Process.sleep/1`; reuse existing deterministic projection/subscriber synchronization.",
     "Do not run `dev check`, `dev check --quick`, `dev ci`, acceptance suites, or another unscoped full-suite command in this packet."
   ],
   "focused_validation": [
-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs test/memba/membership/no_crud_spike_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs"
+    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/messaging/request_group_access_test.exs test/memba/messaging/send_message_dispatch_test.exs test/memba/messaging/no_crud_spike_test.exs test/memba/messaging/app_test.exs",
+    "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs test/memba/messaging/send_club_message_test.exs test/memba/messaging/group_email_posting_policy_test.exs"
   ],
   "completion_evidence_required": [
-    "Return changed paths and the exact new regression-test name in `.delivery/latest-worker-result.json`.",
-    "Show that the target remains an active club member, the stopped GroupMembership projection remains `active: true` after committed custom-group removal, and the resolver returns `active_group_member?: false`.",
-    "Record the focused validation command, successful exit status, and test/failure counts.",
-    "State whether production code changed; if it did, identify the defect exposed by the new test and the bounded repair."
+    "Return all changed paths and the public RequestGroupAccess input shape in `.delivery/latest-worker-result.json`; explicitly state that RequestGroupAccess was not added to the Messaging router.",
+    "Report the exact fixed subject/body shape and an example generated targeted-add URL, identifying which values came from the accepted authoritative resolver.",
+    "Name the focused tests proving Admin-only current recipients, requester non-membership after send, forged extra fields having no effect, built-in/cross-club/inactive/already-member rejection without MessageSent, stale-projection departure rejection, and existing-Admin requester behavior.",
+    "Show that successful dispatch produces the ordinary MessageSent/Admin write-access/delivery event shape and that requested returning/error outcomes propagate without synchronous provider delivery.",
+    "Record each focused validation command, exit status, and test/failure counts; list any unresolved issue without broadening into later todo obligations."
   ],
-  "candidate_origins": [
-    {
-      "base_sha": "6d7bb9606f043155438b49f6a75ae5f4f8b6de51",
-      "head_sha": "777d13957325bdf1b08e623649e870214b089715",
-      "packet_id": "001-6d7bb960-1",
-      "reason": "review_revise",
-      "task_id": "001",
-      "todo_line": "- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships."
-    }
-  ],
-  "latest_review": {
-    "decision": "revise",
-    "packet_id": "001-6d7bb960-1",
-    "reviewed_head": "f19fbef257ff9f78db586404d35d0ac46f911a33",
-    "gap": "The existing stale-projection test removes the person from the club and exits with `member_not_active`; it never proves current custom-group participation when only GroupMembershipProjector is stale."
-  },
-  "latest_worker_result": {
-    "result": "ready_for_review",
-    "packet_id": "001-6d7bb960-1",
-    "changed_paths": [
-      "web/lib/memba/membership.ex",
-      "web/test/memba/membership/authoritative_custom_group_target_test.exs",
-      "web/test/memba/membership/no_crud_spike_test.exs"
-    ],
-    "summary": "The candidate added `Membership.resolve_custom_group_target_authoritatively/3` and focused tests; its reported 18-test validation passed, but review found the stale group-participation case missing."
-  }
+  "candidate_origins": []
 }
