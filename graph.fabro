@@ -1,0 +1,15 @@
+digraph SlackProseSmoke {
+    graph [goal="Collect one freeform clarification without editing files or resuming delivery"]
+    start [shape=Mdiamond, label="Start"]
+    evidence [shape=parallelogram, label="Read validator finding", script="bash .fabro/workflows/iteration-clarification/scripts/read_blocker.sh '{{ inputs.failed_run_id }}' '{{ inputs.plan_path }}'"]
+    prose [shape=hexagon, question_type="freeform", label="Iteration 066 example: Alice's club-admin access has been removed, but an out-of-date permissions record still calls her an admin. She opens the Add page for Bob. The plan says she must not see Bob's details or the private member list. In your own words, what concerns you about fixing the page to check her *current* access first? If you need a different example or explanation, say so. Reply in this message's Slack thread, mentioning the Fabro bot. This is clarification only; it does not restart delivery."]
+    record [shape=box, label="Record Matt's words", prompt="@prompts/record.md"]
+    exit [shape=Msquare, label="Stop without resuming delivery"]
+    failed [shape=parallelogram, label="Stop without an answer", script="echo 'No prose answer was recorded. Delivery remains stopped.' >&2; exit 1"]
+    start -> evidence
+    evidence -> prose [condition="outcome=succeeded"]
+    evidence -> failed
+    prose -> record [freeform=true]
+    record -> exit [condition="outcome=succeeded"]
+    record -> failed
+}
