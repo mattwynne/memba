@@ -130,6 +130,15 @@ defmodule MembaWeb.RouterTest do
         %{"group_id" => group_id},
         :members
       )
+
+      person_id = Memba.ID.generate(:person)
+
+      assert_member_dashboard_live_route(
+        "/groups/#{group_id}/members/add/#{person_id}",
+        "/groups/:group_id/members/add/:person_id",
+        %{"group_id" => group_id, "person_id" => person_id},
+        :targeted_add
+      )
     end
   end
 

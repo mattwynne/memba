@@ -1,45 +1,44 @@
 {
   "schema_version": 1,
-  "packet_id": "005-aa0da3c-1",
-  "task_id": "005",
-  "todo_line": "- [ ] 005 Wire one-click Request access on the ordinary non-member placeholder with single-submit sending and concise sent feedback; remove the helper and Admin email only from that placeholder and sent state; preserve the access barrier and Admin contact elsewhere; and update the two authorised existing placeholder assertions.",
+  "packet_id": "006-8d42dd1-1",
+  "task_id": "006",
+  "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.",
   "result": "ready_for_review",
   "changed_paths": [
-    "acceptance-tests/features/group_conversations.feature",
-    "acceptance-tests/features/journeys/custom_group_admission.feature",
-    "acceptance-tests/features/step_definitions/group_conversation_steps.js",
+    "web/lib/memba_web/components/member_components.ex",
+    "web/lib/memba_web/controllers/page_html.ex",
     "web/lib/memba_web/controllers/page_html/club.html.heex",
     "web/lib/memba_web/live/member_dashboard_live.ex",
-    "web/lib/memba_web/member_dashboard_presentation.ex",
-    "web/test/features/step_definitions/group_conversation_steps.exs",
-    "web/test/memba_web/live/member_dashboard_live_test.exs"
+    "web/lib/memba_web/router.ex",
+    "web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
+    "web/test/memba_web/router_test.exs"
   ],
   "validation": [
     {
-      "command": "mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex lib/memba_web/member_dashboard_presentation.ex lib/memba_web/controllers/page_html/club.html.heex test/features/step_definitions/group_conversation_steps.exs test/memba_web/live/member_dashboard_live_test.exs",
+      "command": "PATH=\"/workspace/memba/.devenv/profile/bin:$PATH\" /nix/store/zrbraj84f6c268xkkc94qibz9fqpniz5-elixir-1.18.4/bin/mix format --check-formatted lib/memba_web/router.ex lib/memba_web/live/member_dashboard_live.ex lib/memba_web/components/member_components.ex lib/memba_web/controllers/page_html.ex lib/memba_web/controllers/page_html/club.html.heex test/memba_web/router_test.exs test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
       "working_directory": "/workspace/memba/web",
       "exit_status": 0,
-      "evidence": "All changed Elixir and HEEx files are formatted."
+      "evidence": "All changed Elixir, HEEx, and test files are formatted."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/router_test.exs",
       "working_directory": "/workspace/memba",
       "exit_status": 0,
-      "evidence": "47 tests passed with 0 failures. Focused routed coverage proves custom-group eligibility, sending copy, accepted/sent/repeat states with distinct messages, forged-param isolation, no-op repeated direct events, generic failure/retry, ordinary Admin-message persistence, continued non-membership/non-disclosure, and built-in Admin mailto preservation."
+      "evidence": "18 tests passed with 0 failures; the targeted route resolves both opaque parameters through the club-member LiveView session with action :targeted_add."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/features/domain_cucumber_acceptance_test.exs --only 'scenario_name:Alice can find Board but cannot read its discussions' --only 'scenario_name:Alice follows an Admin group link'",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
       "working_directory": "/workspace/memba",
       "exit_status": 0,
-      "evidence": "2 selected scenarios passed with 0 failures; 177 unrelated scenarios were excluded. Board now asserts Request access while retaining privacy and non-joining coverage, and the separate Admin contact scenario remains passing."
+      "evidence": "7 tests passed with 0 failures; participant and outside-admin display, sign-in return, Members selection, focus markup, already-member state, generic denials, inactive actor/target and cross-club/invalid identities, conversation privacy, and mutation/welcome-free GET plus connected mount are covered."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev acceptance features/journeys/custom_group_admission.feature",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs",
       "working_directory": "/workspace/memba",
       "exit_status": 0,
-      "evidence": "1 browser scenario passed with 16 of 16 steps passing. Eve sees Request access without the Admin mailto, remains outside Board until Dan uses the existing admission flow, and all original journey assertions remain active."
+      "evidence": "7 tests passed with 0 failures; the reused authoritative resolver still proves server-owned same-club active-member/custom-group facts and current participation despite stale projections."
     }
   ],
-  "notes": "MemberDashboardLive owns transient :idle/:sending/:sent state, resets it on routed group changes, ignores request events outside eligible idle state, generates a fresh typed message ID, and passes only message_id, selected_club.club_id, current_member.id as requester_person_id, and selected_group.group_id to Messaging.request_group_access/2 with strong consistency. Presentation eligibility requires a custom group plus :ordinary_non_member access; the application service remains the authoritative recheck. The initial TDD run failed on the absent affordance as expected and was superseded by the successful final runs; a first formatting check found one blank-line issue and was superseded by the successful check. Only the existing Board assertions in group_conversations.feature and custom_group_admission.feature changed, both retained privacy/non-joining semantics and gained @iteration-066; the future custom_group_access_request.feature remains @todo and unchanged. Per packet constraints, dev check was not run; the deterministic workflow's later dev_check node owns that gate. The pre-existing untracked Fabro __pycache__ directory was preserved untouched.",
+  "notes": "The new :targeted_add route keeps group_id and person_id in handle_params state, loads the ordinary authorised dashboard first, requires can_add_custom_group_members?, and only then calls Membership.resolve_custom_group_target_authoritatively/3 with the host-selected club ID. A stateless targeted panel uses stable IDs, JS.focus on its focusable heading, server-resolved person/membership facts, explanatory welcome copy, and an authoritative already-member status; no targeted Add event, membership command, welcome, Cancel/Escape, success transition, acceptance feature, or browser journey was added. Direct GET and connected mount leave the target outside the group with no GroupMemberAdded event or email, and an existing admission regression file also passed 11 tests. Initial expected TDD failures for the absent route/UI, a wrong-working-directory dev invocation, and one formatting discrepancy were superseded by the successful final runs. Per packet constraints, dev check was not run; task 009 owns the full gate. The pre-existing untracked Fabro __pycache__ directory was preserved untouched.",
   "unresolved": []
 }

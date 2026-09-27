@@ -72,6 +72,7 @@ defmodule MembaWeb.Router do
       live "/groups/new", MemberGroupLive.New, :new
       live "/groups/:group_id", MemberDashboardLive, :conversations
       live "/groups/:group_id/members", MemberDashboardLive, :members
+      live "/groups/:group_id/members/add/:person_id", MemberDashboardLive, :targeted_add
       live "/my/settings", MySettingsLive, :profile
       live "/my/settings/profile", MySettingsLive, :profile
       live "/my/settings/clubs", MySettingsLive, :clubs

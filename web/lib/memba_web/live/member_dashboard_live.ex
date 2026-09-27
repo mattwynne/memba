@@ -34,6 +34,7 @@ defmodule MembaWeb.MemberDashboardLive do
   def mount(params, session, socket) do
     club_id = Map.get(session, "club_id")
     selected_group_id = Map.get(params, "group_id")
+    targeted_person_id = Map.get(params, "person_id")
     current_identity = current_identity_from_session(session)
     current_identity_clubs = identity_clubs(current_identity)
 
@@ -54,6 +55,8 @@ defmodule MembaWeb.MemberDashboardLive do
          socket
          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
          |> assign(:selected_group_route_id, selected_group_id)
+         |> assign(:targeted_person_route_id, targeted_person_id)
+         |> assign(:targeted_group_member, nil)
          |> assign(:active_section, "conversations")
          |> assign(:custom_group_member_picker_open?, false)
          |> assign(:custom_group_member_removal, nil)
@@ -72,9 +75,12 @@ defmodule MembaWeb.MemberDashboardLive do
   @impl Phoenix.LiveView
   def handle_params(params, _uri, socket) do
     selected_group_id = Map.get(params, "group_id")
+    targeted_person_id = Map.get(params, "person_id")
 
     socket =
       socket
+      |> assign(:targeted_person_route_id, targeted_person_id)
+      |> assign(:targeted_group_member, nil)
       |> assign(:custom_group_member_picker_open?, false)
       |> assign(:custom_group_member_removal, nil)
       |> assign(:group_access_request_state, :idle)
@@ -326,7 +332,7 @@ defmodule MembaWeb.MemberDashboardLive do
     MembaWeb.PageHTML.club(assigns)
   end
 
-  defp active_section(:members), do: "members"
+  defp active_section(live_action) when live_action in [:members, :targeted_add], do: "members"
   defp active_section(_live_action), do: "conversations"
 
   defp removal_operation_id(socket, membership_id, person_id, submitted_operation_id) do
@@ -414,6 +420,7 @@ defmodule MembaWeb.MemberDashboardLive do
         socket
         |> assign(:selected_group_route_id, selected_group_id)
         |> assign(dashboard_assigns)
+        |> assign_targeted_group_member()
 
       {:error, :forbidden} ->
         forbidden!()
@@ -457,6 +464,63 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp identity_clubs(nil), do: []
   defp identity_clubs(identity), do: identity.active_clubs
+
+  defp assign_targeted_group_member(
+         %{
+           assigns: %{
+             live_action: :targeted_add,
+             can_add_custom_group_members?: true,
+             selected_club: %{club_id: club_id},
+             selected_group: %{group_id: group_id},
+             targeted_person_route_id: person_id
+           }
+         } = socket
+       ) do
+    case Membership.resolve_custom_group_target_authoritatively(club_id, person_id, group_id) do
+      {:ok, target} ->
+        assign(socket, :targeted_group_member, present_targeted_group_member(target))
+
+      {:error, _invalid_missing_or_unauthorized} ->
+        not_found!(socket)
+    end
+  end
+
+  defp assign_targeted_group_member(%{assigns: %{live_action: :targeted_add}}) do
+    forbidden!()
+  end
+
+  defp assign_targeted_group_member(socket) do
+    assign(socket, :targeted_group_member, nil)
+  end
+
+  defp present_targeted_group_member(%{
+         membership: %{membership_id: membership_id},
+         person: %{person_id: person_id, name: name},
+         active_group_member?: active_group_member?
+       }) do
+    %{
+      person_id: person_id,
+      membership_id: membership_id,
+      name: name,
+      initials: person_initials(name),
+      active_group_member?: active_group_member?
+    }
+  end
+
+  defp person_initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map_join("", fn <<first::utf8, _rest::binary>> ->
+      String.upcase(<<first::utf8>>)
+    end)
+    |> case do
+      "" -> "?"
+      initials -> initials
+    end
+  end
+
+  defp person_initials(_name), do: "?"
 
   defp forbidden!, do: raise(MembaWeb.ForbiddenError)
 

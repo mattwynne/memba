@@ -465,6 +465,75 @@ defmodule MembaWeb.MemberComponents do
     """
   end
 
+  attr :target, :map, required: true
+  attr :group_name, :string, required: true
+
+  def targeted_group_member_panel(assigns) do
+    ~H"""
+    <section
+      id="targeted-group-member-panel"
+      class="picker"
+      aria-labelledby="targeted-group-member-heading"
+      data-person-id={@target.person_id}
+      data-membership-id={@target.membership_id}
+      data-already-member={to_string(@target.active_group_member?)}
+    >
+      <h2
+        id="targeted-group-member-heading"
+        class="picker__title"
+        tabindex="-1"
+        phx-mounted={JS.focus()}
+      >
+        Add to {@group_name}
+      </h2>
+
+      <div
+        id={"targeted-group-member-person-#{@target.person_id}"}
+        class="pick-row mt-3"
+        data-person-id={@target.person_id}
+        data-membership-id={@target.membership_id}
+      >
+        <div class="pick-row__avatar" aria-hidden="true">
+          {@target.initials}
+        </div>
+        <div class="pick-row__name">
+          {@target.name}
+          <small id="targeted-group-member-context" class="pick-row__meta">
+            Club member
+          </small>
+        </div>
+      </div>
+
+      <div
+        :if={@target.active_group_member?}
+        id="targeted-group-member-status"
+        class="mt-4 rounded-xl border border-sage-200 bg-sage-50 p-4 text-sm text-ink"
+        role="status"
+        aria-live="polite"
+      >
+        <strong>{@target.name} is already a member of {@group_name}.</strong>
+      </div>
+
+      <p
+        :if={not @target.active_group_member?}
+        id="targeted-group-member-consequences"
+        class="picker__hint mt-4"
+      >
+        {@target.name} will be able to read all {@group_name} conversations and receive its emails.
+        They'll get a welcome email with a link to {@group_name}.
+      </p>
+
+      <div
+        :if={not @target.active_group_member?}
+        id="targeted-group-member-actions"
+        class="mt-4 flex flex-wrap gap-2"
+        aria-label={"Actions for #{@target.name}"}
+      >
+      </div>
+    </section>
+    """
+  end
+
   defp pending_removal_target?(
          %{person_id: person_id, status: :pending},
          %{id: person_id}
