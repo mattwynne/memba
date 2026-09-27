@@ -14,6 +14,11 @@ Use this directory as the detailed rulebook for coding agents working on Memba. 
 
 ## By task
 
+### Formulating acceptance scenarios
+
+- [Seb Rose: Introduction to Formulation](seb-rose-introduction-to-formulation.md) — illustrative rule examples versus complete user journeys.
+- [Gáspár Nagy: Clean up bad BDD scenarios](gaspar-nagy-clean-up-bad-bdd-scenarios.md) — keep automated rule examples focused on one rule.
+
 ### Building or changing UI
 
 - [Frontend, CSS, and design](frontend-design.md) — Tailwind v4 imports, CSS/JS bundle rules, CSS factoring, daisyUI policy, visual quality expectations.

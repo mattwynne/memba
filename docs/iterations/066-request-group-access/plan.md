@@ -42,9 +42,9 @@ Behaviour-facing. Rule: requesting access sends an ordinary Admin message and gr
 
 BDD decision: Required.
 
-Add `acceptance-tests/features/custom_group_access_requests.feature`, tagged `@iteration-065 @todo-domain @todo-ui`, for a standard request, no editable composer, no requester access to Admin replies, ordinary subsequent membership grant and repeated requests. Include invalid/cross-club actor/target authorization without bespoke technical-failure scenarios.
+Add `acceptance-tests/features/custom_group_access_requests.feature`, tagged `@iteration-066 @todo`, for a standard request, no editable composer, no requester access to Admin replies, ordinary subsequent membership grant and repeated requests. Include invalid/cross-club actor/target authorization without bespoke technical-failure scenarios.
 
-Add the Request access affordance example to `group_conversations.feature` with `@iteration-065 @todo-domain @todo-ui`. Preserve the earlier 061 email contact/privacy examples; they remain true after the button appears.
+Add the Request access affordance example to `group_conversations.feature` with `@iteration-066 @todo`. Preserve the earlier 061 email contact/privacy examples; they remain true after the button appears.
 
 Matt reviewed the rules and HTML prototype during planning.
 

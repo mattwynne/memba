@@ -78,14 +78,6 @@ Feature: Group-scoped club conversations
       But Bob should not belong to Board
       And Bob should not have access to Board conversations
 
-    @iteration-061 @not-domain
-    Scenario: Bob has Members but no Conversations while outside Board
-      Given Bob is a club admin
-      And Carol is the only member of the Kootenay Mountaineering Club Board group
-      When Bob opens Board
-      Then Bob should have Board's Members section available
-      But Board's Conversations section and New message action should be absent
-
     @iteration-061
     Scenario Outline: Neither ordinary membership nor club administration grants Board access
       Given Bob is a club admin
@@ -113,34 +105,10 @@ Feature: Group-scoped club conversations
       When Pat opens a link to Kootenay Mountaineering Club's Board
       Then no KMC group details should be disclosed to Pat
 
-    @iteration-065 @todo-domain @todo-ui
+    @iteration-066 @todo
     Scenario: Alice can request Board access without writing a message
       Given Alice is not a club admin
       And Carol is a member of the Kootenay Mountaineering Club Board group
       When Alice opens Board
       Then Alice should be offered Request access
       And Alice should not be asked to compose a message
-
-  Rule: The club home returns to the member's last selected group
-
-    @iteration-061 @not-domain
-    Scenario: Alice returns to a group she has not joined
-      Given Alice is not a club admin
-      And Carol is a member of the Kootenay Mountaineering Club Board group
-      And Alice most recently viewed Board in Kootenay Mountaineering Club
-      When Alice opens the Kootenay Mountaineering Club home
-      Then Alice should see Board selected with access guidance
-      But Alice should see neither Board conversations nor its membership list
-
-    @not-domain
-    Scenario: Bob returns to Admin
-      Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
-      And Bob most recently viewed the Admin group in Kootenay Mountaineering Club
-      When Bob opens the Kootenay Mountaineering Club home
-      Then Bob should see the Admin group selected
-
-    @not-domain
-    Scenario: Alice has no remembered group
-      Given Alice has not previously selected a group in Kootenay Mountaineering Club
-      When Alice opens the Kootenay Mountaineering Club home
-      Then Alice should see the Everyone group selected

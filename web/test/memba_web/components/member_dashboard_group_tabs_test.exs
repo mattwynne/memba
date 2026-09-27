@@ -7,7 +7,7 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
 
   alias MembaWeb.MemberDashboardGroupTabs
 
-  test "renders the conversations tab action as the only active contextual action" do
+  test "renders the conversations section action as the only active contextual action" do
     assigns = %{}
 
     html =
@@ -46,26 +46,33 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
 
     assert_selector(
       html,
-      "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
-        "[aria-orientation='horizontal']" <>
-        "[phx-hook='MembaWeb.MemberDashboardGroupTabs.SectionTabs']"
+      "nav#member-section-tabs-list.section-tabs__list[aria-label='Group sections']"
     )
 
     assert_selector(
       html,
       "#member-section-tab-conversations.section-tab.is-active" <>
         "[href='/groups/grp_123'][data-phx-link='patch']" <>
-        "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
-        "[aria-controls='member-section-panel-conversations'][tabindex='0']"
+        "[data-tab='conversations'][aria-current='page']"
     )
 
     assert_selector(
       html,
       "#member-section-tab-members.section-tab" <>
         "[href='/groups/grp_123/members'][data-phx-link='patch']" <>
-        "[data-tab='members'][role='tab'][aria-selected='false']" <>
-        "[aria-controls='member-section-panel-members'][tabindex='-1']"
+        "[data-tab='members']"
     )
+
+    refute_selector(html, "#member-section-tabs-list[role='tablist']")
+    refute_selector(html, "#member-section-tabs-list[phx-hook]")
+    refute_selector(html, "#member-section-tab-conversations[role='tab']")
+    refute_selector(html, "#member-section-tab-conversations[aria-selected]")
+    refute_selector(html, "#member-section-tab-conversations[aria-controls]")
+    refute_selector(html, "#member-section-tab-members[aria-current]")
+    refute_selector(html, "#member-section-tab-members[role='tab']")
+    refute_selector(html, "#member-section-tab-members[aria-selected]")
+    refute_selector(html, "#member-section-tab-members[aria-controls]")
+    refute_selector(html, "#member-section-tab-members[tabindex]")
 
     assert_selector(
       html,
@@ -77,7 +84,7 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
     refute_selector(html, "#member-section-action-invite-member")
   end
 
-  test "renders the members tab action only when the members tab is active" do
+  test "renders the members section action only when the members section is active" do
     assigns = %{}
 
     html =
@@ -108,7 +115,7 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
 
     assert_selector(
       html,
-      "#member-section-tab-members.section-tab.is-active[aria-selected='true'][tabindex='0']"
+      "#member-section-tab-members.section-tab.is-active[aria-current='page']"
     )
 
     assert_selector(
@@ -121,7 +128,7 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
     refute_selector(html, "#member-section-action-new-message")
   end
 
-  test "keeps the single action container empty when the active tab has no permitted action" do
+  test "keeps the single action container empty when the active section has no permitted action" do
     assigns = %{}
 
     html =
@@ -144,7 +151,7 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
     refute_selector(html, "#member-section-action-invite-member")
   end
 
-  test "renders the Members-only tab composition when conversations are unavailable" do
+  test "renders the Members-only section composition when conversations are unavailable" do
     assigns = %{}
 
     html =
@@ -159,13 +166,15 @@ defmodule MembaWeb.MemberDashboardGroupTabsTest do
 
     assert_selector(
       html,
-      "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
-        "[aria-orientation='horizontal'] " <>
+      "nav#member-section-tabs-list[aria-label='Group sections'] " <>
         "#member-section-tab-members[href='/groups/grp_123/members']" <>
-        "[role='tab'][aria-selected='true']" <>
-        "[aria-controls='member-section-panel-members'][tabindex='0']"
+        "[aria-current='page']"
     )
 
+    refute_selector(html, "#member-section-tab-members[role='tab']")
+    refute_selector(html, "#member-section-tab-members[aria-selected]")
+    refute_selector(html, "#member-section-tab-members[aria-controls]")
+    refute_selector(html, "#member-section-tab-members[tabindex]")
     refute_selector(html, "#member-section-tab-conversations")
     assert_selector(html, "#member-section-tabs-action.section-tabs__action")
   end

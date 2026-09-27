@@ -243,49 +243,6 @@ defmodule MembaWeb.MemberDashboardLive do
   end
 
   @impl Phoenix.LiveView
-  def handle_event(
-        "restore_remembered_group",
-        %{"group_id" => remembered_group_id},
-        %{assigns: %{selected_group_route_id: nil}} = socket
-      )
-      when is_binary(remembered_group_id) and remembered_group_id != "" do
-    case MemberDashboardPresentation.load(
-           socket.assigns.selected_club.club_id,
-           socket.assigns.current_identity,
-           socket.assigns.current_identity_clubs,
-           remembered_group_id
-         ) do
-      {:ok, dashboard_assigns} ->
-        selected_group_id = dashboard_assigns.selected_group.group_id
-
-        socket =
-          socket
-          |> assign(:selected_group_route_id, selected_group_id)
-          |> assign(dashboard_assigns)
-          |> push_patch(to: remembered_group_path(socket.assigns.live_action, selected_group_id))
-
-        {:reply, %{selected_group_id: selected_group_id}, socket}
-
-      {:error, :not_found} ->
-        reply_with_selected_group(socket)
-
-      {:error, :forbidden} ->
-        forbidden!()
-    end
-  end
-
-  def handle_event("restore_remembered_group", _params, socket) do
-    socket =
-      refresh_dashboard(
-        socket,
-        socket.assigns.selected_club.club_id,
-        socket.assigns.selected_group_route_id
-      )
-
-    reply_with_selected_group(socket)
-  end
-
-  @impl Phoenix.LiveView
   def handle_info(
         {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
         %{assigns: %{selected_club: selected_club}} = socket
@@ -333,9 +290,6 @@ defmodule MembaWeb.MemberDashboardLive do
     |> assign(:custom_group_member_picker_query, query)
     |> assign(:custom_group_member_picker_form, to_form(%{"query" => query}, as: :member_search))
   end
-
-  defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
-  defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"
 
   defp deliver_group_welcome(
          %CustomGroupAdmission{transition: :member_added} = admission,
@@ -388,10 +342,6 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp person_name(%{name: name}), do: name
   defp person_name(_person), do: nil
-
-  defp reply_with_selected_group(socket) do
-    {:reply, %{selected_group_id: socket.assigns.selected_group.group_id}, socket}
-  end
 
   defp refresh_dashboard(socket, club_id, selected_group_id) do
     case MemberDashboardPresentation.load(

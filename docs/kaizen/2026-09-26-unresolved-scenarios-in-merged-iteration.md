@@ -14,7 +14,7 @@ A TODO tag should make unfinished coverage visible while its iteration is pendin
 
 [Iteration 064](../iterations/README.md) is marked **merged**, but ten scenario AST nodes in `acceptance-tests/features/custom_group_lifecycle.feature` and five in `acceptance-tests/features/custom_group_membership.feature` still inherit `@todo-ui`. Two of the lifecycle outlines also inherit `@todo-domain`, so those examples are selected by neither runner. These are scenario counts, not expanded outline example-row counts.
 
-We do not yet know whether these tags reflect undelivered behaviour, deliberate but undocumented deferral, obsolete examples, or forgotten tag cleanup. Iterations **065–067 are validated rather than merged**; their TODO-tagged future scenarios are expected and are not the problem observed here.
+We do not yet know whether these tags reflect undelivered behaviour, deliberate but undocumented deferral, obsolete examples, or forgotten tag cleanup. Iterations **066–068 are validated rather than merged** (shifted up when browser-suite work took 065); their TODO-tagged future scenarios are expected and are not the problem observed here.
 
 ## Impact
 

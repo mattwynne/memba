@@ -5,9 +5,8 @@ defmodule Memba.CucumberConfigurationTest do
     assert configured_feature_paths() == expected_shared_feature_paths()
   end
 
-  test "domain Cucumber configuration excludes scenarios not ready or not intended for domain" do
-    assert Application.fetch_env!(:cucumber, :tags) ==
-             "not @not-domain and not @todo-domain"
+  test "domain Cucumber excludes browser journeys and future scenarios" do
+    assert Application.fetch_env!(:cucumber, :tags) == "not @journey and not @todo"
   end
 
   defp configured_feature_paths do

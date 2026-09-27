@@ -10,10 +10,10 @@ Feature: Conversations within custom groups
     And Alice, Bob, and Carol are the only members of its custom group Board
     And Board's email address is "board@kmc.clubs.memba.io"
 
-  Rule: Web composition belongs to the selected group
+  Rule: A Board conversation is addressed to its members, not Everyone
 
     Scenario: Bob starts a Board discussion without addressing Everyone
-      When Bob sends "September agenda" to Board on the website
+      When Bob starts "September agenda" in Board
       Then "September agenda" should be a Board conversation
       And Alice, Bob, and Carol should be able to read it
       And Alice, Bob, and Carol should each receive its initial email

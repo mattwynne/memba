@@ -133,6 +133,7 @@ Rule: Inbound club email is rejected when it cannot be posted safely
       When Robin emails "Trip planning night" to everyone@kmc.clubs.memba.io from "robin@example.test"
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Robin should receive a rejection email explaining the message was not posted
+      And Robin should receive a rejection email from "Kootenay Mountaineering Club via Memba"
       And Robin should be told how to contact support
 
     @iteration-042

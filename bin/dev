@@ -823,8 +823,32 @@ _check() {
   precommit || return $?
 
   if [ "${argc_quick:-0}" != "1" ]; then
+    responsive_check || return $?
     acceptance
   fi
+}
+
+# @cmd Run the direct Playwright responsive smoke check when relevant files changed
+# @flag --force Run the browser responsive checks even when the file-change trigger would skip
+responsive_check() {
+  with_quality_gate_lock _responsive_check "$@"
+}
+
+_responsive_check() {
+  start_postgres || return $?
+  _setup || return $?
+
+  local responsive_args=("$@")
+  if [ "${argc_force:-0}" = "1" ]; then
+    responsive_args+=(--force)
+  fi
+
+  (
+    cd "$repo_root/acceptance-tests"
+
+    local_test_email_env node --test test/responsive_change_detector.test.js || return $?
+    local_test_email_env npm run test:responsive -- "${responsive_args[@]}"
+  )
 }
 
 dev_test() {

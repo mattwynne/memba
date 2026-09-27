@@ -10,7 +10,6 @@ const {
 
 const staffPages = {
   Clubs: { navItem: "clubs", path: "/admin/clubs", pageSelector: "#clubs-index" },
-  Requests: { navItem: "requests", path: "/admin/requests", pageSelector: "#admin-requests-index" },
   People: { navItem: "people", path: "/admin/people", pageSelector: "#admin-people-index" },
   Messages: { navItem: "messages", path: "/admin/messages", pageSelector: "#admin-messages-index" },
   Deliveries: { navItem: "deliveries", path: "/admin/deliveries", pageSelector: "#deliveries-overview" }
@@ -18,14 +17,6 @@ const staffPages = {
 
 When("{word} opens the Memba staff area", async function (_staffName) {
   await openStaffPage(this, staffPages.Clubs);
-});
-
-When("{word} opens the staff People page", async function (_staffName) {
-  await openStaffPage(this, staffPages.People);
-});
-
-When("Memba staff review people", async function () {
-  await openStaffPage(this, staffPages.People);
 });
 
 When("{word} opens the staff Messages page", async function (_staffName) {
@@ -65,47 +56,6 @@ Then("{word} should be able to navigate to {word}", async function (_staffName, 
   await playwrightExpect(this.page.locator(staffPage.pageSelector)).toBeVisible({
     timeout: projectionTimeoutMs(this)
   });
-});
-
-Then(
-  "{word} should not be offered unavailable staff pages such as Incoming or Roles",
-  async function (_staffName) {
-    const nav = this.page.locator('nav[aria-label="Memba staff navigation"]');
-
-    await playwrightExpect(nav.getByText("Incoming")).toHaveCount(0);
-    await playwrightExpect(nav.getByText("Roles")).toHaveCount(0);
-    await playwrightExpect(nav.locator("[data-admin-nav-item]")).toHaveCount(Object.keys(staffPages).length);
-  }
-);
-
-Then("{word} should see Alice as one person", async function (_staffName) {
-  await assertPersonListedOnce(this, "Alice");
-});
-
-Then("Memba should list Alice as one person", async function () {
-  await assertPersonListedOnce(this, "Alice");
-});
-
-Then(
-  "{word} should see that {word} is a member of Kootenay Mountaineering Club",
-  async function (_staffName, personName) {
-    await assertPersonMembership(this, personName, kootenayClubName);
-  }
-);
-
-Then(
-  "{word} should see that {word} is a member of Nelson Paddling Club",
-  async function (_staffName, personName) {
-    await assertPersonMembership(this, personName, "Nelson Paddling Club");
-  }
-);
-
-Then("Memba should show Alice's Kootenay Mountaineering Club membership", async function () {
-  await assertPersonMembership(this, "Alice", kootenayClubName);
-});
-
-Then("Memba should show Alice's Nelson Paddling Club membership", async function () {
-  await assertPersonMembership(this, "Alice", "Nelson Paddling Club");
 });
 
 Then("{word} should see {string} for Kootenay Mountaineering Club", async function (_staffName, subject) {
@@ -160,24 +110,6 @@ function clubFor(world, clubName) {
   const club = world.clubs && world.clubs[clubName];
   assert.ok(club && club.clubId, `Expected ${clubName} to be known in the scenario`);
   return club;
-}
-
-function personRows(world, personName) {
-  return world.page.locator(
-    `[data-testid="admin-person-row"][data-person-name=${cssString(personName)}]`
-  );
-}
-
-async function assertPersonListedOnce(world, personName) {
-  await playwrightExpect(personRows(world, personName)).toHaveCount(1, {
-    timeout: projectionTimeoutMs(world)
-  });
-}
-
-async function assertPersonMembership(world, personName, clubName) {
-  const rows = personRows(world, personName);
-  await playwrightExpect(rows).toHaveCount(1, { timeout: projectionTimeoutMs(world) });
-  await playwrightExpect(rows.first().locator('[data-testid="admin-person-memberships"]')).toContainText(clubName);
 }
 
 async function messageRow(world, subject) {

@@ -662,9 +662,13 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   step "{word} should receive a rejection email from {string}",
        %{args: [sender_name, expected_from_name]} = context do
-    context = assert_rejection_email(context, sender_name, "wasn't posted")
-    email = fetch_from_context!(context, :rejection_emails, sender_name)
+    context =
+      case Map.get(context, :rejection_emails, %{}) do
+        %{^sender_name => _email} -> context
+        _ -> assert_rejection_email(context, sender_name, "wasn't posted")
+      end
 
+    email = fetch_from_context!(context, :rejection_emails, sender_name)
     assert email_from(email) =~ expected_from_name
 
     context

@@ -28,10 +28,3 @@ Rule: A slug can belong to only one club
       When Pat tries to change Nelson Paddling Club's slug to "kmc"
       Then Memba should reject the club slug as already taken
       And Nelson Paddling Club should keep its previous slug
-
-Rule: A club slug routes public visitors to that club's public page
-
-    @not-domain
-    Scenario: Robin opens an unknown club subdomain
-      When Robin opens "unknown.clubs.memba.io"
-      Then Robin should see a not found page

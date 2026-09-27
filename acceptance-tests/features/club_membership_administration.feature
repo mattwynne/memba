@@ -20,7 +20,7 @@ Rule: The first active member of a club becomes an Admin
       Then Robin should be an active member of West Coast Paddlers
       And Robin should be an Admin of West Coast Paddlers
 
-    @iteration-059 @not-ui
+    @iteration-059
     Scenario: Robin and Alice accept invitations at the same time
       Given West Coast Paddlers exists as a club with no active members
       And Pat has invited "robin@example.com" to join West Coast Paddlers

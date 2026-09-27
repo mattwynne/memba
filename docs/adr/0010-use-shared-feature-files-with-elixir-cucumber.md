@@ -4,7 +4,7 @@ Date: 2026-05-26
 
 ## Status
 
-accepted
+accepted; [ADR 0026](0026-keep-browser-journeys-distinct-from-domain-examples.md) partially supersedes the same-scenario and same-file expectations for browser journeys. Both runners still discover the shared feature tree.
 
 ## Context
 

@@ -37,7 +37,7 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     context
   end
 
-  step ~r/^(\w+) sends "([^"]+)" to Board on the website$/,
+  step ~r/^(\w+) starts "([^"]+)" in Board$/,
        %{args: [sender_name, subject]} = context do
     send_board_conversation(context, sender_name, subject, :current_member)
   end

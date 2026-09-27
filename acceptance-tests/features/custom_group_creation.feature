@@ -82,36 +82,3 @@ Feature: Creating custom club groups
       Given Nelson Paddling Club has a Board group with stored email slug "board"
       When Alice creates the custom group "Board" in Kootenay Mountaineering Club
       Then Board's email address should be "board@kmc.clubs.memba.io"
-
-  @not-domain
-  Rule: Group-name feedback and the proposed email address update while typing
-
-    Scenario: Alice sees the email address before creating Trips
-      When Alice enters "Trips" as a new group name
-      Then she should see the proposed address "trips@kmc.clubs.memba.io"
-      But Trips should not yet exist
-
-    Scenario: Alice corrects a duplicate name without submitting
-      Given KMC already has a group named "Board"
-      When Alice enters " bOaRd " as a new group name
-      Then she should be told immediately that the name is already in use
-      When she changes the name to "Trips"
-      Then the duplicate-name feedback should disappear
-      And the proposed address should become "trips@kmc.clubs.memba.io"
-
-    Scenario: Alice previews a numeric suffix and creates that group
-      Given KMC has the custom group "Huts & maintenance" with stored email slug "huts-maintenance"
-      When Alice enters "Huts maintenance" as a new group name
-      Then the name should be accepted
-      And the proposed address should be "huts-maintenance-2@kmc.clubs.memba.io"
-      When Alice creates the group
-      Then its stored address should match the proposed address
-
-    Scenario: Clearing an edited name gives live blank-name feedback
-      Given Alice has entered "Trips" as a new group name
-      When Alice clears the name
-      Then she should be told that the group needs a name
-      And no proposed email address should be shown
-
-  # Preview is advisory; creation authoritatively rechecks name and slug uniqueness.
-  # Renaming and explicit slug editing remain deferred.

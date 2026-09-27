@@ -133,276 +133,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-group-email-address")
   end
 
-  test "Everyone fallback exposes browser-local group restoration metadata", %{conn: conn} do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/conversations")
-
-    assert has_element?(
-             view,
-             "#member-club-home[phx-hook='RememberGroupSelection']" <>
-               "[data-club-id='#{alice.club_id}']" <>
-               "[data-selected-group-id='#{everyone_group_id}']" <>
-               "[data-explicit-group-route='false']"
-           )
-  end
-
-  test "an authorised remembered group is restored to its canonical URL", %{conn: conn} do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    trip_planning_group =
-      create_group(
-        club_id: alice.club_id,
-        group_key: "trip_planning",
-        name: "Trip Planning"
-      )
-
-    add_group_member(trip_planning_group, alice)
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/members")
-
-    render_hook(view, "restore_remembered_group", %{
-      "group_id" => trip_planning_group.group_id
-    })
-
-    trip_planning_group_id = trip_planning_group.group_id
-
-    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
-    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}/members")
-
-    assert has_element?(
-             view,
-             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
-               "[data-explicit-group-route='true']"
-           )
-
-    assert has_element?(view, "#member-group-name", "Trip Planning")
-    refute has_element?(view, "#member-section-panel-members[hidden]")
-  end
-
-  test "a remembered same-club group opens its permitted non-member surface without granting access",
-       %{
-         conn: conn
-       } do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    bob =
-      create_active_member(
-        email: "bob@example.com",
-        name: "Bob Builder",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-
-    private_group =
-      create_group(
-        club_id: alice.club_id,
-        group_key: "private_planning",
-        name: "Private Planning"
-      )
-
-    add_group_member(private_group, bob)
-
-    secret_conversation =
-      create_message(
-        club_id: alice.club_id,
-        sender_id: bob.person_id,
-        subject: "Private planning details",
-        audience_group_id: private_group.group_id
-      )
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/conversations")
-
-    render_hook(view, "restore_remembered_group", %{"group_id" => private_group.group_id})
-
-    private_group_id = private_group.group_id
-
-    assert_reply view, %{selected_group_id: ^private_group_id}
-    assert_patch(view, ~p"/groups/#{private_group.group_id}")
-
-    assert has_element?(
-             view,
-             "#member-club-home[data-selected-group-id='#{private_group.group_id}']" <>
-               "[data-explicit-group-route='true']"
-           )
-
-    assert has_element?(view, "#member-group-name", "Private Planning")
-    assert has_element?(view, "#member-group-access-title", "Private Planning is a private group")
-    refute has_element?(view, "#member-section-tabs")
-    refute has_element?(view, "[data-message-id='#{secret_conversation.message_id}']")
-    refute has_element?(view, "#club-member-#{bob.person_id}")
-  end
-
-  test "missing and foreign remembered groups fall back to Everyone", %{conn: conn} do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    other_club_member =
-      create_active_member(
-        email: "other@example.com",
-        name: "Other Member",
-        club_name: "Other Club"
-      )
-
-    foreign_group =
-      create_group(
-        club_id: other_club_member.club_id,
-        group_key: "foreign_planning",
-        name: "Foreign Planning"
-      )
-
-    add_group_member(foreign_group, other_club_member)
-
-    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/conversations")
-
-    for remembered_group_id <- [Memba.ID.generate(:group), foreign_group.group_id] do
-      render_hook(view, "restore_remembered_group", %{"group_id" => remembered_group_id})
-
-      assert_reply view, %{selected_group_id: ^everyone_group_id}
-
-      assert has_element?(
-               view,
-               "#member-club-home[data-selected-group-id='#{everyone_group_id}']" <>
-                 "[data-explicit-group-route='false']"
-             )
-    end
-
-    assert has_element?(view, "#member-group-name", "Everyone")
-    refute has_element?(view, "#member-group-name", "Foreign Planning")
-    refute has_element?(view, "#member-group-link-#{foreign_group.group_id}")
-  end
-
-  @tag :capture_log
-  test "remembered selection fails closed when the server detects revoked club access", %{
-    conn: conn
-  } do
-    Process.flag(:trap_exit, true)
-
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    trip_planning_group =
-      create_group(
-        club_id: alice.club_id,
-        group_key: "trip_planning",
-        name: "Trip Planning"
-      )
-
-    add_group_member(trip_planning_group, alice)
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/conversations")
-
-    alice.membership_id
-    |> then(&Repo.get_by!(Membership, membership_id: &1))
-    |> Ecto.Changeset.change(active: false)
-    |> Repo.update!()
-
-    assert {{%MembaWeb.ForbiddenError{}, _stacktrace}, _live_view_call} =
-             catch_exit(
-               render_hook(view, "restore_remembered_group", %{
-                 "group_id" => trip_planning_group.group_id
-               })
-             )
-  end
-
-  test "an explicit non-member group route wins over a remembered group event", %{conn: conn} do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    bob =
-      create_active_member(
-        email: "bob@example.com",
-        name: "Bob Builder",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-
-    trip_planning_group =
-      create_group(
-        club_id: alice.club_id,
-        group_key: "trip_planning",
-        name: "Trip Planning"
-      )
-
-    hut_group =
-      create_group(
-        club_id: alice.club_id,
-        group_key: "hut_planning",
-        name: "Hut Planning"
-      )
-
-    add_group_member(trip_planning_group, bob)
-    add_group_member(hut_group, alice)
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/groups/#{trip_planning_group.group_id}")
-
-    render_hook(view, "restore_remembered_group", %{"group_id" => hut_group.group_id})
-
-    trip_planning_group_id = trip_planning_group.group_id
-
-    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
-
-    assert has_element?(
-             view,
-             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
-               "[data-explicit-group-route='true']"
-           )
-
-    assert has_element?(view, "#member-group-name", "Trip Planning")
-    assert has_element?(view, "#member-group-access-title", "Trip Planning is a private group")
-    refute has_element?(view, "#member-section-tabs")
-    refute has_element?(view, "#member-group-name", "Hut Planning")
-  end
-
   test "a committed group change refreshes discovery in an already-open dashboard", %{
     conn: conn
   } do
@@ -1028,7 +758,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-section-tab-members.section-tab.is-active" <>
                "[href='/groups/#{trip_planning_group.group_id}/members']" <>
-               "[aria-selected='true'][tabindex='0']"
+               "[aria-current='page']"
            )
 
     assert has_element?(
@@ -1286,19 +1016,21 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tabs-list[role='tablist'][aria-label='Group sections']" <>
-               "[aria-orientation='horizontal'] " <>
-               "#member-section-tab-members[role='tab'][aria-selected='true']" <>
-               "[aria-controls='member-section-panel-members'][tabindex='0']"
+             "nav#member-section-tabs-list[aria-label='Group sections'] " <>
+               "#member-section-tab-members[aria-current='page']"
            )
 
+    refute has_element?(view, "#member-section-tabs-list[role='tablist']")
+    refute has_element?(view, "#member-section-tab-members[role='tab']")
     refute has_element?(view, "#member-section-tab-conversations")
 
     assert has_element?(
              view,
-             "#member-section-panel-members[role='tabpanel']" <>
-               "[aria-labelledby='member-section-tab-members'][tabindex='0']:not([hidden])"
+             "#member-section-panel-members.section-panel[data-panel='members']" <>
+               "[aria-label='Members']:not([hidden])"
            )
+
+    refute has_element?(view, "#member-section-panel-members[role='tabpanel']")
 
     assert has_element?(view, "#member-section-tabs-action.section-tabs__action")
 
@@ -1416,40 +1148,57 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tabs-list[role='tablist'][aria-orientation='horizontal'][phx-hook]"
+             "nav#member-section-tabs-list[aria-label='Group sections']"
            )
+
+    refute has_element?(view, "#member-section-tabs-list[role='tablist']")
+    refute has_element?(view, "#member-section-tabs-list[phx-hook]")
 
     assert has_element?(
              view,
              "#member-section-tab-conversations.section-tab.is-active" <>
-               "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
-               "[aria-controls='member-section-panel-conversations'][tabindex='0']",
+               "[data-tab='conversations'][aria-current='page']",
              "Conversations"
            )
 
+    refute has_element?(view, "#member-section-tab-conversations[role='tab']")
+    refute has_element?(view, "#member-section-tab-conversations[aria-selected]")
+    refute has_element?(view, "#member-section-tab-conversations[aria-controls]")
+    refute has_element?(view, "#member-section-tab-conversations[tabindex]")
+
     assert has_element?(
              view,
-             "#member-section-tab-members.section-tab" <>
-               "[data-tab='members'][role='tab'][aria-selected='false']" <>
-               "[aria-controls='member-section-panel-members'][tabindex='-1']",
+             "#member-section-tab-members.section-tab[data-tab='members']",
              "Members"
            )
+
+    refute has_element?(view, "#member-section-tab-members[aria-current]")
+    refute has_element?(view, "#member-section-tab-members[role='tab']")
+    refute has_element?(view, "#member-section-tab-members[aria-selected]")
+    refute has_element?(view, "#member-section-tab-members[aria-controls]")
+    refute has_element?(view, "#member-section-tab-members[tabindex]")
 
     assert has_element?(
              view,
              "#member-section-panel-conversations.section-panel[data-panel='conversations']" <>
-               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']" <>
-               "[tabindex='0']"
+               "[aria-label='Conversations']"
            )
+
+    refute has_element?(view, "#member-section-panel-conversations[role='tabpanel']")
+    refute has_element?(view, "#member-section-panel-conversations[aria-labelledby]")
+    refute has_element?(view, "#member-section-panel-conversations[tabindex]")
 
     refute has_element?(view, "#member-section-panel-conversations[hidden]")
 
     assert has_element?(
              view,
              "#member-section-panel-members.section-panel[data-panel='members']" <>
-               "[role='tabpanel'][aria-labelledby='member-section-tab-members']" <>
-               "[tabindex='0'][hidden]"
+               "[aria-label='Members'][hidden]"
            )
+
+    refute has_element?(view, "#member-section-panel-members[role='tabpanel']")
+    refute has_element?(view, "#member-section-panel-members[aria-labelledby]")
+    refute has_element?(view, "#member-section-panel-members[tabindex]")
 
     refute has_element?(view, "#member-group-header .group-head__actions")
     refute has_element?(view, "#member-group-header #member-section-action-new-message")
@@ -1652,17 +1401,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tab-members.section-tab.is-active" <>
-               "[aria-selected='true'][aria-controls='member-section-panel-members']" <>
-               "[tabindex='0']"
+             "#member-section-tab-members.section-tab.is-active[aria-current='page']"
            )
 
-    assert has_element?(
-             view,
-             "#member-section-tab-conversations.section-tab" <>
-               "[aria-selected='false'][aria-controls='member-section-panel-conversations']" <>
-               "[tabindex='-1']"
-           )
+    refute has_element?(view, "#member-section-tab-members[aria-selected]")
+    refute has_element?(view, "#member-section-tab-members[aria-controls]")
+    refute has_element?(view, "#member-section-tab-members[tabindex]")
+
+    assert has_element?(view, "#member-section-tab-conversations.section-tab")
+    refute has_element?(view, "#member-section-tab-conversations[aria-current]")
+    refute has_element?(view, "#member-section-tab-conversations[aria-selected]")
+    refute has_element?(view, "#member-section-tab-conversations[aria-controls]")
+    refute has_element?(view, "#member-section-tab-conversations[tabindex]")
 
     assert has_element?(view, "#member-section-panel-conversations[hidden]")
     refute has_element?(view, "#member-section-panel-members[hidden]")

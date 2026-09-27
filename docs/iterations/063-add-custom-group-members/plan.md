@@ -33,7 +33,7 @@ Club invitations remain separate. Public group discovery is not an invitation or
 
 ### Out of scope
 
-Group removal/leave controls (064), Request access (065), club invitations, separate group-admin roles, historical email replay, removal notifications, rename/slug editing, archiving/deletion, or special internal-failure UI/retry flows. Existing generic technical-error behaviour is reused.
+Group removal/leave controls (064), Request access (066), club invitations, separate group-admin roles, historical email replay, removal notifications, rename/slug editing, archiving/deletion, or special internal-failure UI/retry flows. Existing generic technical-error behaviour is reused.
 
 ## Iteration Type
 

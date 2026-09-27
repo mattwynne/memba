@@ -1,4 +1,4 @@
-@iteration-065 @todo-domain @todo-ui
+@iteration-066 @todo
 Feature: Asking club admins for custom-group access
   A request is an ordinary message to Admin, not a tracked application.
   Admins grant membership through ordinary group membership management.

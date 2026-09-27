@@ -4,7 +4,7 @@ Date: 2026-05-26
 
 ## Status
 
-accepted
+accepted; the requirement to run the same scenarios at both layers is partially superseded by [ADR 0026](0026-keep-browser-journeys-distinct-from-domain-examples.md).
 
 ## Context
 

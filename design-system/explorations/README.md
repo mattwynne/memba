@@ -7,7 +7,7 @@ This mirrors the cloud project's `explorations/` category (the cloud already hol
 2026-07-16). Locally this folder was created on 2026-09-12 for the custom-club-groups
 prototype; it was **not** verified against the cloud's current `explorations/` listing
 because DesignSync could not authenticate in that session. The reviewed local
-HTML is sufficient for iterations 061–065; inspect cloud changes before any future sync.
+HTML is sufficient for the group-design iterations 061–064 and 066 (request access was renumbered from 065); inspect cloud changes before any future sync.
 
 ## What belongs here
 

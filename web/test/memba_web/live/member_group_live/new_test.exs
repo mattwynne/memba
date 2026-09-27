@@ -405,7 +405,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       "Conversations"
     )
     |> assert_has(
-      "#member-section-tab-members.is-active[aria-selected='true']" <>
+      "#member-section-tab-members.is-active[aria-current='page']" <>
         "[href='/groups/#{group_id}/members']",
       "Members"
     )

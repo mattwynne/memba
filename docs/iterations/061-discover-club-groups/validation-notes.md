@@ -1,5 +1,9 @@
 # Planning checks for 061–065
 
+This records the original September planning sequence. Request access, originally 065, is
+now 066 after the browser-journey work took slot 065; the historical run IDs and
+counts below have not been renumbered.
+
 Matt reviewed the rules and HTML prototype during planning. No further stakeholder review is required; Fabro validation remains pending.
 
 - Native Gherkin parser: all 21 feature files parse; all 79 future expanded examples are excluded by the default domain/browser tag expressions.

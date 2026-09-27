@@ -107,4 +107,4 @@ config :memba, :club_site,
 config :cucumber,
   features: ["../acceptance-tests/features/**/*.feature"],
   steps: ["test/features/step_definitions/**/*.exs"],
-  tags: "not @not-domain and not @todo-domain"
+  tags: "not @journey and not @todo"

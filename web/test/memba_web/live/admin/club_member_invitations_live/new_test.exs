@@ -130,7 +130,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     |> assert_path(~p"/conversations")
     |> assert_has("#member-club-home[data-club-id='#{club.club_id}']")
     |> assert_has("#club-site-identity-menu .app-menu__who-name", "Robin Example")
-    |> assert_has("#member-section-tab-conversations[aria-selected='true']", "Conversations")
+    |> assert_has("#member-section-tab-conversations[aria-current='page']", "Conversations")
 
     assert %{name: "Robin Example", email: "robin@example.com"} =
              Membership.get_person_by_email("robin@example.com")

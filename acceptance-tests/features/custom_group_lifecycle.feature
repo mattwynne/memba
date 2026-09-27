@@ -47,7 +47,7 @@ Feature: Joining and leaving custom groups
       And Carol should receive a welcome email with a link to Board
       But Carol's former conversation follows should not be restored
 
-  @iteration-064 @todo-domain @todo-ui
+  @iteration-064 @todo
   Rule: Current group participation controls conversation activity
 
     Scenario Outline: Carol loses access even with an old Board conversation open
@@ -78,7 +78,7 @@ Feature: Joining and leaving custom groups
         | Carol leaves Board           |
         | Bob removes Carol from Board |
 
-  @iteration-064 @todo-ui
+  @iteration-064
   Rule: A message's email recipients are fixed when it is posted
 
     Scenario: Removing Carol does not cancel her queued email
@@ -96,7 +96,7 @@ Feature: Joining and leaving custom groups
       Then Carol's delivered copy of "Hut budget" should not be withdrawn
       But its conversation link should no longer give Carol access
 
-  @iteration-064 @todo-ui
+  @iteration-064
   Rule: Follow preferences survive absence without creating a backlog
 
     Scenario: Carol's Board follow remains while she is absent
@@ -120,7 +120,7 @@ Feature: Joining and leaving custom groups
       Then Carol should receive "The figures are final" by email
       And Carol should still be following "September agenda"
 
-  @iteration-064 @todo-ui
+  @iteration-064
   Rule: The last member may leave without archiving or deleting the group
 
     Scenario: Bob leaves Board empty

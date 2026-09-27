@@ -13,7 +13,7 @@ Rule: A public request does not grant access
 
 Rule: Signed-out requesters verify their email before Staff review
 
-    @iteration-030 @todo-ui
+    @iteration-030
     Scenario: Robin verifies their email before staff see the request
       When Robin starts requesting Memba access with email "robin@example.com"
       Then Robin should receive a sign-in link at "robin@example.com"
@@ -21,7 +21,7 @@ Rule: Signed-out requesters verify their email before Staff review
       When Robin follows the sign-in link
       Then Robin should be completing a verified request as "robin@example.com"
 
-    @iteration-030 @todo-ui
+    @iteration-030
     Scenario: Staff do not see an email-only verification that Robin abandons
       When Robin starts requesting Memba access with email "robin@example.com"
       Then Memba staff should not be notified about Robin's request yet
@@ -39,7 +39,7 @@ Rule: Signed-in people do not re-enter their known identity details
 
 Rule: Verified request submission does not create membership-domain records
 
-    @iteration-030 @todo-ui
+    @iteration-030
     Scenario: Robin submits a verified request before becoming a Person
       Given Robin is signed in as verified email "robin@example.com"
       When Robin requests Memba access for West Coast Paddlers with name "Robin Example" and a short note
@@ -48,7 +48,7 @@ Rule: Verified request submission does not create membership-domain records
       And West Coast Paddlers should not exist as a club yet
       And Robin should not be able to sign in to West Coast Paddlers yet
 
-    @iteration-030 @todo-ui
+    @iteration-030
     Scenario: Pat converts Robin's verified request into a club and first member
       Given Robin has submitted a verified request for West Coast Paddlers with email "robin@example.com"
       And Pat is signed in as Memba staff

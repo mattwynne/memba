@@ -13,7 +13,7 @@ Every active club member can discover the club's groups without gaining access t
 
 Iteration 058 lists only groups the member belongs to and treats other group links as not found. Matt has replaced that policy: names are visible throughout the club, while conversation access still requires group membership. Club admins may inspect group membership without joining, but receive neither conversation access nor group emails through their admin role.
 
-This is the first of the agreed 061–065 slices. Use `a4dbf56e9` or later remote main, including the deployed HEEx consolidation at `03e0e2578`; the earlier design worktree's local-main base was stale. Iterations 098 and 099 are deferred, not dependencies.
+This is the first of the agreed group slices 061–064 and 066 (request access was renumbered from 065). Use `a4dbf56e9` or later remote main, including the deployed HEEx consolidation at `03e0e2578`; the earlier design worktree's local-main base was stale. Iterations 098 and 099 are deferred, not dependencies.
 
 ## Related Problems
 
@@ -32,7 +32,7 @@ This is the first of the agreed 061–065 slices. Use `a4dbf56e9` or later remot
 
 ### Out of scope
 
-Creation (062), adding people (063), removal/leave controls (064), and Request access (065). The approved temporary placeholder offers the Admin email address only; no inert request button. No open/self-join groups, public conversations, membership dates or bespoke technical-failure UI. Existing generic app errors remain unchanged.
+Creation (062), adding people (063), removal/leave controls (064), and Request access (066). The approved temporary placeholder offers the Admin email address only; no inert request button. No open/self-join groups, public conversations, membership dates or bespoke technical-failure UI. Existing generic app errors remain unchanged.
 
 ## Iteration Type
 
@@ -48,7 +48,7 @@ Matt reviewed the rules and HTML prototype during planning; no further stakehold
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/group_conversations.feature`: change only the named discovery/privacy expectations and add this slice's examples. Remove runner-debt tags only for scenarios the corresponding runner implements; retain all iteration tags and the unaffected 058 regressions. Later Request access assertions belong to 065, not this slice.
+- `acceptance-tests/features/group_conversations.feature`: change only the named discovery/privacy expectations and add this slice's examples. Remove runner-debt tags only for scenarios the corresponding runner implements; retain all iteration tags and the unaffected 058 regressions. Later Request access assertions belong to 066, not this slice.
 
 ## Designs
 
@@ -73,7 +73,7 @@ Use `MemberDashboardGroupTabs.group_tabs/1` for the single active-tab action pos
 
 ## Open Business Decisions
 
-None known. Matt approved the email-only placeholder until 065 and the prototype's access distinctions.
+None known. Matt approved the email-only placeholder until 066 and the prototype's access distinctions.
 
 ## Implementation Plan
 
@@ -101,4 +101,4 @@ Members can find a group's name and know how to ask for access. Club admins can 
 
 ## Risks / Follow-ups
 
-The highest risk is reusing the new discovery list as a conversation access grant. Keep the existing active-membership query separate. Do not turn metadata visibility into access to conversation subject lines or member lists. Request access is intentionally absent until 065; membership actions arrive in 063–064. No problem-note status updates, app-wide error redesign or unrelated refactor belongs here.
+The highest risk is reusing the new discovery list as a conversation access grant. Keep the existing active-membership query separate. Do not turn metadata visibility into access to conversation subject lines or member lists. Request access is intentionally absent until 066; membership actions arrive in 063–064. No problem-note status updates, app-wide error redesign or unrelated refactor belongs here.

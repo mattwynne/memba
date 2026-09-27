@@ -74,7 +74,7 @@ The approved designs remain the implementation source; this revision requires no
 - `design-system/templates/club-group-non-member.html`: former-member placeholder and outside-admin management view.
 - `design-system/explorations/custom-groups-prototype.html`: approved transitions, including last-member leave.
 
-Controls must identify the affected group and must not suggest club removal. Reuse normal member rows and the active-tab action pattern. After leaving, a regular member remains on the group's restricted surface; an admin retains membership management without Conversations. Until 065, the placeholder continues to use the Admin email only. Do not add an archive prompt, removal email, follow-reset UI, or custom infrastructure-failure state.
+Controls must identify the affected group and must not suggest club removal. Reuse normal member rows and the active-tab action pattern. After leaving, a regular member remains on the group's restricted surface; an admin retains membership management without Conversations. Until 066, the placeholder continues to use the Admin email only. Do not add an archive prompt, removal email, follow-reset UI, or custom infrastructure-failure state.
 
 The designs' promise to stop getting group emails “straight away” means messages posted after departure do not create a delivery for that person. It does not retract or cancel a delivery fixed when an earlier message was posted.
 

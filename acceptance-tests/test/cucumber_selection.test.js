@@ -22,20 +22,20 @@ function selectedFiles(scenarios) {
 }
 
 test("an explicit feature path does not also select the default suite", async () => {
-  const scenarios = await selectedScenarios(["features/homepage.feature"]);
+  const scenarios = await selectedScenarios(["features/journeys/member_onboarding.feature"]);
   assert.ok(scenarios.length > 0);
-  assert.deepEqual(selectedFiles(scenarios), ["features/homepage.feature"]);
+  assert.deepEqual(selectedFiles(scenarios), ["features/journeys/member_onboarding.feature"]);
 });
 
 test("multiple explicit feature paths select only those files", async () => {
-  const paths = ["features/homepage.feature", "features/authentication.feature"];
+  const paths = ["features/journeys/member_onboarding.feature", "features/journeys/board_conversation.feature"];
   const scenarios = await selectedScenarios(paths);
   assert.deepEqual(selectedFiles(scenarios), [...paths].sort());
 });
 
 test("a file and line select only that scenario", async () => {
   const suite = await selectedScenarios();
-  const scenario = suite.find(({ uri }) => uri === "features/homepage.feature");
+  const scenario = suite.find(({ uri }) => uri === "features/journeys/member_onboarding.feature");
   assert.ok(scenario);
   assert.deepEqual(
     await selectedScenarios([`${scenario.uri}:${scenario.location.line}`]),
@@ -43,7 +43,7 @@ test("a file and line select only that scenario", async () => {
   );
 });
 
-test("no explicit path preserves the full shared-feature suite", async () => {
+test("no explicit path preserves the selected browser journeys", async () => {
   const defaultSuite = await selectedScenarios();
   assert.ok(selectedFiles(defaultSuite).length > 1);
   assert.deepEqual(defaultSuite, await selectedScenarios(["features/**/*.feature"]));

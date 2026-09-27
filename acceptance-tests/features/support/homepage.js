@@ -62,22 +62,8 @@ async function assertHomepageStaffAccess({ page }, { expect = playwrightExpect }
   await expect(page.locator("a#admin-home-link")).toHaveCount(0);
 }
 
-async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } = {}) {
-  const viewport = page.viewportSize();
-  const overflow = await page.evaluate(() => ({
-    body: document.body.scrollWidth,
-    document: document.documentElement.scrollWidth,
-    viewport: document.documentElement.clientWidth
-  }));
-
-  await expect(Math.max(overflow.body, overflow.document)).toBeLessThanOrEqual(
-    viewport?.width || overflow.viewport
-  );
-}
-
 module.exports = {
   HOMEPAGE_VOLUNTEERING_PROMISE,
-  assertHomepageFitsScreen,
   assertHomepageRequestAccess,
   assertHomepageSignIn,
   assertHomepageStaffAccess,

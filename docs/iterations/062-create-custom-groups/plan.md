@@ -34,7 +34,7 @@ The reviewed creation design now has live name validation and a live generated e
 
 ### Out of scope
 
-Adding anyone other than the creator (063), group leave/remove controls (064), welcome emails for additions (063), Request access (065), renaming, slug editing, archiving/deletion, public/self-join groups, custom email policies and bespoke technical-failure flows. Creator welcome notification is not introduced here; creation itself confirms membership.
+Adding anyone other than the creator (063), group leave/remove controls (064), welcome emails for additions (063), Request access (066), renaming, slug editing, archiving/deletion, public/self-join groups, custom email policies and bespoke technical-failure flows. Creator welcome notification is not introduced here; creation itself confirms membership.
 
 ## Iteration Type
 
