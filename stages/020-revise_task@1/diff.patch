@@ -1,0 +1,99 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+index ff799c4..e5c4334 100644
+--- a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+@@ -1,21 +1,19 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "001-6d7bb960-1",
++  "packet_id": "001-c228a6d8-2",
+   "task_id": "001",
+   "todo_line": "- [ ] 001 Add and focused-test a narrow Membership public authoritative resolver for an active same-club person and target custom group, returning membership identity plus server-owned club/person/group facts and current group participation while rejecting invalid IDs, missing/cross-club/built-in groups, and inactive memberships.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba/membership.ex",
+-    "web/test/memba/membership/authoritative_custom_group_target_test.exs",
+-    "web/test/memba/membership/no_crud_spike_test.exs"
++    "web/test/memba/membership/authoritative_custom_group_target_test.exs"
+   ],
+   "validation": [
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/authoritative_custom_group_target_test.exs test/memba/membership/no_crud_spike_test.exs test/memba/membership/add_custom_group_member_dispatch_test.exs",
+       "exit_status": 0,
+-      "evidence": "18 tests passed with 0 failures, covering outside-group and already-member success, malformed and unknown IDs, cross-club person/group combinations, both built-in groups, inactive membership with a deliberately stale projection, the public Membership boundary, and unchanged custom-group admission behavior."
++      "evidence": "19 tests passed with 0 failures. The new regression `reports current non-participation while the group membership projection is stale` proves the target remains an active club member after committed custom-group removal, the stopped GroupMembership projection still reports active: true, and the authoritative resolver returns active_group_member?: false."
+     }
+   ],
+-  "notes": "Added Membership.resolve_custom_group_target_authoritatively/3. It returns {:ok, %{club: %{club_id, name, slug}, membership: %{membership_id, person_id}, person: %{person_id, name}, group: %{club_id, group_id, group_key, email_slug, name}, active_group_member?: boolean}}; malformed IDs return :invalid_club_id/:invalid_person_id/:invalid_group_id, missing clubs return :not_found, missing or inactive members return :member_not_active, missing or cross-club groups return :group_not_defined, built-ins return :system_group_not_allowed, and an unavailable projected person display returns :person_not_found. Club aggregate state is checked before projected person display lookup. No command, event, projection, schema, migration, Messaging, web, acceptance, or admission behavior was added or changed. The initial focused TDD run failed because the resolver did not yet exist; the packet's repo-relative web/test paths were adjusted to test paths because dev test runs Mix from web/.",
++  "notes": "Added the exact stale custom-group-participation regression requested by review and deterministic subscriber barriers for clean teardown. The existing aggregate-backed resolver passed without repair, so production code did not change; no commands, events, projections, schemas, migrations, Messaging, web, acceptance, or admission behavior changed.",
+   "unresolved": []
+ }
+diff --git a/web/test/memba/membership/authoritative_custom_group_target_test.exs b/web/test/memba/membership/authoritative_custom_group_target_test.exs
+index 59afd9d..8012451 100644
+--- a/web/test/memba/membership/authoritative_custom_group_target_test.exs
++++ b/web/test/memba/membership/authoritative_custom_group_target_test.exs
+@@ -9,7 +9,11 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
+   alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.RemoveClubMember
++  alias Memba.Membership.Commands.RemoveGroupMember
++  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
++  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
+   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
++  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.SystemGroups
+ 
+@@ -66,6 +70,52 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
+       assert membership_id == target.membership_id
+     end
+ 
++    test "reports current non-participation while the group membership projection is stale" do
++      %{club: club, group_id: group_id, target: target} = setup_target()
++      add_group_member!(club.club_id, group_id, target)
++
++      assert %GroupMembershipProjection{active: true} =
++               Repo.get_by!(GroupMembershipProjection,
++                 group_id: group_id,
++                 membership_id: target.membership_id
++               )
++
++      projector_child_id = stop_projector!(GroupMembershipProjector)
++
++      assert :ok =
++               App.dispatch(
++                 %RemoveGroupMember{
++                   club_id: club.club_id,
++                   group_id: group_id,
++                   membership_id: target.membership_id,
++                   person_id: target.person_id
++                 },
++                 consistency: :eventual
++               )
++
++      assert Membership.active_member_of_club_authoritatively?(
++               club.club_id,
++               target.person_id
++             )
++
++      assert %GroupMembershipProjection{active: true} =
++               Repo.get_by!(GroupMembershipProjection,
++                 group_id: group_id,
++                 membership_id: target.membership_id
++               )
++
++      assert {:ok, %{active_group_member?: false}} =
++               Membership.resolve_custom_group_target_authoritatively(
++                 club.club_id,
++                 target.person_id,
++                 group_id
++               )
++
++      Memba.ProjectionBarrier.await!([ClearRemovedGroupMemberFollows], timeout: 5_000)
++      restart_projector!(projector_child_id)
++      Memba.ProjectionBarrier.await!([GroupMembershipProjector], timeout: 5_000)
++    end
++
+     test "rejects invalid and missing typed identities" do
+       %{club: club, group_id: group_id, target: target} = setup_target()
+ 
