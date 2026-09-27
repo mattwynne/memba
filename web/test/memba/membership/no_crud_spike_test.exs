@@ -24,6 +24,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     assert source =~ "def list_active_club_memberships_for_person("
     assert source =~ "def list_active_members_of_club("
     assert source =~ "def list_active_members_of_group("
+    assert source =~ "def resolve_custom_group_target_authoritatively("
     assert source =~ "def list_active_groups_for_member_authoritatively("
     assert source =~ "def list_active_members_of_group_authoritatively("
     assert source =~ "def list_discoverable_groups_for_member("
