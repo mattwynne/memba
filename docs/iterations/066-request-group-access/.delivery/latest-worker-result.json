@@ -1,12 +1,14 @@
 {
   "schema_version": 1,
-  "packet_id": "006-92cda0d-2",
-  "task_id": "006",
-  "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.",
+  "packet_id": "007-da28ff7-1",
+  "task_id": "007",
+  "todo_line": "- [ ] 007 Wire explicit targeted Add through the existing admission and welcome flow with confirmation-time actor and target rechecks, idempotent already-member behaviour, no duplicate welcome, and the approved Cancel, Escape, success-announcement, and focus transitions; focused-test lost authority and stale membership.",
   "result": "ready_for_review",
   "changed_paths": [
+    "web/lib/memba_web/components/member_components.ex",
     "web/lib/memba_web/controllers/page_html/club.html.heex",
     "web/lib/memba_web/live/member_dashboard_live.ex",
+    "web/test/memba_web/components/member_components_test.exs",
     "web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs"
   ],
   "validation": [
@@ -14,21 +16,27 @@
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
       "working_directory": "/workspace/memba",
       "exit_status": 0,
-      "evidence": "8 tests passed with 0 failures. The new projected-name mismatch regression and all pre-existing task-006 sign-in, display-authority, privacy, focus, selected-person, already-member, and mutation/welcome-free GET cases passed."
+      "evidence": "13 tests passed with 0 failures. Coverage includes inert GET/reconnect behavior, route/session-owned confirmation despite forged event identities, exactly one admission and welcome, race/retry idempotence, stale revoked-Admin denial, stale departed-target denial, Cancel/Escape patches, semantic success status, and conditional member-row focus."
+    },
+    {
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_admission_live_test.exs test/memba_web/components/member_components_test.exs",
+      "working_directory": "/workspace/memba",
+      "exit_status": 0,
+      "evidence": "26 tests passed with 0 failures. Ordinary picker admission/welcome/provider-failure behavior remains passing, and component assertions prove identity-free targeted controls, routed Cancel/Escape focus recovery, non-actionable already-member state, and focus markup only on the admitted row."
+    },
+    {
+      "command": "devenv shell -- bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex lib/memba_web/components/member_components.ex lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_targeted_add_live_test.exs test/memba_web/components/member_components_test.exs",
+      "working_directory": "/workspace/memba",
+      "exit_status": 0,
+      "evidence": "All production and test files changed by this packet are formatted."
     },
     {
       "command": "git diff --check",
       "working_directory": "/workspace/memba",
       "exit_status": 0,
       "evidence": "The packet diff has no whitespace errors."
-    },
-    {
-      "command": "PATH=\"$PWD/../.devenv/profile/bin:$PATH\" mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
-      "working_directory": "/workspace/memba/web",
-      "exit_status": 0,
-      "evidence": "All production and test files changed by this revision are formatted."
     }
   ],
-  "notes": "The resolver-returned group name is now retained as targeted_group_member.group_name and is the sole group label passed to the targeted panel. A test-only mismatch sets the projected selected-group name to Projected Board while the Club aggregate remains Board, then proves the heading and consequence copy use Board and never expose the projected copy. The regression first failed as expected (8 tests, 1 failure) before the production change. The ordinary projection-backed display gate and accepted read-only route are unchanged; no aggregate-backed GET actor query, targeted Add handling, membership/welcome mutation, Cancel/Escape or success transition, acceptance feature change, or browser journey work was added. Per packet constraints, dev check was not run; task 009 owns the full gate.",
+  "notes": "The new confirm_targeted_group_member event ignores browser identity fields, re-resolves the route target authoritatively, and dispatches the existing Club admission boundary with the authenticated actor. Fresh resolver-owned club/group/person facts drive the targeted welcome and success copy; only :member_added sends a welcome and patches to the ordinary Members URL, while :already_member refreshes to the non-actionable targeted status. Cancel and Escape use one JS patch/focus command, and successful admission gives only the admitted row a mount-focus contract. Focused stale-page tests stop the relevant projectors to prove revoked actor and departed target denial without events, email, or accidental membership. Initial TDD runs failed for the intentionally absent controls/handler, and projector-staleness diagnostics were superseded by the passing final runs. No acceptance feature or journey file changed, todo.md remains untouched, and dev check was not run because task 009 owns the full gate.",
   "unresolved": []
 }

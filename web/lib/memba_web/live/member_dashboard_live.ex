@@ -57,6 +57,9 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:selected_group_route_id, selected_group_id)
          |> assign(:targeted_person_route_id, targeted_person_id)
          |> assign(:targeted_group_member, nil)
+         |> assign(:targeted_group_member_success, nil)
+         |> assign(:targeted_group_member_focus_id, nil)
+         |> assign(:preserve_targeted_group_member_success?, false)
          |> assign(:active_section, "conversations")
          |> assign(:custom_group_member_picker_open?, false)
          |> assign(:custom_group_member_removal, nil)
@@ -79,6 +82,7 @@ defmodule MembaWeb.MemberDashboardLive do
 
     socket =
       socket
+      |> consume_targeted_group_member_success_transition()
       |> assign(:targeted_person_route_id, targeted_person_id)
       |> assign(:targeted_group_member, nil)
       |> assign(:custom_group_member_picker_open?, false)
@@ -177,6 +181,52 @@ defmodule MembaWeb.MemberDashboardLive do
 
   def handle_event("filter_custom_group_member_candidates", _params, socket),
     do: {:noreply, socket}
+
+  def handle_event(
+        "confirm_targeted_group_member",
+        _params,
+        %{
+          assigns: %{
+            live_action: :targeted_add,
+            can_add_custom_group_members?: true,
+            current_member: %{id: actor_person_id},
+            selected_club: %{club_id: club_id},
+            selected_group_route_id: group_id,
+            targeted_person_route_id: person_id
+          }
+        } = socket
+      ) do
+    with {:ok, target} <-
+           Membership.resolve_custom_group_target_authoritatively(
+             club_id,
+             person_id,
+             group_id
+           ),
+         {:ok, %CustomGroupAdmission{} = admission} <-
+           Membership.add_custom_group_member(
+             %{
+               club_id: target.club.club_id,
+               group_id: target.group.group_id,
+               membership_id: target.membership.membership_id,
+               person_id: target.person.person_id,
+               actor_person_id: actor_person_id
+             },
+             consistency: :strong
+           ) do
+      admission
+      |> deliver_targeted_group_welcome(target)
+      |> log_group_welcome_delivery_failure(admission)
+
+      {:noreply, complete_targeted_group_admission(socket, target, admission)}
+    else
+      {:error, _invalid_stale_or_unauthorized} ->
+        {:noreply, targeted_group_admission_error(socket)}
+    end
+  end
+
+  def handle_event("confirm_targeted_group_member", _params, socket) do
+    {:noreply, targeted_group_admission_error(socket)}
+  end
 
   def handle_event(
         "add_custom_group_member",
@@ -357,6 +407,48 @@ defmodule MembaWeb.MemberDashboardLive do
     |> assign(:custom_group_member_picker_form, to_form(%{"query" => query}, as: :member_search))
   end
 
+  defp complete_targeted_group_admission(
+         socket,
+         target,
+         %CustomGroupAdmission{transition: :member_added}
+       ) do
+    group_id = target.group.group_id
+
+    socket
+    |> refresh_dashboard(target.club.club_id, group_id)
+    |> assign(:targeted_group_member_success, %{
+      person_id: target.person.person_id,
+      person_name: target.person.name,
+      group_name: target.group.name
+    })
+    |> assign(:targeted_group_member_focus_id, target.person.person_id)
+    |> assign(:preserve_targeted_group_member_success?, true)
+    |> push_patch(to: ~p"/groups/#{group_id}/members")
+  end
+
+  defp complete_targeted_group_admission(
+         socket,
+         target,
+         %CustomGroupAdmission{transition: :already_member}
+       ) do
+    refresh_dashboard(socket, target.club.club_id, target.group.group_id)
+  end
+
+  defp targeted_group_admission_error(socket) do
+    put_flash(socket, :error, "We couldn't add that member. Refresh and try again.")
+  end
+
+  defp consume_targeted_group_member_success_transition(socket) do
+    if socket.assigns[:preserve_targeted_group_member_success?] do
+      assign(socket, :preserve_targeted_group_member_success?, false)
+    else
+      assign(socket,
+        targeted_group_member_success: nil,
+        targeted_group_member_focus_id: nil
+      )
+    end
+  end
+
   defp deliver_group_welcome(
          %CustomGroupAdmission{transition: :member_added} = admission,
          socket
@@ -387,6 +479,38 @@ defmodule MembaWeb.MemberDashboardLive do
   defp deliver_group_welcome(
          %CustomGroupAdmission{transition: :already_member},
          _socket
+       ),
+       do: :ok
+
+  defp deliver_targeted_group_welcome(
+         %CustomGroupAdmission{transition: :member_added} = admission,
+         target
+       ) do
+    added_by = Membership.get_person(admission.actor_person_id)
+
+    GroupWelcomeEmail.deliver(%{
+      club: target.club,
+      group: target.group,
+      recipient: %{
+        person_id: target.person.person_id,
+        name: target.person.name,
+        email: Membership.get_person_primary_email(target.person.person_id)
+      },
+      added_by: %{
+        person_id: admission.actor_person_id,
+        name: person_name(added_by)
+      },
+      group_url:
+        ClubSite.url(
+          target.club,
+          ~p"/groups/#{target.group.group_id}"
+        )
+    })
+  end
+
+  defp deliver_targeted_group_welcome(
+         %CustomGroupAdmission{transition: :already_member},
+         _target
        ),
        do: :ok
 
