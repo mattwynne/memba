@@ -49,4 +49,4 @@ A gate can prevent downstream failure while still only detecting an upstream def
 - **Choosing the fix first:** investigate before steering the chain toward a preferred tool, prompt, or process change.
 - **Endless abstraction:** prefer a specific mechanism over conclusions such as “poor communication” or “insufficient care.”
 
-For the full path from investigation to a tested, sustained improvement, see [A3 problem-solving](a3-problem-solving.md). Return to the [Kaizen Fix workflow](SKILL.md#investigation-workflow) to apply it to a kaizen note.
+For the full path from investigation to a tested, sustained improvement, see [A3 problem-solving](a3-problem-solving.md). Return to [Kaizen Investigate](SKILL.md#investigate) to record the findings, then [Kaizen Fix](../kaizen-fix/SKILL.md#fix-workflow) to apply a countermeasure.
