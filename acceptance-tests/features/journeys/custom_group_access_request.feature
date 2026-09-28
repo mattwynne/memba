@@ -1,4 +1,4 @@
-@journey @iteration-066 @todo
+@journey @iteration-066
 Feature: Asking for Board membership from its page
 
   Scenario: Eve asks and Dan adds her from the request email
