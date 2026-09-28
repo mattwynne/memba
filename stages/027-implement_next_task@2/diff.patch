@@ -1,0 +1,590 @@
+diff --git a/acceptance-tests/features/journeys/custom_group_access_request.feature b/acceptance-tests/features/journeys/custom_group_access_request.feature
+index 1d3ff2e..857dcba 100644
+--- a/acceptance-tests/features/journeys/custom_group_access_request.feature
++++ b/acceptance-tests/features/journeys/custom_group_access_request.feature
+@@ -1,4 +1,4 @@
+-@journey @iteration-066 @todo
++@journey @iteration-066
+ Feature: Asking for Board membership from its page
+ 
+   Scenario: Eve asks and Dan adds her from the request email
+diff --git a/acceptance-tests/features/step_definitions/custom_group_access_request_steps.js b/acceptance-tests/features/step_definitions/custom_group_access_request_steps.js
+new file mode 100644
+index 0000000..adf40d1
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/custom_group_access_request_steps.js
+@@ -0,0 +1,78 @@
++const { Given, Then, When } = require("@cucumber/cucumber");
++const {
++  assertBoardConversationAccess,
++  assertBoardMembership,
++  assertNoAdminRequestConversationAccess,
++  assertRequestAccessWithoutComposer,
++  assertRequestStatus,
++  assertTargetedBoardAdd,
++  captureWelcomeEmail,
++  confirmTargetedBoardAdd,
++  ensureAliceIsOnlyBoardMember,
++  ensureEveIsOrdinaryMember,
++  ensureKootenayClub,
++  openBoardAs,
++  openRequestEmailAction,
++  openWelcomeLink,
++  requestBoardAccess
++} = require("../support/custom_group_access_request");
++
++Given("KMC is a club", function () {
++  ensureKootenayClub(this);
++});
++
++Given("Eve is its ordinary active club member", function () {
++  ensureEveIsOrdinaryMember(this);
++});
++
++Given("Alice is the only member of its group Board", function () {
++  ensureAliceIsOnlyBoardMember(this);
++});
++
++When("Eve opens Board", async function () {
++  await openBoardAs(this, "Eve");
++});
++
++Then("Eve should be offered Request access without a message composer", async function () {
++  await assertRequestAccessWithoutComposer(this, "Eve");
++});
++
++When("Eve requests access to Board", async function () {
++  await requestBoardAccess(this, "Eve");
++});
++
++Then('Eve should see "Your request has been sent."', async function () {
++  await assertRequestStatus(this, "Eve", "Your request has been sent.");
++});
++
++Then("Eve should still not belong to Board", function () {
++  assertBoardMembership(this, "Eve", false);
++});
++
++When('Dan opens "Add Eve to Board" from the request email', async function () {
++  await openRequestEmailAction(this, "Dan", "Add Eve to Board");
++});
++
++Then("Dan should be offered the action to add Eve to Board", async function () {
++  await assertTargetedBoardAdd(this, "Dan", "Eve");
++});
++
++When("Dan confirms adding Eve to Board", async function () {
++  await confirmTargetedBoardAdd(this, "Dan", "Eve");
++});
++
++Then("Eve should receive a welcome email with a link to Board", async function () {
++  await captureWelcomeEmail(this, "Eve");
++});
++
++When("Eve opens Board from her welcome email", async function () {
++  await openWelcomeLink(this, "Eve");
++});
++
++Then("Eve should have access to Board's conversations", async function () {
++  await assertBoardConversationAccess(this, "Eve");
++});
++
++Then("Eve should still have no access to the Admin request conversation", async function () {
++  await assertNoAdminRequestConversationAccess(this, "Eve");
++});
+diff --git a/acceptance-tests/features/support/custom_group_access_request.js b/acceptance-tests/features/support/custom_group_access_request.js
+new file mode 100644
+index 0000000..7d6c710
+--- /dev/null
++++ b/acceptance-tests/features/support/custom_group_access_request.js
+@@ -0,0 +1,428 @@
++const assert = require("node:assert/strict");
++const { expect } = require("@playwright/test");
++const {
++  assertOnlyGroupMember,
++  ensureClubWithSlug,
++  ensureCustomGroup,
++  ensureOrdinaryClubMembers,
++  kootenayClubName
++} = require("./custom_group_creation");
++const { withMemberHarness } = require("./member_harness");
++const {
++  assertMemberDoesNotSeeAdminMessage,
++  clubSiteUrl,
++  testMailboxEmails,
++  waitForLiveViewConnected,
++  waitForMailboxEmails
++} = require("./member_message");
++const serverCommands = require("./server_commands");
++
++const boardName = "Board";
++const requestSubject = "Access request: Board";
++
++function ensureKootenayClub(world) {
++  ensureClubWithSlug(world, kootenayClubName, "kmc");
++}
++
++function ensureEveIsOrdinaryMember(world) {
++  ensureOrdinaryClubMembers(world, ["Eve"]);
++}
++
++function ensureAliceIsOnlyBoardMember(world) {
++  ensureCustomGroup(world, kootenayClubName, boardName, "board", ["Alice"]);
++  assertOnlyGroupMember(world, boardName, "Alice");
++}
++
++async function openBoardAs(world, personName) {
++  const groupId = boardId(world);
++
++  await withMemberHarness(world, personName, async (member) => {
++    await member.page.goto(clubSiteUrl(member.baseUrl, club(world)));
++    await waitForLiveViewConnected(member);
++
++    const boardLink = member.page.locator(
++      `[data-testid="member-group-link"][data-group-id="${groupId}"]`
++    );
++
++    await expect(boardLink).toBeVisible();
++    await boardLink.click();
++    await waitForLiveViewConnected(member);
++    await expect(member.page.locator("#member-group-name")).toHaveText(boardName);
++  });
++}
++
++async function assertRequestAccessWithoutComposer(world, personName) {
++  await withMemberHarness(world, personName, async (member) => {
++    await expect(member.page.locator("#member-group-request-access")).toHaveText(
++      "Request access"
++    );
++    await expect(member.page.locator("#member-message-compose")).toHaveCount(0);
++    await expect(member.page.locator("#member-section-action-new-message")).toHaveCount(0);
++  });
++}
++
++async function requestBoardAccess(world, personName) {
++  world.accessRequestMailboxBaselineIds = (await testMailboxEmails(world)).map(
++    mailboxIdentity
++  );
++
++  await withMemberHarness(world, personName, async (member) => {
++    const requestButton = member.page.locator("#member-group-request-access");
++
++    await expect(requestButton).toBeVisible();
++    await requestButton.click();
++    await expect(member.page.locator("#member-group-request-status")).toContainText(
++      "Your request has been sent."
++    );
++    await expect(requestButton).toHaveCount(0);
++  });
++
++  rememberAccessRequestMessage(world, personName);
++}
++
++async function assertRequestStatus(world, personName, expectedText) {
++  await withMemberHarness(world, personName, async (member) => {
++    await expect(member.page.locator("#member-group-request-status")).toContainText(
++      expectedText
++    );
++  });
++}
++
++function assertBoardMembership(world, personName, expected) {
++  const activeMember = serverCommands.runCommand(
++    `
++%{
++  activeMember:
++    Memba.Membership.active_member_of_group_authoritatively?(
++      Map.fetch!(payload, "clubId"),
++      Map.fetch!(payload, "groupId"),
++      Map.fetch!(payload, "personId")
++    )
++}
++`,
++    {
++      clubId: club(world).clubId,
++      groupId: boardId(world),
++      personId: person(world, personName).personId
++    }
++  ).activeMember;
++
++  assert.equal(
++    activeMember,
++    expected,
++    `Expected ${personName} ${expected ? "to belong" : "not to belong"} to ${boardName}`
++  );
++}
++
++async function openRequestEmailAction(world, personName, actionLabel) {
++  assert.ok(
++    Array.isArray(world.accessRequestMailboxBaselineIds),
++    "Expected the request-email baseline to be captured before submission"
++  );
++
++  serverCommands.dispatchPendingEmailDeliveries();
++
++  const emails = await waitForMailboxEmails(
++    world,
++    world.accessRequestMailboxBaselineIds.length + 1,
++    `${personName}'s ${requestSubject} email`
++  );
++  const freshEmails = emailsAfterBaseline(
++    world.accessRequestMailboxBaselineIds,
++    emails
++  );
++  const recipient = person(world, personName);
++  const expectedSubject = `[${club(world).slug}] ${requestSubject}`;
++  const email = freshEmails.find(
++    (candidate) =>
++      candidate.subject === expectedSubject &&
++      mailboxRecipient(candidate).includes(recipient.email) &&
++      mailboxText(candidate).includes("Eve would like to join Board.") &&
++      htmlActionUrl(candidate, actionLabel)
++  );
++
++  assert.ok(
++    email,
++    `Expected a fresh ${JSON.stringify(expectedSubject)} email to ${recipient.email} ` +
++      `with the ${JSON.stringify(actionLabel)} action`
++  );
++
++  const actionUrl = htmlActionUrl(email, actionLabel);
++  assertExpectedClubUrl(
++    world,
++    actionUrl,
++    `/groups/${boardId(world)}/members/add/${person(world, "Eve").personId}`
++  );
++
++  world.accessRequestEmail = email;
++  world.accessRequestActionUrl = actionUrl;
++
++  await withMemberHarness(world, personName, async (member) => {
++    await member.page.goto(actionUrl);
++    await waitForLiveViewConnected(member);
++  });
++}
++
++async function assertTargetedBoardAdd(world, actorName, targetName) {
++  await withMemberHarness(world, actorName, async (member) => {
++    await expect(member.page.locator("#member-group-name")).toHaveText(boardName);
++    await expect(member.page.locator("#targeted-group-member-heading")).toHaveText(
++      `Add to ${boardName}`
++    );
++    await expect(
++      member.page.locator(`#targeted-group-member-person-${person(world, targetName).personId}`)
++    ).toContainText(targetName);
++    await expect(member.page.locator("#targeted-group-member-add")).toHaveText(
++      `Add ${targetName} to ${boardName}`
++    );
++  });
++}
++
++async function confirmTargetedBoardAdd(world, actorName, targetName) {
++  world.groupWelcomeMailboxBaselineIds = (await testMailboxEmails(world)).map(
++    mailboxIdentity
++  );
++
++  await withMemberHarness(world, actorName, async (member) => {
++    await member.page.locator("#targeted-group-member-add").click();
++    await expect(member.page.locator("#targeted-group-member-success")).toContainText(
++      `${targetName} is now a member of ${boardName}.`
++    );
++    await expect(
++      member.page.locator(`#club-member-${person(world, targetName).personId}`)
++    ).toBeVisible();
++    await expect(member.page.locator("#targeted-group-member-add")).toHaveCount(0);
++  });
++
++  assertBoardMembership(world, targetName, true);
++}
++
++async function captureWelcomeEmail(world, personName) {
++  assert.ok(
++    Array.isArray(world.groupWelcomeMailboxBaselineIds),
++    "Expected the welcome-email baseline to be captured before explicit Add"
++  );
++
++  const emails = await waitForMailboxEmails(
++    world,
++    world.groupWelcomeMailboxBaselineIds.length + 1,
++    `${personName}'s ${boardName} welcome email`
++  );
++  const freshEmails = emailsAfterBaseline(
++    world.groupWelcomeMailboxBaselineIds,
++    emails
++  );
++  const recipient = person(world, personName);
++  const expectedSubject = `[${club(world).slug}] You've been added to ${boardName}`;
++  const expectedPath = `/groups/${boardId(world)}`;
++  const email = freshEmails.find(
++    (candidate) =>
++      candidate.subject === expectedSubject &&
++      mailboxRecipient(candidate).includes(recipient.email) &&
++      emailUrlForPath(candidate, expectedPath)
++  );
++
++  assert.ok(
++    email,
++    `Expected a fresh ${JSON.stringify(expectedSubject)} email to ${recipient.email} ` +
++      `with a ${boardName} link`
++  );
++
++  const welcomeUrl = emailUrlForPath(email, expectedPath);
++  assertExpectedClubUrl(world, welcomeUrl, expectedPath);
++
++  world.groupWelcomeEmail = email;
++  world.groupWelcomeUrl = welcomeUrl;
++}
++
++async function openWelcomeLink(world, personName) {
++  assert.ok(world.groupWelcomeUrl, `Expected ${personName}'s captured welcome link`);
++
++  await withMemberHarness(world, personName, async (member) => {
++    await member.page.goto(world.groupWelcomeUrl);
++    await waitForLiveViewConnected(member);
++    await expect(member.page.locator("#member-group-name")).toHaveText(boardName);
++  });
++}
++
++async function assertBoardConversationAccess(world, personName) {
++  await withMemberHarness(world, personName, async (member) => {
++    await expect(member.page.locator("#member-section-tabs")).toBeVisible();
++    await expect(member.page.locator("#member-section-panel-conversations")).toBeVisible();
++    await expect(member.page.locator("#member-group-request-access")).toHaveCount(0);
++  });
++}
++
++async function assertNoAdminRequestConversationAccess(world, personName) {
++  await withMemberHarness(world, personName, async (member) => {
++    await assertMemberDoesNotSeeAdminMessage(member, requestSubject);
++    const message = member.messages[requestSubject];
++    const response = await member.page.goto(
++      clubSiteUrl(
++        member.baseUrl,
++        club(world),
++        `/messages/${encodeURIComponent(message.messageId)}`
++      )
++    );
++
++    assert.ok(
++      response && [403, 404].includes(response.status()),
++      `Expected ${personName}'s direct Admin request URL to be forbidden or not found`
++    );
++    await expect(member.page.getByRole("heading", { name: requestSubject })).toHaveCount(0);
++    await expect(member.page.locator("#member-message-reply-form")).toHaveCount(0);
++  });
++}
++
++function rememberAccessRequestMessage(world, requesterName) {
++  const result = serverCommands.runCommand(
++    `
++club_id = Map.fetch!(payload, "clubId")
++requester_id = Map.fetch!(payload, "requesterId")
++subject = Map.fetch!(payload, "subject")
++admin_group_id = Memba.Membership.SystemGroups.admin_group_id(club_id)
++
++messages =
++  admin_group_id
++  |> Memba.Messaging.list_conversations_for_group()
++  |> Enum.map(&Memba.Messaging.get_message(&1.message_id))
++  |> Enum.filter(&(&1.sender_id == requester_id and &1.subject == subject))
++
++case messages do
++  [message] ->
++    %{
++      body: message.body,
++      clubId: message.club_id,
++      messageId: message.message_id,
++      senderId: message.sender_id,
++      subject: message.subject
++    }
++
++  matches ->
++    raise "Expected one access request message, found #{length(matches)}"
++end
++`,
++    {
++      clubId: club(world).clubId,
++      requesterId: person(world, requesterName).personId,
++      subject: requestSubject
++    }
++  );
++
++  assert.ok(
++    result.body.includes("Eve would like to join Board."),
++    "Expected the browser request to create the fixed access-request message"
++  );
++
++  world.messages[requestSubject] = {
++    ...result,
++    clubSlug: club(world).slug
++  };
++  world.lastMessageSubject = requestSubject;
++}
++
++function htmlActionUrl(email, label) {
++  const escapedLabel = escapeRegularExpression(label);
++  const match = mailboxHtml(email).match(
++    new RegExp(
++      `<a\\b[^>]*href="([^"]+)"[^>]*>\\s*${escapedLabel}\\s*</a>`,
++      "i"
++    )
++  );
++
++  return match && decodeHtmlAttribute(match[1]);
++}
++
++function emailUrlForPath(email, expectedPath) {
++  const candidates = mailboxText(email).match(/https?:\/\/[^\s<>]+/gu) || [];
++
++  return candidates
++    .map((candidate) => candidate.replace(/[),.;]+$/u, ""))
++    .find((candidate) => {
++      try {
++        return new URL(candidate).pathname === expectedPath;
++      } catch (_error) {
++        return false;
++      }
++    });
++}
++
++function assertExpectedClubUrl(world, candidate, expectedPath) {
++  const actual = new URL(candidate);
++  const expectedOrigin = new URL(clubSiteUrl(world.baseUrl, club(world))).origin;
++
++  assert.equal(actual.origin, expectedOrigin, "Expected the emitted club-hosted URL");
++  assert.equal(actual.pathname, expectedPath, "Expected the emitted action path");
++  assert.equal(actual.search, "", "Expected no query authority in the emitted URL");
++  assert.equal(actual.hash, "", "Expected no fragment authority in the emitted URL");
++}
++
++function emailsAfterBaseline(baselineIds, emails) {
++  const baseline = new Set(baselineIds);
++  return emails.filter((email) => !baseline.has(mailboxIdentity(email)));
++}
++
++function mailboxIdentity(email) {
++  return email.id || (email.headers && email.headers["Message-ID"]) || JSON.stringify(email);
++}
++
++function mailboxRecipient(email) {
++  return JSON.stringify((email && email.to) || "");
++}
++
++function mailboxText(email) {
++  return String((email && (email.text_body || email.textBody || email.text)) || "");
++}
++
++function mailboxHtml(email) {
++  return String((email && (email.html_body || email.htmlBody || email.html)) || "");
++}
++
++function decodeHtmlAttribute(value) {
++  return value
++    .replaceAll("&amp;", "&")
++    .replaceAll("&quot;", '"')
++    .replaceAll("&#39;", "'")
++    .replaceAll("&lt;", "<")
++    .replaceAll("&gt;", ">");
++}
++
++function escapeRegularExpression(value) {
++  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++}
++
++function club(world) {
++  const value = world.clubs && world.clubs[kootenayClubName];
++  assert.ok(value, `Expected ${kootenayClubName}`);
++  return value;
++}
++
++function boardId(world) {
++  const value = world.groups && world.groups[`${kootenayClubName}:${boardName}`];
++  assert.ok(value, `Expected ${boardName}`);
++  return value;
++}
++
++function person(world, personName) {
++  const value = world.people && world.people[personName];
++  assert.ok(value, `Expected ${personName}`);
++  return value;
++}
++
++module.exports = {
++  assertBoardConversationAccess,
++  assertBoardMembership,
++  assertNoAdminRequestConversationAccess,
++  assertRequestAccessWithoutComposer,
++  assertRequestStatus,
++  assertTargetedBoardAdd,
++  captureWelcomeEmail,
++  confirmTargetedBoardAdd,
++  ensureAliceIsOnlyBoardMember,
++  ensureEveIsOrdinaryMember,
++  ensureKootenayClub,
++  openBoardAs,
++  openRequestEmailAction,
++  openWelcomeLink,
++  requestBoardAccess
++};
+diff --git a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+index 00724e5..1b7df20 100644
+--- a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+@@ -1,42 +1,34 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "007-da28ff7-1",
+-  "task_id": "007",
+-  "todo_line": "- [ ] 007 Wire explicit targeted Add through the existing admission and welcome flow with confirmation-time actor and target rechecks, idempotent already-member behaviour, no duplicate welcome, and the approved Cancel, Escape, success-announcement, and focus transitions; focused-test lost authority and stale membership.",
++  "packet_id": "008-6fd8f70-1",
++  "task_id": "008",
++  "todo_line": "- [ ] 008 Implement the approved browser step plumbing and enable the iteration-066 journey, preserving its no-composer, privacy, no-auto-add, welcome, and no-Admin-conversation-access assertions.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/components/member_components.ex",
+-    "web/lib/memba_web/controllers/page_html/club.html.heex",
+-    "web/lib/memba_web/live/member_dashboard_live.ex",
+-    "web/test/memba_web/components/member_components_test.exs",
+-    "web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs"
++    "acceptance-tests/features/journeys/custom_group_access_request.feature",
++    "acceptance-tests/features/step_definitions/custom_group_access_request_steps.js",
++    "acceptance-tests/features/support/custom_group_access_request.js"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
+-      "working_directory": "/workspace/memba",
+-      "exit_status": 0,
+-      "evidence": "13 tests passed with 0 failures. Coverage includes inert GET/reconnect behavior, route/session-owned confirmation despite forged event identities, exactly one admission and welcome, race/retry idempotence, stale revoked-Admin denial, stale departed-target denial, Cancel/Escape patches, semantic success status, and conditional member-row focus."
+-    },
+-    {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_admission_live_test.exs test/memba_web/components/member_components_test.exs",
+-      "working_directory": "/workspace/memba",
++      "command": "node --test test/journey_step_definitions.test.js",
++      "working_directory": "/workspace/memba/acceptance-tests",
+       "exit_status": 0,
+-      "evidence": "26 tests passed with 0 failures. Ordinary picker admission/welcome/provider-failure behavior remains passing, and component assertions prove identity-free targeted controls, routed Cancel/Escape focus recovery, non-actionable already-member state, and focus markup only on the admitted row."
++      "evidence": "1 test passed; Cucumber dry-ran 6 selected journey scenarios and 106 steps with no undefined or ambiguous steps. The enabled iteration-066 journey's 18 steps each resolve exactly once."
+     },
+     {
+-      "command": "devenv shell -- bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex lib/memba_web/components/member_components.ex lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_targeted_add_live_test.exs test/memba_web/components/member_components_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev acceptance features/journeys/custom_group_access_request.feature",
+       "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "All production and test files changed by this packet are formatted."
++      "evidence": "Chromium reported 1 scenario passed and all 18 steps passed. Eve used the real Request access control without a composer or protected Board content; authoritative checks kept her outside Board after submission and after Dan opened the emitted HTML action; Dan explicitly added her and saw the success/member row; Eve followed the fresh welcome link into Board while the Admin request remained absent and its direct URL returned protected 404."
+     },
+     {
+-      "command": "git diff --check",
+-      "working_directory": "/workspace/memba",
++      "command": "node --test test/cucumber_config.test.js",
++      "working_directory": "/workspace/memba/acceptance-tests",
+       "exit_status": 0,
+-      "evidence": "The packet diff has no whitespace errors."
++      "evidence": "14 configuration tests passed, including journey-only browser selection, one coherent scenario per journey file, and iteration tag rules."
+     }
+   ],
+-  "notes": "The new confirm_targeted_group_member event ignores browser identity fields, re-resolves the route target authoritatively, and dispatches the existing Club admission boundary with the authenticated actor. Fresh resolver-owned club/group/person facts drive the targeted welcome and success copy; only :member_added sends a welcome and patches to the ordinary Members URL, while :already_member refreshes to the non-actionable targeted status. Cancel and Escape use one JS patch/focus command, and successful admission gives only the admitted row a mount-focus contract. Focused stale-page tests stop the relevant projectors to prove revoked actor and departed target denial without events, email, or accidental membership. Initial TDD runs failed for the intentionally absent controls/handler, and projector-staleness diagnostics were superseded by the passing final runs. No acceptance feature or journey file changed, todo.md remains untouched, and dev check was not run because task 009 owns the full gate.",
++  "notes": "Added all 16 previously undefined bindings in custom_group_access_request_steps.js and kept the existing Alice/Dan admin setup and private-group content/list assertion as the two reused definitions. The dedicated support builds KMC/Alice/Dan/Eve/Board through existing setup APIs and uses separate reusable Eve and Dan browser contexts. It captures mailbox identities immediately before Request and immediately before explicit Add, dispatches and polls through existing helpers, and selects fresh mail by exact recipient, slugged subject, body content, and emitted action/link—not mailbox order. Dan follows the HTML anchor labelled Add Eve to Board, and Eve follows the welcome email's emitted Board URL; both URLs are checked for the expected club origin and identity-only path. Server-side assertions use authoritative current group participation before Add and after confirmation. The final privacy step proves the Admin request is absent from Board and directly unavailable. The scenario text and provenance are unchanged; only @todo was removed. Initial TDD dry-run found the expected 16 undefined steps, the first browser run exposed that protected direct access returns the accepted privacy-preserving 404 rather than 403, and an earlier standalone npm diagnostic hit an acceptance lifecycle RPC/teardown issue; both were superseded by the successful final sandbox-preferred validation. todo.md remains untouched, and dev check was not run because task 009 owns the exact-state full gate.",
+   "unresolved": []
+ }
