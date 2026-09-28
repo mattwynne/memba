@@ -16,6 +16,7 @@ Keep this file short. Detailed project rules live in [docs/reference/](docs/refe
 
 - Start with the semantic index: [docs/reference/README.md](docs/reference/README.md).
 - Project-wide defaults: [docs/reference/project-guidelines.md](docs/reference/project-guidelines.md).
+- Design heuristics: [docs/design-heuristics/README.md](docs/design-heuristics/README.md).
 - Phoenix 1.8 layout, routing, icon, and input rules: [docs/reference/phoenix-1-8.md](docs/reference/phoenix-1-8.md).
 - Tailwind, JS/CSS bundles, and design standards: [docs/reference/frontend-design.md](docs/reference/frontend-design.md).
 - Elixir, Mix, and testing rules: [docs/reference/elixir-mix-tests.md](docs/reference/elixir-mix-tests.md).
