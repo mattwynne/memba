@@ -5,6 +5,7 @@ script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/publish_to_main.sh
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 iteration_status_source="$repo_root/.fabro/workflows/scripts/iteration_status.py"
 guard_source="$repo_root/.fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py"
+generated_guard_source="$repo_root/.fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py"
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
 
@@ -19,12 +20,17 @@ cat > bin/dev <<'DEV'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s %s\n' "$(git rev-parse HEAD)" "$*" >> "$FABRO_DEV_CHECK_LOG"
+if [ "${FABRO_DEV_CHECK_FAIL:-0}" = 1 ]; then
+  echo 'Controlled exact-commit check failure' >&2
+  exit 86
+fi
 DEV
 chmod +x bin/dev
 export FABRO_DEV_CHECK_LOG="$workdir/dev-check.log"
 cp "$iteration_status_source" .fabro/workflows/scripts/iteration_status.py
 chmod +x .fabro/workflows/scripts/iteration_status.py
 cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py.real
+cp "$generated_guard_source" .fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py
 cat > .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py <<'PY'
 #!/usr/bin/env python3
 import os
@@ -161,6 +167,51 @@ if ! git push -q origin HEAD:"$run_branch"; then
   echo "Expected ordinary post-publish checkpoint push to active Fabro run branch to succeed" >&2
   exit 1
 fi
+
+# A failed exact-commit check must leave the rebased candidate fetchable and
+# clearly identify its phase, without moving main or treating it as a conflict.
+failed_run_branch=fabro/run/FAIL-RUN
+git switch -q -c "$failed_run_branch" origin/main
+printf 'new candidate\n' > web/lib/another.ex
+git add web/lib/another.ex
+git commit -q -m 'fabro checkpoint for failed validation'
+git push -q origin HEAD:"$failed_run_branch"
+main_before_failed_check=$(git rev-parse origin/main)
+set +e
+FABRO_DEV_CHECK_FAIL=1 FABRO_RUN_ID=FAIL-RUN "$script_path" docs/iterations/001-example/plan.md >"$workdir/failed-check.out" 2>&1
+failed_check_status=$?
+set -e
+if [ "$failed_check_status" -ne 86 ]; then
+  echo "Expected exact-commit validation to return its failing exit status, got $failed_check_status" >&2
+  cat "$workdir/failed-check.out" >&2
+  exit 1
+fi
+if [ "$(git ls-remote origin refs/heads/main | cut -f1)" != "$main_before_failed_check" ]; then
+  echo 'Failed check must not publish to main' >&2
+  exit 1
+fi
+candidate_ref=$(git ls-remote --heads origin 'fabro/rescue/FAIL-RUN-001-*-publish-candidate' | cut -f2)
+if [ -z "$candidate_ref" ]; then
+  echo 'Expected a remote rescue ref for the failed exact-commit candidate' >&2
+  exit 1
+fi
+publish_state_file=$(git rev-parse --git-path fabro/publish-state.txt)
+if ! grep -q 'phase=exact_commit_validation' "$publish_state_file" \
+  || ! grep -q "rescue_ref=${candidate_ref#refs/heads/}" "$publish_state_file" \
+  || ! grep -q 'Publish phase: exact_commit_validation' "$workdir/failed-check.out"; then
+  echo 'Expected phase and rescue candidate in durable publish output' >&2
+  cat "$workdir/failed-check.out" >&2
+  exit 1
+fi
+
+mkdir -p .fabro/workflows/iteration-implementation/scripts/__pycache__
+printf 'cache' > .fabro/workflows/iteration-implementation/scripts/__pycache__/helper.pyc
+if FABRO_RUN_ID=FAIL-RUN "$script_path" docs/iterations/001-example/plan.md >"$workdir/cache-rejected.out" 2>&1; then
+  echo 'Expected publish to reject untracked bytecode before creating a new candidate' >&2
+  exit 1
+fi
+grep -q 'Refusing to publish generated Python bytecode' "$workdir/cache-rejected.out"
+rm -rf .fabro/workflows/iteration-implementation/scripts/__pycache__
 
 # If origin/main moves with an overlapping change after validation, the publish
 # script should preserve the attempted implementation on a rescue branch and

@@ -4,6 +4,7 @@ set -euo pipefail
 script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/final_artifact_gate.sh
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 guard_source="$repo_root/.fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py"
+generated_guard_source="$repo_root/.fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py"
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
 
@@ -17,6 +18,7 @@ setup_repo() {
   git config user.email test@example.com
   mkdir -p .fabro/workflows/iteration-implementation/scripts docs/iterations/001-example acceptance-tests/features
   cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py
+  cp "$generated_guard_source" .fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py
   cat > docs/iterations/001-example/plan.md <<'PLAN'
 # Example plan
 
@@ -94,5 +96,17 @@ git add acceptance-tests/features/example.feature
 git commit -q -m 'implementation edits feature without permission'
 assert_fails
 grep -q 'locked acceptance feature policy failed' /tmp/implementation-final-gate.err
+
+setup_repo "$workdir/generated-cache"
+cd "$workdir/generated-cache"
+mkdir -p .fabro/workflows/iteration-implementation/scripts/__pycache__
+printf 'cache' > .fabro/workflows/iteration-implementation/scripts/__pycache__/helper.pyc
+assert_fails
+grep -q 'Refusing to publish generated Python bytecode' /tmp/implementation-final-gate.err
+
+git add .fabro/workflows/iteration-implementation/scripts/__pycache__/helper.pyc
+git commit -q -m 'checkpoint accidentally tracked cache'
+assert_fails
+grep -q 'helper.pyc' /tmp/implementation-final-gate.err
 
 echo "implementation final_artifact_gate tests passed"

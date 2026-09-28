@@ -66,4 +66,22 @@ The publication node combines Git preparation with a full fresh-checkout validat
 
 **How to check a countermeasure.** Test the timeout and failure routing with a controlled slow-check fixture; separately time a real cold publish-worktree check and verify that it attests the exact SHA pushed. Injected check failure/timeout, database interruption, and rebase conflict must each fail closed with the right phase, preserved candidate, and diagnostic output. Candidate-hygiene tests must reject both tracked and untracked bytecode. Then inspect the next representative delivery for cold-check duration, complete logs, and no `main` push without a matching attestation. Passing fixtures alone would not establish that the unexplained PostgreSQL error is prevented.
 
-**Decision pending:** choose whether to start with the bounded timeout/diagnostic/hygiene controls while investigating PostgreSQL independently, or redesign to one post-rebase full gate. No workflow or application change has been made here.
+**Decision:** Matt selected the bounded timeout, diagnostic, and candidate-hygiene controls (items 1–3), leaving the single-check redesign and PostgreSQL root-cause investigation separate.
+
+## Resolution: bounded publication controls
+
+Date: 2026-09-28
+
+The established timeout mechanism was the publish node's 300-second limit around a cold exact-commit `dev check`; the earlier warm `dev_check` had already taken 269.7 seconds. A separate staging defect admitted generated Python bytecode. The PostgreSQL missing-file mechanism remains unproven, so this countermeasure does not claim to fix it.
+
+Changes:
+
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: allow 2,400 seconds for the publish stage, retain the exact-commit quality gate, and print the last publish phase and rescue candidate on non-conflict failures instead of describing every failure as a merge problem. No automatic retry or bypass was added.
+- `scripts/publish_to_main.sh` in that workflow: record timestamped phases and candidate SHA in the durable run output plus local Git metadata; push a unique, non-forced rescue ref for the rebased candidate **before** exact-commit validation so a timeout cannot destroy the only copy. Continue to require the check's success, attestation, and a normal push to `main`.
+- `bin/dev`: when the publish script opts in, log checkout SHA, port, devenv/PG paths, quality-gate lock, and available Postgres process/PID status without printing the full environment or credentials. This improves the next failure's boundary evidence but cannot recover the old sandbox's missing logs.
+- `.gitignore`, `scripts/guard_generated_publish_files.py`, and the final-artifact/publish gates: ignore future Python bytecode and reject changed tracked or untracked bytecode in a candidate. An ignore rule alone would not stop a file already tracked in a checkpoint.
+- Publication fixture and workflow-routing tests cover a failing exact-commit check leaving `main` unchanged and a fetchable candidate, phase output, candidate hygiene, and the increased timeout. No iteration-066 product code or previously failed run was changed.
+
+Focused shell and Python workflow suites passed; `fabro validate` accepted the graph with its pre-existing `goal_gate_has_retry` warning. An isolated cold `MEMBA_POSTGRES_PORT=15466 MEMBA_DEV_NGROK=0 ./bin/dev check` returned 0 in 312 seconds with 1,572 ExUnit tests and five browser scenarios passing. It also logged a non-fatal `tcp recv: closed` and SQL-sandbox ownership warnings; those observations are not a PostgreSQL root-cause diagnosis. The final staged-diff quality gate and commit result are recorded in the delivery handoff.
+
+**Remaining follow-up:** obtain Fabro-host PostgreSQL/process/kill evidence for the missing-file error before changing database ownership or teardown; inspect a representative future delivery for the actual cold publish duration, captured diagnostics, fetchable rescue ref on failure, and exact-SHA attestation before any main push. This fix prevents the known short-budget and cache-escape paths and improves evidence; live recurrence prevention has not yet been demonstrated.

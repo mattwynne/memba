@@ -284,14 +284,14 @@ digraph IterationImplementation {
         label="Publish Implementation to Main",
         shape=parallelogram,
         script="bash .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh '{{ inputs.plan_path }}'",
-        timeout="300s",
+        timeout="2400s",
         goal_gate=true
     ]
 
     publish_conflict_recovery_gate [
         label="Gate: Publish Conflict Recoverable?",
         shape=parallelogram,
-        script="set -eu\nconflicted_files=$(git diff --name-only --diff-filter=U || true)\nif [ -z \"$conflicted_files\" ]; then\n  echo 'Publish failed, but the worktree does not contain conflict markers for agent recovery.' >&2\n  git status --short --branch >&2 || true\n  exit 1\nfi\nmkdir -p .fabro/tmp\n{\n  echo '# Publish conflict evidence'\n  echo\n  echo '## Status'\n  git status --short --branch || true\n  echo\n  echo '## Conflicted files'\n  printf '%s\\n' \"$conflicted_files\"\n  echo\n  echo '## Recent commits'\n  git log --oneline --decorate -12 || true\n  echo\n  echo '## Rescue branches'\n  git branch --list 'fabro/rescue/*' || true\n  echo\n  echo '## Recovery branches'\n  git branch --list 'fabro/recover/*' || true\n} > .fabro/tmp/publish-conflict-evidence.md\necho 'Publish failed with recoverable merge conflicts:'\nprintf '%s\\n' \"$conflicted_files\"\necho 'Wrote .fabro/tmp/publish-conflict-evidence.md'",
+        script="set -eu\nconflicted_files=$(git diff --name-only --diff-filter=U || true)\nif [ -z \"$conflicted_files\" ]; then\n  echo 'Publish failed outside Git conflict recovery; inspect the preceding publish stage for its timeout, test, or push failure.' >&2\n  publish_state=$(git rev-parse --git-path fabro/publish-state.txt)\n  if [ -f \"$publish_state\" ]; then cat \"$publish_state\" >&2; fi\n  git status --short --branch >&2 || true\n  exit 1\nfi\nmkdir -p .fabro/tmp\n{\n  echo '# Publish conflict evidence'\n  echo\n  echo '## Status'\n  git status --short --branch || true\n  echo\n  echo '## Conflicted files'\n  printf '%s\\n' \"$conflicted_files\"\n  echo\n  echo '## Recent commits'\n  git log --oneline --decorate -12 || true\n  echo\n  echo '## Rescue branches'\n  git branch --list 'fabro/rescue/*' || true\n  echo\n  echo '## Recovery branches'\n  git branch --list 'fabro/recover/*' || true\n} > .fabro/tmp/publish-conflict-evidence.md\necho 'Publish failed with recoverable merge conflicts:'\nprintf '%s\\n' \"$conflicted_files\"\necho 'Wrote .fabro/tmp/publish-conflict-evidence.md'",
         timeout="120s"
     ]
 
@@ -305,7 +305,7 @@ digraph IterationImplementation {
     publish_failed [
         label="Fail: Publish to Main",
         shape=parallelogram,
-        script="echo 'Iteration implementation failed: could not squash and push the implementation to main. If the failure was a rebase conflict, inspect the rescue branch and .fabro/tmp/publish-conflict-evidence.md; otherwise check push credentials, branch protection, and origin/main movement.' >&2\nexit 1"
+        script="echo 'Iteration implementation was not published. Inspect the publish_to_main stage outcome and command output; a timeout or failed exact-commit check is not a merge conflict.' >&2\npublish_state=$(git rev-parse --git-path fabro/publish-state.txt)\nif [ -f \"$publish_state\" ]; then echo 'Last recorded publish phase and preserved candidate:' >&2; cat \"$publish_state\" >&2; fi\nexit 1"
     ]
 
     final_summary [
