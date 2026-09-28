@@ -34,7 +34,7 @@ Use the existing stable authorization checkpoint pattern when handling `RequestG
 
 ### Open the email link
 
-The email button and plain-text body both link to `/groups/:group_id/members/add/:person_id` on the club site. This GET page shows the identified person ready to add to the identified group; it is not an endpoint that adds anyone. Require sign-in and current permission to manage that group before showing person or group details. Resolve the target’s current active club membership server-side. The URL carries identities, not authority; opening it emits no membership command or event. Reuse ordinary Members-page presentation and the explicit Add action.
+The email button and plain-text body both link to `/groups/:group_id/members/add/:person_id` on the club site. This GET page shows the identified person ready to add to the identified group; it is not an endpoint that adds anyone. Require sign-in, same-club resolution and the ordinary projection-backed member-management display permission before showing person or group details. A recently revoked admin can briefly retain display access while that projection catches up; this is accepted for the read-only page, not for addition. Resolve the target’s active club membership server-side. The URL carries identities, not authority; opening it emits no membership command or event. Reuse ordinary Members-page presentation and the explicit Add action.
 
 ### Add Eve to Board
 
@@ -46,7 +46,7 @@ The member application resolves the selected person’s current active club memb
 - “Your request has been sent” means the message was accepted. Provider delivery is asynchronous; acceptance does not promise email receipt or reading.
 - Recipients are fixed by the existing message-posting rules. Later role changes do not cancel deliveries already created.
 - If Dan adds Eve before Alice acts, Alice sees that Eve is already a member. Simultaneous confirmations still use existing duplicate-add protection.
-- If Eve leaves the club or the actor loses authority before confirmation, the addition is refused by existing membership rules. The link does not preserve old authority.
+- If Eve leaves the club or the actor loses authority before confirmation, the authoritative addition decision refuses the change even when a stale read model still allows the actor to open the targeted page. The link does not preserve old authority.
 - A later deliberate ask is another ordinary message, not an update to a pending request. Existing send identity/retry semantics remain intact; no deliberate-request deduplication is added.
 - An old message remains historical correspondence. It is not a current approval or a grant of membership.
 
