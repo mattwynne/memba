@@ -8,4 +8,4 @@
 - [x] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.
 - [x] 007 Wire explicit targeted Add through the existing admission and welcome flow with confirmation-time actor and target rechecks, idempotent already-member behaviour, no duplicate welcome, and the approved Cancel, Escape, success-announcement, and focus transitions; focused-test lost authority and stale membership.
 - [x] 008 Implement the approved browser step plumbing and enable the iteration-066 journey, preserving its no-composer, privacy, no-auto-add, welcome, and no-Admin-conversation-access assertions.
-- [ ] 009 Run both acceptance layers and `dev check` on the exact delivered state and record successful exits.
+- [x] 009 Run both acceptance layers and `dev check` on the exact delivered state and record successful exits.
