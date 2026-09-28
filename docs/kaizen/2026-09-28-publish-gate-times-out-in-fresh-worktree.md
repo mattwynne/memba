@@ -30,6 +30,12 @@ Delivery is blocked despite accepted tasks and a passing earlier full gate. The 
 
 The publication node combines Git preparation with a full fresh-checkout validation under a fixed five-minute budget, while the ordinary workflow-owned full gate alone took almost that long. No preflight compared that budget to cold setup plus test time. The fallback after **any** publish failure checks only for conflict markers and otherwise emits a generic failure, obscuring the timed-out validation. The staging policy also does not exclude or reject generated Python bytecode before creating the publish candidate.
 
+## Evidence retained and limits
+
+- The complete Fabro run export was gathered with `fabro dump 01M3JPCGJBCG3NVGR5FTBK3MMG --output /tmp/memba-066-publish-failure-evidence`; it contains `events.jsonl`, `run.log`, checkpoints, and `stages/046-publish_to_main@1/output.log`, `status.json`, and `script_timing.json`. The server-side run remains the durable source; the `/tmp` export is a local working copy, not a repository artifact.
+- The publish command's stored output is run blob `sha256/2383e8ab2e5ba646e6b1149fa5d4c0509e90a6827e8621d94d6d35610656dfee` (26,748 output bytes). `script_timing.json` records `duration_ms: 302400` and `termination: timed_out`. The output shows an OS `Killed` message just before the 02:15:19 PostgreSQL errors; it does not identify what killed that process.
+- The saved output establishes no successful exit from the publish-candidate check. It does not include separate PostgreSQL server logs, surviving database state, or a reproducer of the missing-file error. The disposable publish worktree and run sandbox were removed/stopped after failure. Those boundaries remain unverified.
+
 ## Open questions
 
 - What produced PostgreSQL's missing-file errors just before the deadline? Did the fresh worktree's managed service interact with an earlier service or cleanup?
