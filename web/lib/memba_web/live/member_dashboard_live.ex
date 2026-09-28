@@ -494,6 +494,7 @@ defmodule MembaWeb.MemberDashboardLive do
   end
 
   defp present_targeted_group_member(%{
+         group: %{name: group_name},
          membership: %{membership_id: membership_id},
          person: %{person_id: person_id, name: name},
          active_group_member?: active_group_member?
@@ -503,6 +504,7 @@ defmodule MembaWeb.MemberDashboardLive do
       membership_id: membership_id,
       name: name,
       initials: person_initials(name),
+      group_name: group_name,
       active_group_member?: active_group_member?
     }
   end

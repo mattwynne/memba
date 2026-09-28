@@ -7,7 +7,9 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.SystemGroups
+  alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
@@ -85,6 +87,38 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
     refute Membership.active_member_of_group?(group.group_id, eve.person_id)
     assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
     refute_received {:email, %Swoosh.Email{}}
+  end
+
+  test "the targeted panel uses the authoritative group name instead of projected copy",
+       %{conn: conn} do
+    club = create_club!("Alpine Club", "alpine")
+    alice = create_member!(club, "Alice Adams", "alice@example.com")
+    dan = create_member!(club, "Dan Delgado", "dan@example.com")
+    eve = create_member!(club, "Eve Ekwueme", "eve@example.com")
+    group = create_custom_group!(club, alice, "Board")
+    make_admin!(club, alice, dan)
+
+    group.group_id
+    |> then(&Repo.get!(GroupProjection, &1))
+    |> Ecto.Changeset.change(name: "Projected Board")
+    |> Repo.update!()
+
+    assert Repo.get!(GroupProjection, group.group_id).name == "Projected Board"
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("dan@example.com", club)
+      |> live(~p"/groups/#{group.group_id}/members/add/#{eve.person_id}")
+
+    assert has_element?(view, "#targeted-group-member-heading", "Add to Board")
+
+    assert has_element?(
+             view,
+             "#targeted-group-member-consequences",
+             "read all Board conversations"
+           )
+
+    refute has_element?(view, "#targeted-group-member-panel", "Projected Board")
   end
 
   test "an outside club admin sees only the targeted Members surface", %{conn: conn} do
