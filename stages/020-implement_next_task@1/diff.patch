@@ -1,0 +1,809 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+index fb11cd3..00724e5 100644
+--- a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+@@ -1,12 +1,14 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "006-92cda0d-2",
+-  "task_id": "006",
+-  "todo_line": "- [ ] 006 Add and focused-test the signed-in read-only targeted-add route with same-club person/group resolution, current display authority, sign-in return, protected-detail denial, heading focus, selected-person and already-member states, and scanner-safe GET behaviour that performs no membership mutation.",
++  "packet_id": "007-da28ff7-1",
++  "task_id": "007",
++  "todo_line": "- [ ] 007 Wire explicit targeted Add through the existing admission and welcome flow with confirmation-time actor and target rechecks, idempotent already-member behaviour, no duplicate welcome, and the approved Cancel, Escape, success-announcement, and focus transitions; focused-test lost authority and stale membership.",
+   "result": "ready_for_review",
+   "changed_paths": [
++    "web/lib/memba_web/components/member_components.ex",
+     "web/lib/memba_web/controllers/page_html/club.html.heex",
+     "web/lib/memba_web/live/member_dashboard_live.ex",
++    "web/test/memba_web/components/member_components_test.exs",
+     "web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs"
+   ],
+   "validation": [
+@@ -14,21 +16,27 @@
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
+       "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "8 tests passed with 0 failures. The new projected-name mismatch regression and all pre-existing task-006 sign-in, display-authority, privacy, focus, selected-person, already-member, and mutation/welcome-free GET cases passed."
++      "evidence": "13 tests passed with 0 failures. Coverage includes inert GET/reconnect behavior, route/session-owned confirmation despite forged event identities, exactly one admission and welcome, race/retry idempotence, stale revoked-Admin denial, stale departed-target denial, Cancel/Escape patches, semantic success status, and conditional member-row focus."
+     },
+     {
+-      "command": "git diff --check",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_admission_live_test.exs test/memba_web/components/member_components_test.exs",
+       "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "The packet diff has no whitespace errors."
++      "evidence": "26 tests passed with 0 failures. Ordinary picker admission/welcome/provider-failure behavior remains passing, and component assertions prove identity-free targeted controls, routed Cancel/Escape focus recovery, non-actionable already-member state, and focus markup only on the admitted row."
+     },
+     {
+-      "command": "PATH=\"$PWD/../.devenv/profile/bin:$PATH\" mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
+-      "working_directory": "/workspace/memba/web",
++      "command": "devenv shell -- bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex lib/memba_web/components/member_components.ex lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_targeted_add_live_test.exs test/memba_web/components/member_components_test.exs",
++      "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "All production and test files changed by this revision are formatted."
++      "evidence": "All production and test files changed by this packet are formatted."
++    },
++    {
++      "command": "git diff --check",
++      "working_directory": "/workspace/memba",
++      "exit_status": 0,
++      "evidence": "The packet diff has no whitespace errors."
+     }
+   ],
+-  "notes": "The resolver-returned group name is now retained as targeted_group_member.group_name and is the sole group label passed to the targeted panel. A test-only mismatch sets the projected selected-group name to Projected Board while the Club aggregate remains Board, then proves the heading and consequence copy use Board and never expose the projected copy. The regression first failed as expected (8 tests, 1 failure) before the production change. The ordinary projection-backed display gate and accepted read-only route are unchanged; no aggregate-backed GET actor query, targeted Add handling, membership/welcome mutation, Cancel/Escape or success transition, acceptance feature change, or browser journey work was added. Per packet constraints, dev check was not run; task 009 owns the full gate.",
++  "notes": "The new confirm_targeted_group_member event ignores browser identity fields, re-resolves the route target authoritatively, and dispatches the existing Club admission boundary with the authenticated actor. Fresh resolver-owned club/group/person facts drive the targeted welcome and success copy; only :member_added sends a welcome and patches to the ordinary Members URL, while :already_member refreshes to the non-actionable targeted status. Cancel and Escape use one JS patch/focus command, and successful admission gives only the admitted row a mount-focus contract. Focused stale-page tests stop the relevant projectors to prove revoked actor and departed target denial without events, email, or accidental membership. Initial TDD runs failed for the intentionally absent controls/handler, and projector-staleness diagnostics were superseded by the passing final runs. No acceptance feature or journey file changed, todo.md remains untouched, and dev check was not run because task 009 owns the full gate.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/components/member_components.ex b/web/lib/memba_web/components/member_components.ex
+index 6a04a38..1a63c45 100644
+--- a/web/lib/memba_web/components/member_components.ex
++++ b/web/lib/memba_web/components/member_components.ex
+@@ -145,6 +145,7 @@ defmodule MembaWeb.MemberComponents do
+   attr :club_name, :string, default: ""
+   attr :manageable, :boolean, default: false
+   attr :removal, :map, default: nil
++  attr :focus_person_id, :string, default: nil
+ 
+   def member_list(assigns) do
+     ~H"""
+@@ -168,6 +169,7 @@ defmodule MembaWeb.MemberComponents do
+         confirming={pending_removal_target?(@removal, row)}
+         removal_operation_id={removal_operation_id(@removal, row)}
+         last_member={@active_member_count == 1}
++        focus_on_mount={@focus_person_id == row.id}
+       />
+     </div>
+     """
+@@ -181,6 +183,7 @@ defmodule MembaWeb.MemberComponents do
+   attr :confirming, :boolean, default: false
+   attr :removal_operation_id, :string, default: nil
+   attr :last_member, :boolean, default: false
++  attr :focus_on_mount, :boolean, default: false
+ 
+   def member_row(assigns) do
+     assigns =
+@@ -192,7 +195,14 @@ defmodule MembaWeb.MemberComponents do
+       data-testid="club-member-row"
+       data-member-id={@row.id}
+       data-current-member={to_string(@self?)}
+-      class={["member-row", @self? && "is-you", @confirming && "is-confirming"]}
++      class={[
++        "member-row",
++        @self? && "is-you",
++        @confirming && "is-confirming",
++        @focus_on_mount && "is-new"
++      ]}
++      tabindex={if(@focus_on_mount, do: "-1")}
++      phx-mounted={if(@focus_on_mount, do: JS.focus())}
+     >
+       <div class="member-row__avatar" aria-hidden="true">
+         {@row.initials}
+@@ -467,6 +477,7 @@ defmodule MembaWeb.MemberComponents do
+ 
+   attr :target, :map, required: true
+   attr :group_name, :string, required: true
++  attr :cancel_path, :string, required: true
+ 
+   def targeted_group_member_panel(assigns) do
+     ~H"""
+@@ -477,6 +488,8 @@ defmodule MembaWeb.MemberComponents do
+       data-person-id={@target.person_id}
+       data-membership-id={@target.membership_id}
+       data-already-member={to_string(@target.active_group_member?)}
++      phx-window-keydown={close_targeted_group_member_panel(@cancel_path)}
++      phx-key="Escape"
+     >
+       <h2
+         id="targeted-group-member-heading"
+@@ -529,6 +542,22 @@ defmodule MembaWeb.MemberComponents do
+         class="mt-4 flex flex-wrap gap-2"
+         aria-label={"Actions for #{@target.name}"}
+       >
++        <.button
++          id="targeted-group-member-add"
++          type="button"
++          phx-click="confirm_targeted_group_member"
++          phx-disable-with="Adding…"
++        >
++          Add {@target.name} to {@group_name}
++        </.button>
++        <.button
++          id="targeted-group-member-cancel"
++          type="button"
++          variant="secondary"
++          phx-click={close_targeted_group_member_panel(@cancel_path)}
++        >
++          Cancel
++        </.button>
+       </div>
+     </section>
+     """
+@@ -565,6 +594,11 @@ defmodule MembaWeb.MemberComponents do
+     |> JS.focus(to: "#member-section-action-add-group-member")
+   end
+ 
++  defp close_targeted_group_member_panel(cancel_path) do
++    JS.patch(cancel_path)
++    |> JS.focus(to: "#member-section-action-add-group-member")
++  end
++
+   defp participant_avatar_stack_visible?(participants, additional_count) do
+     participants != [] or additional_count > 0
+   end
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index ee21b91..c5706f3 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -321,10 +321,25 @@
+           hidden={not active_member_section?(active_section, "members")}
+         >
+           <section id="club-members">
++            <div
++              :if={@targeted_group_member_success}
++              id="targeted-group-member-success"
++              class="mb-4 rounded-xl border border-sage-200 bg-sage-50 p-4 text-sm text-ink"
++              role="status"
++              aria-live="polite"
++            >
++              <strong>
++                {@targeted_group_member_success.person_name} is now a member of {@targeted_group_member_success.group_name}.
++              </strong>
++              <p class="mt-1 text-ink-2">
++                They'll receive a welcome email with a link to the group.
++              </p>
++            </div>
+             <.targeted_group_member_panel
+               :if={@targeted_group_member}
+               target={@targeted_group_member}
+               group_name={@targeted_group_member.group_name}
++              cancel_path={~p"/groups/#{@selected_group.group_id}/members"}
+             />
+             <.outside_group_admin_notice
+               :if={outside_admin? && @can_add_self_to_custom_group?}
+@@ -386,6 +401,7 @@
+               club_name={@selected_club.name}
+               manageable={@can_add_custom_group_members?}
+               removal={assigns[:custom_group_member_removal]}
++              focus_person_id={@targeted_group_member_focus_id}
+             />
+           </section>
+         </section>
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 3079eca..a4b683c 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -57,6 +57,9 @@ defmodule MembaWeb.MemberDashboardLive do
+          |> assign(:selected_group_route_id, selected_group_id)
+          |> assign(:targeted_person_route_id, targeted_person_id)
+          |> assign(:targeted_group_member, nil)
++         |> assign(:targeted_group_member_success, nil)
++         |> assign(:targeted_group_member_focus_id, nil)
++         |> assign(:preserve_targeted_group_member_success?, false)
+          |> assign(:active_section, "conversations")
+          |> assign(:custom_group_member_picker_open?, false)
+          |> assign(:custom_group_member_removal, nil)
+@@ -79,6 +82,7 @@ defmodule MembaWeb.MemberDashboardLive do
+ 
+     socket =
+       socket
++      |> consume_targeted_group_member_success_transition()
+       |> assign(:targeted_person_route_id, targeted_person_id)
+       |> assign(:targeted_group_member, nil)
+       |> assign(:custom_group_member_picker_open?, false)
+@@ -178,6 +182,52 @@ defmodule MembaWeb.MemberDashboardLive do
+   def handle_event("filter_custom_group_member_candidates", _params, socket),
+     do: {:noreply, socket}
+ 
++  def handle_event(
++        "confirm_targeted_group_member",
++        _params,
++        %{
++          assigns: %{
++            live_action: :targeted_add,
++            can_add_custom_group_members?: true,
++            current_member: %{id: actor_person_id},
++            selected_club: %{club_id: club_id},
++            selected_group_route_id: group_id,
++            targeted_person_route_id: person_id
++          }
++        } = socket
++      ) do
++    with {:ok, target} <-
++           Membership.resolve_custom_group_target_authoritatively(
++             club_id,
++             person_id,
++             group_id
++           ),
++         {:ok, %CustomGroupAdmission{} = admission} <-
++           Membership.add_custom_group_member(
++             %{
++               club_id: target.club.club_id,
++               group_id: target.group.group_id,
++               membership_id: target.membership.membership_id,
++               person_id: target.person.person_id,
++               actor_person_id: actor_person_id
++             },
++             consistency: :strong
++           ) do
++      admission
++      |> deliver_targeted_group_welcome(target)
++      |> log_group_welcome_delivery_failure(admission)
++
++      {:noreply, complete_targeted_group_admission(socket, target, admission)}
++    else
++      {:error, _invalid_stale_or_unauthorized} ->
++        {:noreply, targeted_group_admission_error(socket)}
++    end
++  end
++
++  def handle_event("confirm_targeted_group_member", _params, socket) do
++    {:noreply, targeted_group_admission_error(socket)}
++  end
++
+   def handle_event(
+         "add_custom_group_member",
+         %{"membership_id" => membership_id, "person_id" => person_id},
+@@ -357,6 +407,48 @@ defmodule MembaWeb.MemberDashboardLive do
+     |> assign(:custom_group_member_picker_form, to_form(%{"query" => query}, as: :member_search))
+   end
+ 
++  defp complete_targeted_group_admission(
++         socket,
++         target,
++         %CustomGroupAdmission{transition: :member_added}
++       ) do
++    group_id = target.group.group_id
++
++    socket
++    |> refresh_dashboard(target.club.club_id, group_id)
++    |> assign(:targeted_group_member_success, %{
++      person_id: target.person.person_id,
++      person_name: target.person.name,
++      group_name: target.group.name
++    })
++    |> assign(:targeted_group_member_focus_id, target.person.person_id)
++    |> assign(:preserve_targeted_group_member_success?, true)
++    |> push_patch(to: ~p"/groups/#{group_id}/members")
++  end
++
++  defp complete_targeted_group_admission(
++         socket,
++         target,
++         %CustomGroupAdmission{transition: :already_member}
++       ) do
++    refresh_dashboard(socket, target.club.club_id, target.group.group_id)
++  end
++
++  defp targeted_group_admission_error(socket) do
++    put_flash(socket, :error, "We couldn't add that member. Refresh and try again.")
++  end
++
++  defp consume_targeted_group_member_success_transition(socket) do
++    if socket.assigns[:preserve_targeted_group_member_success?] do
++      assign(socket, :preserve_targeted_group_member_success?, false)
++    else
++      assign(socket,
++        targeted_group_member_success: nil,
++        targeted_group_member_focus_id: nil
++      )
++    end
++  end
++
+   defp deliver_group_welcome(
+          %CustomGroupAdmission{transition: :member_added} = admission,
+          socket
+@@ -390,6 +482,38 @@ defmodule MembaWeb.MemberDashboardLive do
+        ),
+        do: :ok
+ 
++  defp deliver_targeted_group_welcome(
++         %CustomGroupAdmission{transition: :member_added} = admission,
++         target
++       ) do
++    added_by = Membership.get_person(admission.actor_person_id)
++
++    GroupWelcomeEmail.deliver(%{
++      club: target.club,
++      group: target.group,
++      recipient: %{
++        person_id: target.person.person_id,
++        name: target.person.name,
++        email: Membership.get_person_primary_email(target.person.person_id)
++      },
++      added_by: %{
++        person_id: admission.actor_person_id,
++        name: person_name(added_by)
++      },
++      group_url:
++        ClubSite.url(
++          target.club,
++          ~p"/groups/#{target.group.group_id}"
++        )
++    })
++  end
++
++  defp deliver_targeted_group_welcome(
++         %CustomGroupAdmission{transition: :already_member},
++         _target
++       ),
++       do: :ok
++
+   defp log_group_welcome_delivery_failure(:ok, _admission), do: :ok
+ 
+   defp log_group_welcome_delivery_failure(
+diff --git a/web/test/memba_web/components/member_components_test.exs b/web/test/memba_web/components/member_components_test.exs
+index 89e958a..32917f5 100644
+--- a/web/test/memba_web/components/member_components_test.exs
++++ b/web/test/memba_web/components/member_components_test.exs
+@@ -371,6 +371,96 @@ defmodule MembaWeb.MemberComponentsTest do
+     end
+   end
+ 
++  describe "targeted_group_member_panel/1" do
++    test "renders identity-free Add plus routed Cancel and Escape focus recovery" do
++      target = %{
++        person_id: Memba.ID.generate(:person),
++        membership_id: Memba.ID.generate(:membership),
++        name: "Eve Ekwueme",
++        initials: "EE",
++        active_group_member?: false
++      }
++
++      html =
++        render_component(&MemberComponents.targeted_group_member_panel/1, %{
++          target: target,
++          group_name: "Board",
++          cancel_path: "/groups/group-123/members"
++        })
++
++      assert_selector(
++        html,
++        "#targeted-group-member-panel[phx-window-keydown][phx-key='Escape']"
++      )
++
++      assert_selector(
++        html,
++        "#targeted-group-member-add[phx-click='confirm_targeted_group_member']" <>
++          "[phx-disable-with='Adding…']"
++      )
++
++      refute_selector(html, "#targeted-group-member-add[phx-value-person_id]")
++      refute_selector(html, "#targeted-group-member-add[phx-value-membership_id]")
++      refute_selector(html, "#targeted-group-member-add[phx-value-group_id]")
++      refute_selector(html, "#targeted-group-member-add[phx-value-club_id]")
++      refute_selector(html, "#targeted-group-member-add[phx-value-actor_person_id]")
++
++      cancel_commands = attribute!(html, "#targeted-group-member-cancel", "phx-click")
++      escape_commands = attribute!(html, "#targeted-group-member-panel", "phx-window-keydown")
++
++      for commands <- [cancel_commands, escape_commands] do
++        assert commands =~ "\"patch\""
++        assert commands =~ "/groups/group-123/members"
++        assert commands =~ "\"focus\""
++        assert commands =~ "#member-section-action-add-group-member"
++      end
++    end
++
++    test "keeps an already-member target non-actionable" do
++      html =
++        render_component(&MemberComponents.targeted_group_member_panel/1, %{
++          target: %{
++            person_id: Memba.ID.generate(:person),
++            membership_id: Memba.ID.generate(:membership),
++            name: "Eve Ekwueme",
++            initials: "EE",
++            active_group_member?: true
++          },
++          group_name: "Board",
++          cancel_path: "/groups/group-123/members"
++        })
++
++      assert_text(
++        html,
++        "#targeted-group-member-status[role='status'][aria-live='polite']",
++        "Eve Ekwueme is already a member of Board."
++      )
++
++      refute_selector(html, "#targeted-group-member-actions")
++      refute_selector(html, "#targeted-group-member-add")
++    end
++  end
++
++  test "member_list/1 gives the focus contract only to the newly admitted row" do
++    alice_id = Memba.ID.generate(:person)
++    eve_id = Memba.ID.generate(:person)
++
++    html =
++      render_member_list(
++        rows: [
++          %{id: alice_id, name: "Alice Adams", initials: "AA", roles: []},
++          %{id: eve_id, name: "Eve Ekwueme", initials: "EE", roles: []}
++        ],
++        active_member_count: 2,
++        current_member: %{id: alice_id, name: "Alice Adams"},
++        focus_person_id: eve_id
++      )
++
++    assert_selector(html, "#club-member-#{eve_id}[tabindex='-1'][phx-mounted]")
++    refute_selector(html, "#club-member-#{alice_id}[tabindex]")
++    refute_selector(html, "#club-member-#{alice_id}[phx-mounted]")
++  end
++
+   describe "outside_group_admin_notice/1" do
+     test "renders its caller-supplied self-admission action" do
+       assigns = %{group_name: "Board"}
+@@ -538,6 +628,16 @@ defmodule MembaWeb.MemberComponentsTest do
+     render_component(&MemberComponents.member_list/1, assigns)
+   end
+ 
++  defp attribute!(html, selector, name) do
++    case html
++         |> LazyHTML.from_fragment()
++         |> LazyHTML.query(selector)
++         |> LazyHTML.attribute(name) do
++      [value] -> value
++      values -> flunk("Expected one #{name} attribute at #{selector}, got: #{inspect(values)}")
++    end
++  end
++
+   defp conversation_row(overrides) do
+     Map.merge(
+       %{
+diff --git a/web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs b/web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs
+index ef42965..f426bb4 100644
+--- a/web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_targeted_add_live_test.exs
+@@ -1,13 +1,27 @@
+ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
+   use MembaWeb.FeatureCase, async: false
+ 
+-  import Phoenix.LiveViewTest, only: [has_element?: 2, has_element?: 3, live: 2]
++  import Phoenix.LiveViewTest,
++    only: [
++      assert_patch: 2,
++      element: 2,
++      has_element?: 2,
++      has_element?: 3,
++      live: 2,
++      render_click: 1,
++      render_click: 3,
++      render_keydown: 2
++    ]
+ 
+   alias Commanded.EventStore
+   alias Memba.Membership
+   alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Projections.Group, as: GroupProjection
++  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
++  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
++  alias Memba.Membership.Projectors.Role, as: RoleProjector
+   alias Memba.Membership.SystemGroups
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+@@ -82,13 +96,246 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
+            )
+ 
+     assert has_element?(view, "#targeted-group-member-actions")
+-    refute has_element?(view, "#targeted-group-member-add")
++
++    assert has_element?(
++             view,
++             "#targeted-group-member-add[phx-click='confirm_targeted_group_member']",
++             "Add Eve Ekwueme to Board"
++           )
++
++    assert has_element?(view, "#targeted-group-member-cancel", "Cancel")
+     assert has_element?(view, "#club-member-#{alice.person_id}", "Alice Adams")
+     refute Membership.active_member_of_group?(group.group_id, eve.person_id)
+     assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
+     refute_received {:email, %Swoosh.Email{}}
+   end
+ 
++  test "explicit Add ignores browser identities, admits the routed target, and announces success",
++       %{conn: conn} do
++    club = create_club!("Alpine Club", "alpine")
++    alice = create_member!(club, "Alice Adams", "alice@example.com")
++    eve = create_member!(club, "Eve Ekwueme", "eve@example.com")
++    mallory = create_member!(club, "Mallory Misroute", "mallory@example.com")
++    group = create_custom_group!(club, alice, "Board")
++    path = ~p"/groups/#{group.group_id}/members/add/#{eve.person_id}"
++    additions_before = target_addition_count(club.club_id, group.group_id, eve.person_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", club)
++      |> live(path)
++
++    refute_received {:email, %Swoosh.Email{}}
++
++    _html =
++      render_click(view, "confirm_targeted_group_member", %{
++        "actor_person_id" => mallory.person_id,
++        "club_id" => Memba.ID.generate(:club),
++        "group_id" => Memba.ID.generate(:group),
++        "membership_id" => mallory.membership_id,
++        "person_id" => mallory.person_id
++      })
++
++    assert_patch(view, ~p"/groups/#{group.group_id}/members")
++    refute has_element?(view, "#targeted-group-member-panel")
++
++    assert has_element?(
++             view,
++             "#targeted-group-member-success[role='status'][aria-live='polite']",
++             "Eve Ekwueme is now a member of Board."
++           )
++
++    assert has_element?(
++             view,
++             "#club-member-#{eve.person_id}[tabindex='-1'][phx-mounted]",
++             "Eve Ekwueme"
++           )
++
++    refute has_element?(view, "#club-member-#{alice.person_id}[tabindex]")
++    assert Membership.active_member_of_group?(group.group_id, eve.person_id)
++    refute Membership.active_member_of_group?(group.group_id, mallory.person_id)
++
++    assert target_addition_count(club.club_id, group.group_id, eve.person_id) ==
++             additions_before + 1
++
++    assert_received {:email, %Swoosh.Email{} = welcome}
++    assert welcome.to == [{"Eve Ekwueme", "eve@example.com"}]
++    assert welcome.subject == "[alpine] You've been added to Board"
++    assert welcome.text_body =~ ClubSite.url(club, ~p"/groups/#{group.group_id}")
++    refute_received {:email, %Swoosh.Email{}}
++  end
++
++  test "a confirmation race becomes an already-member no-op without another event or welcome",
++       %{conn: conn} do
++    club = create_club!("Alpine Club", "alpine")
++    alice = create_member!(club, "Alice Adams", "alice@example.com")
++    eve = create_member!(club, "Eve Ekwueme", "eve@example.com")
++    group = create_custom_group!(club, alice, "Board")
++    path = ~p"/groups/#{group.group_id}/members/add/#{eve.person_id}"
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", club)
++      |> live(path)
++
++    assert has_element?(view, "#targeted-group-member-add")
++    add_group_member!(club, group, alice, eve)
++    additions_after_race = target_addition_count(club.club_id, group.group_id, eve.person_id)
++    refute_received {:email, %Swoosh.Email{}}
++
++    _html = render_click(view, "confirm_targeted_group_member", %{})
++
++    assert has_element?(
++             view,
++             "#targeted-group-member-status[role='status'][aria-live='polite']",
++             "Eve Ekwueme is already a member of Board."
++           )
++
++    refute has_element?(view, "#targeted-group-member-add")
++
++    assert target_addition_count(club.club_id, group.group_id, eve.person_id) ==
++             additions_after_race
++
++    refute_received {:email, %Swoosh.Email{}}
++  end
++
++  test "confirmation denies a stale outside Admin after authoritative role revocation",
++       %{conn: conn} do
++    club = create_club!("Alpine Club", "alpine")
++    alice = create_member!(club, "Alice Adams", "alice@example.com")
++    dan = create_member!(club, "Dan Delgado", "dan@example.com")
++    eve = create_member!(club, "Eve Ekwueme", "eve@example.com")
++    group = create_custom_group!(club, alice, "Board")
++    make_admin!(club, alice, dan)
++    additions_before = target_addition_count(club.club_id, group.group_id, eve.person_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("dan@example.com", club)
++      |> live(~p"/groups/#{group.group_id}/members/add/#{eve.person_id}")
++
++    assert has_element?(view, "#targeted-group-member-add")
++    role_projector_child_id = stop_projector!(RoleProjector)
++
++    assert :ok =
++             Membership.remove_membership_administrator_as_club_member(
++               %{
++                 club_id: club.club_id,
++                 membership_id: dan.membership_id,
++                 person_id: dan.person_id,
++                 actor_person_id: alice.person_id
++               },
++               consistency: :eventual
++             )
++
++    assert Membership.person_has_club_permission?(
++             club.club_id,
++             dan.person_id,
++             Memba.Membership.Permissions.club_manage_members()
++           )
++
++    _html = render_click(view, "confirm_targeted_group_member", %{})
++
++    assert has_element?(
++             view,
++             "#flash-error",
++             "We couldn't add that member. Refresh and try again."
++           )
++
++    refute Membership.active_member_of_group?(group.group_id, eve.person_id)
++    assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
++    refute_received {:email, %Swoosh.Email{}}
++
++    stop_live_view!(view)
++    restart_projector!(role_projector_child_id)
++    await_restarted_projectors!([RoleProjector])
++  end
++
++  test "confirmation denies a target who left while the displayed membership is stale",
++       %{conn: conn} do
++    club = create_club!("Alpine Club", "alpine")
++    alice = create_member!(club, "Alice Adams", "alice@example.com")
++    eve = create_member!(club, "Eve Ekwueme", "eve@example.com")
++    group = create_custom_group!(club, alice, "Board")
++    additions_before = target_addition_count(club.club_id, group.group_id, eve.person_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", club)
++      |> live(~p"/groups/#{group.group_id}/members/add/#{eve.person_id}")
++
++    assert has_element?(view, "#targeted-group-member-add")
++
++    stopped_projectors =
++      for projector <- [
++            Memba.Membership.Projectors.Group,
++            GroupMembershipProjector,
++            MembershipProjector,
++            RoleProjector
++          ] do
++        {projector, stop_projector!(projector)}
++      end
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveClubMember{
++                 club_id: club.club_id,
++                 membership_id: eve.membership_id,
++                 person_id: eve.person_id
++               },
++               consistency: :eventual
++             )
++
++    assert Membership.active_member_of_club?(club.club_id, eve.person_id)
++    _html = render_click(view, "confirm_targeted_group_member", %{})
++
++    assert has_element?(
++             view,
++             "#flash-error",
++             "We couldn't add that member. Refresh and try again."
++           )
++
++    refute Membership.active_member_of_group?(group.group_id, eve.person_id)
++    assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
++    refute_received {:email, %Swoosh.Email{}}
++
++    stop_live_view!(view)
++    Enum.each(stopped_projectors, fn {_projector, child_id} -> restart_projector!(child_id) end)
++    await_restarted_projectors!(Enum.map(stopped_projectors, &elem(&1, 0)))
++  end
++
++  test "Cancel and Escape leave targeted mode without admission or welcome", %{conn: conn} do
++    club = create_club!("Alpine Club", "alpine")
++    alice = create_member!(club, "Alice Adams", "alice@example.com")
++    eve = create_member!(club, "Eve Ekwueme", "eve@example.com")
++    group = create_custom_group!(club, alice, "Board")
++    path = ~p"/groups/#{group.group_id}/members/add/#{eve.person_id}"
++    ordinary_path = ~p"/groups/#{group.group_id}/members"
++    additions_before = target_addition_count(club.club_id, group.group_id, eve.person_id)
++    conn = signed_in_club_host(conn, "alice@example.com", club)
++
++    {:ok, cancel_view, _html} = live(conn, path)
++
++    cancel_view
++    |> element("#targeted-group-member-cancel")
++    |> render_click()
++
++    assert_patch(cancel_view, ordinary_path)
++    refute has_element?(cancel_view, "#targeted-group-member-panel")
++
++    {:ok, escape_view, _html} = live(conn, path)
++
++    escape_view
++    |> element("#targeted-group-member-panel")
++    |> render_keydown(%{"key" => "Escape"})
++
++    assert_patch(escape_view, ordinary_path)
++    refute has_element?(escape_view, "#targeted-group-member-panel")
++    refute Membership.active_member_of_group?(group.group_id, eve.person_id)
++    assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
++    refute_received {:email, %Swoosh.Email{}}
++  end
++
+   test "the targeted panel uses the authoritative group name instead of projected copy",
+        %{conn: conn} do
+     club = create_club!("Alpine Club", "alpine")
+@@ -366,6 +613,55 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
+     end)
+   end
+ 
++  defp stop_projector!(projector) do
++    child_id =
++      Supervisor.which_children(Memba.Supervisor)
++      |> Enum.find_value(fn
++        {child_id, _pid, :worker, [module]} when module == projector -> child_id
++        _child -> nil
++      end)
++
++    assert child_id,
++           "Expected #{inspect(projector)} in #{inspect(Supervisor.which_children(Memba.Supervisor))}"
++
++    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
++    on_exit(fn -> restart_projector!(child_id) end)
++    child_id
++  end
++
++  defp restart_projector!(child_id) do
++    case Supervisor.restart_child(Memba.Supervisor, child_id) do
++      {:ok, _pid} -> :ok
++      {:ok, _pid, _info} -> :ok
++      {:error, :running} -> :ok
++      {:error, :not_found} -> :ok
++    end
++  end
++
++  defp await_restarted_projectors!(projectors) do
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    Memba.ProjectionBarrier.await!(
++      projectors,
++      checkpoint: checkpoint,
++      timeout: 5_000
++    )
++
++    final_checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    Memba.ProjectionBarrier.await!(
++      projectors,
++      checkpoint: final_checkpoint,
++      timeout: 5_000
++    )
++  end
++
++  defp stop_live_view!(view) do
++    view_ref = Process.monitor(view.pid)
++    :ok = GenServer.stop(view.pid)
++    assert_receive {:DOWN, ^view_ref, :process, _, :normal}
++  end
++
+   defp assert_not_found_without_details(conn, path, protected_details) do
+     result =
+       try do
