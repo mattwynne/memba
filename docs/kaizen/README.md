@@ -15,6 +15,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 
 | First observed | Kaizen note | Status | Review due |
 | --- | --- | --- | --- |
+| 2026-09-28 | [Problem: publish gate timed out validating a fresh worktree](2026-09-28-publish-gate-times-out-in-fresh-worktree.md) | Open | — |
 | 2026-09-27 | [Problem: Plan validation could not publish after the shared attestation ref moved](2026-09-27-plan-validation-attestation-ref-push-rejected.md) | Closed | — |
 | 2026-09-26 | [Problem: Unresolved acceptance scenarios remain after an iteration is merged](2026-09-26-unresolved-scenarios-in-merged-iteration.md) | New | — |
 | 2026-09-23 | [Problem: BDD discovery did not challenge a costly business rule before iteration planning](2026-09-23-bdd-discovery-did-not-challenge-costly-business-rule.md) | Open | — |

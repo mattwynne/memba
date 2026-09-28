@@ -20,7 +20,7 @@ Treat delivery-machinery friction as a weakness in the work system, not a person
 - Did the problem appear where it was caused, or only later after more work had piled on top?
 - Did we get a clear signal that something was wrong, or did the system hide or blur the abnormality?
 - Would continuing without stopping spread confusion, waste effort, or make the evidence harder to recover?
-- What evidence will a later `kaizen-fix` need to find and fix the cause rather than the symptom?
+- What evidence will `kaizen-investigate` need to establish the cause before `kaizen-fix` addresses it?
 
 ## Trigger Habit
 

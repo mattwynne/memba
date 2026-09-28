@@ -11,6 +11,26 @@ if [ ! -f "$PLAN_PATH" ]; then
   exit 1
 fi
 
+# Keep phase state in Git's local metadata: it survives disposable-worktree
+# cleanup and remains available to the failure gate without dirtying the run
+# checkout. Fabro also captures each phase message in its durable run log.
+publish_state_file=$(git rev-parse --git-path fabro/publish-state.txt)
+mkdir -p "$(dirname "$publish_state_file")"
+publish_candidate_sha='not prepared'
+publish_rescue_ref='not prepared'
+publish_phase() {
+  local phase=$1
+  {
+    printf 'phase=%s\n' "$phase"
+    printf 'at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'candidate=%s\n' "$publish_candidate_sha"
+    printf 'rescue_ref=%s\n' "$publish_rescue_ref"
+  } > "$publish_state_file"
+  printf 'Publish phase: %s; candidate: %s; rescue: %s\n' \
+    "$phase" "$publish_candidate_sha" "$publish_rescue_ref"
+}
+publish_phase prepare
+
 stage_publish_artifact() {
   local path
   while IFS= read -r -d '' path; do
@@ -37,6 +57,7 @@ if [ -z "$changed_paths" ] && [ -z "$status" ]; then
 fi
 
 python3 .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py "$PLAN_PATH" "$base_sha"
+python3 -B .fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py "$base_sha"
 
 iteration_dir=${PLAN_PATH%/plan.md}
 iteration_slug=$(basename "$iteration_dir")
@@ -85,6 +106,8 @@ commit_msg=$(mktemp)
 
 attempted_publish_sha=$(fabro_git_commit_tree "$tree_sha" -p "$base_sha" -F "$commit_msg")
 rm -f "$commit_msg"
+publish_candidate_sha=$attempted_publish_sha
+publish_phase rebase
 safe_run_id=$(printf '%s' "$run_id" | tr -c '[:alnum:]_.-' '-')
 rescue_branch="fabro/rescue/${safe_run_id}-${iteration_number}-publish-conflict"
 git branch -f "$rescue_branch" "$attempted_publish_sha"
@@ -164,13 +187,24 @@ EOF
   exit 2
 fi
 
+# A timeout or failed exact-commit check must not leave the only rebased
+# candidate in the disposable worktree. Use a unique non-forced rescue ref so
+# repeated attempts cannot overwrite a previous candidate.
+publish_candidate_sha=$(git -C "$publish_worktree" rev-parse HEAD)
+publish_rescue_ref="fabro/rescue/${safe_run_id}-${iteration_number}-${publish_candidate_sha:0:12}-publish-candidate"
+publish_phase preserve_candidate
+git push origin "$publish_candidate_sha:refs/heads/$publish_rescue_ref"
+publish_phase exact_commit_validation
 (
   cd "$publish_worktree"
-  "$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
+  MEMBA_PUBLISH_DIAGNOSTICS=1 "$SCRIPT_DIR/../../scripts/attest_dev_check.sh"
 )
 
 published_sha=$(git -C "$publish_worktree" rev-parse HEAD)
+publish_phase publish_attestation
 (cd "$publish_worktree" && "$SCRIPT_DIR/../../scripts/publish_dev_check_attestation.sh" "$published_sha")
+publish_phase push_main
 git push origin "$published_sha:main"
+publish_phase complete
 
 echo "Published implementation to main: $published_sha"

@@ -43,9 +43,9 @@ Before implementing, choose a baseline, a success measure, and a review point. F
 
 Do not equate “change merged” with “prevention demonstrated.” If effectiveness needs later observation, record the owner, review point, and pending evidence. Do not invent measurements or commitments on someone else's behalf.
 
-## Use within Kaizen Fix
+## Use within Kaizen Investigate and Kaizen Fix
 
-Follow the [Kaizen Fix workflow](SKILL.md#investigation-workflow); A3 complements its debugging and validation steps rather than replacing them.
+Follow the [Kaizen Investigate workflow](SKILL.md#investigate) to establish causes and options, then the [Kaizen Fix workflow](../kaizen-fix/SKILL.md#fix-workflow) to implement and validate a chosen countermeasure. A3 complements debugging and validation rather than replacing them.
 
 For a small, obvious fix, a concise resolution section can carry the A3 reasoning. For a recurring, costly, or cross-stage problem, make the current condition, target, alternatives, and follow-up explicit. A separate A3 document is optional, not a new paperwork requirement.
 

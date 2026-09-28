@@ -59,6 +59,11 @@ for match in NODE_RE.finditer(workflow):
         continue
     nodes[name] = workflow[start:end]
 
+if 'timeout="2400s"' not in nodes["publish_to_main"]:
+    raise SystemExit("publish must budget the cold exact-commit gate, not just the warm dev_check")
+if "publish-state.txt" not in nodes["publish_conflict_recovery_gate"] or "publish-state.txt" not in nodes["publish_failed"]:
+    raise SystemExit("publish failure paths must surface the last recorded phase and candidate")
+
 goal_gates = {name for name, body in nodes.items() if "goal_gate=true" in body}
 expected_goal_gates = {"publish_to_main"}
 if goal_gates != expected_goal_gates:

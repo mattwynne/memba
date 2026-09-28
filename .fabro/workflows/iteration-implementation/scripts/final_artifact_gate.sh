@@ -95,6 +95,7 @@ if [ -n "$recent_commits" ]; then
 fi
 
 python3 .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py "$PLAN_PATH" "$base_sha"
+python3 -B .fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py "$base_sha"
 
 if [ -z "$changed_paths" ] && [ -z "$status" ]; then
   echo 'ERROR: Implementation workflow reached finalization with no artifact evidence.' >&2

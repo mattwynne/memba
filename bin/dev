@@ -811,6 +811,23 @@ _ci() {
   acceptance
 }
 
+publish_check_context() {
+  # Do not dump the whole environment or database URLs into Fabro logs. These
+  # paths and the managed-process status identify the service used by the
+  # exact-commit check if its disposable checkout later disappears.
+  printf '[publish-check] at=%s repo=%s sha=%s port=%s devenv_state=%s pgdata=%s pghost=%s lock=%s\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$repo_root" "$(repo_sha)" \
+    "$MEMBA_POSTGRES_PORT" "${DEVENV_STATE:-<unset>}" "${PGDATA:-<unset>}" \
+    "${PGHOST:-<unset>}" "$(quality_gate_lock_dir)"
+  if [ -n "${PGDATA:-}" ] && [ -f "$PGDATA/postmaster.pid" ]; then
+    local postgres_pid
+    IFS= read -r postgres_pid < "$PGDATA/postmaster.pid" || true
+    printf '[publish-check] postmaster_pid=%s\n' "${postgres_pid:-<unknown>}"
+  fi
+  DEVENV_TUI=false devenv_with_postgres_port processes status postgres 2>&1 \
+    | head -n 35 || true
+}
+
 # @cmd Run the standard local quality gate
 # @flag --quick Skip browser acceptance for faster local loops
 check() {
@@ -819,6 +836,9 @@ check() {
 
 _check() {
   start_postgres || return $?
+  if [ "${MEMBA_PUBLISH_DIAGNOSTICS:-0}" = "1" ]; then
+    publish_check_context
+  fi
   _setup || return $?
   precommit || return $?
 
