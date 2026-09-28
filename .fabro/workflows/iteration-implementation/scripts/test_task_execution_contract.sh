@@ -16,6 +16,7 @@ planner = (root / "prompts/delivery_planner.md").read_text()
 implementation = (root / "prompts/implement_next_task.md").read_text()
 validation = (root / "prompts/validate_task.md").read_text()
 graph = (root / "workflow.fabro").read_text()
+launcher = (root.parents[2] / "bin/dev").read_text()
 
 checks = [
     ("planner owns task selection", "You own task selection, semantic splitting/reordering" in planner),
@@ -49,7 +50,12 @@ checks = [
     ("planner before worker", "delivery_planner -> guard_delivery_packet" in graph and "guard_delivery_packet -> implement_next_task" in graph),
     ("worker result routing", "route_worker_result -> validate_task" in graph and "route_worker_result -> before_delivery_planner" in graph),
     ("review acceptance returns to planner", "apply_task_verdict -> before_delivery_planner" in graph),
-    ("revision goes through planner", 'apply_task_verdict -> before_delivery_planner [condition="outcome=succeeded && preferred_label=revise"]' in graph),
+    ("revision checks escalation before planner", 'apply_task_verdict -> task_escalation [condition="outcome=succeeded && preferred_label=revise"]' in graph and 'task_escalation -> before_delivery_planner [condition="outcome=succeeded && preferred_label=continue"]' in graph),
+    ("delivery launcher does not auto-answer Slack gates", '--auto-approve \\\n      --no-upgrade-check' not in launcher),
+    ("blocked and repeated revisions reach Slack", 'apply_task_verdict -> task_escalation [condition="outcome=succeeded && preferred_label=blocked"]' in graph and 'task_escalation -> task_discussion [condition="outcome=succeeded && preferred_label=discuss"]' in graph and 'provider = "slack"' in (root / "workflow.toml").read_text()),
+    ("discussion never publishes automatically", 'summarize_task_discussion -> task_clarification_complete' in graph and 'task_clarification_complete ->' not in graph),
+    ("Slack pings the replying user by ID", '<@U0C3C6Y9ZAR>' in graph and 'task_discussion_follow_up' in graph),
+    ("unfinished discussion still reaches follow-up", 'reflect_task_discussion -> task_discussion_follow_up [condition="outcome=partially_succeeded && preferred_label=ask"]' in graph and 'task_discussion_follow_up -> reflect_task_discussion [freeform=true]' in graph),
     ("bounded revision worker retained", "revise_task [" in graph and "max_visits=3" in graph),
     ("typed task verdict", 'output_schema="@schemas/task-verdict.json"' in graph),
     ("native structured handoff", 'stdin_source="output.validate_task"' in graph),
@@ -72,3 +78,4 @@ PY
 
 python3 -B "$workflow_dir/scripts/test_delivery_planner_state.py"
 python3 -B "$workflow_dir/scripts/test_apply_task_verdict.py"
+python3 -B "$workflow_dir/scripts/test_escalate_task_review.py"

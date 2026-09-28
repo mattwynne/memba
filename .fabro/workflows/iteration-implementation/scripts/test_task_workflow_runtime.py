@@ -34,7 +34,9 @@ TASK_ACCEPTED = "- [x] task001 already accepted"
 TASK_NODES = {
     "sync_task_list", "todo_readable", "all_tasks_done", "before_delivery_planner",
     "delivery_planner", "guard_delivery_packet", "implement_next_task", "route_worker_result",
-    "validate_task", "apply_task_verdict", "task_stopped", "revise_task",
+    "validate_task", "apply_task_verdict", "task_escalation", "task_discussion",
+    "reflect_task_discussion", "summarize_task_discussion", "task_clarification_complete",
+    "task_stopped", "revise_task",
     "dev_check", "publish_to_main",
 }
 
@@ -156,7 +158,7 @@ class FabroTaskRuntime(unittest.TestCase):
         shutil.copy2(WORKFLOW_DIR / "schemas/task-verdict.json", fixture / "schemas/task-verdict.json")
         helpers = fixture / ".fabro/workflows/iteration-implementation/scripts"
         helpers.mkdir(parents=True)
-        for name in ("apply_task_verdict.py", "sync_task_list.py", "delivery_planner_state.py"):
+        for name in ("apply_task_verdict.py", "escalate_task_review.py", "sync_task_list.py", "delivery_planner_state.py"):
             shutil.copy2(WORKFLOW_DIR / "scripts" / name, helpers / name)
 
         (fixture / "scenario.json").write_text(json.dumps(scenario, indent=2) + "\n")
@@ -213,7 +215,11 @@ class FabroTaskRuntime(unittest.TestCase):
             block = nodes[name]
             # Keep production schema, stdin_source, limits and command bodies.
             # Replace only LLM work and delivery side effects with inert fixtures.
-            if name in ("delivery_planner", "implement_next_task", "validate_task", "revise_task"):
+            if name == "task_discussion":
+                block = '[shape=hexagon, label="Clarify the task", question_type="freeform"]'
+            elif name in ("reflect_task_discussion", "summarize_task_discussion"):
+                block = ' [shape=parallelogram, output_schema="routing", script="echo \'{\\\"preferred_next_label\\\":\\\"finish\\\"}\'" ]' if name == "reflect_task_discussion" else ' [shape=parallelogram, script="echo Guidance recorded" ]'
+            elif name in ("delivery_planner", "implement_next_task", "validate_task", "revise_task"):
                 if name == "validate_task":
                     command = "python3 scripts/validate.py; status=$?; if [ $status -eq 0 ]; then git add reviews.jsonl state.json && git commit -qm 'fabro(run): validate_task (succeeded)'; fi; exit $status"
                 else:
@@ -227,9 +233,11 @@ class FabroTaskRuntime(unittest.TestCase):
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker \'docs/iterations/009-runtime/plan.md\'; status=$?; if [ $status -eq 0 ]; then git add docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): route_worker_result (succeeded)\'; fi; exit $status"', block)
             elif name == "apply_task_verdict":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py \'docs/iterations/009-runtime/plan.md\'; status=$?; git add docs/iterations/009-runtime/todo.md docs/iterations/009-runtime/.delivery/latest-review.json docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): apply_task_verdict (completed)\'; exit $status"', block)
+            elif name == "task_escalation":
+                block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/escalate_task_review.py \'docs/iterations/009-runtime/plan.md\'"', block)
             elif name in ("dev_check", "publish_to_main"):
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', f'script="python3 scripts/step.py {name}"', block)
-            self.assertIn("shape=parallelogram", block)
+            self.assertIn("shape=hexagon" if name == "task_discussion" else "shape=parallelogram", block)
             self.assertNotIn("prompt=", block)
             blocks.append(f"    {name} {block}")
         edges = [
@@ -389,19 +397,23 @@ class FabroTaskRuntime(unittest.TestCase):
         result = self.run_fixture(fixture)
         self.assertEqual(result["status"], 1, result["combined"])
         self.assertIn(reason, result["events"])
+        self.assertIn("task_discussion", result["stages"])
+        self.assertNotIn("publish_to_main", result["stages"])
         self.assertIn(TASK_CURRENT, self.todo(fixture))
 
-    def test_repeated_revise_hits_native_max_visits_and_preserves_work(self) -> None:
+    def test_third_revise_reaches_human_gate_before_native_limit_and_preserves_work(self) -> None:
         fixture = self.make_fixture("max-visits", {"verdicts": [{"decision": "revise"}] * 10})
         result = self.run_fixture(fixture)
         self.assertEqual(result["status"], 1, result["combined"])
         self.assertIn(TASK_CURRENT, self.todo(fixture))
         work = (fixture / "work.log").read_text()
         self.assertIn(f"implement_next_task:{TASK_CURRENT}:ready_for_review", work)
-        # Fabro 0.316 increments the visit count before checking the limit:
-        # max_visits=3 stops before executing the third revision.
+        # The third negative verdict escalates before Fabro's iteration-wide
+        # max_visits=3 would reject the next revision worker.
         self.assertEqual(work.count(f"revise_task:{TASK_CURRENT}:ready_for_review"), 2, work)
-        self.assertIn('node "revise_task" visited 3 times', result["combined"])
+        self.assertIn("task_discussion", result["stages"])
+        self.assertIn('Stage started node_id="task_clarification_complete"', result["logs"])
+        self.assertNotIn('node "revise_task" visited 3 times', result["combined"])
         self.assertNotIn("publish_to_main", result["stages"])
 
     def test_new_run_continues_the_checkpointed_pending_candidate(self) -> None:
