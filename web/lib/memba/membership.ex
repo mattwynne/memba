@@ -1419,6 +1419,58 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Resolve an active club member and custom group from authoritative Club state.
+
+  The Club aggregate establishes current membership identity, same-club group
+  ownership, custom-group classification, and current participation before the
+  projected person display name is read. The result is a plain public summary;
+  callers do not receive the aggregate or projection schemas.
+
+  Invalid typed IDs return the corresponding `:invalid_*_id` error. Missing
+  clubs return `:not_found`; missing or inactive club members return
+  `:member_not_active`; missing or cross-club groups return
+  `:group_not_defined`; and built-in groups return
+  `:system_group_not_allowed`.
+  """
+  def resolve_custom_group_target_authoritatively(club_id, person_id, group_id) do
+    with {:ok, club_id} <- cast_id(:club, club_id, :invalid_club_id),
+         {:ok, person_id} <- cast_id(:person, person_id, :invalid_person_id),
+         {:ok, group_id} <- cast_id(:group, group_id, :invalid_group_id),
+         {:ok, club} <- authoritative_club(club_id),
+         {:ok, membership_id} <- authoritative_active_membership_id(club, person_id),
+         {:ok, group} <- authoritative_custom_group(club, group_id),
+         {:ok, person} <- projected_person_display(person_id) do
+      {:ok,
+       %{
+         club: %{
+           club_id: club.club_id,
+           name: club.name,
+           slug: club.slug
+         },
+         membership: %{
+           membership_id: membership_id,
+           person_id: person_id
+         },
+         person: person,
+         group: %{
+           club_id: club.club_id,
+           group_id: group.group_id,
+           group_key: group.group_key,
+           email_slug: group.email_slug,
+           name: group.name
+         },
+         active_group_member?:
+           authoritative_group_member_for_membership?(
+             club,
+             group_id,
+             membership_id,
+             person_id
+           )
+       }}
+    end
+  end
+
+  @doc """
   Return whether the Club aggregate currently records a person as an active
   member of one of its groups.
 
@@ -1525,6 +1577,37 @@ defmodule Memba.Membership do
   """
   def await_group_access_projections(opts \\ []) when is_list(opts) do
     ProjectionBarrier.await(@group_access_projectors, opts)
+  end
+
+  defp authoritative_club(club_id) do
+    case App.aggregate_state(Memba.Membership.Club, club_id) do
+      %Memba.Membership.Club{club_id: ^club_id} = club -> {:ok, club}
+      _missing_club -> {:error, :not_found}
+    end
+  end
+
+  defp authoritative_active_membership_id(club, person_id) do
+    case active_membership_ids_for_person(club, person_id) do
+      [] -> {:error, :member_not_active}
+      membership_ids -> {:ok, Enum.min(membership_ids)}
+    end
+  end
+
+  defp authoritative_custom_group(club, group_id) do
+    with {:ok, group} <- Map.fetch(club.groups, group_id),
+         true <- SystemGroups.custom_group?(%{club_id: club.club_id, group_id: group_id}) do
+      {:ok, group}
+    else
+      :error -> {:error, :group_not_defined}
+      false -> {:error, :system_group_not_allowed}
+    end
+  end
+
+  defp projected_person_display(person_id) do
+    case Repo.get(Person, person_id) do
+      %Person{name: name} -> {:ok, %{person_id: person_id, name: name}}
+      nil -> {:error, :person_not_found}
+    end
   end
 
   defp authoritative_group_email_address(club, %{email_slug: email_slug})

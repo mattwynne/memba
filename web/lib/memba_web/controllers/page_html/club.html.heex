@@ -221,18 +221,59 @@
             Only people in {@selected_group.name} can read its conversations, get its emails,
             or see who's in it. You're a member of {@selected_club.name}, but not of {@selected_group.name}.
           </p>
-          <p class="access__copy">
-            Think you should be? Ask the club admins.
-          </p>
-          <p class="access__admin">
-            Email the admins:
-            <.link
-              id="member-group-admin-email"
-              href={"mailto:#{@club_admin_email_address}"}
-            >
-              {@club_admin_email_address}
-            </.link>
-          </p>
+
+          <div :if={@can_request_group_access?} id="member-group-request-access-panel">
+            <%= if @group_access_request_state == :sent do %>
+              <div
+                id="member-group-request-status"
+                class="mt-5 rounded-xl border border-sage-200 bg-sage-50 p-4"
+                role="status"
+                aria-live="polite"
+              >
+                <p class="font-semibold text-ink">Your request has been sent.</p>
+                <p class="mt-1 text-sm text-ink-2">
+                  The club admins have your message. You're not in {@selected_group.name} yet.
+                  If they add you, you'll receive a welcome email with a link to the group.
+                </p>
+              </div>
+              <.button
+                id="member-group-request-another"
+                type="button"
+                variant="secondary"
+                class="mt-4"
+                phx-click="reset_group_access_request"
+              >
+                Send another request
+              </.button>
+            <% else %>
+              <p class="access__copy">
+                You can ask the club admins to add you.
+              </p>
+              <.button
+                id="member-group-request-access"
+                type="button"
+                phx-click="request_group_access"
+                phx-disable-with="Sending your request…"
+              >
+                Request access
+              </.button>
+            <% end %>
+          </div>
+
+          <div :if={not @can_request_group_access?}>
+            <p class="access__copy">
+              Think you should be? Ask the club admins.
+            </p>
+            <p class="access__admin">
+              Email the admins:
+              <.link
+                id="member-group-admin-email"
+                href={"mailto:#{@club_admin_email_address}"}
+              >
+                {@club_admin_email_address}
+              </.link>
+            </p>
+          </div>
         </section>
 
         <section
@@ -280,6 +321,26 @@
           hidden={not active_member_section?(active_section, "members")}
         >
           <section id="club-members">
+            <div
+              :if={@targeted_group_member_success}
+              id="targeted-group-member-success"
+              class="mb-4 rounded-xl border border-sage-200 bg-sage-50 p-4 text-sm text-ink"
+              role="status"
+              aria-live="polite"
+            >
+              <strong>
+                {@targeted_group_member_success.person_name} is now a member of {@targeted_group_member_success.group_name}.
+              </strong>
+              <p class="mt-1 text-ink-2">
+                They'll receive a welcome email with a link to the group.
+              </p>
+            </div>
+            <.targeted_group_member_panel
+              :if={@targeted_group_member}
+              target={@targeted_group_member}
+              group_name={@targeted_group_member.group_name}
+              cancel_path={~p"/groups/#{@selected_group.group_id}/members"}
+            />
             <.outside_group_admin_notice
               :if={outside_admin? && @can_add_self_to_custom_group?}
               group_name={@selected_group.name}
@@ -340,6 +401,7 @@
               club_name={@selected_club.name}
               manageable={@can_add_custom_group_members?}
               removal={assigns[:custom_group_member_removal]}
+              focus_person_id={@targeted_group_member_focus_id}
             />
           </section>
         </section>

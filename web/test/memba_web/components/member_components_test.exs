@@ -371,6 +371,96 @@ defmodule MembaWeb.MemberComponentsTest do
     end
   end
 
+  describe "targeted_group_member_panel/1" do
+    test "renders identity-free Add plus routed Cancel and Escape focus recovery" do
+      target = %{
+        person_id: Memba.ID.generate(:person),
+        membership_id: Memba.ID.generate(:membership),
+        name: "Eve Ekwueme",
+        initials: "EE",
+        active_group_member?: false
+      }
+
+      html =
+        render_component(&MemberComponents.targeted_group_member_panel/1, %{
+          target: target,
+          group_name: "Board",
+          cancel_path: "/groups/group-123/members"
+        })
+
+      assert_selector(
+        html,
+        "#targeted-group-member-panel[phx-window-keydown][phx-key='Escape']"
+      )
+
+      assert_selector(
+        html,
+        "#targeted-group-member-add[phx-click='confirm_targeted_group_member']" <>
+          "[phx-disable-with='Adding…']"
+      )
+
+      refute_selector(html, "#targeted-group-member-add[phx-value-person_id]")
+      refute_selector(html, "#targeted-group-member-add[phx-value-membership_id]")
+      refute_selector(html, "#targeted-group-member-add[phx-value-group_id]")
+      refute_selector(html, "#targeted-group-member-add[phx-value-club_id]")
+      refute_selector(html, "#targeted-group-member-add[phx-value-actor_person_id]")
+
+      cancel_commands = attribute!(html, "#targeted-group-member-cancel", "phx-click")
+      escape_commands = attribute!(html, "#targeted-group-member-panel", "phx-window-keydown")
+
+      for commands <- [cancel_commands, escape_commands] do
+        assert commands =~ "\"patch\""
+        assert commands =~ "/groups/group-123/members"
+        assert commands =~ "\"focus\""
+        assert commands =~ "#member-section-action-add-group-member"
+      end
+    end
+
+    test "keeps an already-member target non-actionable" do
+      html =
+        render_component(&MemberComponents.targeted_group_member_panel/1, %{
+          target: %{
+            person_id: Memba.ID.generate(:person),
+            membership_id: Memba.ID.generate(:membership),
+            name: "Eve Ekwueme",
+            initials: "EE",
+            active_group_member?: true
+          },
+          group_name: "Board",
+          cancel_path: "/groups/group-123/members"
+        })
+
+      assert_text(
+        html,
+        "#targeted-group-member-status[role='status'][aria-live='polite']",
+        "Eve Ekwueme is already a member of Board."
+      )
+
+      refute_selector(html, "#targeted-group-member-actions")
+      refute_selector(html, "#targeted-group-member-add")
+    end
+  end
+
+  test "member_list/1 gives the focus contract only to the newly admitted row" do
+    alice_id = Memba.ID.generate(:person)
+    eve_id = Memba.ID.generate(:person)
+
+    html =
+      render_member_list(
+        rows: [
+          %{id: alice_id, name: "Alice Adams", initials: "AA", roles: []},
+          %{id: eve_id, name: "Eve Ekwueme", initials: "EE", roles: []}
+        ],
+        active_member_count: 2,
+        current_member: %{id: alice_id, name: "Alice Adams"},
+        focus_person_id: eve_id
+      )
+
+    assert_selector(html, "#club-member-#{eve_id}[tabindex='-1'][phx-mounted]")
+    refute_selector(html, "#club-member-#{alice_id}[tabindex]")
+    refute_selector(html, "#club-member-#{alice_id}[phx-mounted]")
+  end
+
   describe "outside_group_admin_notice/1" do
     test "renders its caller-supplied self-admission action" do
       assigns = %{group_name: "Board"}
@@ -536,6 +626,16 @@ defmodule MembaWeb.MemberComponentsTest do
       |> Map.put_new(:group_name, "Board")
 
     render_component(&MemberComponents.member_list/1, assigns)
+  end
+
+  defp attribute!(html, selector, name) do
+    case html
+         |> LazyHTML.from_fragment()
+         |> LazyHTML.query(selector)
+         |> LazyHTML.attribute(name) do
+      [value] -> value
+      values -> flunk("Expected one #{name} attribute at #{selector}, got: #{inspect(values)}")
+    end
   end
 
   defp conversation_row(overrides) do

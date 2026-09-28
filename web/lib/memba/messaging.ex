@@ -20,6 +20,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
+  alias Memba.Messaging.Commands.RequestGroupAccess
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationAccess
@@ -54,6 +55,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Recipient
   alias Memba.ProjectionBarrier
   alias Memba.Repo
+  alias MembaWeb.ClubSite
 
   import Ecto.Query
 
@@ -73,6 +75,32 @@ defmodule Memba.Messaging do
   def send_club_message(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- send_club_message_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Ask the club's Admin group to add an active member to a custom group.
+
+  The caller supplies only a stable `:message_id`, authenticated `:club_id` and
+  `:requester_person_id`, and target `:group_id`. At a stable authorization
+  checkpoint, Membership authoritatively resolves the current requester, club,
+  target, participation, and current Admin recipients. Messaging then derives
+  the fixed subject, body, club-hosted targeted-add URL, and Admin destination
+  before dispatching the existing `SendMessage` constituent command.
+
+  The request itself is not routed or persisted. Provider delivery remains
+  asynchronous, and a successful result confirms only ordinary message
+  acceptance.
+  """
+  def request_group_access(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, request} <- request_group_access_command(attrs),
+         {:ok, command} <-
+           authorize_at_stable_checkpoint(fn ->
+             request_group_access_send_command(request)
+           end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -2021,6 +2049,67 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp request_group_access_command(attrs) do
+    with {:ok, message_id} <- fetch_required_id(attrs, :message_id, :message),
+         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+         {:ok, requester_person_id} <-
+           fetch_required_id(attrs, :requester_person_id, :person),
+         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group) do
+      {:ok,
+       %RequestGroupAccess{
+         message_id: message_id,
+         club_id: club_id,
+         requester_person_id: requester_person_id,
+         group_id: group_id
+       }}
+    end
+  end
+
+  defp request_group_access_send_command(%RequestGroupAccess{} = request) do
+    with {:ok, target} <-
+           Membership.resolve_custom_group_target_authoritatively(
+             request.club_id,
+             request.requester_person_id,
+             request.group_id
+           ),
+         :ok <- reject_current_group_member(target) do
+      admin_group_id = SystemGroups.admin_group_id(target.club.club_id)
+
+      {:ok,
+       %SendMessage{
+         message_id: request.message_id,
+         club_id: target.club.club_id,
+         sender_id: target.person.person_id,
+         audience_group_id: admin_group_id,
+         subject: "Access request: #{target.group.name}",
+         body: request_group_access_body(target),
+         recipients: resolve_group_recipients(target.club.club_id, admin_group_id)
+       }}
+    end
+  end
+
+  defp reject_current_group_member(%{active_group_member?: false}), do: :ok
+  defp reject_current_group_member(%{active_group_member?: true}), do: {:error, :already_member}
+
+  defp request_group_access_body(target) do
+    add_url =
+      ClubSite.url(
+        target.club,
+        "/groups/#{target.group.group_id}/members/add/#{target.person.person_id}"
+      )
+
+    """
+    #{target.person.name} would like to join #{target.group.name}.
+
+    #{target.person.name} asked from #{target.group.name}'s page in #{target.club.name}.
+
+    Add #{target.person.name} to #{target.group.name}:
+    #{add_url}
+
+    You'll confirm on the website before #{target.person.name} is added.
+    """
+  end
+
   defp resolve_audience_group(attrs, club_id) do
     audience_group_id =
       optional_audience_group_id(attrs, SystemGroups.everyone_group_id(club_id))
@@ -2162,8 +2251,10 @@ defmodule Memba.Messaging do
   end
 
   defp invalid_id_reason(:conversation_id), do: :invalid_conversation_id
+  defp invalid_id_reason(:message_id), do: :invalid_message_id
   defp invalid_id_reason(:club_id), do: :invalid_club_id
   defp invalid_id_reason(:group_id), do: :invalid_group_id
+  defp invalid_id_reason(:requester_person_id), do: :invalid_person_id
 
   defp fetch_conversation_root(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do

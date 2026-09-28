@@ -20,10 +20,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
-  alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Recipient
   alias Memba.Repo
   alias MembaWeb.MemberDashboardPresentation
@@ -936,9 +936,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-group-admin-email[href='mailto:#{group_address(alice.club_id, SystemGroups.admin_email_slug())}']"
+             "#member-group-request-access[phx-click='request_group_access']" <>
+               "[phx-disable-with='Sending your request…']",
+             "Request access"
            )
 
+    refute has_element?(view, "#member-group-admin-email")
+    refute has_element?(view, "#member-group-access-guidance", "Think you should be?")
     refute has_element?(view, "#member-group-member-count")
     refute has_element?(view, "#member-group-email-address")
     refute has_element?(view, "#member-section-tabs")
@@ -955,6 +959,300 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert malformed_response =~ "Not Found"
     refute malformed_response =~ private_group.name
+  end
+
+  test "a custom-group outsider can send, see accepted feedback, and deliberately send another request",
+       %{conn: conn} do
+    admin =
+      create_active_member(
+        email: "admin@example.com",
+        name: "Ada Admin",
+        club_name: "Alpine Club",
+        slug: "alpine"
+      )
+
+    eve =
+      create_active_member(
+        email: "eve@example.com",
+        name: "Eve Example",
+        club_name: "Alpine Club",
+        club_id: admin.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: admin.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, admin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("eve@example.com", eve)
+      |> live(~p"/groups/#{private_group.group_id}")
+
+    assert has_element?(
+             view,
+             "#member-group-request-access[phx-click='request_group_access']" <>
+               "[phx-disable-with='Sending your request…']",
+             "Request access"
+           )
+
+    refute has_element?(view, "#member-group-request-status")
+    refute has_element?(view, "#member-group-admin-email")
+    refute has_element?(view, "#member-section-tabs")
+    refute has_element?(view, "#member-section-action-new-message")
+    refute has_element?(view, "#member-section-panel-conversations")
+    refute has_element?(view, "#member-section-panel-members")
+    refute has_element?(view, "[data-testid='club-message-row']")
+    refute has_element?(view, "[data-testid='club-member-row']")
+
+    view
+    |> element("#member-group-request-access")
+    |> render_click(%{
+      "club_id" => Memba.ID.generate(:club),
+      "requester_person_id" => admin.person_id,
+      "group_id" => SystemGroups.admin_group_id(admin.club_id),
+      "subject" => "Forged subject",
+      "body" => "Forged body"
+    })
+
+    assert has_element?(
+             view,
+             "#member-group-request-status[role='status']",
+             "Your request has been sent."
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-request-status",
+             "The club admins have your message."
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-request-status",
+             "You're not in Private Planning yet."
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-request-another[phx-click='reset_group_access_request']",
+             "Send another request"
+           )
+
+    refute has_element?(view, "#member-group-request-access")
+    refute has_element?(view, "#member-group-admin-email")
+    refute has_element?(view, "#member-section-tabs")
+    refute has_element?(view, "#member-section-action-new-message")
+    refute has_element?(view, "[data-testid='club-message-row']")
+    refute has_element?(view, "[data-testid='club-member-row']")
+
+    [first_request] =
+      Repo.all(
+        from(message in Message,
+          where:
+            message.club_id == ^admin.club_id and
+              message.sender_id == ^eve.person_id
+        )
+      )
+
+    assert first_request.subject == "Access request: Private Planning"
+    assert first_request.body =~ "Eve Example would like to join Private Planning."
+
+    assert first_request.body =~
+             "/groups/#{private_group.group_id}/members/add/#{eve.person_id}"
+
+    refute first_request.body =~ "Forged"
+
+    assert Repo.get_by(ConversationGroupAccess,
+             conversation_id: first_request.message_id,
+             group_id: SystemGroups.admin_group_id(admin.club_id),
+             access_level: "write"
+           )
+
+    refute Memba.Membership.active_member_of_group_authoritatively?(
+             admin.club_id,
+             private_group.group_id,
+             eve.person_id
+           )
+
+    refute Memba.Messaging.member_has_conversation_access?(
+             first_request.message_id,
+             admin.club_id,
+             eve.person_id,
+             :read
+           )
+
+    render_hook(view, "request_group_access", %{
+      "club_id" => admin.club_id,
+      "requester_person_id" => eve.person_id,
+      "group_id" => private_group.group_id
+    })
+
+    assert Repo.aggregate(
+             from(message in Message,
+               where:
+                 message.club_id == ^admin.club_id and
+                   message.sender_id == ^eve.person_id
+             ),
+             :count
+           ) == 1
+
+    view
+    |> element("#member-group-request-another")
+    |> render_click()
+
+    assert has_element?(view, "#member-group-request-access", "Request access")
+    refute has_element?(view, "#member-group-request-status")
+
+    view
+    |> element("#member-group-request-access")
+    |> render_click()
+
+    request_ids =
+      Repo.all(
+        from(message in Message,
+          where:
+            message.club_id == ^admin.club_id and
+              message.sender_id == ^eve.person_id,
+          order_by: message.message_id,
+          select: message.message_id
+        )
+      )
+
+    assert length(request_ids) == 2
+    assert Enum.uniq(request_ids) == request_ids
+
+    refute Memba.Membership.active_member_of_group_authoritatively?(
+             admin.club_id,
+             private_group.group_id,
+             eve.person_id
+           )
+  end
+
+  test "a rejected custom-group request uses generic error feedback and keeps a retry action",
+       %{conn: conn} do
+    admin =
+      create_active_member(
+        email: "admin@example.com",
+        name: "Ada Admin",
+        club_name: "Alpine Club"
+      )
+
+    eve =
+      create_active_member(
+        email: "eve@example.com",
+        name: "Eve Example",
+        club_name: "Alpine Club",
+        club_id: admin.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: admin.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, admin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("eve@example.com", eve)
+      |> live(~p"/groups/#{private_group.group_id}")
+
+    group_membership_projector_child_id =
+      stop_projector!(Memba.Membership.Projectors.GroupMembership)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %AddGroupMember{
+                 club_id: admin.club_id,
+                 group_id: private_group.group_id,
+                 membership_id: eve.membership_id,
+                 person_id: eve.person_id
+               },
+               consistency: :eventual
+             )
+
+    refute Memba.Membership.active_member_of_group?(
+             private_group.group_id,
+             eve.person_id
+           )
+
+    view
+    |> element("#member-group-request-access")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#flash-error",
+             "We couldn't send your request. Refresh and try again."
+           )
+
+    assert has_element?(view, "#member-group-request-access", "Request access")
+    refute has_element?(view, "#member-group-request-status")
+
+    assert Repo.aggregate(
+             from(message in Message,
+               where:
+                 message.club_id == ^admin.club_id and
+                   message.sender_id == ^eve.person_id
+             ),
+             :count
+           ) == 0
+
+    restart_projector!(group_membership_projector_child_id)
+    assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
+  end
+
+  test "an ordinary non-member keeps Admin contact guidance without a request action",
+       %{conn: conn} do
+    admin =
+      create_active_member(
+        email: "admin@example.com",
+        name: "Ada Admin",
+        club_name: "Alpine Club"
+      )
+
+    eve =
+      create_active_member(
+        email: "eve@example.com",
+        name: "Eve Example",
+        club_name: "Alpine Club",
+        club_id: admin.club_id
+      )
+
+    admin_group_id = SystemGroups.admin_group_id(admin.club_id)
+
+    admin_group =
+      Repo.insert!(%Group{
+        club_id: admin.club_id,
+        group_id: admin_group_id,
+        group_key: SystemGroups.admin_key(),
+        name: SystemGroups.admin_name(),
+        name_uniqueness_key: Memba.Membership.GroupName.uniqueness_key(SystemGroups.admin_name())
+      })
+
+    add_group_member(admin_group, admin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("eve@example.com", eve)
+      |> live(~p"/groups/#{admin_group_id}")
+
+    assert has_element?(
+             view,
+             "#member-group-admin-email[href='mailto:#{group_address(admin.club_id, SystemGroups.admin_email_slug())}']"
+           )
+
+    assert has_element?(view, "#member-group-access-guidance", "Think you should be?")
+    refute has_element?(view, "#member-group-request-access")
+    refute has_element?(view, "#member-group-request-another")
+    refute has_element?(view, "#member-group-request-status")
   end
 
   test "an outside admin receives the selected group's Members-only composition", %{conn: conn} do
@@ -2917,6 +3215,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       groups: [selected_group],
       selected_group: selected_group,
       selected_group_route_id: nil,
+      targeted_group_member: nil,
+      targeted_group_member_success: nil,
+      targeted_group_member_focus_id: nil,
       current_member: %{name: "Alice Adams"},
       current_member_can_manage_members?: false,
       can_add_custom_group_members?: false,

@@ -5,6 +5,7 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
   alias Memba.Messaging.MemberMessageEmail
   alias Memba.Messaging.OutboundMessageID
   alias Memba.Membership.SystemGroups
+  alias MembaWeb.ClubSite
 
   test "Admin root messages use the club as the From identity" do
     club_id = Memba.ID.generate(:club)
@@ -40,6 +41,149 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
     assert html =~ "Reply to this email to post back to"
     assert html =~ "active member of the Admin group at Kootenay Mountaineering Club"
     refute html =~ "to all members"
+  end
+
+  test "root HTML promotes a typed targeted-add URL for the current club without a magic subject" do
+    group_id = Memba.ID.generate(:group)
+    person_id = Memba.ID.generate(:person)
+    add_url = ClubSite.url("kmc", "/groups/#{group_id}/members/add/#{person_id}")
+
+    body = """
+    Eve <Admin> would like to join Board & Friends.
+
+    Add Eve <Admin> to Board & Friends:
+    #{add_url}
+
+    You'll confirm on the website before Eve is added.
+    """
+
+    request =
+      email_delivery_request(
+        club_slug: "kmc",
+        subject: "An ordinary member message",
+        body: body
+      )
+
+    html = MemberMessageEmail.html_body(request)
+
+    assert html =~ ~s(class="btn")
+    assert html =~ "Add Eve &lt;Admin&gt; to Board &amp; Friends"
+    assert html =~ ~s(href="#{add_url}")
+    assert html =~ add_url
+    refute html =~ "Eve <Admin>"
+    assert MemberMessageEmail.text_body(request) == body
+  end
+
+  test "unsafe or malformed targeted-add candidates remain escaped non-action text" do
+    group_id = Memba.ID.generate(:group)
+    person_id = Memba.ID.generate(:person)
+    other_group_id = Memba.ID.generate(:group)
+    path = "/groups/#{group_id}/members/add/#{person_id}"
+    current_club_url = ClubSite.url("kmc", path)
+    current_uri = URI.parse(current_club_url)
+
+    unsafe_urls = [
+      ClubSite.url("neighbour", path),
+      "#{current_uri.scheme}://#{current_uri.host}.attacker.test:#{current_uri.port}#{path}",
+      "https://example.test#{path}",
+      ClubSite.root_url(path),
+      String.replace_prefix(current_club_url, "http://", "https://"),
+      "#{current_uri.scheme}://#{current_uri.host}:#{current_uri.port + 1}#{path}",
+      path,
+      "#{current_club_url}?confirm=true",
+      "#{current_club_url}#confirm",
+      "#{current_uri.scheme}://member@#{current_uri.host}:#{current_uri.port}#{path}",
+      ClubSite.url("kmc", "/groups/#{group_id}/members/#{person_id}"),
+      ClubSite.url("kmc", "#{path}/extra"),
+      ClubSite.url("kmc", "/groups/#{person_id}/members/add/#{group_id}"),
+      ClubSite.url("kmc", "/groups/#{other_group_id}/members/add/not-a-person-id"),
+      String.replace(current_club_url, "grp_", "grp%5F")
+    ]
+
+    Enum.each(unsafe_urls, fn unsafe_url ->
+      body = """
+      <script>alert("outside")</script>
+
+      Add Eve <Admin> to Board & Friends:
+      #{unsafe_url}
+      """
+
+      html =
+        email_delivery_request(
+          club_slug: "kmc",
+          subject: "Access request: Board",
+          body: body
+        )
+        |> MemberMessageEmail.html_body()
+
+      refute html =~ ~s(class="btn")
+      refute html =~ ~s(href="#{unsafe_url}")
+      assert html =~ "&lt;script&gt;alert(&quot;outside&quot;)&lt;/script&gt;"
+      assert html =~ "Add Eve &lt;Admin&gt; to Board &amp; Friends:"
+      refute html =~ ~s(<script>)
+      refute html =~ "Eve <Admin>"
+    end)
+  end
+
+  test "subject-only spoofing and reply bodies cannot create a targeted-add action" do
+    group_id = Memba.ID.generate(:group)
+    person_id = Memba.ID.generate(:person)
+    add_url = ClubSite.url("kmc", "/groups/#{group_id}/members/add/#{person_id}")
+
+    subject_only_html =
+      email_delivery_request(
+        club_slug: "kmc",
+        subject: "Access request: Board",
+        body: "Please add Eve to Board."
+      )
+      |> MemberMessageEmail.html_body()
+
+    reply_html =
+      email_delivery_request(
+        club_slug: "kmc",
+        subject: "Access request: Board",
+        reply_to_message_id: Memba.ID.generate(:message),
+        body: "Add Eve to Board:\n#{add_url}"
+      )
+      |> MemberMessageEmail.html_body()
+
+    refute subject_only_html =~ ~s(class="btn")
+    refute reply_html =~ ~s(class="btn")
+    refute reply_html =~ ~s(href="#{add_url}")
+    assert reply_html =~ add_url
+  end
+
+  test "multiple valid targeted-add candidates are not promoted" do
+    first_url =
+      ClubSite.url(
+        "kmc",
+        "/groups/#{Memba.ID.generate(:group)}/members/add/#{Memba.ID.generate(:person)}"
+      )
+
+    second_url =
+      ClubSite.url(
+        "kmc",
+        "/groups/#{Memba.ID.generate(:group)}/members/add/#{Memba.ID.generate(:person)}"
+      )
+
+    html =
+      email_delivery_request(
+        club_slug: "kmc",
+        body: """
+        Add Eve to Board:
+        #{first_url}
+
+        Add Eve to Trips:
+        #{second_url}
+        """
+      )
+      |> MemberMessageEmail.html_body()
+
+    refute html =~ ~s(class="btn")
+    refute html =~ ~s(href="#{first_url}")
+    refute html =~ ~s(href="#{second_url}")
+    assert html =~ first_url
+    assert html =~ second_url
   end
 
   test "Everyone root messages keep the member sender as the From identity" do

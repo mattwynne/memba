@@ -12,7 +12,8 @@ defmodule MembaWeb.PageHTML do
       custom_group_membership_guidance: 1,
       custom_group_member_picker: 1,
       member_list: 1,
-      outside_group_admin_notice: 1
+      outside_group_admin_notice: 1,
+      targeted_group_member_panel: 1
     ]
 
   alias Memba.Membership.SystemGroups

@@ -145,6 +145,7 @@ defmodule MembaWeb.MemberComponents do
   attr :club_name, :string, default: ""
   attr :manageable, :boolean, default: false
   attr :removal, :map, default: nil
+  attr :focus_person_id, :string, default: nil
 
   def member_list(assigns) do
     ~H"""
@@ -168,6 +169,7 @@ defmodule MembaWeb.MemberComponents do
         confirming={pending_removal_target?(@removal, row)}
         removal_operation_id={removal_operation_id(@removal, row)}
         last_member={@active_member_count == 1}
+        focus_on_mount={@focus_person_id == row.id}
       />
     </div>
     """
@@ -181,6 +183,7 @@ defmodule MembaWeb.MemberComponents do
   attr :confirming, :boolean, default: false
   attr :removal_operation_id, :string, default: nil
   attr :last_member, :boolean, default: false
+  attr :focus_on_mount, :boolean, default: false
 
   def member_row(assigns) do
     assigns =
@@ -192,7 +195,14 @@ defmodule MembaWeb.MemberComponents do
       data-testid="club-member-row"
       data-member-id={@row.id}
       data-current-member={to_string(@self?)}
-      class={["member-row", @self? && "is-you", @confirming && "is-confirming"]}
+      class={[
+        "member-row",
+        @self? && "is-you",
+        @confirming && "is-confirming",
+        @focus_on_mount && "is-new"
+      ]}
+      tabindex={if(@focus_on_mount, do: "-1")}
+      phx-mounted={if(@focus_on_mount, do: JS.focus())}
     >
       <div class="member-row__avatar" aria-hidden="true">
         {@row.initials}
@@ -465,6 +475,94 @@ defmodule MembaWeb.MemberComponents do
     """
   end
 
+  attr :target, :map, required: true
+  attr :group_name, :string, required: true
+  attr :cancel_path, :string, required: true
+
+  def targeted_group_member_panel(assigns) do
+    ~H"""
+    <section
+      id="targeted-group-member-panel"
+      class="picker"
+      aria-labelledby="targeted-group-member-heading"
+      data-person-id={@target.person_id}
+      data-membership-id={@target.membership_id}
+      data-already-member={to_string(@target.active_group_member?)}
+      phx-window-keydown={close_targeted_group_member_panel(@cancel_path)}
+      phx-key="Escape"
+    >
+      <h2
+        id="targeted-group-member-heading"
+        class="picker__title"
+        tabindex="-1"
+        phx-mounted={JS.focus()}
+      >
+        Add to {@group_name}
+      </h2>
+
+      <div
+        id={"targeted-group-member-person-#{@target.person_id}"}
+        class="pick-row mt-3"
+        data-person-id={@target.person_id}
+        data-membership-id={@target.membership_id}
+      >
+        <div class="pick-row__avatar" aria-hidden="true">
+          {@target.initials}
+        </div>
+        <div class="pick-row__name">
+          {@target.name}
+          <small id="targeted-group-member-context" class="pick-row__meta">
+            Club member
+          </small>
+        </div>
+      </div>
+
+      <div
+        :if={@target.active_group_member?}
+        id="targeted-group-member-status"
+        class="mt-4 rounded-xl border border-sage-200 bg-sage-50 p-4 text-sm text-ink"
+        role="status"
+        aria-live="polite"
+      >
+        <strong>{@target.name} is already a member of {@group_name}.</strong>
+      </div>
+
+      <p
+        :if={not @target.active_group_member?}
+        id="targeted-group-member-consequences"
+        class="picker__hint mt-4"
+      >
+        {@target.name} will be able to read all {@group_name} conversations and receive its emails.
+        They'll get a welcome email with a link to {@group_name}.
+      </p>
+
+      <div
+        :if={not @target.active_group_member?}
+        id="targeted-group-member-actions"
+        class="mt-4 flex flex-wrap gap-2"
+        aria-label={"Actions for #{@target.name}"}
+      >
+        <.button
+          id="targeted-group-member-add"
+          type="button"
+          phx-click="confirm_targeted_group_member"
+          phx-disable-with="Adding…"
+        >
+          Add {@target.name} to {@group_name}
+        </.button>
+        <.button
+          id="targeted-group-member-cancel"
+          type="button"
+          variant="secondary"
+          phx-click={close_targeted_group_member_panel(@cancel_path)}
+        >
+          Cancel
+        </.button>
+      </div>
+    </section>
+    """
+  end
+
   defp pending_removal_target?(
          %{person_id: person_id, status: :pending},
          %{id: person_id}
@@ -493,6 +591,11 @@ defmodule MembaWeb.MemberComponents do
 
   defp close_custom_group_member_picker do
     JS.push("close_custom_group_member_picker")
+    |> JS.focus(to: "#member-section-action-add-group-member")
+  end
+
+  defp close_targeted_group_member_panel(cancel_path) do
+    JS.patch(cancel_path)
     |> JS.focus(to: "#member-section-action-add-group-member")
   end
 

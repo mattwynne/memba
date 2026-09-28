@@ -1,4 +1,4 @@
-@journey
+@journey @iteration-066
 Feature: Finding and joining a newly created Board
   Creating a private group does not make it readable to every club member.
   A club admin can admit someone without joining the group themselves.
@@ -11,7 +11,7 @@ Feature: Finding and joining a newly created Board
     Then Alice should be its only member
     And Dan should not belong to Board
     When Eve selects the Board group
-    Then Eve should see Board's name and the club Admin email address
+    Then Eve should see Board's name and be offered Request access
     But Eve should see neither Board conversations nor its membership list
     When Dan adds Eve to Board
     Then Eve should belong to Board

@@ -8,9 +8,11 @@ defmodule Memba.Messaging.MemberMessageEmail do
 
   alias Memba.ClubInboundEmailAddress
   alias Memba.EmailTemplates
+  alias Memba.ID
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.OutboundMessageID
+  alias MembaWeb.ClubSite
 
   @doc "Return the sanitized From display name for a member-message email."
   def from_display_name(%EmailDeliveryRequest{} = request) do
@@ -95,7 +97,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
         border_bottom: true
       ),
       sender_row(sender_name, audience_description),
-      message_section(title, request.body),
+      message_section(title, request.body, request),
       reply_hint(request, sender_name, club_name)
     ]
 
@@ -186,22 +188,117 @@ defmodule Memba.Messaging.MemberMessageEmail do
     """
   end
 
-  defp message_section(title, body) do
+  defp message_section(title, body, request) do
     [
       EmailTemplates.card_section(
         [
           EmailTemplates.heading(title,
             margin: "6px 0 14px"
           ),
-          EmailTemplates.plaintext_to_html(body,
-            color: "#2c3a35",
-            font_size: "15.5px"
-          )
+          message_body_html(body, request)
         ],
         padding: "14px 28px 22px"
       )
     ]
   end
+
+  defp message_body_html(body, request) do
+    case targeted_add_action(body, request) do
+      {:ok, before_action, label, url, after_action} ->
+        [
+          plaintext_message_html(before_action),
+          EmailTemplates.primary_action(label, url),
+          plaintext_message_html(after_action)
+        ]
+
+      :error ->
+        plaintext_message_html(body)
+    end
+  end
+
+  defp plaintext_message_html(body) do
+    EmailTemplates.plaintext_to_html(body,
+      color: "#2c3a35",
+      font_size: "15.5px"
+    )
+  end
+
+  defp targeted_add_action(body, request) when is_binary(body) do
+    lines = String.split(body, ~r/\r\n|\n|\r/u, trim: false)
+
+    candidates =
+      lines
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.with_index()
+      |> Enum.flat_map(fn
+        {[label_line, url], index} ->
+          with {:ok, label} <- targeted_add_label(label_line),
+               true <- targeted_add_url?(url, request) do
+            [{index, label, url}]
+          else
+            _not_a_supported_action -> []
+          end
+      end)
+
+    case candidates do
+      [{index, label, url}] ->
+        {before_action, action_and_after} = Enum.split(lines, index)
+        [_label_line, _url | after_action] = action_and_after
+
+        {:ok, Enum.join(before_action, "\n"), label, url, Enum.join(after_action, "\n")}
+
+      _none_or_ambiguous ->
+        :error
+    end
+  end
+
+  defp targeted_add_action(_body, _request), do: :error
+
+  defp targeted_add_label("Add " <> rest = line) do
+    if line == String.trim(line) and String.ends_with?(line, ":") do
+      label = String.replace_suffix(line, ":", "")
+      target = String.replace_suffix(rest, ":", "")
+
+      if String.trim(target) == "", do: :error, else: {:ok, label}
+    else
+      :error
+    end
+  end
+
+  defp targeted_add_label(_line), do: :error
+
+  defp targeted_add_url?(url, %EmailDeliveryRequest{} = request) do
+    with {:ok, candidate} <- URI.new(url),
+         {:ok, expected_origin} <- request.club_slug |> ClubSite.url("/") |> URI.new(),
+         true <- exact_origin?(candidate, expected_origin),
+         true <- candidate.userinfo == nil,
+         true <- candidate.query == nil,
+         true <- candidate.fragment == nil,
+         true <- targeted_add_path?(candidate.path) do
+      true
+    else
+      _invalid_or_unexpected_url -> false
+    end
+  end
+
+  defp exact_origin?(candidate, expected) do
+    is_binary(expected.scheme) and is_binary(expected.host) and
+      candidate.scheme == expected.scheme and candidate.host == expected.host and
+      candidate.port == expected.port
+  end
+
+  defp targeted_add_path?(path) when is_binary(path) do
+    case String.split(path, "/", trim: false) do
+      ["", "groups", group_id, "members", "add", person_id] ->
+        match?({:ok, _group_id}, ID.cast(:group, group_id)) and
+          match?({:ok, _person_id}, ID.cast(:person, person_id))
+
+      _other_path ->
+        false
+    end
+  end
+
+  defp targeted_add_path?(_path), do: false
 
   defp conversation_subject_section(%EmailDeliveryRequest{} = request) do
     """
