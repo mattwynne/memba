@@ -1,0 +1,66 @@
+diff --git a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+index 1b7df20..be424f5 100644
+--- a/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
++++ b/docs/iterations/066-request-group-access/.delivery/latest-worker-result.json
+@@ -1,34 +1,32 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "008-6fd8f70-1",
+-  "task_id": "008",
+-  "todo_line": "- [ ] 008 Implement the approved browser step plumbing and enable the iteration-066 journey, preserving its no-composer, privacy, no-auto-add, welcome, and no-Admin-conversation-access assertions.",
++  "packet_id": "009-a6340e4-1",
++  "task_id": "009",
++  "todo_line": "- [ ] 009 Run both acceptance layers and `dev check` on the exact delivered state and record successful exits.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "acceptance-tests/features/journeys/custom_group_access_request.feature",
+-    "acceptance-tests/features/step_definitions/custom_group_access_request_steps.js",
+-    "acceptance-tests/features/support/custom_group_access_request.js"
++    "web/test/memba_web/live/member_dashboard_live_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "node --test test/journey_step_definitions.test.js",
+-      "working_directory": "/workspace/memba/acceptance-tests",
++      "command": "PATH=\"$PWD/bin:$PATH\" bin/dev test test/features/custom_group_access_request_steps_test.exs",
++      "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "1 test passed; Cucumber dry-ran 6 selected journey scenarios and 106 steps with no undefined or ambiguous steps. The enabled iteration-066 journey's 18 steps each resolve exactly once."
++      "evidence": "On candidate HEAD 54171101dd5e8be5c8fba9edce79a2f34f94ee09 with the final one-file test-helper diff, ExUnit reported 4 tests and 0 failures. The wrapper's selection assertion confirms all three iteration-066 domain examples were selected, and their three generated scenario tests passed."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev acceptance features/journeys/custom_group_access_request.feature",
++      "command": "PATH=\"$PWD/bin:$PATH\" bin/dev acceptance",
+       "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "Chromium reported 1 scenario passed and all 18 steps passed. Eve used the real Request access control without a composer or protected Board content; authoritative checks kept her outside Board after submission and after Dan opened the emitted HTML action; Dan explicitly added her and saw the success/member row; Eve followed the fresh welcome link into Board while the Admin request remained absent and its direct URL returned protected 404."
++      "evidence": "On the same unchanged candidate, the unfiltered @journey and not @todo browser suite reported 6 scenarios passed and 106 steps passed. The iteration-066 Eve request-to-Dan admission journey passed all 18 steps, including no composer or protected content, no admission on request/link open, explicit Add, welcome-link return, and Admin-conversation privacy."
+     },
+     {
+-      "command": "node --test test/cucumber_config.test.js",
+-      "working_directory": "/workspace/memba/acceptance-tests",
++      "command": "PATH=\"$PWD/bin:$PATH\" bin/dev check",
++      "working_directory": "/workspace/memba",
+       "exit_status": 0,
+-      "evidence": "14 configuration tests passed, including journey-only browser selection, one coherent scenario per journey file, and iteration tag rules."
++      "evidence": "On the same unchanged candidate, the full gate passed warnings-as-errors compilation, unused-dependency and formatting checks, 1615 ExUnit tests with 0 failures including domain Cucumber, the responsive detector/decision, and the complete browser suite with 6 scenarios and 106 steps passing."
+     }
+   ],
+-  "notes": "Added all 16 previously undefined bindings in custom_group_access_request_steps.js and kept the existing Alice/Dan admin setup and private-group content/list assertion as the two reused definitions. The dedicated support builds KMC/Alice/Dan/Eve/Board through existing setup APIs and uses separate reusable Eve and Dan browser contexts. It captures mailbox identities immediately before Request and immediately before explicit Add, dispatches and polls through existing helpers, and selects fresh mail by exact recipient, slugged subject, body content, and emitted action/link—not mailbox order. Dan follows the HTML anchor labelled Add Eve to Board, and Eve follows the welcome email's emitted Board URL; both URLs are checked for the expected club origin and identity-only path. Server-side assertions use authoritative current group participation before Add and after confirmation. The final privacy step proves the Admin request is absent from Board and directly unavailable. The scenario text and provenance are unchanged; only @todo was removed. Initial TDD dry-run found the expected 16 undefined steps, the first browser run exposed that protected direct access returns the accepted privacy-preserving 404 rather than 403, and an earlier standalone npm diagnostic hit an acceptance lifecycle RPC/teardown issue; both were superseded by the successful final sandbox-preferred validation. todo.md remains untouched, and dev check was not run because task 009 owns the exact-state full gate.",
++  "notes": "The initial full gate exposed five deterministic direct-render MemberDashboardLive regressions: the shared dashboard_html/1 test helper lacked the three targeted-add assigns that production mount supplies. Adding nil defaults for targeted_group_member, targeted_group_member_success, and targeted_group_member_focus_id fixed all five without changing product behaviour; the focused failed-test rerun passed 5/5 before all three final gates were rerun. An earlier literal bin/mix attempt could not own PostgreSQL in the Fabro shell and generated a temporary core dump, which was removed; final domain evidence therefore uses the required sandbox-safe dev test wrapper. Final HEAD remained 54171101dd5e8be5c8fba9edce79a2f34f94ee09, todo.md stayed untouched, and the known pre-existing Fabro __pycache__ residue remains unmodified.",
+   "unresolved": []
+ }
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 7a9cc4b..da6bbb1 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -3215,6 +3215,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       groups: [selected_group],
+       selected_group: selected_group,
+       selected_group_route_id: nil,
++      targeted_group_member: nil,
++      targeted_group_member_success: nil,
++      targeted_group_member_focus_id: nil,
+       current_member: %{name: "Alice Adams"},
+       current_member_can_manage_members?: false,
+       can_add_custom_group_members?: false,
