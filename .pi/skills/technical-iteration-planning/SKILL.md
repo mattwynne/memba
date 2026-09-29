@@ -18,8 +18,8 @@ Do not implement the iteration or launch delivery. Do not edit application code,
 3. **Slice and defer** — map technical prerequisites, risks, questions and independently useful capabilities. Keep one engineering capability per iteration; defer adjacent cleanup.
 4. **Review and agree scope** — run `ensemble-review` with the Technical-scope brief below. Present simpler approaches, hidden behaviour changes, missing evidence and deferrals to Matt. Revise until he agrees the capability and boundaries.
 5. **Model architecture and maintain vocabulary where needed** — if the work changes domain concepts, commands, events, invariants or ownership, use `domain-modelling`, `domain-vocabulary`, and the canonical lexicon; otherwise document affected solution-domain responsibilities, interfaces, data flow and operational boundaries directly. Do not invent product behaviour or put solution terms into the problem-domain lexicon. When modelling reveals better problem-domain language, ask Matt through `domain-vocabulary`. After he agrees the term, update the lexicon, model, and affected Gherkin with `bdd-formulation` only where the changed concept is used, preserving every rule, example, timing, actor, and outcome. Check the resulting diff for semantic coherence; do not add another ensemble or approval ceremony merely to propagate Matt's agreed vocabulary. If applying the term exposes a product-policy change rather than wording, return to `iteration-planning` for behaviour planning.
-6. **Review and agree architecture** — run `ensemble-review` with the Domain-model or Technical-design brief below. Resolve findings with Matt and repeat any affected review checkpoint.
-7. **Resolve architecture decisions** — use `record-architectural-decisions` for consequential choices emerging from the agreed model/design. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance.
+6. **Review and agree architecture** — before requesting design review, identify the consequential choices emerging from the model/design (including changes to durable responsibility, interface, ownership, process or package boundaries). Tell Matt which are ADR candidates and why, or recommend no ADR with a reason; ask him to agree that classification. Do not leave the question implicit in “any ADR,” and do not require an ADR merely because the iteration is technical. Run `ensemble-review` with the Domain-model or Technical-design brief below. Resolve findings with Matt, revisit the ADR classification if review changes the design, and repeat any affected review checkpoint.
+7. **Resolve architecture decisions** — use `record-architectural-decisions` for consequential choices in the agreed model/design that Matt agrees warrant a record. That shared skill owns ADR collaboration, its caller-supplied ensemble brief, publication, and Matt's explicit acceptance. If none are required, carry the agreed reason into the plan.
 8. **Assemble the plan** — compose the agreed capability, non-regression contract, technical/domain design, vocabulary decisions, ADRs, implementation boundaries and validation approach without introducing new decisions.
 9. **Facilitator coherence pass** — as the planning facilitator, check the assembled plan against the agreed ingredients, implementation boundary, non-regression contract, validation approach, and status/index metadata. Do not run a duplicate assembled-plan ensemble. Return substantive findings to the owning step and repeat its existing review/Matt-agreement checkpoint.
 10. **Publish the ready plan** — update the iteration index with status `ready`, run appropriate planning checks, then commit and push. If Matt explicitly chooses validation-only before launch, run `bin/dev fabro validate-plan <plan_path>` after publication and route substantive findings back through their owning step.
@@ -77,6 +77,7 @@ digraph technical_iteration_planning {
   formulation [label="bdd-formulation\npropagate agreed vocabulary"];
   policy_changed [shape=diamond, label="Policy changed?"];
   behaviour_route [label="iteration-planning\nbehaviour route"];
+  adr_triage [label="Name ADR candidates or reason for none\nMatt agrees classification"];
   design_review [label="ensemble-review\ncaller-owned design/model brief"];
   design_agreed [shape=diamond, label="Matt agrees design?"];
   adr [label="record-architectural-decisions\ncollaborate + review"];
@@ -92,7 +93,7 @@ digraph technical_iteration_planning {
   scope -> capability [label="no", style=dashed];
   scope -> design [label="yes"];
   design -> naming;
-  naming -> design_review [label="no"];
+  naming -> adr_triage [label="no"];
   naming -> vocabulary [label="yes"];
   vocabulary -> vocabulary_agreed;
   vocabulary_agreed -> vocabulary [label="no", style=dashed];
@@ -104,6 +105,7 @@ digraph technical_iteration_planning {
   formulation -> policy_changed;
   policy_changed -> behaviour_route [label="yes"];
   policy_changed -> design [label="no · resume", style=dashed];
+  adr_triage -> design_review;
   design_review -> design_agreed;
   design_agreed -> design [label="no", style=dashed];
   design_agreed -> adr [label="yes / if required"];
