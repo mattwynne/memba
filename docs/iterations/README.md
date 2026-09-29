@@ -75,14 +75,15 @@ historical plans, specify current behaviour.
 | 064 | 2026-09-13 | merged | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md); `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 065 | 2026-09-27 | merged | Browser journeys distinct from domain rule examples | [delivery log](065-browser-journeys-and-domain-examples/plan.md) — `features/journeys/`, domain features, conditional responsive checks |
 | 066 | 2026-09-27 | merged | Ask to join a group | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `journeys/custom_group_access_request.feature`, `group_conversations.feature` |
-| 067 | 2026-08-13 | validated | Members change their own name | [plan](067-member-name-editing/plan.md) — `member_profile.feature` |
-| 068 | 2026-08-13 | validated | Members set their own profile photo | [plan](068-member-profile-photo/plan.md) — `member_profile.feature` |
+| 067 | 2026-09-28 | ready | Live projection queries for open club-member pages | [plan](067-live-projection-queries/plan.md) — `live_club_member_list.feature` |
+| 068 | 2026-08-13 | draft | Members change their own name (replanning) | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
+| 069 | 2026-08-13 | needs-revision | Members set their own profile photo (renumbered; dependency review pending) | [plan](069-member-profile-photo/plan.md) — `member_profile.feature` |
 
 The former 065–067 plans were shifted to 066–068 to make room for the
-browser-suite work recorded at 065. The re-planned 066 replaces its earlier
-validated draft with a ready plan, new request-email action and reviewed local
-mock-up; Fabro has not validated this replacement. Delivery will update the
-older custom-group Admin-email placeholder assertions when the UI changes.
+browser-suite work recorded at 065. The re-planned 066 replaced its earlier
+validated draft. On 2026-09-28, the unimplemented name and photo plans shifted
+from 067–068 to 068–069 to insert the live-query foundation at 067. Those
+renumbered drafts are not covered by their old Fabro validation results.
 
 Status notes:
 
@@ -114,5 +115,6 @@ Shared acceptance feature files used across these iterations (tag descriptions b
 - Iteration 031 originally used `email_branding.feature`; focused email tests cover markup, and [member-message deliverability](../../acceptance-tests/features/member_message_deliverability.feature) retains the club-identified rejection behaviour.
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
-- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (planned in 067 for self-service name editing and 068 for photo management. Four `@iteration-067 @todo` name examples and seven `@iteration-068 @todo` photo examples remain excluded from both runners until implemented.)
+- [`live_club_member_list.feature`](../../acceptance-tests/features/live_club_member_list.feature) (`@iteration-067 @todo` example for an already-open club member list updating automatically).
+- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (replanning 068 for self-service name editing and 069 for photo management. Current `@iteration-068 @todo` name examples and seven `@iteration-069 @todo` photo examples remain excluded from both runners until implemented.)
 - [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (058 introduced selected-group scope and composition; 061 added discovery and restricted surfaces. 065 intentionally removed remembered restoration; the explicit group URL remains. the superseded 066 affordance-only `@todo` example was replaced by the focused request feature and browser journey. Existing Board privacy/placeholder assertions remain executable until delivery changes the UI.)

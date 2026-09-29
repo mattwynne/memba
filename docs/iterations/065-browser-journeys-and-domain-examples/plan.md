@@ -72,8 +72,8 @@ behaviour. The feature files, LiveView, and current tests define what ships.
   [061](../061-discover-club-groups/plan.md); the later Everyone/default choice
   supersedes remembered restoration only, not URL-addressable group access.
 - The undelivered [066 request-access](../066-request-group-access/plan.md),
-  [067 name-editing](../067-member-name-editing/plan.md), and
-  [068 photo](../068-member-profile-photo/plan.md) plans retain their own
+  [068 name-editing](../068-member-name-editing/plan.md), and
+  [069 photo](../069-member-profile-photo/plan.md) plans retain their own
   future scenarios and are not implemented by this delivery.
 - Application, navigation, and responsive-check edits were staged alongside
   the browser-suite cut. Do not infer their validation from an old gate after

@@ -1,9 +1,14 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: validated
+Status: draft — replanning after live-query foundation inserted at 067
 
 ## Goal
+
+**Replanning note:** this old validated draft is not ready for delivery after the 067 live-query
+insertion. The agreed replan must cover current names on historical contributions, relevant open
+member and staff pages, stale concurrent saves, and a smaller acceptance example set before this
+plan can be marked ready.
 
 A signed-in member can change the name their clubs see, from the Profile tab of `/my/settings`.
 
@@ -36,7 +41,7 @@ profile update". `Membership` already owns Person identity.
   workflow; this iteration must not become a workaround for it.
 
 No captured problem note describes "members cannot change their own name" — it surfaced while
-planning self-service profile editing, alongside iteration 068.
+planning self-service profile editing, alongside iteration 069.
 
 ## Scope
 
@@ -50,12 +55,13 @@ planning self-service profile editing, alongside iteration 068.
 - A maximum name length of 100 characters, rejected with `That name is too long.`
 - The new name showing everywhere the old one appeared: member rows, conversation originator and
   reply authors, the avatar menu, and derived initials.
-- Live refresh of an open `/my/settings` via the existing `Memba.ReadModelChanges` topic, matching
-  how the Emails tab already refreshes.
+- Live refresh of name-bearing open member pages through the live-query pattern established in
+  [iteration 067](../067-live-projection-queries/plan.md). Staff name-bearing views need an
+  explicit scope decision during this replan; staff streams are deferred from 067.
 
 ### Out of scope
 
-- The profile **photo** — that is iteration 068. The Profile tab's photo field is designed and
+- The profile **photo** — that is iteration 069. The Profile tab's photo field is designed and
   will be built there; this iteration leaves the existing initials avatar untouched.
 - Per-club display names. One Person has one name across every club they belong to.
 - Any other profile field (pronouns, phone, date of birth, emergency contact, club-specific fields).
@@ -84,7 +90,7 @@ explicit example. Three "default to Gherkin" signals apply.
 
 New feature file
 [`acceptance-tests/features/member_profile.feature`](../../../acceptance-tests/features/member_profile.feature),
-shared with iteration 068. This iteration's scenarios are tagged `@iteration-067 @todo`:
+shared with iteration 069. This iteration's scenarios are currently tagged `@iteration-068 @todo`; the scenario set is under review:
 
 Rule: A member can change their own name
 
@@ -105,10 +111,10 @@ the build red before implementation.
 ## Allowed acceptance feature changes
 
 - `acceptance-tests/features/member_profile.feature`: implementation may remove the
-  temporary `@todo` tag on the four `@iteration-067` scenarios as domain step support is
+  temporary `@todo` tag on the `@iteration-068` scenarios as domain step support is
   delivered. Any needed browser proof belongs in a dedicated `@journey` feature, not a
   duplicate of each rule example. These scenarios are the acceptance criteria for this slice;
-  preserve the `@iteration-067` tags and the behaviour. The `@iteration-068` scenarios
+  preserve the `@iteration-068` tags and the behaviour. The `@iteration-069` scenarios
   in the same file belong to the next iteration and must be left alone.
 
 ## Designs
@@ -118,8 +124,8 @@ The Profile tab's name field is designed and pushed:
 → cloud `templates/account-settings/account-settings.html`. Render-verified headlessly at 1320px
 (no console/network errors, no horizontal overflow) before pushing.
 
-The template covers the **final** state of the Profile tab across both iterations 067 and 068.
-This iteration builds only the name half; the photo field ships in 068.
+The template covers the **final** state of the Profile tab across iterations 068 and 069.
+This iteration builds only the name half; the photo field ships in 069.
 
 Prototype review clarification:
 
@@ -210,7 +216,7 @@ Decided during planning:
 9. Add domain tests for the aggregate rules and the projector.
 10. Add LiveView tests for display → edit → save, cancel, blank rejection, over-length rejection, and
     live refresh.
-11. Implement the `@iteration-067` acceptance scenarios and remove their `@todo` tags.
+11. Implement the `@iteration-068` acceptance scenarios and remove their `@todo` tags.
 12. Run `dev check` and fix all issues.
 
 ## Open Technical Decisions
@@ -246,7 +252,7 @@ staff or admin involvement. The domain gains an explicit `PersonRenamed` fact, w
   - blank input renders `Enter the name your clubs should see.` and keeps the form open;
   - an open settings page refreshes after a rename elsewhere.
 - Acceptance tests:
-  - the four `@iteration-067` scenarios in `member_profile.feature`, with the temporary
+  - the `@iteration-068` scenarios in `member_profile.feature`, with the temporary
     `@todo` tags removed.
 - Manual demo:
   1. Sign in as an existing club member with a wrong name.
@@ -267,4 +273,4 @@ staff or admin involvement. The domain gains an explicit `PersonRenamed` fact, w
 - Renaming is not merging duplicate people
   ([`2026-06-06-staff-merge-people.md`](../../problems/2026-06-06-staff-merge-people.md)) and should
   not be treated as a substitute for it.
-- The Profile tab remains half-editable until iteration 068 adds the photo field.
+- The Profile tab remains half-editable until iteration 069 adds the photo field.
