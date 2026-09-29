@@ -15,7 +15,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 
 | First observed | Kaizen note | Status | Review due |
 | --- | --- | --- | --- |
-| 2026-09-29 | [Problem: deliver is blocked by its own run-ID pointers](2026-09-29-deliver-blocked-by-its-own-run-id-pointers.md) | Open | — |
+| 2026-09-29 | [Problem: deliver is blocked by its own run-ID pointers](2026-09-29-deliver-blocked-by-its-own-run-id-pointers.md) | Closed | — |
 | 2026-09-29 | [Problem: Technical planning left ADR triage implicit](2026-09-29-technical-planning-adr-triage-was-implicit.md) | New | — |
 | 2026-09-28 | [Problem: publish gate timed out validating a fresh worktree](2026-09-28-publish-gate-times-out-in-fresh-worktree.md) | Open | — |
 | 2026-09-27 | [Problem: Plan validation could not publish after the shared attestation ref moved](2026-09-27-plan-validation-attestation-ref-push-rejected.md) | Closed | — |

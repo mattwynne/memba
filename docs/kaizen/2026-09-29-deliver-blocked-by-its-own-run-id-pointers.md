@@ -65,4 +65,16 @@ Date: 2026-09-29
 
 **Simplicity challenge (2026-09-29).** The local pointer files may be unnecessary if Fabro's durable run list offers dependable recovery when terminal output is lost. Stop writing them entirely would remove the producer/gate conflict while keeping the clean-tree safeguard. However, the installed `fabro 0.316.0-nightly.0` CLI does **not** support `fabro runs list` (`unrecognized subcommand 'runs'`), despite that command appearing in checked-in later-version documentation. `fabro run list --help` treats `list` as a workflow path. The Fabro web UI may provide run discovery, but its adequacy for finding a specific detached run after output loss has not been verified here. Before choosing either pointer removal or relocation, test recovery from the current server/UI and consider how to distinguish concurrent runs. If reliable discovery exists, prefer no local pointers; otherwise the worktree-aware Git metadata option remains a smaller safe change than weakening the gate.
 
-**Decision pending.** Matt has not approved moving the current two pointers or retrying 067, nor chosen the permanent countermeasure. Leave the delivery blocked until he decides those separately.
+**Decision (2026-09-29).** Matt chose option 2: stop writing local run-ID pointers and use Fabro's run history/UI when terminal output is lost. This does not authorize moving the two existing pointer files or retrying 067. A local CLI upgrade test found that even `0.370.0-nightly.0` has no `fabro runs list`; the user-local upgraded binary was removed, leaving the installed client/server at `0.316.0-nightly.0`. The checked-in newer CLI documentation is not evidence of a command available in this installation.
+
+## Resolution
+
+Date: 2026-09-29
+
+**Cause and fix.** `bin/dev` wrote recovery pointers inside the untracked checkout while its next delivery required an entirely clean checkout. Removed only the two pointer writes; retained the implementation and review run IDs, URLs and recovery commands in launcher output. This removes the source of future pointer-created dirt without weakening the clean-tree gate, adding ignore rules, or changing Fabro workflow scratch files. Actual run history remains on the Fabro server.
+
+**Changed path:** [`bin/dev`](../../bin/dev). Existing `.fabro/tmp/` pointers were not touched; handling them and retrying delivery require separate authorization.
+
+**Validation.** `bash -n bin/dev` passed; a focused source check confirmed neither pointer filename remains in the wrapper and both run-ID/recovery output paths remain. `.fabro/workflows/scripts/test_dev_checkout_boundary.sh` passed. Full `bin/dev check` passed on the working diff (ExUnit and browser acceptance). A post-commit quality gate is still required before reporting the committed state as passing. No actual delivery was launched by this fix.
+
+**Effectiveness follow-up.** At the next authorized delivery, check that the wrapper no longer creates run-ID files and an unrelated untracked file still blocks the preflight. The old files will continue to block this checkout until Matt authorizes their preservation/move; removing future writes alone cannot remove pre-existing files. The web UI recovery route has not been exercised with lost terminal output in this investigation.
