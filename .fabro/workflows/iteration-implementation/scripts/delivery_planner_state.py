@@ -331,6 +331,51 @@ def assert_planner_file_boundary(base: str, todo: Path, delivery: Path) -> None:
         raise ContractError("Delivery planner may only change todo.md and declared planner artifacts; changed: " + ", ".join(disallowed))
 
 
+def write_planner_output(plan: Path) -> None:
+    """Persist only Fabro's schema-validated planner response, never agent-written artifacts."""
+    paths = delivery_paths(plan)
+    baseline = validate_baseline(paths, plan, paths["todo"])
+    base = baseline["binding_head"]
+    changed = changed_since(base)
+    if any(path != rel(paths["todo"]) for path in changed):
+        raise ContractError("Delivery planner may only edit todo.md before the typed output writer; changed: " + ", ".join(changed))
+    try:
+        output = json.load(sys.stdin)
+    except json.JSONDecodeError as error:
+        raise ContractError(f"Invalid planner output JSON: {error}") from error
+    if not isinstance(output, dict):
+        raise ContractError("Planner output must be an object")
+    state = output.get("execution_state")
+    result = output.get("planner_result")
+    packet = output.get("current_worker_packet")
+    if not isinstance(state, dict) or not isinstance(result, dict):
+        raise ContractError("Planner output requires execution_state and planner_result objects")
+    for data, path in ((state, paths["state"]), (result, paths["planner_result"])):
+        ensure_schema_version(data, path)
+        validate_paths(data, path, plan, paths["todo"])
+        if data.get("source_baseline") != base:
+            raise ContractError(f"{path} source_baseline must equal the guarded planner baseline")
+    if result.get("decision") not in ("ready", "all_done", "human_blocked"):
+        raise ContractError("Planner output has invalid decision")
+    if result["decision"] == "ready":
+        if not isinstance(packet, dict):
+            raise ContractError("Ready planner output requires a worker packet")
+        ensure_schema_version(packet, paths["packet"])
+        validate_paths(packet, paths["packet"], plan, paths["todo"])
+        if packet.get("source_baseline") != base:
+            raise ContractError("Worker packet source_baseline must equal the guarded planner baseline")
+        for ref in require_dict_list(packet, "references", paths["packet"], nonempty=True):
+            require_string(ref, "path", paths["packet"])
+            require_string(ref, "facts", paths["packet"])
+    elif packet is not None:
+        raise ContractError("Non-ready planner output must have null current_worker_packet")
+    write_json(paths["state"], state)
+    write_json(paths["planner_result"], result)
+    if packet is not None:
+        write_json(paths["packet"], packet)
+    print(f"Wrote validated planner output for {result['decision']} to {paths['delivery']}")
+
+
 def validate_planner_result(paths: dict[str, Path], plan: Path, todo: Path, base: str) -> dict[str, Any]:
     result = read_json(paths["planner_result"])
     ensure_schema_version(result, paths["planner_result"])
@@ -595,14 +640,16 @@ def route_worker(plan: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[1] not in {"before-planner", "guard-planner", "route-worker"}:
-        print("Usage: delivery_planner_state.py before-planner|guard-planner|route-worker PLAN_PATH", file=sys.stderr)
+    if len(argv) != 3 or argv[1] not in {"before-planner", "write-planner-output", "guard-planner", "route-worker"}:
+        print("Usage: delivery_planner_state.py before-planner|write-planner-output|guard-planner|route-worker PLAN_PATH", file=sys.stderr)
         return 2
     try:
         command = argv[1]
         plan = Path(argv[2])
         if command == "before-planner":
             before_planner(plan)
+        elif command == "write-planner-output":
+            write_planner_output(plan)
         elif command == "guard-planner":
             guard_planner(plan)
         else:

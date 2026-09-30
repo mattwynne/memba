@@ -119,9 +119,18 @@ digraph IterationImplementation {
     delivery_planner [
         label="Delivery Planner",
         prompt="@prompts/delivery_planner.md",
+        output_schema="@schemas/planner-output.json",
         fidelity="truncate",
         timeout="2400s",
         max_visits=30
+    ]
+
+    write_planner_output [
+        label="Write Typed Planner Output",
+        shape=parallelogram,
+        stdin_source="output.delivery_planner",
+        script="python3 -B .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py write-planner-output '{{ inputs.plan_path }}'",
+        timeout="120s"
     ]
 
     guard_delivery_packet [
@@ -344,8 +353,10 @@ digraph IterationImplementation {
     all_tasks_done -> task_stopped
     before_delivery_planner -> delivery_planner [condition="outcome=succeeded"]
     before_delivery_planner -> task_stopped
-    delivery_planner -> guard_delivery_packet [condition="outcome=succeeded"]
+    delivery_planner -> write_planner_output [condition="outcome=succeeded"]
     delivery_planner -> task_stopped
+    write_planner_output -> guard_delivery_packet [condition="outcome=succeeded"]
+    write_planner_output -> task_stopped
     guard_delivery_packet -> implement_next_task [condition="outcome=succeeded && preferred_label=implement"]
     guard_delivery_packet -> revise_task [condition="outcome=succeeded && preferred_label=revise"]
     guard_delivery_packet -> dev_check [condition="outcome=succeeded && preferred_label=all_done"]

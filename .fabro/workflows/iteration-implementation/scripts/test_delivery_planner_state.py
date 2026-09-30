@@ -44,11 +44,12 @@ class DeliveryPlannerStateTest(unittest.TestCase):
         self.git("add", ".")
         self.git("commit", "-qm", message)
 
-    def invoke(self, command: str) -> subprocess.CompletedProcess[str]:
+    def invoke(self, command: str, payload: dict[str, object] | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(HELPER), command, str(self.plan)],
             cwd=self.root,
             text=True,
+            input=json.dumps(payload) if payload is not None else None,
             capture_output=True,
         )
 
@@ -157,6 +158,70 @@ class DeliveryPlannerStateTest(unittest.TestCase):
         self.start_planner()
         self.write_planner_artifacts()
         self.assert_guard_route("implement")
+
+    def test_typed_output_writer_persists_ready_packet_before_guard(self) -> None:
+        self.start_planner()
+        output = {
+            "execution_state": self.state(),
+            "planner_result": self.planner_result(),
+            "current_worker_packet": self.packet(),
+        }
+        result = self.invoke("write-planner-output", output)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads((self.delivery / "current-worker-packet.json").read_text()), output["current_worker_packet"])
+        self.assert_guard_route("implement")
+
+    def test_typed_output_writer_rejects_string_references_before_writing(self) -> None:
+        self.start_planner()
+        packet = self.packet()
+        packet["references"] = ["app.txt"]
+        result = self.invoke("write-planner-output", {
+            "execution_state": self.state(),
+            "planner_result": self.planner_result(),
+            "current_worker_packet": packet,
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("references must contain objects", result.stderr)
+        self.assertFalse((self.delivery / "execution-state.json").exists())
+        self.assertFalse((self.delivery / "current-worker-packet.json").exists())
+
+    def test_typed_output_writer_rejects_direct_artifact_edits(self) -> None:
+        self.start_planner()
+        self.write_json("execution-state.json", self.state())
+        result = self.invoke("write-planner-output", {
+            "execution_state": self.state(),
+            "planner_result": self.planner_result(),
+            "current_worker_packet": self.packet(),
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("may only edit todo.md", result.stderr)
+        self.assertFalse((self.delivery / "current-worker-packet.json").exists())
+
+    def test_typed_output_writer_all_done_and_human_blocked_have_no_packet(self) -> None:
+        self.start_planner()
+        blocked = self.invoke("write-planner-output", {
+            "execution_state": self.state(),
+            "planner_result": self.planner_result("human_blocked", actionable_reason="Needs Matt"),
+            "current_worker_packet": None,
+        })
+        self.assertEqual(blocked.returncode, 0, blocked.stderr)
+        self.assertFalse((self.delivery / "current-worker-packet.json").exists())
+        self.assert_guard_route("human_blocked")
+
+        # An all-done decision is legal only if the baseline had no pending work.
+        self.todo.write_text(TODO_TEXT.replace(TASK, TASK.replace("[ ]", "[x]", 1)).replace(NEXT_TASK, NEXT_TASK.replace("[ ]", "[x]", 1)))
+        self.checkpoint("all work accepted")
+        self.start_planner()
+        accepted = [ACCEPTED, TASK.replace("[ ]", "[x]", 1), NEXT_TASK.replace("[ ]", "[x]", 1)]
+        state = self.state(accepted=accepted, pending=[])
+        state["coverage_map"] = [{"scope": "All accepted", "pending_task_ids": [], "accepted_task_lines": accepted}]
+        complete = self.invoke("write-planner-output", {
+            "execution_state": state,
+            "planner_result": self.planner_result("all_done"),
+            "current_worker_packet": None,
+        })
+        self.assertEqual(complete.returncode, 0, complete.stderr)
+        self.assert_guard_route("all_done")
 
     def test_completed_todo_routes_to_final_gate_only_when_no_pending_existed_at_planner_entry(self) -> None:
         self.todo.write_text(TODO_TEXT.replace(TASK, TASK.replace("[ ]", "[x]", 1)).replace(NEXT_TASK, NEXT_TASK.replace("[ ]", "[x]", 1)))

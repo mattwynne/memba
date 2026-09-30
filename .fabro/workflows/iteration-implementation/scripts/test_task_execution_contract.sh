@@ -16,15 +16,18 @@ planner = (root / "prompts/delivery_planner.md").read_text()
 implementation = (root / "prompts/implement_next_task.md").read_text()
 validation = (root / "prompts/validate_task.md").read_text()
 graph = (root / "workflow.fabro").read_text()
+planner_schema = (root / "schemas/planner-output.json").read_text()
+writer = (root / "scripts/delivery_planner_state.py").read_text()
 launcher = (root.parents[2] / "bin/dev").read_text()
 
 checks = [
     ("planner owns task selection", "You own task selection, semantic splitting/reordering" in planner),
-    ("planner cannot edit code", "You may edit only this iteration's `todo.md` and files under the iteration's `.delivery/` directory." in planner),
-    ("planner writes durable state", ".delivery/execution-state.json" in planner and ".delivery/current-worker-packet.json" in planner),
+    ("planner cannot edit code or artifacts", "You may edit only this iteration's `todo.md`." in planner and "Do not write `.delivery/` files" in planner),
+    ("planner emits typed state and packet", 'output_schema="@schemas/planner-output.json"' in graph and '"execution_state"' in planner_schema and '"current_worker_packet"' in planner_schema),
+    ("typed output writer consumes planner response", 'stdin_source="output.delivery_planner"' in graph and 'write-planner-output' in graph and 'write_planner_output(plan)' in writer),
+    ("reference shape defined in schema", '"required": ["path", "facts"]' in planner_schema and '"type": "object"' in planner_schema),
     ("planner uses binding checkpoint rather than predecessor", "Use that `git rev-parse HEAD` value as `source_baseline`" in planner and "Do not copy the baseline JSON's `pre_planner_head`" in planner and "guard will reject it" in planner),
-    ("planner requires exact coverage key", "Each `coverage_map` item must use the exact key `scope`" in planner and "Do not use aliases such as `scope_or_acceptance_layer`" in planner),
-    ("planner shows execution-state coverage schema", '"coverage_map": [' in planner and '{"scope": "approved scope or acceptance layer", "pending_task_ids": ["001"], "accepted_task_lines": []}' in planner),
+    ("planner requires exact coverage key", "with the exact `scope` key" in planner and "(no aliases)" in planner),
     ("ordinary planner packets exclude the full gate", "For an ordinary implementation or revision packet, `focused_validation` must not include `dev check`" in planner and "deterministic `dev_check` node owns the iteration-wide gate" in planner),
     ("worker reads packet", "Read the current packet" in implementation),
     ("worker does not split/select", "Do not choose a different todo line, split tasks, reorder `todo.md`" in implementation),
@@ -47,7 +50,7 @@ checks = [
     ("validator prohibits every broad gate form", "Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command in ordinary validation." in validation),
     ("validator does not reintroduce browser full gate", "do not require a duplicate full `dev check` solely because the task changes UI" in validation),
     ("explicit gate requires successful exit evidence", "require its successful exit evidence before accepting the task" in validation),
-    ("planner before worker", "delivery_planner -> guard_delivery_packet" in graph and "guard_delivery_packet -> implement_next_task" in graph),
+    ("planner before worker", "delivery_planner -> write_planner_output" in graph and "write_planner_output -> guard_delivery_packet" in graph and "guard_delivery_packet -> implement_next_task" in graph),
     ("worker result routing", "route_worker_result -> validate_task" in graph and "route_worker_result -> before_delivery_planner" in graph),
     ("review acceptance returns to planner", "apply_task_verdict -> before_delivery_planner" in graph),
     ("revision checks escalation before planner", 'apply_task_verdict -> task_escalation [condition="outcome=succeeded && preferred_label=revise"]' in graph and 'task_escalation -> before_delivery_planner [condition="outcome=succeeded && preferred_label=continue"]' in graph),

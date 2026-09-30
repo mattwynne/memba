@@ -33,7 +33,7 @@ TASK_ACCEPTED = "- [x] task001 already accepted"
 
 TASK_NODES = {
     "sync_task_list", "todo_readable", "all_tasks_done", "before_delivery_planner",
-    "delivery_planner", "guard_delivery_packet", "implement_next_task", "route_worker_result",
+    "delivery_planner", "write_planner_output", "guard_delivery_packet", "implement_next_task", "route_worker_result",
     "validate_task", "apply_task_verdict", "task_escalation", "task_discussion",
     "reflect_task_discussion", "summarize_task_discussion", "task_clarification_complete",
     "task_stopped", "revise_task",
@@ -155,7 +155,8 @@ class FabroTaskRuntime(unittest.TestCase):
         for child in ["schemas", "scripts", "docs/iterations/009-runtime"]:
             (fixture / child).mkdir(parents=True, exist_ok=True)
 
-        shutil.copy2(WORKFLOW_DIR / "schemas/task-verdict.json", fixture / "schemas/task-verdict.json")
+        for schema in ("task-verdict.json", "planner-output.json"):
+            shutil.copy2(WORKFLOW_DIR / "schemas" / schema, fixture / "schemas" / schema)
         helpers = fixture / ".fabro/workflows/iteration-implementation/scripts"
         helpers.mkdir(parents=True)
         for name in ("apply_task_verdict.py", "escalate_task_review.py", "sync_task_list.py", "delivery_planner_state.py"):
@@ -227,6 +228,8 @@ class FabroTaskRuntime(unittest.TestCase):
                 block = re.sub(r'prompt="[^"]*"', f'shape=parallelogram, script="{command}"', block)
             elif name == "before_delivery_planner":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner \'docs/iterations/009-runtime/plan.md\' && git add docs/iterations/009-runtime/.delivery/_guard/planner-guard-baseline.json && git commit -qm \'fabro(run): before_delivery_planner (succeeded)\'"', block)
+            elif name == "write_planner_output":
+                block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py write-planner-output \'docs/iterations/009-runtime/plan.md\' && git add docs/iterations/009-runtime/.delivery && git commit -qm \'fabro(run): write_planner_output (succeeded)\'"', block)
             elif name == "guard_delivery_packet":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner \'docs/iterations/009-runtime/plan.md\'; status=$?; if [ $status -eq 0 ]; then git add docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): guard_delivery_packet (succeeded)\'; fi; exit $status"', block)
             elif name == "route_worker_result":
@@ -379,6 +382,15 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertEqual(result["stages"][-1], "task_stopped")
         self.assertNotIn("publish_to_main", result["stages"])
 
+    def test_planner_string_references_fail_before_writer_or_worker(self) -> None:
+        fixture = self.make_fixture("planner-string-references", {"planner_reference_strings": True})
+        result = self.run_fixture(fixture)
+        self.assertEqual(result["status"], 1, result["combined"])
+        self.assertIn("output_schema validation", result["combined"])
+        self.assertNotIn("write_planner_output", result["stages"])
+        self.assertNotIn("implement_next_task", result["stages"])
+        self.assertFalse((fixture / "docs/iterations/009-runtime/.delivery/current-worker-packet.json").exists())
+
     def test_malformed_schema_with_failed_outcome_fails_closed(self) -> None:
         fixture = self.make_fixture(
             "malformed-schema",
@@ -455,6 +467,7 @@ todo_path = "docs/iterations/009-runtime/todo.md"
 delivery = Path("docs/iterations/009-runtime/.delivery")
 todo = Path(todo_path).read_text().splitlines()
 pending = next((line for line in todo if line.startswith("- [ ] ")), None)
+scenario = json.loads(Path("scenario.json").read_text())
 
 
 def git_head() -> str:
@@ -502,7 +515,7 @@ if kind == "delivery_planner":
         {"scope": "accepted fixture", "pending_task_ids": [], "accepted_task_lines": accepted},
         {"scope": "pending fixture", "pending_task_ids": [item["task_id"] for item in pending_obligations], "accepted_task_lines": []},
     ]
-    write_json(delivery / "execution-state.json", {
+    execution_state = {
         "schema_version": 1,
         "plan_path": plan_path,
         "todo_path": todo_path,
@@ -512,17 +525,18 @@ if kind == "delivery_planner":
         "candidate_origins": required_origins,
         "coverage_map": coverage,
         "planner_note": f"fixture planner prepared {attempt}",
-    })
+    }
     decision = "ready" if pending is not None else "all_done"
-    write_json(delivery / "planner-result.json", {
+    planner_result = {
         "schema_version": 1,
         "plan_path": plan_path,
         "todo_path": todo_path,
         "source_baseline": source,
         "decision": decision,
-    })
+    }
+    packet = None
     if pending is not None:
-        write_json(delivery / "current-worker-packet.json", {
+        packet = {
             "schema_version": 1,
             "packet_id": f"task-current-{source[:7]}-{attempt}",
             "task_id": "task-current",
@@ -534,20 +548,18 @@ if kind == "delivery_planner":
             "outcome": "fixture outcome",
             "scope": ["append work log"],
             "scope_exclusions": [],
-            "references": [{"path": "work.log", "facts": "fixture candidate evidence"}],
+            "references": ["work.log"] if scenario.get("planner_reference_strings") else [{"path": "work.log", "facts": "fixture candidate evidence"}],
             "constraints": [],
             "focused_validation": ["scripted reviewer"],
             "completion_evidence_required": ["latest-worker-result.json"],
             "candidate_origins": required_origins,
             "latest_review": latest_review,
-        })
-    maybe_commit("planner checkpoint", todo_path, str(delivery / "execution-state.json"), str(delivery / "planner-result.json"), str(delivery / "current-worker-packet.json"))
-    print(f"planned {pending}")
+        }
+    print(json.dumps({"execution_state": execution_state, "planner_result": planner_result, "current_worker_packet": packet}))
     sys.exit(0)
 
 assert pending is not None
 packet = json.loads((delivery / "current-worker-packet.json").read_text())
-scenario = json.loads(Path("scenario.json").read_text())
 worker_state_path = Path("worker-state.json")
 worker_state = json.loads(worker_state_path.read_text()) if worker_state_path.exists() else {"workers": 0}
 worker_index = worker_state["workers"]
