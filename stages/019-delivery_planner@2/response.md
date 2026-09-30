@@ -1,0 +1,384 @@
+{
+  "execution_state": {
+    "schema_version": 1,
+    "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+    "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
+    "source_baseline": "e4f81307f6f61fb44973b55c72b57bdb870f13b0",
+    "accepted_tasks": [
+      "- [x] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces.",
+      "- [x] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally.",
+      "- [x] 004 Implement and unit-test an app-private provisional binding/source contract for opaque interests, one assign per query, route rebind, relevant refresh, access errors, subscribe-before-read, bind-time reconciliation and reconnect, without a process per query or a frozen package API.",
+      "- [x] 005 Wire the dashboard query to the provisional binding and scoped Memba notification translation; prove club-member and selected-group entry/exit, order/count updates, represented Person and role changes, route/access transitions, unrelated-club isolation and transient-state preservation."
+    ],
+    "pending_obligations": [
+      {
+        "task_id": "task-006",
+        "todo_line": "- [ ] 006 Wire composed conversation detail to the provisional binding; prove Message, represented-Person, exact-follow, both independently committed delivery projections and fresh access-loss behavior, unrelated-conversation isolation and transient-state preservation, then freeze the generic contract from both vertical proofs.",
+        "status": "prepared",
+        "origin": "Conversation-detail vertical proof and API-freeze gate split from approved plan tasks 2, 4, 5 and 7. It follows the accepted dashboard proof so the generic contract is justified by two materially different consumers.",
+        "coverage": [
+          "One coherent conversation-detail result assign loaded from fresh authenticated-email authority",
+          "Conversation-message collection and represented-author Person interests",
+          "Exact current-member conversation-follow identity and isolation",
+          "Exact member-status and staff-reason delivery contributors",
+          "Independent delivery-projector commit-order convergence",
+          "Fresh club membership, group participation and conversation-access authorization",
+          "Unrelated conversation, message, delivery, club, Person and follow isolation",
+          "Reply form, command feedback, route and disclosure-state preservation",
+          "Frozen generic Query, Source and Binding contract for task 007 extraction"
+        ],
+        "replaces": [
+          "- [ ] 003 Design and prove the contract against the current club dashboard as one coherent query/view-model assign (member entry/exit and route/access transitions) and composed conversation detail (multiple projectors/access) before freezing the generic package API; define subscribe-before-read and bind-time reconciliation.",
+          "- [ ] 005 Implement the Memba adapter for committed projector notifications, scoped collection/identity invalidations and authorized view-specific queries composed from existing read APIs; use conservative invalidation when exact mapping is unavailable.",
+          "- [ ] 006 Migrate each in-scope member LiveView to query-result assigns, preserving its route, access, form state and UI. Ensure list entry/exit and existing live delivery/conversation flows do not regress.",
+          "- [ ] 008 Add the focused acceptance example, focused tests per migrated member page and a real committed-projector-to-open-LiveView test, plus package unit tests for matching/mount/change/reconnect races; run `dev check`."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-007",
+        "todo_line": "- [ ] 007 Extract, implement and test the frozen generic contract as a local Mix package, replace the two provisional consumers with it, and cover interest replacement, invalidation matching, refresh, duplicate/out-of-order notifications, subscriber cleanup and lifecycle without Memba or Commanded imports.",
+        "status": "pending",
+        "origin": "Remaining generic-package implementation from approved plan task 3, reordered after the two pre-freeze vertical proofs required by the approved technical model.",
+        "coverage": [
+          "Extractable local Mix application",
+          "Replacement of app-private binding use in dashboard and conversation detail",
+          "Generic query registration, interest replacement, matching and refresh",
+          "Duplicate and out-of-order notification behavior",
+          "Subscriber cleanup and lifecycle tests",
+          "No Memba or Commanded imports in package source or tests"
+        ],
+        "replaces": [
+          "- [ ] 004 Implement and test the generic local Mix package's query binding, interests, invalidation, refresh and lifecycle contract without Memba or Commanded imports."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-008",
+        "todo_line": "- [ ] 008 Complete the Memba adapter for all committed projector mappings and conservative fallbacks in the migration matrix, plus the remaining authorized view-specific queries composed from existing read APIs.",
+        "status": "pending",
+        "origin": "Remaining application-adapter and query work from approved plan task 4 after the dashboard and conversation-proof mappings are implemented.",
+        "coverage": [
+          "Every remaining projector and event mapping recorded in the accepted migration matrix",
+          "Collection, identity and authorization interests",
+          "Old and new scopes where available",
+          "Conservative club, family or global fallbacks when exact scope is unavailable",
+          "Remaining fresh authorized view-specific queries",
+          "No app-specific policy in the generic package"
+        ],
+        "replaces": [
+          "- [ ] 005 Implement the Memba adapter for committed projector notifications, scoped collection/identity invalidations and authorized view-specific queries composed from existing read APIs; use conservative invalidation when exact mapping is unavailable."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-009",
+        "todo_line": "- [ ] 009 Migrate the remaining in-scope member LiveViews to one query-result assign each, preserving routes, access transitions, forms, command state, navigation and UI; ensure delivery status/reason convergence and existing conversation flows do not regress.",
+        "status": "pending",
+        "origin": "Remaining migration work from approved plan task 5 after dashboard and conversation detail serve as the pre-freeze proof consumers.",
+        "coverage": [
+          "Group creation, settings, message composition, delivery detail and invitation LiveViews",
+          "One coherent result assign per remaining in-scope page",
+          "Preserved routes, access transitions, forms, commands, navigation and UI",
+          "Live delivery status and staff-reason convergence",
+          "Existing conversation and delivery behavior",
+          "No staff stream migration"
+        ],
+        "replaces": [
+          "- [ ] 006 Migrate each in-scope member LiveView to query-result assigns, preserving its route, access, form state and UI. Ensure list entry/exit and existing live delivery/conversation flows do not regress."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-010",
+        "todo_line": "- [ ] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments.",
+        "status": "pending",
+        "origin": "Approved plan task 6, retained after minimum development-time package consumption and separated from production release and quality-gate completion.",
+        "coverage": [
+          "Supported path dependency in web/mix.exs",
+          "Docker dependency-copy and compilation ordering",
+          "Production release inclusion",
+          "Explicit package test execution in the repository quality gate",
+          "Supported local and CI environments"
+        ],
+        "replaces": [
+          "- [ ] 007 Integrate the package with `web/mix.exs`, Docker release build and `dev check` so both package and web tests run in supported environments."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-011",
+        "todo_line": "- [ ] 011 Add the focused acceptance example, close the focused proof gaps for every migrated member page and a real committed-projector-to-open-LiveView path, complete package lifecycle/race coverage, and run final `dev check`.",
+        "status": "pending",
+        "origin": "Approved plan task 7 retained as the final acceptance, proof-gap and exact-state validation obligation after implementation slices complete.",
+        "coverage": [
+          "Stakeholder-readable club-member live-update example",
+          "Focused regression proof for every migrated member page",
+          "At least one real committed-projector-to-open-LiveView path",
+          "Remaining package mount, change, reconnect and race coverage",
+          "Final full dev check on the exact delivered state"
+        ],
+        "replaces": [
+          "- [ ] 008 Add the focused acceptance example, focused tests per migrated member page and a real committed-projector-to-open-LiveView test, plus package unit tests for matching/mount/change/reconnect races; run `dev check`."
+        ],
+        "candidate_origins": []
+      }
+    ],
+    "candidate_origins": [],
+    "coverage_map": [
+      {
+        "accepted_task_lines": [
+          "- [x] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted repository migration matrix, route inventory, event/interest map, fresh-authorization analysis, focused-proof inventory and explicit exclusions."
+      },
+      {
+        "accepted_task_lines": [
+          "- [x] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted dashboard query/view-model boundary, fresh-authority prerequisite, coherent dashboard result assign, connected subscribe-before-read ordering and provisional predicates."
+      },
+      {
+        "accepted_task_lines": [
+          "- [x] 004 Implement and unit-test an app-private provisional binding/source contract for opaque interests, one assign per query, route rebind, relevant refresh, access errors, subscribe-before-read, bind-time reconciliation and reconnect, without a process per query or a frozen package API."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted provisional generic lifecycle, opaque-interest matching, route rebind, bind-window reconciliation, access-error and reconnect contract."
+      },
+      {
+        "accepted_task_lines": [
+          "- [x] 005 Wire the dashboard query to the provisional binding and scoped Memba notification translation; prove club-member and selected-group entry/exit, order/count updates, represented Person and role changes, route/access transitions, unrelated-club isolation and transient-state preservation."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted dashboard binding, scoped Memba invalidation, partial-scope fallbacks and open-dashboard vertical behavior proof."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-006"
+        ],
+        "scope": "Conversation-detail binding, multi-projector and fresh-access proof, transient-state preservation and generic API freeze."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-007"
+        ],
+        "scope": "Frozen generic local-package extraction and lifecycle hardening."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-008"
+        ],
+        "scope": "Complete remaining Memba notification adapter mappings and authorized queries."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-009"
+        ],
+        "scope": "Migration of the five remaining in-scope member LiveViews."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-010"
+        ],
+        "scope": "Production package, Docker release and quality-gate integration."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-011"
+        ],
+        "scope": "Acceptance example, remaining focused proof and final exact-state validation."
+      }
+    ],
+    "planner_note": "The four checked todo lines are preserved exactly. The trusted checkpoint records task 005 as accepted and requires no candidate origin to be carried forward, so task 006 is the unchanged first unchecked obligation and receives a fresh implementation packet. Its scope is bounded to the conversation-detail vertical proof, the projector mappings that detail consumes, and freezing the already-proven generic callback and lifecycle contract for task 007 extraction. Tasks 007 through 011 retain their existing order, identities, lineage and coverage. No todo line was edited, split, reordered or marked complete during this planner visit."
+  },
+  "planner_result": {
+    "schema_version": 1,
+    "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+    "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
+    "source_baseline": "e4f81307f6f61fb44973b55c72b57bdb870f13b0",
+    "decision": "ready"
+  },
+  "current_worker_packet": {
+    "schema_version": 1,
+    "packet_id": "task-006-e4f8130-conversation-detail-binding-1",
+    "task_id": "task-006",
+    "todo_line": "- [ ] 006 Wire composed conversation detail to the provisional binding; prove Message, represented-Person, exact-follow, both independently committed delivery projections and fresh access-loss behavior, unrelated-conversation isolation and transient-state preservation, then freeze the generic contract from both vertical proofs.",
+    "attempt": "implementation",
+    "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+    "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
+    "source_baseline": "e4f81307f6f61fb44973b55c72b57bdb870f13b0",
+    "outcome": "Move member conversation detail behind one fresh-authorized provisional live-query result, prove exact Message, represented-author, follow, delivery and access invalidation behavior on an already-open view while preserving transient state, and freeze the generic Query/Source/Binding contract for extraction only after both dashboard and conversation-detail vertical proofs pass.",
+    "scope": [
+      "Introduce an app-owned conversation-detail query descriptor that binds one coherent result under a single socket assign such as `:message_detail`. Its inputs must contain routed club/message context and the authenticated email, not mount-captured active-club rows.",
+      "On every initial read and refresh, normalize the authenticated email, call `Memba.Accounts.list_active_clubs_for_email/1`, re-resolve the current Person/member, and rerun authoritative conversation audience/access checks. Preserve the existing initial `:forbidden` versus `:not_found` distinction.",
+      "Compose the existing conversation-detail model through `MembaWeb.MemberMessageDetail`, adjusting that boundary only as needed to expose the canonical audience/access scope and coherent result needed by the query. Keep the rendered conversation, author names, follow state and joined delivery data together.",
+      "Derive replacement interests from each successful result for the selected Club, current Person and membership authority, exact audience-group participation and conversation access, exact conversation and conversation-message collection, root and represented message identities, every represented author Person, the exact current-member follow identity, the root-message delivery collection and represented delivery identities.",
+      "Register only the conservative fallback-family interests needed by conversation detail. Exact notifications for another club, conversation, message, Person, follow identity or delivery must remain isolated; genuinely unscoped historic notifications may conservatively refresh through the documented fallback.",
+      "Bind `MembaWeb.MemberMessageLive.Show` through `MembaWeb.LiveQuery.Binding` and `MembaWeb.LiveQuery.MembaReadModelSource`, so connected subscription occurs before the initial read and bind-window reconciliation remains active. Route every read-model notification through `Binding.handle_notification/2` and remove the LiveView's hand-maintained projector clauses.",
+      "Keep the coherent detail model as the only projection-result socket assign. Flatten it only at the render boundary if needed by the existing template, and derive only legitimate shell state such as page title. Update event handlers to read current query data from the coherent result rather than retaining compatibility projection assigns.",
+      "After successful reply and follow commands, perform any required immediate read-your-writes reread through the same query/binding path. Do not retain the old direct flat-assign refresh helper as a second projection-read path.",
+      "On a binding refresh error, rely on the binding to clear the private result before the LiveView navigates to the existing selected-group or `/conversations` destination. Prove fresh club-membership loss, audience-group participation loss and exact conversation-access revocation cannot leave stale private content rendered.",
+      "Extend `MembaReadModelSource` for `ConversationFollow`, `MemberEmailDelivery` and `MembaStaffEmailDelivery`. Follow notifications must retain exact conversation/member scope, including the `MessageSent` sender form. Both delivery projectors must emit the same exact message-delivery collection plus available delivery identity.",
+      "For a delivery notification lacking `message_id`, recover message scope from the committed change payload or committed member/staff delivery row using `delivery_id`; if scope still cannot be recovered, emit the migration matrix's delivery-family fallback rather than silently ignoring the update. Preserve useful exact delivery identity alongside any fallback.",
+      "Add focused source/query tests and connected LiveView proof for a newly committed reply entering an already-open conversation, represented-author Person matching and isolation, exact current-member follow updates versus another member's follow changes, both delivery projectors, unrelated-scope isolation and transient-state preservation.",
+      "Prove the two independently committed delivery contributors converge in both orders. A first projector commit may yield an intermediate joined model; the second projector's notification must cause another exact-message reread that exposes the final member status and staff reason. Exercise each projector's committed transaction and post-commit notification path, or an equivalently deterministic committed-projector path, rather than proving only fabricated classifier envelopes.",
+      "Preserve reply form/body/error/state, follow command feedback, flash, route context and expanded receipt-group state across successful relevant query refreshes. Keep commands and transient state owned by the LiveView.",
+      "After the dashboard and conversation-detail tests pass, freeze the extraction-facing generic contract: Query load success/error shape, Source subscribe/classify/match callbacks, one source subscription per LiveView owner, one result assign per query, subscribe-before-read reconciliation, atomic result/interest replacement and owner-handled access errors. Lock these semantics in module types/moduledocs and focused contract tests, and record a concise iteration-local extraction note if needed; keep Memba invalidation tuple vocabulary app-private."
+    ],
+    "scope_exclusions": [
+      "Do not extract the local Mix package, replace modules with a path dependency, or change Docker/release/quality-gate integration; tasks 007 and 010 own that work.",
+      "Do not migrate `MembaWeb.MemberMessageDeliveryLive.Show` or any other remaining member LiveView; task 009 retains those migrations even though delivery detail shares loader code.",
+      "Do not complete projector mappings needed only by group creation, settings, message composition, delivery detail or invitation; task 008 retains the remaining adapter inventory.",
+      "Do not change conversation or delivery UI hierarchy or copy, and do not restore the intentionally omitted inline conversation receipt summary or delivery-status groups.",
+      "Do not add the acceptance feature, broaden browser coverage or run the iteration-wide `dev check`; task 011 and the deterministic dev-check stage retain those responsibilities.",
+      "Do not introduce `PersonRenamed`, name editing, profile photos, new domain events, command-policy changes, projector schema changes or migrations. Use controlled existing Person projection data plus an existing Person-family notification for represented-author proof.",
+      "Do not change event-store behavior, replay projectors in the LiveView, patch view-model fields from events, create a process per query, add a global cache or claim durable PubSub delivery.",
+      "Do not freeze Memba-specific invalidation tuple names as package API. Only the generic query/source/binding responsibilities and callback/result semantics are frozen.",
+      "Do not weaken initial forbidden/not-found behavior or the existing leave-private-surface navigation after delivered access loss.",
+      "Do not edit the approved plan, todo line, migration matrix, ADRs, acceptance feature or design sources, and do not mark task 006 complete."
+    ],
+    "references": [
+      {
+        "path": "docs/iterations/067-live-projection-queries/plan.md",
+        "facts": "The approved technical model requires one coherent authorized result per assign, represented identity and collection interests, subscribe-before-read reconciliation, fresh authorization on every refresh, conservative fallback for missing scope and API freeze only after dashboard and conversation-detail proofs. Task-wide package extraction and final full validation occur later."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/todo.md",
+        "facts": "Task 006 is the first unchecked line. It specifically requires Message, represented-Person, exact-follow, both independently committed delivery projections, fresh access loss, unrelated-conversation isolation, transient-state preservation and generic-contract freeze."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/.delivery/_guard/planner-guard-baseline.json",
+        "facts": "The trusted checkpoint records tasks 001, 003, 004 and 005 as accepted, task 006 as the first pending obligation and no required unaccepted candidate origin."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/.delivery/latest-review.json",
+        "facts": "The latest review accepted the repaired dashboard vertical proof, including represented conversation Person interests and conservative partial-scope mappings. Conversation detail is therefore a fresh implementation attempt, not another task-005 revision."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/migration-matrix.md",
+        "facts": "Conversation detail must bind one result containing selected club/current member, root and conversation messages, author summaries, exact follow state and joined delivery data. Its interests cover conversation messages, represented authors, exact follow, both delivery contributors and current membership/group/access authority. The matrix requires convergence regardless of which delivery projector commits first."
+      },
+      {
+        "path": "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md",
+        "facts": "A member LiveView owns the subscription, a relevant committed change triggers a fresh authorized read and only the query's coherent assign is replaced. Memba-specific notification mapping remains outside the generic mechanism."
+      },
+      {
+        "path": "docs/adr/0021-publish-committed-read-model-changes.md",
+        "facts": "Projectors publish `{:read_model_changed, %{projector: ..., source_event: ..., metadata: ..., changes: ...}}` only after projection transactions commit, which is the invalidation boundary the source adapter must classify."
+      },
+      {
+        "path": "web/lib/memba_web/member_message_detail.ex",
+        "facts": "The existing loader composes selected club, current Person/member, authoritative conversation access, ordered messages, represented author names, exact follow state and member delivery rows whose reasons come from the staff-delivery join. It currently accepts an active-club snapshot from its caller and returns a flat assign map."
+      },
+      {
+        "path": "web/lib/memba_web/live/member_message_live/show.ex",
+        "facts": "The current LiveView reads before subscribing, spreads projection data across flat assigns and keeps separate handlers for Message, MemberEmailDelivery, ConversationFollow and access projectors. It omits represented Person and staff-delivery notifications, reuses `current_identity_clubs` on refresh and has separate direct refresh paths."
+      },
+      {
+        "path": "web/lib/memba_web/member_dashboard_query.ex",
+        "facts": "The accepted first vertical proof demonstrates the intended app-owned descriptor pattern: normalized authenticated-email authority is reread on every load, one coherent result and complete replacement interests are returned, and fallback interests stay app-private."
+      },
+      {
+        "path": "web/lib/memba_web/live_query/binding.ex",
+        "facts": "The accepted provisional binding already supplies one public assign per query, one shared source subscription, connected subscribe-before-read, bind-window reconciliation, relevant-only refresh, atomic result/interest replacement, route rebind and result clearing on access error. Reuse it unless the second consumer reveals a concrete generic-contract defect."
+      },
+      {
+        "path": "web/lib/memba_web/live_query/query.ex",
+        "facts": "The current app-private descriptor freezes toward a stable query identity, one assign and a one-argument loader returning either one result plus replacement interests or an access error."
+      },
+      {
+        "path": "web/lib/memba_web/live_query/source.ex",
+        "facts": "The generic source boundary injects subscription, raw-notification classification and opaque interest/invalidation matching without importing Memba projector knowledge."
+      },
+      {
+        "path": "web/lib/memba_web/live_query/memba_read_model_source.ex",
+        "facts": "The accepted adapter currently classifies Club, Membership, Person, Group, GroupMembership, Role, Message and ConversationGroupAccess. ConversationFollow and both delivery projectors are absent, and current tests intentionally expect delivery notifications to be ignored; task 006 must replace that temporary behavior for conversation detail."
+      },
+      {
+        "path": "web/lib/memba/messaging.ex",
+        "facts": "`member_has_conversation_access?/4` resolves the root audience and authoritative active group participation. `list_member_email_deliverys/1` uses member receipts as the left side and joins `MembaStaffEmailDelivery` by delivery ID so member status and staff reason are independently committed contributors to one result."
+      },
+      {
+        "path": "web/lib/memba/messaging/projectors/conversation_follow.ex",
+        "facts": "ConversationFollow projects explicit follow/unfollow events using `member_id` and auto-following MessageSent using `sender_id`; its after-update callback publishes committed changes. Exact classification must handle both event shapes."
+      },
+      {
+        "path": "web/lib/memba/messaging/projectors/member_email_delivery.ex",
+        "facts": "The member delivery projector inserts or updates member-facing status and publishes every committed supported delivery event. Current events carry message and delivery IDs, while historical or synthetic envelopes may be incomplete."
+      },
+      {
+        "path": "web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex",
+        "facts": "The staff delivery projector independently inserts or updates detailed status/reason and publishes after commit. Its later notification must trigger another joined reread even when the member-status projector already refreshed the query."
+      },
+      {
+        "path": "web/test/memba_web/live/member_message_live/show_test.exs",
+        "facts": "Existing connected tests cover initial route rendering, selected-group context, synthetic group-membership and conversation-access loss, follow UI and reply-form validation. They do not prove binding ownership, fresh active-club authority, represented-Person refresh, staff-reason invalidation, unrelated-scope isolation or transient-state preservation across a query refresh."
+      },
+      {
+        "path": "web/test/memba_web/live/member_message_live/show_reply_test.exs",
+        "facts": "Existing feature tests prove command-driven reply and follow behavior. Preserve these flows while moving their post-command rereads through the coherent query path."
+      },
+      {
+        "path": "web/test/memba_web/live_query/memba_read_model_source_test.exs",
+        "facts": "Current source tests cover dashboard mappings and partial-scope fallbacks but explicitly assert that delivery notifications are ignored. Replace that temporary expectation with exact follow and dual-delivery classification, lookup and fallback proof."
+      },
+      {
+        "path": "web/test/memba_web/live_query/binding_test.exs",
+        "facts": "Existing contract tests cover subscription ordering, relevant-only refresh, interest replacement, route rebind, access-error clearing, bind-window reconciliation and fresh connected mounts. Preserve them and add only second-consumer contract cases needed to freeze extraction semantics."
+      },
+      {
+        "path": "docs/reference/liveview.md",
+        "facts": "LiveView behavior tests should use stable DOM IDs and LiveViewTest selectors, keep forms in `to_form` assigns and test rendered outcomes. Projection refreshes must not overwrite LiveView-owned form or navigation state."
+      },
+      {
+        "path": "docs/reference/elixir-mix-tests.md",
+        "facts": "Focused tests must avoid `Process.sleep/1`, use deterministic synchronization and use supervised process startup where applicable."
+      }
+    ],
+    "constraints": [
+      "Keep task 006 as a fresh implementation attempt with no candidate lineage; task 005 is accepted and must not be reopened.",
+      "Preserve the accepted dashboard behavior and adapt it only if the second vertical proof requires a generic callback-shape change needed for the frozen contract.",
+      "Use one conversation-detail projection-result assign. Do not retain flat compatibility assigns as a second socket-level projection model.",
+      "All matching refreshes must rerun fresh authority from the normalized authenticated email; conservative invalidation may cause extra reads but must never bypass authorization.",
+      "Retain useful exact keys when adding a fallback. Do not collapse partially scoped follow or delivery envelopes into global-only invalidation.",
+      "A represented Person interest must correspond to an author actually present in the coherent conversation result; do not register every club Person.",
+      "Exact follow matching includes conversation and current member. Another member's follow change for the same conversation must not refresh the current member's result.",
+      "Both delivery projectors contribute to the same joined query result. Do not treat the staff reason as subordinate to or synchronized with the member-status transaction.",
+      "Delivery-scope recovery may read committed projection rows by delivery ID, but must not alter projector writes, events or schemas to manufacture scope.",
+      "Use stable LiveView selectors and deterministic projector/notification synchronization. Do not use `Process.sleep/1`.",
+      "Do not expose private conversation data after an access error; the binding-cleared result must precede owner-controlled navigation.",
+      "Do not run `dev check`, `dev check --quick`, `dev ci` or another unscoped full-suite command as focused validation.",
+      "Do not mark the todo line complete."
+    ],
+    "focused_validation": [
+      "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/binding_test.exs test/memba_web/live_query/memba_read_model_source_test.exs test/memba_web/member_message_detail_query_test.exs",
+      "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs test/memba_web/member_message_detail_loader_test.exs test/memba_web/controllers/member_message_detail_test.exs",
+      "bin/mix format --check-formatted",
+      "git diff --check"
+    ],
+    "completion_evidence_required": [
+      "List every changed path and classify it as conversation query/model, LiveView binding migration, Memba source mapping, generic-contract freeze note or focused proof.",
+      "Describe the final coherent result assign and confirm which former flat projection assigns were removed from socket state versus which shell/transient assigns intentionally remain.",
+      "Show that every query read begins from normalized authenticated email and freshly resolved active-club/current-member authority rather than `current_identity_clubs`.",
+      "Enumerate collection, represented-identity, follow, delivery and authorization interests returned by the conversation-detail query, including how interests are replaced after a new reply introduces a new author.",
+      "Provide a compact mapping for ConversationFollow, MemberEmailDelivery and MembaStaffEmailDelivery envelopes: exact keys, alternate event field shapes, message-scope recovery and conservative fallback.",
+      "Identify the focused connected tests proving a new reply enters an already-open conversation, a represented author refreshes only for the matching Person notification and another conversation/message/Person remains isolated.",
+      "Identify the exact-follow tests proving the current member's committed follow change refreshes while another member's follow change for the same conversation does not.",
+      "Identify the tests exercising both delivery projector commit orders. Report the intermediate state after the first commit and the converged joined member-status/staff-reason state after the second notification.",
+      "Identify the fresh-authorization tests for club-membership loss, audience-group participation loss and exact conversation-access revocation, including evidence that private query data is cleared before existing leave-surface navigation.",
+      "Identify the relevant-refresh test preserving reply form/body/errors/state, follow feedback, route context, flash and expanded receipt-group state without reintroducing omitted receipt UI.",
+      "Summarize the frozen generic Query, Source and Binding callback/result/lifecycle contract and identify the types, moduledocs, contract tests and any iteration-local extraction note that lock it for task 007.",
+      "Confirm all pre-existing conversation detail/reply/follow tests and accepted dashboard/binding/source focused tests remain passing, and that no delivery-detail migration, package extraction, full-adapter completion, acceptance-feature, domain/projector-schema or staff-stream work was introduced.",
+      "Report every focused validation command, exit status and concise pass evidence, plus any unresolved issue. Any missing vertical proof or contract-freeze evidence must remain unresolved rather than being reported as complete."
+    ],
+    "candidate_origins": []
+  }
+}
