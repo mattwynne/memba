@@ -1,0 +1,89 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 9d5b353..6f4b925 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,25 +1,23 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-003-95b3c6a-dashboard-boundary-1",
++  "packet_id": "task-003-ca07fef-page-title-revision-2",
+   "task_id": "task-003",
+   "todo_line": "- [ ] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/member_dashboard_query.ex",
+     "web/lib/memba_web/live/member_dashboard_live.ex",
+-    "web/test/memba_web/member_dashboard_query_test.exs",
+     "web/test/memba_web/live/member_dashboard_live_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "bin/dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_dashboard_presentation_test.exs test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_dashboard_admission_live_test.exs test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
++      "command": "bin/dev test test/memba_web/live/member_dashboard_live_test.exs",
+       "exit_status": 0,
+-      "evidence": "85 focused query, presentation, dashboard, admission, removal and targeted-add tests passed with 0 failures."
++      "evidence": "48 focused MemberDashboardLive tests passed with 0 failures, including the exact page_title/1 assertion for Alpine Club · Memba."
+     },
+     {
+-      "command": "bin/mix format --check-formatted",
++      "command": "bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex test/memba_web/live/member_dashboard_live_test.exs",
+       "exit_status": 0,
+-      "evidence": "All Elixir source and test files are formatted."
++      "evidence": "The revised LiveView and focused test are formatted."
+     },
+     {
+       "command": "git diff --check",
+@@ -27,6 +25,6 @@
+       "evidence": "No whitespace errors were reported."
+     }
+   ],
+-  "notes": "The new MembaWeb.MemberDashboardQuery normalizes the authenticated email and resolves active clubs on every invocation before delegating to the existing presentation boundary. MemberDashboardLive subscribes before its connected reads, retains the routed club ID and identity email as stable inputs, and stores projection-backed display and authorization data only under :dashboard; render-local assign/2 expansion is required so LiveView change tracking emits refreshed dashboard diffs without creating socket mirrors. Tests prove stale active-club snapshots cannot preserve access, selected-group errors remain distinct, the single-assign boundary is maintained, and an open filtered member picker survives a successful dashboard replacement. The initial expected TDD failure was the absent query module; a superseded diagnostic admission-suite failure exposed Map.merge/2 bypassing LiveView change tracking and was fixed with render-local assign/2. Existing provisional projector predicates remain intentionally unchanged for later tasks.",
++  "notes": "The initial TDD assertion reproduced the regression as Memba · Memba. The shared install_dashboard/2 path now handles both successful mount and successful refresh, assigning the coherent :dashboard result and deriving only permitted shell metadata :page_title from dashboard.page_title without another read or mirrored projection fields; the exact regression assertion is `assert page_title(view) == \"Alpine Club · Memba\"`.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 1e04766..7d9f988 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -62,7 +62,7 @@ defmodule MembaWeb.MemberDashboardLive do
+          |> assign(:custom_group_member_removal, nil)
+          |> assign(:group_access_request_state, :idle)
+          |> assign_custom_group_member_picker_query("")
+-         |> assign(:dashboard, dashboard)}
++         |> install_dashboard(dashboard)}
+ 
+       {:error, :forbidden} ->
+         forbidden!()
+@@ -531,7 +531,7 @@ defmodule MembaWeb.MemberDashboardLive do
+       {:ok, dashboard} ->
+         socket
+         |> assign(:selected_group_route_id, selected_group_id)
+-        |> assign(:dashboard, dashboard)
++        |> install_dashboard(dashboard)
+         |> assign_targeted_group_member()
+ 
+       {:error, :forbidden} ->
+@@ -559,6 +559,10 @@ defmodule MembaWeb.MemberDashboardLive do
+     end
+   end
+ 
++  defp install_dashboard(socket, dashboard) do
++    assign(socket, dashboard: dashboard, page_title: dashboard.page_title)
++  end
++
+   defp assign_current_identity(socket, identity, current_identity_clubs) do
+     assign(socket,
+       current_identity: identity,
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index dba6ae2..ef77792 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -56,6 +56,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       |> signed_in_club_host("alice@example.com", alice)
+       |> live(~p"/conversations")
+ 
++    assert page_title(view) == "Alpine Club · Memba"
++
+     assert has_element?(
+              view,
+              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
