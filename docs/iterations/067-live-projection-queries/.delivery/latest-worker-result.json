@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "packet_id": "task-001-a43a809-inventory-1",
+  "packet_id": "task-001-2bcb025-inventory-revision-2",
   "task_id": "task-001",
   "todo_line": "- [ ] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces.",
   "result": "ready_for_review",
@@ -9,24 +9,19 @@
   ],
   "validation": [
     {
-      "command": "test -s docs/iterations/067-live-projection-queries/migration-matrix.md && for module in MembaWeb.MemberDashboardLive MembaWeb.MemberGroupLive.New MembaWeb.MySettingsLive MembaWeb.MemberMessageLive.New MembaWeb.MemberMessageLive.Show MembaWeb.MemberMessageDeliveryLive.Show MembaWeb.MemberInvitationLive.New; do grep -Fq \"$module\" docs/iterations/067-live-projection-queries/migration-matrix.md || exit 1; done",
+      "command": "test -s docs/iterations/067-live-projection-queries/migration-matrix.md && grep -Fq 'Memba.Messaging.Projectors.MembaStaffEmailDelivery' docs/iterations/067-live-projection-queries/migration-matrix.md",
       "exit_status": 0,
-      "evidence": "The matrix is non-empty and names all seven in-scope LiveView modules."
+      "evidence": "The revised matrix is non-empty and includes the previously omitted fully qualified staff delivery projector."
     },
     {
-      "command": "for term in 'Projector / source events' 'Logical interests emitted' 'Old scope' 'New scope' 'Conservative fallback' 'Fresh authorization/access transition' 'LiveView-owned transient state' 'Existing focused evidence' 'Remaining proof required'; do grep -Fq \"$term\" docs/iterations/067-live-projection-queries/migration-matrix.md || exit 1; done",
+      "command": "matrix=docs/iterations/067-live-projection-queries/migration-matrix.md; grep -Fq 'commit and publish independently' \"$matrix\" && grep -Fq 'regardless of commit order' \"$matrix\" && grep -Fq 'broad delivery-family invalidation' \"$matrix\" && grep -Fq 'exact staff delivery reason' \"$matrix\" && grep -Fq 'represented-member role assignment/removal and role-label changes update badges independently of current-actor permission invalidation' \"$matrix\" && grep -Fq 'ClubMemberRemoved` carries club/membership/person but no `role_id`' \"$matrix\" && grep -Fq 'legacy `MemberRemoved` requires only membership and may omit club/person' \"$matrix\"",
       "exit_status": 0,
-      "evidence": "Required event mapping, scope/fallback, authorization, transient-state, and proof/gap fields are present."
+      "evidence": "Delivery-projector convergence/fallback, represented-member badge proof, and exact-role versus compatibility-removal semantics are all recorded."
     },
     {
-      "command": "matrix=docs/iterations/067-live-projection-queries/migration-matrix.md; for route in '/conversations' '/members' '/groups/new' '/groups/:group_id' '/groups/:group_id/members' '/groups/:group_id/members/add/:person_id' '/my/settings' '/my/settings/profile' '/my/settings/clubs' '/my/settings/emails' '/messages/new' '/messages/:message_id' '/messages/:message_id/delivery' '/members/invitations/new' '/admin/clubs' '/admin/requests' '/admin/people' '/admin/clubs/:club_id' '/admin/clubs/:club_id/invitations/new' '/admin/clubs/:club_id/people/new' '/admin/clubs/:club_id/people/:person_id/edit' '/admin/deliveries' '/admin/messages' '/admin/messages/:message_id'; do grep -Fq \"$route\" \"$matrix\" || exit 1; done; for module in Admin.ClubsLive.Index Admin.RequestsLive.Index Admin.PeopleLive.Index Admin.ClubsLive.Show Admin.DeliveriesLive.Index Admin.MessagesLive.Index Admin.MessagesLive.Show; do grep -Fq \"$module\" \"$matrix\" || exit 1; done; grep -Fq 'stream(:clubs' web/lib/memba_web/live/admin/clubs_live/index.ex; grep -Fq 'stream(:active_requests' web/lib/memba_web/live/admin/requests_live/index.ex; grep -Fq 'stream(:people' web/lib/memba_web/live/admin/people_live/index.ex; grep -Fq 'stream(:members' web/lib/memba_web/live/admin/clubs_live/show.ex; grep -Fq 'stream(:deliveries' web/lib/memba_web/live/admin/deliveries_live/index.ex; grep -Fq 'stream(:messages' web/lib/memba_web/live/admin/messages_live/index.ex; grep -Fq 'stream(:member_email_deliverys' web/lib/memba_web/live/admin/messages_live/show.ex",
+      "command": "matrix=docs/iterations/067-live-projection-queries/migration-matrix.md; grep -Fq 'Grant is an upsert' \"$matrix\" && grep -Fq 'does not carry that prior level' \"$matrix\" && grep -Fq 'does **not** reorder dashboard rows' \"$matrix\" && grep -Fq \"ordering and displayed \\`sent_at\\` remain the root's \\`inserted_at\\`\" \"$matrix\"",
       "exit_status": 0,
-      "evidence": "Every member and staff route is represented; Clubs index/show, Requests index, People index, Deliveries index, and Messages index/show were confirmed stream-backed from source."
-    },
-    {
-      "command": "! grep -n '[[:blank:]]$' docs/iterations/067-live-projection-queries/migration-matrix.md && grep -c '^### `MembaWeb\\.' docs/iterations/067-live-projection-queries/migration-matrix.md && grep -c '^| `Membership.Projectors\\|^| `Messaging.Projectors' docs/iterations/067-live-projection-queries/migration-matrix.md",
-      "exit_status": 0,
-      "evidence": "No trailing whitespace; counts confirm seven per-LiveView sections and ten projector-family mapping rows."
+      "evidence": "The grant old-scope and root-time dashboard ordering corrections are present."
     },
     {
       "command": "git diff --check",
@@ -36,14 +31,14 @@
     {
       "command": "git status --short",
       "exit_status": 0,
-      "evidence": "Only migration-matrix.md and the required .delivery/latest-worker-result.json artifact are visible as untracked changes; no application, test, feature, ADR, plan, reference, or todo file changed."
+      "evidence": "Only migration-matrix.md and the required .delivery/latest-worker-result.json artifact are modified; no application, test, feature, ADR, plan, todo, reference, schema, or unrelated documentation file changed."
     },
     {
       "command": "node -e 'const fs=require(\"fs\"); const packet=JSON.parse(fs.readFileSync(process.argv[1],\"utf8\")); const result=JSON.parse(fs.readFileSync(process.argv[2],\"utf8\")); for (const key of [\"packet_id\",\"task_id\",\"todo_line\"]) if (result[key] !== packet[key]) throw new Error(key); if (result.schema_version !== 1 || result.result !== \"ready_for_review\" || !result.validation.every(entry => entry.exit_status === 0) || typeof result.notes !== \"string\" || !result.notes) throw new Error(\"invalid result\");' docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json",
       "exit_status": 0,
-      "evidence": "The worker result is valid JSON and its routing identity matches the current packet."
+      "evidence": "The worker result is valid JSON, every reported final validation succeeded, and routing identity matches the current packet."
     }
   ],
-  "notes": "The inventory confirms all seven member modules migrate and no whole-page exception is justified. It preserves the one-dashboard-result boundary, distinguishes synthetic notification tests from the existing committed custom-group-admission-to-open-dashboard proof, records the still-@todo club-member-entry example and missing delivery-status refresh, and documents conservative fallbacks for MessageSent without group scope, role fan-out, Person events without club scope, and historic delivery events without message scope. This was a docs-only packet, so dev check was intentionally not run. Ruby was unavailable for an artifact parse check; the same check passed with Node.",
+  "notes": "Closed all five review gaps while preserving the existing inventory: added the independently committed MembaStaffEmailDelivery reason dependency and exact-message/fallback convergence rules; separated represented-member role labels and missing open-view badge proof from current-actor permissions; distinguished exact role removal from membership-removal compatibility invalidation; corrected grant upsert old scope; and kept reply-derived updates separate from root-time ordering. An initial focused grep exposed that the new staff projector row used an abbreviated module name; the row was corrected to the required fully qualified name before all reported final checks passed. This revision is documentation-only, so the packet-required focused checks ran and the full quality gate was intentionally not run.",
   "unresolved": []
 }
