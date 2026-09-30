@@ -75,7 +75,7 @@ historical plans, specify current behaviour.
 | 064 | 2026-09-13 | merged | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md); `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 065 | 2026-09-27 | merged | Browser journeys distinct from domain rule examples | [delivery log](065-browser-journeys-and-domain-examples/plan.md) — `features/journeys/`, domain features, conditional responsive checks |
 | 066 | 2026-09-27 | merged | Ask to join a group | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `journeys/custom_group_access_request.feature`, `group_conversations.feature` |
-| 067 | 2026-09-28 | validated | Live projection queries for open club-member pages | [plan](067-live-projection-queries/plan.md) — `live_club_member_list.feature` |
+| 067 | 2026-09-28 | implementing | Live projection queries for open club-member pages | [plan](067-live-projection-queries/plan.md) — `live_club_member_list.feature` |
 | 068 | 2026-08-13 | draft | Members change their own name (replanning) | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
 | 069 | 2026-08-13 | needs-revision | Members set their own profile photo (renumbered; dependency review pending) | [plan](069-member-profile-photo/plan.md) — `member_profile.feature` |
 
