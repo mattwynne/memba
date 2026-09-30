@@ -1,0 +1,249 @@
+# Live projection query migration matrix
+
+This inventory is the implementation map for iteration 067. It records the
+repository state before migration and the required query boundaries without
+freezing package function names, concrete interest types, reconnect hooks, or
+module placement. The interest names below are logical descriptions for task
+003 to prove, not a proposed public package API.
+
+The source notification is the post-commit message established by ADR 0021:
+
+```elixir
+{:read_model_changed,
+ %{
+   projector: projector,
+   source_event: event,
+   metadata: metadata,
+   changes: changes
+ }}
+```
+
+The target contract is ADR 0027: one registered query returns one coherent view
+model for one ordinary assign, the LiveView owns the subscription, a matching
+notification causes an authorized reread, and only that query assign is
+replaced. Staff streams remain outside this contract.
+
+## Route and migration inventory
+
+The `:club_member` live session in `MembaWeb.Router` has fourteen routes served
+by exactly seven modules. All seven have projection-backed display or
+authorization data and therefore migrate. There is no whole-page exception;
+the exceptions are the transient state that remains owned by each LiveView.
+The session supplies the host-selected `club_id` and `club_id_source`, while
+path and query parameters supply the selected group, person, message, or tab.
+
+| Module | Routes | Decision | Coherent query result boundary |
+| --- | --- | --- | --- |
+| `MembaWeb.MemberDashboardLive` | `/conversations`; `/members`; `/groups/:group_id`; `/groups/:group_id/members`; `/groups/:group_id/members/add/:person_id` | Migrate | One dashboard view model under one assign for the selected club and group. Do not split member, group, permission, and conversation data into independently refreshed query assigns. |
+| `MembaWeb.MemberGroupLive.New` | `/groups/new` | Migrate | One group-creation context result containing the freshly authorized selected club and current member. |
+| `MembaWeb.MySettingsLive` | `/my/settings`; `/my/settings/profile`; `/my/settings/clubs`; `/my/settings/emails` | Migrate | One settings view model containing the selected club, current Person, current active club memberships, and email-address rows. |
+| `MembaWeb.MemberMessageLive.New` | `/messages/new` (optional `group_id` query parameter) | Migrate | One compose-context result containing the selected club/member, authorized audience group, recipient count, and audience display data. |
+| `MembaWeb.MemberMessageLive.Show` | `/messages/:message_id` (optional `group_id` query parameter) | Migrate | One authorized conversation-detail result containing the conversation, author names, follow state, and delivery data. |
+| `MembaWeb.MemberMessageDeliveryLive.Show` | `/messages/:message_id/delivery` (optional `group_id` query parameter) | Migrate | One authorized delivery-detail result. It may share loading code with conversation detail, but binds its own one result assign and must include current receipt status. |
+| `MembaWeb.MemberInvitationLive.New` | `/members/invitations/new` (optional `group_id` query parameter used by return navigation) | Migrate | One invitation context result containing the freshly authorized selected club/member and active-member count. |
+
+## Fresh authorization and lifecycle rule
+
+The HTTP pipeline verifies active club membership before entering the member
+LiveView session. `IdentityAuth` then places `current_identity` and
+`current_identity_clubs` on the socket. Those club rows are a mount-time
+snapshot and are not fresh authority for a later query refresh.
+
+Every initial query and refresh must instead begin with the authenticated,
+normalized identity email retained by the LiveView and:
+
+1. call `Accounts.list_active_clubs_for_email/1` again and resolve the routed
+   `club_id` from that fresh set;
+2. resolve the current Person/member again from current Person and Membership
+   projections rather than trusting an old `current_member`;
+3. rerun page-specific `Authorization` checks;
+4. rerun authoritative current group participation and conversation access
+   checks where those surfaces depend on them; and
+5. return the existing `:forbidden` or `:not_found` distinction so the LiveView
+   can clear or leave the private surface instead of retaining the old result.
+
+The connected binding must subscribe before its initial read. A notification
+that arrives while the first result and its interests are being installed must
+cause conservative reconciliation. Fresh mount and reconnect read current
+projections. This mitigates mount/reconnect races; PubSub remains non-durable
+and does not promise recovery of a lost broadcast to an uninterrupted process.
+
+## Per-LiveView read and state matrix
+
+### `MembaWeb.MemberDashboardLive`
+
+| Field | Current repository evidence | Required migration |
+| --- | --- | --- |
+| Route/session inputs | Session `club_id` and `club_id_source`; path `group_id`; targeted-add path `person_id`; `live_action` selects Conversations, Members, or targeted add. | Pass route identity into the dashboard query while retaining URL section and targeted-add coordination in the LiveView. Route changes reread the same coherent query. |
+| Reads and ordinary assigns | `MemberDashboardPresentation.load/4` uses the mount-captured active clubs, `Membership.list_active_members_of_club/1`, discoverable and authoritative participating groups, `Authorization.authorize_manage_members/2`, group members, `Messaging.list_conversations_for_group/1`, conversation access, Person-backed names/initials, member counts, and group email data. It currently spreads `selected_club`, `current_member`, `groups`, `selected_group`, access flags, `members`, counts, `messages`, `message_rows`, admission candidates, and permission flags across ordinary assigns. | Return that display and authorization data as one dashboard result. Interests include the selected club; club-member, discoverable-group, current-person participation, selected-group-member, and selected-group-conversation collections; represented Person/group/conversation identities; current-person permission/access identities; and dependent delivery data only if the final dashboard model actually displays it. |
+| Current subscription/predicate | Calls `load/4` before subscribing. It then refreshes every dashboard result for any `MemberEmailDelivery` notification, regardless of club/message, and for same-club `Group`, `GroupMembership`, `Membership`, `Role`, or `ConversationGroupAccess` notifications. `handle_params/3` also reloads. `Message`, `Person`, and `Club` notifications are not handled. | Subscribe before the connected read and replace only the dashboard result when logical interests match. Add collection interests so a previously absent member/group/conversation can enter and a represented row can leave. Remove the current unscoped delivery refresh unless delivery data remains a real dashboard dependency. |
+| Fresh authorization/access transition | Refresh currently reuses `current_identity_clubs`. `:forbidden` raises the existing forbidden treatment; an invalid/missing selected group uses the existing not-found treatment. A route patch already rereads selected-group access. | Rebuild active clubs, current member, manage-members permission, group participation, and selected-group access from the authenticated email on every refresh. Preserve forbidden versus not-found treatment and never retain member or conversation rows after access fails. |
+| LiveView-owned transient state | `active_section` and route IDs; targeted member resolution/focus/success preservation; picker open/query/form state; admission/removal operation state; access-request state; command feedback, flash, and navigation. | Query refresh must not replace these. Targeted member authorization remains coordinated by the route/LiveView around the coherent dashboard result. |
+
+### `MembaWeb.MemberGroupLive.New`
+
+| Field | Current repository evidence | Required migration |
+| --- | --- | --- |
+| Route/session inputs | Session `club_id` and `club_id_source`; route params are retained for navigation. | Bind one group-creation context for the routed club. |
+| Reads and ordinary assigns | `group_context/3` finds the selected club in mount-captured clubs, finds the current member via `Membership.list_active_members_of_club/1`, and calls `Authorization.authorize_manage_members/2`. Ordinary display assigns are `selected_club` and `current_member`. | The result contains freshly derived selected club/member and manage-members authorization. It depends on selected Club identity, club membership/current Person identity, and current-person role/permission interests. |
+| Current subscription/predicate | No `ReadModelChanges` subscription. Preview and submit call command/query APIs directly. | Install subscribe-before-read live binding so delivered membership, Person, Club, or role/permission changes recheck access. The group-name preview is not a projection result assign. |
+| Fresh authorization/access transition | Mount failure uses the existing forbidden treatment. Submit-time aggregate authorization loss shows “You no longer have permission…” and navigates to the club group home; authorization-state mismatch keeps the form available to retry. | A query access error must clear/leave this private form using the existing forbidden/private-surface semantics. Task 003 must prove the precise connected transition without changing the established submit-time behavior. |
+| LiveView-owned transient state | `route_params`; generated `group_id`; name form input/errors; group-name/email preview; retry key; command result, flash, and navigation. | Never replace these during context refresh. Group projection changes may affect a later explicit preview validation, but must not silently overwrite typed input or preview state. |
+
+### `MembaWeb.MySettingsLive`
+
+| Field | Current repository evidence | Required migration |
+| --- | --- | --- |
+| Route/session inputs | Session `club_id`; `live_action` selects profile, clubs, or emails. | Bind one settings result while the LiveView continues to own tab routing. |
+| Reads and ordinary assigns | `Membership.get_club/1`, `Membership.get_person_by_email/1`, `Membership.list_active_club_memberships_for_person/1`, and `Membership.list_person_email_addresses/1` populate `selected_club`, `current_person`, `current_person_clubs`, and `current_person_email_addresses`. | Return all four as one coherent settings model. Interests include selected Club identity, current Person identity and email collection, and the current Person's active club-membership collection (including represented Club identities). |
+| Current subscription/predicate | Reads selected club and current Person before subscribing, so this is not a complete subscribe-before-query binding. It handles only Person projector email-address event families for the current Person and refreshes only email rows. Club membership chips, Person basics, selected Club, and access are not refreshed. | Subscribe before the complete read. Exact Person and collection interests update email rows and Person display together; club membership collection interests detect a newly joined or departed club. |
+| Fresh authorization/access transition | Mount failure uses forbidden treatment. The selected club is fetched by ID but open-page active membership is not rechecked. | Freshly resolve active clubs and current Person from the authenticated email. Losing selected-club membership must clear/leave the private member surface with existing forbidden semantics; do not keep settings data merely because the route plug authorized the original request. |
+| LiveView-owned transient state | `active_tab`; add-email form contents; validation/error state; verification delivery feedback, flash, and command navigation. | A query refresh replaces only the settings model and preserves the selected tab and in-progress add-email form/errors. |
+
+### `MembaWeb.MemberMessageLive.New`
+
+| Field | Current repository evidence | Required migration |
+| --- | --- | --- |
+| Route/session inputs | Session `club_id` and `club_id_source`; optional query `group_id`; retained `route_params`. Everyone is the default audience. | Bind one authorized compose-context result for the selected club/audience. |
+| Reads and ordinary assigns | `compose_context/4` resolves the selected club from mount-captured clubs, reads active club members to identify the current member, reads active groups for that member, selects the requested/default group, reads active group members, and derives recipient count and audience copy. Ordinary assigns are `selected_club`, `current_member`, `audience_group`, `active_member_count`, and `message_audience`. | Return those values as one result. Interests include selected Club, club-member/current Person identity, current-person participating-group collection, selected Group identity, selected-group-member collection, and represented Persons whose primary-email eligibility affects the recipient count. |
+| Current subscription/predicate | Completes `compose_context/4` before subscribing. Same-club `Group`, `GroupMembership`, and `Membership` notifications broadly reload. Person/Club changes are omitted. | Subscribe before read and match scoped interests. Group-member collection entry/exit updates the count even when that Person was not in the prior result; Person email changes for represented recipients can also change recipient eligibility. |
+| Fresh authorization/access transition | Reload currently reuses `current_identity_clubs`. Any reload error clears compose context and navigates to the selected group or `/conversations`; mount distinguishes forbidden from not found. Send submission separately reloads context and domain commands perform authoritative checks. | Freshly derive active clubs/member/group participation before every refresh. Preserve the clear-then-navigate access-loss behavior and initial forbidden/not-found distinction. |
+| LiveView-owned transient state | Message form subject/body; `compose_state`; sent message ID; send/body errors; retry state; route params, flash, and navigation. | Query refresh must not reset typed text or send/retry state. |
+
+### `MembaWeb.MemberMessageLive.Show`
+
+| Field | Current repository evidence | Required migration |
+| --- | --- | --- |
+| Route/session inputs | Session `club_id` and `club_id_source`; path `message_id`; optional query `group_id` for return navigation. | Bind one authorized conversation-detail result. |
+| Reads and ordinary assigns | `MemberMessageDetail.load/3` resolves a selected active club, current Person/member, root message and club ownership, authoritative conversation access, conversation messages, author Person summaries, exact conversation follow state, and member delivery receipts/summaries. These are currently spread over `selected_club`, `message`, `sender_name`, `current_member`, follow flags, `conversation_entries`, and delivery assigns. | Return the complete detail model under one assign. Interests include selected Club/current member, exact conversation and its message collection, represented author Person identities, exact current-member follow identity, exact message delivery collections, and the group/conversation access identities that authorize the result. |
+| Current subscription/predicate | Loads before subscribing. Exact message receipt changes refresh when `message_id` matches; `Message` refreshes when `conversation_id` matches; follow refreshes by conversation; same-club Membership/GroupMembership changes refresh only when `person_id` is current member; ConversationGroupAccess refreshes the exact conversation. | Subscribe before read. Keep exact identity matching, plus collection scope for a newly posted reply. Recompute interests when messages/authors change. |
+| Fresh authorization/access transition | Loader uses mount-captured active clubs. Access notifications rerun the loader and navigate to the selected group or `/conversations` on any error. Other matching detail notifications currently raise forbidden/not-found on reread errors. | Every relevant refresh reruns fresh active-club, current-member, group-participation, and conversation-access checks. Any access failure must remove the private result and preserve the existing leave-private-surface behavior rather than retaining stale conversation content. |
+| LiveView-owned transient state | Reply form/body/errors/state; follow command feedback; expanded receipt groups; route params, flash, and navigation. | Preserve all of these when the detail result is replaced. |
+
+### `MembaWeb.MemberMessageDeliveryLive.Show`
+
+| Field | Current repository evidence | Required migration |
+| --- | --- | --- |
+| Route/session inputs | Session `club_id` and `club_id_source`; path `message_id`; optional query `group_id`. | Bind one authorized delivery-detail result. |
+| Reads and ordinary assigns | Reuses `MemberMessageDetail.load/3`, including selected club/current member, message and access, author names, conversation entries/follow data, and member receipt rows/count/summary/groups. The delivery template primarily consumes message metadata and receipt presentation. | Return a coherent authorized delivery model under one assign. Shared loader code is acceptable, but this binding owns exact message-delivery collection interests and only exposes data justified by the delivery surface. |
+| Current subscription/predicate | Loads before subscribing. It handles only same-club Membership, GroupMembership, and exact ConversationGroupAccess access changes. It does **not** handle `MemberEmailDelivery`, so an open delivery page does not refresh as webhook-driven receipt statuses commit. | Subscribe before read. Exact message-delivery collection invalidation must update receipt rows, grouping, counts, and percentages. Preserve access invalidations and represented Person identities. |
+| Fresh authorization/access transition | Access refresh reuses mount-captured active clubs and navigates to the selected group or `/conversations` on error. Initial mount distinguishes forbidden/not found. | Freshly derive active club/member/group/conversation access on every refresh and preserve the existing leave-private-surface transition. |
+| LiveView-owned transient state | Route params, native `<details>` disclosure state where the browser retains it, flash, back-link context, and navigation. | Query replacement must not introduce LiveView state that resets unrelated disclosure/navigation state. |
+
+### `MembaWeb.MemberInvitationLive.New`
+
+| Field | Current repository evidence | Required migration |
+| --- | --- | --- |
+| Route/session inputs | Session `club_id` and `club_id_source`; optional `group_id` is retained for return navigation. | Bind one invitation-context result for the routed club. |
+| Reads and ordinary assigns | `invitation_context/3` resolves selected club from mount-captured clubs, reads active club members to identify the current member and count members, and calls `Authorization.authorize_manage_members/2`. Ordinary assigns are `selected_club`, `current_member`, and `active_member_count`. | Return those values as one result. Interests include selected Club, club-member collection (entry/exit changes count), current Person, and current-person role/permission identity. |
+| Current subscription/predicate | No `ReadModelChanges` subscription; authorization and count are mount-only. | Install subscribe-before-read binding. Membership additions/removals update count even for previously absent rows; current-member membership/role changes trigger a fresh access decision. |
+| Fresh authorization/access transition | Mount failure uses forbidden treatment. Submit relies on the invitation domain/application path and does not refresh the page authorization context first. | Freshly derive active clubs/member/manage-members permission. A delivered access loss must clear/leave the invitation surface with the existing forbidden/private-surface semantics; task 003 must prove the exact connected transition. |
+| LiveView-owned transient state | Invitation email form, validation errors, pending/resend decision, delivery feedback, flash, route params, and return navigation. | Preserve typed email and command feedback across successful context refreshes. |
+
+## Projector/event to logical-interest mapping
+
+“Old scope” and “new scope” refer to the collection/identity scope visible in
+the source event. Current event families do not move a record between clubs or
+groups in one event, so most exact scopes are identical. Where old scope is not
+carried, the adapter must emit the documented conservative key rather than
+silently omit invalidation. Duplicate or out-of-order notifications are
+possible; for example, the Club projector also publishes no-op compatibility
+events that specialized projectors publish.
+
+| Projector / source events | Logical interests emitted | Old scope | New scope | Entry/exit and consumers | Conservative fallback |
+| --- | --- | --- | --- | --- | --- |
+| `Membership.Projectors.Club`: `ClubCreated`, `ClubUpdated` | Club identity for `club_id`; active-club collection by identity email is rederived by query rather than inferred from this event. | `club_id`; an updated event does not carry the old name/slug, but identity is unchanged. Creation has no old row. | Same `club_id`. | Club names/slugs on every result that represents that club. Creation can enter global/staff lists, which are out of scope here. | If a Club-projector event has `club_id` but is one of its no-op role/group compatibility events, emit the corresponding club-wide group or permission interest described below; otherwise emit a broad Club-projector invalidation so member queries reread rather than dropping an unknown event. Duplicate refresh is safe. |
+| `Membership.Projectors.Membership`: `ClubMemberAdded`, `ClubMemberRemoved`, legacy `MemberAdded`, legacy `MemberRemoved` | Club-member collection for `club_id`; membership identity; Person identity; active-clubs collection for the affected Person/current identity. | Add: no active row, but event carries destination `club_id`, `membership_id`, `person_id`. Remove: same carried club/person scope is the departing scope. | Add: same club collection now contains the row. Remove: same club collection no longer contains it. | Detects a previously absent club member entering dashboards/counts/settings and represented/current members leaving. Consumed by dashboard, settings, compose, detail, delivery, group creation, and invitation authorization/results as applicable. | If a replayed/unknown membership event lacks club scope, invalidate all member queries interested in the affected Person; if Person is also unavailable, use a global membership-family invalidation. |
+| `Membership.Projectors.Person`: `PersonCreated`, `PersonEmailAddressAdded`, `PersonEmailAddressVerified`, `PersonEmailAddressesReplaced`, `PersonPrimaryEmailAddressChanged`, `PersonEmailAddressRemoved` | Exact Person identity and that Person's email-address collection. | No club scope exists. Email events carry Person but generally do not carry a complete prior email collection; old club/group scopes are unavailable. | Same Person identity; new email collection must be reread. | Updates represented names/initials where currently available, settings email rows, authenticated-person resolution, and recipient eligibility/counts for represented group members. A new Person enters member/group results through separate membership events. | Never guess a club from a Person event. Queries register represented/current Person identities. For an unrecognized Person event lacking `person_id`, emit a broad Person-family invalidation. |
+| `Membership.Projectors.Group`: `GroupCreated`, `GroupEmailSlugAssigned` | Club group/discoverable-group collection for `club_id`; exact Group identity for `group_id`. | Creation has no prior row; email-slug assignment has the same group identity and no old slug in the event. | `club_id` and `group_id` carried by both events. | `GroupCreated` lets a previously absent discoverable/participating group enter dashboard and compose choices; identity changes update selected-group display/email. | If either ID is missing, use club group-collection invalidation when club is known; otherwise broad Group-family invalidation. |
+| `Membership.Projectors.GroupMembership`: `GroupMemberAdded`, `GroupMemberRemoved` | Group-member collection for `group_id`; current-person participating-group collection for `(club_id, person_id)`; group authorization identity; affected Person identity. | Add: no active row but destination club/group/person is carried. Remove: the carried club/group/person is the departing scope. | Same club/group scope after add; no active row after removal. | Detects absent members entering counts/lists and represented members leaving; changes discoverability, compose authorization, dashboard surfaces, and conversation authorization for the affected person. | The event is exact today. If group is unavailable, invalidate the affected Person's club participation broadly; if person is unavailable, invalidate the club's group-participation family. |
+| `Membership.Projectors.Role`: `ClubRoleAssignedToMember`, `ClubRoleRemovedFromMember`, legacy assignment/removal, and club-member removal compatibility | Exact current-person/member permission identity plus club role/permission collection. | Assignment has no active assignment; removal carries the departing `club_id`, `person_id`, and `role_id`. | Assignment is in the same club/person scope; removal leaves it. | Rechecks manage-members display/access for dashboard, group creation, and invitation. Person-specific assignment/removal is exact. | `ClubRoleDefined` and `ClubRolePermissionGranted` do not identify every affected Person and can fan out flattened permissions, so emit conservative club-wide role/permission invalidation. Any unknown role event also falls back to club-wide role/permission invalidation, or global Role-family invalidation if club is absent. |
+| `Messaging.Projectors.Message`: `MessageSent` for roots and replies | Exact message identity; conversation-message collection for derived `conversation_id` (`event.conversation_id` or root `message_id`); club conversation collection. | New message has no prior row. The event carries club and exact/derivable conversation, but no audience `group_id`. | Same club and derived conversation now contain the new message. | New roots/replies enter conversation detail; roots and latest reply activity can enter/reorder dashboard conversation results. Author Person identity is registered after reread. | Because `MessageSent` lacks audience group, it cannot exactly target a group dashboard collection. Emit a conservative club-conversation invalidation in addition to exact conversation/message keys. |
+| `Messaging.Projectors.ConversationGroupAccess`: `ConversationAccessGrantedToGroup`, `ConversationAccessRevokedFromGroup` | Exact conversation-access identity; group conversation collection for `group_id`; exact Group identity. | Grant: no prior access row. Revoke: carried `club_id`, `group_id`, and `conversation_id` identify the departing relationship. | Grant uses the same carried scope; revoke leaves it. | Lets conversations enter/leave a selected group's dashboard collection and forces fresh access for conversation/delivery detail. | Events are exact today. If group is unavailable, invalidate exact conversation plus the club's conversation collections; if conversation is unavailable, invalidate the group collection; if both are absent, invalidate club conversation access broadly. |
+| `Messaging.Projectors.ConversationFollow`: `ConversationFollowed`, `ConversationUnfollowed`, and auto-following `MessageSent` | Exact follow identity `(conversation_id, member_id)` and exact conversation identity. | Same conversation/member; prior following value is not needed. For root `MessageSent`, conversation derives from message ID. | Same conversation/member with the new following value. | Updates current-member follow state on conversation detail. It does not grant access or create delivery eligibility. | If member is unavailable, invalidate follow state for the conversation; if conversation is unavailable, invalidate the affected member's follow interests; if neither is available, broad Follow-family invalidation. |
+| `Messaging.Projectors.MemberEmailDelivery`: `EmailDeliveryCreated`, `EmailDeliveryDelivered`, `EmailDeliveryDelayed`, `EmailDeliveryBounced`, `EmailDeliverySpamComplaint`; replay-only no-op `EmailDeliveryOpened` | Exact message-delivery collection for `message_id`; exact delivery identity for `delivery_id`. | Creation has no prior receipt. Status events keep the same message/delivery scope; prior status is not carried. | Same message/delivery with inserted or updated status. | Receipt rows enter on creation and move between derived status groups/counts on status changes. Consumed by conversation detail and, critically, delivery detail. | Current events carry `message_id`. If historic/unknown input lacks it, first derive it from committed `changes` using `delivery_id`; if still unavailable, emit broad delivery-family invalidation. Never use the dashboard's current all-deliveries refresh as the target design. |
+
+### Query-to-interest coverage
+
+This table makes the preceding event map actionable while leaving concrete
+types to task 003.
+
+| Planned binding | Collection scopes (including absent-row entry) | Represented/exact identities | Authorization interests |
+| --- | --- | --- | --- |
+| Dashboard | Club members; discoverable groups; current-person participating groups; selected-group members; selected-group conversations | Selected Club/Group, represented Persons and conversations/messages | Current membership, current-person club permissions, selected-group participation, conversation access |
+| Group creation | Current identity's active clubs and selected club membership | Selected Club and current Person/member | Current-person club role/permission |
+| Settings | Current Person's active club memberships and email addresses | Current Person, selected and represented Clubs | Selected-club current membership |
+| Message compose | Club members; current-person participating groups; selected-group members | Selected Club/Group and represented current/recipient Persons | Current club membership and selected-group participation |
+| Conversation detail | Conversation messages; exact message delivery collections | Selected Club, conversation/root message, represented message authors, exact follow | Current club/group membership and exact conversation access |
+| Delivery detail | Exact message delivery collection; conversation messages only if retained in the view model | Selected Club, conversation/root message, represented authors/recipients | Current club/group membership and exact conversation access |
+| Invitation | Club members | Selected Club and current Person/member | Current-person club role/permission |
+
+## Focused proof and remaining gaps
+
+The listed evidence is current proof, not proof of the future package binding.
+Tests that call a helper to inject `{:read_model_changed, ...}` directly are
+synthetic even when they first mutate a projection.
+
+| Binding | Existing focused evidence | Remaining proof required by iteration 067 |
+| --- | --- | --- |
+| Dashboard | `member_dashboard_live_test.exs` covers synthetic group discovery, group-membership access loss, route-patch rechecks, role loss, conversation-access removal, member rows/counts, and routing. `member_dashboard_admission_live_test.exs` has the strongest integration proof: a real admission command commits projectors, PubSub reaches another member's already-open dashboard, and the view gains access/rows/count without navigation. | Implement the shared binding and one-result assign; prove subscribe-before-read/bind reconciliation and reconnect; prove club-member add/remove and reorder/derived counts; prove Person changes; prove unrelated club/query isolation and transient-state preservation. The stakeholder scenario in `live_club_member_list.feature` is still `@todo`: Bob's open club member list must show Alice after she becomes a club member. This is distinct from the existing custom-group admission proof. |
+| Group creation | `member_group_live/new_test.exs` covers route/mount authorization, preview behavior, submit-time permission loss, authorization-state mismatch, and keeping form input/retry state on failures. | No open-page projection subscription exists. Prove delivered membership/role loss uses fresh authority, Club/Person display refresh where relevant, and successful unrelated context refresh leaves generated identity, typed name, preview, and errors untouched. |
+| Settings | `my_settings_live_test.exs` covers tab routing and a matching Person email notification while an unrelated Person notification is ignored; email commands update rows. Notification proof is synthetic. | Prove one-result replacement, live active-club membership chips, Person basics, selected-club membership loss, exact Person isolation, form/error preservation, bind race, and reconnect. |
+| Message compose | `member_message_live/new_test.exs` covers a synthetic group-membership access-loss notification and private-metadata removal. `new_send_test.exs` covers submission-time authorization rechecks, form preservation across validation/failure/retry, and fail-closed behavior while departure projections lag. | Prove live member-count entry/exit, Person/email recipient eligibility, Group/Club changes, fresh active clubs rather than mount-captured clubs, one-result replacement without resetting the form/send state, bind race, and reconnect. |
+| Conversation detail | `member_message_live/show_test.exs` covers access loss after group-membership removal and conversation-access revocation plus follow UI; `show_reply_test.exs` covers reply refresh and follow commands. Existing notification helpers are mostly synthetic even where a command also ran. | Prove all contributing projectors through query interests: new replies, represented author changes, exact follow, exact delivery status, unrelated conversation/club isolation, fresh authorization, transient reply/disclosure preservation, bind race, and reconnect. |
+| Delivery detail | `member_message_delivery_live/show_test.exs` covers initial receipt presentation and access-loss navigation after group-membership removal or conversation-access revocation. | There is no proof—and no current handler—that webhook-driven `MemberEmailDelivery` commits update an already-open delivery page. Add exact-message live receipt status/group/count proof, unrelated-message isolation, fresh authorization, bind race, and reconnect. |
+| Invitation | `member_invitation_live/new_test.exs` covers routed/mount authorization and form shape; `send_test.exs` covers invite/resend/active-member rules. | No open-page subscription exists. Prove member count entry/exit, delivered membership/role revocation with fresh authority, form preservation, unrelated club isolation, bind race, and reconnect. |
+
+## Explicitly deferred and out-of-scope surfaces
+
+### Staff LiveView session
+
+Every route in `live_session :memba_staff` remains unchanged. Stream-backed
+staff modules keep Phoenix streams and any existing `ReadModelChanges`
+subscription or hand-written refresh. Iteration 067 does not add a stream
+adapter and does not convert these pages to ordinary query-result assigns.
+
+| Staff route(s) | Module | Current collection mechanism | 067 decision |
+| --- | --- | --- | --- |
+| `/admin/clubs` | `MembaWeb.Admin.ClubsLive.Index` | `stream(:clubs, ...)` | Deferred unchanged. |
+| `/admin/requests`; `/admin/requests/:request_id` | `MembaWeb.Admin.RequestsLive.Index` | `stream(:active_requests, ...)`, `stream_delete/3` | Deferred unchanged. |
+| `/admin/people` | `MembaWeb.Admin.PeopleLive.Index` | `stream(:people, ...)` | Deferred unchanged. |
+| `/admin/clubs/:club_id` | `MembaWeb.Admin.ClubsLive.Show` | `stream(:people, ...)` and `stream(:members, ...)` | Deferred unchanged. |
+| `/admin/clubs/:club_id/invitations/new` | `MembaWeb.Admin.ClubMemberInvitationsLive.New` | Form/ordinary assigns; staff surface, not a member LiveView | Out of scope unchanged. |
+| `/admin/clubs/:club_id/people/new` | `MembaWeb.Admin.PeopleLive.New` | Form/ordinary assigns; staff surface | Out of scope unchanged. |
+| `/admin/clubs/:club_id/people/:person_id/edit` | `MembaWeb.Admin.PeopleLive.Edit` | Form/ordinary assigns; staff surface | Out of scope unchanged. |
+| `/admin/deliveries` | `MembaWeb.Admin.DeliveriesLive.Index` | `stream(:deliveries, ...)`; hand-written `ReadModelChanges` refresh | Deferred unchanged. |
+| `/admin/messages` | `MembaWeb.Admin.MessagesLive.Index` | `stream(:messages, ...)` | Deferred unchanged. |
+| `/admin/messages/:message_id` | `MembaWeb.Admin.MessagesLive.Show` | `addressed_recipients`, `delivery_records`, and `member_email_deliverys` streams; hand-written `ReadModelChanges` refresh | Deferred unchanged. |
+
+The stream-backed deferred modules are therefore
+`Admin.ClubsLive.Index`, `Admin.RequestsLive.Index`,
+`Admin.PeopleLive.Index`, `Admin.ClubsLive.Show`,
+`Admin.DeliveriesLive.Index`, `Admin.MessagesLive.Index`, and
+`Admin.MessagesLive.Show`.
+
+### Other surfaces
+
+| Category | Examples/evidence | 067 decision |
+| --- | --- | --- |
+| Public | `MembaWeb.PublicClubPageLive`, home/about/get-started/terms/privacy routes | Out of scope; public club pages and static/public content do not adopt the member live-query binding. |
+| Auth and onboarding | `MembaWeb.AuthLive.SignIn`, `MembaWeb.AuthLive.Onboard`, auth callbacks | Out of scope; identity/session workflows are not projection-backed member display queries. |
+| Controllers and static/email rendering | Invitation/profile callbacks, email verification, stop-follow controller, webhook controllers, page controllers, email templates | Out of scope; the plan excludes non-LiveView consumers and email rendering. |
+| Other non-member LiveViews/dev tooling | LiveDashboard, mailbox preview, test-support endpoints | Out of scope. |
+| Staff forms using ordinary assigns | Staff invitation and Person new/edit modules listed above | Still out of scope because scope is selected by member surface, not merely by assign mechanism. |
+
+## Task 003 handoff constraints
+
+- Prove dashboard and conversation detail first, including route/access
+  transitions and notification arrival across initial interest installation,
+  before freezing the generic package API.
+- Preserve one coherent dashboard result.
+- Keep Memba projector/event translation and fresh authorization in the app;
+  the local package must not import Memba or Commanded.
+- Treat the interest labels in this document as responsibilities and evidence,
+  not frozen data structures.
+- Use conservative invalidation where the event cannot identify a narrower
+  collection, especially `MessageSent` without audience group, role/permission
+  fan-out, Person events without club scope, and malformed/historic delivery
+  notifications without message scope.
+- Do not infer durability from PubSub and do not extend this work to streams.

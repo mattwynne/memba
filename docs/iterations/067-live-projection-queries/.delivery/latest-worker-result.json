@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "packet_id": "task-001-a43a809-inventory-1",
+  "task_id": "task-001",
+  "todo_line": "- [ ] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces.",
+  "result": "ready_for_review",
+  "changed_paths": [
+    "docs/iterations/067-live-projection-queries/migration-matrix.md"
+  ],
+  "validation": [
+    {
+      "command": "test -s docs/iterations/067-live-projection-queries/migration-matrix.md && for module in MembaWeb.MemberDashboardLive MembaWeb.MemberGroupLive.New MembaWeb.MySettingsLive MembaWeb.MemberMessageLive.New MembaWeb.MemberMessageLive.Show MembaWeb.MemberMessageDeliveryLive.Show MembaWeb.MemberInvitationLive.New; do grep -Fq \"$module\" docs/iterations/067-live-projection-queries/migration-matrix.md || exit 1; done",
+      "exit_status": 0,
+      "evidence": "The matrix is non-empty and names all seven in-scope LiveView modules."
+    },
+    {
+      "command": "for term in 'Projector / source events' 'Logical interests emitted' 'Old scope' 'New scope' 'Conservative fallback' 'Fresh authorization/access transition' 'LiveView-owned transient state' 'Existing focused evidence' 'Remaining proof required'; do grep -Fq \"$term\" docs/iterations/067-live-projection-queries/migration-matrix.md || exit 1; done",
+      "exit_status": 0,
+      "evidence": "Required event mapping, scope/fallback, authorization, transient-state, and proof/gap fields are present."
+    },
+    {
+      "command": "matrix=docs/iterations/067-live-projection-queries/migration-matrix.md; for route in '/conversations' '/members' '/groups/new' '/groups/:group_id' '/groups/:group_id/members' '/groups/:group_id/members/add/:person_id' '/my/settings' '/my/settings/profile' '/my/settings/clubs' '/my/settings/emails' '/messages/new' '/messages/:message_id' '/messages/:message_id/delivery' '/members/invitations/new' '/admin/clubs' '/admin/requests' '/admin/people' '/admin/clubs/:club_id' '/admin/clubs/:club_id/invitations/new' '/admin/clubs/:club_id/people/new' '/admin/clubs/:club_id/people/:person_id/edit' '/admin/deliveries' '/admin/messages' '/admin/messages/:message_id'; do grep -Fq \"$route\" \"$matrix\" || exit 1; done; for module in Admin.ClubsLive.Index Admin.RequestsLive.Index Admin.PeopleLive.Index Admin.ClubsLive.Show Admin.DeliveriesLive.Index Admin.MessagesLive.Index Admin.MessagesLive.Show; do grep -Fq \"$module\" \"$matrix\" || exit 1; done; grep -Fq 'stream(:clubs' web/lib/memba_web/live/admin/clubs_live/index.ex; grep -Fq 'stream(:active_requests' web/lib/memba_web/live/admin/requests_live/index.ex; grep -Fq 'stream(:people' web/lib/memba_web/live/admin/people_live/index.ex; grep -Fq 'stream(:members' web/lib/memba_web/live/admin/clubs_live/show.ex; grep -Fq 'stream(:deliveries' web/lib/memba_web/live/admin/deliveries_live/index.ex; grep -Fq 'stream(:messages' web/lib/memba_web/live/admin/messages_live/index.ex; grep -Fq 'stream(:member_email_deliverys' web/lib/memba_web/live/admin/messages_live/show.ex",
+      "exit_status": 0,
+      "evidence": "Every member and staff route is represented; Clubs index/show, Requests index, People index, Deliveries index, and Messages index/show were confirmed stream-backed from source."
+    },
+    {
+      "command": "! grep -n '[[:blank:]]$' docs/iterations/067-live-projection-queries/migration-matrix.md && grep -c '^### `MembaWeb\\.' docs/iterations/067-live-projection-queries/migration-matrix.md && grep -c '^| `Membership.Projectors\\|^| `Messaging.Projectors' docs/iterations/067-live-projection-queries/migration-matrix.md",
+      "exit_status": 0,
+      "evidence": "No trailing whitespace; counts confirm seven per-LiveView sections and ten projector-family mapping rows."
+    },
+    {
+      "command": "git diff --check",
+      "exit_status": 0,
+      "evidence": "Git whitespace validation passed."
+    },
+    {
+      "command": "git status --short",
+      "exit_status": 0,
+      "evidence": "Only migration-matrix.md and the required .delivery/latest-worker-result.json artifact are visible as untracked changes; no application, test, feature, ADR, plan, reference, or todo file changed."
+    },
+    {
+      "command": "node -e 'const fs=require(\"fs\"); const packet=JSON.parse(fs.readFileSync(process.argv[1],\"utf8\")); const result=JSON.parse(fs.readFileSync(process.argv[2],\"utf8\")); for (const key of [\"packet_id\",\"task_id\",\"todo_line\"]) if (result[key] !== packet[key]) throw new Error(key); if (result.schema_version !== 1 || result.result !== \"ready_for_review\" || !result.validation.every(entry => entry.exit_status === 0) || typeof result.notes !== \"string\" || !result.notes) throw new Error(\"invalid result\");' docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json",
+      "exit_status": 0,
+      "evidence": "The worker result is valid JSON and its routing identity matches the current packet."
+    }
+  ],
+  "notes": "The inventory confirms all seven member modules migrate and no whole-page exception is justified. It preserves the one-dashboard-result boundary, distinguishes synthetic notification tests from the existing committed custom-group-admission-to-open-dashboard proof, records the still-@todo club-member-entry example and missing delivery-status refresh, and documents conservative fallbacks for MessageSent without group scope, role fan-out, Person events without club scope, and historic delivery events without message scope. This was a docs-only packet, so dev check was intentionally not run. Ruby was unavailable for an artifact parse check; the same check passed with Node.",
+  "unresolved": []
+}
