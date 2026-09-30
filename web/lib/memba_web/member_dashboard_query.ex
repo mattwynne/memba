@@ -147,8 +147,29 @@ defmodule MembaWeb.MemberDashboardQuery do
         optional_tuple(:conversation_access, group_id, conversation_id),
         optional_tuple(:message, message_id)
       ]
+      |> Kernel.++(conversation_person_interests(row))
       |> Enum.reject(&is_nil/1)
     end)
+  end
+
+  defp conversation_person_interests(row) do
+    participant_ids =
+      row
+      |> Map.get(:participants, [])
+      |> Enum.map(fn
+        participant when is_map(participant) -> Map.get(participant, :id)
+        participant_id -> participant_id
+      end)
+
+    [
+      Map.get(row, :sender_id),
+      Map.get(row, :originator_id),
+      Map.get(row, :latest_replier_id)
+      | participant_ids
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.map(&{:person, &1})
   end
 
   defp fallback_interests(club_id) do

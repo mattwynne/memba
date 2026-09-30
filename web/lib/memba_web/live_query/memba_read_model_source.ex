@@ -143,21 +143,15 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     invalidations =
       compact([
         tuple(:group_members, group_id),
+        tuple(:person, person_id),
         tuple(:person_groups, club_id, person_id),
         tuple(:group_participation, club_id, group_id, person_id),
-        missing_scope_fallback(:group_membership, club_id, person_id)
+        if(is_nil(club_id) || is_nil(group_id) || is_nil(person_id),
+          do: family_fallback(:group_membership, club_id)
+        )
       ])
 
-    case invalidations do
-      [] when not is_nil(club_id) ->
-        {:ok, [{:fallback, :group_membership, club_id}]}
-
-      [] ->
-        {:ok, [{:fallback, :group_membership}]}
-
-      invalidations ->
-        {:ok, invalidations}
-    end
+    {:ok, invalidations}
   end
 
   defp role_invalidations(event) do
@@ -181,16 +175,20 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
         |> scoped_or_role_fallback(club_id)
 
       event_name in @role_definition_events ->
-        scoped_or_role_fallback(
-          compact([tuple(:role, role_id), tuple(:club_roles, club_id)]),
-          club_id
-        )
+        compact([
+          tuple(:role, role_id),
+          tuple(:club_roles, club_id),
+          if(is_nil(club_id), do: family_fallback(:role, club_id))
+        ])
+        |> scoped_or_role_fallback(club_id)
 
       event_name in @role_permission_events ->
-        scoped_or_role_fallback(
-          compact([tuple(:role, role_id), tuple(:club_permissions, club_id)]),
-          club_id
-        )
+        compact([
+          tuple(:role, role_id),
+          tuple(:club_permissions, club_id),
+          if(is_nil(club_id), do: family_fallback(:role, club_id))
+        ])
+        |> scoped_or_role_fallback(club_id)
 
       event_name in @role_membership_removal_events ->
         member_roles = tuple(:member_roles, club_id, membership_id, person_id)
@@ -221,13 +219,11 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
         tuple(:message, message_id),
         tuple(:conversation, conversation_id),
         tuple(:conversation_messages, conversation_id),
-        tuple(:club_conversations, club_id)
+        tuple(:club_conversations, club_id),
+        if(is_nil(club_id), do: family_fallback(:message, club_id))
       ])
 
-    cond do
-      club_id || conversation_id -> {:ok, invalidations}
-      true -> {:ok, [{:fallback, :message}]}
-    end
+    {:ok, invalidations}
   end
 
   defp conversation_access_invalidations(event) do
@@ -270,6 +266,9 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   defp missing_scope_fallback(_family, _club_id, scoped) when not is_nil(scoped), do: nil
   defp missing_scope_fallback(family, nil, nil), do: {:fallback, family}
   defp missing_scope_fallback(family, club_id, nil), do: {:fallback, family, club_id}
+
+  defp family_fallback(family, nil), do: {:fallback, family}
+  defp family_fallback(family, club_id), do: {:fallback, family, club_id}
 
   defp tuple(_name, nil), do: nil
   defp tuple(name, value), do: {name, value}

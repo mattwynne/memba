@@ -411,6 +411,88 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-group-link-#{local_group.group_id}", "Local Changed")
   end
 
+  test "a conversation-only represented Person refreshes only for its exact notification", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    guest =
+      insert_membership_person!(
+        person_id: Memba.ID.generate(:person),
+        name: "Guest Replier",
+        email: "guest@example.com"
+      )
+
+    outsider =
+      insert_membership_person!(
+        person_id: Memba.ID.generate(:person),
+        name: "Outside Person",
+        email: "outside@example.com"
+      )
+
+    root =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Guest conditions"
+      )
+
+    create_message(
+      club_id: alice.club_id,
+      sender_id: guest.person_id,
+      conversation_id: root.message_id,
+      reply_to_message_id: root.message_id,
+      subject: "Guest conditions",
+      body: "The guest route is clear."
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    activity_selector =
+      "#member-message-#{root.message_id} " <>
+        "[data-testid='message-reply-activity'][data-latest-replier-id='#{guest.person_id}']"
+
+    assert has_element?(view, activity_selector, "latest from Guest Replier")
+    refute has_element?(view, "#club-member-#{guest.person_id}")
+
+    Person
+    |> where([person], person.person_id == ^guest.person_id)
+    |> Repo.update_all(set: [name: "Changed Guest"])
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: outsider.person_id,
+        email: "outside+other@example.com",
+        normalized_email: "outside+other@example.com"
+      }
+    )
+
+    assert has_element?(view, activity_selector, "latest from Guest Replier")
+    refute render(view) =~ "Changed Guest"
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: guest.person_id,
+        email: "guest+other@example.com",
+        normalized_email: "guest+other@example.com"
+      }
+    )
+
+    assert has_element?(view, activity_selector, "latest from Changed Guest")
+  end
+
   test "represented-member role assignment, definition and removal refresh badges", %{
     conn: conn
   } do
@@ -722,9 +804,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
   end
 
-  test "a route patch replaces selected-group interests and ignores the old group's changes", %{
-    conn: conn
-  } do
+  test "a route patch replaces selected-group interests and ignores the old group's unrepresented changes",
+       %{conn: conn} do
     alice =
       create_active_member(
         email: "alice@example.com",
@@ -777,14 +858,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       active: true
     })
 
+    unrepresented_membership_id = Memba.ID.generate(:membership)
+    unrepresented_person_id = Memba.ID.generate(:person)
+
     notify_read_model_change(
       view,
       Memba.Membership.Projectors.GroupMembership,
       %Memba.Membership.Events.GroupMemberAdded{
         club_id: alice.club_id,
         group_id: old_group.group_id,
-        membership_id: bob.membership_id,
-        person_id: bob.person_id
+        membership_id: unrepresented_membership_id,
+        person_id: unrepresented_person_id
       }
     )
 
@@ -2336,6 +2420,152 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "#member-message-list-empty",
              "No club messages yet"
            )
+  end
+
+  test "a Message notification adds a newly readable root to an open conversation list", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    projected_message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Fresh route conditions",
+        body: "The projection is ready."
+      )
+
+    Repo.delete_all(
+      from(access in ConversationGroupAccess,
+        where: access.conversation_id == ^projected_message.message_id
+      )
+    )
+
+    Repo.delete!(projected_message)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    assert has_element?(view, "#member-message-list-empty")
+
+    message =
+      insert_group_accessible_message!(
+        message_id: projected_message.message_id,
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: projected_message.subject,
+        body: projected_message.body,
+        inserted_at: projected_message.inserted_at
+      )
+
+    assert Enum.any?(
+             Memba.Messaging.list_conversations_for_group(
+               SystemGroups.everyone_group_id(alice.club_id)
+             ),
+             &(&1.message_id == message.message_id)
+           )
+
+    refute has_element?(view, "#member-message-#{message.message_id}")
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.Message,
+      %Memba.Messaging.Events.MessageSent{
+        message_id: message.message_id,
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: message.subject,
+        body: message.body
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id}[data-message-subject='Fresh route conditions']"
+           )
+
+    refute has_element?(view, "#member-message-list-empty")
+  end
+
+  test "a reply Message notification refreshes activity and participants on the root row", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    root =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Weekend route"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    activity_selector =
+      "#member-message-#{root.message_id} [data-testid='message-reply-activity']"
+
+    assert has_element?(view, "#{activity_selector}[data-reply-count='0']", "No replies yet")
+
+    reply =
+      insert_group_accessible_message!(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: root.message_id,
+        reply_to_message_id: root.message_id,
+        subject: root.subject,
+        body: "Count me in.",
+        inserted_at: DateTime.utc_now()
+      )
+
+    assert has_element?(view, "#{activity_selector}[data-reply-count='0']", "No replies yet")
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.Message,
+      %Memba.Messaging.Events.MessageSent{
+        message_id: reply.message_id,
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: root.message_id,
+        reply_to_message_id: root.message_id,
+        subject: reply.subject,
+        body: reply.body
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#{activity_selector}[data-reply-count='1']" <>
+               "[data-latest-replier-id='#{bob.person_id}']" <>
+               "[data-latest-replier-name='Bob Builder']",
+             "1 reply · latest from Bob Builder"
+           )
+
+    assert participant_avatar_names(render(view), root.message_id) == ["Bob Builder"]
+    refute has_element?(view, "#member-message-#{reply.message_id}")
   end
 
   test "dashboard conversation rows use design-system classes and render participant avatar stacks" do

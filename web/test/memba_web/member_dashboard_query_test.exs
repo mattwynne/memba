@@ -87,8 +87,10 @@ defmodule MembaWeb.MemberDashboardQueryTest do
         %{
           message_id: "message-1",
           conversation_id: "conversation-1",
-          sender_id: "person-2",
-          participants: [%{id: "person-3"}]
+          sender_id: "person-4",
+          originator_id: "person-5",
+          latest_replier_id: "person-6",
+          participants: [%{id: "person-7"}, %{id: "person-4"}]
         }
       ]
     }
@@ -114,6 +116,10 @@ defmodule MembaWeb.MemberDashboardQueryTest do
           {:person, "person-1"},
           {:person, "person-2"},
           {:person, "person-3"},
+          {:person, "person-4"},
+          {:person, "person-5"},
+          {:person, "person-6"},
+          {:person, "person-7"},
           {:conversation, "conversation-1"},
           {:conversation_messages, "conversation-1"},
           {:message, "message-1"}

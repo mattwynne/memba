@@ -3,6 +3,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
   alias Memba.Membership.Events.ClubMemberAdded
   alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleDefined
+  alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
@@ -174,6 +176,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
              )
 
     assert {:group_members, "group-1"} in membership_invalidations
+    assert {:person, "person-1"} in membership_invalidations
     assert {:person_groups, "club-1", "person-1"} in membership_invalidations
     assert {:group_participation, "club-1", "group-1", "person-1"} in membership_invalidations
 
@@ -221,6 +224,100 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
                source,
                notification(Memba.Messaging.Projectors.ConversationGroupAccess, %{})
              )
+  end
+
+  test "retains role identity and adds a global fallback when club scope is missing" do
+    source = MembaReadModelSource.new()
+
+    for event <- [
+          %ClubRoleDefined{
+            club_id: nil,
+            role_id: "role-1",
+            role_key: "trip_lead",
+            name: "Trip Lead"
+          },
+          %ClubRolePermissionGranted{
+            club_id: nil,
+            role_id: "role-1",
+            permission: "club.manage_members"
+          }
+        ] do
+      assert {:ok, invalidations} =
+               Source.classify(
+                 source,
+                 notification(Memba.Membership.Projectors.Role, event)
+               )
+
+      assert {:role, "role-1"} in invalidations
+      assert {:fallback, :role} in invalidations
+    end
+  end
+
+  test "retains Message identities and adds a global fallback when club scope is missing" do
+    source = MembaReadModelSource.new()
+
+    event = %MessageSent{
+      message_id: "message-2",
+      club_id: nil,
+      sender_id: "person-1",
+      conversation_id: "message-1",
+      reply_to_message_id: "message-1",
+      subject: "Re: Plans",
+      body: "Count me in"
+    }
+
+    assert {:ok, invalidations} =
+             Source.classify(
+               source,
+               notification(Memba.Messaging.Projectors.Message, event)
+             )
+
+    assert {:message, "message-2"} in invalidations
+    assert {:conversation, "message-1"} in invalidations
+    assert {:conversation_messages, "message-1"} in invalidations
+    assert {:fallback, :message} in invalidations
+  end
+
+  test "retains partial GroupMembership scopes and adds participation fallbacks" do
+    source = MembaReadModelSource.new()
+
+    assert {:ok, missing_group} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Membership.Projectors.GroupMembership,
+                 %{club_id: "club-1", person_id: "person-1"}
+               )
+             )
+
+    assert {:person, "person-1"} in missing_group
+    assert {:person_groups, "club-1", "person-1"} in missing_group
+    assert {:fallback, :group_membership, "club-1"} in missing_group
+
+    assert {:ok, missing_person} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Membership.Projectors.GroupMembership,
+                 %{club_id: "club-1", group_id: "group-1"}
+               )
+             )
+
+    assert {:group_members, "group-1"} in missing_person
+    assert {:fallback, :group_membership, "club-1"} in missing_person
+
+    assert {:ok, missing_club} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Membership.Projectors.GroupMembership,
+                 %{group_id: "group-1", person_id: "person-1"}
+               )
+             )
+
+    assert {:group_members, "group-1"} in missing_club
+    assert {:person, "person-1"} in missing_club
+    assert {:fallback, :group_membership} in missing_club
   end
 
   test "ignores delivery notifications because dashboard delivery data was removed" do
