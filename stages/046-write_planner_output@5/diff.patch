@@ -1,0 +1,307 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json b/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
+index f9d94d5..ab78ba7 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
+@@ -1,93 +1,115 @@
+ {
+-  "attempt": "revision",
+-  "candidate_origins": [
+-    {
+-      "base_sha": "95b3c6a790d5402af6518ef6de0395f80a3d7747",
+-      "head_sha": "e052431e15721f1490c72afe39c10e2077a1d9ca",
+-      "packet_id": "task-003-95b3c6a-dashboard-boundary-1",
+-      "reason": "review_revise",
+-      "task_id": "task-003",
+-      "todo_line": "- [ ] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+-    }
+-  ],
++  "attempt": "implementation",
++  "candidate_origins": [],
+   "completion_evidence_required": [
+-    "List every changed path and identify the shared initial/refresh dashboard-installation path, if introduced.",
+-    "Show the exact `Phoenix.LiveViewTest.page_title/1` assertion and its expected club-specific title including the ` \u00b7 Memba` suffix.",
+-    "Confirm by source inspection that top-level `:page_title` is derived only from the newly installed dashboard result on both mount and refresh, with no independent read or additional mirrored projection fields.",
+-    "Report exact focused validation commands, exit statuses and concise pass summaries.",
+-    "Report any unresolved issue without marking task 003 complete."
++    "List every changed path and state the responsibility of each provisional query, source, binding or test-support module.",
++    "Document the implemented success and access-error shapes and the responsibility split between query, source, binding and owning LiveView.",
++    "Identify focused tests proving disconnected read without subscription, connected subscribe-before-read ordering, one result assign per query, unrelated-assign preservation, relevant versus unrelated refresh, interest replacement and route rebind.",
++    "Provide a deterministic bind-window ordering trace showing subscription, initial read in progress, notification delivery, result/interest installation and conservative follow-up read.",
++    "Show that successful refresh replaces only the affected result and interests, while another registered query and transient assigns remain unchanged.",
++    "Show that route rebind stops old interests from causing refresh and that later refresh uses the new query inputs.",
++    "Show that initial-read, rebind and refresh access errors are surfaced to the owner without generic navigation policy or silent retention as a successful result.",
++    "Show that reconnect is tested as a fresh connected mount/process that subscribes again and rereads changed state.",
++    "Confirm that no per-query process, Memba projector mapping, Commanded dependency, package extraction or dashboard wiring was introduced.",
++    "Report each focused validation command with exit status and concise pass evidence, plus any unresolved issue; bind-window reconciliation or reconnect gaps must remain unresolved rather than being treated as complete."
+   ],
+   "constraints": [
+-    "Keep the task identity `task-003` and preserve the candidate provenance; this is a bounded revision, not a new implementation task.",
+-    "The top-level `:page_title` must always be derived from the dashboard result being installed and must not come from a separate query, stale selected-club assign or mount-time club snapshot.",
+-    "Apply the derivation on both initial success and refresh success so future title-changing dashboard results cannot leave shell metadata stale.",
+-    "Keep `:dashboard` as the sole projection-backed query-result assign; do not restore selected club, selected group, rows, counts, messages or permissions as top-level compatibility mirrors.",
+-    "Preserve existing `:forbidden` and `:not_found` behavior and all current transient LiveView state.",
+-    "Use focused deterministic tests and do not use `Process.sleep/1`.",
+-    "Do not mark the todo line complete; return evidence for review."
++    "Keep all new contract code app-private and provisional; do not extract it or present its names and callback signatures as the frozen package API.",
++    "Keep query execution, subscription state, notification handling and refreshes in the owning LiveView process.",
++    "Treat interests and invalidations as opaque values interpreted through injected matching behavior; the binding must not know Memba projectors, Commanded events, SQL predicates or authorization policy.",
++    "Subscribe only for a connected stateful mount and establish that subscription before its initial query read.",
++    "Conservatively reconcile a recognized notification delivered during the subscribe/read/install window, using deterministic synchronization and without relying on timing sleeps.",
++    "Replace a successful query result and its interests together; do not patch fields from notifications and do not overwrite unrelated query results or transient assigns.",
++    "After route rebind, old inputs and interests must no longer drive matching or refresh.",
++    "Surface access errors to the owning LiveView and do not encode redirect, raise, flash or private-surface policy in the provisional layer.",
++    "Reconnect means a new connected mount/process with a new subscription and fresh read; do not promise recovery of PubSub messages lost before that subscription.",
++    "Do not use `Process.sleep/1` in tests and do not mark the todo line complete; return implementation and focused validation evidence for review."
+   ],
+   "focused_validation": [
+-    "bin/dev test test/memba_web/live/member_dashboard_live_test.exs",
+-    "bin/mix format --check-formatted lib/memba_web/live/member_dashboard_live.ex test/memba_web/live/member_dashboard_live_test.exs",
++    "bin/dev test test/memba_web/live_query",
++    "bin/mix format --check-formatted",
+     "git diff --check"
+   ],
+-  "outcome": "Restore the club-specific browser title while preserving `:dashboard` as the sole projection-query result assign by deriving the LiveView shell's top-level `:page_title` metadata from each successfully installed dashboard result, with focused regression coverage.",
+-  "packet_id": "task-003-ca07fef-page-title-revision-2",
++  "outcome": "Establish and focused-test an app-private provisional LiveView-owned query binding and source contract that installs one result assign per query, keeps interests opaque, refreshes only relevant registrations, safely rebinds route inputs, surfaces access errors, reconciles notifications delivered across the connected bind window, and rereads fresh state on LiveView remount/reconnect without introducing per-query processes or freezing the eventual package API.",
++  "packet_id": "task-004-ba89b32-provisional-binding-1",
+   "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+   "references": [
+     {
+-      "facts": "The latest review accepted the candidate's fresh authority, coherent `:dashboard` result, subscribe-before-read ordering, provisional predicates and transient-state proof, but requires revision because the root layout reads `socket.assigns.page_title`; it specifically requests deriving that shell assign from `dashboard.page_title` and adding a `Phoenix.LiveViewTest.page_title/1` assertion.",
+-      "path": "docs/iterations/067-live-projection-queries/.delivery/latest-review.json"
++      "facts": "The technical model assigns three responsibilities: a query returns one view model plus interests or an access error, a source subscribes and converts notifications to invalidations, and a LiveView-owned binding installs one assign, matches notifications, refreshes and replaces result plus interests. Connected binding subscribes before reading, bind-window notifications require conservative reconciliation, access transitions remain owned by the LiveView, and no process per query is allowed.",
++      "path": "docs/iterations/067-live-projection-queries/plan.md"
+     },
+     {
+-      "facts": "The candidate changed the dashboard query, LiveView and focused tests and reported 85 focused tests passing. Those changes remain unaccepted candidate work and must be preserved while addressing the review gap.",
+-      "path": "docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json"
++      "facts": "Task 004 is the first unchecked line and is limited to an app-private provisional binding/source lifecycle contract. Task 005 separately owns dashboard wiring and scoped Memba translation, task 006 owns conversation proof and API freeze, and task 007 owns package extraction and hardening.",
++      "path": "docs/iterations/067-live-projection-queries/todo.md"
+     },
+     {
+-      "facts": "Successful mount currently assigns only `:dashboard`, successful `refresh_dashboard/2` replacements also assign only `:dashboard`, and `render/1` expands the dashboard map only into render-local assigns. That expansion is too late to supply LiveView shell metadata.",
+-      "path": "web/lib/memba_web/live/member_dashboard_live.ex"
++      "facts": "The accepted matrix requires connected subscribe-before-read, conservative reconciliation for notifications arriving during first result/interest installation, fresh reads on mount and reconnect, opaque logical interests rather than frozen types, and no durable PubSub guarantee. Its dashboard-specific projector mappings and vertical proof gaps are later-task scope.",
++      "path": "docs/iterations/067-live-projection-queries/migration-matrix.md"
+     },
+     {
+-      "facts": "The root layout's `<.live_title>` reads `assigns[:page_title]`, defaults to `Memba`, and appends ` \u00b7 Memba`; therefore the LiveView socket must carry the derived top-level title for initial rendering and title diffs.",
+-      "path": "web/lib/memba_web/components/layouts/root.html.heex"
++      "facts": "The accepted decision requires one coherent view model per ordinary assign, LiveView-owned subscriptions, relevant changes causing fresh authorized reads, Memba policy remaining outside the generic mechanism, and staff streams remaining deferred.",
++      "path": "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md"
+     },
+     {
+-      "facts": "The coherent dashboard result already contains `page_title: selected_club.name`; this value is the sole permitted source for shell title metadata and no extra club read is needed.",
+-      "path": "web/lib/memba_web/member_dashboard_presentation.ex"
++      "facts": "The existing source broadcasts post-commit `{:read_model_changed, %{projector: ..., source_event: ..., metadata: ..., changes: ...}}` messages through application PubSub. Task 004 needs an injectable source boundary around this role, not concrete projector translation.",
++      "path": "docs/adr/0021-publish-committed-read-model-changes.md"
+     },
+     {
+-      "facts": "The focused LiveView suite already builds a signed-in routed club dashboard and is the appropriate place to assert `page_title(view) == \"Alpine Club \u00b7 Memba\"` while retaining existing route, access and transient-state coverage.",
+-      "path": "web/test/memba_web/live/member_dashboard_live_test.exs"
++      "facts": "The accepted dashboard currently subscribes during connected mount before calling its query, stores projection-backed output under `:dashboard`, derives only shell `:page_title`, and retains hand-written `handle_info/2` predicates. This task must leave that consumer unchanged while proving the reusable provisional lifecycle in isolation.",
++      "path": "web/lib/memba_web/live/member_dashboard_live.ex"
+     },
+     {
+-      "facts": "The plan requires one coherent dashboard query result bound to one assign while preserving existing page behavior. Deriving shell metadata from that result does not split the query or authorize an independent read.",
+-      "path": "docs/iterations/067-live-projection-queries/plan.md"
++      "facts": "The accepted app-owned query demonstrates the required read boundary: stable route inputs plus authenticated email produce either one coherent result or `{:error, :forbidden | :not_found}`, with active-club authority reread on each call. The provisional contract must support this shape without importing dashboard policy.",
++      "path": "web/lib/memba_web/member_dashboard_query.ex"
+     },
+     {
+-      "facts": "ADR 0027 requires club home to begin with one coherent dashboard view model rather than separately refreshed projection fields; the revision must keep `:dashboard` as that one result.",
+-      "path": "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md"
++      "facts": "The current publisher exposes one shared PubSub topic and post-commit message shape. The provisional source abstraction may be tested with a fake source; concrete Memba notification-to-interest translation remains outside task 004.",
++      "path": "web/lib/memba/read_model_changes.ex"
+     },
+     {
+-      "facts": "LiveView state changes should be made through socket assigns and focused LiveView tests should assert rendered behavior using the framework's test APIs.",
++      "facts": "`handle_params/3` runs after mount and on live patches, so route-dependent registrations need an explicit rebind path that replaces prior inputs and interests rather than accumulating them.",
++      "path": "docs/tools/phoenix-live-view/guides/server/live-navigation.md"
++    },
++    {
++      "facts": "Phoenix performs an HTTP mount followed by a connected mount, and after a connected process failure it remounts a new stateful LiveView process. Reconnect proof should therefore demonstrate fresh remount/read behavior instead of inventing an in-process reconnect callback.",
++      "path": "docs/tools/phoenix-live-view/guides/server/error-handling.md"
++    },
++    {
++      "facts": "LiveView state changes belong in socket assigns, tests should assert behavior through framework APIs, and transient UI state must not be disturbed by replacing a query result.",
+       "path": "docs/reference/liveview.md"
++    },
++    {
++      "facts": "Focused tests must avoid `Process.sleep/1`; deterministic message ordering or synchronization should be used. Test-only processes, if any, must be started with `start_supervised!/1`, and separate modules should not be nested in one source file.",
++      "path": "docs/reference/elixir-mix-tests.md"
++    },
++    {
++      "facts": "The latest review accepted task 003, including the fresh query boundary, coherent dashboard result, connected subscribe-before-read ordering and preserved provisional predicates. It explicitly leaves lifecycle, scoped invalidation and conversation proofs in tasks 004 onward; there is no rejected task-004 candidate to revise.",
++      "path": "docs/iterations/067-live-projection-queries/.delivery/latest-review.json"
+     }
+   ],
+   "schema_version": 1,
+   "scope": [
+-    "Update the successful initial dashboard installation and every successful dashboard refresh so the socket receives both the coherent `:dashboard` query result and a top-level `:page_title` derived only from `dashboard.page_title`.",
+-    "Prefer one small installation helper or equivalent shared path so initial mount and refresh cannot diverge; the helper must not perform another read or mirror any other dashboard fields.",
+-    "Add a focused `Phoenix.LiveViewTest.page_title/1` assertion proving that the routed club dashboard retains its club-specific title, including the root layout suffix, after the single-result-assign migration.",
+-    "Retain all accepted parts of the existing task-003 candidate: fresh email-based authority, one dashboard result assign, connected subscribe-before-read ordering, current route/access transitions, provisional notification predicates and transient-state preservation."
++    "Add app-private provisional modules, under a cohesive `MembaWeb.LiveQuery` namespace or an equivalently narrow location, that separate query loading, source subscription/notification classification and socket-owned binding state. Keep names and callback shapes explicitly provisional.",
++    "Represent each registration with a stable query identity, one public result assign, current query inputs or read callback, and current opaque interests. Internal registry metadata may occupy one reserved socket assign, but projection fields must not be mirrored into additional public compatibility assigns.",
++    "Support a query success carrying one coherent result plus replacement interests and an explicit access-error result such as `:forbidden` or `:not_found`. Return access errors to the owning LiveView without embedding redirect, navigation, exception or Memba authorization policy in the binding.",
++    "On the disconnected HTTP mount, read current query state without subscribing. On the connected mount, subscribe before the initial read, then install the result and interests. A recognized notification delivered after subscription while the initial synchronous read or interest installation is in progress must cause conservative reconciliation rather than being lost.",
++    "Handle source notifications in the LiveView process: translate or classify through the injected source contract, match opaque invalidations against current interests, reread only affected registrations, and replace each successful result and its interests together while preserving unrelated result assigns and transient socket assigns.",
++    "Support route rebind for an existing query identity so changed inputs produce a fresh result and interests, old interests stop matching, and subsequent refreshes use the rebound inputs.",
++    "Model reconnect according to Phoenix lifecycle semantics: a new connected LiveView process remounts, subscribes again and performs a fresh read. Do not add an in-process reconnect callback that Phoenix does not invoke.",
++    "Add deterministic focused tests using a fake query/source and, where needed, a minimal LiveView fixture. Cover disconnected read without subscription, connected subscribe-before-read ordering, one result assign per query, unrelated-assign preservation, at least two registrations for relevant/unrelated refresh, interest replacement, route rebind, initial/rebind/refresh access errors, bind-window reconciliation, fresh remount/reconnect reads and execution in the owning process."
+   ],
+   "scope_exclusions": [
+-    "Do not move additional dashboard fields back to top-level socket assigns; `:page_title` is permitted shell metadata, not a second query result.",
+-    "Do not redesign the root layout or change title text, suffix behavior, dashboard rendering, URLs, DOM structure or user-facing copy.",
+-    "Do not implement opaque interests, scoped notification translation, bind-time reconciliation, reconnect machinery or subscriber cleanup from tasks 004 and 005.",
+-    "Do not broaden or otherwise revise the provisional projector predicates.",
+-    "Do not change conversation detail, another LiveView, the local package, Mix/Docker/quality-gate integration, acceptance features, ADRs, the approved plan, migration matrix, todo file or delivery artifacts."
++    "Do not wire the provisional binding into `MembaWeb.MemberDashboardLive` or alter the accepted dashboard query, presentation, templates, routes or focused dashboard tests; task 005 owns dashboard integration.",
++    "Do not implement the concrete `Memba.ReadModelChanges` source adapter, projector/event-to-interest mappings, collection or identity key vocabulary, old/new-scope handling or conservative Memba fallbacks; tasks 005 and 008 own those.",
++    "Do not create or migrate conversation detail, delivery detail or another member LiveView query; tasks 006, 008 and 009 retain those obligations.",
++    "Do not create the local Mix package, declare a public or frozen API, add a path dependency, or change Docker, release or quality-gate integration.",
++    "Do not add a GenServer, supervisor, global cache, process per query, durable notification log, projector replay or event-driven view-model field patching.",
++    "Do not expand this slice into duplicate/out-of-order optimization or an explicit subscriber-cleanup API reserved for package hardening in task 007; ordinary PubSub process-exit cleanup is sufficient for the provisional proof.",
++    "Do not claim recovery for broadcasts lost before subscription or while an uninterrupted process is disconnected; bind-window reconciliation covers notifications delivered after subscription, and a remount performs a fresh read.",
++    "Do not edit acceptance features, ADRs, the migration matrix, the approved plan, todo file, staff stream-backed views or other out-of-scope surfaces."
+   ],
+-  "source_baseline": "ca07fef36170deaf2c84c7542dc67bd2d1f4372c",
+-  "task_id": "task-003",
+-  "todo_line": "- [ ] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally.",
++  "source_baseline": "ba89b32856e526b0399e905c04ce787dc8fffc47",
++  "task_id": "task-004",
++  "todo_line": "- [ ] 004 Implement and unit-test an app-private provisional binding/source contract for opaque interests, one assign per query, route rebind, relevant refresh, access errors, subscribe-before-read, bind-time reconciliation and reconnect, without a process per query or a frozen package API.",
+   "todo_path": "docs/iterations/067-live-projection-queries/todo.md"
+ }
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/execution-state.json b/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
+index 5403f43..46e121f 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
+@@ -1,17 +1,9 @@
+ {
+   "accepted_tasks": [
+-    "- [x] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces."
+-  ],
+-  "candidate_origins": [
+-    {
+-      "base_sha": "95b3c6a790d5402af6518ef6de0395f80a3d7747",
+-      "head_sha": "e052431e15721f1490c72afe39c10e2077a1d9ca",
+-      "packet_id": "task-003-95b3c6a-dashboard-boundary-1",
+-      "reason": "review_revise",
+-      "task_id": "task-003",
+-      "todo_line": "- [ ] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+-    }
++    "- [x] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces.",
++    "- [x] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+   ],
++  "candidate_origins": [],
+   "coverage_map": [
+     {
+       "accepted_task_lines": [
+@@ -21,18 +13,18 @@
+       "scope": "Accepted repository migration matrix, route inventory, event/interest map, fresh-authorization analysis, focused-proof inventory and explicit exclusions."
+     },
+     {
+-      "accepted_task_lines": [],
+-      "pending_task_ids": [
+-        "task-003"
++      "accepted_task_lines": [
++        "- [x] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+       ],
+-      "scope": "Dashboard query/view-model boundary and fresh-authority prerequisite."
++      "pending_task_ids": [],
++      "scope": "Accepted dashboard query/view-model boundary, fresh-authority prerequisite, coherent dashboard result assign, connected subscribe-before-read ordering and provisional predicates."
+     },
+     {
+       "accepted_task_lines": [],
+       "pending_task_ids": [
+         "task-004"
+       ],
+-      "scope": "Provisional generic lifecycle and bind-window contract."
++      "scope": "Provisional generic lifecycle, opaque-interest and bind-window contract."
+     },
+     {
+       "accepted_task_lines": [],
+@@ -85,45 +77,16 @@
+     }
+   ],
+   "pending_obligations": [
+-    {
+-      "candidate_origins": [
+-        {
+-          "base_sha": "95b3c6a790d5402af6518ef6de0395f80a3d7747",
+-          "head_sha": "e052431e15721f1490c72afe39c10e2077a1d9ca",
+-          "packet_id": "task-003-95b3c6a-dashboard-boundary-1",
+-          "reason": "review_revise",
+-          "task_id": "task-003",
+-          "todo_line": "- [ ] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+-        }
+-      ],
+-      "coverage": [
+-        "App-owned dashboard query boundary beginning from authenticated email",
+-        "Fresh active-club and current-member authorization on every read",
+-        "One coherent dashboard result assign rather than long-lived field fan-out",
+-        "Subscription before the connected initial read",
+-        "Preserved forbidden/not-found route semantics",
+-        "Preserved picker, admission, removal, access-request, targeted-add, navigation and command state",
+-        "Provisional retention of existing hand-written notification predicates"
+-      ],
+-      "origin": "Technical prerequisite split from approved plan task 2 and the dashboard portion of plan task 5. It establishes the coherent dashboard result and fresh-authority boundary before introducing generic lifecycle and interest machinery.",
+-      "replaces": [
+-        "- [ ] 003 Design and prove the contract against the current club dashboard as one coherent query/view-model assign (member entry/exit and route/access transitions) and composed conversation detail (multiple projectors/access) before freezing the generic package API; define subscribe-before-read and bind-time reconciliation.",
+-        "- [ ] 006 Migrate each in-scope member LiveView to query-result assigns, preserving its route, access, form state and UI. Ensure list entry/exit and existing live delivery/conversation flows do not regress."
+-      ],
+-      "status": "prepared",
+-      "task_id": "task-003",
+-      "todo_line": "- [ ] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+-    },
+     {
+       "candidate_origins": [],
+       "coverage": [
+-        "App-private provisional query and source responsibilities",
++        "App-private provisional query, source and binding responsibilities",
+         "Opaque interest matching and replacement",
+-        "One result assign per registered query",
++        "One public result assign per registered query",
+         "Route rebind behavior",
+         "Relevant notification refresh and access-error surfacing",
+-        "Subscribe-before-read and bind-window reconciliation",
+-        "Fresh connected mount and reconnect behavior",
++        "Connected subscribe-before-read ordering and bind-window reconciliation",
++        "Fresh static mount, connected mount and reconnect behavior",
+         "LiveView-owned state without a process per query"
+       ],
+       "origin": "Technical lifecycle slice split from approved plan tasks 2 and 3 so race and reconnect behavior can be proved independently before either vertical consumer freezes the package API.",
+@@ -131,7 +94,7 @@
+         "- [ ] 003 Design and prove the contract against the current club dashboard as one coherent query/view-model assign (member entry/exit and route/access transitions) and composed conversation detail (multiple projectors/access) before freezing the generic package API; define subscribe-before-read and bind-time reconciliation.",
+         "- [ ] 004 Implement and test the generic local Mix package's query binding, interests, invalidation, refresh and lifecycle contract without Memba or Commanded imports."
+       ],
+-      "status": "pending",
++      "status": "prepared",
+       "task_id": "task-004",
+       "todo_line": "- [ ] 004 Implement and unit-test an app-private provisional binding/source contract for opaque interests, one assign per query, route rebind, relevant refresh, access errors, subscribe-before-read, bind-time reconciliation and reconnect, without a process per query or a frozen package API."
+     },
+@@ -272,8 +235,8 @@
+     }
+   ],
+   "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+-  "planner_note": "Task 003 remains the first unchecked obligation and keeps its existing identity for a bounded revision. The candidate implementation at e052431 establishes the fresh email-based dashboard query, one :dashboard result assign, subscribe-before-read ordering, provisional notification predicates, route/access behavior and transient-state preservation, but review found that moving page_title solely inside :dashboard regressed the root layout title because the shell reads socket.assigns.page_title. The revision packet preserves all prior candidate provenance and limits work to deriving the permitted shell :page_title assign from the dashboard result plus focused title coverage. Tasks 004 through 011 remain unchanged and pending; no todo line was edited or accepted.",
++  "planner_note": "The accepted review for task 003 is reflected by preserving its exact checked todo line and removing its now-accepted candidate provenance from pending work. Task 004 is the first unchecked obligation and is prepared without further splitting or reordering. It remains an app-private, provisional lifecycle slice: dashboard wiring and Memba projector translation stay in task 005, conversation proof and API freeze stay in task 006, and package extraction remains task 007. No todo line was edited during this planner visit, and there is no unaccepted candidate origin to preserve.",
+   "schema_version": 1,
+-  "source_baseline": "ca07fef36170deaf2c84c7542dc67bd2d1f4372c",
++  "source_baseline": "ba89b32856e526b0399e905c04ce787dc8fffc47",
+   "todo_path": "docs/iterations/067-live-projection-queries/todo.md"
+ }
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/planner-result.json b/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
+index 1367e1b..79ff322 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
+@@ -2,6 +2,6 @@
+   "decision": "ready",
+   "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+   "schema_version": 1,
+-  "source_baseline": "ca07fef36170deaf2c84c7542dc67bd2d1f4372c",
++  "source_baseline": "ba89b32856e526b0399e905c04ce787dc8fffc47",
+   "todo_path": "docs/iterations/067-live-projection-queries/todo.md"
+ }
