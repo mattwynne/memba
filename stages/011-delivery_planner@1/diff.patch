@@ -1,0 +1,269 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json b/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
+new file mode 100644
+index 0000000..5349f23
+--- /dev/null
++++ b/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
+@@ -0,0 +1,76 @@
++{
++  "schema_version": 1,
++  "packet_id": "001-36371a7-1",
++  "task_id": "001",
++  "todo_line": "- [ ] 001 Inventory club-member LiveViews and projection-backed reads, existing refresh predicates, fresh authorization sources and access transitions; record queries to migrate, event/interest mappings, focused test evidence and justified exceptions.",
++  "attempt": "implementation",
++  "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
++  "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
++  "source_baseline": "36371a72a40071392793dacb38b3bbb8d4c7a778",
++  "outcome": "Create `docs/iterations/067-live-projection-queries/.delivery/member-liveview-migration-matrix.md` as the implementation-ready inventory for all seven LiveView modules in the `:club_member` live session, with one proposed query-result assign per surface and explicit read, invalidation, authorization, transition, transient-state, and focused-proof mappings.",
++  "scope": [
++    "Inventory the seven modules routed by `web/lib/memba_web/router.ex` under `live_session :club_member`: `MemberDashboardLive`, `MemberGroupLive.New`, `MemberInvitationLive.New`, `MemberMessageLive.New`, `MemberMessageLive.Show`, `MemberMessageDeliveryLive.Show`, and `MySettingsLive`; verify that each uses ordinary assigns rather than streams.",
++    "For each module, record its routes, projection-backed display reads and current loader symbols, the proposed coherent query/view-model assign, current manual refresh predicates or absence of refresh, fresh authorization inputs, existing forbidden/not-found/navigation transition, transient assigns that must remain outside the query, and existing versus missing focused evidence.",
++    "Keep the dashboard as one coherent authorized result around `MemberDashboardPresentation.load/4`; include selected club/group, member rows and counts, conversations, permissions/access, candidates, and represented people rather than proposing independently refreshed dashboard fields.",
++    "Record a per-query event-to-interest matrix keyed by both projector and source-event type. Include collection interests needed for rows entering or leaving, represented record identities, same/old/new scope information, independently committed projector notifications, and a documented conservative fallback whenever an event lacks precise scope.",
++    "At minimum assess Club, Group, Membership, GroupMembership, Person, Role, Message, ConversationGroupAccess, ConversationFollow, MemberEmailDelivery, and MembaStaffEmailDelivery projectors. Record ClubInvitation, base EmailDelivery, and InboundEmailSource as justified non-interests if direct inspection still shows that they contribute no continuously displayed result.",
++    "Record the existing focused test evidence and the missing proof needed by later tasks, including the approved `@iteration-067` member-entry example, member entry/removal/order/counts, external reply arrival, delivery-status refresh, role/membership loss on open forms/settings, unrelated-club isolation, transient-state preservation, reconnect/bind races, and a real committed-projector-to-open-LiveView path.",
++    "Identify any genuine whole-LiveView exception explicitly. Current inspection found no in-scope member module that merits an exception; projection-backed context should be separated from forms, validation, command state, generated IDs, tabs, picker/search state, reply/send state, success/focus state, and input-derived group preview."
++  ],
++  "scope_exclusions": [
++    "Do not edit application code, tests, acceptance features, ADRs, the approved plan, or the todo; this packet produces only the migration-matrix document.",
++    "Do not design or freeze the generic package API, implement subscriptions or adapters, migrate a LiveView, enable acceptance scenarios, or add tests; those remain tasks 003-008.",
++    "Do not complete task 002's detailed staff-stream inventory. Mark staff, public, auth/onboarding, and stream-backed surfaces as deferred scope boundaries only, without changing them or claiming task 002 complete.",
++    "Do not treat command forms, validation state, navigation state, or transient input-derived previews as projection query results.",
++    "Do not infer a business-policy change for invitation or settings access gaps; record the current behaviour, approved fresh-authorization requirement, and implementation proof needed."
++  ],
++  "references": [
++    "docs/iterations/067-live-projection-queries/plan.md",
++    "docs/adr/0021-publish-committed-read-model-changes.md",
++    "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md",
++    "docs/reference/liveview.md",
++    "web/lib/memba_web/router.ex",
++    "web/lib/memba/read_model_changes.ex",
++    "web/lib/memba_web/identity_auth.ex",
++    "web/lib/memba_web/live/member_dashboard_live.ex",
++    "web/lib/memba_web/member_dashboard_presentation.ex",
++    "web/lib/memba_web/live/member_group_live/new.ex",
++    "web/lib/memba_web/live/member_invitation_live/new.ex",
++    "web/lib/memba_web/live/member_message_live/new.ex",
++    "web/lib/memba_web/live/member_message_live/show.ex",
++    "web/lib/memba_web/live/member_message_delivery_live/show.ex",
++    "web/lib/memba_web/live/my_settings_live.ex",
++    "web/lib/memba_web/member_message_detail.ex",
++    "web/lib/memba/membership/projectors/",
++    "web/lib/memba/messaging/projectors/",
++    "web/test/memba_web/live/",
++    "web/test/memba/read_model_changes_test.exs",
++    "acceptance-tests/features/live_club_member_list.feature"
++  ],
++  "constraints": [
++    "Use inspected code and tests as ground truth. The router currently establishes seven in-scope module boundaries; five have hand-written ReadModelChanges subscriptions while group creation and invitation have none.",
++    "A source event may be published after several projectors commit independently, so map projector plus event and never use one projector's notification as evidence that another projector's rows have committed.",
++    "The notification `changes` value is projector-specific Ecto.Multi output, not a normalized old/new record. Prefer stable event fields and document lookup-derived or conservative invalidation where needed.",
++    "Fresh authorization cannot rely only on mount-captured `current_identity_clubs`. Record how each refresh reacquires current club membership, group participation, role permission, and conversation access from the stable identity and current projection or authoritative APIs.",
++    "Person email events have person identity but no club/group scope even though active-member queries depend on primary email rows; record identity matching plus lookup-derived or conservative affected collection invalidation.",
++    "`MessageSent` has club and conversation identity but no audience group; record conversation identity plus conservative club-conversation invalidation until a precise ConversationGroupAccess commit can match a group collection.",
++    "The shared member receipt loader joins member and staff delivery projections for status and reason, so detail queries that display receipts must account for both projector families and ignore documented no-op replay events.",
++    "Subscribe-before-read and bind-time reconciliation are known requirements, but their API and proof belong to task 003; the matrix should state them as later proof needs, not choose an implementation.",
++    "Preserve existing private-surface semantics in the matrix: dashboard forbidden/not-found behaviour and compose/conversation/delivery navigation on lost access. Flag the current invitation submit-time authorization and settings membership-loss gaps for later implementation proof.",
++    "Keep the document concise enough to act as an implementation checklist while giving every row explicit symbols, interests, authority, transition, transient exclusions, and test citations."
++  ],
++  "focused_validation": [
++    "git diff --check -- docs/iterations/067-live-projection-queries/.delivery/member-liveview-migration-matrix.md",
++    "grep -nE 'MemberDashboardLive|MemberGroupLive.New|MemberInvitationLive.New|MemberMessageLive.New|MemberMessageLive.Show|MemberMessageDeliveryLive.Show|MySettingsLive' docs/iterations/067-live-projection-queries/.delivery/member-liveview-migration-matrix.md",
++    "grep -nE 'Club|GroupMembership|Membership|Person|Role|Message|ConversationGroupAccess|ConversationFollow|MemberEmailDelivery|MembaStaffEmailDelivery' docs/iterations/067-live-projection-queries/.delivery/member-liveview-migration-matrix.md",
++    "git status --short -- docs/iterations/067-live-projection-queries"
++  ],
++  "completion_evidence_required": [
++    "Return the exact changed-file list; it should contain only the migration-matrix document for this worker packet.",
++    "Summarize the seven proposed query-result boundaries and identify any justified whole-surface exception.",
++    "Confirm that every query row records concrete read symbols, projector/event interests with entry/exit and conservative fallback treatment, fresh authorization source, access transition, transient exclusions, and focused evidence.",
++    "List current handler mismatches and missing tests that later implementation tasks must close, including which existing test is the real committed-projector-to-open-view proof.",
++    "Report the focused validation commands and exit results; do not run the repository-wide dev check for this documentation-only packet."
++  ],
++  "candidate_origins": []
++}
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/execution-state.json b/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
+new file mode 100644
+index 0000000..e8a7103
+--- /dev/null
++++ b/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
+@@ -0,0 +1,168 @@
++{
++  "schema_version": 1,
++  "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
++  "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
++  "source_baseline": "36371a72a40071392793dacb38b3bbb8d4c7a778",
++  "accepted_tasks": [],
++  "pending_obligations": [
++    {
++      "task_id": "001",
++      "todo_line": "- [ ] 001 Inventory club-member LiveViews and projection-backed reads, existing refresh predicates, fresh authorization sources and access transitions; record queries to migrate, event/interest mappings, focused test evidence and justified exceptions.",
++      "origin": "plan.md Implementation Plan 1 and Validation Plan repository inventory/migration matrix",
++      "status": "prepared",
++      "coverage": [
++        "Inventory all club-member LiveViews that display projection-backed data through ordinary assigns",
++        "Record one proposed query result per surface, including the single coherent dashboard view model",
++        "Map contributing projectors and events to collection scopes and record identities, including conservative fallbacks",
++        "Record fresh authorization sources, access-loss transitions, transient state exclusions, and focused proof"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "002",
++      "todo_line": "- [ ] 002 Exclude staff streams explicitly.",
++      "origin": "plan.md Scope and Implementation Plan 1",
++      "status": "pending",
++      "coverage": [
++        "Document the deferred staff and stream-backed surfaces explicitly without adding a stream adapter"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "003",
++      "todo_line": "- [ ] 003 Design and prove the contract against the current club dashboard as one coherent query/view-model assign (member entry/exit and route/access transitions) and composed conversation detail (multiple projectors/access) before freezing the generic package API; define subscribe-before-read and bind-time reconciliation.",
++      "origin": "plan.md Technical Model and Implementation Plan 2",
++      "status": "pending",
++      "coverage": [
++        "Prove the query/result/interest/source contract against dashboard and conversation detail",
++        "Define subscribe-before-read, bind-time reconciliation, route transitions, and access-error handling before freezing the package API"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "004",
++      "todo_line": "- [ ] 004 Implement and test the generic local Mix package's query binding, interests, invalidation, refresh and lifecycle contract without Memba or Commanded imports.",
++      "origin": "plan.md Scope, Technical Model, and Implementation Plan 3",
++      "status": "pending",
++      "coverage": [
++        "Implement the generic local package with one LiveView-owned binding per assign",
++        "Test interest replacement, invalidation matching, refresh, lifecycle, and bind/reconnect races without Memba or Commanded dependencies"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "005",
++      "todo_line": "- [ ] 005 Implement the Memba adapter for committed projector notifications, scoped collection/identity invalidations and authorized view-specific queries composed from existing read APIs; use conservative invalidation when exact mapping is unavailable.",
++      "origin": "plan.md Technical Model and Implementation Plan 4",
++      "status": "pending",
++      "coverage": [
++        "Translate committed ReadModelChanges notifications into scoped collection and identity invalidations",
++        "Implement authorized Memba view-specific queries with fresh authorization and conservative invalidation where event scope is incomplete"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "006",
++      "todo_line": "- [ ] 006 Migrate each in-scope member LiveView to query-result assigns, preserving its route, access, form state and UI. Ensure list entry/exit and existing live delivery/conversation flows do not regress.",
++      "origin": "plan.md Scope and Implementation Plan 5",
++      "status": "pending",
++      "coverage": [
++        "Migrate every inventoried in-scope member LiveView or record a justified exception",
++        "Preserve route, access, command, navigation, transient form state, and existing UI while replacing only each query result assign",
++        "Keep member entry/removal/reordering/counts and delivery/conversation live behaviour current"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "007",
++      "todo_line": "- [ ] 007 Integrate the package with `web/mix.exs`, Docker release build and `dev check` so both package and web tests run in supported environments.",
++      "origin": "plan.md Scope, Implementation Plan 6, and Validation Plan build/release proof",
++      "status": "pending",
++      "coverage": [
++        "Wire the path dependency into the web application and production Docker release",
++        "Make the project quality gate execute both package and web tests"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    },
++    {
++      "task_id": "008",
++      "todo_line": "- [ ] 008 Add the focused acceptance example, focused tests per migrated member page and a real committed-projector-to-open-LiveView test, plus package unit tests for matching/mount/change/reconnect races; run `dev check`.",
++      "origin": "plan.md Acceptance Scenarios, Implementation Plan 7, and Validation Plan",
++      "status": "pending",
++      "coverage": [
++        "Enable the approved club-member-list acceptance example without changing its rule",
++        "Add focused proof for migrated member pages, fresh authorization, unrelated updates, transient-state preservation, lifecycle races, and committed-projector delivery",
++        "Run the final full dev check on the exact delivered state"
++      ],
++      "replaces": [],
++      "candidate_origins": []
++    }
++  ],
++  "candidate_origins": [],
++  "coverage_map": [
++    {
++      "scope": "Repository inventory and migration matrix for all club-member ordinary-assign LiveViews: projection reads, query boundaries, event/interest mappings, fresh authorization, access transitions, transient state, existing proof, and justified exceptions.",
++      "pending_task_ids": [
++        "001"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Explicit deferral of staff, public, auth/onboarding, and stream-backed surfaces; no stream adapter in iteration 067.",
++      "pending_task_ids": [
++        "002"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Pre-freeze proof of one coherent dashboard query and composed conversation-detail query, including list entry/exit, route and access changes, subscribe-before-read, and bind-time reconciliation.",
++      "pending_task_ids": [
++        "003"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Extractable generic package API and implementation for LiveView-owned query binding, interests, invalidation matching, result replacement, cleanup, and lifecycle races without Memba or Commanded imports.",
++      "pending_task_ids": [
++        "004"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Memba notification adapter and authorized view-specific queries over existing read APIs, with scoped collection/identity keys, independently committed projector convergence, fresh authority, and conservative fallback.",
++      "pending_task_ids": [
++        "005"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Migration of all in-scope member LiveViews to one query-result assign per query while preserving commands, routes, access semantics, forms, navigation, UI, and existing delivery/conversation behaviour.",
++      "pending_task_ids": [
++        "006"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Local path dependency, production Docker build/release inclusion, and quality-gate execution of package and web tests.",
++      "pending_task_ids": [
++        "007"
++      ],
++      "accepted_task_lines": []
++    },
++    {
++      "scope": "Stakeholder-readable member-entry acceptance example and focused package/LiveView proof for relevant and unrelated changes, entry/removal/reordering/counts, authorization loss, transient state, reconnect/bind races, and a real committed-projector-to-open-view path, followed by exact-state dev check.",
++      "pending_task_ids": [
++        "008"
++      ],
++      "accepted_task_lines": []
++    }
++  ],
++  "planner_note": "Initial preparation at the trusted before-planner checkpoint. There is no prior worker result, review, accepted task, or unresolved candidate origin. The approved todo order is already dependency-correct, so no task was split, combined, replaced, or reordered. Task 001 is prepared as a documentation-only migration-matrix prerequisite; package design, runtime changes, explicit staff-stream enumeration, and tests remain with tasks 002-008."
++}
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/planner-result.json b/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
+new file mode 100644
+index 0000000..0dd1905
+--- /dev/null
++++ b/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
+@@ -0,0 +1,7 @@
++{
++  "schema_version": 1,
++  "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
++  "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
++  "source_baseline": "36371a72a40071392793dacb38b3bbb8d4c7a778",
++  "decision": "ready"
++}
