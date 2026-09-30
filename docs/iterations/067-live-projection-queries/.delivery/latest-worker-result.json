@@ -1,44 +1,32 @@
 {
   "schema_version": 1,
-  "packet_id": "task-001-2bcb025-inventory-revision-2",
-  "task_id": "task-001",
-  "todo_line": "- [ ] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces.",
+  "packet_id": "task-003-95b3c6a-dashboard-boundary-1",
+  "task_id": "task-003",
+  "todo_line": "- [ ] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally.",
   "result": "ready_for_review",
   "changed_paths": [
-    "docs/iterations/067-live-projection-queries/migration-matrix.md"
+    "web/lib/memba_web/member_dashboard_query.ex",
+    "web/lib/memba_web/live/member_dashboard_live.ex",
+    "web/test/memba_web/member_dashboard_query_test.exs",
+    "web/test/memba_web/live/member_dashboard_live_test.exs"
   ],
   "validation": [
     {
-      "command": "test -s docs/iterations/067-live-projection-queries/migration-matrix.md && grep -Fq 'Memba.Messaging.Projectors.MembaStaffEmailDelivery' docs/iterations/067-live-projection-queries/migration-matrix.md",
+      "command": "bin/dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_dashboard_presentation_test.exs test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_dashboard_admission_live_test.exs test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
       "exit_status": 0,
-      "evidence": "The revised matrix is non-empty and includes the previously omitted fully qualified staff delivery projector."
+      "evidence": "85 focused query, presentation, dashboard, admission, removal and targeted-add tests passed with 0 failures."
     },
     {
-      "command": "matrix=docs/iterations/067-live-projection-queries/migration-matrix.md; grep -Fq 'commit and publish independently' \"$matrix\" && grep -Fq 'regardless of commit order' \"$matrix\" && grep -Fq 'broad delivery-family invalidation' \"$matrix\" && grep -Fq 'exact staff delivery reason' \"$matrix\" && grep -Fq 'represented-member role assignment/removal and role-label changes update badges independently of current-actor permission invalidation' \"$matrix\" && grep -Fq 'ClubMemberRemoved` carries club/membership/person but no `role_id`' \"$matrix\" && grep -Fq 'legacy `MemberRemoved` requires only membership and may omit club/person' \"$matrix\"",
+      "command": "bin/mix format --check-formatted",
       "exit_status": 0,
-      "evidence": "Delivery-projector convergence/fallback, represented-member badge proof, and exact-role versus compatibility-removal semantics are all recorded."
-    },
-    {
-      "command": "matrix=docs/iterations/067-live-projection-queries/migration-matrix.md; grep -Fq 'Grant is an upsert' \"$matrix\" && grep -Fq 'does not carry that prior level' \"$matrix\" && grep -Fq 'does **not** reorder dashboard rows' \"$matrix\" && grep -Fq \"ordering and displayed \\`sent_at\\` remain the root's \\`inserted_at\\`\" \"$matrix\"",
-      "exit_status": 0,
-      "evidence": "The grant old-scope and root-time dashboard ordering corrections are present."
+      "evidence": "All Elixir source and test files are formatted."
     },
     {
       "command": "git diff --check",
       "exit_status": 0,
-      "evidence": "Git whitespace validation passed."
-    },
-    {
-      "command": "git status --short",
-      "exit_status": 0,
-      "evidence": "Only migration-matrix.md and the required .delivery/latest-worker-result.json artifact are modified; no application, test, feature, ADR, plan, todo, reference, schema, or unrelated documentation file changed."
-    },
-    {
-      "command": "node -e 'const fs=require(\"fs\"); const packet=JSON.parse(fs.readFileSync(process.argv[1],\"utf8\")); const result=JSON.parse(fs.readFileSync(process.argv[2],\"utf8\")); for (const key of [\"packet_id\",\"task_id\",\"todo_line\"]) if (result[key] !== packet[key]) throw new Error(key); if (result.schema_version !== 1 || result.result !== \"ready_for_review\" || !result.validation.every(entry => entry.exit_status === 0) || typeof result.notes !== \"string\" || !result.notes) throw new Error(\"invalid result\");' docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json",
-      "exit_status": 0,
-      "evidence": "The worker result is valid JSON, every reported final validation succeeded, and routing identity matches the current packet."
+      "evidence": "No whitespace errors were reported."
     }
   ],
-  "notes": "Closed all five review gaps while preserving the existing inventory: added the independently committed MembaStaffEmailDelivery reason dependency and exact-message/fallback convergence rules; separated represented-member role labels and missing open-view badge proof from current-actor permissions; distinguished exact role removal from membership-removal compatibility invalidation; corrected grant upsert old scope; and kept reply-derived updates separate from root-time ordering. An initial focused grep exposed that the new staff projector row used an abbreviated module name; the row was corrected to the required fully qualified name before all reported final checks passed. This revision is documentation-only, so the packet-required focused checks ran and the full quality gate was intentionally not run.",
+  "notes": "The new MembaWeb.MemberDashboardQuery normalizes the authenticated email and resolves active clubs on every invocation before delegating to the existing presentation boundary. MemberDashboardLive subscribes before its connected reads, retains the routed club ID and identity email as stable inputs, and stores projection-backed display and authorization data only under :dashboard; render-local assign/2 expansion is required so LiveView change tracking emits refreshed dashboard diffs without creating socket mirrors. Tests prove stale active-club snapshots cannot preserve access, selected-group errors remain distinct, the single-assign boundary is maintained, and an open filtered member picker survives a successful dashboard replacement. The initial expected TDD failure was the absent query module; a superseded diagnostic admission-suite failure exposed Map.merge/2 bypassing LiveView change tracking and was fixed with render-local assign/2. Existing provisional projector predicates remain intentionally unchanged for later tasks.",
   "unresolved": []
 }

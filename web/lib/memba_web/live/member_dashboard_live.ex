@@ -20,7 +20,7 @@ defmodule MembaWeb.MemberDashboardLive do
   alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
-  alias MembaWeb.MemberDashboardPresentation
+  alias MembaWeb.MemberDashboardQuery
 
   @dashboard_state_projectors [
     Memba.Membership.Projectors.Group,
@@ -35,24 +35,21 @@ defmodule MembaWeb.MemberDashboardLive do
     club_id = Map.get(session, "club_id")
     selected_group_id = Map.get(params, "group_id")
     targeted_person_id = Map.get(params, "person_id")
+
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+    end
+
     current_identity = current_identity_from_session(session)
     current_identity_clubs = identity_clubs(current_identity)
 
     socket = assign_current_identity(socket, current_identity, current_identity_clubs)
 
-    case MemberDashboardPresentation.load(
-           club_id,
-           current_identity,
-           current_identity_clubs,
-           selected_group_id
-         ) do
-      {:ok, dashboard_assigns} ->
-        if connected?(socket) do
-          Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
-        end
-
+    case MemberDashboardQuery.load(club_id, identity_email(current_identity), selected_group_id) do
+      {:ok, dashboard} ->
         {:ok,
          socket
+         |> assign(:routed_club_id, club_id)
          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
          |> assign(:selected_group_route_id, selected_group_id)
          |> assign(:targeted_person_route_id, targeted_person_id)
@@ -65,7 +62,7 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:custom_group_member_removal, nil)
          |> assign(:group_access_request_state, :idle)
          |> assign_custom_group_member_picker_query("")
-         |> assign(dashboard_assigns)}
+         |> assign(:dashboard, dashboard)}
 
       {:error, :forbidden} ->
         forbidden!()
@@ -89,7 +86,7 @@ defmodule MembaWeb.MemberDashboardLive do
       |> assign(:custom_group_member_removal, nil)
       |> assign(:group_access_request_state, :idle)
       |> assign_custom_group_member_picker_query("")
-      |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
+      |> refresh_dashboard(selected_group_id)
 
     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
   end
@@ -100,7 +97,7 @@ defmodule MembaWeb.MemberDashboardLive do
         _params,
         %{
           assigns: %{
-            can_request_group_access?: true,
+            dashboard: %{can_request_group_access?: true},
             group_access_request_state: :idle
           }
         } = socket
@@ -111,9 +108,9 @@ defmodule MembaWeb.MemberDashboardLive do
       Messaging.request_group_access(
         %{
           message_id: ID.generate(:message),
-          club_id: socket.assigns.selected_club.club_id,
-          requester_person_id: socket.assigns.current_member.id,
-          group_id: socket.assigns.selected_group.group_id
+          club_id: socket.assigns.dashboard.selected_club.club_id,
+          requester_person_id: socket.assigns.dashboard.current_member.id,
+          group_id: socket.assigns.dashboard.selected_group.group_id
         },
         consistency: :strong
       )
@@ -140,7 +137,7 @@ defmodule MembaWeb.MemberDashboardLive do
         _params,
         %{
           assigns: %{
-            can_request_group_access?: true,
+            dashboard: %{can_request_group_access?: true},
             group_access_request_state: :sent
           }
         } = socket
@@ -153,7 +150,7 @@ defmodule MembaWeb.MemberDashboardLive do
   def handle_event(
         "open_custom_group_member_picker",
         _params,
-        %{assigns: %{can_add_custom_group_members?: true}} = socket
+        %{assigns: %{dashboard: %{can_add_custom_group_members?: true}}} = socket
       ) do
     {:noreply,
      socket
@@ -188,9 +185,11 @@ defmodule MembaWeb.MemberDashboardLive do
         %{
           assigns: %{
             live_action: :targeted_add,
-            can_add_custom_group_members?: true,
-            current_member: %{id: actor_person_id},
-            selected_club: %{club_id: club_id},
+            dashboard: %{
+              can_add_custom_group_members?: true,
+              current_member: %{id: actor_person_id},
+              selected_club: %{club_id: club_id}
+            },
             selected_group_route_id: group_id,
             targeted_person_route_id: person_id
           }
@@ -234,11 +233,11 @@ defmodule MembaWeb.MemberDashboardLive do
         socket
       ) do
     attrs = %{
-      club_id: socket.assigns.selected_club.club_id,
-      group_id: socket.assigns.selected_group.group_id,
+      club_id: socket.assigns.dashboard.selected_club.club_id,
+      group_id: socket.assigns.dashboard.selected_group.group_id,
       membership_id: membership_id,
       person_id: person_id,
-      actor_person_id: socket.assigns.current_member.id
+      actor_person_id: socket.assigns.dashboard.current_member.id
     }
 
     case Membership.add_custom_group_member(attrs, consistency: :strong) do
@@ -247,12 +246,7 @@ defmodule MembaWeb.MemberDashboardLive do
         |> deliver_group_welcome(socket)
         |> log_group_welcome_delivery_failure(admission)
 
-        {:noreply,
-         refresh_dashboard(
-           socket,
-           socket.assigns.selected_club.club_id,
-           socket.assigns.selected_group_route_id
-         )}
+        {:noreply, refresh_dashboard(socket, socket.assigns.selected_group_route_id)}
 
       {:error, _reason} ->
         {:noreply,
@@ -267,7 +261,7 @@ defmodule MembaWeb.MemberDashboardLive do
   def handle_event(
         "confirm_custom_group_member_removal",
         %{"membership_id" => membership_id, "person_id" => person_id},
-        %{assigns: %{can_add_custom_group_members?: true}} = socket
+        %{assigns: %{dashboard: %{can_add_custom_group_members?: true}}} = socket
       ) do
     {:noreply,
      assign(socket, :custom_group_member_removal, %{
@@ -298,17 +292,17 @@ defmodule MembaWeb.MemberDashboardLive do
     with {:ok, operation_id} <-
            removal_operation_id(socket, membership_id, person_id, submitted_operation_id) do
       attrs = %{
-        club_id: socket.assigns.selected_club.club_id,
-        group_id: socket.assigns.selected_group.group_id,
+        club_id: socket.assigns.dashboard.selected_club.club_id,
+        group_id: socket.assigns.dashboard.selected_group.group_id,
         membership_id: membership_id,
         person_id: person_id,
-        actor_person_id: socket.assigns.current_member.id,
+        actor_person_id: socket.assigns.dashboard.current_member.id,
         removal_operation_id: operation_id
       }
 
       case Membership.remove_custom_group_member(attrs, consistency: :strong) do
         {:ok, %CustomGroupRemoval{}} ->
-          self_leave? = person_id == socket.assigns.current_member.id
+          self_leave? = person_id == socket.assigns.dashboard.current_member.id
 
           completed_removal = %{
             action_key: {membership_id, person_id},
@@ -321,17 +315,14 @@ defmodule MembaWeb.MemberDashboardLive do
           refreshed =
             socket
             |> assign(:custom_group_member_removal, completed_removal)
-            |> refresh_dashboard(
-              socket.assigns.selected_club.club_id,
-              socket.assigns.selected_group_route_id
-            )
+            |> refresh_dashboard(socket.assigns.selected_group_route_id)
 
           refreshed =
             if self_leave? do
               put_flash(
                 refreshed,
                 :info,
-                "You're no longer in #{socket.assigns.selected_group.name}. You still belong to #{socket.assigns.selected_club.name}."
+                "You're no longer in #{socket.assigns.dashboard.selected_group.name}. You still belong to #{socket.assigns.dashboard.selected_club.name}."
               )
             else
               refreshed
@@ -342,10 +333,7 @@ defmodule MembaWeb.MemberDashboardLive do
         {:error, _reason} ->
           {:noreply,
            socket
-           |> refresh_dashboard(
-             socket.assigns.selected_club.club_id,
-             socket.assigns.selected_group_route_id
-           )
+           |> refresh_dashboard(socket.assigns.selected_group_route_id)
            |> put_flash(:error, "You are not authorized to access that page.")}
       end
     else
@@ -361,25 +349,26 @@ defmodule MembaWeb.MemberDashboardLive do
   @impl Phoenix.LiveView
   def handle_info(
         {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
-        %{assigns: %{selected_club: selected_club}} = socket
+        %{assigns: %{dashboard: %{selected_club: _selected_club}}} = socket
       ) do
-    {:noreply,
-     refresh_dashboard(socket, selected_club.club_id, socket.assigns.selected_group_route_id)}
+    {:noreply, refresh_dashboard(socket, socket.assigns.selected_group_route_id)}
   end
 
   def handle_info(
         {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
-        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
+        %{assigns: %{dashboard: %{selected_club: %{club_id: club_id}}}} = socket
       )
       when projector in @dashboard_state_projectors do
-    {:noreply, refresh_dashboard(socket, club_id, socket.assigns.selected_group_route_id)}
+    {:noreply, refresh_dashboard(socket, socket.assigns.selected_group_route_id)}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
-  def render(%{selected_club: _selected_club} = assigns) do
-    MembaWeb.PageHTML.club(assigns)
+  def render(%{dashboard: dashboard} = assigns) do
+    assigns
+    |> assign(dashboard)
+    |> MembaWeb.PageHTML.club()
   end
 
   defp active_section(live_action) when live_action in [:members, :targeted_add], do: "members"
@@ -415,7 +404,7 @@ defmodule MembaWeb.MemberDashboardLive do
     group_id = target.group.group_id
 
     socket
-    |> refresh_dashboard(target.club.club_id, group_id)
+    |> refresh_dashboard(group_id)
     |> assign(:targeted_group_member_success, %{
       person_id: target.person.person_id,
       person_name: target.person.name,
@@ -431,7 +420,7 @@ defmodule MembaWeb.MemberDashboardLive do
          target,
          %CustomGroupAdmission{transition: :already_member}
        ) do
-    refresh_dashboard(socket, target.club.club_id, target.group.group_id)
+    refresh_dashboard(socket, target.group.group_id)
   end
 
   defp targeted_group_admission_error(socket) do
@@ -457,8 +446,8 @@ defmodule MembaWeb.MemberDashboardLive do
     added_by = Membership.get_person(admission.actor_person_id)
 
     GroupWelcomeEmail.deliver(%{
-      club: socket.assigns.selected_club,
-      group: socket.assigns.selected_group,
+      club: socket.assigns.dashboard.selected_club,
+      group: socket.assigns.dashboard.selected_group,
       recipient: %{
         person_id: admission.person_id,
         name: person_name(recipient),
@@ -470,7 +459,7 @@ defmodule MembaWeb.MemberDashboardLive do
       },
       group_url:
         ClubSite.url(
-          socket.assigns.selected_club,
+          socket.assigns.dashboard.selected_club,
           ~p"/groups/#{admission.group_id}"
         )
     })
@@ -533,17 +522,16 @@ defmodule MembaWeb.MemberDashboardLive do
   defp person_name(%{name: name}), do: name
   defp person_name(_person), do: nil
 
-  defp refresh_dashboard(socket, club_id, selected_group_id) do
-    case MemberDashboardPresentation.load(
-           club_id,
-           socket.assigns.current_identity,
-           socket.assigns.current_identity_clubs,
+  defp refresh_dashboard(socket, selected_group_id) do
+    case MemberDashboardQuery.load(
+           socket.assigns.routed_club_id,
+           socket.assigns.current_identity_email,
            selected_group_id
          ) do
-      {:ok, dashboard_assigns} ->
+      {:ok, dashboard} ->
         socket
         |> assign(:selected_group_route_id, selected_group_id)
-        |> assign(dashboard_assigns)
+        |> assign(:dashboard, dashboard)
         |> assign_targeted_group_member()
 
       {:error, :forbidden} ->
@@ -593,9 +581,11 @@ defmodule MembaWeb.MemberDashboardLive do
          %{
            assigns: %{
              live_action: :targeted_add,
-             can_add_custom_group_members?: true,
-             selected_club: %{club_id: club_id},
-             selected_group: %{group_id: group_id},
+             dashboard: %{
+               can_add_custom_group_members?: true,
+               selected_club: %{club_id: club_id},
+               selected_group: %{group_id: group_id}
+             },
              targeted_person_route_id: person_id
            }
          } = socket

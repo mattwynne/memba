@@ -84,6 +84,23 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-message-#{message.message_id}")
     assert has_element?(view, "#club-member-#{alice.person_id}")
     assert has_element?(view, "#club-member-#{bob.person_id}")
+
+    %{socket: socket} = :sys.get_state(view.pid)
+
+    assert socket.assigns.dashboard.selected_club.club_id == alice.club_id
+
+    for projection_assign <- [
+          :selected_club,
+          :selected_group,
+          :current_member,
+          :members,
+          :active_member_count,
+          :messages,
+          :message_rows,
+          :current_member_can_manage_members?
+        ] do
+      refute Map.has_key?(socket.assigns, projection_assign)
+    end
   end
 
   test "Everyone fallback renders the resolved group as selected in the rail and header", %{
@@ -170,6 +187,73 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-group-rail-other #member-group-link-#{new_group.group_id}",
              "New Planning"
+           )
+  end
+
+  test "a dashboard result replacement preserves the open member picker and its query", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{private_group.group_id}/members")
+
+    view
+    |> element("#member-section-action-add-group-member")
+    |> render_click()
+
+    view
+    |> form("#custom-group-member-search-form", member_search: %{query: "nobody"})
+    |> render_change()
+
+    new_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "new_planning",
+        name: "New Planning"
+      )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Group,
+      %Memba.Membership.Events.GroupCreated{
+        club_id: alice.club_id,
+        group_id: new_group.group_id,
+        group_key: new_group.group_key,
+        name: new_group.name
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-group-rail-other #member-group-link-#{new_group.group_id}",
+             "New Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-action-add-group-member[aria-expanded='true']"
+           )
+
+    assert has_element?(
+             view,
+             "#custom-group-member-search-form input[name='member_search[query]'][value='nobody']"
            )
   end
 
