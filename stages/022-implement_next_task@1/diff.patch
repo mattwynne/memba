@@ -1,0 +1,1894 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 8dd155f..c67ff5c 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,26 +1,32 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-005-1dfd4de-dashboard-review-revision-2",
+-  "task_id": "task-005",
+-  "todo_line": "- [ ] 005 Wire the dashboard query to the provisional binding and scoped Memba notification translation; prove club-member and selected-group entry/exit, order/count updates, represented Person and role changes, route/access transitions, unrelated-club isolation and transient-state preservation.",
++  "packet_id": "task-006-e4f8130-conversation-detail-binding-1",
++  "task_id": "task-006",
++  "todo_line": "- [ ] 006 Wire composed conversation detail to the provisional binding; prove Message, represented-Person, exact-follow, both independently committed delivery projections and fresh access-loss behavior, unrelated-conversation isolation and transient-state preservation, then freeze the generic contract from both vertical proofs.",
+   "result": "ready_for_review",
+   "changed_paths": [
++    "docs/iterations/067-live-projection-queries/extraction-contract.md",
++    "web/lib/memba_web/live/member_message_live/show.ex",
++    "web/lib/memba_web/live_query/binding.ex",
+     "web/lib/memba_web/live_query/memba_read_model_source.ex",
+-    "web/lib/memba_web/member_dashboard_query.ex",
+-    "web/test/memba_web/live/member_dashboard_live_test.exs",
++    "web/lib/memba_web/live_query/query.ex",
++    "web/lib/memba_web/live_query/source.ex",
++    "web/lib/memba_web/member_message_detail.ex",
++    "web/lib/memba_web/member_message_detail_query.ex",
++    "web/test/memba_web/live/member_message_live/show_test.exs",
+     "web/test/memba_web/live_query/memba_read_model_source_test.exs",
+-    "web/test/memba_web/member_dashboard_query_test.exs"
++    "web/test/memba_web/member_message_detail_query_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs test/memba_web/member_dashboard_query_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/binding_test.exs test/memba_web/live_query/memba_read_model_source_test.exs test/memba_web/member_message_detail_query_test.exs",
+       "exit_status": 0,
+-      "evidence": "14 tests passed with 0 failures, covering conversation-only represented Person interests and exact-plus-fallback classification for partial Role, Message and GroupMembership notifications."
++      "evidence": "27 tests passed with 0 failures, covering the frozen binding lifecycle, fresh-authorized query interests, exact follow and dual-delivery classification, changes/row scope recovery and conservative fallbacks."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs test/memba_web/member_message_detail_loader_test.exs test/memba_web/controllers/member_message_detail_test.exs",
+       "exit_status": 0,
+-      "evidence": "57 tests passed with 0 failures, including isolated Message-only root entry and reply-derived convergence, conversation-only Person isolation, and all prior dashboard binding behavior."
++      "evidence": "36 tests passed with 0 failures, including committed reply entry, represented-author isolation, exact current-member follow, both delivery commit orders, all three authorization-loss paths, transient-state preservation and all pre-existing detail/reply/follow/controller behavior."
+     },
+     {
+       "command": "bin/mix format --check-formatted",
+@@ -33,6 +39,6 @@
+       "evidence": "No whitespace errors were reported."
+     }
+   ],
+-  "notes": "Conversation rows now register deduplicated exact Person interests for sender, originator, latest replier and displayed participants, including identities absent from dashboard member/candidate collections. Partial Role and Message envelopes retain exact keys while adding global family fallbacks when club scope is missing; GroupMembership always retains an available Person key and adds club/global participation fallback whenever club, group or person scope is incomplete. The root-entry proof creates authoritative conversation state before mount, removes and restores only the committed read rows, then delivers only the Message projector notification so ConversationGroupAccess cannot supply the refresh. Because complete GroupMembership invalidations now intentionally include an exact affected-Person key, route isolation is proven with an unrepresented old-group person while the selected-group notification remains exact. Initial TDD runs failed on the five missing query/source behaviors and then exposed two LiveView fixture issues (authoritative conversation audience and newly relevant represented candidates); both were repaired. An initial formatting invocation used web-prefixed paths unsupported by the root wrapper; the corrected formatter and final format check passed. No conversation-detail, package, full-adapter, acceptance-feature, domain/projector, delivery-dashboard or staff-stream work was introduced.",
++  "notes": "Conversation detail now binds only the coherent :message_detail projection result; former flat selected_club, message, current_member, conversation_entries and delivery assigns are absent from socket state, while current identity shell data, page_title, route_params, reply form/body/errors/state, flash and expanded_receipt_groups remain owner state. Every load normalizes authenticated email, rereads Accounts.list_active_clubs_for_email/1, re-resolves Person/member and canonical audience, and reruns authoritative group/conversation access without current_identity_clubs. Successful results replace interests for selected Club, club-members/current membership and Person authority, exact audience-group participation and conversation access, conversation/message collection, represented messages/authors, exact current-member follow plus partial-scope follow fallbacks, root-message delivery collection, represented deliveries and conservative families; the new-reply query test proves a newly represented author replaces the interest set. ConversationFollow maps explicit member_id and MessageSent sender_id to {:conversation_follow, conversation, member}, retaining conversation-only, member-only or club/global fallback scope. Both delivery projectors map message_id to {:message_deliveries, message} and delivery_id to {:delivery, delivery}; missing message scope is recovered from nested committed changes, then committed member/staff rows, otherwise the exact delivery key is retained alongside {:fallback, :delivery}. Connected tests prove a committed reply enters an open conversation, matching represented Person refresh and other Person isolation, unrelated club/conversation/message/delivery isolation, exact current-member follow refresh versus another member, and member-first intermediate status-without-reason then converged reason plus staff-first intermediate reason-with-sent-status then converged member status. Existing group-participation and exact-access revocation tests plus the new club-membership-loss test prove fresh authorization and owner navigation after Binding clears the private result; page_title is also cleared. Relevant-refresh proof preserves whitespace reply params/validation/state, follow display, route context, info flash and expanded receipt state without restoring omitted receipt UI. Query/Source/Binding types and moduledocs plus binding_test.exs and extraction-contract.md freeze one-argument query success/error, opaque source callbacks, one owner subscription, one assign per query, subscribe-before-read reconciliation, atomic result/interest replacement and owner-handled cleared access errors for task 007. No delivery-detail or other LiveView migration, package extraction, remaining-adapter completion, acceptance feature, domain/projector schema, Docker/quality-gate or staff-stream work was introduced. The superseded TDD runs first failed for absent source/query behavior; one attempted write-mode formatter invocation was sandbox-read-only, after which the exact required format check passed.",
+   "unresolved": []
+ }
+diff --git a/docs/iterations/067-live-projection-queries/extraction-contract.md b/docs/iterations/067-live-projection-queries/extraction-contract.md
+new file mode 100644
+index 0000000..2088d33
+--- /dev/null
++++ b/docs/iterations/067-live-projection-queries/extraction-contract.md
+@@ -0,0 +1,31 @@
++# Frozen live-query extraction contract
++
++Task 006 freezes the generic contract proved by the dashboard and conversation
++detail verticals. Task 007 may move and rename modules as part of package
++extraction, but it must preserve these semantics:
++
++- A query has a stable identity, owns exactly one public result assign, and has
++  a one-argument loader. The loader returns `{:ok, result, interests}` or
++  `{:error, reason}`. Every success atomically replaces both the coherent result
++  and its complete opaque interest set.
++- A source has zero-argument `subscribe`, one-argument `classify`, and
++  two-argument `matches?` callbacks. Classification returns `:ignore` or
++  `{:ok, invalidations}`. Interest and invalidation values remain opaque to the
++  generic package; Memba projector names and tuple vocabulary stay in the app.
++- One LiveView owner holds registrations and one shared source subscription.
++  No process is created per query. A connected bind subscribes before its first
++  read and reconciles relevant notifications delivered across the bind window.
++- Notifications refresh only matching registrations. Rebind replaces inputs,
++  result, and interests. A failed initial read, rebind, or refresh clears that
++  query's public result and interests before returning the error to the owner.
++- The LiveView owner decides whether an access error raises, renders a cleared
++  surface, or navigates. Query replacement does not overwrite route, form,
++  flash, disclosure, command, or other transient owner state.
++
++The contract is represented by the types and moduledocs in
++`MembaWeb.LiveQuery.Query`, `MembaWeb.LiveQuery.Source`, and
++`MembaWeb.LiveQuery.Binding`. `binding_test.exs` locks subscription ordering,
++one-subscription ownership, relevant-only refresh, atomic interest replacement,
++route rebind, result clearing, bind-window reconciliation, and fresh connected
++mount behavior. The dashboard and conversation-detail tests prove the same
++contract against two materially different consumers.
+diff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex
+index a63cda9..9510d83 100644
+--- a/web/lib/memba_web/live/member_message_live/show.ex
++++ b/web/lib/memba_web/live/member_message_live/show.ex
+@@ -11,44 +11,37 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   require Logger
+ 
+   alias Memba.Messaging
+-  alias Memba.ReadModelChanges
+-  alias MembaWeb.MemberMessageDetail
++  alias MembaWeb.LiveQuery.Binding
++  alias MembaWeb.LiveQuery.MembaReadModelSource
++  alias MembaWeb.MemberMessageDetailQuery
+ 
+-  @access_projectors [
+-    Memba.Membership.Projectors.GroupMembership,
+-    Memba.Membership.Projectors.Membership,
+-    Memba.Messaging.Projectors.ConversationGroupAccess
+-  ]
++  @message_detail_query_id :member_message_detail
+ 
+   @impl Phoenix.LiveView
+   def mount(params, session, socket) when is_map(params) do
+     params = put_session_club_id(params, session) |> put_club_id_source(session)
+-    socket = ensure_identity_assigns(socket)
++
++    socket =
++      socket
++      |> ensure_identity_assigns()
++      |> assign(:current_identity_email, identity_email(socket.assigns[:current_identity]))
++      |> assign(:route_params, params)
++      |> assign_initial_reply_state()
++      |> assign(:expanded_receipt_groups, MapSet.new())
+ 
+     case params do
+       %{"club_id" => _club_id, "message_id" => _message_id} ->
+-        case MemberMessageDetail.load(
+-               params,
+-               socket.assigns.current_identity_clubs,
+-               socket.assigns.current_identity
++        case Binding.bind(
++               socket,
++               MemberMessageDetailQuery.query(),
++               message_detail_query_inputs(socket),
++               MembaReadModelSource.new()
+              ) do
+-          {:ok, detail_assigns} ->
+-            if connected?(socket) do
+-              Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+-            end
+-
+-            {:ok,
+-             socket
+-             |> assign(:route_params, params)
+-             |> assign(detail_assigns)
+-             |> assign_initial_reply_state()
+-             |> assign(:expanded_receipt_groups, MapSet.new())}
+-
+-          {:error, :forbidden} ->
+-            forbidden!(socket)
+-
+-          {:error, :not_found} ->
+-            not_found!(socket)
++          {:ok, socket} ->
++            {:ok, synchronize_message_detail_shell(socket)}
++
++          {:error, errors, socket} ->
++            initial_binding_error!(errors, socket)
+         end
+ 
+       _params ->
+@@ -61,51 +54,16 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   end
+ 
+   @impl Phoenix.LiveView
+-  def handle_info(
+-        {:read_model_changed,
+-         %{projector: Memba.Messaging.Projectors.MemberEmailDelivery, source_event: event}},
+-        %{assigns: %{message: message}} = socket
+-      ) do
+-    if Map.get(event, :message_id) == message.message_id do
+-      {:noreply, refresh_message_detail(socket)}
+-    else
+-      {:noreply, socket}
+-    end
+-  end
+-
+-  def handle_info(
+-        {:read_model_changed,
+-         %{projector: Memba.Messaging.Projectors.Message, source_event: event}},
+-        %{assigns: %{message: message}} = socket
+-      ) do
+-    if Map.get(event, :conversation_id) == message.conversation_id do
+-      {:noreply, refresh_message_detail(socket)}
+-    else
+-      {:noreply, socket}
+-    end
+-  end
++  def handle_info({:read_model_changed, _change} = notification, socket) do
++    case Binding.handle_notification(socket, notification) do
++      {:ignored, socket} ->
++        {:noreply, socket}
+ 
+-  def handle_info(
+-        {:read_model_changed,
+-         %{projector: Memba.Messaging.Projectors.ConversationFollow, source_event: event}},
+-        %{assigns: %{message: message}} = socket
+-      ) do
+-    if event_conversation_id(event) == message.conversation_id do
+-      {:noreply, refresh_message_detail(socket)}
+-    else
+-      {:noreply, socket}
+-    end
+-  end
++      {:ok, socket} ->
++        {:noreply, synchronize_message_detail_shell(socket)}
+ 
+-  def handle_info(
+-        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id} = event}},
+-        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
+-      )
+-      when projector in @access_projectors do
+-    if access_change_relevant?(projector, event, socket) do
+-      {:noreply, refresh_access_or_leave(socket)}
+-    else
+-      {:noreply, socket}
++      {:error, errors, socket} ->
++        {:noreply, refresh_binding_error(errors, socket)}
+     end
+   end
+ 
+@@ -163,8 +121,16 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   end
+ 
+   @impl Phoenix.LiveView
+-  def render(%{message: _message} = assigns) do
+-    MembaWeb.PageHTML.message(assigns)
++  def render(%{message_detail: message_detail} = assigns) when is_map(message_detail) do
++    assigns
++    |> assign(message_detail)
++    |> MembaWeb.PageHTML.message()
++  end
++
++  def render(%{message_detail: nil} = assigns) do
++    ~H"""
++    <div id="member-message-detail-cleared"></div>
++    """
+   end
+ 
+   def render(_assigns) do
+@@ -199,47 +165,62 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   end
+ 
+   defp refresh_message_detail(socket) do
+-    case MemberMessageDetail.load(
+-           socket.assigns.route_params,
+-           socket.assigns.current_identity_clubs,
+-           socket.assigns.current_identity
++    case Binding.rebind(
++           socket,
++           @message_detail_query_id,
++           message_detail_query_inputs(socket)
+          ) do
+-      {:ok, detail_assigns} ->
+-        assign(socket, detail_assigns)
+-
+-      {:error, :forbidden} ->
+-        forbidden!(socket)
++      {:ok, socket} ->
++        synchronize_message_detail_shell(socket)
+ 
+-      {:error, :not_found} ->
+-        not_found!(socket)
++      {:error, errors, socket} ->
++        refresh_binding_error(errors, socket)
+     end
+   end
+ 
+-  defp refresh_access_or_leave(socket) do
+-    case MemberMessageDetail.load(
+-           socket.assigns.route_params,
+-           socket.assigns.current_identity_clubs,
+-           socket.assigns.current_identity
+-         ) do
+-      {:ok, detail_assigns} ->
+-        assign(socket, detail_assigns)
++  defp message_detail_query_inputs(socket) do
++    %{
++      club_id: Map.get(socket.assigns.route_params, "club_id"),
++      message_id: Map.get(socket.assigns.route_params, "message_id"),
++      authenticated_email: socket.assigns.current_identity_email
++    }
++  end
+ 
+-      {:error, _reason} ->
+-        push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
+-    end
++  defp synchronize_message_detail_shell(
++         %{assigns: %{message_detail: %{page_title: page_title}}} = socket
++       ) do
++    assign(socket, :page_title, page_title)
+   end
+ 
+-  defp access_change_relevant?(
+-         Memba.Messaging.Projectors.ConversationGroupAccess,
+-         event,
++  defp synchronize_message_detail_shell(socket), do: socket
++
++  defp initial_binding_error!(
++         [{@message_detail_query_id, :forbidden} | _errors],
+          socket
+-       ) do
+-    event_conversation_id(event) ==
+-      (socket.assigns.message.conversation_id || socket.assigns.message.message_id)
++       ),
++       do: forbidden!(socket)
++
++  defp initial_binding_error!(
++         [{@message_detail_query_id, :not_found} | _errors],
++         socket
++       ),
++       do: not_found!(socket)
++
++  defp initial_binding_error!(errors, _socket) do
++    raise "member message detail live query failed: #{inspect(errors)}"
+   end
+ 
+-  defp access_change_relevant?(_membership_projector, event, socket) do
+-    Map.get(event, :person_id) == socket.assigns.current_member.id
++  defp refresh_binding_error(errors, socket) do
++    if Enum.any?(errors, fn
++         {@message_detail_query_id, reason} when reason in [:forbidden, :not_found] -> true
++         _other -> false
++       end) do
++      socket
++      |> assign(:page_title, nil)
++      |> push_navigate(to: access_lost_path(socket.assigns.route_params))
++    else
++      raise "member message detail live query refresh failed: #{inspect(errors)}"
++    end
+   end
+ 
+   defp update_current_member_follow(socket, action) do
+@@ -279,9 +260,11 @@ defmodule MembaWeb.MemberMessageLive.Show do
+ 
+   defp current_member_follow_attrs(socket) do
+     with %{
+-           selected_club: %{club_id: club_id},
+-           message: %{conversation_id: conversation_id},
+-           current_member: %{id: member_id}
++           message_detail: %{
++             selected_club: %{club_id: club_id},
++             conversation_audience: %{conversation_id: conversation_id},
++             current_member: %{id: member_id}
++           }
+          } <- socket.assigns do
+       {:ok,
+        %{
+@@ -302,13 +285,6 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
+   end
+ 
+-  defp event_conversation_id(%{conversation_id: conversation_id})
+-       when is_binary(conversation_id),
+-       do: conversation_id
+-
+-  defp event_conversation_id(%{message_id: message_id}), do: message_id
+-  defp event_conversation_id(_event), do: nil
+-
+   defp assign_initial_reply_state(socket) do
+     socket
+     |> assign(:reply_state, :composing)
+@@ -318,7 +294,12 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   end
+ 
+   defp post_current_member_reply(socket, reply_params) do
+-    with %{message: %{conversation_id: conversation_id}, current_member: %{id: sender_id}} <-
++    with %{
++           message_detail: %{
++             conversation_audience: %{conversation_id: conversation_id},
++             current_member: %{id: sender_id}
++           }
++         } <-
+            socket.assigns do
+       reply_message_id = Memba.ID.generate(:message)
+ 
+@@ -359,20 +340,24 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   end
+ 
+   defp log_reply_failure(socket, reason) do
++    detail = socket.assigns.message_detail
++
+     Logger.error("Member message reply failed",
+-      club_id: socket.assigns.selected_club.club_id,
+-      conversation_id: socket.assigns.message.conversation_id,
+-      sender_id: current_member_id(socket.assigns.current_member),
++      club_id: detail.selected_club.club_id,
++      conversation_id: detail.conversation_audience.conversation_id,
++      sender_id: current_member_id(detail.current_member),
+       reason: inspect(reason)
+     )
+   end
+ 
+   defp log_follow_failure(socket, action, reason) do
++    detail = socket.assigns.message_detail
++
+     Logger.error("Member conversation follow setting failed",
+       action: action,
+-      club_id: socket.assigns.selected_club.club_id,
+-      conversation_id: socket.assigns.message.conversation_id,
+-      member_id: current_member_id(socket.assigns.current_member),
++      club_id: detail.selected_club.club_id,
++      conversation_id: detail.conversation_audience.conversation_id,
++      member_id: current_member_id(detail.current_member),
+       reason: inspect(reason)
+     )
+   end
+@@ -392,6 +377,9 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     |> assign_new(:current_identity_clubs, fn -> [] end)
+   end
+ 
++  defp identity_email(%{email: email}), do: email
++  defp identity_email(_identity), do: nil
++
+   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
+ 
+   defp not_found!(socket) do
+diff --git a/web/lib/memba_web/live_query/binding.ex b/web/lib/memba_web/live_query/binding.ex
+index a29ac0e..463f1b5 100644
+--- a/web/lib/memba_web/live_query/binding.ex
++++ b/web/lib/memba_web/live_query/binding.ex
+@@ -1,6 +1,6 @@
+ defmodule MembaWeb.LiveQuery.Binding do
+   @moduledoc """
+-  Provisional, app-private live-query lifecycle owned by a LiveView process.
++  Extraction-facing live-query lifecycle owned by a LiveView process.
+ 
+   The binding keeps registration metadata in one reserved socket assign. Each
+   registration installs exactly one public result assign. Connected binding
+@@ -13,8 +13,8 @@ defmodule MembaWeb.LiveQuery.Binding do
+   remain the owner's responsibility.
+ 
+   This module intentionally creates no process and encodes no Memba projector
+-  knowledge. Its names and callback shapes are provisional until later
+-  iteration tasks prove and extract the package API.
++  knowledge. Its callback, result, replacement, subscription, and access-error
++  semantics are frozen for extraction; package placement remains later work.
+   """
+ 
+   alias MembaWeb.LiveQuery.Query
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+index 70cd9c4..52a41fe 100644
+--- a/web/lib/memba_web/live_query/memba_read_model_source.ex
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -8,6 +8,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   """
+ 
+   alias Memba.ReadModelChanges
++  alias Memba.Messaging
+   alias MembaWeb.LiveQuery.Source
+ 
+   @club_projector Memba.Membership.Projectors.Club
+@@ -18,6 +19,9 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   @role_projector Memba.Membership.Projectors.Role
+   @message_projector Memba.Messaging.Projectors.Message
+   @conversation_access_projector Memba.Messaging.Projectors.ConversationGroupAccess
++  @conversation_follow_projector Memba.Messaging.Projectors.ConversationFollow
++  @member_delivery_projector Memba.Messaging.Projectors.MemberEmailDelivery
++  @staff_delivery_projector Memba.Messaging.Projectors.MembaStaffEmailDelivery
+ 
+   @club_events ~w(ClubCreated ClubUpdated)
+   @group_events ~w(GroupCreated GroupEmailSlugAssigned)
+@@ -49,8 +53,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   end
+ 
+   @doc false
+-  def classify({:read_model_changed, %{projector: projector, source_event: event}})
++  def classify({:read_model_changed, %{projector: projector, source_event: event} = change})
+       when is_atom(projector) and is_map(event) do
++    changes = Map.get(change, :changes, %{})
++
+     case projector do
+       @club_projector -> classify_club_projector(event)
+       @membership_projector -> membership_invalidations(event)
+@@ -60,6 +66,9 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+       @role_projector -> role_invalidations(event)
+       @message_projector -> message_invalidations(event)
+       @conversation_access_projector -> conversation_access_invalidations(event)
++      @conversation_follow_projector -> conversation_follow_invalidations(event)
++      @member_delivery_projector -> delivery_invalidations(event, changes)
++      @staff_delivery_projector -> delivery_invalidations(event, changes)
+       _other_projector -> :ignore
+     end
+   end
+@@ -252,6 +261,57 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+     end
+   end
+ 
++  defp conversation_follow_invalidations(event) do
++    club_id = field(event, :club_id)
++    conversation_id = field(event, :conversation_id) || field(event, :message_id)
++    member_id = field(event, :member_id) || field(event, :sender_id)
++
++    cond do
++      conversation_id && member_id ->
++        {:ok, [{:conversation_follow, conversation_id, member_id}]}
++
++      conversation_id ->
++        {:ok, [{:conversation_follows, conversation_id}]}
++
++      member_id ->
++        {:ok, [{:member_conversation_follows, member_id}]}
++
++      club_id ->
++        {:ok, [{:fallback, :conversation_follow, club_id}]}
++
++      true ->
++        {:ok, [{:fallback, :conversation_follow}]}
++    end
++  end
++
++  defp delivery_invalidations(event, changes) do
++    delivery_id = field(event, :delivery_id) || deep_field(changes, :delivery_id)
++
++    message_id =
++      field(event, :message_id) ||
++        deep_field(changes, :message_id) ||
++        delivery_message_id(delivery_id)
++
++    invalidations =
++      compact([
++        tuple(:message_deliveries, message_id),
++        tuple(:delivery, delivery_id),
++        if(is_nil(message_id), do: {:fallback, :delivery})
++      ])
++
++    {:ok, invalidations}
++  end
++
++  defp delivery_message_id(nil), do: nil
++
++  defp delivery_message_id(delivery_id) do
++    case Messaging.get_member_email_delivery(delivery_id) ||
++           Messaging.get_memba_staff_email_delivery(delivery_id) do
++      %{message_id: message_id} -> message_id
++      _missing_delivery -> nil
++    end
++  end
++
+   defp scoped_or_fallback(invalidations, family) do
+     case compact(invalidations) do
+       [] -> {:ok, [{:fallback, family}]}
+@@ -288,7 +348,20 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+     |> Enum.uniq()
+   end
+ 
+-  defp field(event, name), do: Map.get(event, name)
++  defp field(event, name), do: Map.get(event, name) || Map.get(event, Atom.to_string(name))
++
++  defp deep_field(value, name) when is_map(value) do
++    field(value, name) ||
++      Enum.find_value(value, fn {_key, nested_value} ->
++        deep_field(nested_value, name)
++      end)
++  end
++
++  defp deep_field(value, name) when is_list(value) do
++    Enum.find_value(value, &deep_field(&1, name))
++  end
++
++  defp deep_field(_value, _name), do: nil
+ 
+   defp event_name(%{__struct__: module}) do
+     module
+diff --git a/web/lib/memba_web/live_query/query.ex b/web/lib/memba_web/live_query/query.ex
+index efb0c9e..ce83037 100644
+--- a/web/lib/memba_web/live_query/query.ex
++++ b/web/lib/memba_web/live_query/query.ex
+@@ -1,13 +1,14 @@
+ defmodule MembaWeb.LiveQuery.Query do
+   @moduledoc """
+-  Provisional, app-private description of one LiveView-owned query.
++  Extraction-facing description of one LiveView-owned query.
+ 
+   A query has a stable identity, owns exactly one public socket assign, and
+   reads one coherent result from its current inputs. Its interests are opaque
+   to the query and binding; only the injected source knows how to match them.
+ 
+-  This contract is intentionally local to Memba while the iteration proves it
+-  against real consumers. It is not the frozen API of the future package.
++  The callback and result shapes in this module are frozen for extraction. The
++  module remains app-local until package extraction; application-specific
++  interest values are not part of the generic contract.
+   """
+ 
+   @enforce_keys [:id, :assign, :load]
+@@ -24,7 +25,7 @@ defmodule MembaWeb.LiveQuery.Query do
+         }
+ 
+   @doc """
+-  Builds a provisional query description.
++  Builds a query description with one stable identity, assign, and loader.
+   """
+   @spec new!(keyword()) :: t()
+   def new!(options) when is_list(options) do
+diff --git a/web/lib/memba_web/live_query/source.ex b/web/lib/memba_web/live_query/source.ex
+index 2e75e62..fa151ae 100644
+--- a/web/lib/memba_web/live_query/source.ex
++++ b/web/lib/memba_web/live_query/source.ex
+@@ -1,14 +1,14 @@
+ defmodule MembaWeb.LiveQuery.Source do
+   @moduledoc """
+-  Provisional, app-private source boundary for live-query notifications.
++  Extraction-facing source boundary for live-query notifications.
+ 
+   The source subscribes the owning connected LiveView process, classifies raw
+   notifications into opaque invalidations, and decides whether an invalidation
+   matches an opaque query interest. It deliberately contains no Memba
+   projector mapping or authorization policy.
+ 
+-  This callback shape remains provisional until the planned application
+-  integrations have proved the eventual package API.
++  These callback shapes are frozen for extraction. The source may keep its
++  interest and invalidation vocabulary application-private.
+   """
+ 
+   @enforce_keys [:subscribe, :classify, :matches?]
+diff --git a/web/lib/memba_web/member_message_detail.ex b/web/lib/memba_web/member_message_detail.ex
+index 3ecb72f..ca66405 100644
+--- a/web/lib/memba_web/member_message_detail.ex
++++ b/web/lib/memba_web/member_message_detail.ex
+@@ -32,9 +32,17 @@ defmodule MembaWeb.MemberMessageDetail do
+          {:ok, current_member} <- fetch_current_member(club_id, current_person),
+          {:ok, message} <- fetch_message(params),
+          :ok <- require_message_in_club(message, club_id),
++         {:ok, conversation_audience} <- fetch_conversation_audience(message, club_id),
+          :ok <- require_conversation_access(message, club_id, current_person),
+          {:ok, conversation_messages} <- fetch_conversation(message) do
+-      {:ok, detail_assigns(selected_club, message, conversation_messages, current_member)}
++      {:ok,
++       detail_assigns(
++         selected_club,
++         message,
++         conversation_messages,
++         current_member,
++         conversation_audience
++       )}
+     end
+   end
+ 
+@@ -88,6 +96,15 @@ defmodule MembaWeb.MemberMessageDetail do
+     end
+   end
+ 
++  defp fetch_conversation_audience(message, club_id) do
++    conversation_id = message.conversation_id || message.message_id
++
++    case Messaging.resolve_conversation_audience(conversation_id) do
++      {:ok, %{club_id: ^club_id} = audience} -> {:ok, audience}
++      _missing_mismatched_or_ambiguous -> {:error, :not_found}
++    end
++  end
++
+   defp require_conversation_access(message, club_id, current_person) do
+     if Messaging.member_has_conversation_access?(
+          message.message_id,
+@@ -110,11 +127,24 @@ defmodule MembaWeb.MemberMessageDetail do
+     end
+   end
+ 
+-  defp detail_assigns(selected_club, message, conversation_messages, current_member) do
++  defp detail_assigns(
++         selected_club,
++         message,
++         conversation_messages,
++         current_member,
++         conversation_audience
++       ) do
++    root_message =
++      Enum.find(
++        conversation_messages,
++        &(&1.message_id == conversation_audience.conversation_id)
++      )
++
++    member_email_deliverys =
++      Messaging.list_member_email_deliverys(root_message.message_id)
++
+     receipt_model =
+-      message.message_id
+-      |> Messaging.list_member_email_deliverys()
+-      |> MemberEmailDeliveryPresentation.present_receipts()
++      MemberEmailDeliveryPresentation.present_receipts(member_email_deliverys)
+ 
+     sender = Membership.get_person(message.sender_id)
+ 
+@@ -122,12 +152,16 @@ defmodule MembaWeb.MemberMessageDetail do
+       page_title: message.subject,
+       selected_club: selected_club,
+       message: message,
++      root_message: root_message,
++      conversation_audience: conversation_audience,
+       sender_name: sender_name(sender),
+       current_member: current_member,
+       can_follow_conversation: not is_nil(current_member),
+       following_conversation: following_conversation?(message, current_member),
+       conversation_entries: conversation_entries(conversation_messages),
++      member_email_delivery_records: member_email_deliverys,
+       member_email_deliverys: receipt_model.receipts,
++      member_email_delivery_ids: Enum.map(member_email_deliverys, & &1.delivery_id),
+       member_email_delivery_count: receipt_model.total_count,
+       member_email_delivery_summary: receipt_model.summary,
+       member_email_delivery_groups: receipt_model.groups
+diff --git a/web/lib/memba_web/member_message_detail_query.ex b/web/lib/memba_web/member_message_detail_query.ex
+new file mode 100644
+index 0000000..d16932f
+--- /dev/null
++++ b/web/lib/memba_web/member_message_detail_query.ex
+@@ -0,0 +1,126 @@
++defmodule MembaWeb.MemberMessageDetailQuery do
++  @moduledoc """
++  Fresh-authorized live query for one member conversation detail.
++
++  The routed club and message plus the authenticated email are stable inputs.
++  Every load normalizes that email, resolves active-club and current-member
++  authority again, and returns the complete conversation, follow, and joined
++  delivery model with a replacement set of app-private interests.
++  """
++
++  alias Memba.Accounts
++  alias MembaWeb.LiveQuery.Query
++  alias MembaWeb.MemberMessageDetail
++
++  @fallback_families [
++    :club,
++    :membership,
++    :person,
++    :group_membership,
++    :message,
++    :conversation_access,
++    :conversation_follow,
++    :delivery
++  ]
++
++  @doc """
++  Returns the extraction-facing query descriptor for conversation detail.
++  """
++  @spec query() :: Query.t()
++  def query do
++    Query.new!(
++      id: :member_message_detail,
++      assign: :message_detail,
++      load: fn inputs ->
++        case load(inputs.club_id, inputs.message_id, inputs.authenticated_email) do
++          {:ok, detail} -> {:ok, detail, interests(detail)}
++          {:error, reason} -> {:error, reason}
++        end
++      end
++    )
++  end
++
++  @doc """
++  Loads one coherent detail model from freshly resolved authenticated authority.
++  """
++  @spec load(term(), term(), term()) :: {:ok, map()} | {:error, :forbidden | :not_found}
++  def load(club_id, message_id, authenticated_email) do
++    normalized_email = Accounts.normalize_email(authenticated_email)
++    active_clubs = Accounts.list_active_clubs_for_email(normalized_email)
++    identity = if normalized_email, do: %{email: normalized_email}
++
++    MemberMessageDetail.load(
++      %{"club_id" => club_id, "message_id" => message_id},
++      active_clubs,
++      identity
++    )
++  end
++
++  @doc """
++  Derives complete collection, identity, delivery, follow, and authority
++  interests from a successful coherent result.
++  """
++  @spec interests(map()) :: [term()]
++  def interests(detail) when is_map(detail) do
++    selected_club = Map.fetch!(detail, :selected_club)
++    current_member = Map.fetch!(detail, :current_member)
++    audience = Map.fetch!(detail, :conversation_audience)
++    root_message = Map.get(detail, :root_message, Map.fetch!(detail, :message))
++
++    club_id = Map.fetch!(selected_club, :club_id)
++    person_id = Map.fetch!(current_member, :id)
++    membership_id = Map.fetch!(current_member, :membership_id)
++    group_id = Map.fetch!(audience, :group_id)
++    conversation_id = Map.fetch!(audience, :conversation_id)
++    delivery_message_id = Map.fetch!(root_message, :message_id)
++
++    [
++      {:club, club_id},
++      {:club_members, club_id},
++      {:membership, membership_id},
++      {:person, person_id},
++      {:person_clubs, person_id},
++      {:group_members, group_id},
++      {:group_participation, club_id, group_id, person_id},
++      {:conversation, conversation_id},
++      {:conversation_messages, conversation_id},
++      {:conversation_access, group_id, conversation_id},
++      {:conversation_follow, conversation_id, person_id},
++      {:conversation_follows, conversation_id},
++      {:member_conversation_follows, person_id},
++      {:message_deliveries, delivery_message_id}
++    ]
++    |> Kernel.++(message_and_author_interests(detail))
++    |> Kernel.++(delivery_interests(detail))
++    |> Kernel.++(fallback_interests(club_id))
++    |> Enum.uniq()
++  end
++
++  defp message_and_author_interests(detail) do
++    detail
++    |> Map.get(:conversation_entries, [])
++    |> Enum.flat_map(fn %{message: message} ->
++      [
++        optional_tuple(:message, Map.get(message, :message_id)),
++        optional_tuple(:person, Map.get(message, :sender_id))
++      ]
++    end)
++    |> Enum.reject(&is_nil/1)
++  end
++
++  defp delivery_interests(detail) do
++    detail
++    |> Map.get(:member_email_delivery_ids, [])
++    |> Enum.map(&optional_tuple(:delivery, &1))
++    |> Enum.reject(&is_nil/1)
++  end
++
++  defp fallback_interests(club_id) do
++    Enum.flat_map(@fallback_families, fn family ->
++      [{:fallback, family}, {:fallback, family, club_id}]
++    end)
++  end
++
++  defp optional_tuple(_name, nil), do: nil
++  defp optional_tuple(name, value), do: {name, value}
++end
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index d30ca81..a0b5792 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -7,9 +7,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+   alias Memba.Membership.Projections.Group
+   alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
+   alias Memba.Membership.SystemGroups
+-  alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging
++  alias Memba.Messaging.Events.ConversationFollowed
++  alias Memba.Messaging.Events.EmailDeliveryDelayed
++  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Projections.MemberEmailDelivery
++  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -1116,6 +1121,547 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute render(view) =~ "Members by delivery status"
+   end
+ 
++  test "a committed reply enters an already-open conversation", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Open conversation"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host(alice.email, alice)
++      |> live(~p"/messages/#{message.message_id}")
++
++    reply_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.post_message_reply(
++               %{
++                 "message_id" => reply_id,
++                 "conversation_id" => message.message_id,
++                 "sender_id" => bob.person_id,
++                 "body" => "This arrived while the page stayed open."
++               },
++               consistency: :strong
++             )
++
++    assert has_element?(
++             view,
++             "#member-conversation[data-message-count='2'] " <>
++               "#member-conversation-entry-#{reply_id}",
++             "This arrived while the page stayed open."
++           )
++  end
++
++  test "represented-author Person refresh is exact and replaces only the coherent result", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Clark",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Exact author refresh"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host(bob.email, bob)
++      |> live(~p"/messages/#{message.message_id}")
++
++    assert has_element?(view, "#member-conversation-entry-#{message.message_id}", "Alice Adams")
++
++    alice.person_id
++    |> then(&Repo.get!(Person, &1))
++    |> Ecto.Changeset.change(name: "Alice Updated")
++    |> Repo.update!()
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Person,
++      %Memba.Membership.Events.PersonEmailAddressAdded{
++        person_id: carol.person_id,
++        email: carol.email,
++        normalized_email: carol.email
++      }
++    )
++
++    refute has_element?(
++             view,
++             "#member-conversation-entry-#{message.message_id}",
++             "Alice Updated"
++           )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Person,
++      %Memba.Membership.Events.PersonEmailAddressAdded{
++        person_id: alice.person_id,
++        email: alice.email,
++        normalized_email: alice.email
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-conversation-entry-#{message.message_id}",
++             "Alice Updated"
++           )
++
++    %{socket: socket} = :sys.get_state(view.pid)
++    assert is_map(socket.assigns.message_detail)
++    refute Map.has_key?(socket.assigns, :message)
++    refute Map.has_key?(socket.assigns, :selected_club)
++    refute Map.has_key?(socket.assigns, :conversation_entries)
++  end
++
++  test "another club, conversation, message and delivery do not refresh the open result", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    other =
++      create_active_member(
++        email: "other@example.com",
++        name: "Other Member",
++        club_name: "Other Club",
++        slug: "other-club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Scoped conversation"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host(alice.email, alice)
++      |> live(~p"/messages/#{message.message_id}")
++
++    pending_reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        conversation_id: message.message_id,
++        reply_to_message_id: message.message_id,
++        subject: "Scoped conversation",
++        body: "Only an exact conversation invalidation should reveal me."
++      )
++
++    unrelated_message_id = Memba.ID.generate(:message)
++
++    notify_read_model_change(
++      view,
++      Memba.Messaging.Projectors.Message,
++      %MessageSent{
++        message_id: unrelated_message_id,
++        club_id: other.club_id,
++        sender_id: other.person_id,
++        conversation_id: unrelated_message_id,
++        reply_to_message_id: nil,
++        subject: "Other conversation",
++        body: "Unrelated"
++      }
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Messaging.Projectors.MemberEmailDelivery,
++      %Memba.Messaging.Events.EmailDeliveryDelivered{
++        message_id: unrelated_message_id,
++        delivery_id: Memba.ID.generate(:delivery)
++      }
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Membership,
++      %Memba.Membership.Events.ClubMemberAdded{
++        club_id: other.club_id,
++        membership_id: other.membership_id,
++        person_id: other.person_id
++      }
++    )
++
++    assert has_element?(view, "#member-conversation[data-message-count='1']")
++    refute has_element?(view, "#member-conversation-entry-#{pending_reply.message_id}")
++
++    notify_read_model_change(
++      view,
++      Memba.Messaging.Projectors.Message,
++      %MessageSent{
++        message_id: pending_reply.message_id,
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        conversation_id: message.message_id,
++        reply_to_message_id: message.message_id,
++        subject: pending_reply.subject,
++        body: pending_reply.body
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-conversation[data-message-count='2'] " <>
++               "#member-conversation-entry-#{pending_reply.message_id}"
++           )
++  end
++
++  test "follow invalidation matches the exact current member", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Exact follow"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host(alice.email, alice)
++      |> live(~p"/messages/#{message.message_id}")
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='false']"
++           )
++
++    alice_follow =
++      Messaging.get_conversation_follow(message.message_id, alice.person_id)
++      |> Ecto.Changeset.change(following: true)
++      |> Repo.update!()
++
++    assert :ok =
++             Messaging.follow_conversation_as_current_member(
++               %{
++                 club_id: alice.club_id,
++                 conversation_id: message.message_id,
++                 member_id: bob.person_id
++               },
++               consistency: :strong
++             )
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='false']"
++           )
++
++    assert :ok =
++             Memba.Messaging.Projectors.ConversationFollow.after_update(
++               %ConversationFollowed{
++                 follow_id: alice_follow.follow_id,
++                 club_id: alice.club_id,
++                 conversation_id: message.message_id,
++                 member_id: alice.person_id
++               },
++               %{},
++               %{messaging_conversation_follow: alice_follow}
++             )
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='true']"
++           )
++  end
++
++  test "independent delivery commits converge in member-first and staff-first order", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Delivery convergence"
++      )
++
++    member_first_id = Memba.ID.generate(:delivery)
++    staff_first_id = Memba.ID.generate(:delivery)
++
++    Repo.delete_all(
++      from(delivery in MembaStaffEmailDelivery,
++        where: delivery.message_id == ^message.message_id
++      )
++    )
++
++    for {delivery_id, recipient_id, recipient_name} <- [
++          {member_first_id, alice.person_id, "Alice Adams"},
++          {staff_first_id, bob.person_id, "Bob Builder"}
++        ] do
++      create_member_email_delivery(
++        delivery_id: delivery_id,
++        message_id: message.message_id,
++        recipient_id: recipient_id,
++        recipient_name: recipient_name,
++        status: "sent"
++      )
++
++      create_memba_staff_email_delivery(
++        delivery_id: delivery_id,
++        message_id: message.message_id,
++        recipient_id: recipient_id,
++        recipient_name: recipient_name,
++        reason: nil
++      )
++    end
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host(alice.email, alice)
++      |> live(~p"/messages/#{message.message_id}")
++
++    member_first_receipt =
++      member_first_id
++      |> Messaging.get_member_email_delivery()
++      |> Ecto.Changeset.change(status: "delivery problem")
++      |> Repo.update!()
++
++    publish_delivery_change(
++      Memba.Messaging.Projectors.MemberEmailDelivery,
++      message.message_id,
++      member_first_receipt,
++      nil
++    )
++
++    assert %{status: "delivery problem", reason: nil} =
++             live_receipt(view, alice.person_id)
++
++    member_first_staff =
++      member_first_id
++      |> Messaging.get_memba_staff_email_delivery()
++      |> Ecto.Changeset.change(status: "delayed", reason: "Mailbox temporarily unavailable")
++      |> Repo.update!()
++
++    publish_delivery_change(
++      Memba.Messaging.Projectors.MembaStaffEmailDelivery,
++      message.message_id,
++      member_first_staff,
++      member_first_staff.reason
++    )
++
++    assert %{status: "delivery problem", reason: "Mailbox temporarily unavailable"} =
++             live_receipt(view, alice.person_id)
++
++    staff_first =
++      staff_first_id
++      |> Messaging.get_memba_staff_email_delivery()
++      |> Ecto.Changeset.change(status: "delayed", reason: "Provider retrying")
++      |> Repo.update!()
++
++    publish_delivery_change(
++      Memba.Messaging.Projectors.MembaStaffEmailDelivery,
++      message.message_id,
++      staff_first,
++      staff_first.reason
++    )
++
++    assert %{status: "sent", reason: "Provider retrying"} =
++             live_receipt(view, bob.person_id)
++
++    staff_first_receipt =
++      staff_first_id
++      |> Messaging.get_member_email_delivery()
++      |> Ecto.Changeset.change(status: "delivery problem")
++      |> Repo.update!()
++
++    publish_delivery_change(
++      Memba.Messaging.Projectors.MemberEmailDelivery,
++      message.message_id,
++      staff_first_receipt,
++      nil
++    )
++
++    assert %{status: "delivery problem", reason: "Provider retrying"} =
++             live_receipt(view, bob.person_id)
++
++    refute has_element?(view, "#member-receipt-summary")
++    refute has_element?(view, "#member-receipts-section")
++  end
++
++  test "relevant refresh preserves reply validation, route and disclosure state", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    private_group = create_group(alice.club_id, "Private Planning")
++    add_group_member(private_group, alice)
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Preserve transient state",
++        audience_group_id: private_group.group_id
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> club_host(alice)
++      |> init_test_session(%{
++        IdentityAuth.identity_session_key() => alice.email,
++        "phoenix_flash" => %{"info" => "Keep this feedback visible."}
++      })
++      |> live(~p"/messages/#{message.message_id}?#{[group_id: private_group.group_id]}")
++
++    view
++    |> element("#member-message-reply-form")
++    |> render_submit(%{"reply" => %{"body" => "  "}})
++
++    render_hook(view, "toggle_receipt_group", %{"status" => "delivered"})
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Person,
++      %Memba.Membership.Events.PersonEmailAddressAdded{
++        person_id: alice.person_id,
++        email: alice.email,
++        normalized_email: alice.email
++      }
++    )
++
++    assert has_element?(view, "#member-message-detail[data-reply-state='composing']")
++    assert has_element?(view, "#member-message-reply-body-error", "Reply body can’t be blank.")
++
++    assert has_element?(
++             view,
++             "a#back-to-club-home-link[href='/groups/#{private_group.group_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='false']"
++           )
++
++    %{socket: socket} = :sys.get_state(view.pid)
++    assert socket.assigns.reply_form.params == %{"body" => "  "}
++    assert socket.assigns.reply_error == nil
++    assert socket.assigns.route_params["group_id"] == private_group.group_id
++    assert MapSet.member?(socket.assigns.expanded_receipt_groups, "delivered")
++    assert Phoenix.Flash.get(socket.assigns.flash, :info) == "Keep this feedback visible."
++  end
++
++  test "fresh club-membership loss leaves an already-open private surface", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Membership-gated details"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host(bob.email, alice)
++      |> live(~p"/messages/#{message.message_id}")
++
++    assert :ok =
++             Memba.Membership.remove_member(
++               %{membership_id: bob.membership_id},
++               consistency: :strong
++             )
++
++    assert_redirect(view, ~p"/conversations")
++  end
++
+   defp signed_in_club_host(conn, email, club) do
+     conn
+     |> club_host(club)
+@@ -1190,6 +1736,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     |> Map.from_struct()
+     |> Map.put(:person_id, person_id)
+     |> Map.put(:membership_id, membership_id)
++    |> Map.put(:email, Keyword.fetch!(attrs, :email))
+   end
+ 
+   defp create_group(club_id, name) do
+@@ -1304,6 +1851,41 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     })
+   end
+ 
++  defp create_memba_staff_email_delivery(attrs) do
++    Repo.insert!(%MembaStaffEmailDelivery{
++      delivery_id: Keyword.fetch!(attrs, :delivery_id),
++      message_id: Keyword.fetch!(attrs, :message_id),
++      recipient_id: Keyword.fetch!(attrs, :recipient_id),
++      recipient_name: Keyword.fetch!(attrs, :recipient_name),
++      recipient_address: "member@example.com",
++      channel: "email",
++      status: "sent",
++      reason: Keyword.fetch!(attrs, :reason)
++    })
++  end
++
++  defp publish_delivery_change(projector, message_id, delivery, reason) do
++    assert :ok =
++             projector.after_update(
++               %EmailDeliveryDelayed{
++                 message_id: message_id,
++                 delivery_id: delivery.delivery_id,
++                 reason: reason || "Member-facing delivery problem"
++               },
++               %{},
++               %{delivery_change: delivery}
++             )
++  end
++
++  defp live_receipt(view, recipient_id) do
++    %{socket: socket} = :sys.get_state(view.pid)
++
++    Enum.find(
++      socket.assigns.message_detail.member_email_delivery_records,
++      &(&1.recipient_id == recipient_id)
++    )
++  end
++
+   defp normalize_whitespace(text) do
+     text
+     |> String.replace(~r/\s+/, " ")
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+index 3033d32..e3a62b0 100644
+--- a/web/test/memba_web/live_query/memba_read_model_source_test.exs
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -10,7 +10,12 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.PersonEmailAddressAdded
+   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
++  alias Memba.Messaging.Events.ConversationFollowed
++  alias Memba.Messaging.Events.EmailDeliveryDelivered
+   alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Projections.MemberEmailDelivery
++  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
++  alias Memba.Repo
+   alias MembaWeb.LiveQuery.MembaReadModelSource
+   alias MembaWeb.LiveQuery.Source
+ 
+@@ -320,23 +325,192 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     assert {:fallback, :group_membership} in missing_club
+   end
+ 
+-  test "ignores delivery notifications because dashboard delivery data was removed" do
++  test "classifies explicit and MessageSent conversation follows by conversation and member" do
+     source = MembaReadModelSource.new()
+ 
+-    assert :ignore =
++    assert {:ok, explicit_invalidations} =
+              Source.classify(
+                source,
+-               notification(Memba.Messaging.Projectors.MemberEmailDelivery, %{})
++               notification(
++                 Memba.Messaging.Projectors.ConversationFollow,
++                 %ConversationFollowed{
++                   follow_id: "follow-1",
++                   club_id: "club-1",
++                   conversation_id: "conversation-1",
++                   member_id: "person-1"
++                 }
++               )
++             )
++
++    assert {:conversation_follow, "conversation-1", "person-1"} in explicit_invalidations
++
++    assert {:ok, sent_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.ConversationFollow,
++                 %MessageSent{
++                   message_id: "conversation-2",
++                   club_id: "club-1",
++                   sender_id: "person-2",
++                   conversation_id: nil,
++                   reply_to_message_id: nil,
++                   subject: "Plans",
++                   body: "Meet at eight"
++                 }
++               )
++             )
++
++    assert {:conversation_follow, "conversation-2", "person-2"} in sent_invalidations
++    refute {:conversation_follow, "conversation-2", "person-1"} in sent_invalidations
++  end
++
++  test "retains partial conversation-follow scope with a conservative fallback" do
++    source = MembaReadModelSource.new()
++
++    assert {:ok, conversation_scoped} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.ConversationFollow,
++                 %{conversation_id: "conversation-1"}
++               )
++             )
++
++    assert {:conversation_follows, "conversation-1"} in conversation_scoped
++    refute {:fallback, :conversation_follow} in conversation_scoped
++
++    assert {:ok, member_scoped} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.ConversationFollow,
++                 %{member_id: "person-1"}
++               )
++             )
++
++    assert {:member_conversation_follows, "person-1"} in member_scoped
++
++    assert {:ok, [{:fallback, :conversation_follow}]} =
++             Source.classify(
++               source,
++               notification(Memba.Messaging.Projectors.ConversationFollow, %{})
++             )
++  end
++
++  test "classifies both delivery contributors with exact message and delivery scope" do
++    source = MembaReadModelSource.new()
++
++    for projector <- [
++          Memba.Messaging.Projectors.MemberEmailDelivery,
++          Memba.Messaging.Projectors.MembaStaffEmailDelivery
++        ] do
++      event = %EmailDeliveryDelivered{
++        message_id: "message-1",
++        delivery_id: "delivery-1"
++      }
++
++      assert {:ok, invalidations} =
++               Source.classify(source, notification(projector, event))
++
++      assert {:message_deliveries, "message-1"} in invalidations
++      assert {:delivery, "delivery-1"} in invalidations
++    end
++  end
++
++  test "recovers delivery message scope from committed changes and projection rows" do
++    source = MembaReadModelSource.new()
++    delivery_id = Memba.ID.generate(:delivery)
++    message_id = Memba.ID.generate(:message)
++
++    assert {:ok, changes_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.MemberEmailDelivery,
++                 %{delivery_id: delivery_id},
++                 %{
++                   messaging_member_email_delivery: %{
++                     delivery_id: delivery_id,
++                     message_id: message_id
++                   }
++                 }
++               )
++             )
++
++    assert {:message_deliveries, message_id} in changes_invalidations
++    assert {:delivery, delivery_id} in changes_invalidations
++
++    Repo.insert!(%MemberEmailDelivery{
++      delivery_id: delivery_id,
++      message_id: message_id,
++      recipient_id: Memba.ID.generate(:person),
++      recipient_name: "Alice",
++      status: "sent"
++    })
++
++    assert {:ok, row_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.MembaStaffEmailDelivery,
++                 %{delivery_id: delivery_id}
++               )
+              )
++
++    assert {:message_deliveries, message_id} in row_invalidations
++    assert {:delivery, delivery_id} in row_invalidations
++
++    staff_delivery_id = Memba.ID.generate(:delivery)
++    staff_message_id = Memba.ID.generate(:message)
++
++    Repo.insert!(%MembaStaffEmailDelivery{
++      delivery_id: staff_delivery_id,
++      message_id: staff_message_id,
++      recipient_id: Memba.ID.generate(:person),
++      recipient_name: "Bob",
++      recipient_address: "bob@example.com",
++      channel: "email",
++      status: "delayed",
++      reason: "Retrying"
++    })
++
++    assert {:ok, staff_row_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.MemberEmailDelivery,
++                 %{delivery_id: staff_delivery_id}
++               )
++             )
++
++    assert {:message_deliveries, staff_message_id} in staff_row_invalidations
++    assert {:delivery, staff_delivery_id} in staff_row_invalidations
++  end
++
++  test "retains exact delivery identity alongside fallback when message scope is unavailable" do
++    source = MembaReadModelSource.new()
++
++    assert {:ok, invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.MemberEmailDelivery,
++                 %{delivery_id: Memba.ID.generate(:delivery)}
++               )
++             )
++
++    assert Enum.any?(invalidations, &match?({:delivery, _delivery_id}, &1))
++    assert {:fallback, :delivery} in invalidations
+   end
+ 
+-  defp notification(projector, source_event) do
++  defp notification(projector, source_event, changes \\ %{}) do
+     {:read_model_changed,
+      %{
+        projector: projector,
+        source_event: source_event,
+        metadata: %{},
+-       changes: %{}
++       changes: changes
+      }}
+   end
+ end
+diff --git a/web/test/memba_web/member_message_detail_query_test.exs b/web/test/memba_web/member_message_detail_query_test.exs
+new file mode 100644
+index 0000000..2d3b693
+--- /dev/null
++++ b/web/test/memba_web/member_message_detail_query_test.exs
+@@ -0,0 +1,219 @@
++defmodule MembaWeb.MemberMessageDetailQueryTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership
++  alias Memba.Membership.SystemGroups
++  alias Memba.Messaging
++  alias MembaWeb.LiveQuery.Query
++  alias MembaWeb.MemberMessageDetailQuery
++
++  test "describes one coherent message-detail result assign" do
++    query = MemberMessageDetailQuery.query()
++
++    assert query.id == :member_message_detail
++    assert query.assign == :message_detail
++    assert is_function(query.load, 1)
++  end
++
++  test "derives collection, represented identity, follow, delivery and authority interests" do
++    detail = %{
++      selected_club: %{club_id: "club-1"},
++      current_member: %{
++        id: "person-current",
++        membership_id: "membership-current"
++      },
++      conversation_audience: %{
++        conversation_id: "message-root",
++        group_id: "group-1"
++      },
++      message: %{
++        message_id: "message-root",
++        conversation_id: "message-root",
++        sender_id: "person-author-1"
++      },
++      conversation_entries: [
++        %{
++          message: %{
++            message_id: "message-root",
++            conversation_id: "message-root",
++            sender_id: "person-author-1"
++          }
++        },
++        %{
++          message: %{
++            message_id: "message-reply",
++            conversation_id: "message-root",
++            sender_id: "person-author-2"
++          }
++        }
++      ],
++      member_email_deliverys: [
++        %{delivery_id: "delivery-1"},
++        %{delivery_id: "delivery-2"}
++      ],
++      member_email_delivery_ids: ["delivery-1", "delivery-2"]
++    }
++
++    interests = MemberMessageDetailQuery.interests(detail)
++
++    for interest <- [
++          {:club, "club-1"},
++          {:club_members, "club-1"},
++          {:membership, "membership-current"},
++          {:person, "person-current"},
++          {:person_clubs, "person-current"},
++          {:group_members, "group-1"},
++          {:group_participation, "club-1", "group-1", "person-current"},
++          {:conversation, "message-root"},
++          {:conversation_messages, "message-root"},
++          {:conversation_access, "group-1", "message-root"},
++          {:message, "message-root"},
++          {:message, "message-reply"},
++          {:person, "person-author-1"},
++          {:person, "person-author-2"},
++          {:conversation_follow, "message-root", "person-current"},
++          {:conversation_follows, "message-root"},
++          {:member_conversation_follows, "person-current"},
++          {:message_deliveries, "message-root"},
++          {:delivery, "delivery-1"},
++          {:delivery, "delivery-2"},
++          {:fallback, :delivery}
++        ] do
++      assert interest in interests
++    end
++
++    refute {:person, "person-not-represented"} in interests
++  end
++
++  test "descriptor returns complete replacement interests with each successful read" do
++    query = MemberMessageDetailQuery.query()
++
++    assert %Query{} = query
++  end
++
++  test "loads from normalized email and freshly resolved active-club authority" do
++    alice = create_active_member("alice@example.com", "Alice Adams")
++    bob = create_active_member("bob@example.com", "Bob Builder", alice.club_id)
++    message = create_message(alice, "Fresh authority")
++
++    assert {:ok, detail} =
++             MemberMessageDetailQuery.load(
++               alice.club_id,
++               message.message_id,
++               "  BOB@EXAMPLE.COM "
++             )
++
++    assert detail.current_member.id == bob.person_id
++
++    assert :ok =
++             Membership.remove_member(
++               %{membership_id: bob.membership_id},
++               consistency: :strong
++             )
++
++    assert {:error, :forbidden} =
++             MemberMessageDetailQuery.load(
++               alice.club_id,
++               message.message_id,
++               "bob@example.com"
++             )
++  end
++
++  test "a new reply replaces interests with its newly represented author" do
++    alice = create_active_member("alice@example.com", "Alice Adams")
++    bob = create_active_member("bob@example.com", "Bob Builder", alice.club_id)
++    carol = create_active_member("carol@example.com", "Carol Clark", alice.club_id)
++    message = create_message(alice, "Replacement interests")
++
++    assert {:ok, before_detail} =
++             MemberMessageDetailQuery.load(
++               alice.club_id,
++               message.message_id,
++               bob.email
++             )
++
++    before_interests = MemberMessageDetailQuery.interests(before_detail)
++    refute {:person, carol.person_id} in before_interests
++
++    assert :ok =
++             Messaging.post_message_reply(
++               %{
++                 "message_id" => Memba.ID.generate(:message),
++                 "conversation_id" => message.message_id,
++                 "sender_id" => carol.person_id,
++                 "body" => "I can bring the route notes."
++               },
++               consistency: :strong
++             )
++
++    assert {:ok, after_detail} =
++             MemberMessageDetailQuery.load(
++               alice.club_id,
++               message.message_id,
++               bob.email
++             )
++
++    after_interests = MemberMessageDetailQuery.interests(after_detail)
++    assert {:person, carol.person_id} in after_interests
++    assert length(after_detail.conversation_entries) == 2
++  end
++
++  defp create_active_member(email, name, club_id \\ Memba.ID.generate(:club)) do
++    unless Membership.get_club(club_id) do
++      assert :ok =
++               Membership.create_club(
++                 membership_club_attrs(
++                   club_id: club_id,
++                   name: "Alpine Club"
++                 ),
++                 consistency: :strong
++               )
++    end
++
++    person_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: name, email: email},
++               consistency: :strong
++             )
++
++    membership_id = Memba.ID.generate(:membership)
++
++    assert :ok =
++             Membership.add_member(
++               %{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    %{
++      club_id: club_id,
++      person_id: person_id,
++      membership_id: membership_id,
++      email: email
++    }
++  end
++
++  defp create_message(member, subject) do
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.send_club_message_as_current_member(
++               %{
++                 message_id: message_id,
++                 club_id: member.club_id,
++                 sender_id: member.person_id,
++                 audience_group_id: SystemGroups.everyone_group_id(member.club_id),
++                 subject: subject,
++                 body: "Bring your maps."
++               },
++               consistency: :strong
++             )
++
++    Messaging.get_message(message_id)
++  end
++end
