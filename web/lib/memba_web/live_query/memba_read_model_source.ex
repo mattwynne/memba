@@ -8,6 +8,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   """
 
   alias Memba.ReadModelChanges
+  alias Memba.Messaging
   alias MembaWeb.LiveQuery.Source
 
   @club_projector Memba.Membership.Projectors.Club
@@ -18,6 +19,9 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   @role_projector Memba.Membership.Projectors.Role
   @message_projector Memba.Messaging.Projectors.Message
   @conversation_access_projector Memba.Messaging.Projectors.ConversationGroupAccess
+  @conversation_follow_projector Memba.Messaging.Projectors.ConversationFollow
+  @member_delivery_projector Memba.Messaging.Projectors.MemberEmailDelivery
+  @staff_delivery_projector Memba.Messaging.Projectors.MembaStaffEmailDelivery
 
   @club_events ~w(ClubCreated ClubUpdated)
   @group_events ~w(GroupCreated GroupEmailSlugAssigned)
@@ -49,8 +53,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   end
 
   @doc false
-  def classify({:read_model_changed, %{projector: projector, source_event: event}})
+  def classify({:read_model_changed, %{projector: projector, source_event: event} = change})
       when is_atom(projector) and is_map(event) do
+    changes = Map.get(change, :changes, %{})
+
     case projector do
       @club_projector -> classify_club_projector(event)
       @membership_projector -> membership_invalidations(event)
@@ -60,6 +66,9 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
       @role_projector -> role_invalidations(event)
       @message_projector -> message_invalidations(event)
       @conversation_access_projector -> conversation_access_invalidations(event)
+      @conversation_follow_projector -> conversation_follow_invalidations(event)
+      @member_delivery_projector -> delivery_invalidations(event, changes)
+      @staff_delivery_projector -> delivery_invalidations(event, changes)
       _other_projector -> :ignore
     end
   end
@@ -252,6 +261,57 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     end
   end
 
+  defp conversation_follow_invalidations(event) do
+    club_id = field(event, :club_id)
+    conversation_id = field(event, :conversation_id) || field(event, :message_id)
+    member_id = field(event, :member_id) || field(event, :sender_id)
+
+    cond do
+      conversation_id && member_id ->
+        {:ok, [{:conversation_follow, conversation_id, member_id}]}
+
+      conversation_id ->
+        {:ok, [{:conversation_follows, conversation_id}]}
+
+      member_id ->
+        {:ok, [{:member_conversation_follows, member_id}]}
+
+      club_id ->
+        {:ok, [{:fallback, :conversation_follow, club_id}]}
+
+      true ->
+        {:ok, [{:fallback, :conversation_follow}]}
+    end
+  end
+
+  defp delivery_invalidations(event, changes) do
+    delivery_id = field(event, :delivery_id) || deep_field(changes, :delivery_id)
+
+    message_id =
+      field(event, :message_id) ||
+        deep_field(changes, :message_id) ||
+        delivery_message_id(delivery_id)
+
+    invalidations =
+      compact([
+        tuple(:message_deliveries, message_id),
+        tuple(:delivery, delivery_id),
+        if(is_nil(message_id), do: {:fallback, :delivery})
+      ])
+
+    {:ok, invalidations}
+  end
+
+  defp delivery_message_id(nil), do: nil
+
+  defp delivery_message_id(delivery_id) do
+    case Messaging.get_member_email_delivery(delivery_id) ||
+           Messaging.get_memba_staff_email_delivery(delivery_id) do
+      %{message_id: message_id} -> message_id
+      _missing_delivery -> nil
+    end
+  end
+
   defp scoped_or_fallback(invalidations, family) do
     case compact(invalidations) do
       [] -> {:ok, [{:fallback, family}]}
@@ -288,7 +348,20 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     |> Enum.uniq()
   end
 
-  defp field(event, name), do: Map.get(event, name)
+  defp field(event, name), do: Map.get(event, name) || Map.get(event, Atom.to_string(name))
+
+  defp deep_field(value, name) when is_map(value) do
+    field(value, name) ||
+      Enum.find_value(value, fn {_key, nested_value} ->
+        deep_field(nested_value, name)
+      end)
+  end
+
+  defp deep_field(value, name) when is_list(value) do
+    Enum.find_value(value, &deep_field(&1, name))
+  end
+
+  defp deep_field(_value, _name), do: nil
 
   defp event_name(%{__struct__: module}) do
     module

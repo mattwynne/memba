@@ -32,9 +32,17 @@ defmodule MembaWeb.MemberMessageDetail do
          {:ok, current_member} <- fetch_current_member(club_id, current_person),
          {:ok, message} <- fetch_message(params),
          :ok <- require_message_in_club(message, club_id),
+         {:ok, conversation_audience} <- fetch_conversation_audience(message, club_id),
          :ok <- require_conversation_access(message, club_id, current_person),
          {:ok, conversation_messages} <- fetch_conversation(message) do
-      {:ok, detail_assigns(selected_club, message, conversation_messages, current_member)}
+      {:ok,
+       detail_assigns(
+         selected_club,
+         message,
+         conversation_messages,
+         current_member,
+         conversation_audience
+       )}
     end
   end
 
@@ -88,6 +96,15 @@ defmodule MembaWeb.MemberMessageDetail do
     end
   end
 
+  defp fetch_conversation_audience(message, club_id) do
+    conversation_id = message.conversation_id || message.message_id
+
+    case Messaging.resolve_conversation_audience(conversation_id) do
+      {:ok, %{club_id: ^club_id} = audience} -> {:ok, audience}
+      _missing_mismatched_or_ambiguous -> {:error, :not_found}
+    end
+  end
+
   defp require_conversation_access(message, club_id, current_person) do
     if Messaging.member_has_conversation_access?(
          message.message_id,
@@ -110,11 +127,24 @@ defmodule MembaWeb.MemberMessageDetail do
     end
   end
 
-  defp detail_assigns(selected_club, message, conversation_messages, current_member) do
+  defp detail_assigns(
+         selected_club,
+         message,
+         conversation_messages,
+         current_member,
+         conversation_audience
+       ) do
+    root_message =
+      Enum.find(
+        conversation_messages,
+        &(&1.message_id == conversation_audience.conversation_id)
+      )
+
+    member_email_deliverys =
+      Messaging.list_member_email_deliverys(root_message.message_id)
+
     receipt_model =
-      message.message_id
-      |> Messaging.list_member_email_deliverys()
-      |> MemberEmailDeliveryPresentation.present_receipts()
+      MemberEmailDeliveryPresentation.present_receipts(member_email_deliverys)
 
     sender = Membership.get_person(message.sender_id)
 
@@ -122,12 +152,16 @@ defmodule MembaWeb.MemberMessageDetail do
       page_title: message.subject,
       selected_club: selected_club,
       message: message,
+      root_message: root_message,
+      conversation_audience: conversation_audience,
       sender_name: sender_name(sender),
       current_member: current_member,
       can_follow_conversation: not is_nil(current_member),
       following_conversation: following_conversation?(message, current_member),
       conversation_entries: conversation_entries(conversation_messages),
+      member_email_delivery_records: member_email_deliverys,
       member_email_deliverys: receipt_model.receipts,
+      member_email_delivery_ids: Enum.map(member_email_deliverys, & &1.delivery_id),
       member_email_delivery_count: receipt_model.total_count,
       member_email_delivery_summary: receipt_model.summary,
       member_email_delivery_groups: receipt_model.groups

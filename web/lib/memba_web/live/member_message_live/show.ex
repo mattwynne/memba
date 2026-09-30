@@ -11,44 +11,37 @@ defmodule MembaWeb.MemberMessageLive.Show do
   require Logger
 
   alias Memba.Messaging
-  alias Memba.ReadModelChanges
-  alias MembaWeb.MemberMessageDetail
+  alias MembaWeb.LiveQuery.Binding
+  alias MembaWeb.LiveQuery.MembaReadModelSource
+  alias MembaWeb.MemberMessageDetailQuery
 
-  @access_projectors [
-    Memba.Membership.Projectors.GroupMembership,
-    Memba.Membership.Projectors.Membership,
-    Memba.Messaging.Projectors.ConversationGroupAccess
-  ]
+  @message_detail_query_id :member_message_detail
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
     params = put_session_club_id(params, session) |> put_club_id_source(session)
-    socket = ensure_identity_assigns(socket)
+
+    socket =
+      socket
+      |> ensure_identity_assigns()
+      |> assign(:current_identity_email, identity_email(socket.assigns[:current_identity]))
+      |> assign(:route_params, params)
+      |> assign_initial_reply_state()
+      |> assign(:expanded_receipt_groups, MapSet.new())
 
     case params do
       %{"club_id" => _club_id, "message_id" => _message_id} ->
-        case MemberMessageDetail.load(
-               params,
-               socket.assigns.current_identity_clubs,
-               socket.assigns.current_identity
+        case Binding.bind(
+               socket,
+               MemberMessageDetailQuery.query(),
+               message_detail_query_inputs(socket),
+               MembaReadModelSource.new()
              ) do
-          {:ok, detail_assigns} ->
-            if connected?(socket) do
-              Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
-            end
+          {:ok, socket} ->
+            {:ok, synchronize_message_detail_shell(socket)}
 
-            {:ok,
-             socket
-             |> assign(:route_params, params)
-             |> assign(detail_assigns)
-             |> assign_initial_reply_state()
-             |> assign(:expanded_receipt_groups, MapSet.new())}
-
-          {:error, :forbidden} ->
-            forbidden!(socket)
-
-          {:error, :not_found} ->
-            not_found!(socket)
+          {:error, errors, socket} ->
+            initial_binding_error!(errors, socket)
         end
 
       _params ->
@@ -61,51 +54,16 @@ defmodule MembaWeb.MemberMessageLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_info(
-        {:read_model_changed,
-         %{projector: Memba.Messaging.Projectors.MemberEmailDelivery, source_event: event}},
-        %{assigns: %{message: message}} = socket
-      ) do
-    if Map.get(event, :message_id) == message.message_id do
-      {:noreply, refresh_message_detail(socket)}
-    else
-      {:noreply, socket}
-    end
-  end
+  def handle_info({:read_model_changed, _change} = notification, socket) do
+    case Binding.handle_notification(socket, notification) do
+      {:ignored, socket} ->
+        {:noreply, socket}
 
-  def handle_info(
-        {:read_model_changed,
-         %{projector: Memba.Messaging.Projectors.Message, source_event: event}},
-        %{assigns: %{message: message}} = socket
-      ) do
-    if Map.get(event, :conversation_id) == message.conversation_id do
-      {:noreply, refresh_message_detail(socket)}
-    else
-      {:noreply, socket}
-    end
-  end
+      {:ok, socket} ->
+        {:noreply, synchronize_message_detail_shell(socket)}
 
-  def handle_info(
-        {:read_model_changed,
-         %{projector: Memba.Messaging.Projectors.ConversationFollow, source_event: event}},
-        %{assigns: %{message: message}} = socket
-      ) do
-    if event_conversation_id(event) == message.conversation_id do
-      {:noreply, refresh_message_detail(socket)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_info(
-        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id} = event}},
-        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
-      )
-      when projector in @access_projectors do
-    if access_change_relevant?(projector, event, socket) do
-      {:noreply, refresh_access_or_leave(socket)}
-    else
-      {:noreply, socket}
+      {:error, errors, socket} ->
+        {:noreply, refresh_binding_error(errors, socket)}
     end
   end
 
@@ -163,8 +121,16 @@ defmodule MembaWeb.MemberMessageLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def render(%{message: _message} = assigns) do
-    MembaWeb.PageHTML.message(assigns)
+  def render(%{message_detail: message_detail} = assigns) when is_map(message_detail) do
+    assigns
+    |> assign(message_detail)
+    |> MembaWeb.PageHTML.message()
+  end
+
+  def render(%{message_detail: nil} = assigns) do
+    ~H"""
+    <div id="member-message-detail-cleared"></div>
+    """
   end
 
   def render(_assigns) do
@@ -199,47 +165,62 @@ defmodule MembaWeb.MemberMessageLive.Show do
   end
 
   defp refresh_message_detail(socket) do
-    case MemberMessageDetail.load(
-           socket.assigns.route_params,
-           socket.assigns.current_identity_clubs,
-           socket.assigns.current_identity
+    case Binding.rebind(
+           socket,
+           @message_detail_query_id,
+           message_detail_query_inputs(socket)
          ) do
-      {:ok, detail_assigns} ->
-        assign(socket, detail_assigns)
+      {:ok, socket} ->
+        synchronize_message_detail_shell(socket)
 
-      {:error, :forbidden} ->
-        forbidden!(socket)
-
-      {:error, :not_found} ->
-        not_found!(socket)
+      {:error, errors, socket} ->
+        refresh_binding_error(errors, socket)
     end
   end
 
-  defp refresh_access_or_leave(socket) do
-    case MemberMessageDetail.load(
-           socket.assigns.route_params,
-           socket.assigns.current_identity_clubs,
-           socket.assigns.current_identity
-         ) do
-      {:ok, detail_assigns} ->
-        assign(socket, detail_assigns)
-
-      {:error, _reason} ->
-        push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
-    end
+  defp message_detail_query_inputs(socket) do
+    %{
+      club_id: Map.get(socket.assigns.route_params, "club_id"),
+      message_id: Map.get(socket.assigns.route_params, "message_id"),
+      authenticated_email: socket.assigns.current_identity_email
+    }
   end
 
-  defp access_change_relevant?(
-         Memba.Messaging.Projectors.ConversationGroupAccess,
-         event,
-         socket
+  defp synchronize_message_detail_shell(
+         %{assigns: %{message_detail: %{page_title: page_title}}} = socket
        ) do
-    event_conversation_id(event) ==
-      (socket.assigns.message.conversation_id || socket.assigns.message.message_id)
+    assign(socket, :page_title, page_title)
   end
 
-  defp access_change_relevant?(_membership_projector, event, socket) do
-    Map.get(event, :person_id) == socket.assigns.current_member.id
+  defp synchronize_message_detail_shell(socket), do: socket
+
+  defp initial_binding_error!(
+         [{@message_detail_query_id, :forbidden} | _errors],
+         socket
+       ),
+       do: forbidden!(socket)
+
+  defp initial_binding_error!(
+         [{@message_detail_query_id, :not_found} | _errors],
+         socket
+       ),
+       do: not_found!(socket)
+
+  defp initial_binding_error!(errors, _socket) do
+    raise "member message detail live query failed: #{inspect(errors)}"
+  end
+
+  defp refresh_binding_error(errors, socket) do
+    if Enum.any?(errors, fn
+         {@message_detail_query_id, reason} when reason in [:forbidden, :not_found] -> true
+         _other -> false
+       end) do
+      socket
+      |> assign(:page_title, nil)
+      |> push_navigate(to: access_lost_path(socket.assigns.route_params))
+    else
+      raise "member message detail live query refresh failed: #{inspect(errors)}"
+    end
   end
 
   defp update_current_member_follow(socket, action) do
@@ -279,9 +260,11 @@ defmodule MembaWeb.MemberMessageLive.Show do
 
   defp current_member_follow_attrs(socket) do
     with %{
-           selected_club: %{club_id: club_id},
-           message: %{conversation_id: conversation_id},
-           current_member: %{id: member_id}
+           message_detail: %{
+             selected_club: %{club_id: club_id},
+             conversation_audience: %{conversation_id: conversation_id},
+             current_member: %{id: member_id}
+           }
          } <- socket.assigns do
       {:ok,
        %{
@@ -302,13 +285,6 @@ defmodule MembaWeb.MemberMessageLive.Show do
     Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
   end
 
-  defp event_conversation_id(%{conversation_id: conversation_id})
-       when is_binary(conversation_id),
-       do: conversation_id
-
-  defp event_conversation_id(%{message_id: message_id}), do: message_id
-  defp event_conversation_id(_event), do: nil
-
   defp assign_initial_reply_state(socket) do
     socket
     |> assign(:reply_state, :composing)
@@ -318,7 +294,12 @@ defmodule MembaWeb.MemberMessageLive.Show do
   end
 
   defp post_current_member_reply(socket, reply_params) do
-    with %{message: %{conversation_id: conversation_id}, current_member: %{id: sender_id}} <-
+    with %{
+           message_detail: %{
+             conversation_audience: %{conversation_id: conversation_id},
+             current_member: %{id: sender_id}
+           }
+         } <-
            socket.assigns do
       reply_message_id = Memba.ID.generate(:message)
 
@@ -359,20 +340,24 @@ defmodule MembaWeb.MemberMessageLive.Show do
   end
 
   defp log_reply_failure(socket, reason) do
+    detail = socket.assigns.message_detail
+
     Logger.error("Member message reply failed",
-      club_id: socket.assigns.selected_club.club_id,
-      conversation_id: socket.assigns.message.conversation_id,
-      sender_id: current_member_id(socket.assigns.current_member),
+      club_id: detail.selected_club.club_id,
+      conversation_id: detail.conversation_audience.conversation_id,
+      sender_id: current_member_id(detail.current_member),
       reason: inspect(reason)
     )
   end
 
   defp log_follow_failure(socket, action, reason) do
+    detail = socket.assigns.message_detail
+
     Logger.error("Member conversation follow setting failed",
       action: action,
-      club_id: socket.assigns.selected_club.club_id,
-      conversation_id: socket.assigns.message.conversation_id,
-      member_id: current_member_id(socket.assigns.current_member),
+      club_id: detail.selected_club.club_id,
+      conversation_id: detail.conversation_audience.conversation_id,
+      member_id: current_member_id(detail.current_member),
       reason: inspect(reason)
     )
   end
@@ -391,6 +376,9 @@ defmodule MembaWeb.MemberMessageLive.Show do
     |> assign_new(:current_identity, fn -> nil end)
     |> assign_new(:current_identity_clubs, fn -> [] end)
   end
+
+  defp identity_email(%{email: email}), do: email
+  defp identity_email(_identity), do: nil
 
   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
 

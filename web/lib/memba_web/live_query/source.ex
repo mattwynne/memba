@@ -1,14 +1,14 @@
 defmodule MembaWeb.LiveQuery.Source do
   @moduledoc """
-  Provisional, app-private source boundary for live-query notifications.
+  Extraction-facing source boundary for live-query notifications.
 
   The source subscribes the owning connected LiveView process, classifies raw
   notifications into opaque invalidations, and decides whether an invalidation
   matches an opaque query interest. It deliberately contains no Memba
   projector mapping or authorization policy.
 
-  This callback shape remains provisional until the planned application
-  integrations have proved the eventual package API.
+  These callback shapes are frozen for extraction. The source may keep its
+  interest and invalidation vocabulary application-private.
   """
 
   @enforce_keys [:subscribe, :classify, :matches?]

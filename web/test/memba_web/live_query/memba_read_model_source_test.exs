@@ -10,7 +10,12 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.PersonEmailAddressAdded
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+  alias Memba.Messaging.Events.ConversationFollowed
+  alias Memba.Messaging.Events.EmailDeliveryDelivered
   alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.Projections.MemberEmailDelivery
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+  alias Memba.Repo
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.LiveQuery.Source
 
@@ -320,23 +325,192 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert {:fallback, :group_membership} in missing_club
   end
 
-  test "ignores delivery notifications because dashboard delivery data was removed" do
+  test "classifies explicit and MessageSent conversation follows by conversation and member" do
     source = MembaReadModelSource.new()
 
-    assert :ignore =
+    assert {:ok, explicit_invalidations} =
              Source.classify(
                source,
-               notification(Memba.Messaging.Projectors.MemberEmailDelivery, %{})
+               notification(
+                 Memba.Messaging.Projectors.ConversationFollow,
+                 %ConversationFollowed{
+                   follow_id: "follow-1",
+                   club_id: "club-1",
+                   conversation_id: "conversation-1",
+                   member_id: "person-1"
+                 }
+               )
+             )
+
+    assert {:conversation_follow, "conversation-1", "person-1"} in explicit_invalidations
+
+    assert {:ok, sent_invalidations} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Messaging.Projectors.ConversationFollow,
+                 %MessageSent{
+                   message_id: "conversation-2",
+                   club_id: "club-1",
+                   sender_id: "person-2",
+                   conversation_id: nil,
+                   reply_to_message_id: nil,
+                   subject: "Plans",
+                   body: "Meet at eight"
+                 }
+               )
+             )
+
+    assert {:conversation_follow, "conversation-2", "person-2"} in sent_invalidations
+    refute {:conversation_follow, "conversation-2", "person-1"} in sent_invalidations
+  end
+
+  test "retains partial conversation-follow scope with a conservative fallback" do
+    source = MembaReadModelSource.new()
+
+    assert {:ok, conversation_scoped} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Messaging.Projectors.ConversationFollow,
+                 %{conversation_id: "conversation-1"}
+               )
+             )
+
+    assert {:conversation_follows, "conversation-1"} in conversation_scoped
+    refute {:fallback, :conversation_follow} in conversation_scoped
+
+    assert {:ok, member_scoped} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Messaging.Projectors.ConversationFollow,
+                 %{member_id: "person-1"}
+               )
+             )
+
+    assert {:member_conversation_follows, "person-1"} in member_scoped
+
+    assert {:ok, [{:fallback, :conversation_follow}]} =
+             Source.classify(
+               source,
+               notification(Memba.Messaging.Projectors.ConversationFollow, %{})
              )
   end
 
-  defp notification(projector, source_event) do
+  test "classifies both delivery contributors with exact message and delivery scope" do
+    source = MembaReadModelSource.new()
+
+    for projector <- [
+          Memba.Messaging.Projectors.MemberEmailDelivery,
+          Memba.Messaging.Projectors.MembaStaffEmailDelivery
+        ] do
+      event = %EmailDeliveryDelivered{
+        message_id: "message-1",
+        delivery_id: "delivery-1"
+      }
+
+      assert {:ok, invalidations} =
+               Source.classify(source, notification(projector, event))
+
+      assert {:message_deliveries, "message-1"} in invalidations
+      assert {:delivery, "delivery-1"} in invalidations
+    end
+  end
+
+  test "recovers delivery message scope from committed changes and projection rows" do
+    source = MembaReadModelSource.new()
+    delivery_id = Memba.ID.generate(:delivery)
+    message_id = Memba.ID.generate(:message)
+
+    assert {:ok, changes_invalidations} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Messaging.Projectors.MemberEmailDelivery,
+                 %{delivery_id: delivery_id},
+                 %{
+                   messaging_member_email_delivery: %{
+                     delivery_id: delivery_id,
+                     message_id: message_id
+                   }
+                 }
+               )
+             )
+
+    assert {:message_deliveries, message_id} in changes_invalidations
+    assert {:delivery, delivery_id} in changes_invalidations
+
+    Repo.insert!(%MemberEmailDelivery{
+      delivery_id: delivery_id,
+      message_id: message_id,
+      recipient_id: Memba.ID.generate(:person),
+      recipient_name: "Alice",
+      status: "sent"
+    })
+
+    assert {:ok, row_invalidations} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+                 %{delivery_id: delivery_id}
+               )
+             )
+
+    assert {:message_deliveries, message_id} in row_invalidations
+    assert {:delivery, delivery_id} in row_invalidations
+
+    staff_delivery_id = Memba.ID.generate(:delivery)
+    staff_message_id = Memba.ID.generate(:message)
+
+    Repo.insert!(%MembaStaffEmailDelivery{
+      delivery_id: staff_delivery_id,
+      message_id: staff_message_id,
+      recipient_id: Memba.ID.generate(:person),
+      recipient_name: "Bob",
+      recipient_address: "bob@example.com",
+      channel: "email",
+      status: "delayed",
+      reason: "Retrying"
+    })
+
+    assert {:ok, staff_row_invalidations} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Messaging.Projectors.MemberEmailDelivery,
+                 %{delivery_id: staff_delivery_id}
+               )
+             )
+
+    assert {:message_deliveries, staff_message_id} in staff_row_invalidations
+    assert {:delivery, staff_delivery_id} in staff_row_invalidations
+  end
+
+  test "retains exact delivery identity alongside fallback when message scope is unavailable" do
+    source = MembaReadModelSource.new()
+
+    assert {:ok, invalidations} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Messaging.Projectors.MemberEmailDelivery,
+                 %{delivery_id: Memba.ID.generate(:delivery)}
+               )
+             )
+
+    assert Enum.any?(invalidations, &match?({:delivery, _delivery_id}, &1))
+    assert {:fallback, :delivery} in invalidations
+  end
+
+  defp notification(projector, source_event, changes \\ %{}) do
     {:read_model_changed,
      %{
        projector: projector,
        source_event: source_event,
        metadata: %{},
-       changes: %{}
+       changes: changes
      }}
   end
 end

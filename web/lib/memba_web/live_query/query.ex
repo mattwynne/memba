@@ -1,13 +1,14 @@
 defmodule MembaWeb.LiveQuery.Query do
   @moduledoc """
-  Provisional, app-private description of one LiveView-owned query.
+  Extraction-facing description of one LiveView-owned query.
 
   A query has a stable identity, owns exactly one public socket assign, and
   reads one coherent result from its current inputs. Its interests are opaque
   to the query and binding; only the injected source knows how to match them.
 
-  This contract is intentionally local to Memba while the iteration proves it
-  against real consumers. It is not the frozen API of the future package.
+  The callback and result shapes in this module are frozen for extraction. The
+  module remains app-local until package extraction; application-specific
+  interest values are not part of the generic contract.
   """
 
   @enforce_keys [:id, :assign, :load]
@@ -24,7 +25,7 @@ defmodule MembaWeb.LiveQuery.Query do
         }
 
   @doc """
-  Builds a provisional query description.
+  Builds a query description with one stable identity, assign, and loader.
   """
   @spec new!(keyword()) :: t()
   def new!(options) when is_list(options) do

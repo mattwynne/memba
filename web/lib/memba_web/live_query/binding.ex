@@ -1,6 +1,6 @@
 defmodule MembaWeb.LiveQuery.Binding do
   @moduledoc """
-  Provisional, app-private live-query lifecycle owned by a LiveView process.
+  Extraction-facing live-query lifecycle owned by a LiveView process.
 
   The binding keeps registration metadata in one reserved socket assign. Each
   registration installs exactly one public result assign. Connected binding
@@ -13,8 +13,8 @@ defmodule MembaWeb.LiveQuery.Binding do
   remain the owner's responsibility.
 
   This module intentionally creates no process and encodes no Memba projector
-  knowledge. Its names and callback shapes are provisional until later
-  iteration tasks prove and extract the package API.
+  knowledge. Its callback, result, replacement, subscription, and access-error
+  semantics are frozen for extraction; package placement remains later work.
   """
 
   alias MembaWeb.LiveQuery.Query

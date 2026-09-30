@@ -1,26 +1,32 @@
 {
   "schema_version": 1,
-  "packet_id": "task-005-1dfd4de-dashboard-review-revision-2",
-  "task_id": "task-005",
-  "todo_line": "- [ ] 005 Wire the dashboard query to the provisional binding and scoped Memba notification translation; prove club-member and selected-group entry/exit, order/count updates, represented Person and role changes, route/access transitions, unrelated-club isolation and transient-state preservation.",
+  "packet_id": "task-006-e4f8130-conversation-detail-binding-1",
+  "task_id": "task-006",
+  "todo_line": "- [ ] 006 Wire composed conversation detail to the provisional binding; prove Message, represented-Person, exact-follow, both independently committed delivery projections and fresh access-loss behavior, unrelated-conversation isolation and transient-state preservation, then freeze the generic contract from both vertical proofs.",
   "result": "ready_for_review",
   "changed_paths": [
+    "docs/iterations/067-live-projection-queries/extraction-contract.md",
+    "web/lib/memba_web/live/member_message_live/show.ex",
+    "web/lib/memba_web/live_query/binding.ex",
     "web/lib/memba_web/live_query/memba_read_model_source.ex",
-    "web/lib/memba_web/member_dashboard_query.ex",
-    "web/test/memba_web/live/member_dashboard_live_test.exs",
+    "web/lib/memba_web/live_query/query.ex",
+    "web/lib/memba_web/live_query/source.ex",
+    "web/lib/memba_web/member_message_detail.ex",
+    "web/lib/memba_web/member_message_detail_query.ex",
+    "web/test/memba_web/live/member_message_live/show_test.exs",
     "web/test/memba_web/live_query/memba_read_model_source_test.exs",
-    "web/test/memba_web/member_dashboard_query_test.exs"
+    "web/test/memba_web/member_message_detail_query_test.exs"
   ],
   "validation": [
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs test/memba_web/member_dashboard_query_test.exs",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/binding_test.exs test/memba_web/live_query/memba_read_model_source_test.exs test/memba_web/member_message_detail_query_test.exs",
       "exit_status": 0,
-      "evidence": "14 tests passed with 0 failures, covering conversation-only represented Person interests and exact-plus-fallback classification for partial Role, Message and GroupMembership notifications."
+      "evidence": "27 tests passed with 0 failures, covering the frozen binding lifecycle, fresh-authorized query interests, exact follow and dual-delivery classification, changes/row scope recovery and conservative fallbacks."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs test/memba_web/member_message_detail_loader_test.exs test/memba_web/controllers/member_message_detail_test.exs",
       "exit_status": 0,
-      "evidence": "57 tests passed with 0 failures, including isolated Message-only root entry and reply-derived convergence, conversation-only Person isolation, and all prior dashboard binding behavior."
+      "evidence": "36 tests passed with 0 failures, including committed reply entry, represented-author isolation, exact current-member follow, both delivery commit orders, all three authorization-loss paths, transient-state preservation and all pre-existing detail/reply/follow/controller behavior."
     },
     {
       "command": "bin/mix format --check-formatted",
@@ -33,6 +39,6 @@
       "evidence": "No whitespace errors were reported."
     }
   ],
-  "notes": "Conversation rows now register deduplicated exact Person interests for sender, originator, latest replier and displayed participants, including identities absent from dashboard member/candidate collections. Partial Role and Message envelopes retain exact keys while adding global family fallbacks when club scope is missing; GroupMembership always retains an available Person key and adds club/global participation fallback whenever club, group or person scope is incomplete. The root-entry proof creates authoritative conversation state before mount, removes and restores only the committed read rows, then delivers only the Message projector notification so ConversationGroupAccess cannot supply the refresh. Because complete GroupMembership invalidations now intentionally include an exact affected-Person key, route isolation is proven with an unrepresented old-group person while the selected-group notification remains exact. Initial TDD runs failed on the five missing query/source behaviors and then exposed two LiveView fixture issues (authoritative conversation audience and newly relevant represented candidates); both were repaired. An initial formatting invocation used web-prefixed paths unsupported by the root wrapper; the corrected formatter and final format check passed. No conversation-detail, package, full-adapter, acceptance-feature, domain/projector, delivery-dashboard or staff-stream work was introduced.",
+  "notes": "Conversation detail now binds only the coherent :message_detail projection result; former flat selected_club, message, current_member, conversation_entries and delivery assigns are absent from socket state, while current identity shell data, page_title, route_params, reply form/body/errors/state, flash and expanded_receipt_groups remain owner state. Every load normalizes authenticated email, rereads Accounts.list_active_clubs_for_email/1, re-resolves Person/member and canonical audience, and reruns authoritative group/conversation access without current_identity_clubs. Successful results replace interests for selected Club, club-members/current membership and Person authority, exact audience-group participation and conversation access, conversation/message collection, represented messages/authors, exact current-member follow plus partial-scope follow fallbacks, root-message delivery collection, represented deliveries and conservative families; the new-reply query test proves a newly represented author replaces the interest set. ConversationFollow maps explicit member_id and MessageSent sender_id to {:conversation_follow, conversation, member}, retaining conversation-only, member-only or club/global fallback scope. Both delivery projectors map message_id to {:message_deliveries, message} and delivery_id to {:delivery, delivery}; missing message scope is recovered from nested committed changes, then committed member/staff rows, otherwise the exact delivery key is retained alongside {:fallback, :delivery}. Connected tests prove a committed reply enters an open conversation, matching represented Person refresh and other Person isolation, unrelated club/conversation/message/delivery isolation, exact current-member follow refresh versus another member, and member-first intermediate status-without-reason then converged reason plus staff-first intermediate reason-with-sent-status then converged member status. Existing group-participation and exact-access revocation tests plus the new club-membership-loss test prove fresh authorization and owner navigation after Binding clears the private result; page_title is also cleared. Relevant-refresh proof preserves whitespace reply params/validation/state, follow display, route context, info flash and expanded receipt state without restoring omitted receipt UI. Query/Source/Binding types and moduledocs plus binding_test.exs and extraction-contract.md freeze one-argument query success/error, opaque source callbacks, one owner subscription, one assign per query, subscribe-before-read reconciliation, atomic result/interest replacement and owner-handled cleared access errors for task 007. No delivery-detail or other LiveView migration, package extraction, remaining-adapter completion, acceptance feature, domain/projector schema, Docker/quality-gate or staff-stream work was introduced. The superseded TDD runs first failed for absent source/query behavior; one attempted write-mode formatter invocation was sandbox-read-only, after which the exact required format check passed.",
   "unresolved": []
 }
