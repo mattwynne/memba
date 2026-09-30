@@ -5,6 +5,7 @@ defmodule MembaWeb.MemberDashboardQueryTest do
   alias Memba.Membership
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias MembaWeb.MemberDashboardQuery
+  alias MembaWeb.LiveQuery.Query
 
   test "reloads active-club authority from the normalized authenticated email on every call" do
     alice = create_active_member(email: "Alice@Example.com", club_name: "Alpine Club")
@@ -20,6 +21,17 @@ defmodule MembaWeb.MemberDashboardQueryTest do
 
     assert dashboard.selected_club.club_id == alice.club_id
     assert dashboard.current_member.id == alice.person_id
+
+    assert {:ok, bound_dashboard, interests} =
+             Query.load(MemberDashboardQuery.query(), %{
+               club_id: alice.club_id,
+               authenticated_email: " ALICE@EXAMPLE.COM ",
+               selected_group_id: nil
+             })
+
+    assert bound_dashboard.selected_club.club_id == alice.club_id
+    assert {:club_members, alice.club_id} in interests
+    assert {:person, alice.person_id} in interests
 
     MembershipProjection
     |> where([membership], membership.membership_id == ^alice.membership_id)
@@ -44,6 +56,85 @@ defmodule MembaWeb.MemberDashboardQueryTest do
                "alice@example.com",
                Memba.ID.generate(:group)
              )
+  end
+
+  test "the provisional descriptor returns one dashboard and replacement interests" do
+    query = MemberDashboardQuery.query()
+
+    assert query.id == :member_dashboard
+    assert query.assign == :dashboard
+
+    dashboard = %{
+      selected_club: %{club_id: "club-1"},
+      selected_group: %{group_id: "group-1"},
+      current_member: %{
+        id: "person-1",
+        membership_id: "membership-1",
+        roles: ["Membership Admin"]
+      },
+      groups: [
+        %{club_id: "club-1", group_id: "group-1"},
+        %{club_id: "club-1", group_id: "group-2"}
+      ],
+      members: [
+        %{id: "person-1", membership_id: "membership-1", roles: ["Membership Admin"]},
+        %{id: "person-2", membership_id: "membership-2", roles: ["Trip Lead"]}
+      ],
+      custom_group_member_candidates: [
+        %{id: "person-3", membership_id: "membership-3", roles: []}
+      ],
+      message_rows: [
+        %{
+          message_id: "message-1",
+          conversation_id: "conversation-1",
+          sender_id: "person-2",
+          participants: [%{id: "person-3"}]
+        }
+      ]
+    }
+
+    interests = MemberDashboardQuery.interests(dashboard)
+
+    for collection_interest <- [
+          {:club_members, "club-1"},
+          {:club_groups, "club-1"},
+          {:person_groups, "club-1", "person-1"},
+          {:group_members, "group-1"},
+          {:group_conversations, "group-1"},
+          {:club_conversations, "club-1"}
+        ] do
+      assert collection_interest in interests
+    end
+
+    for identity_interest <- [
+          {:club, "club-1"},
+          {:group, "group-1"},
+          {:group, "group-2"},
+          {:membership, "membership-1"},
+          {:person, "person-1"},
+          {:person, "person-2"},
+          {:person, "person-3"},
+          {:conversation, "conversation-1"},
+          {:conversation_messages, "conversation-1"},
+          {:message, "message-1"}
+        ] do
+      assert identity_interest in interests
+    end
+
+    for role_interest <- [
+          {:member_roles, "club-1", "membership-1", "person-1"},
+          {:member_roles, "club-1", "membership-2", "person-2"},
+          {:member_roles, "club-1", "membership-3", "person-3"},
+          {:member_permissions, "club-1", "membership-1", "person-1"},
+          {:club_roles, "club-1"},
+          {:club_permissions, "club-1"}
+        ] do
+      assert role_interest in interests
+    end
+
+    assert {:conversation_access, "group-1", "conversation-1"} in interests
+    assert {:group_participation, "club-1", "group-1", "person-1"} in interests
+    refute {:member_permissions, "club-1", "membership-2", "person-2"} in interests
   end
 
   defp create_active_member(attrs) do

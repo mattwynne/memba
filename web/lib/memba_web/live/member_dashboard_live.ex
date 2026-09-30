@@ -17,18 +17,13 @@ defmodule MembaWeb.MemberDashboardLive do
   alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.GroupWelcomeEmail
   alias Memba.Messaging
-  alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
+  alias MembaWeb.LiveQuery.Binding
+  alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberDashboardQuery
 
-  @dashboard_state_projectors [
-    Memba.Membership.Projectors.Group,
-    Memba.Membership.Projectors.GroupMembership,
-    Memba.Membership.Projectors.Membership,
-    Memba.Membership.Projectors.Role,
-    Memba.Messaging.Projectors.ConversationGroupAccess
-  ]
+  @dashboard_query_id :member_dashboard
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) do
@@ -36,39 +31,37 @@ defmodule MembaWeb.MemberDashboardLive do
     selected_group_id = Map.get(params, "group_id")
     targeted_person_id = Map.get(params, "person_id")
 
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
-    end
-
     current_identity = current_identity_from_session(session)
     current_identity_clubs = identity_clubs(current_identity)
 
-    socket = assign_current_identity(socket, current_identity, current_identity_clubs)
+    socket =
+      socket
+      |> assign_current_identity(current_identity, current_identity_clubs)
+      |> assign(:routed_club_id, club_id)
+      |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
+      |> assign(:selected_group_route_id, selected_group_id)
+      |> assign(:targeted_person_route_id, targeted_person_id)
+      |> assign(:targeted_group_member, nil)
+      |> assign(:targeted_group_member_success, nil)
+      |> assign(:targeted_group_member_focus_id, nil)
+      |> assign(:preserve_targeted_group_member_success?, false)
+      |> assign(:active_section, "conversations")
+      |> assign(:custom_group_member_picker_open?, false)
+      |> assign(:custom_group_member_removal, nil)
+      |> assign(:group_access_request_state, :idle)
+      |> assign_custom_group_member_picker_query("")
 
-    case MemberDashboardQuery.load(club_id, identity_email(current_identity), selected_group_id) do
-      {:ok, dashboard} ->
-        {:ok,
-         socket
-         |> assign(:routed_club_id, club_id)
-         |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
-         |> assign(:selected_group_route_id, selected_group_id)
-         |> assign(:targeted_person_route_id, targeted_person_id)
-         |> assign(:targeted_group_member, nil)
-         |> assign(:targeted_group_member_success, nil)
-         |> assign(:targeted_group_member_focus_id, nil)
-         |> assign(:preserve_targeted_group_member_success?, false)
-         |> assign(:active_section, "conversations")
-         |> assign(:custom_group_member_picker_open?, false)
-         |> assign(:custom_group_member_removal, nil)
-         |> assign(:group_access_request_state, :idle)
-         |> assign_custom_group_member_picker_query("")
-         |> install_dashboard(dashboard)}
+    case Binding.bind(
+           socket,
+           MemberDashboardQuery.query(),
+           dashboard_query_inputs(socket, selected_group_id),
+           MembaReadModelSource.new()
+         ) do
+      {:ok, socket} ->
+        {:ok, synchronize_dashboard_shell(socket)}
 
-      {:error, :forbidden} ->
-        forbidden!()
-
-      {:error, :not_found} ->
-        not_found!(socket)
+      {:error, errors, socket} ->
+        dashboard_binding_error!(errors, socket)
     end
   end
 
@@ -347,19 +340,17 @@ defmodule MembaWeb.MemberDashboardLive do
   end
 
   @impl Phoenix.LiveView
-  def handle_info(
-        {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
-        %{assigns: %{dashboard: %{selected_club: _selected_club}}} = socket
-      ) do
-    {:noreply, refresh_dashboard(socket, socket.assigns.selected_group_route_id)}
-  end
+  def handle_info({:read_model_changed, _change} = notification, socket) do
+    case Binding.handle_notification(socket, notification) do
+      {:ignored, socket} ->
+        {:noreply, socket}
 
-  def handle_info(
-        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
-        %{assigns: %{dashboard: %{selected_club: %{club_id: club_id}}}} = socket
-      )
-      when projector in @dashboard_state_projectors do
-    {:noreply, refresh_dashboard(socket, socket.assigns.selected_group_route_id)}
+      {:ok, socket} ->
+        {:noreply, synchronize_dashboard_shell(socket)}
+
+      {:error, errors, socket} ->
+        dashboard_binding_error!(errors, socket)
+    end
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
@@ -523,22 +514,18 @@ defmodule MembaWeb.MemberDashboardLive do
   defp person_name(_person), do: nil
 
   defp refresh_dashboard(socket, selected_group_id) do
-    case MemberDashboardQuery.load(
-           socket.assigns.routed_club_id,
-           socket.assigns.current_identity_email,
-           selected_group_id
+    case Binding.rebind(
+           socket,
+           @dashboard_query_id,
+           dashboard_query_inputs(socket, selected_group_id)
          ) do
-      {:ok, dashboard} ->
+      {:ok, socket} ->
         socket
         |> assign(:selected_group_route_id, selected_group_id)
-        |> install_dashboard(dashboard)
-        |> assign_targeted_group_member()
+        |> synchronize_dashboard_shell()
 
-      {:error, :forbidden} ->
-        forbidden!()
-
-      {:error, :not_found} ->
-        not_found!(socket)
+      {:error, errors, socket} ->
+        dashboard_binding_error!(errors, socket)
     end
   end
 
@@ -559,8 +546,28 @@ defmodule MembaWeb.MemberDashboardLive do
     end
   end
 
-  defp install_dashboard(socket, dashboard) do
-    assign(socket, dashboard: dashboard, page_title: dashboard.page_title)
+  defp dashboard_query_inputs(socket, selected_group_id) do
+    %{
+      club_id: socket.assigns.routed_club_id,
+      authenticated_email: socket.assigns.current_identity_email,
+      selected_group_id: selected_group_id
+    }
+  end
+
+  defp synchronize_dashboard_shell(socket) do
+    socket
+    |> assign(:page_title, socket.assigns.dashboard.page_title)
+    |> assign_targeted_group_member()
+  end
+
+  defp dashboard_binding_error!([{@dashboard_query_id, :forbidden} | _errors], _socket),
+    do: forbidden!()
+
+  defp dashboard_binding_error!([{@dashboard_query_id, :not_found} | _errors], socket),
+    do: not_found!(socket)
+
+  defp dashboard_binding_error!(errors, _socket) do
+    raise "member dashboard live query failed: #{inspect(errors)}"
   end
 
   defp assign_current_identity(socket, identity, current_identity_clubs) do
