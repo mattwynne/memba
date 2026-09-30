@@ -1,0 +1,1528 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 825da6e..05ec137 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,21 +1,27 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-004-ba89b32-provisional-binding-1",
+-  "task_id": "task-004",
+-  "todo_line": "- [ ] 004 Implement and unit-test an app-private provisional binding/source contract for opaque interests, one assign per query, route rebind, relevant refresh, access errors, subscribe-before-read, bind-time reconciliation and reconnect, without a process per query or a frozen package API.",
++  "packet_id": "task-005-bcf5640-dashboard-binding-1",
++  "task_id": "task-005",
++  "todo_line": "- [ ] 005 Wire the dashboard query to the provisional binding and scoped Memba notification translation; prove club-member and selected-group entry/exit, order/count updates, represented Person and role changes, route/access transitions, unrelated-club isolation and transient-state preservation.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/live_query/binding.ex",
+-    "web/lib/memba_web/live_query/query.ex",
+-    "web/lib/memba_web/live_query/source.ex",
+-    "web/test/memba_web/live_query/binding_test.exs",
+-    "web/test/support/live_query_fixture_live.ex"
++    "web/lib/memba_web/live_query/memba_read_model_source.ex",
++    "web/lib/memba_web/member_dashboard_query.ex",
++    "web/lib/memba_web/live/member_dashboard_live.ex",
++    "web/test/memba_web/live_query/memba_read_model_source_test.exs",
++    "web/test/memba_web/member_dashboard_query_test.exs",
++    "web/test/memba_web/live/member_dashboard_live_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query test/memba_web/member_dashboard_query_test.exs",
+       "exit_status": 0,
+-      "evidence": "7 focused tests passed with 0 failures, covering disconnected and connected binding, owner-process execution, scoped refresh and interest replacement, route rebind, access errors, deterministic bind-window reconciliation, and fresh connected remounts."
++      "evidence": "18 tests passed with 0 failures, covering the provisional binding lifecycle plus dashboard descriptor/interests, all eight dashboard projector families, exact matching, conservative missing-scope fallbacks and delivery-notification exclusion."
++    },
++    {
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_presentation_test.exs test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_dashboard_admission_live_test.exs test/memba_web/live/member_dashboard_targeted_add_live_test.exs",
++      "exit_status": 0,
++      "evidence": "89 tests passed with 0 failures, including club and selected-group member entry/removal/order/count updates, represented Person/Group isolation, live represented-member role changes, route-interest replacement, fresh access loss, picker preservation, real admission flow and targeted-add behavior."
+     },
+     {
+       "command": "bin/mix format --check-formatted",
+@@ -28,6 +34,6 @@
+       "evidence": "No whitespace errors were reported."
+     }
+   ],
+-  "notes": "The initial TDD run failed before the provisional modules existed. Query now owns one loader/result/interests shape, Source owns subscription plus opaque notification classification/matching, Binding keeps registrations in one reserved socket assign and returns `{query_id, reason}` access errors to the LiveView owner, and the fixture models reconnect as a fresh connected mount/process. Bind-window reconciliation snapshots messages from subscribe through result/interest installation, consumes recognized source notifications, and forces a conservative follow-up read without sleeps; no dashboard wiring, Memba projector mapping, Commanded dependency, package extraction, generic navigation policy, or per-query process was introduced.",
++  "notes": "The provisional dashboard query takes routed club ID, normalized authenticated email and selected group ID, returns either `{:ok, dashboard, replacement_interests}` or the existing forbidden/not-found error, and rereads active-club authority through `load/3` on bind, rebind and matching notifications. Its interests cover selected-club members/groups/conversations, current-person participating groups, selected-group members/conversations/access, represented Club/Group/Person/membership/message/conversation identities, represented-member role assignments, and separate current-actor permissions, with route rebind replacing old selected-group scopes. The app-private source maps Club, Membership, Person, Group, GroupMembership, Role, Message and ConversationGroupAccess notifications to exact scopes and documented family/club/global fallbacks; Message emits exact conversation plus conservative club-conversation invalidation, while MemberEmailDelivery is ignored. MemberDashboardLive now delegates subscription, notification matching and rereads to Binding, synchronizes only page title and targeted-member coordination, and retains active section, picker/form, operations, access-request, flash and navigation state. Initial TDD runs failed because the new source and descriptor did not yet exist, and targeted loops exposed test-fixture ordering, no-primary-key deletion and authoritative group-name assumptions that were corrected. No conversation-detail migration, API freeze, package extraction, cross-surface adapter completion, domain/projector write, acceptance feature, staff stream, Docker or quality-gate change was introduced.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 7d9f988..64ca4bf 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -17,18 +17,13 @@ defmodule MembaWeb.MemberDashboardLive do
+   alias Memba.Membership.CustomGroupRemoval
+   alias Memba.Membership.GroupWelcomeEmail
+   alias Memba.Messaging
+-  alias Memba.ReadModelChanges
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
++  alias MembaWeb.LiveQuery.Binding
++  alias MembaWeb.LiveQuery.MembaReadModelSource
+   alias MembaWeb.MemberDashboardQuery
+ 
+-  @dashboard_state_projectors [
+-    Memba.Membership.Projectors.Group,
+-    Memba.Membership.Projectors.GroupMembership,
+-    Memba.Membership.Projectors.Membership,
+-    Memba.Membership.Projectors.Role,
+-    Memba.Messaging.Projectors.ConversationGroupAccess
+-  ]
++  @dashboard_query_id :member_dashboard
+ 
+   @impl Phoenix.LiveView
+   def mount(params, session, socket) do
+@@ -36,39 +31,37 @@ defmodule MembaWeb.MemberDashboardLive do
+     selected_group_id = Map.get(params, "group_id")
+     targeted_person_id = Map.get(params, "person_id")
+ 
+-    if connected?(socket) do
+-      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+-    end
+-
+     current_identity = current_identity_from_session(session)
+     current_identity_clubs = identity_clubs(current_identity)
+ 
+-    socket = assign_current_identity(socket, current_identity, current_identity_clubs)
+-
+-    case MemberDashboardQuery.load(club_id, identity_email(current_identity), selected_group_id) do
+-      {:ok, dashboard} ->
+-        {:ok,
+-         socket
+-         |> assign(:routed_club_id, club_id)
+-         |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
+-         |> assign(:selected_group_route_id, selected_group_id)
+-         |> assign(:targeted_person_route_id, targeted_person_id)
+-         |> assign(:targeted_group_member, nil)
+-         |> assign(:targeted_group_member_success, nil)
+-         |> assign(:targeted_group_member_focus_id, nil)
+-         |> assign(:preserve_targeted_group_member_success?, false)
+-         |> assign(:active_section, "conversations")
+-         |> assign(:custom_group_member_picker_open?, false)
+-         |> assign(:custom_group_member_removal, nil)
+-         |> assign(:group_access_request_state, :idle)
+-         |> assign_custom_group_member_picker_query("")
+-         |> install_dashboard(dashboard)}
++    socket =
++      socket
++      |> assign_current_identity(current_identity, current_identity_clubs)
++      |> assign(:routed_club_id, club_id)
++      |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
++      |> assign(:selected_group_route_id, selected_group_id)
++      |> assign(:targeted_person_route_id, targeted_person_id)
++      |> assign(:targeted_group_member, nil)
++      |> assign(:targeted_group_member_success, nil)
++      |> assign(:targeted_group_member_focus_id, nil)
++      |> assign(:preserve_targeted_group_member_success?, false)
++      |> assign(:active_section, "conversations")
++      |> assign(:custom_group_member_picker_open?, false)
++      |> assign(:custom_group_member_removal, nil)
++      |> assign(:group_access_request_state, :idle)
++      |> assign_custom_group_member_picker_query("")
+ 
+-      {:error, :forbidden} ->
+-        forbidden!()
++    case Binding.bind(
++           socket,
++           MemberDashboardQuery.query(),
++           dashboard_query_inputs(socket, selected_group_id),
++           MembaReadModelSource.new()
++         ) do
++      {:ok, socket} ->
++        {:ok, synchronize_dashboard_shell(socket)}
+ 
+-      {:error, :not_found} ->
+-        not_found!(socket)
++      {:error, errors, socket} ->
++        dashboard_binding_error!(errors, socket)
+     end
+   end
+ 
+@@ -347,19 +340,17 @@ defmodule MembaWeb.MemberDashboardLive do
+   end
+ 
+   @impl Phoenix.LiveView
+-  def handle_info(
+-        {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
+-        %{assigns: %{dashboard: %{selected_club: _selected_club}}} = socket
+-      ) do
+-    {:noreply, refresh_dashboard(socket, socket.assigns.selected_group_route_id)}
+-  end
++  def handle_info({:read_model_changed, _change} = notification, socket) do
++    case Binding.handle_notification(socket, notification) do
++      {:ignored, socket} ->
++        {:noreply, socket}
+ 
+-  def handle_info(
+-        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
+-        %{assigns: %{dashboard: %{selected_club: %{club_id: club_id}}}} = socket
+-      )
+-      when projector in @dashboard_state_projectors do
+-    {:noreply, refresh_dashboard(socket, socket.assigns.selected_group_route_id)}
++      {:ok, socket} ->
++        {:noreply, synchronize_dashboard_shell(socket)}
++
++      {:error, errors, socket} ->
++        dashboard_binding_error!(errors, socket)
++    end
+   end
+ 
+   def handle_info(_message, socket), do: {:noreply, socket}
+@@ -523,22 +514,18 @@ defmodule MembaWeb.MemberDashboardLive do
+   defp person_name(_person), do: nil
+ 
+   defp refresh_dashboard(socket, selected_group_id) do
+-    case MemberDashboardQuery.load(
+-           socket.assigns.routed_club_id,
+-           socket.assigns.current_identity_email,
+-           selected_group_id
++    case Binding.rebind(
++           socket,
++           @dashboard_query_id,
++           dashboard_query_inputs(socket, selected_group_id)
+          ) do
+-      {:ok, dashboard} ->
++      {:ok, socket} ->
+         socket
+         |> assign(:selected_group_route_id, selected_group_id)
+-        |> install_dashboard(dashboard)
+-        |> assign_targeted_group_member()
++        |> synchronize_dashboard_shell()
+ 
+-      {:error, :forbidden} ->
+-        forbidden!()
+-
+-      {:error, :not_found} ->
+-        not_found!(socket)
++      {:error, errors, socket} ->
++        dashboard_binding_error!(errors, socket)
+     end
+   end
+ 
+@@ -559,8 +546,28 @@ defmodule MembaWeb.MemberDashboardLive do
+     end
+   end
+ 
+-  defp install_dashboard(socket, dashboard) do
+-    assign(socket, dashboard: dashboard, page_title: dashboard.page_title)
++  defp dashboard_query_inputs(socket, selected_group_id) do
++    %{
++      club_id: socket.assigns.routed_club_id,
++      authenticated_email: socket.assigns.current_identity_email,
++      selected_group_id: selected_group_id
++    }
++  end
++
++  defp synchronize_dashboard_shell(socket) do
++    socket
++    |> assign(:page_title, socket.assigns.dashboard.page_title)
++    |> assign_targeted_group_member()
++  end
++
++  defp dashboard_binding_error!([{@dashboard_query_id, :forbidden} | _errors], _socket),
++    do: forbidden!()
++
++  defp dashboard_binding_error!([{@dashboard_query_id, :not_found} | _errors], socket),
++    do: not_found!(socket)
++
++  defp dashboard_binding_error!(errors, _socket) do
++    raise "member dashboard live query failed: #{inspect(errors)}"
+   end
+ 
+   defp assign_current_identity(socket, identity, current_identity_clubs) do
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+new file mode 100644
+index 0000000..0e19692
+--- /dev/null
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -0,0 +1,301 @@
++defmodule MembaWeb.LiveQuery.MembaReadModelSource do
++  @moduledoc """
++  Provisional Memba adapter for committed read-model notifications.
++
++  The adapter keeps projector and event knowledge outside the generic live-query
++  lifecycle. Its invalidation tuples are deliberately app-private while the
++  dashboard and conversation-detail integrations prove the eventual contract.
++  """
++
++  alias Memba.ReadModelChanges
++  alias MembaWeb.LiveQuery.Source
++
++  @club_projector Memba.Membership.Projectors.Club
++  @membership_projector Memba.Membership.Projectors.Membership
++  @person_projector Memba.Membership.Projectors.Person
++  @group_projector Memba.Membership.Projectors.Group
++  @group_membership_projector Memba.Membership.Projectors.GroupMembership
++  @role_projector Memba.Membership.Projectors.Role
++  @message_projector Memba.Messaging.Projectors.Message
++  @conversation_access_projector Memba.Messaging.Projectors.ConversationGroupAccess
++
++  @club_events ~w(ClubCreated ClubUpdated)
++  @group_events ~w(GroupCreated GroupEmailSlugAssigned)
++  @exact_role_events ~w(
++    ClubRoleAssignedToMember
++    ClubRoleRemovedFromMember
++    MemberRoleAssigned
++    MemberRoleRemoved
++  )
++  @role_definition_events ~w(ClubRoleDefined)
++  @role_permission_events ~w(ClubRolePermissionGranted)
++  @role_membership_removal_events ~w(ClubMemberRemoved MemberRemoved)
++
++  @doc """
++  Builds the shared ReadModelChanges source used by member live queries.
++  """
++  @spec new() :: Source.t()
++  def new do
++    Source.new!(
++      subscribe: &subscribe/0,
++      classify: &classify/1,
++      matches?: &matches?/2
++    )
++  end
++
++  @doc false
++  def subscribe do
++    Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
++  end
++
++  @doc false
++  def classify({:read_model_changed, %{projector: projector, source_event: event}})
++      when is_atom(projector) and is_map(event) do
++    case projector do
++      @club_projector -> classify_club_projector(event)
++      @membership_projector -> membership_invalidations(event)
++      @person_projector -> person_invalidations(event)
++      @group_projector -> group_invalidations(event)
++      @group_membership_projector -> group_membership_invalidations(event)
++      @role_projector -> role_invalidations(event)
++      @message_projector -> message_invalidations(event)
++      @conversation_access_projector -> conversation_access_invalidations(event)
++      _other_projector -> :ignore
++    end
++  end
++
++  def classify(_notification), do: :ignore
++
++  @doc false
++  def matches?(interest, invalidation), do: interest == invalidation
++
++  defp classify_club_projector(event) do
++    event_name = event_name(event)
++
++    cond do
++      event_name in @club_events ->
++        scoped_or_fallback([{:club, field(event, :club_id)}], :club)
++
++      event_name in @group_events ->
++        group_invalidations(event)
++
++      event_name in (@exact_role_events ++
++                       @role_definition_events ++
++                       @role_permission_events ++ @role_membership_removal_events) ->
++        role_invalidations(event)
++
++      club_id = field(event, :club_id) ->
++        {:ok, [{:fallback, :club, club_id}]}
++
++      true ->
++        {:ok, [{:fallback, :club}]}
++    end
++  end
++
++  defp membership_invalidations(event) do
++    club_id = field(event, :club_id)
++    membership_id = field(event, :membership_id)
++    person_id = field(event, :person_id)
++
++    invalidations =
++      compact([
++        tuple(:club_members, club_id),
++        tuple(:membership, membership_id),
++        tuple(:person, person_id),
++        tuple(:person_clubs, person_id)
++      ])
++
++    case {club_id, person_id, invalidations} do
++      {nil, nil, _invalidations} -> {:ok, [{:fallback, :membership}]}
++      {_club_id, _person_id, []} -> {:ok, [{:fallback, :membership}]}
++      _scoped -> {:ok, invalidations}
++    end
++  end
++
++  defp person_invalidations(event) do
++    case field(event, :person_id) do
++      nil -> {:ok, [{:fallback, :person}]}
++      person_id -> {:ok, [{:person, person_id}, {:person_emails, person_id}]}
++    end
++  end
++
++  defp group_invalidations(event) do
++    club_id = field(event, :club_id)
++    group_id = field(event, :group_id)
++
++    cond do
++      club_id && group_id ->
++        {:ok, [{:club_groups, club_id}, {:group, group_id}]}
++
++      club_id ->
++        {:ok, [{:club_groups, club_id}]}
++
++      true ->
++        {:ok, [{:fallback, :group}]}
++    end
++  end
++
++  defp group_membership_invalidations(event) do
++    club_id = field(event, :club_id)
++    group_id = field(event, :group_id)
++    person_id = field(event, :person_id)
++
++    invalidations =
++      compact([
++        tuple(:group_members, group_id),
++        tuple(:person_groups, club_id, person_id),
++        tuple(:group_participation, club_id, group_id, person_id),
++        missing_scope_fallback(:group_membership, club_id, person_id)
++      ])
++
++    case invalidations do
++      [] when not is_nil(club_id) ->
++        {:ok, [{:fallback, :group_membership, club_id}]}
++
++      [] ->
++        {:ok, [{:fallback, :group_membership}]}
++
++      invalidations ->
++        {:ok, invalidations}
++    end
++  end
++
++  defp role_invalidations(event) do
++    event_name = event_name(event)
++    club_id = field(event, :club_id)
++    membership_id = field(event, :membership_id)
++    person_id = field(event, :person_id)
++    role_id = field(event, :role_id)
++
++    cond do
++      event_name in @exact_role_events ->
++        member_roles = tuple(:member_roles, club_id, membership_id, person_id)
++        member_permissions = tuple(:member_permissions, club_id, membership_id, person_id)
++
++        compact([
++          member_roles,
++          member_permissions,
++          tuple(:role, role_id),
++          missing_scope_fallback(:role, club_id, member_roles)
++        ])
++        |> scoped_or_role_fallback(club_id)
++
++      event_name in @role_definition_events ->
++        scoped_or_role_fallback(
++          compact([tuple(:role, role_id), tuple(:club_roles, club_id)]),
++          club_id
++        )
++
++      event_name in @role_permission_events ->
++        scoped_or_role_fallback(
++          compact([tuple(:role, role_id), tuple(:club_permissions, club_id)]),
++          club_id
++        )
++
++      event_name in @role_membership_removal_events ->
++        member_roles = tuple(:member_roles, club_id, membership_id, person_id)
++
++        compact([
++          member_roles,
++          tuple(:member_permissions, club_id, membership_id, person_id),
++          tuple(:club_permissions, club_id),
++          missing_scope_fallback(:role, club_id, member_roles)
++        ])
++        |> scoped_or_role_fallback(club_id)
++
++      club_id ->
++        {:ok, [{:fallback, :role, club_id}]}
++
++      true ->
++        {:ok, [{:fallback, :role}]}
++    end
++  end
++
++  defp message_invalidations(event) do
++    club_id = field(event, :club_id)
++    message_id = field(event, :message_id)
++    conversation_id = field(event, :conversation_id) || message_id
++
++    invalidations =
++      compact([
++        tuple(:message, message_id),
++        tuple(:conversation, conversation_id),
++        tuple(:conversation_messages, conversation_id),
++        tuple(:club_conversations, club_id)
++      ])
++
++    cond do
++      club_id || conversation_id -> {:ok, invalidations}
++      true -> {:ok, [{:fallback, :message}]}
++    end
++  end
++
++  defp conversation_access_invalidations(event) do
++    club_id = field(event, :club_id)
++    group_id = field(event, :group_id)
++    conversation_id = field(event, :conversation_id)
++
++    invalidations =
++      compact([
++        tuple(:group_conversations, group_id),
++        tuple(:club_conversations, if(is_nil(group_id), do: club_id)),
++        tuple(:conversation_access, group_id, conversation_id),
++        tuple(:conversation, conversation_id),
++        tuple(:group, group_id)
++      ])
++
++    cond do
++      group_id || conversation_id ->
++        {:ok, invalidations}
++
++      club_id ->
++        {:ok, [{:fallback, :conversation_access, club_id}]}
++
++      true ->
++        {:ok, [{:fallback, :conversation_access}]}
++    end
++  end
++
++  defp scoped_or_fallback(invalidations, family) do
++    case compact(invalidations) do
++      [] -> {:ok, [{:fallback, family}]}
++      invalidations -> {:ok, invalidations}
++    end
++  end
++
++  defp scoped_or_role_fallback([], nil), do: {:ok, [{:fallback, :role}]}
++  defp scoped_or_role_fallback([], club_id), do: {:ok, [{:fallback, :role, club_id}]}
++  defp scoped_or_role_fallback(invalidations, _club_id), do: {:ok, invalidations}
++
++  defp missing_scope_fallback(_family, _club_id, scoped) when not is_nil(scoped), do: nil
++  defp missing_scope_fallback(family, nil, nil), do: {:fallback, family}
++  defp missing_scope_fallback(family, club_id, nil), do: {:fallback, family, club_id}
++
++  defp tuple(_name, nil), do: nil
++  defp tuple(name, value), do: {name, value}
++
++  defp tuple(_name, nil, _value), do: nil
++  defp tuple(_name, _value, nil), do: nil
++  defp tuple(name, first, second), do: {name, first, second}
++
++  defp tuple(_name, nil, _second, _third), do: nil
++  defp tuple(_name, _first, nil, _third), do: nil
++  defp tuple(_name, _first, _second, nil), do: nil
++  defp tuple(name, first, second, third), do: {name, first, second, third}
++
++  defp compact(invalidations) do
++    invalidations
++    |> Enum.reject(&is_nil/1)
++    |> Enum.uniq()
++  end
++
++  defp field(event, name), do: Map.get(event, name)
++
++  defp event_name(%{__struct__: module}) do
++    module
++    |> Module.split()
++    |> List.last()
++  end
++
++  defp event_name(_event), do: nil
++end
+diff --git a/web/lib/memba_web/member_dashboard_query.ex b/web/lib/memba_web/member_dashboard_query.ex
+index ab99ee1..7f199c5 100644
+--- a/web/lib/memba_web/member_dashboard_query.ex
++++ b/web/lib/memba_web/member_dashboard_query.ex
+@@ -9,6 +9,42 @@ defmodule MembaWeb.MemberDashboardQuery do
+ 
+   alias Memba.Accounts
+   alias MembaWeb.MemberDashboardPresentation
++  alias MembaWeb.LiveQuery.Query
++
++  @fallback_families [
++    :club,
++    :membership,
++    :person,
++    :group,
++    :group_membership,
++    :role,
++    :message,
++    :conversation_access
++  ]
++
++  @doc """
++  Returns the app-private provisional descriptor for the dashboard binding.
++
++  Inputs contain the routed club ID, authenticated email and optional selected
++  group ID. A successful read returns the coherent dashboard plus a complete
++  replacement set of opaque interests.
++  """
++  def query do
++    Query.new!(
++      id: :member_dashboard,
++      assign: :dashboard,
++      load: fn inputs ->
++        case load(
++               inputs.club_id,
++               inputs.authenticated_email,
++               inputs.selected_group_id
++             ) do
++          {:ok, dashboard} -> {:ok, dashboard, interests(dashboard)}
++          {:error, reason} -> {:error, reason}
++        end
++      end
++    )
++  end
+ 
+   @doc """
+   Returns one coherent dashboard view model or the presentation boundary's
+@@ -26,4 +62,110 @@ defmodule MembaWeb.MemberDashboardQuery do
+       selected_group_id
+     )
+   end
++
++  @doc """
++  Builds the dashboard's provisional collection, identity and authorization
++  interests from one successful result.
++  """
++  def interests(dashboard) when is_map(dashboard) do
++    selected_club = Map.fetch!(dashboard, :selected_club)
++    selected_group = Map.fetch!(dashboard, :selected_group)
++    current_member = Map.fetch!(dashboard, :current_member)
++
++    club_id = Map.fetch!(selected_club, :club_id)
++    group_id = Map.fetch!(selected_group, :group_id)
++    current_person_id = Map.fetch!(current_member, :id)
++    current_membership_id = Map.fetch!(current_member, :membership_id)
++
++    represented_members = represented_members(dashboard)
++    message_rows = Map.get(dashboard, :message_rows, [])
++
++    [
++      {:club, club_id},
++      {:club_members, club_id},
++      {:club_groups, club_id},
++      {:club_conversations, club_id},
++      {:person_groups, club_id, current_person_id},
++      {:group_members, group_id},
++      {:group_conversations, group_id},
++      {:group_participation, club_id, group_id, current_person_id},
++      {:membership, current_membership_id},
++      {:person, current_person_id},
++      {:person_clubs, current_person_id},
++      {:member_permissions, club_id, current_membership_id, current_person_id},
++      {:club_permissions, club_id},
++      {:club_roles, club_id}
++    ]
++    |> Kernel.++(group_interests(dashboard))
++    |> Kernel.++(member_interests(club_id, represented_members))
++    |> Kernel.++(conversation_interests(group_id, message_rows))
++    |> Kernel.++(fallback_interests(club_id))
++    |> Enum.uniq()
++  end
++
++  defp represented_members(dashboard) do
++    dashboard
++    |> Map.get(:members, [])
++    |> Kernel.++(Map.get(dashboard, :custom_group_member_candidates, []))
++    |> Kernel.++([Map.fetch!(dashboard, :current_member)])
++    |> Enum.uniq_by(&Map.get(&1, :id))
++  end
++
++  defp group_interests(dashboard) do
++    dashboard
++    |> Map.get(:groups, [])
++    |> Enum.flat_map(fn group ->
++      case Map.get(group, :group_id) do
++        nil -> []
++        group_id -> [{:group, group_id}]
++      end
++    end)
++  end
++
++  defp member_interests(club_id, members) do
++    Enum.flat_map(members, fn member ->
++      person_id = Map.get(member, :id)
++      membership_id = Map.get(member, :membership_id)
++
++      [
++        optional_tuple(:person, person_id),
++        optional_tuple(:membership, membership_id),
++        optional_tuple(:member_roles, club_id, membership_id, person_id)
++      ]
++      |> Enum.reject(&is_nil/1)
++    end)
++  end
++
++  defp conversation_interests(group_id, message_rows) do
++    Enum.flat_map(message_rows, fn row ->
++      conversation_id = Map.get(row, :conversation_id) || Map.get(row, :message_id)
++      message_id = Map.get(row, :message_id)
++
++      [
++        optional_tuple(:conversation, conversation_id),
++        optional_tuple(:conversation_messages, conversation_id),
++        optional_tuple(:conversation_access, group_id, conversation_id),
++        optional_tuple(:message, message_id)
++      ]
++      |> Enum.reject(&is_nil/1)
++    end)
++  end
++
++  defp fallback_interests(club_id) do
++    Enum.flat_map(@fallback_families, fn family ->
++      [{:fallback, family}, {:fallback, family, club_id}]
++    end)
++  end
++
++  defp optional_tuple(_name, nil), do: nil
++  defp optional_tuple(name, value), do: {name, value}
++
++  defp optional_tuple(_name, nil, _third), do: nil
++  defp optional_tuple(_name, _second, nil), do: nil
++  defp optional_tuple(name, second, third), do: {name, second, third}
++
++  defp optional_tuple(_name, nil, _second, _third), do: nil
++  defp optional_tuple(_name, _first, nil, _third), do: nil
++  defp optional_tuple(_name, _first, _second, nil), do: nil
++  defp optional_tuple(name, first, second, third), do: {name, first, second, third}
+ end
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index ef77792..3442a7a 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -14,6 +14,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
+   alias Memba.Membership.Projections.Role
+   alias Memba.Membership.Projections.RoleAssignment
+   alias Memba.Membership.SystemGroups
+@@ -192,6 +193,306 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "club members enter, reorder, update the count and leave an already-open dashboard", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/members")
++
++    zoe =
++      create_active_member(
++        email: "zoe@example.com",
++        name: "Zoe Zed",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    aaron =
++      create_active_member(
++        email: "aaron@example.com",
++        name: "Aaron Able",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    assert has_element?(
++             view,
++             "#active-members-list[data-active-member-count='3']"
++           )
++
++    assert rendered_member_names(view) == ["Aaron Able", "Alice Adams", "Zoe Zed"]
++
++    assert :ok =
++             Memba.Membership.remove_member(
++               %{membership_id: zoe.membership_id},
++               consistency: :strong
++             )
++
++    assert has_element?(
++             view,
++             "#active-members-list[data-active-member-count='2']"
++           )
++
++    refute has_element?(view, "#club-member-#{zoe.person_id}")
++    assert has_element?(view, "#club-member-#{aaron.person_id}")
++  end
++
++  test "selected-group members enter, reorder, update the count and leave an open list", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{private_group.group_id}/members")
++
++    refute has_element?(view, "#club-member-#{bob.person_id}")
++
++    add_group_member(private_group, bob)
++
++    assert has_element?(
++             view,
++             "#active-members-list[data-active-member-count='2']"
++           )
++
++    assert rendered_member_names(view) == ["Alice Adams", "Bob Builder"]
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveGroupMember{
++                 club_id: alice.club_id,
++                 group_id: private_group.group_id,
++                 membership_id: bob.membership_id,
++                 person_id: bob.person_id
++               },
++               consistency: :strong
++             )
++
++    assert has_element?(
++             view,
++             "#active-members-list[data-active-member-count='1']"
++           )
++
++    refute has_element?(view, "#club-member-#{bob.person_id}")
++  end
++
++  test "represented Person and Group invalidations are exact through the Memba source", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    local_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "local_planning",
++        name: "Local Planning"
++      )
++
++    outsider =
++      create_active_member(
++        email: "outsider@example.com",
++        name: "Outsider",
++        club_name: "Other Club"
++      )
++
++    foreign_group =
++      create_group(
++        club_id: outsider.club_id,
++        group_key: "foreign_planning",
++        name: "Foreign Planning"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/members")
++
++    Person
++    |> where([person], person.person_id == ^bob.person_id)
++    |> Repo.update_all(set: [name: "Bob Changed"])
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Person,
++      %Memba.Membership.Events.PersonEmailAddressAdded{
++        person_id: outsider.person_id,
++        email: "other@example.com",
++        normalized_email: "other@example.com"
++      }
++    )
++
++    assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
++    refute render(view) =~ "Bob Changed"
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Person,
++      %Memba.Membership.Events.PersonEmailAddressAdded{
++        person_id: bob.person_id,
++        email: "bob+other@example.com",
++        normalized_email: "bob+other@example.com"
++      }
++    )
++
++    assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Changed")
++
++    Group
++    |> where([group], group.group_id == ^local_group.group_id)
++    |> Repo.update_all(set: [name: "Local Changed"])
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Group,
++      %Memba.Membership.Events.GroupEmailSlugAssigned{
++        club_id: outsider.club_id,
++        group_id: foreign_group.group_id,
++        email_slug: "foreign-planning"
++      }
++    )
++
++    assert has_element?(view, "#member-group-link-#{local_group.group_id}", "Local Planning")
++    refute render(view) =~ "Local Changed"
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Group,
++      %Memba.Membership.Events.GroupEmailSlugAssigned{
++        club_id: alice.club_id,
++        group_id: local_group.group_id,
++        email_slug: "local-planning"
++      }
++    )
++
++    assert has_element?(view, "#member-group-link-#{local_group.group_id}", "Local Changed")
++  end
++
++  test "represented-member role assignment, definition and removal refresh badges", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/members")
++
++    role = create_role(club_id: alice.club_id, role_key: "trip_lead", name: "Trip Lead")
++    assignment = assign_role(bob, role)
++
++    role_selector = "#club-member-#{bob.person_id} .member-row__role"
++    refute has_element?(view, role_selector)
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Role,
++      %Memba.Membership.Events.ClubRoleAssignedToMember{
++        club_id: alice.club_id,
++        membership_id: bob.membership_id,
++        person_id: bob.person_id,
++        role_id: role.role_id
++      }
++    )
++
++    assert has_element?(view, role_selector, "Trip Lead")
++
++    role
++    |> Ecto.Changeset.change(name: "Expedition Lead")
++    |> Repo.update!()
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Role,
++      %Memba.Membership.Events.ClubRoleDefined{
++        club_id: alice.club_id,
++        role_id: role.role_id,
++        role_key: role.role_key,
++        name: "Expedition Lead"
++      }
++    )
++
++    assert has_element?(view, role_selector, "Expedition Lead")
++    refute has_element?(view, role_selector, "Trip Lead")
++
++    RoleAssignment
++    |> where(
++      [role_assignment],
++      role_assignment.membership_id == ^assignment.membership_id and
++        role_assignment.role_id == ^assignment.role_id
++    )
++    |> Repo.delete_all()
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Role,
++      %Memba.Membership.Events.ClubRoleRemovedFromMember{
++        club_id: alice.club_id,
++        membership_id: bob.membership_id,
++        person_id: bob.person_id,
++        role_id: role.role_id
++      }
++    )
++
++    refute has_element?(view, role_selector)
++  end
++
+   test "a dashboard result replacement preserves the open member picker and its query", %{
+     conn: conn
+   } do
+@@ -421,6 +722,88 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
+   end
+ 
++  test "a route patch replaces selected-group interests and ignores the old group's changes", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    old_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "old_planning",
++        name: "Old Planning"
++      )
++
++    new_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "new_planning",
++        name: "New Planning"
++      )
++
++    add_group_member(old_group, alice)
++    add_group_member(new_group, alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{old_group.group_id}")
++
++    view
++    |> element("#member-group-link-#{new_group.group_id}")
++    |> render_click()
++
++    assert_patch(view, ~p"/groups/#{new_group.group_id}")
++    assert has_element?(view, "#member-group-name", "New Planning")
++
++    Repo.insert!(%GroupMembership{
++      club_id: alice.club_id,
++      group_id: new_group.group_id,
++      membership_id: bob.membership_id,
++      person_id: bob.person_id,
++      active: true
++    })
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.GroupMembership,
++      %Memba.Membership.Events.GroupMemberAdded{
++        club_id: alice.club_id,
++        group_id: old_group.group_id,
++        membership_id: bob.membership_id,
++        person_id: bob.person_id
++      }
++    )
++
++    refute has_element?(view, "#club-member-#{bob.person_id}")
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.GroupMembership,
++      %Memba.Membership.Events.GroupMemberAdded{
++        club_id: alice.club_id,
++        group_id: new_group.group_id,
++        membership_id: bob.membership_id,
++        person_id: bob.person_id
++      }
++    )
++
++    assert has_element?(view, "#club-member-#{bob.person_id}")
++  end
++
+   test "a committed role change removes the outside-admin member surface", %{conn: conn} do
+     alice =
+       create_active_member(
+@@ -479,6 +862,38 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#club-member-#{bob.person_id}")
+   end
+ 
++  test "selected-club membership loss performs a fresh authorized read", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/members")
++
++    Membership
++    |> where([membership], membership.membership_id == ^alice.membership_id)
++    |> Repo.update_all(set: [active: false])
++
++    monitor = Process.monitor(view.pid)
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Membership,
++      %Memba.Membership.Events.ClubMemberRemoved{
++        club_id: alice.club_id,
++        membership_id: alice.membership_id,
++        person_id: alice.person_id
++      }
++    )
++
++    assert_receive {:DOWN, ^monitor, :process, _pid, _reason}
++  end
++
+   test "a committed conversation-access change removes the conversation from an open dashboard",
+        %{conn: conn} do
+     alice =
+@@ -3414,6 +3829,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     |> Enum.map(fn role_badge -> role_badge |> LazyHTML.text() |> String.trim() end)
+   end
+ 
++  defp rendered_member_names(view) do
++    view
++    |> render()
++    |> LazyHTML.from_fragment()
++    |> LazyHTML.query("#active-members-list .member-row__name")
++    |> Enum.map(fn member_name -> member_name |> LazyHTML.text() |> String.trim() end)
++  end
++
+   defp invite_member_action_count(html) do
+     html
+     |> LazyHTML.from_fragment()
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+new file mode 100644
+index 0000000..cbb5525
+--- /dev/null
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -0,0 +1,245 @@
++defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
++  use MembaWeb.ConnCase, async: true
++
++  alias Memba.Membership.Events.ClubMemberAdded
++  alias Memba.Membership.Events.ClubRoleAssignedToMember
++  alias Memba.Membership.Events.ClubUpdated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Events.PersonEmailAddressAdded
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
++  alias Memba.Messaging.Events.MessageSent
++  alias MembaWeb.LiveQuery.MembaReadModelSource
++  alias MembaWeb.LiveQuery.Source
++
++  test "subscribes to the shared committed read-model topic" do
++    source = MembaReadModelSource.new()
++
++    assert :ok = Source.subscribe(source)
++
++    notification =
++      {:read_model_changed,
++       %{
++         projector: Memba.Membership.Projectors.Person,
++         source_event: %PersonEmailAddressAdded{
++           person_id: "person-1",
++           email: "alice@example.com",
++           normalized_email: "alice@example.com"
++         },
++         metadata: %{},
++         changes: %{}
++       }}
++
++    Phoenix.PubSub.broadcast(Memba.PubSub, Memba.ReadModelChanges.topic(), notification)
++
++    assert_receive ^notification
++  end
++
++  test "classifies club-member collection entry and exact represented identities" do
++    source = MembaReadModelSource.new()
++
++    assert {:ok, invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.Membership,
++                 %ClubMemberAdded{
++                   club_id: "club-1",
++                   membership_id: "membership-1",
++                   person_id: "person-1"
++                 }
++               )
++             )
++
++    assert {:club_members, "club-1"} in invalidations
++    assert {:membership, "membership-1"} in invalidations
++    assert {:person, "person-1"} in invalidations
++    assert {:person_clubs, "person-1"} in invalidations
++  end
++
++  test "matches Person changes only to the represented Person unless scope is unavailable" do
++    source = MembaReadModelSource.new()
++
++    assert {:ok, [{:person, "person-1"}, {:person_emails, "person-1"}]} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.Person,
++                 %PersonEmailAddressAdded{
++                   person_id: "person-1",
++                   email: "alice@example.com",
++                   normalized_email: "alice@example.com"
++                 }
++               )
++             )
++
++    assert Source.matches?(source, {:person, "person-1"}, {:person, "person-1"})
++    refute Source.matches?(source, {:person, "person-2"}, {:person, "person-1"})
++
++    assert {:ok, [{:fallback, :person}]} =
++             Source.classify(
++               source,
++               notification(Memba.Membership.Projectors.Person, %{})
++             )
++  end
++
++  test "keeps represented role badges distinct from current-actor permissions" do
++    source = MembaReadModelSource.new()
++
++    assert {:ok, invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.Role,
++                 %ClubRoleAssignedToMember{
++                   club_id: "club-1",
++                   membership_id: "membership-1",
++                   person_id: "person-1",
++                   role_id: "role-1"
++                 }
++               )
++             )
++
++    assert {:member_roles, "club-1", "membership-1", "person-1"} in invalidations
++    assert {:member_permissions, "club-1", "membership-1", "person-1"} in invalidations
++    assert {:role, "role-1"} in invalidations
++  end
++
++  test "uses club-conversation invalidation for root messages and replies" do
++    source = MembaReadModelSource.new()
++
++    event = %MessageSent{
++      message_id: "message-2",
++      club_id: "club-1",
++      sender_id: "person-1",
++      conversation_id: "message-1",
++      reply_to_message_id: "message-1",
++      subject: "Re: Plans",
++      body: "Count me in"
++    }
++
++    assert {:ok, invalidations} =
++             Source.classify(
++               source,
++               notification(Memba.Messaging.Projectors.Message, event)
++             )
++
++    assert {:message, "message-2"} in invalidations
++    assert {:conversation, "message-1"} in invalidations
++    assert {:conversation_messages, "message-1"} in invalidations
++    assert {:club_conversations, "club-1"} in invalidations
++  end
++
++  test "classifies Club, Group, GroupMembership and conversation access scopes" do
++    source = MembaReadModelSource.new()
++
++    assert {:ok, [{:club, "club-1"}]} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.Club,
++                 %ClubUpdated{club_id: "club-1", name: "Updated", slug: "updated"}
++               )
++             )
++
++    assert {:ok, group_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.Group,
++                 %GroupEmailSlugAssigned{
++                   club_id: "club-1",
++                   group_id: "group-1",
++                   email_slug: "planning"
++                 }
++               )
++             )
++
++    assert {:club_groups, "club-1"} in group_invalidations
++    assert {:group, "group-1"} in group_invalidations
++    refute Source.matches?(source, {:club_groups, "club-2"}, {:club_groups, "club-1"})
++
++    assert {:ok, membership_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.GroupMembership,
++                 %GroupMemberAdded{
++                   club_id: "club-1",
++                   group_id: "group-1",
++                   membership_id: "membership-1",
++                   person_id: "person-1"
++                 }
++               )
++             )
++
++    assert {:group_members, "group-1"} in membership_invalidations
++    assert {:person_groups, "club-1", "person-1"} in membership_invalidations
++    assert {:group_participation, "club-1", "group-1", "person-1"} in membership_invalidations
++
++    assert {:ok, access_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Messaging.Projectors.ConversationGroupAccess,
++                 %ConversationAccessGrantedToGroup{
++                   club_id: "club-1",
++                   group_id: "group-1",
++                   conversation_id: "conversation-1",
++                   access_level: "write"
++                 }
++               )
++             )
++
++    assert {:group_conversations, "group-1"} in access_invalidations
++    assert {:conversation_access, "group-1", "conversation-1"} in access_invalidations
++  end
++
++  test "uses club and global conservative fallbacks when exact scope is missing" do
++    source = MembaReadModelSource.new()
++
++    assert {:ok, membership_invalidations} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.GroupMembership,
++                 %{club_id: "club-1", group_id: "group-1"}
++               )
++             )
++
++    assert {:group_members, "group-1"} in membership_invalidations
++    assert {:fallback, :group_membership, "club-1"} in membership_invalidations
++
++    assert {:ok, [{:fallback, :role, "club-1"}]} =
++             Source.classify(
++               source,
++               notification(Memba.Membership.Projectors.Role, %{club_id: "club-1"})
++             )
++
++    assert {:ok, [{:fallback, :conversation_access}]} =
++             Source.classify(
++               source,
++               notification(Memba.Messaging.Projectors.ConversationGroupAccess, %{})
++             )
++  end
++
++  test "ignores delivery notifications because dashboard delivery data was removed" do
++    source = MembaReadModelSource.new()
++
++    assert :ignore =
++             Source.classify(
++               source,
++               notification(Memba.Messaging.Projectors.MemberEmailDelivery, %{})
++             )
++  end
++
++  defp notification(projector, source_event) do
++    {:read_model_changed,
++     %{
++       projector: projector,
++       source_event: source_event,
++       metadata: %{},
++       changes: %{}
++     }}
++  end
++end
+diff --git a/web/test/memba_web/member_dashboard_query_test.exs b/web/test/memba_web/member_dashboard_query_test.exs
+index 6f10e56..687eafa 100644
+--- a/web/test/memba_web/member_dashboard_query_test.exs
++++ b/web/test/memba_web/member_dashboard_query_test.exs
+@@ -5,6 +5,7 @@ defmodule MembaWeb.MemberDashboardQueryTest do
+   alias Memba.Membership
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias MembaWeb.MemberDashboardQuery
++  alias MembaWeb.LiveQuery.Query
+ 
+   test "reloads active-club authority from the normalized authenticated email on every call" do
+     alice = create_active_member(email: "Alice@Example.com", club_name: "Alpine Club")
+@@ -21,6 +22,17 @@ defmodule MembaWeb.MemberDashboardQueryTest do
+     assert dashboard.selected_club.club_id == alice.club_id
+     assert dashboard.current_member.id == alice.person_id
+ 
++    assert {:ok, bound_dashboard, interests} =
++             Query.load(MemberDashboardQuery.query(), %{
++               club_id: alice.club_id,
++               authenticated_email: " ALICE@EXAMPLE.COM ",
++               selected_group_id: nil
++             })
++
++    assert bound_dashboard.selected_club.club_id == alice.club_id
++    assert {:club_members, alice.club_id} in interests
++    assert {:person, alice.person_id} in interests
++
+     MembershipProjection
+     |> where([membership], membership.membership_id == ^alice.membership_id)
+     |> Repo.update_all(set: [active: false])
+@@ -46,6 +58,85 @@ defmodule MembaWeb.MemberDashboardQueryTest do
+              )
+   end
+ 
++  test "the provisional descriptor returns one dashboard and replacement interests" do
++    query = MemberDashboardQuery.query()
++
++    assert query.id == :member_dashboard
++    assert query.assign == :dashboard
++
++    dashboard = %{
++      selected_club: %{club_id: "club-1"},
++      selected_group: %{group_id: "group-1"},
++      current_member: %{
++        id: "person-1",
++        membership_id: "membership-1",
++        roles: ["Membership Admin"]
++      },
++      groups: [
++        %{club_id: "club-1", group_id: "group-1"},
++        %{club_id: "club-1", group_id: "group-2"}
++      ],
++      members: [
++        %{id: "person-1", membership_id: "membership-1", roles: ["Membership Admin"]},
++        %{id: "person-2", membership_id: "membership-2", roles: ["Trip Lead"]}
++      ],
++      custom_group_member_candidates: [
++        %{id: "person-3", membership_id: "membership-3", roles: []}
++      ],
++      message_rows: [
++        %{
++          message_id: "message-1",
++          conversation_id: "conversation-1",
++          sender_id: "person-2",
++          participants: [%{id: "person-3"}]
++        }
++      ]
++    }
++
++    interests = MemberDashboardQuery.interests(dashboard)
++
++    for collection_interest <- [
++          {:club_members, "club-1"},
++          {:club_groups, "club-1"},
++          {:person_groups, "club-1", "person-1"},
++          {:group_members, "group-1"},
++          {:group_conversations, "group-1"},
++          {:club_conversations, "club-1"}
++        ] do
++      assert collection_interest in interests
++    end
++
++    for identity_interest <- [
++          {:club, "club-1"},
++          {:group, "group-1"},
++          {:group, "group-2"},
++          {:membership, "membership-1"},
++          {:person, "person-1"},
++          {:person, "person-2"},
++          {:person, "person-3"},
++          {:conversation, "conversation-1"},
++          {:conversation_messages, "conversation-1"},
++          {:message, "message-1"}
++        ] do
++      assert identity_interest in interests
++    end
++
++    for role_interest <- [
++          {:member_roles, "club-1", "membership-1", "person-1"},
++          {:member_roles, "club-1", "membership-2", "person-2"},
++          {:member_roles, "club-1", "membership-3", "person-3"},
++          {:member_permissions, "club-1", "membership-1", "person-1"},
++          {:club_roles, "club-1"},
++          {:club_permissions, "club-1"}
++        ] do
++      assert role_interest in interests
++    end
++
++    assert {:conversation_access, "group-1", "conversation-1"} in interests
++    assert {:group_participation, "club-1", "group-1", "person-1"} in interests
++    refute {:member_permissions, "club-1", "membership-2", "person-2"} in interests
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
