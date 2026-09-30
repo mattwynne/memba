@@ -62,7 +62,7 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:custom_group_member_removal, nil)
          |> assign(:group_access_request_state, :idle)
          |> assign_custom_group_member_picker_query("")
-         |> assign(:dashboard, dashboard)}
+         |> install_dashboard(dashboard)}
 
       {:error, :forbidden} ->
         forbidden!()
@@ -531,7 +531,7 @@ defmodule MembaWeb.MemberDashboardLive do
       {:ok, dashboard} ->
         socket
         |> assign(:selected_group_route_id, selected_group_id)
-        |> assign(:dashboard, dashboard)
+        |> install_dashboard(dashboard)
         |> assign_targeted_group_member()
 
       {:error, :forbidden} ->
@@ -557,6 +557,10 @@ defmodule MembaWeb.MemberDashboardLive do
           active_clubs: Accounts.list_active_clubs_for_email(email)
         }
     end
+  end
+
+  defp install_dashboard(socket, dashboard) do
+    assign(socket, dashboard: dashboard, page_title: dashboard.page_title)
   end
 
   defp assign_current_identity(socket, identity, current_identity_clubs) do

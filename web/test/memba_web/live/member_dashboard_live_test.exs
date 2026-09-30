@@ -56,6 +56,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/conversations")
 
+    assert page_title(view) == "Alpine Club · Memba"
+
     assert has_element?(
              view,
              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
