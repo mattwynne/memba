@@ -440,6 +440,17 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertNotIn("implement_next_task", result["stages"])
         self.assertFalse((fixture / "docs/iterations/009-runtime/.delivery/current-worker-packet.json").exists())
 
+    def test_revision_obligation_status_rejected_by_schema_before_writer(self) -> None:
+        fixture = self.make_fixture(
+            "invalid-revision-status", {"planner_obligation_status": "prepared_revision"},
+        )
+        result = self.run_fixture(fixture)
+        self.assertEqual(result["status"], 1, result["combined"])
+        self.assertIn("output_schema validation", result["combined"])
+        self.assertNotIn("write_planner_output", result["stages"])
+        self.assertNotIn("implement_next_task", result["stages"])
+        self.assertIn(TASK_CURRENT, self.todo(fixture))
+
     def test_malformed_schema_with_failed_outcome_fails_closed(self) -> None:
         fixture = self.make_fixture(
             "malformed-schema",
@@ -555,7 +566,7 @@ if kind == "delivery_planner":
             "task_id": task_id,
             "todo_line": line,
             "origin": "fixture todo",
-            "status": "prepared" if index == 0 else "pending",
+            "status": scenario.get("planner_obligation_status", "prepared") if index == 0 else "pending",
             "coverage": ["fixture"],
             "replaces": [],
             "candidate_origins": required_origins if index == 0 else [],
