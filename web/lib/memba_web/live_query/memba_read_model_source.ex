@@ -52,6 +52,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
 
   alias Memba.ReadModelChanges
   alias Memba.Repo
+  alias MembaWeb.LiveQuery.ReadModelContractViolationError
 
   @club_projector Memba.Membership.Projectors.Club
   @membership_projector Memba.Membership.Projectors.Membership
@@ -100,8 +101,16 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   end
 
   @doc false
-  def classify({:read_model_changed, %{projector: projector, source_event: event}})
-      when is_atom(projector) and is_map(event) do
+  def classify(
+        {:read_model_changed,
+         %{
+           projector: projector,
+           source_event: event,
+           metadata: metadata,
+           changes: changes
+         }}
+      )
+      when is_atom(projector) and is_map(event) and is_map(metadata) and is_map(changes) do
     case projector do
       @club_projector -> classify_club_projector(event)
       @membership_projector -> classify_membership_projector(event)
@@ -481,7 +490,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   end
 
   defp contract_violation(projector, event, reason) do
-    {:error, {:read_model_contract_violation, projector, event_module(event), reason}}
+    raise ReadModelContractViolationError,
+      projector: projector,
+      source_event: event_module(event),
+      reason: reason
   end
 
   defp event_module(%{__struct__: module}) when is_atom(module), do: module

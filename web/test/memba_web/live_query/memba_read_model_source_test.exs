@@ -1,6 +1,10 @@
 defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   use MembaWeb.ConnCase, async: true
 
+  alias LiveQuery.Binding
+  alias LiveQuery.Query
+  alias LiveQuery.Source
+
   alias Memba.Membership.Events.{
     ClubCreated,
     ClubMemberAdded,
@@ -44,8 +48,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Repo
-  alias LiveQuery.Source
   alias MembaWeb.LiveQuery.MembaReadModelSource
+  alias MembaWeb.LiveQuery.ReadModelContractViolationError
 
   test "subscribes to the shared committed read-model topic" do
     source = MembaReadModelSource.new()
@@ -93,23 +97,41 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   end
 
   test "surfaces malformed Membership events without emitting fallback invalidations" do
+    assert_contract_violation(
+      Memba.Membership.Projectors.Membership,
+      malformed_membership_event(),
+      {:missing_required_fields, [:person_id]}
+    )
+  end
+
+  test "raises the application contract exception through ordinary binding handling" do
+    source = MembaReadModelSource.new()
+    query = contract_probe_query(fn -> :ok end)
+
+    assert {:ok, socket} = Binding.bind(socket(true), query, :current, source)
+
+    exception =
+      assert_raise ReadModelContractViolationError, fn ->
+        Binding.handle_notification(socket, malformed_membership_notification())
+      end
+
+    assert_contract_exception(exception)
+  end
+
+  test "raises the application contract exception during bind-window reconciliation" do
     source = MembaReadModelSource.new()
 
-    assert {:error,
-            {:read_model_contract_violation, Memba.Membership.Projectors.Membership,
-             ClubMemberAdded,
-             {:missing_required_fields, [:person_id]}}} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Membership.Projectors.Membership,
-                 %ClubMemberAdded{
-                   club_id: "club-1",
-                   membership_id: "membership-1",
-                   person_id: nil
-                 }
-               )
-             )
+    query =
+      contract_probe_query(fn ->
+        send(self(), malformed_membership_notification())
+      end)
+
+    exception =
+      assert_raise ReadModelContractViolationError, fn ->
+        Binding.bind(socket(true), query, :current, source)
+      end
+
+    assert_contract_exception(exception)
   end
 
   test "matches Person changes only to the represented Person" do
@@ -1002,17 +1024,40 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
                })
              )
 
-    assert {:error,
-            {:read_model_contract_violation, Memba.Membership.Projectors.Person, :unstructured,
-             :unsupported_projector_event}} =
-             Source.classify(
-               source,
-               notification(Memba.Membership.Projectors.Person, %{person_id: "person-1"})
-             )
+    exception =
+      assert_raise ReadModelContractViolationError, fn ->
+        Source.classify(
+          source,
+          notification(Memba.Membership.Projectors.Person, %{person_id: "person-1"})
+        )
+      end
+
+    assert exception.projector == Memba.Membership.Projectors.Person
+    assert exception.source_event == :unstructured
+    assert exception.reason == :unsupported_projector_event
 
     assert :ignore = Source.classify(source, {:read_model_changed, %{}})
     assert :ignore = Source.classify(source, {:read_model_changed, "malformed"})
     assert :ignore = Source.classify(source, :unrelated)
+  end
+
+  test "ignores incomplete or mistyped outer envelopes before recognized-projector dispatch" do
+    source = MembaReadModelSource.new()
+
+    {:read_model_changed, envelope} =
+      notification(
+        Memba.Membership.Projectors.Person,
+        %ClubUpdated{club_id: "club-1", name: "Updated", slug: "updated"}
+      )
+
+    for malformed_envelope <- [
+          Map.delete(envelope, :metadata),
+          Map.delete(envelope, :changes),
+          %{envelope | metadata: :not_a_map},
+          %{envelope | changes: :not_a_map}
+        ] do
+      assert :ignore = Source.classify(source, {:read_model_changed, malformed_envelope})
+    end
   end
 
   defp exact_role_events do
@@ -1060,11 +1105,20 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   defp assert_contract_violation(projector, event, reason, changes \\ %{}) do
     event_module = event.__struct__
 
-    assert {:error, {:read_model_contract_violation, ^projector, ^event_module, ^reason}} =
-             Source.classify(
-               MembaReadModelSource.new(),
-               notification(projector, event, changes)
-             )
+    exception =
+      assert_raise ReadModelContractViolationError, fn ->
+        Source.classify(
+          MembaReadModelSource.new(),
+          notification(projector, event, changes)
+        )
+      end
+
+    assert exception.projector == projector
+    assert exception.source_event == event_module
+    assert exception.reason == reason
+
+    assert Exception.message(exception) ==
+             contract_exception_message(projector, event_module, reason)
   end
 
   defp notification(projector, source_event, changes \\ %{}) do
@@ -1075,5 +1129,56 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
        metadata: %{},
        changes: changes
      }}
+  end
+
+  defp malformed_membership_event do
+    %ClubMemberAdded{
+      club_id: "club-1",
+      membership_id: "membership-1",
+      person_id: nil
+    }
+  end
+
+  defp malformed_membership_notification do
+    notification(
+      Memba.Membership.Projectors.Membership,
+      malformed_membership_event()
+    )
+  end
+
+  defp contract_probe_query(before_result) do
+    Query.new!(
+      id: :contract_probe,
+      assign: :contract_probe,
+      load: fn :current ->
+        before_result.()
+        {:ok, :loaded, [{:club_members, "club-1"}]}
+      end
+    )
+  end
+
+  defp assert_contract_exception(exception) do
+    assert exception.projector == Memba.Membership.Projectors.Membership
+    assert exception.source_event == ClubMemberAdded
+    assert exception.reason == {:missing_required_fields, [:person_id]}
+
+    assert Exception.message(exception) ==
+             contract_exception_message(
+               Memba.Membership.Projectors.Membership,
+               ClubMemberAdded,
+               {:missing_required_fields, [:person_id]}
+             )
+  end
+
+  defp contract_exception_message(projector, source_event, reason) do
+    "read-model contract violation for projector #{inspect(projector)}, " <>
+      "source event #{inspect(source_event)}: #{inspect(reason)}"
+  end
+
+  defp socket(connected?) do
+    %Phoenix.LiveView.Socket{
+      transport_pid: if(connected?, do: self()),
+      assigns: %{__changed__: %{}}
+    }
   end
 end
