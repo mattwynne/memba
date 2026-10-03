@@ -8,9 +8,49 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
 
   alias LiveQuery.Source
   alias Memba.ID
-  alias Memba.ReadModelChanges
-  alias Memba.Messaging
+
+  alias Memba.Membership.Events.{
+    ClubCreated,
+    ClubMemberAdded,
+    ClubMemberRemoved,
+    ClubRoleAssignedToMember,
+    ClubRoleDefined,
+    ClubRolePermissionGranted,
+    ClubRoleRemovedFromMember,
+    ClubUpdated,
+    GroupCreated,
+    GroupEmailSlugAssigned,
+    GroupMemberAdded,
+    GroupMemberRemoved,
+    MemberAdded,
+    MemberRemoved,
+    MemberRoleAssigned,
+    MemberRoleRemoved,
+    PersonCreated,
+    PersonEmailAddressAdded,
+    PersonEmailAddressRemoved,
+    PersonEmailAddressVerified,
+    PersonEmailAddressesReplaced,
+    PersonPrimaryEmailAddressChanged
+  }
+
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+
+  alias Memba.Messaging.Events.{
+    ConversationAccessGrantedToGroup,
+    ConversationAccessRevokedFromGroup,
+    ConversationFollowed,
+    ConversationUnfollowed,
+    EmailDeliveryBounced,
+    EmailDeliveryCreated,
+    EmailDeliveryDelayed,
+    EmailDeliveryDelivered,
+    EmailDeliveryOpened,
+    EmailDeliverySpamComplaint,
+    MessageSent
+  }
+
+  alias Memba.ReadModelChanges
   alias Memba.Repo
 
   @club_projector Memba.Membership.Projectors.Club
@@ -25,17 +65,22 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   @member_delivery_projector Memba.Messaging.Projectors.MemberEmailDelivery
   @staff_delivery_projector Memba.Messaging.Projectors.MembaStaffEmailDelivery
 
-  @club_events ~w(ClubCreated ClubUpdated)
-  @group_events ~w(GroupCreated GroupEmailSlugAssigned)
-  @exact_role_events ~w(
-    ClubRoleAssignedToMember
-    ClubRoleRemovedFromMember
-    MemberRoleAssigned
-    MemberRoleRemoved
-  )
-  @role_definition_events ~w(ClubRoleDefined)
-  @role_permission_events ~w(ClubRolePermissionGranted)
-  @role_membership_removal_events ~w(ClubMemberRemoved MemberRemoved)
+  @person_events [
+    PersonCreated,
+    PersonEmailAddressAdded,
+    PersonEmailAddressVerified,
+    PersonEmailAddressesReplaced,
+    PersonPrimaryEmailAddressChanged,
+    PersonEmailAddressRemoved
+  ]
+
+  @delivery_change_events [
+    EmailDeliveryCreated,
+    EmailDeliveryDelivered,
+    EmailDeliveryDelayed,
+    EmailDeliveryBounced,
+    EmailDeliverySpamComplaint
+  ]
 
   @doc """
   Builds the shared ReadModelChanges source used by member live queries.
@@ -55,23 +100,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   end
 
   @doc false
-  def classify({:read_model_changed, %{projector: projector, source_event: event} = change})
+  def classify({:read_model_changed, %{projector: projector, source_event: event}})
       when is_atom(projector) and is_map(event) do
-    changes = Map.get(change, :changes, %{})
-
     case projector do
-      @club_projector -> classify_club_projector(event, changes)
-      @membership_projector -> membership_invalidations(event, changes)
-      @person_projector -> person_invalidations(event)
-      @group_projector -> group_invalidations(event)
-      @group_membership_projector -> group_membership_invalidations(event)
-      @role_projector -> role_invalidations(event, changes)
-      @message_projector -> message_invalidations(event)
-      @conversation_access_projector -> conversation_access_invalidations(event)
-      @conversation_follow_projector -> conversation_follow_invalidations(event)
-      @member_delivery_projector -> delivery_invalidations(event, changes)
-      @staff_delivery_projector -> delivery_invalidations(event, changes)
-      _other_projector -> :ignore
+      @club_projector -> classify_club_projector(event)
+      @membership_projector -> classify_membership_projector(event)
+      @person_projector -> classify_person_projector(event)
+      @group_projector -> classify_group_projector(event, @group_projector)
+      @group_membership_projector -> classify_group_membership_projector(event)
+      @role_projector -> classify_role_projector(event, @role_projector)
+      @message_projector -> classify_message_projector(event)
+      @conversation_access_projector -> classify_conversation_access_projector(event)
+      @conversation_follow_projector -> classify_conversation_follow_projector(event)
+      @member_delivery_projector -> classify_delivery_projector(event, @member_delivery_projector)
+      @staff_delivery_projector -> classify_delivery_projector(event, @staff_delivery_projector)
+      _unrelated_projector -> :ignore
     end
   end
 
@@ -80,279 +123,338 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   @doc false
   def matches?(interest, invalidation), do: interest == invalidation
 
-  defp classify_club_projector(event, changes) do
-    event_name = event_name(event)
+  defp classify_club_projector(%ClubCreated{} = event),
+    do: club_invalidations(event, @club_projector)
 
-    cond do
-      event_name in @club_events ->
-        scoped_or_fallback([{:club, field(event, :club_id)}], :club)
+  defp classify_club_projector(%ClubUpdated{} = event),
+    do: club_invalidations(event, @club_projector)
 
-      event_name in @group_events ->
-        group_invalidations(event)
+  defp classify_club_projector(%GroupCreated{} = event),
+    do: group_invalidations(event, @club_projector)
 
-      event_name in (@exact_role_events ++
-                       @role_definition_events ++
-                       @role_permission_events ++ @role_membership_removal_events) ->
-        role_invalidations(event, changes)
+  defp classify_club_projector(%GroupEmailSlugAssigned{} = event),
+    do: group_invalidations(event, @club_projector)
 
-      club_id = field(event, :club_id) ->
-        {:ok, [{:fallback, :club, club_id}]}
+  defp classify_club_projector(%ClubRoleDefined{} = event),
+    do: role_definition_invalidations(event, @club_projector)
 
-      true ->
-        {:ok, [{:fallback, :club}]}
+  defp classify_club_projector(%ClubRolePermissionGranted{} = event),
+    do: role_permission_invalidations(event, @club_projector)
+
+  defp classify_club_projector(%ClubRoleAssignedToMember{} = event),
+    do: exact_role_invalidations(event, @club_projector)
+
+  defp classify_club_projector(%ClubRoleRemovedFromMember{} = event),
+    do: exact_role_invalidations(event, @club_projector)
+
+  defp classify_club_projector(%MemberRoleAssigned{} = event),
+    do: exact_role_invalidations(event, @club_projector)
+
+  defp classify_club_projector(%MemberRoleRemoved{} = event),
+    do: exact_role_invalidations(event, @club_projector)
+
+  defp classify_club_projector(event),
+    do: contract_violation(@club_projector, event, :unsupported_projector_event)
+
+  defp classify_membership_projector(%ClubMemberAdded{} = event),
+    do: membership_invalidations(event, @membership_projector)
+
+  defp classify_membership_projector(%ClubMemberRemoved{} = event),
+    do: membership_invalidations(event, @membership_projector)
+
+  defp classify_membership_projector(%MemberAdded{} = event),
+    do: membership_invalidations(event, @membership_projector)
+
+  defp classify_membership_projector(%MemberRemoved{} = event) do
+    event
+    |> recover_legacy_membership_scope()
+    |> membership_invalidations(@membership_projector, event)
+  end
+
+  defp classify_membership_projector(event),
+    do: contract_violation(@membership_projector, event, :unsupported_projector_event)
+
+  defp classify_person_projector(event) do
+    if event_module(event) in @person_events do
+      with_required(@person_projector, event, [:person_id], fn %{person_id: person_id} ->
+        [{:person, person_id}, {:person_emails, person_id}]
+      end)
+    else
+      contract_violation(@person_projector, event, :unsupported_projector_event)
     end
   end
 
-  defp membership_invalidations(event, changes) do
-    membership_id = field(event, :membership_id) || deep_field(changes, :membership_id)
-    event_club_id = field(event, :club_id) || deep_field(changes, :club_id)
-    event_person_id = field(event, :person_id) || deep_field(changes, :person_id)
-    membership_scope = membership_scope(membership_id, event_club_id, event_person_id)
+  defp classify_group_projector(%GroupCreated{} = event, projector),
+    do: group_invalidations(event, projector)
 
-    club_id =
-      event_club_id ||
-        Map.get(membership_scope, :club_id)
+  defp classify_group_projector(%GroupEmailSlugAssigned{} = event, projector),
+    do: group_invalidations(event, projector)
 
-    person_id =
-      event_person_id ||
-        Map.get(membership_scope, :person_id)
+  defp classify_group_projector(event, projector),
+    do: contract_violation(projector, event, :unsupported_projector_event)
 
-    invalidations =
-      compact([
-        tuple(:club_members, club_id),
-        tuple(:membership, membership_id),
-        tuple(:person, person_id),
-        tuple(:person_clubs, person_id),
-        if(is_nil(person_id), do: {:fallback, :membership})
-      ])
+  defp classify_group_membership_projector(%GroupMemberAdded{} = event),
+    do: group_membership_invalidations(event)
 
-    {:ok, invalidations}
+  defp classify_group_membership_projector(%GroupMemberRemoved{} = event),
+    do: group_membership_invalidations(event)
+
+  defp classify_group_membership_projector(event),
+    do: contract_violation(@group_membership_projector, event, :unsupported_projector_event)
+
+  defp classify_role_projector(%ClubRoleDefined{} = event, projector),
+    do: role_definition_invalidations(event, projector)
+
+  defp classify_role_projector(%ClubRolePermissionGranted{} = event, projector),
+    do: role_permission_invalidations(event, projector)
+
+  defp classify_role_projector(%ClubRoleAssignedToMember{} = event, projector),
+    do: exact_role_invalidations(event, projector)
+
+  defp classify_role_projector(%ClubRoleRemovedFromMember{} = event, projector),
+    do: exact_role_invalidations(event, projector)
+
+  defp classify_role_projector(%MemberRoleAssigned{} = event, projector),
+    do: exact_role_invalidations(event, projector)
+
+  defp classify_role_projector(%MemberRoleRemoved{} = event, projector),
+    do: exact_role_invalidations(event, projector)
+
+  defp classify_role_projector(%ClubMemberRemoved{} = event, projector),
+    do: membership_role_invalidations(event, projector)
+
+  defp classify_role_projector(%MemberRemoved{} = event, projector) do
+    event
+    |> recover_legacy_membership_scope()
+    |> membership_role_invalidations(projector, event)
   end
 
-  defp person_invalidations(event) do
-    case field(event, :person_id) do
-      nil -> {:ok, [{:fallback, :person}]}
-      person_id -> {:ok, [{:person, person_id}, {:person_emails, person_id}]}
+  defp classify_role_projector(event, projector),
+    do: contract_violation(projector, event, :unsupported_projector_event)
+
+  defp classify_message_projector(%MessageSent{} = event) do
+    with_required(@message_projector, event, [:club_id, :message_id], fn event ->
+      conversation_id = event.conversation_id || event.message_id
+
+      [
+        {:message, event.message_id},
+        {:conversation, conversation_id},
+        {:conversation_messages, conversation_id},
+        {:club_conversations, event.club_id}
+      ]
+    end)
+  end
+
+  defp classify_message_projector(event),
+    do: contract_violation(@message_projector, event, :unsupported_projector_event)
+
+  defp classify_conversation_access_projector(%ConversationAccessGrantedToGroup{} = event),
+    do: conversation_access_invalidations(event)
+
+  defp classify_conversation_access_projector(%ConversationAccessRevokedFromGroup{} = event),
+    do: conversation_access_invalidations(event)
+
+  defp classify_conversation_access_projector(event),
+    do: contract_violation(@conversation_access_projector, event, :unsupported_projector_event)
+
+  defp classify_conversation_follow_projector(%ConversationFollowed{} = event),
+    do: explicit_follow_invalidations(event)
+
+  defp classify_conversation_follow_projector(%ConversationUnfollowed{} = event),
+    do: explicit_follow_invalidations(event)
+
+  defp classify_conversation_follow_projector(%MessageSent{} = event) do
+    if MessageSent.sender_follows_conversation?(event) do
+      with_required(
+        @conversation_follow_projector,
+        event,
+        [:club_id, :message_id, :sender_id],
+        fn event ->
+          conversation_id = event.conversation_id || event.message_id
+
+          [
+            {:conversation_follow, conversation_id, event.sender_id},
+            {:conversation, conversation_id}
+          ]
+        end
+      )
+    else
+      :ignore
     end
   end
 
-  defp group_invalidations(event) do
-    club_id = field(event, :club_id)
-    group_id = field(event, :group_id)
+  defp classify_conversation_follow_projector(event),
+    do: contract_violation(@conversation_follow_projector, event, :unsupported_projector_event)
 
-    invalidations =
-      compact([
-        tuple(:club_groups, club_id),
-        tuple(:group, group_id)
-      ])
+  defp classify_delivery_projector(%EmailDeliveryOpened{}, _projector), do: :ignore
 
-    cond do
-      club_id ->
-        {:ok, invalidations}
-
-      group_id ->
-        {:ok, invalidations ++ [{:fallback, :group}]}
-
-      true ->
-        {:ok, [{:fallback, :group}]}
+  defp classify_delivery_projector(event, projector) do
+    if event_module(event) in @delivery_change_events do
+      with_required(projector, event, [:message_id, :delivery_id], fn event ->
+        [
+          {:message_deliveries, event.message_id},
+          {:delivery, event.delivery_id}
+        ]
+      end)
+    else
+      contract_violation(projector, event, :unsupported_projector_event)
     end
+  end
+
+  defp club_invalidations(event, projector) do
+    with_required(projector, event, [:club_id], fn %{club_id: club_id} ->
+      [{:club, club_id}]
+    end)
+  end
+
+  defp membership_invalidations(event, projector),
+    do: membership_invalidations(event, projector, event)
+
+  defp membership_invalidations(scope, projector, reported_event) do
+    with_required(
+      projector,
+      scope,
+      [:club_id, :membership_id, :person_id],
+      fn scope ->
+        [
+          {:club_members, scope.club_id},
+          {:membership, scope.membership_id},
+          {:person, scope.person_id},
+          {:person_clubs, scope.person_id}
+        ]
+      end,
+      reported_event
+    )
+  end
+
+  defp group_invalidations(event, projector) do
+    with_required(projector, event, [:club_id, :group_id], fn event ->
+      [
+        {:club_groups, event.club_id},
+        {:group, event.group_id}
+      ]
+    end)
   end
 
   defp group_membership_invalidations(event) do
-    club_id = field(event, :club_id)
-    group_id = field(event, :group_id)
-    person_id = field(event, :person_id)
-
-    invalidations =
-      compact([
-        tuple(:group_members, group_id),
-        tuple(:person, person_id),
-        tuple(:person_groups, club_id, person_id),
-        tuple(:group_participation, club_id, group_id, person_id),
-        if(is_nil(club_id) || is_nil(group_id) || is_nil(person_id),
-          do: family_fallback(:group_membership, club_id)
-        )
-      ])
-
-    {:ok, invalidations}
+    with_required(
+      @group_membership_projector,
+      event,
+      [:club_id, :group_id, :membership_id, :person_id],
+      fn event ->
+        [
+          {:group_members, event.group_id},
+          {:person, event.person_id},
+          {:person_groups, event.club_id, event.person_id},
+          {:group_participation, event.club_id, event.group_id, event.person_id}
+        ]
+      end
+    )
   end
 
-  defp role_invalidations(event, changes) do
-    event_name = event_name(event)
-    membership_id = field(event, :membership_id) || deep_field(changes, :membership_id)
-    event_club_id = field(event, :club_id) || deep_field(changes, :club_id)
-    event_person_id = field(event, :person_id) || deep_field(changes, :person_id)
-    membership_scope = membership_scope(membership_id, event_club_id, event_person_id)
-
-    club_id =
-      event_club_id ||
-        Map.get(membership_scope, :club_id)
-
-    person_id =
-      event_person_id ||
-        Map.get(membership_scope, :person_id)
-
-    role_id = field(event, :role_id) || deep_field(changes, :role_id)
-
-    cond do
-      event_name in @exact_role_events ->
-        member_roles = tuple(:member_roles, club_id, membership_id, person_id)
-        member_permissions = tuple(:member_permissions, club_id, membership_id, person_id)
-
-        compact([
-          member_roles,
-          member_permissions,
-          tuple(:role, role_id),
-          missing_scope_fallback(:role, club_id, member_roles)
-        ])
-        |> scoped_or_role_fallback(club_id)
-
-      event_name in @role_definition_events ->
-        compact([
-          tuple(:role, role_id),
-          tuple(:club_roles, club_id),
-          if(is_nil(club_id), do: family_fallback(:role, club_id))
-        ])
-        |> scoped_or_role_fallback(club_id)
-
-      event_name in @role_permission_events ->
-        compact([
-          tuple(:role, role_id),
-          tuple(:club_permissions, club_id),
-          if(is_nil(club_id), do: family_fallback(:role, club_id))
-        ])
-        |> scoped_or_role_fallback(club_id)
-
-      event_name in @role_membership_removal_events ->
-        member_roles = tuple(:member_roles, club_id, membership_id, person_id)
-
-        compact([
-          member_roles,
-          tuple(:member_permissions, club_id, membership_id, person_id),
-          tuple(:club_permissions, club_id),
-          missing_scope_fallback(:role, club_id, member_roles)
-        ])
-        |> scoped_or_role_fallback(club_id)
-
-      club_id ->
-        {:ok, [{:fallback, :role, club_id}]}
-
-      true ->
-        {:ok, [{:fallback, :role}]}
-    end
+  defp role_definition_invalidations(event, projector) do
+    with_required(projector, event, [:club_id, :role_id], fn event ->
+      [
+        {:role, event.role_id},
+        {:club_roles, event.club_id}
+      ]
+    end)
   end
 
-  defp message_invalidations(event) do
-    club_id = field(event, :club_id)
-    message_id = field(event, :message_id)
-    conversation_id = field(event, :conversation_id) || message_id
+  defp role_permission_invalidations(event, projector) do
+    with_required(projector, event, [:club_id, :role_id], fn event ->
+      [
+        {:role, event.role_id},
+        {:club_permissions, event.club_id}
+      ]
+    end)
+  end
 
-    invalidations =
-      compact([
-        tuple(:message, message_id),
-        tuple(:conversation, conversation_id),
-        tuple(:conversation_messages, conversation_id),
-        tuple(:club_conversations, club_id),
-        if(is_nil(club_id) || is_nil(conversation_id),
-          do: family_fallback(:message, club_id)
-        )
-      ])
+  defp exact_role_invalidations(event, projector) do
+    with_required(
+      projector,
+      event,
+      [:club_id, :membership_id, :person_id, :role_id],
+      fn event ->
+        [
+          {:member_roles, event.club_id, event.membership_id, event.person_id},
+          {:member_permissions, event.club_id, event.membership_id, event.person_id},
+          {:role, event.role_id}
+        ]
+      end
+    )
+  end
 
-    {:ok, invalidations}
+  defp membership_role_invalidations(scope, projector),
+    do: membership_role_invalidations(scope, projector, scope)
+
+  defp membership_role_invalidations(scope, projector, reported_event) do
+    with_required(
+      projector,
+      scope,
+      [:club_id, :membership_id, :person_id],
+      fn scope ->
+        [
+          {:member_roles, scope.club_id, scope.membership_id, scope.person_id},
+          {:member_permissions, scope.club_id, scope.membership_id, scope.person_id},
+          {:club_permissions, scope.club_id}
+        ]
+      end,
+      reported_event
+    )
   end
 
   defp conversation_access_invalidations(event) do
-    club_id = field(event, :club_id)
-    group_id = field(event, :group_id)
-    conversation_id = field(event, :conversation_id)
+    with_required(
+      @conversation_access_projector,
+      event,
+      [:club_id, :group_id, :conversation_id],
+      fn event ->
+        [
+          {:group_conversations, event.group_id},
+          {:conversation_access, event.group_id, event.conversation_id},
+          {:conversation, event.conversation_id},
+          {:group, event.group_id}
+        ]
+      end
+    )
+  end
 
-    invalidations =
-      compact([
-        tuple(:group_conversations, group_id),
-        tuple(:club_conversations, if(is_nil(group_id), do: club_id)),
-        tuple(:conversation_access, group_id, conversation_id),
-        tuple(:conversation, conversation_id),
-        tuple(:group, group_id)
-      ])
+  defp explicit_follow_invalidations(event) do
+    with_required(
+      @conversation_follow_projector,
+      event,
+      [:club_id, :conversation_id, :member_id],
+      fn event ->
+        [
+          {:conversation_follow, event.conversation_id, event.member_id},
+          {:conversation, event.conversation_id}
+        ]
+      end
+    )
+  end
 
-    cond do
-      group_id || conversation_id ->
-        fallback =
-          if is_nil(group_id) && is_nil(club_id),
-            do: {:fallback, :conversation_access}
+  defp recover_legacy_membership_scope(%MemberRemoved{} = event) do
+    if is_nil(event.club_id) || is_nil(event.person_id) do
+      case membership_scope(event.membership_id) do
+        %{club_id: club_id, person_id: person_id} ->
+          %{
+            membership_id: event.membership_id,
+            club_id: event.club_id || club_id,
+            person_id: event.person_id || person_id
+          }
 
-        {:ok, compact(invalidations ++ [fallback])}
-
-      club_id ->
-        {:ok, [{:fallback, :conversation_access, club_id}]}
-
-      true ->
-        {:ok, [{:fallback, :conversation_access}]}
+        %{} ->
+          Map.from_struct(event)
+      end
+    else
+      Map.from_struct(event)
     end
   end
 
-  defp conversation_follow_invalidations(event) do
-    club_id = field(event, :club_id)
-    conversation_id = field(event, :conversation_id) || field(event, :message_id)
-    member_id = field(event, :member_id) || field(event, :sender_id)
+  defp membership_scope(nil), do: %{}
 
-    cond do
-      conversation_id && member_id ->
-        {:ok,
-         [
-           {:conversation_follow, conversation_id, member_id},
-           {:conversation, conversation_id}
-         ]}
-
-      conversation_id ->
-        {:ok, [{:conversation_follows, conversation_id}, {:conversation, conversation_id}]}
-
-      member_id ->
-        {:ok, [{:member_conversation_follows, member_id}]}
-
-      club_id ->
-        {:ok, [{:fallback, :conversation_follow, club_id}]}
-
-      true ->
-        {:ok, [{:fallback, :conversation_follow}]}
-    end
-  end
-
-  defp delivery_invalidations(event, changes) do
-    delivery_id = field(event, :delivery_id) || deep_field(changes, :delivery_id)
-
-    message_id =
-      field(event, :message_id) ||
-        deep_field(changes, :message_id) ||
-        delivery_message_id(delivery_id)
-
-    invalidations =
-      compact([
-        tuple(:message_deliveries, message_id),
-        tuple(:delivery, delivery_id),
-        if(is_nil(message_id), do: {:fallback, :delivery})
-      ])
-
-    {:ok, invalidations}
-  end
-
-  defp delivery_message_id(nil), do: nil
-
-  defp delivery_message_id(delivery_id) do
-    case Messaging.get_member_email_delivery(delivery_id) ||
-           Messaging.get_memba_staff_email_delivery(delivery_id) do
-      %{message_id: message_id} -> message_id
-      _missing_delivery -> nil
-    end
-  end
-
-  defp membership_scope(_membership_id, club_id, person_id)
-       when not is_nil(club_id) and not is_nil(person_id),
-       do: %{}
-
-  defp membership_scope(nil, _club_id, _person_id), do: %{}
-
-  defp membership_scope(membership_id, _club_id, _person_id) do
+  defp membership_scope(membership_id) do
     with {:ok, membership_id} <- ID.cast(:membership, membership_id),
          %MembershipProjection{club_id: club_id, person_id: person_id} <-
            Repo.get(MembershipProjection, membership_id) do
@@ -362,62 +464,26 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     end
   end
 
-  defp scoped_or_fallback(invalidations, family) do
-    case compact(invalidations) do
-      [] -> {:ok, [{:fallback, family}]}
-      invalidations -> {:ok, invalidations}
+  defp with_required(projector, values, required_fields, build, reported_event \\ nil) do
+    missing_fields = Enum.filter(required_fields, &is_nil(Map.get(values, &1)))
+
+    case missing_fields do
+      [] ->
+        {:ok, build.(values)}
+
+      missing_fields ->
+        contract_violation(
+          projector,
+          reported_event || values,
+          {:missing_required_fields, missing_fields}
+        )
     end
   end
 
-  defp scoped_or_role_fallback([], nil), do: {:ok, [{:fallback, :role}]}
-  defp scoped_or_role_fallback([], club_id), do: {:ok, [{:fallback, :role, club_id}]}
-  defp scoped_or_role_fallback(invalidations, _club_id), do: {:ok, invalidations}
-
-  defp missing_scope_fallback(_family, _club_id, scoped) when not is_nil(scoped), do: nil
-  defp missing_scope_fallback(family, nil, nil), do: {:fallback, family}
-  defp missing_scope_fallback(family, club_id, nil), do: {:fallback, family, club_id}
-
-  defp family_fallback(family, nil), do: {:fallback, family}
-  defp family_fallback(family, club_id), do: {:fallback, family, club_id}
-
-  defp tuple(_name, nil), do: nil
-  defp tuple(name, value), do: {name, value}
-
-  defp tuple(_name, nil, _value), do: nil
-  defp tuple(_name, _value, nil), do: nil
-  defp tuple(name, first, second), do: {name, first, second}
-
-  defp tuple(_name, nil, _second, _third), do: nil
-  defp tuple(_name, _first, nil, _third), do: nil
-  defp tuple(_name, _first, _second, nil), do: nil
-  defp tuple(name, first, second, third), do: {name, first, second, third}
-
-  defp compact(invalidations) do
-    invalidations
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
+  defp contract_violation(projector, event, reason) do
+    {:error, {:read_model_contract_violation, projector, event_module(event), reason}}
   end
 
-  defp field(event, name), do: Map.get(event, name) || Map.get(event, Atom.to_string(name))
-
-  defp deep_field(value, name) when is_map(value) do
-    field(value, name) ||
-      Enum.find_value(value, fn {_key, nested_value} ->
-        deep_field(nested_value, name)
-      end)
-  end
-
-  defp deep_field(value, name) when is_list(value) do
-    Enum.find_value(value, &deep_field(&1, name))
-  end
-
-  defp deep_field(_value, _name), do: nil
-
-  defp event_name(%{__struct__: module}) do
-    module
-    |> Module.split()
-    |> List.last()
-  end
-
-  defp event_name(_event), do: nil
+  defp event_module(%{__struct__: module}) when is_atom(module), do: module
+  defp event_module(_event), do: :unstructured
 end

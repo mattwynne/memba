@@ -43,7 +43,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   }
 
   alias Memba.Messaging.Projections.MemberEmailDelivery
-  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
   alias LiveQuery.Source
   alias MembaWeb.LiveQuery.MembaReadModelSource
@@ -93,7 +92,27 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert {:person_clubs, "person-1"} in invalidations
   end
 
-  test "matches Person changes only to the represented Person unless scope is unavailable" do
+  test "surfaces malformed Membership events without emitting fallback invalidations" do
+    source = MembaReadModelSource.new()
+
+    assert {:error,
+            {:read_model_contract_violation, Memba.Membership.Projectors.Membership,
+             ClubMemberAdded,
+             {:missing_required_fields, [:person_id]}}} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Membership.Projectors.Membership,
+                 %ClubMemberAdded{
+                   club_id: "club-1",
+                   membership_id: "membership-1",
+                   person_id: nil
+                 }
+               )
+             )
+  end
+
+  test "matches Person changes only to the represented Person" do
     source = MembaReadModelSource.new()
 
     assert {:ok, [{:person, "person-1"}, {:person_emails, "person-1"}]} =
@@ -111,12 +130,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
     assert Source.matches?(source, {:person, "person-1"}, {:person, "person-1"})
     refute Source.matches?(source, {:person, "person-2"}, {:person, "person-1"})
-
-    assert {:ok, [{:fallback, :person}]} =
-             Source.classify(
-               source,
-               notification(Memba.Membership.Projectors.Person, %{})
-             )
   end
 
   test "keeps represented role badges distinct from current-actor permissions" do
@@ -232,128 +245,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert {:conversation_access, "group-1", "conversation-1"} in access_invalidations
   end
 
-  test "uses club and global conservative fallbacks when exact scope is missing" do
-    source = MembaReadModelSource.new()
-
-    assert {:ok, membership_invalidations} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Membership.Projectors.GroupMembership,
-                 %{club_id: "club-1", group_id: "group-1"}
-               )
-             )
-
-    assert {:group_members, "group-1"} in membership_invalidations
-    assert {:fallback, :group_membership, "club-1"} in membership_invalidations
-
-    assert {:ok, [{:fallback, :role, "club-1"}]} =
-             Source.classify(
-               source,
-               notification(Memba.Membership.Projectors.Role, %{club_id: "club-1"})
-             )
-
-    assert {:ok, [{:fallback, :conversation_access}]} =
-             Source.classify(
-               source,
-               notification(Memba.Messaging.Projectors.ConversationGroupAccess, %{})
-             )
-  end
-
-  test "retains role identity and adds a global fallback when club scope is missing" do
-    source = MembaReadModelSource.new()
-
-    for event <- [
-          %ClubRoleDefined{
-            club_id: nil,
-            role_id: "role-1",
-            role_key: "trip_lead",
-            name: "Trip Lead"
-          },
-          %ClubRolePermissionGranted{
-            club_id: nil,
-            role_id: "role-1",
-            permission: "club.manage_members"
-          }
-        ] do
-      assert {:ok, invalidations} =
-               Source.classify(
-                 source,
-                 notification(Memba.Membership.Projectors.Role, event)
-               )
-
-      assert {:role, "role-1"} in invalidations
-      assert {:fallback, :role} in invalidations
-    end
-  end
-
-  test "retains Message identities and adds a global fallback when club scope is missing" do
-    source = MembaReadModelSource.new()
-
-    event = %MessageSent{
-      message_id: "message-2",
-      club_id: nil,
-      sender_id: "person-1",
-      conversation_id: "message-1",
-      reply_to_message_id: "message-1",
-      subject: "Re: Plans",
-      body: "Count me in"
-    }
-
-    assert {:ok, invalidations} =
-             Source.classify(
-               source,
-               notification(Memba.Messaging.Projectors.Message, event)
-             )
-
-    assert {:message, "message-2"} in invalidations
-    assert {:conversation, "message-1"} in invalidations
-    assert {:conversation_messages, "message-1"} in invalidations
-    assert {:fallback, :message} in invalidations
-  end
-
-  test "retains partial GroupMembership scopes and adds participation fallbacks" do
-    source = MembaReadModelSource.new()
-
-    assert {:ok, missing_group} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Membership.Projectors.GroupMembership,
-                 %{club_id: "club-1", person_id: "person-1"}
-               )
-             )
-
-    assert {:person, "person-1"} in missing_group
-    assert {:person_groups, "club-1", "person-1"} in missing_group
-    assert {:fallback, :group_membership, "club-1"} in missing_group
-
-    assert {:ok, missing_person} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Membership.Projectors.GroupMembership,
-                 %{club_id: "club-1", group_id: "group-1"}
-               )
-             )
-
-    assert {:group_members, "group-1"} in missing_person
-    assert {:fallback, :group_membership, "club-1"} in missing_person
-
-    assert {:ok, missing_club} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Membership.Projectors.GroupMembership,
-                 %{group_id: "group-1", person_id: "person-1"}
-               )
-             )
-
-    assert {:group_members, "group-1"} in missing_club
-    assert {:person, "person-1"} in missing_club
-    assert {:fallback, :group_membership} in missing_club
-  end
-
   test "classifies explicit and MessageSent conversation follows by conversation and member" do
     source = MembaReadModelSource.new()
 
@@ -394,36 +285,24 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     refute {:conversation_follow, "conversation-2", "person-1"} in sent_invalidations
   end
 
-  test "retains partial conversation-follow scope with a conservative fallback" do
+  test "ignores MessageSent when the conversation-follow projector made no change" do
     source = MembaReadModelSource.new()
 
-    assert {:ok, conversation_scoped} =
+    event = %MessageSent{
+      message_id: "conversation-2",
+      club_id: "club-1",
+      sender_id: "person-2",
+      conversation_id: nil,
+      reply_to_message_id: nil,
+      subject: "Plans",
+      body: "Meet at eight",
+      sender_follows_conversation: false
+    }
+
+    assert :ignore =
              Source.classify(
                source,
-               notification(
-                 Memba.Messaging.Projectors.ConversationFollow,
-                 %{conversation_id: "conversation-1"}
-               )
-             )
-
-    assert {:conversation_follows, "conversation-1"} in conversation_scoped
-    refute {:fallback, :conversation_follow} in conversation_scoped
-
-    assert {:ok, member_scoped} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Messaging.Projectors.ConversationFollow,
-                 %{member_id: "person-1"}
-               )
-             )
-
-    assert {:member_conversation_follows, "person-1"} in member_scoped
-
-    assert {:ok, [{:fallback, :conversation_follow}]} =
-             Source.classify(
-               source,
-               notification(Memba.Messaging.Projectors.ConversationFollow, %{})
+               notification(Memba.Messaging.Projectors.ConversationFollow, event)
              )
   end
 
@@ -444,102 +323,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
       assert {:message_deliveries, "message-1"} in invalidations
       assert {:delivery, "delivery-1"} in invalidations
-    end
-  end
-
-  test "recovers delivery message scope from committed changes and projection rows" do
-    source = MembaReadModelSource.new()
-    delivery_id = Memba.ID.generate(:delivery)
-    message_id = Memba.ID.generate(:message)
-
-    for projector <- [
-          Memba.Messaging.Projectors.MemberEmailDelivery,
-          Memba.Messaging.Projectors.MembaStaffEmailDelivery
-        ] do
-      assert {:ok, changes_invalidations} =
-               Source.classify(
-                 source,
-                 notification(
-                   projector,
-                   %{delivery_id: delivery_id},
-                   %{
-                     messaging_member_email_delivery: %{
-                       delivery_id: delivery_id,
-                       message_id: message_id
-                     }
-                   }
-                 )
-               )
-
-      assert {:message_deliveries, message_id} in changes_invalidations
-      assert {:delivery, delivery_id} in changes_invalidations
-    end
-
-    Repo.insert!(%MemberEmailDelivery{
-      delivery_id: delivery_id,
-      message_id: message_id,
-      recipient_id: Memba.ID.generate(:person),
-      recipient_name: "Alice",
-      status: "sent"
-    })
-
-    assert {:ok, row_invalidations} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Messaging.Projectors.MembaStaffEmailDelivery,
-                 %{delivery_id: delivery_id}
-               )
-             )
-
-    assert {:message_deliveries, message_id} in row_invalidations
-    assert {:delivery, delivery_id} in row_invalidations
-
-    staff_delivery_id = Memba.ID.generate(:delivery)
-    staff_message_id = Memba.ID.generate(:message)
-
-    Repo.insert!(%MembaStaffEmailDelivery{
-      delivery_id: staff_delivery_id,
-      message_id: staff_message_id,
-      recipient_id: Memba.ID.generate(:person),
-      recipient_name: "Bob",
-      recipient_address: "bob@example.com",
-      channel: "email",
-      status: "delayed",
-      reason: "Retrying"
-    })
-
-    assert {:ok, staff_row_invalidations} =
-             Source.classify(
-               source,
-               notification(
-                 Memba.Messaging.Projectors.MemberEmailDelivery,
-                 %{delivery_id: staff_delivery_id}
-               )
-             )
-
-    assert {:message_deliveries, staff_message_id} in staff_row_invalidations
-    assert {:delivery, staff_delivery_id} in staff_row_invalidations
-  end
-
-  test "retains exact delivery identity alongside fallback when message scope is unavailable" do
-    source = MembaReadModelSource.new()
-
-    for projector <- [
-          Memba.Messaging.Projectors.MemberEmailDelivery,
-          Memba.Messaging.Projectors.MembaStaffEmailDelivery
-        ] do
-      assert {:ok, invalidations} =
-               Source.classify(
-                 source,
-                 notification(
-                   projector,
-                   %{delivery_id: Memba.ID.generate(:delivery)}
-                 )
-               )
-
-      assert Enum.any?(invalidations, &match?({:delivery, _delivery_id}, &1))
-      assert {:fallback, :delivery} in invalidations
     end
   end
 
@@ -641,47 +424,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     )
   end
 
-  test "recovers legacy membership-removal scope from committed changes and the membership row" do
-    changes_event = %MemberRemoved{
-      membership_id: "membership-from-changes",
-      club_id: nil,
-      person_id: nil
-    }
-
-    assert_invalidations(
-      Memba.Membership.Projectors.Membership,
-      changes_event,
-      [
-        {:club_members, "club-from-changes"},
-        {:membership, "membership-from-changes"},
-        {:person, "person-from-changes"},
-        {:person_clubs, "person-from-changes"}
-      ],
-      %{
-        membership_scope: %{
-          club_id: "club-from-changes",
-          person_id: "person-from-changes"
-        }
-      }
-    )
-
-    assert_invalidations(
-      Memba.Membership.Projectors.Role,
-      changes_event,
-      [
-        {:member_roles, "club-from-changes", "membership-from-changes", "person-from-changes"},
-        {:member_permissions, "club-from-changes", "membership-from-changes",
-         "person-from-changes"},
-        {:club_permissions, "club-from-changes"}
-      ],
-      %{
-        membership_scope: %{
-          club_id: "club-from-changes",
-          person_id: "person-from-changes"
-        }
-      }
-    )
-
+  test "recovers genuine legacy MemberRemoved scope from the retained membership row" do
     membership_id = Memba.ID.generate(:membership)
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
@@ -717,6 +460,33 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         {:club_permissions, club_id}
       ]
     )
+  end
+
+  test "surfaces unrecoverable legacy MemberRemoved scope for both publishing projectors" do
+    membership_id = Memba.ID.generate(:membership)
+
+    event = %MemberRemoved{
+      membership_id: membership_id,
+      club_id: nil,
+      person_id: nil
+    }
+
+    for projector <- [
+          Memba.Membership.Projectors.Membership,
+          Memba.Membership.Projectors.Role
+        ] do
+      assert_contract_violation(
+        projector,
+        event,
+        {:missing_required_fields, [:club_id, :person_id]},
+        %{
+          synthetic_membership_scope: %{
+            club_id: "club-from-changes",
+            person_id: "person-from-changes"
+          }
+        }
+      )
+    end
   end
 
   test "covers every Person projector event family with exact Person and email scope" do
@@ -974,6 +744,24 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         {:conversation, "conversation-1"}
       ]
     )
+
+    assert_invalidations(
+      Memba.Messaging.Projectors.ConversationFollow,
+      %MessageSent{
+        message_id: "conversation-1",
+        club_id: "club-1",
+        sender_id: "person-1",
+        conversation_id: nil,
+        reply_to_message_id: nil,
+        subject: "Plans",
+        body: "Meet at eight",
+        sender_follows_conversation: true
+      },
+      [
+        {:conversation_follow, "conversation-1", "person-1"},
+        {:conversation, "conversation-1"}
+      ]
+    )
   end
 
   test "covers every delivery event family identically for both independent projectors" do
@@ -1000,8 +788,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         message_id: "message-1",
         delivery_id: "delivery-1",
         reason: "Complaint"
-      },
-      %EmailDeliveryOpened{message_id: "message-1", delivery_id: "delivery-1"}
+      }
     ]
 
     for projector <- [
@@ -1016,33 +803,178 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     end
   end
 
-  test "retains useful partial scope and adds matrix fallbacks for missing scope" do
-    assert_invalidations(
+  test "ignores replay-only EmailDeliveryOpened for both delivery projectors" do
+    event = %EmailDeliveryOpened{message_id: "message-1", delivery_id: "delivery-1"}
+
+    for projector <- [
+          Memba.Messaging.Projectors.MemberEmailDelivery,
+          Memba.Messaging.Projectors.MembaStaffEmailDelivery
+        ] do
+      assert :ignore =
+               projector
+               |> notification(event)
+               |> then(&Source.classify(MembaReadModelSource.new(), &1))
+    end
+  end
+
+  test "does not recover malformed delivery events from committed changes or projection rows" do
+    delivery_id = Memba.ID.generate(:delivery)
+    message_id = Memba.ID.generate(:message)
+
+    Repo.insert!(%MemberEmailDelivery{
+      delivery_id: delivery_id,
+      message_id: message_id,
+      recipient_id: Memba.ID.generate(:person),
+      recipient_name: "Alice",
+      status: "sent"
+    })
+
+    malformed_event = %EmailDeliveryDelivered{
+      message_id: nil,
+      delivery_id: delivery_id
+    }
+
+    for projector <- [
+          Memba.Messaging.Projectors.MemberEmailDelivery,
+          Memba.Messaging.Projectors.MembaStaffEmailDelivery
+        ] do
+      assert_contract_violation(
+        projector,
+        malformed_event,
+        {:missing_required_fields, [:message_id]},
+        %{delivery: %{delivery_id: delivery_id, message_id: message_id}}
+      )
+    end
+  end
+
+  test "surfaces unsupported pairings and missing required identities without fallbacks" do
+    assert_contract_violation(
+      Memba.Membership.Projectors.Club,
+      %ClubUpdated{club_id: nil, name: "Updated", slug: "updated"},
+      {:missing_required_fields, [:club_id]}
+    )
+
+    assert_contract_violation(
+      Memba.Membership.Projectors.Club,
+      %ClubMemberRemoved{
+        club_id: "club-1",
+        membership_id: "membership-1",
+        person_id: "person-1"
+      },
+      :unsupported_projector_event
+    )
+
+    assert_contract_violation(
+      Memba.Membership.Projectors.Club,
+      %MemberRemoved{
+        membership_id: "membership-1",
+        club_id: "club-1",
+        person_id: "person-1"
+      },
+      :unsupported_projector_event
+    )
+
+    assert_contract_violation(
+      Memba.Membership.Projectors.Club,
+      %PersonCreated{
+        person_id: "person-1",
+        name: "Alice",
+        email: "alice@example.com"
+      },
+      :unsupported_projector_event
+    )
+
+    assert_contract_violation(
+      Memba.Membership.Projectors.Person,
+      %PersonCreated{
+        person_id: nil,
+        name: "Alice",
+        email: "alice@example.com"
+      },
+      {:missing_required_fields, [:person_id]}
+    )
+
+    assert_contract_violation(
       Memba.Membership.Projectors.Group,
-      %{group_id: "group-1"},
-      [{:group, "group-1"}, {:fallback, :group}]
+      %GroupCreated{
+        club_id: nil,
+        group_id: "group-1",
+        group_key: "group-1",
+        name: "Group"
+      },
+      {:missing_required_fields, [:club_id]}
     )
 
-    assert_invalidations(
-      Memba.Membership.Projectors.Membership,
-      %{club_id: "club-1", membership_id: "membership-1"},
-      [
-        {:club_members, "club-1"},
-        {:membership, "membership-1"},
-        {:fallback, :membership}
-      ]
+    assert_contract_violation(
+      Memba.Membership.Projectors.GroupMembership,
+      %GroupMemberAdded{
+        club_id: "club-1",
+        group_id: "group-1",
+        membership_id: "membership-1",
+        person_id: nil
+      },
+      {:missing_required_fields, [:person_id]}
     )
 
-    assert_invalidations(
-      Memba.Messaging.Projectors.Message,
-      %{club_id: "club-1"},
-      [{:club_conversations, "club-1"}, {:fallback, :message, "club-1"}]
+    assert_contract_violation(
+      Memba.Membership.Projectors.Role,
+      %ClubRoleDefined{
+        club_id: "club-1",
+        role_id: nil,
+        role_key: "admin",
+        name: "Admin"
+      },
+      {:missing_required_fields, [:role_id]}
     )
 
-    assert_invalidations(
+    assert_contract_violation(
       Memba.Messaging.Projectors.ConversationGroupAccess,
-      %{conversation_id: "conversation-1"},
-      [{:conversation, "conversation-1"}, {:fallback, :conversation_access}]
+      %ConversationAccessGrantedToGroup{
+        club_id: "club-1",
+        group_id: nil,
+        conversation_id: "conversation-1",
+        access_level: "write"
+      },
+      {:missing_required_fields, [:group_id]}
+    )
+
+    assert_contract_violation(
+      Memba.Messaging.Projectors.ConversationFollow,
+      %ConversationFollowed{
+        follow_id: "follow-1",
+        club_id: "club-1",
+        conversation_id: "conversation-1",
+        member_id: nil
+      },
+      {:missing_required_fields, [:member_id]}
+    )
+
+    assert_contract_violation(
+      Memba.Messaging.Projectors.Message,
+      %MessageSent{
+        message_id: "message-1",
+        club_id: nil,
+        sender_id: "person-1",
+        conversation_id: nil,
+        reply_to_message_id: nil,
+        subject: "Plans",
+        body: "Meet at eight"
+      },
+      {:missing_required_fields, [:club_id]}
+    )
+
+    assert_contract_violation(
+      Memba.Messaging.Projectors.MemberEmailDelivery,
+      %MessageSent{
+        message_id: "message-1",
+        club_id: "club-1",
+        sender_id: "person-1",
+        conversation_id: nil,
+        reply_to_message_id: nil,
+        subject: "Plans",
+        body: "Meet at eight"
+      },
+      :unsupported_projector_event
     )
   end
 
@@ -1068,6 +1000,14 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
                  message_id: "message-1",
                  delivery_id: "delivery-1"
                })
+             )
+
+    assert {:error,
+            {:read_model_contract_violation, Memba.Membership.Projectors.Person, :unstructured,
+             :unsupported_projector_event}} =
+             Source.classify(
+               source,
+               notification(Memba.Membership.Projectors.Person, %{person_id: "person-1"})
              )
 
     assert :ignore = Source.classify(source, {:read_model_changed, %{}})
@@ -1115,6 +1055,16 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
              Source.classify(source, notification(projector, event, changes))
 
     assert MapSet.new(actual) == MapSet.new(expected)
+  end
+
+  defp assert_contract_violation(projector, event, reason, changes \\ %{}) do
+    event_module = event.__struct__
+
+    assert {:error, {:read_model_contract_violation, ^projector, ^event_module, ^reason}} =
+             Source.classify(
+               MembaReadModelSource.new(),
+               notification(projector, event, changes)
+             )
   end
 
   defp notification(projector, source_event, changes \\ %{}) do

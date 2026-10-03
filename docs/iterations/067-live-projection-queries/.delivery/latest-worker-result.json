@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "packet_id": "task-008a-0b2466f-adapter-matrix-1",
+  "packet_id": "task-008a-5a0be69-projector-contract-revision-2",
   "task_id": "task-008a",
-  "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against every projector/event family and conservative fallback in the accepted migration matrix, preserving exact scoped matching and ignoring unrelated projectors.",
+  "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against actual projector/event families and evidenced valid-scope fallbacks in the corrected migration matrix. Preserve exact scoped matching and ignore unrelated projectors; surface known malformed Membership notifications with unrecoverable person identity as contract violations rather than fallback refreshes. Audit remaining fallbacks against real current/legacy event shapes and obtain a fresh independent review.",
   "result": "ready_for_review",
   "changed_paths": [
     "web/lib/memba_web/live_query/memba_read_model_source.ex",
@@ -12,12 +12,17 @@
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
       "exit_status": 0,
-      "evidence": "27 focused adapter tests passed with 0 failures. They cover all eleven projector families, every current/legacy/no-op compatibility event family in the matrix, exact and partial scopes, membership and delivery changes/row recovery, both delivery contributors, conservative fallbacks, exact matching, unrelated projectors and malformed messages."
+      "evidence": "25 focused adapter tests passed with 0 failures, covering all eleven projector families, actual current and legacy event structs, exact and evidenced broad scopes, no-op publications, row-only legacy recovery, visible contract violations, exact matching, and unrelated input."
     },
     {
       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
       "exit_status": 0,
-      "evidence": "8 accepted dashboard and conversation-detail query vocabulary tests passed with 0 failures."
+      "evidence": "8 accepted dashboard and conversation-detail query-vocabulary regression tests passed with 0 failures."
+    },
+    {
+      "command": "if grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules; then exit 1; else echo 'packages/live_query has no Memba or Commanded references'; fi",
+      "exit_status": 0,
+      "evidence": "The generic live_query package contains no Memba or Commanded references."
     },
     {
       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
@@ -28,13 +33,8 @@
       "command": "git diff --check",
       "exit_status": 0,
       "evidence": "The packet diff has no whitespace errors."
-    },
-    {
-      "command": "if grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules; then exit 1; else echo 'packages/live_query has no Memba or Commanded references'; fi",
-      "exit_status": 0,
-      "evidence": "The generic live_query package contains no Memba or Commanded references or dependencies."
     }
   ],
-  "notes": "The initial focused TDD run had 3 expected failures: legacy membership-removal scope was not recovered, conversation-follow invalidations omitted the exact conversation identity, and partial Group scope discarded its useful identity. The adapter now recovers legacy Membership and Role scope from committed changes or an inactive membership row, retains useful exact keys while adding documented fallbacks for incomplete Membership, Group, Message and conversation-access notifications, and emits compatible message/delivery keys for both delivery projectors. The expanded matrix suite uses actual event structs for all publisher families and narrow maps only for compatibility/fallback cases; no accepted matrix mapping remains unsatisfied, and no package API, consumer, projector, domain event, read API or dependency changed.",
+  "notes": "The first TDD run exposed the expected malformed-Membership fallback and false auto-follow defects (29 tests, 2 failures); the subsequent diagnostic run identified nine superseded synthetic-fallback expectations. The adapter now dispatches only actual projector/event-struct pairings, emits stable app-owned read_model_contract_violation errors for known malformed or unsupported pairings, ignores false auto-follow and replay-only opened publications, uses the retained membership projection row as the sole evidenced legacy MemberRemoved recovery source, and never recovers delivery scope from changes or rows. No generic package, accepted query vocabulary, projector, domain event, schema, feature, plan, matrix, ADR, or todo was changed.",
   "unresolved": []
 }
