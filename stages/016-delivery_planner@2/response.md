@@ -1,0 +1,376 @@
+{
+  "execution_state": {
+    "schema_version": 1,
+    "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+    "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
+    "source_baseline": "d3c06ca785911b3e728e5f5c87fa9be9d26903e9",
+    "accepted_tasks": [
+      "- [x] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces.",
+      "- [x] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally.",
+      "- [x] 004 Implement and unit-test an app-private provisional binding/source contract for opaque interests, one assign per query, route rebind, relevant refresh, access errors, subscribe-before-read, bind-time reconciliation and reconnect, without a process per query or a frozen package API.",
+      "- [x] 005 Wire the dashboard query to the provisional binding and scoped Memba notification translation; prove club-member and selected-group entry/exit, order/count updates, represented Person and role changes, route/access transitions, unrelated-club isolation and transient-state preservation.",
+      "- [x] 006 Wire composed conversation detail to the provisional binding; prove Message, represented-Person, exact-follow, both independently committed delivery projections and fresh access-loss behavior, unrelated-conversation isolation and transient-state preservation, then freeze the generic contract from both vertical proofs."
+    ],
+    "pending_obligations": [
+      {
+        "task_id": "task-006a",
+        "todo_line": "- [ ] 006A Implement the approved domain/application scenario “Bob sees Alice join without reloading” against Bob’s already-open club member LiveView, using the committed membership projection notification path and keeping the scenario green.",
+        "origin": "Scenario-led acceptance slice split from baseline task 011 and moved ahead of broad package extraction under the recorded recovery direction. It implements the approved plan's single stakeholder-readable example against the already-accepted dashboard live-query vertical.",
+        "status": "prepared",
+        "coverage": [
+          "The exact approved scenario Bob sees Alice join without reloading",
+          "A real connected Bob member-list LiveView opened before Alice joins",
+          "Initial proof that Alice is absent from the rendered member list",
+          "Membership addition through the existing command and committed Membership projector",
+          "Post-commit ReadModelChanges delivery through the Memba source and live-query binding",
+          "Alice appearing in the same open LiveView without reload, remount or navigation",
+          "Domain/application Cucumber step plumbing rather than a browser journey or synthetic notification"
+        ],
+        "replaces": [
+          "- [ ] 011 Add the focused acceptance example, close the focused proof gaps for every migrated member page and a real committed-projector-to-open-LiveView path, complete package lifecycle/race coverage, and run final `dev check`.",
+          "- [ ] 008 Add the focused acceptance example, focused tests per migrated member page and a real committed-projector-to-open-LiveView test, plus package unit tests for matching/mount/change/reconnect races; run `dev check`."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-007",
+        "todo_line": "- [ ] 007 Extract, implement and test the frozen generic contract as a local Mix package, replace the two provisional consumers with it, and cover interest replacement, invalidation matching, refresh, duplicate/out-of-order notifications, subscriber cleanup and lifecycle without Memba or Commanded imports.",
+        "origin": "Remaining generic-package implementation from approved plan task 3, ordered after the two accepted pre-freeze vertical proofs and the early stakeholder scenario.",
+        "status": "pending",
+        "coverage": [
+          "Extractable local Mix application",
+          "Replacement of app-private binding use in dashboard and conversation detail",
+          "Generic query registration, interest replacement, matching and refresh",
+          "Duplicate and out-of-order notification behavior",
+          "Subscriber cleanup and lifecycle tests",
+          "No Memba or Commanded imports in package source or tests"
+        ],
+        "replaces": [
+          "- [ ] 004 Implement and test the generic local Mix package's query binding, interests, invalidation, refresh and lifecycle contract without Memba or Commanded imports."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-008",
+        "todo_line": "- [ ] 008 Complete the Memba adapter for all committed projector mappings and conservative fallbacks in the migration matrix, plus the remaining authorized view-specific queries composed from existing read APIs.",
+        "origin": "Remaining application-adapter and query work from approved plan task 4 after the accepted dashboard and conversation-detail mappings.",
+        "status": "pending",
+        "coverage": [
+          "Every remaining projector and event mapping recorded in the accepted migration matrix",
+          "Collection, identity and authorization interests",
+          "Old and new scopes where available",
+          "Conservative club, family or global fallbacks when exact scope is unavailable",
+          "Remaining fresh authorized view-specific queries",
+          "No app-specific policy in the generic package"
+        ],
+        "replaces": [
+          "- [ ] 005 Implement the Memba adapter for committed projector notifications, scoped collection/identity invalidations and authorized view-specific queries composed from existing read APIs; use conservative invalidation when exact mapping is unavailable."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-009",
+        "todo_line": "- [ ] 009 Migrate the remaining in-scope member LiveViews to one query-result assign each, preserving routes, access transitions, forms, command state, navigation and UI; ensure delivery status/reason convergence and existing conversation flows do not regress.",
+        "origin": "Remaining migration work from approved plan task 5 after dashboard and conversation detail served as the accepted pre-freeze consumers.",
+        "status": "pending",
+        "coverage": [
+          "Group creation, settings, message composition, delivery detail and invitation LiveViews",
+          "One coherent result assign per remaining in-scope page",
+          "Preserved routes, access transitions, forms, commands, navigation and UI",
+          "Live delivery status and staff-reason convergence",
+          "Existing conversation and delivery behavior",
+          "No staff stream migration"
+        ],
+        "replaces": [
+          "- [ ] 006 Migrate each in-scope member LiveView to query-result assigns, preserving its route, access, form state and UI. Ensure list entry/exit and existing live delivery/conversation flows do not regress."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-010",
+        "todo_line": "- [ ] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments.",
+        "origin": "Approved plan task 6, retaining production release and quality-gate integration after development-time package extraction.",
+        "status": "pending",
+        "coverage": [
+          "Supported path dependency in web/mix.exs",
+          "Docker dependency-copy and compilation ordering",
+          "Production release inclusion",
+          "Explicit package test execution in the repository quality gate",
+          "Supported local and CI environments"
+        ],
+        "replaces": [
+          "- [ ] 007 Integrate the package with `web/mix.exs`, Docker release build and `dev check` so both package and web tests run in supported environments."
+        ],
+        "candidate_origins": []
+      },
+      {
+        "task_id": "task-011",
+        "todo_line": "- [ ] 011 Close the remaining focused proof gaps for every migrated member page, complete package lifecycle/race coverage, and run final `dev check`.",
+        "origin": "Remainder of baseline task 011 after its approved stakeholder scenario and committed-projector open-LiveView proof were split into task 006A and moved earlier. This retains all other focused proof, lifecycle/race and final exact-state validation obligations.",
+        "status": "pending",
+        "coverage": [
+          "Remaining focused regression proof for every migrated member page",
+          "Any still-open migration-matrix proof gaps after tasks 008 and 009",
+          "Remaining package mount, change, reconnect and race coverage",
+          "Final full dev check on the exact delivered state"
+        ],
+        "replaces": [
+          "- [ ] 011 Add the focused acceptance example, close the focused proof gaps for every migrated member page and a real committed-projector-to-open-LiveView path, complete package lifecycle/race coverage, and run final `dev check`.",
+          "- [ ] 008 Add the focused acceptance example, focused tests per migrated member page and a real committed-projector-to-open-LiveView test, plus package unit tests for matching/mount/change/reconnect races; run `dev check`."
+        ],
+        "candidate_origins": []
+      }
+    ],
+    "candidate_origins": [],
+    "coverage_map": [
+      {
+        "accepted_task_lines": [
+          "- [x] 001 Create the repository migration matrix for every club-member LiveView, recording projection-backed reads, query/result boundaries, existing refresh predicates, fresh authorization and access transitions, event-to-interest mappings (including collection entry/exit, old/new scopes and conservative fallbacks), transient-state exceptions, focused proof and gaps; explicitly inventory the deferred staff streams and other out-of-scope surfaces."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted repository migration matrix, route inventory, event/interest map, fresh-authorization analysis, focused-proof inventory and explicit exclusions."
+      },
+      {
+        "accepted_task_lines": [
+          "- [x] 003 Introduce and focused-test an app-owned dashboard query/view-model boundary that begins from the authenticated email and fresh active-club authority; move all projection-backed dashboard data behind one coherent socket assign, subscribe before the connected initial read, preserve route/access error semantics and transient LiveView state, and retain the existing notification predicates provisionally."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted dashboard query/view-model boundary, fresh-authority prerequisite, coherent dashboard result assign, connected subscribe-before-read ordering and provisional predicates."
+      },
+      {
+        "accepted_task_lines": [
+          "- [x] 004 Implement and unit-test an app-private provisional binding/source contract for opaque interests, one assign per query, route rebind, relevant refresh, access errors, subscribe-before-read, bind-time reconciliation and reconnect, without a process per query or a frozen package API."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted provisional generic lifecycle, opaque-interest matching, route rebind, bind-window reconciliation, access-error and reconnect contract."
+      },
+      {
+        "accepted_task_lines": [
+          "- [x] 005 Wire the dashboard query to the provisional binding and scoped Memba notification translation; prove club-member and selected-group entry/exit, order/count updates, represented Person and role changes, route/access transitions, unrelated-club isolation and transient-state preservation."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted dashboard binding, scoped Memba invalidation, partial-scope fallbacks and open-dashboard vertical behavior proof."
+      },
+      {
+        "accepted_task_lines": [
+          "- [x] 006 Wire composed conversation detail to the provisional binding; prove Message, represented-Person, exact-follow, both independently committed delivery projections and fresh access-loss behavior, unrelated-conversation isolation and transient-state preservation, then freeze the generic contract from both vertical proofs."
+        ],
+        "pending_task_ids": [],
+        "scope": "Accepted conversation-detail binding, multi-projector convergence, fresh-access proof, transient-state preservation and frozen extraction contract."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-006a"
+        ],
+        "scope": "Approved stakeholder scenario and real committed-membership-projector-to-already-open-member-LiveView proof."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-007"
+        ],
+        "scope": "Frozen generic local-package extraction and lifecycle hardening."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-008"
+        ],
+        "scope": "Complete remaining Memba notification adapter mappings and authorized queries."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-009"
+        ],
+        "scope": "Migration of the five remaining in-scope member LiveViews."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-010"
+        ],
+        "scope": "Production package, Docker release and quality-gate integration."
+      },
+      {
+        "accepted_task_lines": [],
+        "pending_task_ids": [
+          "task-011"
+        ],
+        "scope": "Remaining per-page proof, package lifecycle/race coverage and final exact-state validation."
+      }
+    ],
+    "planner_note": "All five checked todo lines and all six remaining obligations are preserved exactly; no todo edit was needed at this checkpoint. Task 006A remains the first unchecked obligation and retains its recorded split lineage from task 011, while task 011 retains the remaining per-page proof, package lifecycle/race and final dev-check work. The prior trusted before-stage did not dispatch a worker or create a candidate: it observed the expected missing viewing step but marked the call as a surprise because the framework emitted `No matching step definition found for step:` rather than the earlier predicted wording `Undefined step:`. The selected scenario remains active as @wip, and this fresh implementation packet corrects the pre-run diagnostic prediction from the saved observation without changing task identity or resetting accepted work. All candidate-origin collections remain empty."
+  },
+  "planner_result": {
+    "schema_version": 1,
+    "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+    "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
+    "source_baseline": "d3c06ca785911b3e728e5f5c87fa9be9d26903e9",
+    "decision": "ready"
+  },
+  "current_worker_packet": {
+    "schema_version": 1,
+    "packet_id": "task-006a-d3c06ca-bob-sees-alice-2",
+    "task_id": "task-006a",
+    "todo_line": "- [ ] 006A Implement the approved domain/application scenario “Bob sees Alice join without reloading” against Bob’s already-open club member LiveView, using the committed membership projection notification path and keeping the scenario green.",
+    "attempt": "implementation",
+    "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+    "todo_path": "docs/iterations/067-live-projection-queries/todo.md",
+    "source_baseline": "d3c06ca785911b3e728e5f5c87fa9be9d26903e9",
+    "outcome": "Make the approved Bob-sees-Alice-join domain/application scenario executable and green by driving a real connected member-list LiveView through the existing committed membership projection and live-query notification path, with Bob's original view gaining Alice without reload or navigation.",
+    "scope": [
+      "Add narrowly scoped domain Cucumber step plumbing for the exact approved scenario `Bob sees Alice join without reloading`; prefer an iteration-specific step-definition module so generic membership steps do not accidentally acquire LiveView state.",
+      "Reuse the existing shared definitions for `Bob is a member of Kootenay Mountaineering Club` and `Alice is not a member of Kootenay Mountaineering Club`; do not introduce duplicate patterns for already-defined steps.",
+      "Implement `Bob is viewing the Kootenay Mountaineering Club member list` by building a test connection with `MembaWeb.Endpoint`, deriving the routed club host and Bob's email from scenario context, installing Bob's identity session, and opening the real connected `/members` LiveView before Alice is admitted.",
+      "Store the connected LiveView and relevant club/person identifiers in scenario context. Prove Alice's stable member-row selector is absent when Bob's view is opened so the final assertion cannot pass from initial state.",
+      "Implement `Alice becomes a member of Kootenay Mountaineering Club` through `Memba.Membership.add_member/2` with a fresh membership ID and `consistency: :strong`. Let the Membership projector publish its normal post-commit ReadModelChanges notification.",
+      "Implement `Bob should see Alice appear in the member list automatically` against the same connected LiveView process using the stable `#club-member-<person_id>` row selector and Alice's rendered name.",
+      "Keep Bob's original LiveView open across the When and Then steps. Do not issue another `live/2`, HTTP request, route patch, reload or navigation after Alice is admitted.",
+      "Rely on the accepted dashboard query, Memba source and Binding implementation for refresh behavior; this packet supplies the stakeholder-readable application-boundary proof and must not redesign the accepted live-query contract."
+    ],
+    "scope_exclusions": [
+      "Do not edit the approved scenario wording, rule, examples or feature content; the trusted scenario stages own its @todo/@wip lifecycle.",
+      "Do not create a browser journey, JavaScript step definition or Playwright dependency. The approved scenario is a domain/application LiveView example.",
+      "Do not send `{:read_model_changed, ...}` directly, call `Binding.handle_notification/2` from a step, mutate query assigns, or fabricate projection rows.",
+      "Do not reload, remount or navigate Bob's view after Alice becomes a member.",
+      "Do not alter the accepted dashboard query, binding, source mappings or application code unless a newly recorded unexpected scenario observation proves a real defect and returns the work for replanning.",
+      "Do not begin local-package extraction, remaining adapter work, other LiveView migrations, Docker/release integration or the remaining task-011 proof work.",
+      "Do not run the selected scenario as worker validation; the trusted before/after scenario stages own that run.",
+      "Do not run `dev check`, `dev check --quick`, `dev ci` or another unscoped full-suite command, and do not mark the todo line complete."
+    ],
+    "references": [
+      {
+        "path": "docs/iterations/067-live-projection-queries/plan.md",
+        "facts": "The approved acceptance contract names one domain/application example: Bob has the club member list open, Alice becomes a member, and Bob sees Alice appear automatically. The allowed feature section permits only `acceptance-tests/features/live_club_member_list.feature`; the plan also requires at least one real committed-projector-to-open-LiveView proof."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/todo.md",
+        "facts": "Task 006A is the first unchecked obligation after the accepted dashboard and conversation-detail verticals. The recovery direction places this exact scenario before broad package extraction while preserving the remainder of task 011."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/.delivery/_guard/planner-guard-baseline.json",
+        "facts": "The trusted checkpoint preserves tasks 001, 003, 004, 005 and 006 as accepted and records no required candidate origins. This packet is bound to the current checkpoint HEAD, not the baseline file's predecessor SHA."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/.delivery/wip-before.json",
+        "facts": "The trusted before-stage ran the selected scenario and found the first missing viewing step. It marked the prior call as a surprise only because the observed framework diagnostic was `No matching step definition found for step:` rather than the predicted `Undefined step:` wording; no worker was dispatched and no task-006A candidate was created."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/.delivery/latest-review.json",
+        "facts": "Independent review accepted task 006 and left final validation and remaining tasks pending. That accepted task's worker result is not candidate provenance for task 006A."
+      },
+      {
+        "path": "acceptance-tests/features/live_club_member_list.feature",
+        "facts": "The permitted feature contains exactly one active `@iteration-067` scenario named `Bob sees Alice join without reloading`. Its Bob-membership and Alice-not-a-member Given steps already have shared definitions; the current first undefined step is Bob viewing the Kootenay Mountaineering Club member list."
+      },
+      {
+        "path": "docs/iterations/067-live-projection-queries/migration-matrix.md",
+        "facts": "The dashboard proof inventory identifies this stakeholder scenario as distinct from custom-group admission and requires an already-open club Members page to gain a newly admitted club member through live-query collection invalidation."
+      },
+      {
+        "path": "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md",
+        "facts": "A relevant committed projection change causes a fresh authorized query read and replacement of the coherent dashboard assign while the LiveView owns the subscription."
+      },
+      {
+        "path": "docs/adr/0021-publish-committed-read-model-changes.md",
+        "facts": "Projectors publish ReadModelChanges only after their projection transaction commits; the scenario must exercise this boundary rather than a fabricated notification."
+      },
+      {
+        "path": "web/test/features/step_definitions/authentication_steps.exs",
+        "facts": "The existing `{word} is a member of Kootenay Mountaineering Club` definition creates the club, Person and active membership with strong consistency and records clubs, people and memberships in scenario context."
+      },
+      {
+        "path": "web/test/features/step_definitions/club_member_invitation_steps.exs",
+        "facts": "The existing `{word} is not a member of {word} {word} {word}` definition ensures Alice and the club exist, records Alice in scenario context and asserts no active membership exists. Reuse this definition instead of duplicating it."
+      },
+      {
+        "path": "web/test/support/domain_cucumber_runner.ex",
+        "facts": "The domain runner discovers every `test/features/step_definitions/**/*.exs` module, carries one context map through all scenario steps and executes feature, rule and scenario steps in order."
+      },
+      {
+        "path": "web/test/features/domain_cucumber_acceptance_test.exs",
+        "facts": "This is the ExUnit boundary used by the trusted focused scenario stage. It uses `Memba.EventSourcedCase` and runs selected domain scenarios through `DomainCucumberRunner`, so the step module must build any required Phoenix test connection explicitly."
+      },
+      {
+        "path": "web/lib/memba_web/club_site.ex",
+        "facts": "`MembaWeb.ClubSite.url/2` derives the club subdomain URL from the committed club slug. Existing LiveView tests parse that URL and put its host on the connection before mounting member routes."
+      },
+      {
+        "path": "web/lib/memba_web/identity_auth.ex",
+        "facts": "`identity_session_key/0` exposes the browser-session key for the normalized signed-in email. Existing connected member tests initialize that session before calling `live/2`."
+      },
+      {
+        "path": "web/lib/memba_web/live/member_dashboard_live.ex",
+        "facts": "The accepted dashboard LiveView binds MemberDashboardQuery through the shared Memba source during mount and routes ReadModelChanges through Binding, so the scenario should observe behavior through a normal connected `/members` view."
+      },
+      {
+        "path": "web/lib/memba_web/member_dashboard_query.ex",
+        "facts": "The accepted dashboard query registers the selected club's `{:club_members, club_id}` collection interest and recomputes the coherent dashboard model from fresh authority when matching membership invalidations arrive."
+      },
+      {
+        "path": "web/lib/memba_web/live_query/memba_read_model_source.ex",
+        "facts": "Membership notifications classify to the affected club-members collection and exact membership/person keys, allowing a newly entering member absent from the old result to refresh the dashboard."
+      },
+      {
+        "path": "web/lib/memba/membership.ex",
+        "facts": "`Memba.Membership.add_member/2` is the normal application boundary for adding an active club member and accepts caller-supplied membership identity plus strong-consistency dispatch options."
+      },
+      {
+        "path": "web/lib/memba/membership/projectors/membership.ex",
+        "facts": "ClubMemberAdded inserts the committed Membership projection and `after_update/3` publishes through Memba.ReadModelChanges. The When step must use the normal command path that reaches this callback."
+      },
+      {
+        "path": "web/test/memba_web/live/member_dashboard_live_test.exs",
+        "facts": "Accepted focused coverage opens `/members` on a signed-in club-host connection and proves committed club-member additions enter, reorder and update counts in an already-open dashboard. Stable member rows use `#club-member-<person_id>`."
+      },
+      {
+        "path": "docs/reference/liveview.md",
+        "facts": "LiveView behavior assertions should use stable DOM IDs and LiveViewTest selectors. Retaining the same connected view process is necessary to prove an automatic update rather than a fresh mount."
+      },
+      {
+        "path": "docs/reference/elixir-mix-tests.md",
+        "facts": "Tests must use deterministic synchronization and avoid `Process.sleep/1`; focused test commands should remain scoped to the changed acceptance plumbing and accepted dashboard behavior."
+      }
+    ],
+    "constraints": [
+      "Keep this a fresh implementation attempt with no candidate lineage; tasks 001 through 006 remain accepted and must not be reopened.",
+      "The feature path, scenario name and business wording are locked. The feature is already @wip following the trusted before-stage; the worker must not alter its tags.",
+      "Reuse the exactly matching existing Bob-membership and Alice-not-a-member definitions. Every scenario step must resolve to exactly one domain definition.",
+      "Open Bob's connected view before dispatching Alice's membership command and retain that exact view through the final assertion.",
+      "Assert Alice is absent before the command and present afterward using `#club-member-<Alice person_id>`; rendered name may supplement but not replace the stable selector.",
+      "Use the existing command/application boundary with strong consistency so projection commit occurs before the command returns, while the LiveView update still arrives through the projector's post-commit PubSub notification.",
+      "Do not directly invoke the source classifier, binding refresh or notification handler from scenario steps.",
+      "Build authentication and club-host routing from context data established by existing Given steps; do not hard-code a different club, person ID, email suffix or host.",
+      "Use deterministic LiveViewTest message/render synchronization and do not use `Process.sleep/1` or polling against a newly mounted page.",
+      "Do not run the intentionally red selected scenario from the worker's successful validation list. The deterministic before/after nodes own both observations.",
+      "Do not broaden this packet into generic acceptance infrastructure or application refactoring.",
+      "Do not mark the todo line complete."
+    ],
+    "focused_validation": [
+      "PATH=\"$PWD/bin:$PATH\" dev test test/features/domain_cucumber_runner_test.exs test/features/cucumber_configuration_test.exs",
+      "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
+      "bin/mix format --check-formatted",
+      "git diff --check"
+    ],
+    "completion_evidence_required": [
+      "List every changed path and identify the step-definition module that owns the three previously undefined scenario steps.",
+      "Map all five scenario steps to their single matching definitions, explicitly identifying the two reused shared definitions and confirming no duplicate pattern was introduced.",
+      "Describe how the viewing step builds the endpoint connection, authenticates Bob on the Kootenay club host, opens `/members`, stores the connected LiveView and proves Alice's row is initially absent.",
+      "Identify the exact membership command/application call used by the When step, its fresh membership ID and strong-consistency option, and confirm no projection row or ReadModelChanges message is fabricated.",
+      "Explain how the command reaches Membership projector `after_update/3`, how the existing Memba source matches the club-members collection and why this admits a row absent from the prior query result.",
+      "Show that the Then step asserts Alice's stable member-row selector and name against the same connected LiveView process, with no second `live/2`, request, patch, reload or navigation.",
+      "Confirm the selected feature's wording and tags were not edited by the worker and that no application, package, Docker, release or unrelated migration work was introduced.",
+      "Report each supporting focused validation command, exit status and concise evidence. Do not report the selected scenario itself as worker-run validation because the trusted after-worker stage owns it.",
+      "Report any unresolved issue, especially a context-shape mismatch, duplicate step match or need to bypass the real committed notification path, instead of weakening the scenario."
+    ],
+    "candidate_origins": [],
+    "scenario_focus": {
+      "feature_path": "acceptance-tests/features/live_club_member_list.feature",
+      "name": "Bob sees Alice join without reloading",
+      "predicted_failure": "No matching step definition found for step:",
+      "predicted_after": "green"
+    }
+  }
+}
