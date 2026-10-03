@@ -1,78 +1,40 @@
 {
   "schema_version": 1,
-  "packet_id": "task-007b-7137b1a-consumer-adoption-1",
-  "task_id": "task-007b",
-  "todo_line": "- [ ] 007B Replace the dashboard and conversation-detail provisional generic modules with the local package API, keep the Memba notification source and queries in the app, remove the superseded app-private generic contract, and prove both accepted consumers retain their lifecycle, refresh and access-error behavior.",
+  "packet_id": "task-008a-0b2466f-adapter-matrix-1",
+  "task_id": "task-008a",
+  "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against every projector/event family and conservative fallback in the accepted migration matrix, preserving exact scoped matching and ignoring unrelated projectors.",
   "result": "ready_for_review",
   "changed_paths": [
-    "docs/iterations/067-live-projection-queries/extraction-contract.md",
-    "web/lib/memba_web/live/member_dashboard_live.ex",
-    "web/lib/memba_web/live/member_message_live/show.ex",
-    "web/lib/memba_web/live_query/binding.ex",
     "web/lib/memba_web/live_query/memba_read_model_source.ex",
-    "web/lib/memba_web/live_query/query.ex",
-    "web/lib/memba_web/live_query/source.ex",
-    "web/lib/memba_web/member_dashboard_query.ex",
-    "web/lib/memba_web/member_message_detail_query.ex",
-    "web/mix.exs",
-    "web/test/memba_web/live_query/binding_test.exs",
-    "web/test/memba_web/live_query/memba_read_model_source_test.exs",
-    "web/test/memba_web/member_dashboard_query_test.exs",
-    "web/test/memba_web/member_message_detail_query_test.exs",
-    "web/test/support/live_query_fixture_live.ex"
+    "web/test/memba_web/live_query/memba_read_model_source_test.exs"
   ],
   "validation": [
     {
-      "command": "MIX_ENV=test mix compile --warnings-as-errors (workdir: packages/live_query)",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
       "exit_status": 0,
-      "evidence": "The accepted package compiled in the test environment with warnings treated as errors."
+      "evidence": "27 focused adapter tests passed with 0 failures. They cover all eleven projector families, every current/legacy/no-op compatibility event family in the matrix, exact and partial scopes, membership and delivery changes/row recovery, both delivery contributors, conservative fallbacks, exact matching, unrelated projectors and malformed messages."
     },
     {
-      "command": "mix test (workdir: packages/live_query)",
+      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
       "exit_status": 0,
-      "evidence": "15 package-owned Query, Source, Binding and lifecycle tests passed with 0 failures."
+      "evidence": "8 accepted dashboard and conversation-detail query vocabulary tests passed with 0 failures."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs test/memba_web/live_query/memba_read_model_source_test.exs",
+      "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
       "exit_status": 0,
-      "evidence": "23 app-owned query and source-adapter tests passed with 0 failures while using LiveQuery.Query and LiveQuery.Source."
-    },
-    {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
-      "exit_status": 0,
-      "evidence": "57 dashboard tests passed with 0 failures, including connected scoped refresh, route rebind and old-interest replacement, transient picker preservation, and fresh access-error behavior through LiveQuery.Binding."
-    },
-    {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs",
-      "exit_status": 0,
-      "evidence": "25 conversation-detail tests passed with 0 failures, including exact and unrelated invalidation behavior, two-projector delivery convergence, transient reply/disclosure preservation, and access-loss navigation through LiveQuery.Binding."
-    },
-    {
-      "command": "bin/mix deps.tree live_query",
-      "exit_status": 0,
-      "evidence": "The web dependency tree resolves live_query from ../packages/live_query with phoenix_live_view as its only runtime dependency."
-    },
-    {
-      "command": "bin/mix format --check-formatted",
-      "exit_status": 0,
-      "evidence": "The web application and iteration contract changes are formatted."
-    },
-    {
-      "command": "mix format --check-formatted (workdir: packages/live_query)",
-      "exit_status": 0,
-      "evidence": "The accepted package remains formatted."
-    },
-    {
-      "command": "if grep -R -n -E 'MembaWeb[.]LiveQuery[.](Binding|Query|Source)' web/lib web/test; then exit 1; else exit 0; fi",
-      "exit_status": 0,
-      "evidence": "No compatibility references or copies of the superseded MembaWeb.LiveQuery Binding, Query or Source remain."
+      "evidence": "The web application is formatted."
     },
     {
       "command": "git diff --check",
       "exit_status": 0,
       "evidence": "The packet diff has no whitespace errors."
+    },
+    {
+      "command": "if grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules; then exit 1; else echo 'packages/live_query has no Memba or Commanded references'; fi",
+      "exit_status": 0,
+      "evidence": "The generic live_query package contains no Memba or Commanded references or dependencies."
     }
   ],
-  "notes": "A test-first namespace update initially failed because LiveQuery.Query was not available to web; the minimal ../packages/live_query dependency made the package API available without a lockfile change. Both LiveViews now delegate lifecycle work to LiveQuery.Binding, both app-owned loaders construct LiveQuery.Query, and MembaReadModelSource constructs LiveQuery.Source while retaining every projector/event mapping, invalidation tuple, fresh-authority read, owner navigation policy and consumer behavior. The app-private generic modules, duplicate generic binding test and fixture were removed; extraction-contract references now point to package-owned modules and tests. Per packet exclusion, no dev check or acceptance scenario was run.",
+  "notes": "The initial focused TDD run had 3 expected failures: legacy membership-removal scope was not recovered, conversation-follow invalidations omitted the exact conversation identity, and partial Group scope discarded its useful identity. The adapter now recovers legacy Membership and Role scope from committed changes or an inactive membership row, retains useful exact keys while adding documented fallbacks for incomplete Membership, Group, Message and conversation-access notifications, and emits compatible message/delivery keys for both delivery projectors. The expanded matrix suite uses actual event structs for all publisher families and narrow maps only for compatibility/fallback cases; no accepted matrix mapping remains unsatisfied, and no package API, consumer, projector, domain event, read API or dependency changed.",
   "unresolved": []
 }

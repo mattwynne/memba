@@ -7,8 +7,11 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   """
 
   alias LiveQuery.Source
+  alias Memba.ID
   alias Memba.ReadModelChanges
   alias Memba.Messaging
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Repo
 
   @club_projector Memba.Membership.Projectors.Club
   @membership_projector Memba.Membership.Projectors.Membership
@@ -57,12 +60,12 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     changes = Map.get(change, :changes, %{})
 
     case projector do
-      @club_projector -> classify_club_projector(event)
-      @membership_projector -> membership_invalidations(event)
+      @club_projector -> classify_club_projector(event, changes)
+      @membership_projector -> membership_invalidations(event, changes)
       @person_projector -> person_invalidations(event)
       @group_projector -> group_invalidations(event)
       @group_membership_projector -> group_membership_invalidations(event)
-      @role_projector -> role_invalidations(event)
+      @role_projector -> role_invalidations(event, changes)
       @message_projector -> message_invalidations(event)
       @conversation_access_projector -> conversation_access_invalidations(event)
       @conversation_follow_projector -> conversation_follow_invalidations(event)
@@ -77,7 +80,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   @doc false
   def matches?(interest, invalidation), do: interest == invalidation
 
-  defp classify_club_projector(event) do
+  defp classify_club_projector(event, changes) do
     event_name = event_name(event)
 
     cond do
@@ -90,7 +93,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
       event_name in (@exact_role_events ++
                        @role_definition_events ++
                        @role_permission_events ++ @role_membership_removal_events) ->
-        role_invalidations(event)
+        role_invalidations(event, changes)
 
       club_id = field(event, :club_id) ->
         {:ok, [{:fallback, :club, club_id}]}
@@ -100,24 +103,30 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     end
   end
 
-  defp membership_invalidations(event) do
-    club_id = field(event, :club_id)
-    membership_id = field(event, :membership_id)
-    person_id = field(event, :person_id)
+  defp membership_invalidations(event, changes) do
+    membership_id = field(event, :membership_id) || deep_field(changes, :membership_id)
+    event_club_id = field(event, :club_id) || deep_field(changes, :club_id)
+    event_person_id = field(event, :person_id) || deep_field(changes, :person_id)
+    membership_scope = membership_scope(membership_id, event_club_id, event_person_id)
+
+    club_id =
+      event_club_id ||
+        Map.get(membership_scope, :club_id)
+
+    person_id =
+      event_person_id ||
+        Map.get(membership_scope, :person_id)
 
     invalidations =
       compact([
         tuple(:club_members, club_id),
         tuple(:membership, membership_id),
         tuple(:person, person_id),
-        tuple(:person_clubs, person_id)
+        tuple(:person_clubs, person_id),
+        if(is_nil(person_id), do: {:fallback, :membership})
       ])
 
-    case {club_id, person_id, invalidations} do
-      {nil, nil, _invalidations} -> {:ok, [{:fallback, :membership}]}
-      {_club_id, _person_id, []} -> {:ok, [{:fallback, :membership}]}
-      _scoped -> {:ok, invalidations}
-    end
+    {:ok, invalidations}
   end
 
   defp person_invalidations(event) do
@@ -131,12 +140,18 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     club_id = field(event, :club_id)
     group_id = field(event, :group_id)
 
-    cond do
-      club_id && group_id ->
-        {:ok, [{:club_groups, club_id}, {:group, group_id}]}
+    invalidations =
+      compact([
+        tuple(:club_groups, club_id),
+        tuple(:group, group_id)
+      ])
 
+    cond do
       club_id ->
-        {:ok, [{:club_groups, club_id}]}
+        {:ok, invalidations}
+
+      group_id ->
+        {:ok, invalidations ++ [{:fallback, :group}]}
 
       true ->
         {:ok, [{:fallback, :group}]}
@@ -162,12 +177,22 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     {:ok, invalidations}
   end
 
-  defp role_invalidations(event) do
+  defp role_invalidations(event, changes) do
     event_name = event_name(event)
-    club_id = field(event, :club_id)
-    membership_id = field(event, :membership_id)
-    person_id = field(event, :person_id)
-    role_id = field(event, :role_id)
+    membership_id = field(event, :membership_id) || deep_field(changes, :membership_id)
+    event_club_id = field(event, :club_id) || deep_field(changes, :club_id)
+    event_person_id = field(event, :person_id) || deep_field(changes, :person_id)
+    membership_scope = membership_scope(membership_id, event_club_id, event_person_id)
+
+    club_id =
+      event_club_id ||
+        Map.get(membership_scope, :club_id)
+
+    person_id =
+      event_person_id ||
+        Map.get(membership_scope, :person_id)
+
+    role_id = field(event, :role_id) || deep_field(changes, :role_id)
 
     cond do
       event_name in @exact_role_events ->
@@ -228,7 +253,9 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
         tuple(:conversation, conversation_id),
         tuple(:conversation_messages, conversation_id),
         tuple(:club_conversations, club_id),
-        if(is_nil(club_id), do: family_fallback(:message, club_id))
+        if(is_nil(club_id) || is_nil(conversation_id),
+          do: family_fallback(:message, club_id)
+        )
       ])
 
     {:ok, invalidations}
@@ -250,7 +277,11 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
 
     cond do
       group_id || conversation_id ->
-        {:ok, invalidations}
+        fallback =
+          if is_nil(group_id) && is_nil(club_id),
+            do: {:fallback, :conversation_access}
+
+        {:ok, compact(invalidations ++ [fallback])}
 
       club_id ->
         {:ok, [{:fallback, :conversation_access, club_id}]}
@@ -267,10 +298,14 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
 
     cond do
       conversation_id && member_id ->
-        {:ok, [{:conversation_follow, conversation_id, member_id}]}
+        {:ok,
+         [
+           {:conversation_follow, conversation_id, member_id},
+           {:conversation, conversation_id}
+         ]}
 
       conversation_id ->
-        {:ok, [{:conversation_follows, conversation_id}]}
+        {:ok, [{:conversation_follows, conversation_id}, {:conversation, conversation_id}]}
 
       member_id ->
         {:ok, [{:member_conversation_follows, member_id}]}
@@ -308,6 +343,22 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
            Messaging.get_memba_staff_email_delivery(delivery_id) do
       %{message_id: message_id} -> message_id
       _missing_delivery -> nil
+    end
+  end
+
+  defp membership_scope(_membership_id, club_id, person_id)
+       when not is_nil(club_id) and not is_nil(person_id),
+       do: %{}
+
+  defp membership_scope(nil, _club_id, _person_id), do: %{}
+
+  defp membership_scope(membership_id, _club_id, _person_id) do
+    with {:ok, membership_id} <- ID.cast(:membership, membership_id),
+         %MembershipProjection{club_id: club_id, person_id: person_id} <-
+           Repo.get(MembershipProjection, membership_id) do
+      %{club_id: club_id, person_id: person_id}
+    else
+      _missing_or_invalid_membership -> %{}
     end
   end
 
