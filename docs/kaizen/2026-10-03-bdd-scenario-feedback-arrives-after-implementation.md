@@ -1,0 +1,45 @@
+# Problem: BDD scenario feedback arrives after implementation
+
+Date: 2026-10-03
+
+## Context
+
+In iteration [067](../iterations/067-live-projection-queries/plan.md), the agreed [open member-list example](../../acceptance-tests/features/live_club_member_list.feature) was formulated before delivery but remains tagged `@todo`. The plan places activation of that example, its step definitions and final proof in task 011, after the dashboard work in task 005, conversation detail in task 006, package extraction and other migrations. Task 005 needed a human clarification that a new conversation should enter an already-open list; the missing example is recorded separately in the as-yet-unmerged example-mapping note on `kaizen/067-example-mapping-gap`.
+
+## Expected standard
+
+An agreed BDD/ATDD example should guide delivery as a live, executable, failing-to-passing feedback loop. Choose one scenario deliberately; identify its genuine current failure; make the smallest meaningful change that advances the outcome; rerun it; repeat until it passes. Mark the active scenario `@wip` while it is the focus and expected to be red, and remove `@wip` when it turns green. Keep independent review, approved scope and final all-green gates.
+
+## What happened
+
+The current plan permits removing `@todo` from the 067 feature during implementation but schedules the acceptance example for the final implementation task. The default Elixir and browser runners both exclude `@todo`, so an `@wip` tag alone would not make that scenario run. The delivery planner instead hands a bounded *technical packet* to one worker; its result contract allows `ready_for_review` only with successful focused validations, or `replan`/`human_blocked`. There is no explicit one-scenario WIP selection, baseline failure, incremental failure-to-failure handoff, or success transition that removes the tag. Task 006's 40-minute timeout exposed the cost of a packet combining several vertical proofs without such a driving scenario loop; it does not itself establish that an active scenario would have shortened that task.
+
+## Impact
+
+The accepted example cannot expose missing steps or a failing user outcome early in delivery; focused implementation tests can pass while a stakeholder-visible gap remains undiscovered until late. Large packets may accumulate work before the scenario gives feedback. Conversely, an intentionally red scenario cannot be treated as a passing quality gate or silently published.
+
+## What allowed it to happen
+
+The plan and workflow treat the formulated feature as a late acceptance artifact rather than the worker loop's first-class feedback signal. `@todo` suppresses it; packet routing and task review have no state for reviewed incremental progress while that chosen scenario still fails. The feature-change policy rightly limits changes to explicitly approved files, so changing tags or wording cannot be an unchecked planner shortcut.
+
+## Observations
+
+- The [acceptance runner guide](../../acceptance-tests/README.md) defines `@todo` as excluding future scenarios from both runners and warns against hiding broken current behaviour; `@wip` has no runner semantics today.
+- The agreed 067 scenario concerns an already-open member list, not every conversation-detail or package-integration proof. Technical unit and connected LiveView tests remain necessary even in a scenario-driven workflow.
+- A changed failure message is useful only if the worker moved a real behavioural obstacle. Making an assertion weaker, skipping a step, or fabricating success must not count as progress.
+- A scenario going green need not complete all iteration obligations. Keep it green while refactoring/integrating; choose the next approved scenario when appropriate.
+
+## Why this matters
+
+The team loses BDD's early feedback and may mistake a late green acceptance test for evidence that the scenario drove design. A deliberate WIP loop could also produce smaller, more diagnosable worker steps, provided the chosen scenario can observe the risk and its failing state is isolated from final publication.
+
+## Open questions
+
+- How should the planner select an agreed scenario with useful feedback, and what additional scenario discovery/formulation is needed when the current example does not cover the behaviour being built?
+- How should a targeted `@wip` run include a scenario currently marked `@todo` without contaminating the normal quality gate or letting a red scenario publish? What tags and runner selection are needed at each transition?
+- What exact durable evidence ties a worker change to the prior and new failure, and what does independent review accept while the active scenario is intentionally red?
+- When and on which iteration should this workflow be piloted, without interfering with 067's preserved, unreviewed task-006 checkpoint?
+
+## Proposed direction (not implemented)
+
+Matt proposes that the planner choose **one** agreed scenario carefully, mark it `@wip`, run it to capture the actual failure, then dispatch one small worker change intended to advance that failure. After review, rerun the same scenario and plan from the new result. Remove `@wip` as soon as it is green; retain the scenario in the normal suite thereafter. Do not weaken the scenario or bypass independent review, clean-tree, feature-change, or final quality gates. Investigate the tag/runner and interim-review contract before changing the workflow. No countermeasure or delivery-run recovery was authorized by this observation alone.
