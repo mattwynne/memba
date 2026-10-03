@@ -72,17 +72,21 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
           {:person, "person-author-1"},
           {:person, "person-author-2"},
           {:conversation_follow, "message-root", "person-current"},
-          {:conversation_follows, "message-root"},
-          {:member_conversation_follows, "person-current"},
           {:message_deliveries, "message-root"},
           {:delivery, "delivery-1"},
-          {:delivery, "delivery-2"},
-          {:fallback, :delivery}
+          {:delivery, "delivery-2"}
         ] do
       assert interest in interests
     end
 
     refute {:person, "person-not-represented"} in interests
+    refute {:conversation_follows, "message-root"} in interests
+    refute {:member_conversation_follows, "person-current"} in interests
+
+    refute Enum.any?(interests, fn interest ->
+             match?({:fallback, _family}, interest) or
+               match?({:fallback, _family, _club_id}, interest)
+           end)
   end
 
   test "descriptor returns complete replacement interests with each successful read" do

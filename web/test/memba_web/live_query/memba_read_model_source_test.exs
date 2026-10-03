@@ -74,7 +74,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert_receive ^notification
   end
 
-  test "classifies club-member collection entry and exact represented identities" do
+  test "classifies club-member collection entry, relationship, and authority scopes" do
     source = MembaReadModelSource.new()
 
     assert {:ok, invalidations} =
@@ -92,7 +92,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
     assert {:club_members, "club-1"} in invalidations
     assert {:membership, "membership-1"} in invalidations
-    assert {:person, "person-1"} in invalidations
     assert {:person_clubs, "person-1"} in invalidations
   end
 
@@ -245,7 +244,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
              )
 
     assert {:group_members, "group-1"} in membership_invalidations
-    assert {:person, "person-1"} in membership_invalidations
     assert {:person_groups, "club-1", "person-1"} in membership_invalidations
     assert {:group_participation, "club-1", "group-1", "person-1"} in membership_invalidations
 
@@ -305,6 +303,151 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
     assert {:conversation_follow, "conversation-2", "person-2"} in sent_invalidations
     refute {:conversation_follow, "conversation-2", "person-1"} in sent_invalidations
+  end
+
+  test "does not reread a conversation for another member's follow change" do
+    {socket, reads} =
+      bind_counting_query([
+        {:conversation, "conversation-1"},
+        {:conversation_follow, "conversation-1", "person-1"}
+      ])
+
+    unrelated =
+      notification(
+        Memba.Messaging.Projectors.ConversationFollow,
+        %ConversationFollowed{
+          follow_id: "follow-2",
+          club_id: "club-1",
+          conversation_id: "conversation-1",
+          member_id: "person-2"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, unrelated)
+    assert_read_count(reads, 1)
+
+    relevant =
+      notification(
+        Memba.Messaging.Projectors.ConversationFollow,
+        %ConversationFollowed{
+          follow_id: "follow-1",
+          club_id: "club-1",
+          conversation_id: "conversation-1",
+          member_id: "person-1"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, relevant)
+    assert_read_count(reads, 2)
+  end
+
+  test "does not reread a represented Person for another club's Membership change" do
+    {socket, reads} =
+      bind_counting_query([
+        {:person, "person-1"},
+        {:club_members, "club-1"}
+      ])
+
+    unrelated =
+      notification(
+        Memba.Membership.Projectors.Membership,
+        %ClubMemberAdded{
+          club_id: "club-2",
+          membership_id: "membership-2",
+          person_id: "person-1"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, unrelated)
+    assert_read_count(reads, 1)
+
+    relevant =
+      notification(
+        Memba.Membership.Projectors.Membership,
+        %ClubMemberAdded{
+          club_id: "club-1",
+          membership_id: "membership-3",
+          person_id: "person-3"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, relevant)
+    assert_read_count(reads, 2)
+  end
+
+  test "does not reread a represented Person for another club's GroupMembership change" do
+    {socket, reads} =
+      bind_counting_query([
+        {:person, "person-1"},
+        {:group_members, "group-1"},
+        {:person_groups, "club-1", "person-1"},
+        {:group_participation, "club-1", "group-1", "person-1"}
+      ])
+
+    unrelated =
+      notification(
+        Memba.Membership.Projectors.GroupMembership,
+        %GroupMemberAdded{
+          club_id: "club-2",
+          group_id: "group-2",
+          membership_id: "membership-2",
+          person_id: "person-1"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, unrelated)
+    assert_read_count(reads, 1)
+
+    relevant =
+      notification(
+        Memba.Membership.Projectors.GroupMembership,
+        %GroupMemberAdded{
+          club_id: "club-1",
+          group_id: "group-1",
+          membership_id: "membership-1",
+          person_id: "person-1"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, relevant)
+    assert_read_count(reads, 2)
+  end
+
+  test "does not reread for access on an unselected represented group" do
+    {socket, reads} =
+      bind_counting_query([
+        {:group, "group-unselected"},
+        {:conversation, "conversation-selected"},
+        {:conversation_access, "group-selected", "conversation-selected"}
+      ])
+
+    unrelated =
+      notification(
+        Memba.Messaging.Projectors.ConversationGroupAccess,
+        %ConversationAccessGrantedToGroup{
+          club_id: "club-1",
+          group_id: "group-unselected",
+          conversation_id: "conversation-other",
+          access_level: "write"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, unrelated)
+    assert_read_count(reads, 1)
+
+    conversation_wide =
+      notification(
+        Memba.Messaging.Projectors.ConversationGroupAccess,
+        %ConversationAccessGrantedToGroup{
+          club_id: "club-1",
+          group_id: "group-unselected",
+          conversation_id: "conversation-selected",
+          access_level: "write"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, conversation_wide)
+    assert_read_count(reads, 2)
   end
 
   test "ignores MessageSent when the conversation-follow projector made no change" do
@@ -461,7 +604,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       [
         {:club_members, "club-1"},
         {:membership, "membership-1"},
-        {:person, "person-1"},
         {:person_clubs, "person-1"}
       ]
     )
@@ -488,7 +630,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     expected = [
       {:club_members, club_id},
       {:membership, membership_id},
-      {:person, person_id},
       {:person_clubs, person_id}
     ]
 
@@ -611,7 +752,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       ],
       [
         {:group_members, "group-1"},
-        {:person, "person-1"},
         {:person_groups, "club-1", "person-1"},
         {:group_participation, "club-1", "group-1", "person-1"}
       ]
@@ -742,13 +882,12 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       [
         {:group_conversations, "group-1"},
         {:conversation_access, "group-1", "conversation-1"},
-        {:conversation, "conversation-1"},
-        {:group, "group-1"}
+        {:conversation, "conversation-1"}
       ]
     )
   end
 
-  test "covers explicit and automatic conversation-follow families with conversation identity" do
+  test "covers explicit and automatic conversation-follow families with exact relationship scope" do
     assert_family_invalidations(
       Memba.Messaging.Projectors.ConversationFollow,
       [
@@ -765,10 +904,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
           member_id: "person-1"
         }
       ],
-      [
-        {:conversation_follow, "conversation-1", "person-1"},
-        {:conversation, "conversation-1"}
-      ]
+      [{:conversation_follow, "conversation-1", "person-1"}]
     )
 
     assert_invalidations(
@@ -782,10 +918,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         subject: "Plans",
         body: "Meet at eight"
       },
-      [
-        {:conversation_follow, "conversation-1", "person-1"},
-        {:conversation, "conversation-1"}
-      ]
+      [{:conversation_follow, "conversation-1", "person-1"}]
     )
 
     assert_invalidations(
@@ -800,10 +933,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         body: "Meet at eight",
         sender_follows_conversation: true
       },
-      [
-        {:conversation_follow, "conversation-1", "person-1"},
-        {:conversation, "conversation-1"}
-      ]
+      [{:conversation_follow, "conversation-1", "person-1"}]
     )
   end
 
@@ -1207,6 +1337,31 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         {:ok, :loaded, [{:club_members, "club-1"}]}
       end
     )
+  end
+
+  defp bind_counting_query(interests) do
+    child_spec = Supervisor.child_spec({Agent, fn -> 0 end}, id: make_ref())
+    reads = start_supervised!(child_spec)
+
+    query =
+      Query.new!(
+        id: make_ref(),
+        assign: :counting_probe,
+        load: fn :current ->
+          read_count = Agent.get_and_update(reads, fn count -> {count + 1, count + 1} end)
+          {:ok, read_count, interests}
+        end
+      )
+
+    assert {:ok, socket} =
+             Binding.bind(socket(true), query, :current, MembaReadModelSource.new())
+
+    assert_read_count(reads, 1)
+    {socket, reads}
+  end
+
+  defp assert_read_count(reads, expected) do
+    assert Agent.get(reads, & &1) == expected
   end
 
   defp assert_contract_exception(exception) do

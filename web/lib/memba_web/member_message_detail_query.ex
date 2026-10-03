@@ -12,17 +12,6 @@ defmodule MembaWeb.MemberMessageDetailQuery do
   alias Memba.Accounts
   alias MembaWeb.MemberMessageDetail
 
-  @fallback_families [
-    :club,
-    :membership,
-    :person,
-    :group_membership,
-    :message,
-    :conversation_access,
-    :conversation_follow,
-    :delivery
-  ]
-
   @doc """
   Returns the app-owned query descriptor for conversation detail.
   """
@@ -86,13 +75,10 @@ defmodule MembaWeb.MemberMessageDetailQuery do
       {:conversation_messages, conversation_id},
       {:conversation_access, group_id, conversation_id},
       {:conversation_follow, conversation_id, person_id},
-      {:conversation_follows, conversation_id},
-      {:member_conversation_follows, person_id},
       {:message_deliveries, delivery_message_id}
     ]
     |> Kernel.++(message_and_author_interests(detail))
     |> Kernel.++(delivery_interests(detail))
-    |> Kernel.++(fallback_interests(club_id))
     |> Enum.uniq()
   end
 
@@ -113,12 +99,6 @@ defmodule MembaWeb.MemberMessageDetailQuery do
     |> Map.get(:member_email_delivery_ids, [])
     |> Enum.map(&optional_tuple(:delivery, &1))
     |> Enum.reject(&is_nil/1)
-  end
-
-  defp fallback_interests(club_id) do
-    Enum.flat_map(@fallback_families, fn family ->
-      [{:fallback, family}, {:fallback, family, club_id}]
-    end)
   end
 
   defp optional_tuple(_name, nil), do: nil

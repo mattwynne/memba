@@ -141,6 +141,11 @@ defmodule MembaWeb.MemberDashboardQueryTest do
     assert {:conversation_access, "group-1", "conversation-1"} in interests
     assert {:group_participation, "club-1", "group-1", "person-1"} in interests
     refute {:member_permissions, "club-1", "membership-2", "person-2"} in interests
+
+    refute Enum.any?(interests, fn interest ->
+             match?({:fallback, _family}, interest) or
+               match?({:fallback, _family, _club_id}, interest)
+           end)
   end
 
   defp create_active_member(attrs) do

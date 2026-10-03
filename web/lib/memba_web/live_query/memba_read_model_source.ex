@@ -283,11 +283,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     if MessageSent.sender_follows_conversation?(event) do
       conversation_id = event.conversation_id || event.message_id
 
-      {:ok,
-       [
-         {:conversation_follow, conversation_id, event.sender_id},
-         {:conversation, conversation_id}
-       ]}
+      {:ok, [{:conversation_follow, conversation_id, event.sender_id}]}
     else
       :ignore
     end
@@ -332,7 +328,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
         [
           {:club_members, scope.club_id},
           {:membership, scope.membership_id},
-          {:person, scope.person_id},
           {:person_clubs, scope.person_id}
         ]
       end,
@@ -357,7 +352,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
       fn event ->
         [
           {:group_members, event.group_id},
-          {:person, event.person_id},
           {:person_groups, event.club_id, event.person_id},
           {:group_participation, event.club_id, event.group_id, event.person_id}
         ]
@@ -426,8 +420,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
         [
           {:group_conversations, event.group_id},
           {:conversation_access, event.group_id, event.conversation_id},
-          {:conversation, event.conversation_id},
-          {:group, event.group_id}
+          {:conversation, event.conversation_id}
         ]
       end
     )
@@ -439,10 +432,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
       event,
       [:club_id, :conversation_id, :member_id],
       fn event ->
-        [
-          {:conversation_follow, event.conversation_id, event.member_id},
-          {:conversation, event.conversation_id}
-        ]
+        [{:conversation_follow, event.conversation_id, event.member_id}]
       end
     )
   end

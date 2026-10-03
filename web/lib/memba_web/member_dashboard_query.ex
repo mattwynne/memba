@@ -11,17 +11,6 @@ defmodule MembaWeb.MemberDashboardQuery do
   alias Memba.Accounts
   alias MembaWeb.MemberDashboardPresentation
 
-  @fallback_families [
-    :club,
-    :membership,
-    :person,
-    :group,
-    :group_membership,
-    :role,
-    :message,
-    :conversation_access
-  ]
-
   @doc """
   Returns the app-owned descriptor for the dashboard binding.
 
@@ -99,7 +88,6 @@ defmodule MembaWeb.MemberDashboardQuery do
     |> Kernel.++(group_interests(dashboard))
     |> Kernel.++(member_interests(club_id, represented_members))
     |> Kernel.++(conversation_interests(group_id, message_rows))
-    |> Kernel.++(fallback_interests(club_id))
     |> Enum.uniq()
   end
 
@@ -170,12 +158,6 @@ defmodule MembaWeb.MemberDashboardQuery do
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
     |> Enum.map(&{:person, &1})
-  end
-
-  defp fallback_interests(club_id) do
-    Enum.flat_map(@fallback_families, fn family ->
-      [{:fallback, family}, {:fallback, family, club_id}]
-    end)
   end
 
   defp optional_tuple(_name, nil), do: nil
