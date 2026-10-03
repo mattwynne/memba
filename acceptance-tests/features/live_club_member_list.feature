@@ -3,7 +3,7 @@ Feature: Open club member lists stay current
 
   Rule: An open club member list reflects membership changes
 
-    @iteration-067 @wip
+    @iteration-067
     Scenario: Bob sees Alice join without reloading
       Given Bob is a member of Kootenay Mountaineering Club
       And Bob is viewing the Kootenay Mountaineering Club member list
