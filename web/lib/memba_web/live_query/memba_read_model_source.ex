@@ -348,6 +348,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
         [
           {:club_members, scope.club_id},
           {:membership, scope.membership_id},
+          {:person_club, scope.club_id, scope.person_id},
           {:person_clubs, scope.person_id}
         ]
       end,

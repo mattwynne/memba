@@ -50,6 +50,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   alias Memba.Repo
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.LiveQuery.ReadModelContractViolationError
+  alias MembaWeb.MemberDashboardQuery
   alias MembaWeb.MemberMessageDetailQuery
 
   test "subscribes to the shared committed read-model topic" do
@@ -93,6 +94,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
     assert {:club_members, "club-1"} in invalidations
     assert {:membership, "membership-1"} in invalidations
+    assert {:person_club, "club-1", "person-1"} in invalidations
     assert {:person_clubs, "person-1"} in invalidations
   end
 
@@ -414,10 +416,46 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert_read_count(reads, 2)
   end
 
-  test "conversation detail rereads only for its current member's Membership scope" do
-    {socket, reads} = bind_counting_query(conversation_detail_interests())
+  test "actual dashboard and detail interests ignore current-Person Membership in another club" do
+    notification =
+      notification(
+        Memba.Membership.Projectors.Membership,
+        %ClubMemberAdded{
+          club_id: "club-2",
+          membership_id: "membership-other-club",
+          person_id: "person-current"
+        }
+      )
 
-    another_member =
+    for interests <- [dashboard_interests(), conversation_detail_interests()] do
+      {socket, reads} = bind_counting_query(interests)
+
+      assert {:ignored, ^socket} = Binding.handle_notification(socket, notification)
+      assert_read_count(reads, 1)
+    end
+  end
+
+  test "actual dashboard and detail interests reread for current-Person Membership in selected club" do
+    notification =
+      notification(
+        Memba.Membership.Projectors.Membership,
+        %ClubMemberAdded{
+          club_id: "club-1",
+          membership_id: "membership-new",
+          person_id: "person-current"
+        }
+      )
+
+    for interests <- [dashboard_interests(), conversation_detail_interests()] do
+      {socket, reads} = bind_counting_query(interests)
+
+      assert {:ok, _socket} = Binding.handle_notification(socket, notification)
+      assert_read_count(reads, 2)
+    end
+  end
+
+  test "actual dashboard alone rereads for another Person's Membership in selected club" do
+    notification =
       notification(
         Memba.Membership.Projectors.Membership,
         %ClubMemberAdded{
@@ -427,21 +465,40 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         }
       )
 
-    assert {:ignored, socket} = Binding.handle_notification(socket, another_member)
-    assert_read_count(reads, 1)
+    {dashboard_socket, dashboard_reads} = bind_counting_query(dashboard_interests())
 
-    current_member =
-      notification(
-        Memba.Membership.Projectors.Membership,
-        %ClubMemberAdded{
-          club_id: "club-1",
-          membership_id: "membership-current",
-          person_id: "person-current"
-        }
-      )
+    assert {:ok, _socket} =
+             Binding.handle_notification(dashboard_socket, notification)
 
-    assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
-    assert_read_count(reads, 2)
+    assert_read_count(dashboard_reads, 2)
+
+    {detail_socket, detail_reads} =
+      bind_counting_query(conversation_detail_interests())
+
+    assert {:ignored, ^detail_socket} =
+             Binding.handle_notification(detail_socket, notification)
+
+    assert_read_count(detail_reads, 1)
+  end
+
+  test "audits all projector families against complete dashboard and detail interests" do
+    source = MembaReadModelSource.new()
+    dashboard = MapSet.new(dashboard_interests())
+    detail = MapSet.new(conversation_detail_interests())
+
+    for {_family, projector, event, expected_dashboard, expected_detail} <-
+          query_family_audit_cases() do
+      assert {:ok, invalidations} =
+               Source.classify(source, notification(projector, event))
+
+      invalidations = MapSet.new(invalidations)
+
+      assert MapSet.intersection(dashboard, invalidations) ==
+               MapSet.new(expected_dashboard)
+
+      assert MapSet.intersection(detail, invalidations) ==
+               MapSet.new(expected_detail)
+    end
   end
 
   test "conversation detail rereads only for its current member's group participation" do
@@ -823,6 +880,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       [
         {:club_members, "club-1"},
         {:membership, "membership-1"},
+        {:person_club, "club-1", "person-1"},
         {:person_clubs, "person-1"}
       ]
     )
@@ -849,6 +907,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     expected = [
       {:club_members, club_id},
       {:membership, membership_id},
+      {:person_club, club_id, person_id},
       {:person_clubs, person_id}
     ]
 
@@ -1628,6 +1687,43 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     {socket, reads}
   end
 
+  defp dashboard_interests do
+    MemberDashboardQuery.interests(%{
+      selected_club: %{club_id: "club-1"},
+      selected_group: %{group_id: "group-1"},
+      current_member: %{
+        id: "person-current",
+        membership_id: "membership-current",
+        roles: ["Membership Admin"]
+      },
+      groups: [
+        %{club_id: "club-1", group_id: "group-1"},
+        %{club_id: "club-1", group_id: "group-2"}
+      ],
+      members: [
+        %{
+          id: "person-current",
+          membership_id: "membership-current",
+          roles: ["Membership Admin"]
+        },
+        %{id: "person-member", membership_id: "membership-member", roles: ["Trip Lead"]}
+      ],
+      custom_group_member_candidates: [
+        %{id: "person-candidate", membership_id: "membership-candidate", roles: []}
+      ],
+      message_rows: [
+        %{
+          message_id: "message-root",
+          conversation_id: "conversation-1",
+          sender_id: "person-author",
+          originator_id: "person-originator",
+          latest_replier_id: "person-replier",
+          participants: [%{id: "person-participant"}]
+        }
+      ]
+    })
+  end
+
   defp conversation_detail_interests do
     MemberMessageDetailQuery.interests(%{
       selected_club: %{club_id: "club-1"},
@@ -1644,8 +1740,162 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         sender_id: "person-author"
       },
       conversation_entries: [],
-      member_email_delivery_ids: []
+      member_email_delivery_ids: ["delivery-1"]
     })
+  end
+
+  defp query_family_audit_cases do
+    [
+      {
+        :club,
+        Memba.Membership.Projectors.Club,
+        %ClubUpdated{club_id: "club-1", name: "Updated", slug: "updated"},
+        [{:club, "club-1"}],
+        [{:club, "club-1"}]
+      },
+      {
+        :membership,
+        Memba.Membership.Projectors.Membership,
+        %ClubMemberAdded{
+          club_id: "club-1",
+          membership_id: "membership-new",
+          person_id: "person-current"
+        },
+        [
+          {:club_members, "club-1"},
+          {:person_club, "club-1", "person-current"}
+        ],
+        [{:person_club, "club-1", "person-current"}]
+      },
+      {
+        :person,
+        Memba.Membership.Projectors.Person,
+        %PersonEmailAddressAdded{
+          person_id: "person-current",
+          email: "current@example.com",
+          normalized_email: "current@example.com"
+        },
+        [{:person, "person-current"}],
+        [{:person, "person-current"}]
+      },
+      {
+        :group,
+        Memba.Membership.Projectors.Group,
+        %GroupEmailSlugAssigned{
+          club_id: "club-1",
+          group_id: "group-1",
+          email_slug: "planning"
+        },
+        [{:club_groups, "club-1"}, {:group, "group-1"}],
+        []
+      },
+      {
+        :group_membership,
+        Memba.Membership.Projectors.GroupMembership,
+        %GroupMemberAdded{
+          club_id: "club-1",
+          group_id: "group-1",
+          membership_id: "membership-current",
+          person_id: "person-current"
+        },
+        [
+          {:group_members, "group-1"},
+          {:person_groups, "club-1", "person-current"},
+          {:group_participation, "club-1", "group-1", "person-current"}
+        ],
+        [{:group_participation, "club-1", "group-1", "person-current"}]
+      },
+      {
+        :role,
+        Memba.Membership.Projectors.Role,
+        %ClubRolePermissionGranted{
+          club_id: "club-1",
+          role_id: "role-1",
+          permission: "club.manage_members"
+        },
+        [{:club_permissions, "club-1"}],
+        []
+      },
+      {
+        :message,
+        Memba.Messaging.Projectors.Message,
+        %MessageSent{
+          message_id: "message-new",
+          club_id: "club-1",
+          sender_id: "person-author",
+          conversation_id: "conversation-1",
+          reply_to_message_id: "message-root",
+          subject: "Re: Plans",
+          body: "Count me in"
+        },
+        [
+          {:conversation, "conversation-1"},
+          {:conversation_messages, "conversation-1"},
+          {:club_conversations, "club-1"}
+        ],
+        [
+          {:conversation, "conversation-1"},
+          {:conversation_messages, "conversation-1"}
+        ]
+      },
+      {
+        :conversation_access,
+        Memba.Messaging.Projectors.ConversationGroupAccess,
+        %ConversationAccessGrantedToGroup{
+          club_id: "club-1",
+          group_id: "group-1",
+          conversation_id: "conversation-1",
+          access_level: "write"
+        },
+        [
+          {:group_conversations, "group-1"},
+          {:conversation_access, "group-1", "conversation-1"},
+          {:conversation, "conversation-1"}
+        ],
+        [
+          {:conversation_access, "group-1", "conversation-1"},
+          {:conversation, "conversation-1"}
+        ]
+      },
+      {
+        :conversation_follow,
+        Memba.Messaging.Projectors.ConversationFollow,
+        %ConversationFollowed{
+          follow_id: "follow-1",
+          club_id: "club-1",
+          conversation_id: "conversation-1",
+          member_id: "person-current"
+        },
+        [],
+        [{:conversation_follow, "conversation-1", "person-current"}]
+      },
+      {
+        :member_delivery,
+        Memba.Messaging.Projectors.MemberEmailDelivery,
+        %EmailDeliveryDelivered{
+          message_id: "conversation-1",
+          delivery_id: "delivery-1"
+        },
+        [],
+        [
+          {:message_deliveries, "conversation-1"},
+          {:delivery, "delivery-1"}
+        ]
+      },
+      {
+        :staff_delivery,
+        Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+        %EmailDeliveryDelivered{
+          message_id: "conversation-1",
+          delivery_id: "delivery-1"
+        },
+        [],
+        [
+          {:message_deliveries, "conversation-1"},
+          {:delivery, "delivery-1"}
+        ]
+      }
+    ]
   end
 
   defp assert_read_count(reads, expected) do

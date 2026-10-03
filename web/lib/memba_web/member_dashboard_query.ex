@@ -80,7 +80,7 @@ defmodule MembaWeb.MemberDashboardQuery do
       {:group_participation, club_id, group_id, current_person_id},
       {:membership, current_membership_id},
       {:person, current_person_id},
-      {:person_clubs, current_person_id},
+      {:person_club, club_id, current_person_id},
       {:member_permissions, club_id, current_membership_id, current_person_id},
       {:club_permissions, club_id},
       {:club_roles, club_id}

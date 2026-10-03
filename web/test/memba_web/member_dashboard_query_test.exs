@@ -97,55 +97,43 @@ defmodule MembaWeb.MemberDashboardQueryTest do
 
     interests = MemberDashboardQuery.interests(dashboard)
 
-    for collection_interest <- [
-          {:club_members, "club-1"},
-          {:club_groups, "club-1"},
-          {:person_groups, "club-1", "person-1"},
-          {:group_members, "group-1"},
-          {:group_conversations, "group-1"},
-          {:club_conversations, "club-1"}
-        ] do
-      assert collection_interest in interests
-    end
+    expected_interests = [
+      {:club, "club-1"},
+      {:club_members, "club-1"},
+      {:club_groups, "club-1"},
+      {:club_conversations, "club-1"},
+      {:person_groups, "club-1", "person-1"},
+      {:group_members, "group-1"},
+      {:group_conversations, "group-1"},
+      {:group_participation, "club-1", "group-1", "person-1"},
+      {:membership, "membership-1"},
+      {:person, "person-1"},
+      {:person_club, "club-1", "person-1"},
+      {:member_permissions, "club-1", "membership-1", "person-1"},
+      {:club_permissions, "club-1"},
+      {:club_roles, "club-1"},
+      {:group, "group-1"},
+      {:group, "group-2"},
+      {:member_roles, "club-1", "membership-1", "person-1"},
+      {:person, "person-2"},
+      {:membership, "membership-2"},
+      {:member_roles, "club-1", "membership-2", "person-2"},
+      {:person, "person-3"},
+      {:membership, "membership-3"},
+      {:member_roles, "club-1", "membership-3", "person-3"},
+      {:conversation, "conversation-1"},
+      {:conversation_messages, "conversation-1"},
+      {:conversation_access, "group-1", "conversation-1"},
+      {:message, "message-1"},
+      {:person, "person-4"},
+      {:person, "person-5"},
+      {:person, "person-6"},
+      {:person, "person-7"}
+    ]
 
-    for identity_interest <- [
-          {:club, "club-1"},
-          {:group, "group-1"},
-          {:group, "group-2"},
-          {:membership, "membership-1"},
-          {:person, "person-1"},
-          {:person, "person-2"},
-          {:person, "person-3"},
-          {:person, "person-4"},
-          {:person, "person-5"},
-          {:person, "person-6"},
-          {:person, "person-7"},
-          {:conversation, "conversation-1"},
-          {:conversation_messages, "conversation-1"},
-          {:message, "message-1"}
-        ] do
-      assert identity_interest in interests
-    end
-
-    for role_interest <- [
-          {:member_roles, "club-1", "membership-1", "person-1"},
-          {:member_roles, "club-1", "membership-2", "person-2"},
-          {:member_roles, "club-1", "membership-3", "person-3"},
-          {:member_permissions, "club-1", "membership-1", "person-1"},
-          {:club_roles, "club-1"},
-          {:club_permissions, "club-1"}
-        ] do
-      assert role_interest in interests
-    end
-
-    assert {:conversation_access, "group-1", "conversation-1"} in interests
-    assert {:group_participation, "club-1", "group-1", "person-1"} in interests
-    refute {:member_permissions, "club-1", "membership-2", "person-2"} in interests
-
-    refute Enum.any?(interests, fn interest ->
-             match?({:fallback, _family}, interest) or
-               match?({:fallback, _family, _club_id}, interest)
-           end)
+    assert MapSet.new(interests) == MapSet.new(expected_interests)
+    assert length(interests) == length(expected_interests)
+    refute {:person_clubs, "person-1"} in interests
   end
 
   defp create_active_member(attrs) do

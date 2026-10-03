@@ -56,37 +56,28 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
 
     interests = MemberMessageDetailQuery.interests(detail)
 
-    for interest <- [
-          {:club, "club-1"},
-          {:membership, "membership-current"},
-          {:person, "person-current"},
-          {:person_clubs, "person-current"},
-          {:group_participation, "club-1", "group-1", "person-current"},
-          {:conversation, "message-root"},
-          {:conversation_messages, "message-root"},
-          {:conversation_access, "group-1", "message-root"},
-          {:message, "message-root"},
-          {:message, "message-reply"},
-          {:person, "person-author-1"},
-          {:person, "person-author-2"},
-          {:conversation_follow, "message-root", "person-current"},
-          {:message_deliveries, "message-root"},
-          {:delivery, "delivery-1"},
-          {:delivery, "delivery-2"}
-        ] do
-      assert interest in interests
-    end
+    expected_interests = [
+      {:club, "club-1"},
+      {:membership, "membership-current"},
+      {:person, "person-current"},
+      {:person_club, "club-1", "person-current"},
+      {:group_participation, "club-1", "group-1", "person-current"},
+      {:conversation, "message-root"},
+      {:conversation_messages, "message-root"},
+      {:conversation_access, "group-1", "message-root"},
+      {:conversation_follow, "message-root", "person-current"},
+      {:message_deliveries, "message-root"},
+      {:message, "message-root"},
+      {:person, "person-author-1"},
+      {:message, "message-reply"},
+      {:person, "person-author-2"},
+      {:delivery, "delivery-1"},
+      {:delivery, "delivery-2"}
+    ]
 
-    refute {:club_members, "club-1"} in interests
-    refute {:group_members, "group-1"} in interests
-    refute {:person, "person-not-represented"} in interests
-    refute {:conversation_follows, "message-root"} in interests
-    refute {:member_conversation_follows, "person-current"} in interests
-
-    refute Enum.any?(interests, fn interest ->
-             match?({:fallback, _family}, interest) or
-               match?({:fallback, _family, _club_id}, interest)
-           end)
+    assert MapSet.new(interests) == MapSet.new(expected_interests)
+    assert length(interests) == length(expected_interests)
+    refute {:person_clubs, "person-current"} in interests
   end
 
   test "descriptor returns complete replacement interests with each successful read" do
