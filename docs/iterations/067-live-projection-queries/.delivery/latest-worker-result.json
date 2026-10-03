@@ -1,34 +1,50 @@
 {
   "schema_version": 1,
-  "packet_id": "task-006a-d3c06ca-bob-sees-alice-2",
-  "task_id": "task-006a",
-  "todo_line": "- [ ] 006A Implement the approved domain/application scenario “Bob sees Alice join without reloading” against Bob’s already-open club member LiveView, using the committed membership projection notification path and keeping the scenario green.",
+  "packet_id": "task-007a-1b40c6b-package-extraction-1",
+  "task_id": "task-007a",
+  "todo_line": "- [ ] 007A Create and document the local Mix package and extract the frozen generic query, source and binding contract into it; give the package self-contained tests for construction, one-owner subscription, interest replacement, invalidation matching, refresh, duplicate/out-of-order notifications, bind/rebind races, reconnect and subscriber cleanup, with no Memba or Commanded imports.",
   "result": "ready_for_review",
   "changed_paths": [
-    "web/test/features/step_definitions/live_club_member_list_steps.exs"
+    "packages/live_query/.formatter.exs",
+    "packages/live_query/.gitignore",
+    "packages/live_query/README.md",
+    "packages/live_query/config/config.exs",
+    "packages/live_query/lib/live_query/binding.ex",
+    "packages/live_query/lib/live_query/query.ex",
+    "packages/live_query/lib/live_query/source.ex",
+    "packages/live_query/mix.exs",
+    "packages/live_query/mix.lock",
+    "packages/live_query/test/live_query/binding_test.exs",
+    "packages/live_query/test/live_query/lifecycle_test.exs",
+    "packages/live_query/test/live_query/query_test.exs",
+    "packages/live_query/test/live_query/source_test.exs",
+    "packages/live_query/test/support/fixture_live.ex",
+    "packages/live_query/test/support/subscription_tracker.ex",
+    "packages/live_query/test/support/test_endpoint.ex",
+    "packages/live_query/test/test_helper.exs"
   ],
   "validation": [
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/features/domain_cucumber_runner_test.exs test/features/cucumber_configuration_test.exs",
+      "command": "MIX_HOME=/tmp/home/.mix HEX_HOME=/tmp/home/.hex mix format --check-formatted (workdir: packages/live_query)",
       "exit_status": 0,
-      "evidence": "5 tests passed with 0 failures; domain feature discovery, tag filtering and shared acceptance-feature configuration compile with the new step module."
+      "evidence": "The standalone package's Elixir, test support and HEEx fixture files are formatted."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
+      "command": "MIX_ENV=test MIX_HOME=/tmp/home/.mix HEX_HOME=/tmp/home/.hex mix compile --force --warnings-as-errors (workdir: packages/live_query)",
       "exit_status": 0,
-      "evidence": "57 tests passed with 0 failures, preserving the accepted dashboard LiveView and committed membership-invalidation behavior."
+      "evidence": "All 6 package and test-support modules compiled from scratch with warnings treated as errors."
     },
     {
-      "command": "bin/mix format --check-formatted",
+      "command": "MIX_HOME=/tmp/home/.mix HEX_HOME=/tmp/home/.hex mix test (workdir: packages/live_query)",
       "exit_status": 0,
-      "evidence": "All Elixir source and test files are formatted."
+      "evidence": "15 self-contained package tests passed with 0 failures, covering constructors, disconnected and connected binding, subscribe-before-read, one shared owner subscription, relevant refresh, atomic interest replacement, duplicate/out-of-order notifications, access-error clearing, bind/rebind races, fresh mount/reconnect and monitored subscriber cleanup."
     },
     {
-      "command": "git diff --check",
+      "command": "if grep -R -nE 'Memba|Commanded|Ecto' lib test mix.exs mix.lock; then exit 1; else echo 'No Memba, Commanded, or Ecto references in package code, tests, or dependencies.'; fi (workdir: packages/live_query)",
       "exit_status": 0,
-      "evidence": "No whitespace errors were reported."
+      "evidence": "The package source, package-owned tests and dependency declarations contain no Memba, Commanded or Ecto references."
     }
   ],
-  "notes": "The only implementation path is web/test/features/step_definitions/live_club_member_list_steps.exs, whose Memba.Cucumber.LiveClubMemberListSteps owns the three formerly undefined exact steps. The five scenario steps have one definition each: the Bob-membership Given reuses Memba.Cucumber.AuthenticationSteps, the viewing step uses LiveClubMemberListSteps, the Alice-not-a-member Given reuses Memba.Cucumber.ClubMemberInvitationSteps, and the When/Then use LiveClubMemberListSteps; repository pattern inspection found no duplicate definition. The viewing step reads the scenario club and Bob records, derives the host from ClubSite.url/1, builds a connection for MembaWeb.Endpoint, installs Bob’s normalized email under IdentityAuth.identity_session_key/0, opens connected /members once, stores that LiveView in context, proves Bob’s stable row is present and proves no Alice member row is initially rendered. After the reused Alice Given supplies her person ID, the When step additionally refutes #club-member-<Alice person_id> against that same open view, generates a fresh membership ID, and calls Memba.Membership.add_member/2 with consistency: :strong; it inserts no projection and sends no ReadModelChanges message itself. The AddClubMember command reaches Memba.Membership.Projectors.Membership, whose after_update/3 publishes the committed notification; the existing Memba source emits the matching {:club_members, club_id} collection invalidation already held by the dashboard query, so a previously absent Alice row can enter. The Then step uses the exact LiveView retained in context and asserts Alice’s stable row selector plus rendered name, with no second live/2, request, patch, reload or navigation. The worker did not edit the selected feature wording/tags or todo.md and introduced no application, package, Docker, release or unrelated migration work. The selected @wip scenario was deliberately not worker-run because the trusted after-worker stage owns that observation; superseded local diagnostics were limited to correcting the formatter target and the required LiveViewTest macro imports/module endpoint before the successful validations recorded above.",
+  "notes": "The package preserves the accepted Query, Source and Binding callback shapes and socket-owned lifecycle while documenting notifications as invalidation hints rather than ordered state patches. Package-local LiveView support proves fresh-owner reads and uses a monitoring source tracker to prove cleanup without adding an unsubscribe callback. The initial TDD run failed because the three public modules were intentionally absent; after implementation, the first lifecycle run exposed and led to adding the test-only lazy_html dependency required by Phoenix.LiveViewTest. Because bin/dev test is currently hard-wired to web/ and package integration belongs to tasks 007B/010, focused validation ran the independently testable package directly. Existing web consumers and provisional modules, todo.md, Docker, release and quality-gate files remain untouched, and no unscoped dev check was run.",
   "unresolved": []
 }
