@@ -1,0 +1,1508 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 8edf6b1..dec9237 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,8 +1,8 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008a-0b2466f-adapter-matrix-1",
++  "packet_id": "task-008a-5a0be69-projector-contract-revision-2",
+   "task_id": "task-008a",
+-  "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against every projector/event family and conservative fallback in the accepted migration matrix, preserving exact scoped matching and ignoring unrelated projectors.",
++  "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against actual projector/event families and evidenced valid-scope fallbacks in the corrected migration matrix. Preserve exact scoped matching and ignore unrelated projectors; surface known malformed Membership notifications with unrecoverable person identity as contract violations rather than fallback refreshes. Audit remaining fallbacks against real current/legacy event shapes and obtain a fresh independent review.",
+   "result": "ready_for_review",
+   "changed_paths": [
+     "web/lib/memba_web/live_query/memba_read_model_source.ex",
+@@ -12,12 +12,17 @@
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
+       "exit_status": 0,
+-      "evidence": "27 focused adapter tests passed with 0 failures. They cover all eleven projector families, every current/legacy/no-op compatibility event family in the matrix, exact and partial scopes, membership and delivery changes/row recovery, both delivery contributors, conservative fallbacks, exact matching, unrelated projectors and malformed messages."
++      "evidence": "25 focused adapter tests passed with 0 failures, covering all eleven projector families, actual current and legacy event structs, exact and evidenced broad scopes, no-op publications, row-only legacy recovery, visible contract violations, exact matching, and unrelated input."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
+       "exit_status": 0,
+-      "evidence": "8 accepted dashboard and conversation-detail query vocabulary tests passed with 0 failures."
++      "evidence": "8 accepted dashboard and conversation-detail query-vocabulary regression tests passed with 0 failures."
++    },
++    {
++      "command": "if grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules; then exit 1; else echo 'packages/live_query has no Memba or Commanded references'; fi",
++      "exit_status": 0,
++      "evidence": "The generic live_query package contains no Memba or Commanded references."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -28,13 +33,8 @@
+       "command": "git diff --check",
+       "exit_status": 0,
+       "evidence": "The packet diff has no whitespace errors."
+-    },
+-    {
+-      "command": "if grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules; then exit 1; else echo 'packages/live_query has no Memba or Commanded references'; fi",
+-      "exit_status": 0,
+-      "evidence": "The generic live_query package contains no Memba or Commanded references or dependencies."
+     }
+   ],
+-  "notes": "The initial focused TDD run had 3 expected failures: legacy membership-removal scope was not recovered, conversation-follow invalidations omitted the exact conversation identity, and partial Group scope discarded its useful identity. The adapter now recovers legacy Membership and Role scope from committed changes or an inactive membership row, retains useful exact keys while adding documented fallbacks for incomplete Membership, Group, Message and conversation-access notifications, and emits compatible message/delivery keys for both delivery projectors. The expanded matrix suite uses actual event structs for all publisher families and narrow maps only for compatibility/fallback cases; no accepted matrix mapping remains unsatisfied, and no package API, consumer, projector, domain event, read API or dependency changed.",
++  "notes": "The first TDD run exposed the expected malformed-Membership fallback and false auto-follow defects (29 tests, 2 failures); the subsequent diagnostic run identified nine superseded synthetic-fallback expectations. The adapter now dispatches only actual projector/event-struct pairings, emits stable app-owned read_model_contract_violation errors for known malformed or unsupported pairings, ignores false auto-follow and replay-only opened publications, uses the retained membership projection row as the sole evidenced legacy MemberRemoved recovery source, and never recovers delivery scope from changes or rows. No generic package, accepted query vocabulary, projector, domain event, schema, feature, plan, matrix, ADR, or todo was changed.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+index d8a8f13..aeceef0 100644
+--- a/web/lib/memba_web/live_query/memba_read_model_source.ex
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -8,9 +8,49 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+ 
+   alias LiveQuery.Source
+   alias Memba.ID
+-  alias Memba.ReadModelChanges
+-  alias Memba.Messaging
++
++  alias Memba.Membership.Events.{
++    ClubCreated,
++    ClubMemberAdded,
++    ClubMemberRemoved,
++    ClubRoleAssignedToMember,
++    ClubRoleDefined,
++    ClubRolePermissionGranted,
++    ClubRoleRemovedFromMember,
++    ClubUpdated,
++    GroupCreated,
++    GroupEmailSlugAssigned,
++    GroupMemberAdded,
++    GroupMemberRemoved,
++    MemberAdded,
++    MemberRemoved,
++    MemberRoleAssigned,
++    MemberRoleRemoved,
++    PersonCreated,
++    PersonEmailAddressAdded,
++    PersonEmailAddressRemoved,
++    PersonEmailAddressVerified,
++    PersonEmailAddressesReplaced,
++    PersonPrimaryEmailAddressChanged
++  }
++
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
++
++  alias Memba.Messaging.Events.{
++    ConversationAccessGrantedToGroup,
++    ConversationAccessRevokedFromGroup,
++    ConversationFollowed,
++    ConversationUnfollowed,
++    EmailDeliveryBounced,
++    EmailDeliveryCreated,
++    EmailDeliveryDelayed,
++    EmailDeliveryDelivered,
++    EmailDeliveryOpened,
++    EmailDeliverySpamComplaint,
++    MessageSent
++  }
++
++  alias Memba.ReadModelChanges
+   alias Memba.Repo
+ 
+   @club_projector Memba.Membership.Projectors.Club
+@@ -25,17 +65,22 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   @member_delivery_projector Memba.Messaging.Projectors.MemberEmailDelivery
+   @staff_delivery_projector Memba.Messaging.Projectors.MembaStaffEmailDelivery
+ 
+-  @club_events ~w(ClubCreated ClubUpdated)
+-  @group_events ~w(GroupCreated GroupEmailSlugAssigned)
+-  @exact_role_events ~w(
+-    ClubRoleAssignedToMember
+-    ClubRoleRemovedFromMember
+-    MemberRoleAssigned
+-    MemberRoleRemoved
+-  )
+-  @role_definition_events ~w(ClubRoleDefined)
+-  @role_permission_events ~w(ClubRolePermissionGranted)
+-  @role_membership_removal_events ~w(ClubMemberRemoved MemberRemoved)
++  @person_events [
++    PersonCreated,
++    PersonEmailAddressAdded,
++    PersonEmailAddressVerified,
++    PersonEmailAddressesReplaced,
++    PersonPrimaryEmailAddressChanged,
++    PersonEmailAddressRemoved
++  ]
++
++  @delivery_change_events [
++    EmailDeliveryCreated,
++    EmailDeliveryDelivered,
++    EmailDeliveryDelayed,
++    EmailDeliveryBounced,
++    EmailDeliverySpamComplaint
++  ]
+ 
+   @doc """
+   Builds the shared ReadModelChanges source used by member live queries.
+@@ -55,23 +100,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   end
+ 
+   @doc false
+-  def classify({:read_model_changed, %{projector: projector, source_event: event} = change})
++  def classify({:read_model_changed, %{projector: projector, source_event: event}})
+       when is_atom(projector) and is_map(event) do
+-    changes = Map.get(change, :changes, %{})
+-
+     case projector do
+-      @club_projector -> classify_club_projector(event, changes)
+-      @membership_projector -> membership_invalidations(event, changes)
+-      @person_projector -> person_invalidations(event)
+-      @group_projector -> group_invalidations(event)
+-      @group_membership_projector -> group_membership_invalidations(event)
+-      @role_projector -> role_invalidations(event, changes)
+-      @message_projector -> message_invalidations(event)
+-      @conversation_access_projector -> conversation_access_invalidations(event)
+-      @conversation_follow_projector -> conversation_follow_invalidations(event)
+-      @member_delivery_projector -> delivery_invalidations(event, changes)
+-      @staff_delivery_projector -> delivery_invalidations(event, changes)
+-      _other_projector -> :ignore
++      @club_projector -> classify_club_projector(event)
++      @membership_projector -> classify_membership_projector(event)
++      @person_projector -> classify_person_projector(event)
++      @group_projector -> classify_group_projector(event, @group_projector)
++      @group_membership_projector -> classify_group_membership_projector(event)
++      @role_projector -> classify_role_projector(event, @role_projector)
++      @message_projector -> classify_message_projector(event)
++      @conversation_access_projector -> classify_conversation_access_projector(event)
++      @conversation_follow_projector -> classify_conversation_follow_projector(event)
++      @member_delivery_projector -> classify_delivery_projector(event, @member_delivery_projector)
++      @staff_delivery_projector -> classify_delivery_projector(event, @staff_delivery_projector)
++      _unrelated_projector -> :ignore
+     end
+   end
+ 
+@@ -80,344 +123,367 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   @doc false
+   def matches?(interest, invalidation), do: interest == invalidation
+ 
+-  defp classify_club_projector(event, changes) do
+-    event_name = event_name(event)
++  defp classify_club_projector(%ClubCreated{} = event),
++    do: club_invalidations(event, @club_projector)
+ 
+-    cond do
+-      event_name in @club_events ->
+-        scoped_or_fallback([{:club, field(event, :club_id)}], :club)
++  defp classify_club_projector(%ClubUpdated{} = event),
++    do: club_invalidations(event, @club_projector)
+ 
+-      event_name in @group_events ->
+-        group_invalidations(event)
++  defp classify_club_projector(%GroupCreated{} = event),
++    do: group_invalidations(event, @club_projector)
+ 
+-      event_name in (@exact_role_events ++
+-                       @role_definition_events ++
+-                       @role_permission_events ++ @role_membership_removal_events) ->
+-        role_invalidations(event, changes)
++  defp classify_club_projector(%GroupEmailSlugAssigned{} = event),
++    do: group_invalidations(event, @club_projector)
+ 
+-      club_id = field(event, :club_id) ->
+-        {:ok, [{:fallback, :club, club_id}]}
++  defp classify_club_projector(%ClubRoleDefined{} = event),
++    do: role_definition_invalidations(event, @club_projector)
+ 
+-      true ->
+-        {:ok, [{:fallback, :club}]}
+-    end
+-  end
++  defp classify_club_projector(%ClubRolePermissionGranted{} = event),
++    do: role_permission_invalidations(event, @club_projector)
+ 
+-  defp membership_invalidations(event, changes) do
+-    membership_id = field(event, :membership_id) || deep_field(changes, :membership_id)
+-    event_club_id = field(event, :club_id) || deep_field(changes, :club_id)
+-    event_person_id = field(event, :person_id) || deep_field(changes, :person_id)
+-    membership_scope = membership_scope(membership_id, event_club_id, event_person_id)
+-
+-    club_id =
+-      event_club_id ||
+-        Map.get(membership_scope, :club_id)
+-
+-    person_id =
+-      event_person_id ||
+-        Map.get(membership_scope, :person_id)
+-
+-    invalidations =
+-      compact([
+-        tuple(:club_members, club_id),
+-        tuple(:membership, membership_id),
+-        tuple(:person, person_id),
+-        tuple(:person_clubs, person_id),
+-        if(is_nil(person_id), do: {:fallback, :membership})
+-      ])
+-
+-    {:ok, invalidations}
+-  end
++  defp classify_club_projector(%ClubRoleAssignedToMember{} = event),
++    do: exact_role_invalidations(event, @club_projector)
+ 
+-  defp person_invalidations(event) do
+-    case field(event, :person_id) do
+-      nil -> {:ok, [{:fallback, :person}]}
+-      person_id -> {:ok, [{:person, person_id}, {:person_emails, person_id}]}
+-    end
+-  end
++  defp classify_club_projector(%ClubRoleRemovedFromMember{} = event),
++    do: exact_role_invalidations(event, @club_projector)
+ 
+-  defp group_invalidations(event) do
+-    club_id = field(event, :club_id)
+-    group_id = field(event, :group_id)
++  defp classify_club_projector(%MemberRoleAssigned{} = event),
++    do: exact_role_invalidations(event, @club_projector)
+ 
+-    invalidations =
+-      compact([
+-        tuple(:club_groups, club_id),
+-        tuple(:group, group_id)
+-      ])
++  defp classify_club_projector(%MemberRoleRemoved{} = event),
++    do: exact_role_invalidations(event, @club_projector)
+ 
+-    cond do
+-      club_id ->
+-        {:ok, invalidations}
++  defp classify_club_projector(event),
++    do: contract_violation(@club_projector, event, :unsupported_projector_event)
+ 
+-      group_id ->
+-        {:ok, invalidations ++ [{:fallback, :group}]}
++  defp classify_membership_projector(%ClubMemberAdded{} = event),
++    do: membership_invalidations(event, @membership_projector)
+ 
+-      true ->
+-        {:ok, [{:fallback, :group}]}
+-    end
+-  end
++  defp classify_membership_projector(%ClubMemberRemoved{} = event),
++    do: membership_invalidations(event, @membership_projector)
+ 
+-  defp group_membership_invalidations(event) do
+-    club_id = field(event, :club_id)
+-    group_id = field(event, :group_id)
+-    person_id = field(event, :person_id)
+-
+-    invalidations =
+-      compact([
+-        tuple(:group_members, group_id),
+-        tuple(:person, person_id),
+-        tuple(:person_groups, club_id, person_id),
+-        tuple(:group_participation, club_id, group_id, person_id),
+-        if(is_nil(club_id) || is_nil(group_id) || is_nil(person_id),
+-          do: family_fallback(:group_membership, club_id)
+-        )
+-      ])
++  defp classify_membership_projector(%MemberAdded{} = event),
++    do: membership_invalidations(event, @membership_projector)
+ 
+-    {:ok, invalidations}
++  defp classify_membership_projector(%MemberRemoved{} = event) do
++    event
++    |> recover_legacy_membership_scope()
++    |> membership_invalidations(@membership_projector, event)
+   end
+ 
+-  defp role_invalidations(event, changes) do
+-    event_name = event_name(event)
+-    membership_id = field(event, :membership_id) || deep_field(changes, :membership_id)
+-    event_club_id = field(event, :club_id) || deep_field(changes, :club_id)
+-    event_person_id = field(event, :person_id) || deep_field(changes, :person_id)
+-    membership_scope = membership_scope(membership_id, event_club_id, event_person_id)
+-
+-    club_id =
+-      event_club_id ||
+-        Map.get(membership_scope, :club_id)
+-
+-    person_id =
+-      event_person_id ||
+-        Map.get(membership_scope, :person_id)
+-
+-    role_id = field(event, :role_id) || deep_field(changes, :role_id)
+-
+-    cond do
+-      event_name in @exact_role_events ->
+-        member_roles = tuple(:member_roles, club_id, membership_id, person_id)
+-        member_permissions = tuple(:member_permissions, club_id, membership_id, person_id)
+-
+-        compact([
+-          member_roles,
+-          member_permissions,
+-          tuple(:role, role_id),
+-          missing_scope_fallback(:role, club_id, member_roles)
+-        ])
+-        |> scoped_or_role_fallback(club_id)
+-
+-      event_name in @role_definition_events ->
+-        compact([
+-          tuple(:role, role_id),
+-          tuple(:club_roles, club_id),
+-          if(is_nil(club_id), do: family_fallback(:role, club_id))
+-        ])
+-        |> scoped_or_role_fallback(club_id)
+-
+-      event_name in @role_permission_events ->
+-        compact([
+-          tuple(:role, role_id),
+-          tuple(:club_permissions, club_id),
+-          if(is_nil(club_id), do: family_fallback(:role, club_id))
+-        ])
+-        |> scoped_or_role_fallback(club_id)
+-
+-      event_name in @role_membership_removal_events ->
+-        member_roles = tuple(:member_roles, club_id, membership_id, person_id)
+-
+-        compact([
+-          member_roles,
+-          tuple(:member_permissions, club_id, membership_id, person_id),
+-          tuple(:club_permissions, club_id),
+-          missing_scope_fallback(:role, club_id, member_roles)
+-        ])
+-        |> scoped_or_role_fallback(club_id)
+-
+-      club_id ->
+-        {:ok, [{:fallback, :role, club_id}]}
+-
+-      true ->
+-        {:ok, [{:fallback, :role}]}
++  defp classify_membership_projector(event),
++    do: contract_violation(@membership_projector, event, :unsupported_projector_event)
++
++  defp classify_person_projector(event) do
++    if event_module(event) in @person_events do
++      with_required(@person_projector, event, [:person_id], fn %{person_id: person_id} ->
++        [{:person, person_id}, {:person_emails, person_id}]
++      end)
++    else
++      contract_violation(@person_projector, event, :unsupported_projector_event)
+     end
+   end
+ 
+-  defp message_invalidations(event) do
+-    club_id = field(event, :club_id)
+-    message_id = field(event, :message_id)
+-    conversation_id = field(event, :conversation_id) || message_id
+-
+-    invalidations =
+-      compact([
+-        tuple(:message, message_id),
+-        tuple(:conversation, conversation_id),
+-        tuple(:conversation_messages, conversation_id),
+-        tuple(:club_conversations, club_id),
+-        if(is_nil(club_id) || is_nil(conversation_id),
+-          do: family_fallback(:message, club_id)
+-        )
+-      ])
++  defp classify_group_projector(%GroupCreated{} = event, projector),
++    do: group_invalidations(event, projector)
+ 
+-    {:ok, invalidations}
+-  end
++  defp classify_group_projector(%GroupEmailSlugAssigned{} = event, projector),
++    do: group_invalidations(event, projector)
+ 
+-  defp conversation_access_invalidations(event) do
+-    club_id = field(event, :club_id)
+-    group_id = field(event, :group_id)
+-    conversation_id = field(event, :conversation_id)
+-
+-    invalidations =
+-      compact([
+-        tuple(:group_conversations, group_id),
+-        tuple(:club_conversations, if(is_nil(group_id), do: club_id)),
+-        tuple(:conversation_access, group_id, conversation_id),
+-        tuple(:conversation, conversation_id),
+-        tuple(:group, group_id)
+-      ])
+-
+-    cond do
+-      group_id || conversation_id ->
+-        fallback =
+-          if is_nil(group_id) && is_nil(club_id),
+-            do: {:fallback, :conversation_access}
+-
+-        {:ok, compact(invalidations ++ [fallback])}
+-
+-      club_id ->
+-        {:ok, [{:fallback, :conversation_access, club_id}]}
+-
+-      true ->
+-        {:ok, [{:fallback, :conversation_access}]}
+-    end
+-  end
++  defp classify_group_projector(event, projector),
++    do: contract_violation(projector, event, :unsupported_projector_event)
+ 
+-  defp conversation_follow_invalidations(event) do
+-    club_id = field(event, :club_id)
+-    conversation_id = field(event, :conversation_id) || field(event, :message_id)
+-    member_id = field(event, :member_id) || field(event, :sender_id)
++  defp classify_group_membership_projector(%GroupMemberAdded{} = event),
++    do: group_membership_invalidations(event)
+ 
+-    cond do
+-      conversation_id && member_id ->
+-        {:ok,
+-         [
+-           {:conversation_follow, conversation_id, member_id},
+-           {:conversation, conversation_id}
+-         ]}
++  defp classify_group_membership_projector(%GroupMemberRemoved{} = event),
++    do: group_membership_invalidations(event)
+ 
+-      conversation_id ->
+-        {:ok, [{:conversation_follows, conversation_id}, {:conversation, conversation_id}]}
++  defp classify_group_membership_projector(event),
++    do: contract_violation(@group_membership_projector, event, :unsupported_projector_event)
+ 
+-      member_id ->
+-        {:ok, [{:member_conversation_follows, member_id}]}
++  defp classify_role_projector(%ClubRoleDefined{} = event, projector),
++    do: role_definition_invalidations(event, projector)
+ 
+-      club_id ->
+-        {:ok, [{:fallback, :conversation_follow, club_id}]}
++  defp classify_role_projector(%ClubRolePermissionGranted{} = event, projector),
++    do: role_permission_invalidations(event, projector)
+ 
+-      true ->
+-        {:ok, [{:fallback, :conversation_follow}]}
+-    end
+-  end
++  defp classify_role_projector(%ClubRoleAssignedToMember{} = event, projector),
++    do: exact_role_invalidations(event, projector)
++
++  defp classify_role_projector(%ClubRoleRemovedFromMember{} = event, projector),
++    do: exact_role_invalidations(event, projector)
+ 
+-  defp delivery_invalidations(event, changes) do
+-    delivery_id = field(event, :delivery_id) || deep_field(changes, :delivery_id)
++  defp classify_role_projector(%MemberRoleAssigned{} = event, projector),
++    do: exact_role_invalidations(event, projector)
+ 
+-    message_id =
+-      field(event, :message_id) ||
+-        deep_field(changes, :message_id) ||
+-        delivery_message_id(delivery_id)
++  defp classify_role_projector(%MemberRoleRemoved{} = event, projector),
++    do: exact_role_invalidations(event, projector)
+ 
+-    invalidations =
+-      compact([
+-        tuple(:message_deliveries, message_id),
+-        tuple(:delivery, delivery_id),
+-        if(is_nil(message_id), do: {:fallback, :delivery})
+-      ])
++  defp classify_role_projector(%ClubMemberRemoved{} = event, projector),
++    do: membership_role_invalidations(event, projector)
+ 
+-    {:ok, invalidations}
++  defp classify_role_projector(%MemberRemoved{} = event, projector) do
++    event
++    |> recover_legacy_membership_scope()
++    |> membership_role_invalidations(projector, event)
+   end
+ 
+-  defp delivery_message_id(nil), do: nil
++  defp classify_role_projector(event, projector),
++    do: contract_violation(projector, event, :unsupported_projector_event)
+ 
+-  defp delivery_message_id(delivery_id) do
+-    case Messaging.get_member_email_delivery(delivery_id) ||
+-           Messaging.get_memba_staff_email_delivery(delivery_id) do
+-      %{message_id: message_id} -> message_id
+-      _missing_delivery -> nil
+-    end
++  defp classify_message_projector(%MessageSent{} = event) do
++    with_required(@message_projector, event, [:club_id, :message_id], fn event ->
++      conversation_id = event.conversation_id || event.message_id
++
++      [
++        {:message, event.message_id},
++        {:conversation, conversation_id},
++        {:conversation_messages, conversation_id},
++        {:club_conversations, event.club_id}
++      ]
++    end)
+   end
+ 
+-  defp membership_scope(_membership_id, club_id, person_id)
+-       when not is_nil(club_id) and not is_nil(person_id),
+-       do: %{}
++  defp classify_message_projector(event),
++    do: contract_violation(@message_projector, event, :unsupported_projector_event)
+ 
+-  defp membership_scope(nil, _club_id, _person_id), do: %{}
++  defp classify_conversation_access_projector(%ConversationAccessGrantedToGroup{} = event),
++    do: conversation_access_invalidations(event)
+ 
+-  defp membership_scope(membership_id, _club_id, _person_id) do
+-    with {:ok, membership_id} <- ID.cast(:membership, membership_id),
+-         %MembershipProjection{club_id: club_id, person_id: person_id} <-
+-           Repo.get(MembershipProjection, membership_id) do
+-      %{club_id: club_id, person_id: person_id}
++  defp classify_conversation_access_projector(%ConversationAccessRevokedFromGroup{} = event),
++    do: conversation_access_invalidations(event)
++
++  defp classify_conversation_access_projector(event),
++    do: contract_violation(@conversation_access_projector, event, :unsupported_projector_event)
++
++  defp classify_conversation_follow_projector(%ConversationFollowed{} = event),
++    do: explicit_follow_invalidations(event)
++
++  defp classify_conversation_follow_projector(%ConversationUnfollowed{} = event),
++    do: explicit_follow_invalidations(event)
++
++  defp classify_conversation_follow_projector(%MessageSent{} = event) do
++    if MessageSent.sender_follows_conversation?(event) do
++      with_required(
++        @conversation_follow_projector,
++        event,
++        [:club_id, :message_id, :sender_id],
++        fn event ->
++          conversation_id = event.conversation_id || event.message_id
++
++          [
++            {:conversation_follow, conversation_id, event.sender_id},
++            {:conversation, conversation_id}
++          ]
++        end
++      )
+     else
+-      _missing_or_invalid_membership -> %{}
++      :ignore
+     end
+   end
+ 
+-  defp scoped_or_fallback(invalidations, family) do
+-    case compact(invalidations) do
+-      [] -> {:ok, [{:fallback, family}]}
+-      invalidations -> {:ok, invalidations}
++  defp classify_conversation_follow_projector(event),
++    do: contract_violation(@conversation_follow_projector, event, :unsupported_projector_event)
++
++  defp classify_delivery_projector(%EmailDeliveryOpened{}, _projector), do: :ignore
++
++  defp classify_delivery_projector(event, projector) do
++    if event_module(event) in @delivery_change_events do
++      with_required(projector, event, [:message_id, :delivery_id], fn event ->
++        [
++          {:message_deliveries, event.message_id},
++          {:delivery, event.delivery_id}
++        ]
++      end)
++    else
++      contract_violation(projector, event, :unsupported_projector_event)
+     end
+   end
+ 
+-  defp scoped_or_role_fallback([], nil), do: {:ok, [{:fallback, :role}]}
+-  defp scoped_or_role_fallback([], club_id), do: {:ok, [{:fallback, :role, club_id}]}
+-  defp scoped_or_role_fallback(invalidations, _club_id), do: {:ok, invalidations}
++  defp club_invalidations(event, projector) do
++    with_required(projector, event, [:club_id], fn %{club_id: club_id} ->
++      [{:club, club_id}]
++    end)
++  end
+ 
+-  defp missing_scope_fallback(_family, _club_id, scoped) when not is_nil(scoped), do: nil
+-  defp missing_scope_fallback(family, nil, nil), do: {:fallback, family}
+-  defp missing_scope_fallback(family, club_id, nil), do: {:fallback, family, club_id}
++  defp membership_invalidations(event, projector),
++    do: membership_invalidations(event, projector, event)
++
++  defp membership_invalidations(scope, projector, reported_event) do
++    with_required(
++      projector,
++      scope,
++      [:club_id, :membership_id, :person_id],
++      fn scope ->
++        [
++          {:club_members, scope.club_id},
++          {:membership, scope.membership_id},
++          {:person, scope.person_id},
++          {:person_clubs, scope.person_id}
++        ]
++      end,
++      reported_event
++    )
++  end
+ 
+-  defp family_fallback(family, nil), do: {:fallback, family}
+-  defp family_fallback(family, club_id), do: {:fallback, family, club_id}
++  defp group_invalidations(event, projector) do
++    with_required(projector, event, [:club_id, :group_id], fn event ->
++      [
++        {:club_groups, event.club_id},
++        {:group, event.group_id}
++      ]
++    end)
++  end
+ 
+-  defp tuple(_name, nil), do: nil
+-  defp tuple(name, value), do: {name, value}
++  defp group_membership_invalidations(event) do
++    with_required(
++      @group_membership_projector,
++      event,
++      [:club_id, :group_id, :membership_id, :person_id],
++      fn event ->
++        [
++          {:group_members, event.group_id},
++          {:person, event.person_id},
++          {:person_groups, event.club_id, event.person_id},
++          {:group_participation, event.club_id, event.group_id, event.person_id}
++        ]
++      end
++    )
++  end
+ 
+-  defp tuple(_name, nil, _value), do: nil
+-  defp tuple(_name, _value, nil), do: nil
+-  defp tuple(name, first, second), do: {name, first, second}
++  defp role_definition_invalidations(event, projector) do
++    with_required(projector, event, [:club_id, :role_id], fn event ->
++      [
++        {:role, event.role_id},
++        {:club_roles, event.club_id}
++      ]
++    end)
++  end
+ 
+-  defp tuple(_name, nil, _second, _third), do: nil
+-  defp tuple(_name, _first, nil, _third), do: nil
+-  defp tuple(_name, _first, _second, nil), do: nil
+-  defp tuple(name, first, second, third), do: {name, first, second, third}
++  defp role_permission_invalidations(event, projector) do
++    with_required(projector, event, [:club_id, :role_id], fn event ->
++      [
++        {:role, event.role_id},
++        {:club_permissions, event.club_id}
++      ]
++    end)
++  end
+ 
+-  defp compact(invalidations) do
+-    invalidations
+-    |> Enum.reject(&is_nil/1)
+-    |> Enum.uniq()
++  defp exact_role_invalidations(event, projector) do
++    with_required(
++      projector,
++      event,
++      [:club_id, :membership_id, :person_id, :role_id],
++      fn event ->
++        [
++          {:member_roles, event.club_id, event.membership_id, event.person_id},
++          {:member_permissions, event.club_id, event.membership_id, event.person_id},
++          {:role, event.role_id}
++        ]
++      end
++    )
+   end
+ 
+-  defp field(event, name), do: Map.get(event, name) || Map.get(event, Atom.to_string(name))
++  defp membership_role_invalidations(scope, projector),
++    do: membership_role_invalidations(scope, projector, scope)
++
++  defp membership_role_invalidations(scope, projector, reported_event) do
++    with_required(
++      projector,
++      scope,
++      [:club_id, :membership_id, :person_id],
++      fn scope ->
++        [
++          {:member_roles, scope.club_id, scope.membership_id, scope.person_id},
++          {:member_permissions, scope.club_id, scope.membership_id, scope.person_id},
++          {:club_permissions, scope.club_id}
++        ]
++      end,
++      reported_event
++    )
++  end
+ 
+-  defp deep_field(value, name) when is_map(value) do
+-    field(value, name) ||
+-      Enum.find_value(value, fn {_key, nested_value} ->
+-        deep_field(nested_value, name)
+-      end)
++  defp conversation_access_invalidations(event) do
++    with_required(
++      @conversation_access_projector,
++      event,
++      [:club_id, :group_id, :conversation_id],
++      fn event ->
++        [
++          {:group_conversations, event.group_id},
++          {:conversation_access, event.group_id, event.conversation_id},
++          {:conversation, event.conversation_id},
++          {:group, event.group_id}
++        ]
++      end
++    )
+   end
+ 
+-  defp deep_field(value, name) when is_list(value) do
+-    Enum.find_value(value, &deep_field(&1, name))
++  defp explicit_follow_invalidations(event) do
++    with_required(
++      @conversation_follow_projector,
++      event,
++      [:club_id, :conversation_id, :member_id],
++      fn event ->
++        [
++          {:conversation_follow, event.conversation_id, event.member_id},
++          {:conversation, event.conversation_id}
++        ]
++      end
++    )
+   end
+ 
+-  defp deep_field(_value, _name), do: nil
++  defp recover_legacy_membership_scope(%MemberRemoved{} = event) do
++    if is_nil(event.club_id) || is_nil(event.person_id) do
++      case membership_scope(event.membership_id) do
++        %{club_id: club_id, person_id: person_id} ->
++          %{
++            membership_id: event.membership_id,
++            club_id: event.club_id || club_id,
++            person_id: event.person_id || person_id
++          }
++
++        %{} ->
++          Map.from_struct(event)
++      end
++    else
++      Map.from_struct(event)
++    end
++  end
++
++  defp membership_scope(nil), do: %{}
++
++  defp membership_scope(membership_id) do
++    with {:ok, membership_id} <- ID.cast(:membership, membership_id),
++         %MembershipProjection{club_id: club_id, person_id: person_id} <-
++           Repo.get(MembershipProjection, membership_id) do
++      %{club_id: club_id, person_id: person_id}
++    else
++      _missing_or_invalid_membership -> %{}
++    end
++  end
++
++  defp with_required(projector, values, required_fields, build, reported_event \\ nil) do
++    missing_fields = Enum.filter(required_fields, &is_nil(Map.get(values, &1)))
++
++    case missing_fields do
++      [] ->
++        {:ok, build.(values)}
++
++      missing_fields ->
++        contract_violation(
++          projector,
++          reported_event || values,
++          {:missing_required_fields, missing_fields}
++        )
++    end
++  end
+ 
+-  defp event_name(%{__struct__: module}) do
+-    module
+-    |> Module.split()
+-    |> List.last()
++  defp contract_violation(projector, event, reason) do
++    {:error, {:read_model_contract_violation, projector, event_module(event), reason}}
+   end
+ 
+-  defp event_name(_event), do: nil
++  defp event_module(%{__struct__: module}) when is_atom(module), do: module
++  defp event_module(_event), do: :unstructured
+ end
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+index f875fa6..b4eb6a5 100644
+--- a/web/test/memba_web/live_query/memba_read_model_source_test.exs
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -43,7 +43,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+   }
+ 
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+-  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+   alias Memba.Repo
+   alias LiveQuery.Source
+   alias MembaWeb.LiveQuery.MembaReadModelSource
+@@ -93,7 +92,27 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     assert {:person_clubs, "person-1"} in invalidations
+   end
+ 
+-  test "matches Person changes only to the represented Person unless scope is unavailable" do
++  test "surfaces malformed Membership events without emitting fallback invalidations" do
++    source = MembaReadModelSource.new()
++
++    assert {:error,
++            {:read_model_contract_violation, Memba.Membership.Projectors.Membership,
++             ClubMemberAdded,
++             {:missing_required_fields, [:person_id]}}} =
++             Source.classify(
++               source,
++               notification(
++                 Memba.Membership.Projectors.Membership,
++                 %ClubMemberAdded{
++                   club_id: "club-1",
++                   membership_id: "membership-1",
++                   person_id: nil
++                 }
++               )
++             )
++  end
++
++  test "matches Person changes only to the represented Person" do
+     source = MembaReadModelSource.new()
+ 
+     assert {:ok, [{:person, "person-1"}, {:person_emails, "person-1"}]} =
+@@ -111,12 +130,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+ 
+     assert Source.matches?(source, {:person, "person-1"}, {:person, "person-1"})
+     refute Source.matches?(source, {:person, "person-2"}, {:person, "person-1"})
+-
+-    assert {:ok, [{:fallback, :person}]} =
+-             Source.classify(
+-               source,
+-               notification(Memba.Membership.Projectors.Person, %{})
+-             )
+   end
+ 
+   test "keeps represented role badges distinct from current-actor permissions" do
+@@ -232,128 +245,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     assert {:conversation_access, "group-1", "conversation-1"} in access_invalidations
+   end
+ 
+-  test "uses club and global conservative fallbacks when exact scope is missing" do
+-    source = MembaReadModelSource.new()
+-
+-    assert {:ok, membership_invalidations} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Membership.Projectors.GroupMembership,
+-                 %{club_id: "club-1", group_id: "group-1"}
+-               )
+-             )
+-
+-    assert {:group_members, "group-1"} in membership_invalidations
+-    assert {:fallback, :group_membership, "club-1"} in membership_invalidations
+-
+-    assert {:ok, [{:fallback, :role, "club-1"}]} =
+-             Source.classify(
+-               source,
+-               notification(Memba.Membership.Projectors.Role, %{club_id: "club-1"})
+-             )
+-
+-    assert {:ok, [{:fallback, :conversation_access}]} =
+-             Source.classify(
+-               source,
+-               notification(Memba.Messaging.Projectors.ConversationGroupAccess, %{})
+-             )
+-  end
+-
+-  test "retains role identity and adds a global fallback when club scope is missing" do
+-    source = MembaReadModelSource.new()
+-
+-    for event <- [
+-          %ClubRoleDefined{
+-            club_id: nil,
+-            role_id: "role-1",
+-            role_key: "trip_lead",
+-            name: "Trip Lead"
+-          },
+-          %ClubRolePermissionGranted{
+-            club_id: nil,
+-            role_id: "role-1",
+-            permission: "club.manage_members"
+-          }
+-        ] do
+-      assert {:ok, invalidations} =
+-               Source.classify(
+-                 source,
+-                 notification(Memba.Membership.Projectors.Role, event)
+-               )
+-
+-      assert {:role, "role-1"} in invalidations
+-      assert {:fallback, :role} in invalidations
+-    end
+-  end
+-
+-  test "retains Message identities and adds a global fallback when club scope is missing" do
+-    source = MembaReadModelSource.new()
+-
+-    event = %MessageSent{
+-      message_id: "message-2",
+-      club_id: nil,
+-      sender_id: "person-1",
+-      conversation_id: "message-1",
+-      reply_to_message_id: "message-1",
+-      subject: "Re: Plans",
+-      body: "Count me in"
+-    }
+-
+-    assert {:ok, invalidations} =
+-             Source.classify(
+-               source,
+-               notification(Memba.Messaging.Projectors.Message, event)
+-             )
+-
+-    assert {:message, "message-2"} in invalidations
+-    assert {:conversation, "message-1"} in invalidations
+-    assert {:conversation_messages, "message-1"} in invalidations
+-    assert {:fallback, :message} in invalidations
+-  end
+-
+-  test "retains partial GroupMembership scopes and adds participation fallbacks" do
+-    source = MembaReadModelSource.new()
+-
+-    assert {:ok, missing_group} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Membership.Projectors.GroupMembership,
+-                 %{club_id: "club-1", person_id: "person-1"}
+-               )
+-             )
+-
+-    assert {:person, "person-1"} in missing_group
+-    assert {:person_groups, "club-1", "person-1"} in missing_group
+-    assert {:fallback, :group_membership, "club-1"} in missing_group
+-
+-    assert {:ok, missing_person} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Membership.Projectors.GroupMembership,
+-                 %{club_id: "club-1", group_id: "group-1"}
+-               )
+-             )
+-
+-    assert {:group_members, "group-1"} in missing_person
+-    assert {:fallback, :group_membership, "club-1"} in missing_person
+-
+-    assert {:ok, missing_club} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Membership.Projectors.GroupMembership,
+-                 %{group_id: "group-1", person_id: "person-1"}
+-               )
+-             )
+-
+-    assert {:group_members, "group-1"} in missing_club
+-    assert {:person, "person-1"} in missing_club
+-    assert {:fallback, :group_membership} in missing_club
+-  end
+-
+   test "classifies explicit and MessageSent conversation follows by conversation and member" do
+     source = MembaReadModelSource.new()
+ 
+@@ -394,36 +285,24 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     refute {:conversation_follow, "conversation-2", "person-1"} in sent_invalidations
+   end
+ 
+-  test "retains partial conversation-follow scope with a conservative fallback" do
++  test "ignores MessageSent when the conversation-follow projector made no change" do
+     source = MembaReadModelSource.new()
+ 
+-    assert {:ok, conversation_scoped} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Messaging.Projectors.ConversationFollow,
+-                 %{conversation_id: "conversation-1"}
+-               )
+-             )
+-
+-    assert {:conversation_follows, "conversation-1"} in conversation_scoped
+-    refute {:fallback, :conversation_follow} in conversation_scoped
+-
+-    assert {:ok, member_scoped} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Messaging.Projectors.ConversationFollow,
+-                 %{member_id: "person-1"}
+-               )
+-             )
+-
+-    assert {:member_conversation_follows, "person-1"} in member_scoped
++    event = %MessageSent{
++      message_id: "conversation-2",
++      club_id: "club-1",
++      sender_id: "person-2",
++      conversation_id: nil,
++      reply_to_message_id: nil,
++      subject: "Plans",
++      body: "Meet at eight",
++      sender_follows_conversation: false
++    }
+ 
+-    assert {:ok, [{:fallback, :conversation_follow}]} =
++    assert :ignore =
+              Source.classify(
+                source,
+-               notification(Memba.Messaging.Projectors.ConversationFollow, %{})
++               notification(Memba.Messaging.Projectors.ConversationFollow, event)
+              )
+   end
+ 
+@@ -447,102 +326,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     end
+   end
+ 
+-  test "recovers delivery message scope from committed changes and projection rows" do
+-    source = MembaReadModelSource.new()
+-    delivery_id = Memba.ID.generate(:delivery)
+-    message_id = Memba.ID.generate(:message)
+-
+-    for projector <- [
+-          Memba.Messaging.Projectors.MemberEmailDelivery,
+-          Memba.Messaging.Projectors.MembaStaffEmailDelivery
+-        ] do
+-      assert {:ok, changes_invalidations} =
+-               Source.classify(
+-                 source,
+-                 notification(
+-                   projector,
+-                   %{delivery_id: delivery_id},
+-                   %{
+-                     messaging_member_email_delivery: %{
+-                       delivery_id: delivery_id,
+-                       message_id: message_id
+-                     }
+-                   }
+-                 )
+-               )
+-
+-      assert {:message_deliveries, message_id} in changes_invalidations
+-      assert {:delivery, delivery_id} in changes_invalidations
+-    end
+-
+-    Repo.insert!(%MemberEmailDelivery{
+-      delivery_id: delivery_id,
+-      message_id: message_id,
+-      recipient_id: Memba.ID.generate(:person),
+-      recipient_name: "Alice",
+-      status: "sent"
+-    })
+-
+-    assert {:ok, row_invalidations} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+-                 %{delivery_id: delivery_id}
+-               )
+-             )
+-
+-    assert {:message_deliveries, message_id} in row_invalidations
+-    assert {:delivery, delivery_id} in row_invalidations
+-
+-    staff_delivery_id = Memba.ID.generate(:delivery)
+-    staff_message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%MembaStaffEmailDelivery{
+-      delivery_id: staff_delivery_id,
+-      message_id: staff_message_id,
+-      recipient_id: Memba.ID.generate(:person),
+-      recipient_name: "Bob",
+-      recipient_address: "bob@example.com",
+-      channel: "email",
+-      status: "delayed",
+-      reason: "Retrying"
+-    })
+-
+-    assert {:ok, staff_row_invalidations} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Messaging.Projectors.MemberEmailDelivery,
+-                 %{delivery_id: staff_delivery_id}
+-               )
+-             )
+-
+-    assert {:message_deliveries, staff_message_id} in staff_row_invalidations
+-    assert {:delivery, staff_delivery_id} in staff_row_invalidations
+-  end
+-
+-  test "retains exact delivery identity alongside fallback when message scope is unavailable" do
+-    source = MembaReadModelSource.new()
+-
+-    for projector <- [
+-          Memba.Messaging.Projectors.MemberEmailDelivery,
+-          Memba.Messaging.Projectors.MembaStaffEmailDelivery
+-        ] do
+-      assert {:ok, invalidations} =
+-               Source.classify(
+-                 source,
+-                 notification(
+-                   projector,
+-                   %{delivery_id: Memba.ID.generate(:delivery)}
+-                 )
+-               )
+-
+-      assert Enum.any?(invalidations, &match?({:delivery, _delivery_id}, &1))
+-      assert {:fallback, :delivery} in invalidations
+-    end
+-  end
+-
+   test "covers every Club projector event family including group and role compatibility events" do
+     assert_family_invalidations(
+       Memba.Membership.Projectors.Club,
+@@ -641,47 +424,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     )
+   end
+ 
+-  test "recovers legacy membership-removal scope from committed changes and the membership row" do
+-    changes_event = %MemberRemoved{
+-      membership_id: "membership-from-changes",
+-      club_id: nil,
+-      person_id: nil
+-    }
+-
+-    assert_invalidations(
+-      Memba.Membership.Projectors.Membership,
+-      changes_event,
+-      [
+-        {:club_members, "club-from-changes"},
+-        {:membership, "membership-from-changes"},
+-        {:person, "person-from-changes"},
+-        {:person_clubs, "person-from-changes"}
+-      ],
+-      %{
+-        membership_scope: %{
+-          club_id: "club-from-changes",
+-          person_id: "person-from-changes"
+-        }
+-      }
+-    )
+-
+-    assert_invalidations(
+-      Memba.Membership.Projectors.Role,
+-      changes_event,
+-      [
+-        {:member_roles, "club-from-changes", "membership-from-changes", "person-from-changes"},
+-        {:member_permissions, "club-from-changes", "membership-from-changes",
+-         "person-from-changes"},
+-        {:club_permissions, "club-from-changes"}
+-      ],
+-      %{
+-        membership_scope: %{
+-          club_id: "club-from-changes",
+-          person_id: "person-from-changes"
+-        }
+-      }
+-    )
+-
++  test "recovers genuine legacy MemberRemoved scope from the retained membership row" do
+     membership_id = Memba.ID.generate(:membership)
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
+@@ -719,6 +462,33 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     )
+   end
+ 
++  test "surfaces unrecoverable legacy MemberRemoved scope for both publishing projectors" do
++    membership_id = Memba.ID.generate(:membership)
++
++    event = %MemberRemoved{
++      membership_id: membership_id,
++      club_id: nil,
++      person_id: nil
++    }
++
++    for projector <- [
++          Memba.Membership.Projectors.Membership,
++          Memba.Membership.Projectors.Role
++        ] do
++      assert_contract_violation(
++        projector,
++        event,
++        {:missing_required_fields, [:club_id, :person_id]},
++        %{
++          synthetic_membership_scope: %{
++            club_id: "club-from-changes",
++            person_id: "person-from-changes"
++          }
++        }
++      )
++    end
++  end
++
+   test "covers every Person projector event family with exact Person and email scope" do
+     events = [
+       %PersonCreated{
+@@ -974,6 +744,24 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+         {:conversation, "conversation-1"}
+       ]
+     )
++
++    assert_invalidations(
++      Memba.Messaging.Projectors.ConversationFollow,
++      %MessageSent{
++        message_id: "conversation-1",
++        club_id: "club-1",
++        sender_id: "person-1",
++        conversation_id: nil,
++        reply_to_message_id: nil,
++        subject: "Plans",
++        body: "Meet at eight",
++        sender_follows_conversation: true
++      },
++      [
++        {:conversation_follow, "conversation-1", "person-1"},
++        {:conversation, "conversation-1"}
++      ]
++    )
+   end
+ 
+   test "covers every delivery event family identically for both independent projectors" do
+@@ -1000,8 +788,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+         message_id: "message-1",
+         delivery_id: "delivery-1",
+         reason: "Complaint"
+-      },
+-      %EmailDeliveryOpened{message_id: "message-1", delivery_id: "delivery-1"}
++      }
+     ]
+ 
+     for projector <- [
+@@ -1016,33 +803,178 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     end
+   end
+ 
+-  test "retains useful partial scope and adds matrix fallbacks for missing scope" do
+-    assert_invalidations(
++  test "ignores replay-only EmailDeliveryOpened for both delivery projectors" do
++    event = %EmailDeliveryOpened{message_id: "message-1", delivery_id: "delivery-1"}
++
++    for projector <- [
++          Memba.Messaging.Projectors.MemberEmailDelivery,
++          Memba.Messaging.Projectors.MembaStaffEmailDelivery
++        ] do
++      assert :ignore =
++               projector
++               |> notification(event)
++               |> then(&Source.classify(MembaReadModelSource.new(), &1))
++    end
++  end
++
++  test "does not recover malformed delivery events from committed changes or projection rows" do
++    delivery_id = Memba.ID.generate(:delivery)
++    message_id = Memba.ID.generate(:message)
++
++    Repo.insert!(%MemberEmailDelivery{
++      delivery_id: delivery_id,
++      message_id: message_id,
++      recipient_id: Memba.ID.generate(:person),
++      recipient_name: "Alice",
++      status: "sent"
++    })
++
++    malformed_event = %EmailDeliveryDelivered{
++      message_id: nil,
++      delivery_id: delivery_id
++    }
++
++    for projector <- [
++          Memba.Messaging.Projectors.MemberEmailDelivery,
++          Memba.Messaging.Projectors.MembaStaffEmailDelivery
++        ] do
++      assert_contract_violation(
++        projector,
++        malformed_event,
++        {:missing_required_fields, [:message_id]},
++        %{delivery: %{delivery_id: delivery_id, message_id: message_id}}
++      )
++    end
++  end
++
++  test "surfaces unsupported pairings and missing required identities without fallbacks" do
++    assert_contract_violation(
++      Memba.Membership.Projectors.Club,
++      %ClubUpdated{club_id: nil, name: "Updated", slug: "updated"},
++      {:missing_required_fields, [:club_id]}
++    )
++
++    assert_contract_violation(
++      Memba.Membership.Projectors.Club,
++      %ClubMemberRemoved{
++        club_id: "club-1",
++        membership_id: "membership-1",
++        person_id: "person-1"
++      },
++      :unsupported_projector_event
++    )
++
++    assert_contract_violation(
++      Memba.Membership.Projectors.Club,
++      %MemberRemoved{
++        membership_id: "membership-1",
++        club_id: "club-1",
++        person_id: "person-1"
++      },
++      :unsupported_projector_event
++    )
++
++    assert_contract_violation(
++      Memba.Membership.Projectors.Club,
++      %PersonCreated{
++        person_id: "person-1",
++        name: "Alice",
++        email: "alice@example.com"
++      },
++      :unsupported_projector_event
++    )
++
++    assert_contract_violation(
++      Memba.Membership.Projectors.Person,
++      %PersonCreated{
++        person_id: nil,
++        name: "Alice",
++        email: "alice@example.com"
++      },
++      {:missing_required_fields, [:person_id]}
++    )
++
++    assert_contract_violation(
+       Memba.Membership.Projectors.Group,
+-      %{group_id: "group-1"},
+-      [{:group, "group-1"}, {:fallback, :group}]
++      %GroupCreated{
++        club_id: nil,
++        group_id: "group-1",
++        group_key: "group-1",
++        name: "Group"
++      },
++      {:missing_required_fields, [:club_id]}
+     )
+ 
+-    assert_invalidations(
+-      Memba.Membership.Projectors.Membership,
+-      %{club_id: "club-1", membership_id: "membership-1"},
+-      [
+-        {:club_members, "club-1"},
+-        {:membership, "membership-1"},
+-        {:fallback, :membership}
+-      ]
++    assert_contract_violation(
++      Memba.Membership.Projectors.GroupMembership,
++      %GroupMemberAdded{
++        club_id: "club-1",
++        group_id: "group-1",
++        membership_id: "membership-1",
++        person_id: nil
++      },
++      {:missing_required_fields, [:person_id]}
+     )
+ 
+-    assert_invalidations(
+-      Memba.Messaging.Projectors.Message,
+-      %{club_id: "club-1"},
+-      [{:club_conversations, "club-1"}, {:fallback, :message, "club-1"}]
++    assert_contract_violation(
++      Memba.Membership.Projectors.Role,
++      %ClubRoleDefined{
++        club_id: "club-1",
++        role_id: nil,
++        role_key: "admin",
++        name: "Admin"
++      },
++      {:missing_required_fields, [:role_id]}
+     )
+ 
+-    assert_invalidations(
++    assert_contract_violation(
+       Memba.Messaging.Projectors.ConversationGroupAccess,
+-      %{conversation_id: "conversation-1"},
+-      [{:conversation, "conversation-1"}, {:fallback, :conversation_access}]
++      %ConversationAccessGrantedToGroup{
++        club_id: "club-1",
++        group_id: nil,
++        conversation_id: "conversation-1",
++        access_level: "write"
++      },
++      {:missing_required_fields, [:group_id]}
++    )
++
++    assert_contract_violation(
++      Memba.Messaging.Projectors.ConversationFollow,
++      %ConversationFollowed{
++        follow_id: "follow-1",
++        club_id: "club-1",
++        conversation_id: "conversation-1",
++        member_id: nil
++      },
++      {:missing_required_fields, [:member_id]}
++    )
++
++    assert_contract_violation(
++      Memba.Messaging.Projectors.Message,
++      %MessageSent{
++        message_id: "message-1",
++        club_id: nil,
++        sender_id: "person-1",
++        conversation_id: nil,
++        reply_to_message_id: nil,
++        subject: "Plans",
++        body: "Meet at eight"
++      },
++      {:missing_required_fields, [:club_id]}
++    )
++
++    assert_contract_violation(
++      Memba.Messaging.Projectors.MemberEmailDelivery,
++      %MessageSent{
++        message_id: "message-1",
++        club_id: "club-1",
++        sender_id: "person-1",
++        conversation_id: nil,
++        reply_to_message_id: nil,
++        subject: "Plans",
++        body: "Meet at eight"
++      },
++      :unsupported_projector_event
+     )
+   end
+ 
+@@ -1070,6 +1002,14 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+                })
+              )
+ 
++    assert {:error,
++            {:read_model_contract_violation, Memba.Membership.Projectors.Person, :unstructured,
++             :unsupported_projector_event}} =
++             Source.classify(
++               source,
++               notification(Memba.Membership.Projectors.Person, %{person_id: "person-1"})
++             )
++
+     assert :ignore = Source.classify(source, {:read_model_changed, %{}})
+     assert :ignore = Source.classify(source, {:read_model_changed, "malformed"})
+     assert :ignore = Source.classify(source, :unrelated)
+@@ -1117,6 +1057,16 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     assert MapSet.new(actual) == MapSet.new(expected)
+   end
+ 
++  defp assert_contract_violation(projector, event, reason, changes \\ %{}) do
++    event_module = event.__struct__
++
++    assert {:error, {:read_model_contract_violation, ^projector, ^event_module, ^reason}} =
++             Source.classify(
++               MembaReadModelSource.new(),
++               notification(projector, event, changes)
++             )
++  end
++
+   defp notification(projector, source_event, changes \\ %{}) do
+     {:read_model_changed,
+      %{
