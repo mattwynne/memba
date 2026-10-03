@@ -1,0 +1,341 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index dec9237..01b2338 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,10 +1,11 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008a-5a0be69-projector-contract-revision-2",
++  "packet_id": "task-008a-59e50fa-contract-lifecycle-revision-3",
+   "task_id": "task-008a",
+   "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against actual projector/event families and evidenced valid-scope fallbacks in the corrected migration matrix. Preserve exact scoped matching and ignore unrelated projectors; surface known malformed Membership notifications with unrecoverable person identity as contract violations rather than fallback refreshes. Audit remaining fallbacks against real current/legacy event shapes and obtain a fresh independent review.",
+   "result": "ready_for_review",
+   "changed_paths": [
++    "web/lib/memba_web/live_query/read_model_contract_violation_error.ex",
+     "web/lib/memba_web/live_query/memba_read_model_source.ex",
+     "web/test/memba_web/live_query/memba_read_model_source_test.exs"
+   ],
+@@ -12,29 +13,29 @@
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
+       "exit_status": 0,
+-      "evidence": "25 focused adapter tests passed with 0 failures, covering all eleven projector families, actual current and legacy event structs, exact and evidenced broad scopes, no-op publications, row-only legacy recovery, visible contract violations, exact matching, and unrelated input."
++      "evidence": "28 focused adapter tests passed with 0 failures. They prove the stable exception fields/message through direct classification, ordinary Binding.handle_notification/2, and bind-window reconciliation; complete-envelope gating; all eleven projector families; retained-row-only legacy recovery; exact tuple isolation; false auto-follow no-op; and both delivery contributors' exact mappings plus EmailDeliveryOpened no-op."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
+       "exit_status": 0,
+       "evidence": "8 accepted dashboard and conversation-detail query-vocabulary regression tests passed with 0 failures."
+     },
+-    {
+-      "command": "if grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules; then exit 1; else echo 'packages/live_query has no Memba or Commanded references'; fi",
+-      "exit_status": 0,
+-      "evidence": "The generic live_query package contains no Memba or Commanded references."
+-    },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+       "exit_status": 0,
+-      "evidence": "The web application is formatted."
++      "evidence": "The web application files are formatted."
+     },
+     {
+       "command": "git diff --check",
+       "exit_status": 0,
+       "evidence": "The packet diff has no whitespace errors."
++    },
++    {
++      "command": "grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules >/tmp/task-008a-package-boundary.txt; test ! -s /tmp/task-008a-package-boundary.txt",
++      "exit_status": 0,
++      "evidence": "The frozen generic package still has no Memba or Commanded references."
+     }
+   ],
+-  "notes": "The first TDD run exposed the expected malformed-Membership fallback and false auto-follow defects (29 tests, 2 failures); the subsequent diagnostic run identified nine superseded synthetic-fallback expectations. The adapter now dispatches only actual projector/event-struct pairings, emits stable app-owned read_model_contract_violation errors for known malformed or unsupported pairings, ignores false auto-follow and replay-only opened publications, uses the retained membership projection row as the sole evidenced legacy MemberRemoved recovery source, and never recovers delivery scope from changes or rows. No generic package, accepted query vocabulary, projector, domain event, schema, feature, plan, matrix, ADR, or todo was changed.",
++  "notes": "The initial TDD run failed as expected (28 tests, 8 failures): contract violations were returned rather than raised, both Binding lifecycle paths hid them, and incomplete envelopes reached recognized dispatch. The app-owned exception now stores only projector, source-event module and reason, with a deterministic non-sensitive message; no full payload is retained. Memba.ReadModelChanges.publish/4 and every projector after_update/3 call still supply the four-field envelope, so no publisher-shape conflict was found. No package, accepted LiveView/query consumer, projector/event/schema, plan, todo, matrix, ADR or feature file changed. Eleven-family completion table:\n| Projector | Actual source-event families | Exact/evidenced broad invalidations | No-op | Recovery | Malformed/unsupported |\n| --- | --- | --- | --- | --- | --- |\n| Club | ClubCreated/Updated; GroupCreated/GroupEmailSlugAssigned; role definition/permission and current/legacy exact role assignment/removal | club; club_groups + group; role + club_roles/club_permissions; exact member_roles + member_permissions + role | none | none | raise stable exception |\n| Membership | ClubMemberAdded/Removed; MemberAdded/Removed | exact club_members + membership + person + person_clubs | none | retained Membership row only for legacy MemberRemoved | raise; never partial/global fallback |\n| Person | six Person create/email events | exact person + person_emails | none | none | raise |\n| Group | GroupCreated; GroupEmailSlugAssigned | club_groups + exact group | none | none | raise |\n| GroupMembership | GroupMemberAdded/Removed | group_members + person + exact person_groups/group_participation | none | none | raise |\n| Role | definition/permission; current/legacy exact role assignment/removal; membership-removal compatibility events | role + club_roles; evidenced club_permissions fan-out; exact member_roles/member_permissions/role; membership-wide role/permission invalidation | none | retained Membership row only for legacy MemberRemoved | raise; never invent role_id/global fallback |\n| Message | MessageSent roots/replies | exact message/conversation/conversation_messages + evidenced club_conversations because events lack audience group | none | none | raise |\n| ConversationGroupAccess | grant/revoke | exact conversation_access/conversation/group + group_conversations collection | none | none | raise |\n| ConversationFollow | followed/unfollowed; auto-following MessageSent | exact conversation_follow + conversation | MessageSent with sender_follows_conversation false | none | raise |\n| MemberEmailDelivery | created/delivered/delayed/bounced/spam complaint | exact message_deliveries + delivery | replay-only EmailDeliveryOpened | none | raise; no row/change fallback |\n| MembaStaffEmailDelivery | created/delivered/delayed/bounced/spam complaint | exact message_deliveries + delivery, identical to member contributor | replay-only EmailDeliveryOpened | none | raise; no row/change fallback |",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+index aeceef0..517ef36 100644
+--- a/web/lib/memba_web/live_query/memba_read_model_source.ex
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -52,6 +52,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+ 
+   alias Memba.ReadModelChanges
+   alias Memba.Repo
++  alias MembaWeb.LiveQuery.ReadModelContractViolationError
+ 
+   @club_projector Memba.Membership.Projectors.Club
+   @membership_projector Memba.Membership.Projectors.Membership
+@@ -100,8 +101,16 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   end
+ 
+   @doc false
+-  def classify({:read_model_changed, %{projector: projector, source_event: event}})
+-      when is_atom(projector) and is_map(event) do
++  def classify(
++        {:read_model_changed,
++         %{
++           projector: projector,
++           source_event: event,
++           metadata: metadata,
++           changes: changes
++         }}
++      )
++      when is_atom(projector) and is_map(event) and is_map(metadata) and is_map(changes) do
+     case projector do
+       @club_projector -> classify_club_projector(event)
+       @membership_projector -> classify_membership_projector(event)
+@@ -481,7 +490,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   end
+ 
+   defp contract_violation(projector, event, reason) do
+-    {:error, {:read_model_contract_violation, projector, event_module(event), reason}}
++    raise ReadModelContractViolationError,
++      projector: projector,
++      source_event: event_module(event),
++      reason: reason
+   end
+ 
+   defp event_module(%{__struct__: module}) when is_atom(module), do: module
+diff --git a/web/lib/memba_web/live_query/read_model_contract_violation_error.ex b/web/lib/memba_web/live_query/read_model_contract_violation_error.ex
+new file mode 100644
+index 0000000..8ba3e3b
+--- /dev/null
++++ b/web/lib/memba_web/live_query/read_model_contract_violation_error.ex
+@@ -0,0 +1,23 @@
++defmodule MembaWeb.LiveQuery.ReadModelContractViolationError do
++  @moduledoc """
++  Raised when a recognized read-model publisher violates its event contract.
++
++  The exception records only the projector, source-event module, and stable
++  reason. It deliberately excludes the event payload.
++  """
++
++  @enforce_keys [:projector, :source_event, :reason]
++  defexception [:projector, :source_event, :reason]
++
++  @type t :: %__MODULE__{
++          projector: module(),
++          source_event: module() | :unstructured,
++          reason: term()
++        }
++
++  @impl Exception
++  def message(%__MODULE__{} = exception) do
++    "read-model contract violation for projector #{inspect(exception.projector)}, " <>
++      "source event #{inspect(exception.source_event)}: #{inspect(exception.reason)}"
++  end
++end
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+index b4eb6a5..9cabadc 100644
+--- a/web/test/memba_web/live_query/memba_read_model_source_test.exs
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -1,6 +1,10 @@
+ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+   use MembaWeb.ConnCase, async: true
+ 
++  alias LiveQuery.Binding
++  alias LiveQuery.Query
++  alias LiveQuery.Source
++
+   alias Memba.Membership.Events.{
+     ClubCreated,
+     ClubMemberAdded,
+@@ -44,8 +48,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+ 
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Repo
+-  alias LiveQuery.Source
+   alias MembaWeb.LiveQuery.MembaReadModelSource
++  alias MembaWeb.LiveQuery.ReadModelContractViolationError
+ 
+   test "subscribes to the shared committed read-model topic" do
+     source = MembaReadModelSource.new()
+@@ -93,23 +97,41 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+   end
+ 
+   test "surfaces malformed Membership events without emitting fallback invalidations" do
++    assert_contract_violation(
++      Memba.Membership.Projectors.Membership,
++      malformed_membership_event(),
++      {:missing_required_fields, [:person_id]}
++    )
++  end
++
++  test "raises the application contract exception through ordinary binding handling" do
+     source = MembaReadModelSource.new()
++    query = contract_probe_query(fn -> :ok end)
+ 
+-    assert {:error,
+-            {:read_model_contract_violation, Memba.Membership.Projectors.Membership,
+-             ClubMemberAdded,
+-             {:missing_required_fields, [:person_id]}}} =
+-             Source.classify(
+-               source,
+-               notification(
+-                 Memba.Membership.Projectors.Membership,
+-                 %ClubMemberAdded{
+-                   club_id: "club-1",
+-                   membership_id: "membership-1",
+-                   person_id: nil
+-                 }
+-               )
+-             )
++    assert {:ok, socket} = Binding.bind(socket(true), query, :current, source)
++
++    exception =
++      assert_raise ReadModelContractViolationError, fn ->
++        Binding.handle_notification(socket, malformed_membership_notification())
++      end
++
++    assert_contract_exception(exception)
++  end
++
++  test "raises the application contract exception during bind-window reconciliation" do
++    source = MembaReadModelSource.new()
++
++    query =
++      contract_probe_query(fn ->
++        send(self(), malformed_membership_notification())
++      end)
++
++    exception =
++      assert_raise ReadModelContractViolationError, fn ->
++        Binding.bind(socket(true), query, :current, source)
++      end
++
++    assert_contract_exception(exception)
+   end
+ 
+   test "matches Person changes only to the represented Person" do
+@@ -1002,19 +1024,42 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+                })
+              )
+ 
+-    assert {:error,
+-            {:read_model_contract_violation, Memba.Membership.Projectors.Person, :unstructured,
+-             :unsupported_projector_event}} =
+-             Source.classify(
+-               source,
+-               notification(Memba.Membership.Projectors.Person, %{person_id: "person-1"})
+-             )
++    exception =
++      assert_raise ReadModelContractViolationError, fn ->
++        Source.classify(
++          source,
++          notification(Memba.Membership.Projectors.Person, %{person_id: "person-1"})
++        )
++      end
++
++    assert exception.projector == Memba.Membership.Projectors.Person
++    assert exception.source_event == :unstructured
++    assert exception.reason == :unsupported_projector_event
+ 
+     assert :ignore = Source.classify(source, {:read_model_changed, %{}})
+     assert :ignore = Source.classify(source, {:read_model_changed, "malformed"})
+     assert :ignore = Source.classify(source, :unrelated)
+   end
+ 
++  test "ignores incomplete or mistyped outer envelopes before recognized-projector dispatch" do
++    source = MembaReadModelSource.new()
++
++    {:read_model_changed, envelope} =
++      notification(
++        Memba.Membership.Projectors.Person,
++        %ClubUpdated{club_id: "club-1", name: "Updated", slug: "updated"}
++      )
++
++    for malformed_envelope <- [
++          Map.delete(envelope, :metadata),
++          Map.delete(envelope, :changes),
++          %{envelope | metadata: :not_a_map},
++          %{envelope | changes: :not_a_map}
++        ] do
++      assert :ignore = Source.classify(source, {:read_model_changed, malformed_envelope})
++    end
++  end
++
+   defp exact_role_events do
+     [
+       %ClubRoleAssignedToMember{
+@@ -1060,11 +1105,20 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+   defp assert_contract_violation(projector, event, reason, changes \\ %{}) do
+     event_module = event.__struct__
+ 
+-    assert {:error, {:read_model_contract_violation, ^projector, ^event_module, ^reason}} =
+-             Source.classify(
+-               MembaReadModelSource.new(),
+-               notification(projector, event, changes)
+-             )
++    exception =
++      assert_raise ReadModelContractViolationError, fn ->
++        Source.classify(
++          MembaReadModelSource.new(),
++          notification(projector, event, changes)
++        )
++      end
++
++    assert exception.projector == projector
++    assert exception.source_event == event_module
++    assert exception.reason == reason
++
++    assert Exception.message(exception) ==
++             contract_exception_message(projector, event_module, reason)
+   end
+ 
+   defp notification(projector, source_event, changes \\ %{}) do
+@@ -1076,4 +1130,55 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+        changes: changes
+      }}
+   end
++
++  defp malformed_membership_event do
++    %ClubMemberAdded{
++      club_id: "club-1",
++      membership_id: "membership-1",
++      person_id: nil
++    }
++  end
++
++  defp malformed_membership_notification do
++    notification(
++      Memba.Membership.Projectors.Membership,
++      malformed_membership_event()
++    )
++  end
++
++  defp contract_probe_query(before_result) do
++    Query.new!(
++      id: :contract_probe,
++      assign: :contract_probe,
++      load: fn :current ->
++        before_result.()
++        {:ok, :loaded, [{:club_members, "club-1"}]}
++      end
++    )
++  end
++
++  defp assert_contract_exception(exception) do
++    assert exception.projector == Memba.Membership.Projectors.Membership
++    assert exception.source_event == ClubMemberAdded
++    assert exception.reason == {:missing_required_fields, [:person_id]}
++
++    assert Exception.message(exception) ==
++             contract_exception_message(
++               Memba.Membership.Projectors.Membership,
++               ClubMemberAdded,
++               {:missing_required_fields, [:person_id]}
++             )
++  end
++
++  defp contract_exception_message(projector, source_event, reason) do
++    "read-model contract violation for projector #{inspect(projector)}, " <>
++      "source event #{inspect(source_event)}: #{inspect(reason)}"
++  end
++
++  defp socket(connected?) do
++    %Phoenix.LiveView.Socket{
++      transport_pid: if(connected?, do: self()),
++      assigns: %{__changed__: %{}}
++    }
++  end
+ end
