@@ -14,10 +14,16 @@ def escalate(plan: Path) -> str:
         raise ValueError(f"Expected pending task verdict, got {decision!r}")
     history = delivery / "history.jsonl"
     reviews = [json.loads(line) for line in history.read_text().splitlines() if line.strip()]
-    revisions = sum(row.get("kind") == "review" and row.get("decision") == "revise" for row in reviews)
+    task_id = review["task_id"]
+    revisions = sum(
+        row.get("kind") == "review"
+        and row.get("decision") == "revise"
+        and row.get("task_id") == task_id
+        for row in reviews
+    )
     print(f"Validator's current finding for {review['task']}: {review['reason']}", file=sys.stderr)
     if decision == "blocked" or revisions >= 3:
-        print(f"Escalating {decision} after {revisions} revision verdict(s) before the iteration-wide worker limit.", file=sys.stderr)
+        print(f"Escalating {decision} after {revisions} revision verdict(s) for {task_id}.", file=sys.stderr)
         return "discuss"
     return "continue"
 
