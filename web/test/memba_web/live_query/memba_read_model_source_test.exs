@@ -481,6 +481,39 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert_read_count(detail_reads, 1)
   end
 
+  test "builds complete dashboard interests from a coherent production-shaped result" do
+    dashboard = dashboard_result()
+    [root] = dashboard.message_rows
+    reply = audited_reply_event()
+
+    assert root.message_id == root.conversation_id
+    assert reply.conversation_id == root.message_id
+    assert reply.reply_to_message_id == root.message_id
+
+    interests = MemberDashboardQuery.interests(dashboard)
+
+    assert MapSet.new(interests) == MapSet.new(expected_dashboard_interests())
+    assert length(interests) == length(expected_dashboard_interests())
+  end
+
+  test "builds complete detail interests from a coherent production-shaped result" do
+    detail = conversation_detail_result()
+    [root_entry] = detail.conversation_entries
+    root = detail.root_message
+
+    assert detail.message.message_id == detail.conversation_audience.conversation_id
+    assert root.message_id == detail.message.message_id
+    assert root.conversation_id == detail.message.conversation_id
+    assert root_entry.message.message_id == root.message_id
+    assert root_entry.message.conversation_id == root.conversation_id
+    assert root_entry.message.sender_id == root.sender_id
+
+    interests = MemberMessageDetailQuery.interests(detail)
+
+    assert MapSet.new(interests) == MapSet.new(expected_conversation_detail_interests())
+    assert length(interests) == length(expected_conversation_detail_interests())
+  end
+
   test "audits all projector families against complete dashboard and detail interests" do
     source = MembaReadModelSource.new()
     dashboard = MapSet.new(dashboard_interests())
@@ -1688,7 +1721,11 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   end
 
   defp dashboard_interests do
-    MemberDashboardQuery.interests(%{
+    MemberDashboardQuery.interests(dashboard_result())
+  end
+
+  defp dashboard_result do
+    %{
       selected_club: %{club_id: "club-1"},
       selected_group: %{group_id: "group-1"},
       current_member: %{
@@ -1713,7 +1750,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       ],
       message_rows: [
         %{
-          message_id: "message-root",
+          message_id: "conversation-1",
           conversation_id: "conversation-1",
           sender_id: "person-author",
           originator_id: "person-originator",
@@ -1721,11 +1758,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
           participants: [%{id: "person-participant"}]
         }
       ]
-    })
+    }
   end
 
   defp conversation_detail_interests do
-    MemberMessageDetailQuery.interests(%{
+    MemberMessageDetailQuery.interests(conversation_detail_result())
+  end
+
+  defp conversation_detail_result do
+    root = %{
+      message_id: "conversation-1",
+      conversation_id: "conversation-1",
+      sender_id: "person-detail-author"
+    }
+
+    %{
       selected_club: %{club_id: "club-1"},
       current_member: %{
         id: "person-current",
@@ -1735,13 +1782,77 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         conversation_id: "conversation-1",
         group_id: "group-1"
       },
-      message: %{
-        message_id: "conversation-1",
-        sender_id: "person-author"
-      },
-      conversation_entries: [],
+      message: root,
+      root_message: root,
+      conversation_entries: [%{message: root, sender_name: "Detail Author", kind: :original}],
       member_email_delivery_ids: ["delivery-1"]
-    })
+    }
+  end
+
+  defp expected_dashboard_interests do
+    [
+      {:club, "club-1"},
+      {:club_members, "club-1"},
+      {:club_groups, "club-1"},
+      {:club_conversations, "club-1"},
+      {:person_groups, "club-1", "person-current"},
+      {:group_members, "group-1"},
+      {:group_conversations, "group-1"},
+      {:group_participation, "club-1", "group-1", "person-current"},
+      {:membership, "membership-current"},
+      {:person, "person-current"},
+      {:person_club, "club-1", "person-current"},
+      {:member_permissions, "club-1", "membership-current", "person-current"},
+      {:club_permissions, "club-1"},
+      {:club_roles, "club-1"},
+      {:group, "group-1"},
+      {:group, "group-2"},
+      {:member_roles, "club-1", "membership-current", "person-current"},
+      {:person, "person-member"},
+      {:membership, "membership-member"},
+      {:member_roles, "club-1", "membership-member", "person-member"},
+      {:person, "person-candidate"},
+      {:membership, "membership-candidate"},
+      {:member_roles, "club-1", "membership-candidate", "person-candidate"},
+      {:conversation, "conversation-1"},
+      {:conversation_messages, "conversation-1"},
+      {:conversation_access, "group-1", "conversation-1"},
+      {:message, "conversation-1"},
+      {:person, "person-author"},
+      {:person, "person-originator"},
+      {:person, "person-replier"},
+      {:person, "person-participant"}
+    ]
+  end
+
+  defp expected_conversation_detail_interests do
+    [
+      {:club, "club-1"},
+      {:membership, "membership-current"},
+      {:person, "person-current"},
+      {:person_club, "club-1", "person-current"},
+      {:group_participation, "club-1", "group-1", "person-current"},
+      {:conversation, "conversation-1"},
+      {:conversation_messages, "conversation-1"},
+      {:conversation_access, "group-1", "conversation-1"},
+      {:conversation_follow, "conversation-1", "person-current"},
+      {:message_deliveries, "conversation-1"},
+      {:message, "conversation-1"},
+      {:person, "person-detail-author"},
+      {:delivery, "delivery-1"}
+    ]
+  end
+
+  defp audited_reply_event do
+    %MessageSent{
+      message_id: "message-new",
+      club_id: "club-1",
+      sender_id: "person-author",
+      conversation_id: "conversation-1",
+      reply_to_message_id: "conversation-1",
+      subject: "Re: Plans",
+      body: "Count me in"
+    }
   end
 
   defp query_family_audit_cases do
@@ -1819,15 +1930,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       {
         :message,
         Memba.Messaging.Projectors.Message,
-        %MessageSent{
-          message_id: "message-new",
-          club_id: "club-1",
-          sender_id: "person-author",
-          conversation_id: "conversation-1",
-          reply_to_message_id: "message-root",
-          subject: "Re: Plans",
-          body: "Count me in"
-        },
+        audited_reply_event(),
         [
           {:conversation, "conversation-1"},
           {:conversation_messages, "conversation-1"},
