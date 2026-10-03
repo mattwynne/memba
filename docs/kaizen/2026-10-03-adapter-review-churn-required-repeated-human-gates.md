@@ -1,0 +1,45 @@
+# Problem: adapter review churn required repeated human gates
+
+Date: 2026-10-03
+
+## Context
+
+Iteration [067](../iterations/067-live-projection-queries/plan.md) is delivering a committed-read-model adapter, query consumers, and a reusable live-query package through the [iteration implementation workflow](../../.fabro/workflows/iteration-implementation/workflow.fabro). The intended arrangement is bounded planner/worker/reviewer tasks with independently accepted checkpoints, a human gate for consequential decisions or genuinely repeated failure, and final quality/publication gates. Related but separate observations concern [just-in-time planner handoffs](2026-09-14-just-in-time-delivery-planner.md), [late BDD feedback](2026-10-03-bdd-scenario-feedback-arrives-after-implementation.md), and [a worker timeout](2026-09-30-reviewed-candidate-stranded-by-worker-timeout.md).
+
+## Expected standard
+
+An actionable technical finding on an unchanged approved contract should be repairable and independently re-reviewed without repeatedly requiring Matt to authorize the same kind of repair. Human input remains necessary when a business example or architectural constraint changes the plan. Checked tasks, checkpoint provenance, the clean-tree and planner guards, independent review, and final `dev check`/publication gates must remain intact.
+
+## What happened
+
+Task 008A covers the adapter's actual event/projector families and query invalidation mapping. Four independent reviews of the preserved task-008A candidate returned `revise`, each after a worker reported focused tests passing. The first found missing-scope and no-op/coverage gaps; Matt identified the claimed club-without-person Membership fallback as an **invalid** input rather than a business case and the plan/matrix were corrected. Later reviews found recognized malformed no-op events were ignored before validation, then broad `{:conversation, conversation_id}` invalidation on follow changes, broad `{:person, person_id}` invalidation on membership/group-membership changes, and consumer fallback interests with no producer. A reported focused 30-test adapter run passed, but did not prove that unrelated queries were not reread. The last run, `01M41JBGVZ7CRH93KA4VT0T6QJ`, reached `task_discussion` at 19:31 UTC; Matt replied “Repair as planned,” and the clarification stop preserved the candidate. Task 008A remains unchecked and no 067 application code has been published to `main`.
+
+Three task-008A human discussions were reached across the run chain: the first was caused by an **incorrect iteration-wide** revision count (four revisions on different tasks), subsequently repaired to count by task; later discussions were genuine per-task threshold stops, though each surfaced a distinct, actionable technical gap. The discussion path records guidance, then deliberately stops; resuming from a clean pushed checkpoint requires another branch/run and a new planner visit. A separate continuation run `01M41BW0XN9S1VPCTQRXPMB79T` stopped before a worker because the planner emitted `prepared_revision` rather than the allowed `prepared` status; the fail-closed guard worked, and prompt/schema coverage was corrected on `main` (`035b5fce6`). These are separate mechanisms, not evidence that the reviewer or guard should be weakened.
+
+## Impact
+
+Matt had to respond repeatedly to a technical repair loop; each stop required operator inspection and guarded continuation. The full 067 quality gates have not run, so this is repeated delivery friction and uncompleted work, not a customer-facing incident. Passing state/render assertions masked unnecessary rereads; the independent reviews prevented premature acceptance.
+
+## Investigation — 2026-10-03
+
+**Current versus target condition:** Four `revise` verdicts on one broad adapter task and repeated human gates versus a bounded task that produces an evidence-backed event-to-query dependency mapping, tests both required updates and *absence* of unrelated rereads, and can repair novel technical review findings without a new human decision each time. Zero human contacts is not the target: Matt's impossible/invalid Membership distinction genuinely changed the approved plan and needed his decision.
+
+**Evidence-supported causes and escape path:**
+
+- The accepted matrix included speculative fallbacks for partial synthetic notifications rather than only actual current/legacy event shapes. Matt's clarification removed that false contract. The adapter and two already-accepted consumers still had over-broad or inert interest keys; changing the adapter alone exposed producer/consumer mismatches.
+- Task 008A treated eleven projector families, legacy recovery, malformed event contracts, no-op events, scoped interests, and consumer compatibility as one completion boundary. Work and tests advanced by narrow review finding. Focused passing tests measured output or state, not the *number and scope* of query refreshes. The reviewer checked more of the full boundary on later passes. This explains serial rework; the record does not establish that a separate readiness reviewer or a larger prompt would have caught it earlier.
+- The escalation code originally counted all iteration revisions, then was corrected to count only the selected task. Even with the correction, a fixed per-task count does not distinguish repeated failure of the *same* finding from distinct, bounded technical findings. The workflow turns every human clarification, including “repair as planned,” into a terminal stop, requiring manual checkpoint recovery. This is a deliberate safety boundary, not a publication defect.
+- The separate `prepared_revision` failure came from a planner-output shape that the prompt/schema did not constrain, even though the deterministic guard did. Typed schema validation now rejects that status earlier. This explains a wasted pre-worker continuation but not adapter review churn.
+
+**Simplification check:** Do not add invented event variants, a second readiness model, more blanket fallbacks, or more tiny handoff artifacts. Keep the current independent review and final gates. First reduce the size of the semantic assumption: map only real projector publications to the specific query dependencies they can change. Then provide focused positive and negative refresh-count proof across consumers. An open member-list BDD scenario proves its own update rule, not unrelated conversation/detail isolation.
+
+**Options and recommendation:**
+
+1. **Immediate 067 correction:** before another single-finding patch, trace all producer keys to query interests, remove inert or over-broad keys, reconcile the matrix, and add same-conversation/different-member and same-Person/different-club *refresh-count* tests; preserve valid club-wide/legacy convergence. Re-review the whole affected adapter/consumer boundary. This is a bounded repair of accepted scope, not acceptance or permission to publish.
+2. **Prevention for future iterations (recommended first experiment):** have the planner slice by one meaningful query/producer vertical path, with an explicit event-shape/dependency table and a negative unrelated-query proof in each packet; retain one integrated cross-projector convergence proof before final gates. This changes where evidence arrives, not the number of reviewers or the final quality bar. Avoid slicing into so many projector-only packets that the composed view never gets tested.
+3. **Human-attention policy (requires Matt's approval and workflow design):** escalate immediately for a policy/architecture conflict, same-finding no-progress, unsafe scope, or exceeded time/cost budget. Allow distinct actionable technical `revise` findings to continue automatically within a bounded *per-task* budget, with a durable checkpoint and full independent re-review; distinguish an explicit “repair as planned” reply from plan-changing guidance. A naive higher threshold merely hides churn, and removing human gates outright loses the architectural catch that mattered here.
+4. **Do nothing:** preserves conservative stops but accepts repeated manual recovery for broad tasks; not recommended for this recurrence.
+
+**Validation proposal:** On the next comparable iteration, record human interventions by reason (policy decision versus routine technical revision), revision findings per task, elapsed worker/reviewer time, unrelated-query refresh counts, final-gate result, and any lost candidate or premature acceptance. Compare with 008A's four revise verdicts and three discussions; inspect whether smaller vertical proofs reduce new late findings without increasing unnecessary tasks or review cost. No experiment date or outcome is assumed.
+
+**Decision pending:** Matt has not selected a factory countermeasure. Repairing the present candidate and altering the future escalation/handoff workflow are separate decisions. This investigation does not change application or workflow code and does not accept 008A.

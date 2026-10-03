@@ -15,6 +15,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 
 | First observed | Kaizen note | Status | Review due |
 | --- | --- | --- | --- |
+| 2026-10-03 | [Problem: adapter review churn required repeated human gates](2026-10-03-adapter-review-churn-required-repeated-human-gates.md) | Open | — |
 | 2026-10-03 | [Problem: BDD scenario feedback arrives after implementation](2026-10-03-bdd-scenario-feedback-arrives-after-implementation.md) | Open | — |
 | 2026-09-30 | [Problem: worker timeout stranded a ready-for-review candidate](2026-09-30-reviewed-candidate-stranded-by-worker-timeout.md) | Open | — |
 | 2026-09-29 | [Problem: deliver is blocked by its own run-ID pointers](2026-09-29-deliver-blocked-by-its-own-run-id-pointers.md) | Closed | — |
