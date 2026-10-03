@@ -139,28 +139,48 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     do: club_invalidations(event, @club_projector)
 
   defp classify_club_projector(%GroupCreated{} = event),
-    do: group_invalidations(event, @club_projector)
+    do: ignore_valid_noop(event, @club_projector, [:club_id, :group_id])
 
   defp classify_club_projector(%GroupEmailSlugAssigned{} = event),
-    do: group_invalidations(event, @club_projector)
+    do: ignore_valid_noop(event, @club_projector, [:club_id, :group_id])
 
   defp classify_club_projector(%ClubRoleDefined{} = event),
-    do: role_definition_invalidations(event, @club_projector)
+    do: ignore_valid_noop(event, @club_projector, [:club_id, :role_id])
 
   defp classify_club_projector(%ClubRolePermissionGranted{} = event),
-    do: role_permission_invalidations(event, @club_projector)
+    do: ignore_valid_noop(event, @club_projector, [:club_id, :role_id])
 
   defp classify_club_projector(%ClubRoleAssignedToMember{} = event),
-    do: exact_role_invalidations(event, @club_projector)
+    do:
+      ignore_valid_noop(
+        event,
+        @club_projector,
+        [:club_id, :membership_id, :person_id, :role_id]
+      )
 
   defp classify_club_projector(%ClubRoleRemovedFromMember{} = event),
-    do: exact_role_invalidations(event, @club_projector)
+    do:
+      ignore_valid_noop(
+        event,
+        @club_projector,
+        [:club_id, :membership_id, :person_id, :role_id]
+      )
 
   defp classify_club_projector(%MemberRoleAssigned{} = event),
-    do: exact_role_invalidations(event, @club_projector)
+    do:
+      ignore_valid_noop(
+        event,
+        @club_projector,
+        [:club_id, :membership_id, :person_id, :role_id]
+      )
 
   defp classify_club_projector(%MemberRoleRemoved{} = event),
-    do: exact_role_invalidations(event, @club_projector)
+    do:
+      ignore_valid_noop(
+        event,
+        @club_projector,
+        [:club_id, :membership_id, :person_id, :role_id]
+      )
 
   defp classify_club_projector(event),
     do: contract_violation(@club_projector, event, :unsupported_projector_event)
@@ -370,10 +390,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
 
   defp role_permission_invalidations(event, projector) do
     with_required(projector, event, [:club_id, :role_id], fn event ->
-      [
-        {:role, event.role_id},
-        {:club_permissions, event.club_id}
-      ]
+      [{:club_permissions, event.club_id}]
     end)
   end
 
@@ -385,8 +402,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
       fn event ->
         [
           {:member_roles, event.club_id, event.membership_id, event.person_id},
-          {:member_permissions, event.club_id, event.membership_id, event.person_id},
-          {:role, event.role_id}
+          {:member_permissions, event.club_id, event.membership_id, event.person_id}
         ]
       end
     )
@@ -403,8 +419,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
       fn scope ->
         [
           {:member_roles, scope.club_id, scope.membership_id, scope.person_id},
-          {:member_permissions, scope.club_id, scope.membership_id, scope.person_id},
-          {:club_permissions, scope.club_id}
+          {:member_permissions, scope.club_id, scope.membership_id, scope.person_id}
         ]
       end,
       reported_event
@@ -465,6 +480,11 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     else
       _missing_or_invalid_membership -> %{}
     end
+  end
+
+  defp ignore_valid_noop(event, projector, required_fields) do
+    require_fields(projector, event, required_fields)
+    :ignore
   end
 
   defp with_required(projector, values, required_fields, build, reported_event \\ nil) do

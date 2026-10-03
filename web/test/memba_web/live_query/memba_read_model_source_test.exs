@@ -50,6 +50,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   alias Memba.Repo
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.LiveQuery.ReadModelContractViolationError
+  alias MembaWeb.MemberMessageDetailQuery
 
   test "subscribes to the shared committed read-model topic" do
     source = MembaReadModelSource.new()
@@ -172,7 +173,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
     assert {:member_roles, "club-1", "membership-1", "person-1"} in invalidations
     assert {:member_permissions, "club-1", "membership-1", "person-1"} in invalidations
-    assert {:role, "role-1"} in invalidations
+    refute {:role, "role-1"} in invalidations
   end
 
   test "uses club-conversation invalidation for root messages and replies" do
@@ -413,6 +414,261 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert_read_count(reads, 2)
   end
 
+  test "conversation detail rereads only for its current member's Membership scope" do
+    {socket, reads} = bind_counting_query(conversation_detail_interests())
+
+    another_member =
+      notification(
+        Memba.Membership.Projectors.Membership,
+        %ClubMemberAdded{
+          club_id: "club-1",
+          membership_id: "membership-other",
+          person_id: "person-other"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, another_member)
+    assert_read_count(reads, 1)
+
+    current_member =
+      notification(
+        Memba.Membership.Projectors.Membership,
+        %ClubMemberAdded{
+          club_id: "club-1",
+          membership_id: "membership-current",
+          person_id: "person-current"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
+    assert_read_count(reads, 2)
+  end
+
+  test "conversation detail rereads only for its current member's group participation" do
+    {socket, reads} = bind_counting_query(conversation_detail_interests())
+
+    another_participant =
+      notification(
+        Memba.Membership.Projectors.GroupMembership,
+        %GroupMemberAdded{
+          club_id: "club-1",
+          group_id: "group-1",
+          membership_id: "membership-other",
+          person_id: "person-other"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, another_participant)
+    assert_read_count(reads, 1)
+
+    current_participant =
+      notification(
+        Memba.Membership.Projectors.GroupMembership,
+        %GroupMemberAdded{
+          club_id: "club-1",
+          group_id: "group-1",
+          membership_id: "membership-current",
+          person_id: "person-current"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, current_participant)
+    assert_read_count(reads, 2)
+  end
+
+  test "only Role definition changes reread a query registered for Role identity" do
+    {socket, reads} = bind_counting_query([{:role, "role-1"}])
+
+    club_compatibility_notifications =
+      Enum.map(
+        club_compatibility_noop_events(),
+        &notification(Memba.Membership.Projectors.Club, &1)
+      )
+
+    role_relationship_notifications = [
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubRolePermissionGranted{
+          club_id: "club-1",
+          role_id: "role-1",
+          permission: "club.manage_members"
+        }
+      ),
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubRoleAssignedToMember{
+          club_id: "club-1",
+          membership_id: "membership-1",
+          person_id: "person-1",
+          role_id: "role-1"
+        }
+      ),
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubRoleRemovedFromMember{
+          club_id: "club-1",
+          membership_id: "membership-1",
+          person_id: "person-1",
+          role_id: "role-1"
+        }
+      ),
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubMemberRemoved{
+          club_id: "club-1",
+          membership_id: "membership-1",
+          person_id: "person-1"
+        }
+      )
+    ]
+
+    Enum.each(
+      club_compatibility_notifications ++ role_relationship_notifications,
+      fn notification ->
+        assert {:ignored, ^socket} = Binding.handle_notification(socket, notification)
+        assert_read_count(reads, 1)
+      end
+    )
+
+    role_defined =
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubRoleDefined{
+          club_id: "club-1",
+          role_id: "role-1",
+          role_key: "admin",
+          name: "Admin"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, role_defined)
+    assert_read_count(reads, 2)
+  end
+
+  test "Role assignment changes reread only the affected member relationship" do
+    for interest_name <- [:member_roles, :member_permissions] do
+      {socket, reads} =
+        bind_counting_query([
+          {interest_name, "club-1", "membership-current", "person-current"}
+        ])
+
+      another_member_events = [
+        %ClubRoleAssignedToMember{
+          club_id: "club-1",
+          membership_id: "membership-other",
+          person_id: "person-other",
+          role_id: "role-1"
+        },
+        %ClubRoleRemovedFromMember{
+          club_id: "club-1",
+          membership_id: "membership-other",
+          person_id: "person-other",
+          role_id: "role-1"
+        },
+        %MemberRoleAssigned{
+          club_id: "club-1",
+          membership_id: "membership-other",
+          person_id: "person-other",
+          role_id: "role-1"
+        },
+        %MemberRoleRemoved{
+          club_id: "club-1",
+          membership_id: "membership-other",
+          person_id: "person-other",
+          role_id: "role-1"
+        }
+      ]
+
+      Enum.each(another_member_events, fn event ->
+        assert {:ignored, ^socket} =
+                 Binding.handle_notification(
+                   socket,
+                   notification(Memba.Membership.Projectors.Role, event)
+                 )
+
+        assert_read_count(reads, 1)
+      end)
+
+      current_member =
+        notification(
+          Memba.Membership.Projectors.Role,
+          %ClubRoleAssignedToMember{
+            club_id: "club-1",
+            membership_id: "membership-current",
+            person_id: "person-current",
+            role_id: "role-1"
+          }
+        )
+
+      assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
+      assert_read_count(reads, 2)
+    end
+  end
+
+  test "Role member removal does not reread another membership in the same club" do
+    {socket, reads} =
+      bind_counting_query([
+        {:member_roles, "club-1", "membership-current", "person-current"},
+        {:member_permissions, "club-1", "membership-current", "person-current"}
+      ])
+
+    another_member =
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubMemberRemoved{
+          club_id: "club-1",
+          membership_id: "membership-other",
+          person_id: "person-other"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, another_member)
+    assert_read_count(reads, 1)
+
+    current_member =
+      notification(
+        Memba.Membership.Projectors.Role,
+        %MemberRemoved{
+          club_id: "club-1",
+          membership_id: "membership-current",
+          person_id: "person-current"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
+    assert_read_count(reads, 2)
+  end
+
+  test "Role permission fan-out rereads only queries for the affected club" do
+    {socket, reads} = bind_counting_query([{:club_permissions, "club-1"}])
+
+    another_club =
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubRolePermissionGranted{
+          club_id: "club-2",
+          role_id: "role-2",
+          permission: "club.manage_members"
+        }
+      )
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, another_club)
+    assert_read_count(reads, 1)
+
+    same_club =
+      notification(
+        Memba.Membership.Projectors.Role,
+        %ClubRolePermissionGranted{
+          club_id: "club-1",
+          role_id: "role-1",
+          permission: "club.manage_members"
+        }
+      )
+
+    assert {:ok, _socket} = Binding.handle_notification(socket, same_club)
+    assert_read_count(reads, 2)
+  end
+
   test "does not reread for access on an unselected represented group" do
     {socket, reads} =
       bind_counting_query([
@@ -512,7 +768,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     end
   end
 
-  test "covers every Club projector event family including group and role compatibility events" do
+  test "covers Club writes and ignores validated compatibility no-ops" do
     assert_family_invalidations(
       Memba.Membership.Projectors.Club,
       [
@@ -522,58 +778,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       [{:club, "club-1"}]
     )
 
-    assert_family_invalidations(
+    assert_family_ignored(
       Memba.Membership.Projectors.Club,
-      [
-        %GroupCreated{
-          club_id: "club-1",
-          group_id: "group-1",
-          group_key: "group-1",
-          name: "Group"
-        },
-        %GroupEmailSlugAssigned{
-          club_id: "club-1",
-          group_id: "group-1",
-          email_slug: "group"
-        }
-      ],
-      [{:club_groups, "club-1"}, {:group, "group-1"}]
+      club_compatibility_noop_events()
     )
+  end
 
-    assert_family_invalidations(
-      Memba.Membership.Projectors.Club,
-      [
-        %ClubRoleDefined{
-          club_id: "club-1",
-          role_id: "role-1",
-          role_key: "admin",
-          name: "Admin"
-        }
-      ],
-      [{:role, "role-1"}, {:club_roles, "club-1"}]
-    )
-
-    assert_family_invalidations(
-      Memba.Membership.Projectors.Club,
-      [
-        %ClubRolePermissionGranted{
-          club_id: "club-1",
-          role_id: "role-1",
-          permission: "club.manage_members"
-        }
-      ],
-      [{:role, "role-1"}, {:club_permissions, "club-1"}]
-    )
-
-    assert_family_invalidations(
-      Memba.Membership.Projectors.Club,
-      exact_role_events(),
-      [
-        {:member_roles, "club-1", "membership-1", "person-1"},
-        {:member_permissions, "club-1", "membership-1", "person-1"},
-        {:role, "role-1"}
-      ]
-    )
+  test "requires real identifying fields before ignoring Club compatibility no-ops" do
+    for event <- club_compatibility_noop_events(),
+        missing_field <- club_compatibility_required_fields(event) do
+      assert_contract_violation(
+        Memba.Membership.Projectors.Club,
+        Map.put(event, missing_field, nil),
+        {:missing_required_fields, [missing_field]}
+      )
+    end
   end
 
   test "covers current and legacy Membership entry and exit with symmetric exact scope" do
@@ -640,8 +859,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       row_event,
       [
         {:member_roles, club_id, membership_id, person_id},
-        {:member_permissions, club_id, membership_id, person_id},
-        {:club_permissions, club_id}
+        {:member_permissions, club_id, membership_id, person_id}
       ]
     )
   end
@@ -781,7 +999,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
           permission: "club.manage_members"
         }
       ],
-      [{:role, "role-1"}, {:club_permissions, "club-1"}]
+      [{:club_permissions, "club-1"}]
     )
 
     assert_family_invalidations(
@@ -789,8 +1007,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       exact_role_events(),
       [
         {:member_roles, "club-1", "membership-1", "person-1"},
-        {:member_permissions, "club-1", "membership-1", "person-1"},
-        {:role, "role-1"}
+        {:member_permissions, "club-1", "membership-1", "person-1"}
       ]
     )
 
@@ -810,8 +1027,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       ],
       [
         {:member_roles, "club-1", "membership-1", "person-1"},
-        {:member_permissions, "club-1", "membership-1", "person-1"},
-        {:club_permissions, "club-1"}
+        {:member_permissions, "club-1", "membership-1", "person-1"}
       ]
     )
   end
@@ -1271,8 +1487,60 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     ]
   end
 
+  defp club_compatibility_noop_events do
+    [
+      %GroupCreated{
+        club_id: "club-1",
+        group_id: "group-1",
+        group_key: "group-1",
+        name: "Group"
+      },
+      %GroupEmailSlugAssigned{
+        club_id: "club-1",
+        group_id: "group-1",
+        email_slug: "group"
+      },
+      %ClubRoleDefined{
+        club_id: "club-1",
+        role_id: "role-1",
+        role_key: "admin",
+        name: "Admin"
+      },
+      %ClubRolePermissionGranted{
+        club_id: "club-1",
+        role_id: "role-1",
+        permission: "club.manage_members"
+      }
+      | exact_role_events()
+    ]
+  end
+
+  defp club_compatibility_required_fields(%GroupCreated{}), do: [:club_id, :group_id]
+  defp club_compatibility_required_fields(%GroupEmailSlugAssigned{}), do: [:club_id, :group_id]
+  defp club_compatibility_required_fields(%ClubRoleDefined{}), do: [:club_id, :role_id]
+
+  defp club_compatibility_required_fields(%ClubRolePermissionGranted{}),
+    do: [:club_id, :role_id]
+
+  defp club_compatibility_required_fields(%event{})
+       when event in [
+              ClubRoleAssignedToMember,
+              ClubRoleRemovedFromMember,
+              MemberRoleAssigned,
+              MemberRoleRemoved
+            ],
+       do: [:club_id, :membership_id, :person_id, :role_id]
+
   defp assert_family_invalidations(projector, events, expected) do
     Enum.each(events, &assert_invalidations(projector, &1, expected))
+  end
+
+  defp assert_family_ignored(projector, events) do
+    source = MembaReadModelSource.new()
+
+    Enum.each(events, fn event ->
+      assert :ignore = Source.classify(source, notification(projector, event))
+    end)
   end
 
   defp assert_invalidations(projector, event, expected, changes \\ %{}) do
@@ -1358,6 +1626,26 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
     assert_read_count(reads, 1)
     {socket, reads}
+  end
+
+  defp conversation_detail_interests do
+    MemberMessageDetailQuery.interests(%{
+      selected_club: %{club_id: "club-1"},
+      current_member: %{
+        id: "person-current",
+        membership_id: "membership-current"
+      },
+      conversation_audience: %{
+        conversation_id: "conversation-1",
+        group_id: "group-1"
+      },
+      message: %{
+        message_id: "conversation-1",
+        sender_id: "person-author"
+      },
+      conversation_entries: [],
+      member_email_delivery_ids: []
+    })
   end
 
   defp assert_read_count(reads, expected) do

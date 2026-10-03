@@ -65,11 +65,9 @@ defmodule MembaWeb.MemberMessageDetailQuery do
 
     [
       {:club, club_id},
-      {:club_members, club_id},
       {:membership, membership_id},
       {:person, person_id},
       {:person_clubs, person_id},
-      {:group_members, group_id},
       {:group_participation, club_id, group_id, person_id},
       {:conversation, conversation_id},
       {:conversation_messages, conversation_id},

@@ -58,11 +58,9 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
 
     for interest <- [
           {:club, "club-1"},
-          {:club_members, "club-1"},
           {:membership, "membership-current"},
           {:person, "person-current"},
           {:person_clubs, "person-current"},
-          {:group_members, "group-1"},
           {:group_participation, "club-1", "group-1", "person-current"},
           {:conversation, "message-root"},
           {:conversation_messages, "message-root"},
@@ -79,6 +77,8 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
       assert interest in interests
     end
 
+    refute {:club_members, "club-1"} in interests
+    refute {:group_members, "group-1"} in interests
     refute {:person, "person-not-represented"} in interests
     refute {:conversation_follows, "message-root"} in interests
     refute {:member_conversation_follows, "person-current"} in interests
