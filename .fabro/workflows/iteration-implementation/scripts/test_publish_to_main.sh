@@ -31,6 +31,7 @@ cp "$iteration_status_source" .fabro/workflows/scripts/iteration_status.py
 chmod +x .fabro/workflows/scripts/iteration_status.py
 cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py.real
 cp "$generated_guard_source" .fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py
+cp "$repo_root/.fabro/workflows/iteration-implementation/scripts/wip_scenario.py" .fabro/workflows/iteration-implementation/scripts/wip_scenario.py
 cat > .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py <<'PY'
 #!/usr/bin/env python3
 import os

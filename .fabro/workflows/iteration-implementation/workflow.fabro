@@ -141,6 +141,22 @@ digraph IterationImplementation {
         timeout="120s"
     ]
 
+    call_shot_and_run_scenario [
+        label="Call Shot and Run WIP Scenario",
+        shape=parallelogram,
+        output_schema="routing",
+        script="python3 -B .fabro/workflows/iteration-implementation/scripts/wip_scenario.py before '{{ inputs.plan_path }}'",
+        timeout="660s"
+    ]
+
+    observe_scenario_after_worker [
+        label="Observe WIP Scenario After Worker",
+        shape=parallelogram,
+        output_schema="routing",
+        script="python3 -B .fabro/workflows/iteration-implementation/scripts/wip_scenario.py after '{{ inputs.plan_path }}'",
+        timeout="660s"
+    ]
+
     implement_next_task [
         label="Implement Prepared Task",
         prompt="@prompts/implement_next_task.md",
@@ -224,7 +240,7 @@ digraph IterationImplementation {
     dev_check [
         label="Run Dev Check",
         shape=parallelogram,
-        script="PATH=\"$PWD/bin:$PATH\" dev ci",
+        script="python3 -B .fabro/workflows/iteration-implementation/scripts/wip_scenario.py final '{{ inputs.plan_path }}' && PATH=\"$PWD/bin:$PATH\" dev ci",
         timeout="1800s"
     ]
 
@@ -357,16 +373,22 @@ digraph IterationImplementation {
     delivery_planner -> task_stopped
     write_planner_output -> guard_delivery_packet [condition="outcome=succeeded"]
     write_planner_output -> task_stopped
-    guard_delivery_packet -> implement_next_task [condition="outcome=succeeded && preferred_label=implement"]
-    guard_delivery_packet -> revise_task [condition="outcome=succeeded && preferred_label=revise"]
+    guard_delivery_packet -> call_shot_and_run_scenario [condition="outcome=succeeded && preferred_label=implement"]
+    guard_delivery_packet -> call_shot_and_run_scenario [condition="outcome=succeeded && preferred_label=revise"]
     guard_delivery_packet -> dev_check [condition="outcome=succeeded && preferred_label=all_done"]
     guard_delivery_packet -> task_stopped [condition="outcome=succeeded && preferred_label=human_blocked"]
     guard_delivery_packet -> task_stopped
+    call_shot_and_run_scenario -> implement_next_task [condition="outcome=succeeded && preferred_label=implement"]
+    call_shot_and_run_scenario -> revise_task [condition="outcome=succeeded && preferred_label=revise"]
+    call_shot_and_run_scenario -> before_delivery_planner [condition="outcome=succeeded && preferred_label=replan"]
+    call_shot_and_run_scenario -> task_stopped
     implement_next_task -> route_worker_result [condition="outcome=succeeded"]
     implement_next_task -> task_stopped
     revise_task -> route_worker_result [condition="outcome=succeeded"]
     revise_task -> task_stopped
-    route_worker_result -> validate_task [condition="outcome=succeeded && preferred_label=review"]
+    route_worker_result -> observe_scenario_after_worker [condition="outcome=succeeded && preferred_label=review"]
+    observe_scenario_after_worker -> validate_task [condition="outcome=succeeded && preferred_label=review"]
+    observe_scenario_after_worker -> task_stopped
     route_worker_result -> before_delivery_planner [condition="outcome=succeeded && preferred_label=replan"]
     route_worker_result -> task_stopped [condition="outcome=succeeded && preferred_label=human_blocked"]
     route_worker_result -> task_stopped

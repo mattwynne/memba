@@ -94,6 +94,7 @@ if [ -n "$recent_commits" ]; then
   echo ''
 fi
 
+python3 -B .fabro/workflows/iteration-implementation/scripts/wip_scenario.py final "$PLAN_PATH"
 python3 .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py "$PLAN_PATH" "$base_sha"
 python3 -B .fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py "$base_sha"
 

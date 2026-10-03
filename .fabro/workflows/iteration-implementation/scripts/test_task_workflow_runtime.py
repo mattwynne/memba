@@ -33,8 +33,8 @@ TASK_ACCEPTED = "- [x] task001 already accepted"
 
 TASK_NODES = {
     "sync_task_list", "todo_readable", "all_tasks_done", "before_delivery_planner",
-    "delivery_planner", "write_planner_output", "guard_delivery_packet", "implement_next_task", "route_worker_result",
-    "validate_task", "apply_task_verdict", "task_escalation", "task_discussion",
+    "delivery_planner", "write_planner_output", "guard_delivery_packet", "call_shot_and_run_scenario",
+    "implement_next_task", "route_worker_result", "observe_scenario_after_worker", "validate_task", "apply_task_verdict", "task_escalation", "task_discussion",
     "reflect_task_discussion", "summarize_task_discussion", "task_clarification_complete",
     "task_stopped", "revise_task",
     "dev_check", "publish_to_main",
@@ -159,12 +159,23 @@ class FabroTaskRuntime(unittest.TestCase):
             shutil.copy2(WORKFLOW_DIR / "schemas" / schema, fixture / "schemas" / schema)
         helpers = fixture / ".fabro/workflows/iteration-implementation/scripts"
         helpers.mkdir(parents=True)
-        for name in ("apply_task_verdict.py", "escalate_task_review.py", "sync_task_list.py", "delivery_planner_state.py"):
+        for name in ("apply_task_verdict.py", "escalate_task_review.py", "sync_task_list.py", "delivery_planner_state.py", "wip_scenario.py"):
             shutil.copy2(WORKFLOW_DIR / "scripts" / name, helpers / name)
 
         (fixture / "scenario.json").write_text(json.dumps(scenario, indent=2) + "\n")
         plan = fixture / "docs/iterations/009-runtime/plan.md"
-        plan.write_text("# Runtime harness plan\n")
+        plan.write_text("# Runtime harness plan\n\n## Allowed acceptance feature changes\n- `acceptance-tests/features/wip.feature`: scenario tag activation.\n")
+        if scenario.get("wip"):
+            feature = fixture / "acceptance-tests/features/wip.feature"
+            feature.parent.mkdir(parents=True)
+            feature.write_text("Feature: Work in progress\n  @todo\n  Scenario: Visible outcome\n    Given an observed state\n")
+            bin_dir = fixture / "bin"
+            bin_dir.mkdir()
+            stub = bin_dir / "dev"
+            first_failure = "Unexpected infrastructure failure" if scenario.get("wip_surprise") else "Undefined step: an observed state"
+            second_result = "echo 'Unexpected new error'\necho '1 test, 1 failure'\nexit 1" if scenario.get("wip_after_surprise") else "echo '1 test, 0 failures'"
+            stub.write_text(f"#!/bin/sh\ncount=$(cat wip-count.txt 2>/dev/null || echo 0)\ncount=$((count + 1))\necho \"$count\" > wip-count.txt\nif [ \"$count\" -eq 1 ]; then\n  echo '{first_failure}'\n  echo '1 test, 1 failure'\n  exit 1\nfi\n{second_result}\n")
+            stub.chmod(0o755)
         (fixture / "docs/iterations/009-runtime/todo.md").write_text(
             "\n".join([TASK_ACCEPTED, TASK_CURRENT, TASK_LATER]) + "\n"
         )
@@ -232,6 +243,10 @@ class FabroTaskRuntime(unittest.TestCase):
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py write-planner-output \'docs/iterations/009-runtime/plan.md\' && git add docs/iterations/009-runtime/.delivery && git commit -qm \'fabro(run): write_planner_output (succeeded)\'"', block)
             elif name == "guard_delivery_packet":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner \'docs/iterations/009-runtime/plan.md\'; status=$?; if [ $status -eq 0 ]; then git add docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): guard_delivery_packet (succeeded)\'; fi; exit $status"', block)
+            elif name in ("call_shot_and_run_scenario", "observe_scenario_after_worker"):
+                mode = "before" if name == "call_shot_and_run_scenario" else "after"
+                command = f"python3 .fabro/workflows/iteration-implementation/scripts/wip_scenario.py {mode} 'docs/iterations/009-runtime/plan.md'; status=$?; if [ $status -eq 0 ]; then git add -A && (git diff --cached --quiet || git commit -qm 'fabro(run): {name} (succeeded)'); fi; exit $status"
+                block = re.sub(r'script="(?:\\.|[^"\\])*"', f'script="{command}"', block)
             elif name == "route_worker_result":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker \'docs/iterations/009-runtime/plan.md\'; status=$?; if [ $status -eq 0 ]; then git add docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): route_worker_result (succeeded)\'; fi; exit $status"', block)
             elif name == "apply_task_verdict":
@@ -352,6 +367,40 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertIn("Fidelity resolved node=delivery_planner fidelity=truncate", combined)
         self.assertIn("Fidelity resolved node=implement_next_task fidelity=truncate", combined)
         self.assertIn("Fidelity resolved node=validate_task fidelity=truncate", combined)
+
+    def test_scenario_prediction_precedes_runner_worker_and_green_removes_wip(self) -> None:
+        fixture = self.make_fixture("wip-green", {"wip": True, "verdicts": [{"decision": "accept"}, {"decision": "accept"}]})
+        result = self.run_fixture(fixture)
+        self.assertEqual(result["status"], 0, result["combined"])
+        before = json.loads((fixture / "docs/iterations/009-runtime/.delivery/wip-before.json").read_text())
+        after = json.loads((fixture / "docs/iterations/009-runtime/.delivery/wip-after.json").read_text())
+        self.assertEqual(before["status"], "predicted_red")
+        self.assertEqual(after["status"], "green")
+        self.assertEqual((fixture / "wip-count.txt").read_text().strip(), "2")
+        self.assertNotIn("@wip", (fixture / "acceptance-tests/features/wip.feature").read_text())
+        stages = result["stages"]
+        self.assertLess(stages.index("call_shot_and_run_scenario"), stages.index("implement_next_task"))
+        self.assertLess(stages.index("observe_scenario_after_worker"), stages.index("validate_task"))
+        self.assertTrue((fixture / "published.txt").exists())
+
+    def test_post_worker_surprise_cannot_accept_or_publish(self) -> None:
+        fixture = self.make_fixture("wip-after-surprise", {"wip": True, "wip_after_surprise": True, "verdicts": [{"decision": "accept"}]})
+        result = self.run_fixture(fixture)
+        self.assertEqual(result["status"], 1, result["combined"])
+        self.assertIn("investigate the surprise", result["combined"])
+        self.assertIn(TASK_CURRENT, self.todo(fixture))
+        self.assertNotIn("publish_to_main", result["stages"])
+        self.assertFalse(json.loads((fixture / "docs/iterations/009-runtime/.delivery/wip-after.json").read_text())["prediction_matched"])
+
+    def test_surprising_scenario_failure_returns_to_planner_without_dispatch(self) -> None:
+        fixture = self.make_fixture("wip-surprise", {"wip": True, "wip_surprise": True})
+        result = self.run_fixture(fixture)
+        self.assertEqual(result["status"], 1, result["combined"])
+        self.assertIn("call_shot_and_run_scenario", result["stages"])
+        self.assertEqual(result["stages"].count("before_delivery_planner"), 2)
+        self.assertNotIn("implement_next_task", result["stages"])
+        self.assertIn(TASK_CURRENT, self.todo(fixture))
+        self.assertEqual(json.loads((fixture / "docs/iterations/009-runtime/.delivery/wip-before.json").read_text())["status"], "surprise")
 
     def test_worker_replan_returns_to_planner_without_review_or_checkoff(self) -> None:
         fixture = self.make_fixture(
@@ -526,7 +575,7 @@ if kind == "delivery_planner":
         "coverage_map": coverage,
         "planner_note": f"fixture planner prepared {attempt}",
     }
-    decision = "ready" if pending is not None else "all_done"
+    decision = "human_blocked" if scenario.get("wip_surprise") and (delivery / "wip-before.json").exists() else ("ready" if pending is not None else "all_done")
     planner_result = {
         "schema_version": 1,
         "plan_path": plan_path,
@@ -534,8 +583,10 @@ if kind == "delivery_planner":
         "source_baseline": source,
         "decision": decision,
     }
+    if decision == "human_blocked":
+        planner_result["actionable_reason"] = "Unexpected scenario failure requires investigation"
     packet = None
-    if pending is not None:
+    if pending is not None and decision == "ready":
         packet = {
             "schema_version": 1,
             "packet_id": f"task-current-{source[:7]}-{attempt}",
@@ -554,7 +605,10 @@ if kind == "delivery_planner":
             "completion_evidence_required": ["latest-worker-result.json"],
             "candidate_origins": required_origins,
             "latest_review": latest_review,
+            "scenario_focus": None,
         }
+        if scenario.get("wip") and pending == "- [ ] current009 implement the current task":
+            packet["scenario_focus"] = {"feature_path": "acceptance-tests/features/wip.feature", "name": "Visible outcome", "predicted_failure": "Undefined step: an observed state", "predicted_after": "green"}
     print(json.dumps({"execution_state": execution_state, "planner_result": planner_result, "current_worker_packet": packet}))
     sys.exit(0)
 

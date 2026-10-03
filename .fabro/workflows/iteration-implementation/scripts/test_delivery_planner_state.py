@@ -113,6 +113,7 @@ class DeliveryPlannerStateTest(unittest.TestCase):
             "focused_validation": ["python -m pytest"],
             "completion_evidence_required": ["latest-worker-result.json"],
             "candidate_origins": candidate_origins or [],
+            "scenario_focus": None,
         }
 
     def write_json(self, name: str, data: dict[str, object]) -> None:
@@ -183,6 +184,19 @@ class DeliveryPlannerStateTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("references must contain objects", result.stderr)
         self.assertFalse((self.delivery / "execution-state.json").exists())
+        self.assertFalse((self.delivery / "current-worker-packet.json").exists())
+
+    def test_typed_output_writer_rejects_an_unrecorded_call_shot(self) -> None:
+        self.start_planner()
+        packet = self.packet()
+        packet["scenario_focus"] = {"feature_path": "acceptance-tests/features/example.feature", "name": "Example"}
+        result = self.invoke("write-planner-output", {
+            "execution_state": self.state(),
+            "planner_result": self.planner_result(),
+            "current_worker_packet": packet,
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("scenario_focus requires only", result.stderr)
         self.assertFalse((self.delivery / "current-worker-packet.json").exists())
 
     def test_typed_output_writer_rejects_direct_artifact_edits(self) -> None:
