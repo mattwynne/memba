@@ -331,6 +331,20 @@ def assert_planner_file_boundary(base: str, todo: Path, delivery: Path) -> None:
         raise ContractError("Delivery planner may only change todo.md and declared planner artifacts; changed: " + ", ".join(disallowed))
 
 
+def validate_scenario_focus(packet: dict[str, Any], path: Path) -> None:
+    if "scenario_focus" not in packet:
+        raise ContractError(f"{path} requires scenario_focus (use null only for explicit technical/recovery work)")
+    focus = packet.get("scenario_focus")
+    if focus is None:
+        return  # Existing technical/recovery packets remain valid; an active @wip is checked by the runner.
+    if not isinstance(focus, dict) or set(focus) != {"feature_path", "name", "predicted_failure", "predicted_after"}:
+        raise ContractError(f"{path} scenario_focus requires only feature_path, name, predicted_failure and predicted_after")
+    for key in ("feature_path", "name", "predicted_failure", "predicted_after"):
+        require_string(focus, key, path)
+    if len(focus["predicted_failure"].strip()) < 12 or (focus["predicted_after"] != "green" and len(focus["predicted_after"].strip()) < 12):
+        raise ContractError(f"{path} scenario_focus predictions must be specific or predicted_after must be green")
+
+
 def write_planner_output(plan: Path) -> None:
     """Persist only Fabro's schema-validated planner response, never agent-written artifacts."""
     paths = delivery_paths(plan)
@@ -367,6 +381,7 @@ def write_planner_output(plan: Path) -> None:
         for ref in require_dict_list(packet, "references", paths["packet"], nonempty=True):
             require_string(ref, "path", paths["packet"])
             require_string(ref, "facts", paths["packet"])
+        validate_scenario_focus(packet, paths["packet"])
     elif packet is not None:
         raise ContractError("Non-ready planner output must have null current_worker_packet")
     write_json(paths["state"], state)
@@ -499,6 +514,7 @@ def validate_packet(paths: dict[str, Path], plan: Path, todo: Path, base: str, s
         raise ContractError("Worker packet source_baseline must equal the guarded planner baseline")
     for key in ("packet_id", "task_id", "outcome"):
         require_string(packet, key, paths["packet"])
+    validate_scenario_focus(packet, paths["packet"])
     attempt = packet.get("attempt")
     if attempt not in ("implementation", "revision"):
         raise ContractError("current-worker-packet.json attempt must be implementation or revision")

@@ -133,6 +133,36 @@ class TaskVerdictTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assert_unchanged_failure(self.invoke(text))
 
+    def test_wip_accept_requires_proven_observation_that_moves_past_predicted_failure(self):
+        path = self.delivery / "current-worker-packet.json"
+        packet = json.loads(path.read_text())
+        packet["scenario_focus"] = {"feature_path": "acceptance-tests/features/member.feature", "name": "Bob sees Alice", "predicted_failure": "Alice did not appear on the list", "predicted_after": "Expected 3 members but saw 2"}
+        path.write_text(json.dumps(packet))
+        missing = self.apply("accept")
+        self.assert_unchanged_failure(missing)
+        self.assertIn("wip-before.json", missing.stderr)
+        before = {"packet_id": packet["packet_id"], "status": "predicted_red", "recorded_at": 100,
+                  "predicted_failure": packet["scenario_focus"]["predicted_failure"], "predicted_after": packet["scenario_focus"]["predicted_after"]}
+        after = {"packet_id": packet["packet_id"], "status": "red", "observed_at": 101,
+                 "feature_path": packet["scenario_focus"]["feature_path"], "scenario_name": "Bob sees Alice",
+                 "output_tail": "Alice did not appear on the list", "predicted_failure_still_present": True,
+                 "predicted_after": packet["scenario_focus"]["predicted_after"], "prediction_matched": True}
+        (self.delivery / "wip-before.json").write_text(json.dumps(before))
+        (self.delivery / "wip-after.json").write_text(json.dumps(after))
+        unchanged = self.apply("accept")
+        self.assert_unchanged_failure(unchanged)
+        self.assertIn("unchanged failure", unchanged.stderr)
+        after["output_tail"] = "Expected 3 members but saw 2"
+        after["predicted_failure_still_present"] = False
+        after["prediction_matched"] = False
+        (self.delivery / "wip-after.json").write_text(json.dumps(after))
+        surprised = self.apply("accept")
+        self.assert_unchanged_failure(surprised)
+        self.assertIn("investigate the surprise", surprised.stderr)
+        after["prediction_matched"] = True
+        (self.delivery / "wip-after.json").write_text(json.dumps(after))
+        self.assert_route(self.apply("accept"), "accept")
+
     def test_failed_worker_validation_cannot_be_accepted(self):
         result_path = self.delivery / "latest-worker-result.json"
         worker_result = json.loads(result_path.read_text())

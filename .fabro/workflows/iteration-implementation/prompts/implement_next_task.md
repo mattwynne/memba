@@ -8,12 +8,13 @@ The planner, not this worker, selected and bounded the task. Read the current pa
 - Implement exactly the packet's `todo_line`, `outcome`, and `scope` only. Respect `scope_exclusions`.
 - On revision, address the packet's latest review gaps for the same pending obligation. Preserve useful candidate work and earlier accepted tasks; do not reset to a clean baseline or start the next task.
 - Treat checked todo lines as durable completed work. Do not redo them.
-- Inspect `git status --short` before editing. The resume gate should normally guarantee a clean tree; if uncommitted changes are present, stop for human input unless they are clearly this packet's in-progress work and you can safely continue it without overwriting it.
+- Inspect `git status --short` before editing. A trusted call-shot stage may have removed `@todo` and added `@wip` to exactly the selected scenario before your visit; preserve that tag change. Otherwise the resume gate should normally guarantee a clean tree; if uncommitted changes are present, stop for human input unless they are clearly this packet's in-progress work and you can safely continue it without overwriting it.
 - Never silently overwrite, discard, or duplicate uncommitted or checkpointed candidate work.
 - Leave the task unchecked. Only the workflow's `apply_task_verdict` command checks it off after independent acceptance.
 - Do not edit `todo.md` except to leave it untouched; task shaping belongs to the delivery planner.
 - Do not spawn subagents in this per-task node.
 - Do not commission an extra independent review. The workflow's `validate_task` node already provides independent review after Fabro checkpoints your candidate task.
+- If the packet has `scenario_focus`, read `.delivery/wip-before.json` and the actual observed diagnostic. Change one meaningful cause of that failure. Do not change or weaken the agreed scenario or remove `@wip` yourself. A trusted stage reruns the *same* scenario after you return and records red/green evidence for independent review. The scenario may remain red after a useful intermediate step; never describe it as passing unless the recorded rerun is green. If the observation is surprising or the agreed rule is unclear, return `replan` or `human_blocked` rather than guessing.
 - Do not commit manually. Fabro will checkpoint your changes automatically after this node; independent validation will inspect that checkpoint evidence.
 
 ## Local reference docs
@@ -47,12 +48,12 @@ Before finishing, write `.delivery/latest-worker-result.json` in the iteration d
 - `packet_id`, `task_id`, `todo_line`: exactly from `current-worker-packet.json`.
 - `result`: one of `ready_for_review`, `replan`, or `human_blocked`.
 - `changed_paths`: changed code/config/test/doc paths for this packet.
-- `validation`: final commands, exit statuses, and concise evidence. For `ready_for_review`, include only successful final validation runs (every `exit_status` must be `0`); summarize superseded failing TDD/diagnostic runs in `notes` instead of adding them to this array.
+- `validation`: final commands, exit statuses, and concise evidence. For `ready_for_review`, include only successful *supporting* focused validations (every `exit_status` must be `0`); the trusted WIP scenario observation is separate and may still be red. Summarize superseded failing TDD/diagnostic runs in `notes` instead of adding them to this array.
 - `notes`: one non-empty concise string summarizing useful discoveries, reusable helpers and non-obvious constraints; do not write an array.
 - `unresolved`: unresolved facts or candidate work still needing validation.
 - For `replan`, include `replan_request` with the specific blocker, partial work, completed checks, remaining validation and why the packet is too broad/missing a prerequisite.
 - For `human_blocked`, state the business/acceptance-contract decision needed.
 
-Use `ready_for_review` only when the packet is implemented and focused validation has passed. Use `replan` for missing preparation, excessive scope, or a technical prerequisite outside the packet. Use `human_blocked` for acceptance-contract ambiguity, unsafe work, repeated non-transient lack of progress, or required decisions.
+Use `ready_for_review` only when the packet's one meaningful change is implemented and supporting focused validation has passed; the trusted stage will rerun the WIP scenario before review, and independent review decides whether the failure genuinely advanced. Use `replan` for missing preparation, excessive scope, or a technical prerequisite outside the packet. Use `human_blocked` for acceptance-contract ambiguity, unsafe work, repeated non-transient lack of progress, or required decisions.
 
 When finished, summarize the packet id, result, changes, validation and any replan/human-blocked evidence. The deterministic workflow reads the JSON artifact for routing.

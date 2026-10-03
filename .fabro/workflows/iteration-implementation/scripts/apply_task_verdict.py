@@ -12,7 +12,7 @@ import tempfile
 import time
 from typing import Any
 
-from delivery_planner_state import ContractError, delivery_paths, run_git, validate_worker_result
+from delivery_planner_state import ContractError, delivery_paths, read_json, run_git, validate_worker_result
 
 PENDING = re.compile(r"^[\t ]*- \[ \] \S[^\r\n]*$")
 SCHEMA_VERSION = 1
@@ -87,6 +87,32 @@ def check_off(todo: Path, lines: list[str], index: int) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def validate_scenario_progress(paths: dict[str, Path], packet: dict[str, Any]) -> None:
+    focus = packet.get("scenario_focus")
+    if not focus:
+        return
+    before = read_json(paths["delivery"] / "wip-before.json")
+    after = read_json(paths["delivery"] / "wip-after.json")
+    if (before.get("packet_id") != packet["packet_id"] or after.get("packet_id") != packet["packet_id"] or
+        before.get("status") != "predicted_red" or after.get("status") not in ("red", "green") or
+        before.get("predicted_failure") != focus.get("predicted_failure") or
+        before.get("predicted_after") != focus.get("predicted_after") or
+        after.get("predicted_after") != focus.get("predicted_after") or
+        after.get("feature_path") != focus.get("feature_path") or
+        after.get("scenario_name") != focus.get("name") or
+        not isinstance(before.get("recorded_at"), int) or not isinstance(after.get("observed_at"), int) or
+        after["observed_at"] < before["recorded_at"]):
+        raise ValueError("Cannot accept WIP task without matching pre-run prediction and post-worker scenario observation")
+    if after.get("prediction_matched") is not True:
+        raise ValueError("Cannot accept WIP task when the post-worker scenario differs from the planner's pre-run prediction; investigate the surprise")
+    if after["status"] == "red":
+        if after.get("predicted_failure_still_present") is not False:
+            raise ValueError("WIP scenario still has the predicted failure (or lacks full-output evidence); do not accept unchanged failure as progress")
+    if after["status"] == "green":
+        from wip_scenario import assert_no_wip
+        assert_no_wip(Path.cwd())
+
+
 def validate_review_artifacts(
     paths: dict[str, Path], task: str, *, allow_accepted_packet: bool = False
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -115,6 +141,11 @@ def apply_verdict(plan: Path, verdict: object) -> None:
         raise ValueError(str(error)) from error
 
     lines, index, replay = validate_todo_application(todo, decision, task)
+    if decision == "accept":
+        try:
+            validate_scenario_progress(paths, packet)
+        except ContractError as error:
+            raise ValueError(str(error)) from error
     verdict_dict = {"decision": decision, "task": task, "reason": reason}
 
     if decision == "accept" and not replay:

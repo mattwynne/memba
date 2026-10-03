@@ -19,6 +19,7 @@ setup_repo() {
   mkdir -p .fabro/workflows/iteration-implementation/scripts docs/iterations/001-example acceptance-tests/features
   cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py
   cp "$generated_guard_source" .fabro/workflows/iteration-implementation/scripts/guard_generated_publish_files.py
+  cp "$repo_root/.fabro/workflows/iteration-implementation/scripts/wip_scenario.py" .fabro/workflows/iteration-implementation/scripts/wip_scenario.py
   cat > docs/iterations/001-example/plan.md <<'PLAN'
 # Example plan
 
@@ -96,6 +97,17 @@ git add acceptance-tests/features/example.feature
 git commit -q -m 'implementation edits feature without permission'
 assert_fails
 grep -q 'locked acceptance feature policy failed' /tmp/implementation-final-gate.err
+
+setup_repo "$workdir/active-wip"
+cd "$workdir/active-wip"
+echo implemented > app.txt
+python3 - <<'PY'
+from pathlib import Path
+path = Path('acceptance-tests/features/example.feature')
+path.write_text(path.read_text().replace('  Scenario: Original scenario', '  @wip\n  Scenario: Original scenario'))
+PY
+assert_fails
+grep -q '@wip scenario must be green and untagged' /tmp/implementation-final-gate.err
 
 setup_repo "$workdir/generated-cache"
 cd "$workdir/generated-cache"

@@ -12,6 +12,7 @@ Keep rule examples in their domain feature files. Put each coherent, possibly cr
 - Untagged scenarios run at the domain/application layer only.
 - `@journey` selects a browser-only scenario; the domain runner excludes it. Use it only for deliberately selected journeys, not to hide unsupported domain steps.
 - `@todo` excludes a genuinely future/unimplemented scenario from both runners until its intended layer is ready. Validated future iteration plans may retain these scenarios on main. Do not use it to hide broken current behaviour.
+- `@wip` marks the one agreed scenario currently driving delivery. The workflow removes that scenario's `@todo`, runs it with an explicit pre-run predicted failure and keeps `@wip` while it is red; when green, the workflow removes `@wip` and normal regression coverage continues. `@wip` does **not** exempt a scenario from the normal runner, and neither a red scenario nor an outstanding `@wip` may be published. The current focused WIP runner supports domain/application examples, not `@journey` browser journeys.
 - `@iteration-NNN` records provenance, not runner selection.
 
 ## Responsive check

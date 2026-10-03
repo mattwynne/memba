@@ -38,7 +38,10 @@ checks = [
     ("revision preserves candidate", "Preserve useful candidate work and earlier accepted tasks" in implementation),
     ("worker replan contract", "`replan`" in implementation and "missing preparation" in implementation),
     ("worker result notes match the guard schema", "one non-empty concise string" in implementation and "do not write an array" in implementation),
-    ("ready worker result contains only passing validation", "For `ready_for_review`, include only successful final validation runs" in implementation and "every `exit_status` must be `0`" in implementation and "superseded failing TDD/diagnostic runs in `notes`" in implementation),
+    ("ready worker result contains only passing supporting validation", "For `ready_for_review`, include only successful *supporting* focused validations" in implementation and "every `exit_status` must be `0`" in implementation and "superseded failing TDD/diagnostic runs in `notes`" in implementation),
+    ("planner calls shot before scenario", "Call your shot:" in planner and '"predicted_failure"' in planner_schema and 'write-planner-output' in graph),
+    ("observed scenario precedes review", "route_worker_result -> observe_scenario_after_worker" in graph and "observe_scenario_after_worker -> validate_task" in graph),
+    ("surprise reenters planner", "call_shot_and_run_scenario -> before_delivery_planner" in graph),
     ("browser tasks use focused checks", "For browser-facing tasks, run targeted browser scenarios or a focused browser harness" in implementation),
     ("ordinary tasks prohibit every broad gate form", "Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command in ordinary implementation tasks." in implementation),
     ("explicit final-validation work preserved", "If the packet explicitly requires a full final-validation task" in implementation),
@@ -50,8 +53,8 @@ checks = [
     ("validator prohibits every broad gate form", "Do not run `dev check`, `dev check --quick`, `dev ci`, or any other unscoped full-suite command in ordinary validation." in validation),
     ("validator does not reintroduce browser full gate", "do not require a duplicate full `dev check` solely because the task changes UI" in validation),
     ("explicit gate requires successful exit evidence", "require its successful exit evidence before accepting the task" in validation),
-    ("planner before worker", "delivery_planner -> write_planner_output" in graph and "write_planner_output -> guard_delivery_packet" in graph and "guard_delivery_packet -> implement_next_task" in graph),
-    ("worker result routing", "route_worker_result -> validate_task" in graph and "route_worker_result -> before_delivery_planner" in graph),
+    ("planner before worker", "delivery_planner -> write_planner_output" in graph and "write_planner_output -> guard_delivery_packet" in graph and "guard_delivery_packet -> call_shot_and_run_scenario" in graph and "call_shot_and_run_scenario -> implement_next_task" in graph),
+    ("worker result routing", "route_worker_result -> observe_scenario_after_worker" in graph and "route_worker_result -> before_delivery_planner" in graph),
     ("review acceptance returns to planner", "apply_task_verdict -> before_delivery_planner" in graph),
     ("revision checks escalation before planner", 'apply_task_verdict -> task_escalation [condition="outcome=succeeded && preferred_label=revise"]' in graph and 'task_escalation -> before_delivery_planner [condition="outcome=succeeded && preferred_label=continue"]' in graph),
     ("delivery launcher does not auto-answer Slack gates", '--auto-approve \\\n      --no-upgrade-check' not in launcher),
@@ -79,6 +82,7 @@ if failed:
 print(f"task execution contract: {len(checks)} checks passed")
 PY
 
+python3 -B "$workflow_dir/scripts/test_wip_scenario.py"
 python3 -B "$workflow_dir/scripts/test_delivery_planner_state.py"
 python3 -B "$workflow_dir/scripts/test_apply_task_verdict.py"
 python3 -B "$workflow_dir/scripts/test_escalate_task_review.py"
