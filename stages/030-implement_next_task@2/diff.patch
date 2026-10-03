@@ -1,0 +1,1311 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 5430b82..4e0466a 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,34 +1,50 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-006a-d3c06ca-bob-sees-alice-2",
+-  "task_id": "task-006a",
+-  "todo_line": "- [ ] 006A Implement the approved domain/application scenario “Bob sees Alice join without reloading” against Bob’s already-open club member LiveView, using the committed membership projection notification path and keeping the scenario green.",
++  "packet_id": "task-007a-1b40c6b-package-extraction-1",
++  "task_id": "task-007a",
++  "todo_line": "- [ ] 007A Create and document the local Mix package and extract the frozen generic query, source and binding contract into it; give the package self-contained tests for construction, one-owner subscription, interest replacement, invalidation matching, refresh, duplicate/out-of-order notifications, bind/rebind races, reconnect and subscriber cleanup, with no Memba or Commanded imports.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/test/features/step_definitions/live_club_member_list_steps.exs"
++    "packages/live_query/.formatter.exs",
++    "packages/live_query/.gitignore",
++    "packages/live_query/README.md",
++    "packages/live_query/config/config.exs",
++    "packages/live_query/lib/live_query/binding.ex",
++    "packages/live_query/lib/live_query/query.ex",
++    "packages/live_query/lib/live_query/source.ex",
++    "packages/live_query/mix.exs",
++    "packages/live_query/mix.lock",
++    "packages/live_query/test/live_query/binding_test.exs",
++    "packages/live_query/test/live_query/lifecycle_test.exs",
++    "packages/live_query/test/live_query/query_test.exs",
++    "packages/live_query/test/live_query/source_test.exs",
++    "packages/live_query/test/support/fixture_live.ex",
++    "packages/live_query/test/support/subscription_tracker.ex",
++    "packages/live_query/test/support/test_endpoint.ex",
++    "packages/live_query/test/test_helper.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/features/domain_cucumber_runner_test.exs test/features/cucumber_configuration_test.exs",
++      "command": "MIX_HOME=/tmp/home/.mix HEX_HOME=/tmp/home/.hex mix format --check-formatted (workdir: packages/live_query)",
+       "exit_status": 0,
+-      "evidence": "5 tests passed with 0 failures; domain feature discovery, tag filtering and shared acceptance-feature configuration compile with the new step module."
++      "evidence": "The standalone package's Elixir, test support and HEEx fixture files are formatted."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs",
++      "command": "MIX_ENV=test MIX_HOME=/tmp/home/.mix HEX_HOME=/tmp/home/.hex mix compile --force --warnings-as-errors (workdir: packages/live_query)",
+       "exit_status": 0,
+-      "evidence": "57 tests passed with 0 failures, preserving the accepted dashboard LiveView and committed membership-invalidation behavior."
++      "evidence": "All 6 package and test-support modules compiled from scratch with warnings treated as errors."
+     },
+     {
+-      "command": "bin/mix format --check-formatted",
++      "command": "MIX_HOME=/tmp/home/.mix HEX_HOME=/tmp/home/.hex mix test (workdir: packages/live_query)",
+       "exit_status": 0,
+-      "evidence": "All Elixir source and test files are formatted."
++      "evidence": "15 self-contained package tests passed with 0 failures, covering constructors, disconnected and connected binding, subscribe-before-read, one shared owner subscription, relevant refresh, atomic interest replacement, duplicate/out-of-order notifications, access-error clearing, bind/rebind races, fresh mount/reconnect and monitored subscriber cleanup."
+     },
+     {
+-      "command": "git diff --check",
++      "command": "if grep -R -nE 'Memba|Commanded|Ecto' lib test mix.exs mix.lock; then exit 1; else echo 'No Memba, Commanded, or Ecto references in package code, tests, or dependencies.'; fi (workdir: packages/live_query)",
+       "exit_status": 0,
+-      "evidence": "No whitespace errors were reported."
++      "evidence": "The package source, package-owned tests and dependency declarations contain no Memba, Commanded or Ecto references."
+     }
+   ],
+-  "notes": "The only implementation path is web/test/features/step_definitions/live_club_member_list_steps.exs, whose Memba.Cucumber.LiveClubMemberListSteps owns the three formerly undefined exact steps. The five scenario steps have one definition each: the Bob-membership Given reuses Memba.Cucumber.AuthenticationSteps, the viewing step uses LiveClubMemberListSteps, the Alice-not-a-member Given reuses Memba.Cucumber.ClubMemberInvitationSteps, and the When/Then use LiveClubMemberListSteps; repository pattern inspection found no duplicate definition. The viewing step reads the scenario club and Bob records, derives the host from ClubSite.url/1, builds a connection for MembaWeb.Endpoint, installs Bob’s normalized email under IdentityAuth.identity_session_key/0, opens connected /members once, stores that LiveView in context, proves Bob’s stable row is present and proves no Alice member row is initially rendered. After the reused Alice Given supplies her person ID, the When step additionally refutes #club-member-<Alice person_id> against that same open view, generates a fresh membership ID, and calls Memba.Membership.add_member/2 with consistency: :strong; it inserts no projection and sends no ReadModelChanges message itself. The AddClubMember command reaches Memba.Membership.Projectors.Membership, whose after_update/3 publishes the committed notification; the existing Memba source emits the matching {:club_members, club_id} collection invalidation already held by the dashboard query, so a previously absent Alice row can enter. The Then step uses the exact LiveView retained in context and asserts Alice’s stable row selector plus rendered name, with no second live/2, request, patch, reload or navigation. The worker did not edit the selected feature wording/tags or todo.md and introduced no application, package, Docker, release or unrelated migration work. The selected @wip scenario was deliberately not worker-run because the trusted after-worker stage owns that observation; superseded local diagnostics were limited to correcting the formatter target and the required LiveViewTest macro imports/module endpoint before the successful validations recorded above.",
++  "notes": "The package preserves the accepted Query, Source and Binding callback shapes and socket-owned lifecycle while documenting notifications as invalidation hints rather than ordered state patches. Package-local LiveView support proves fresh-owner reads and uses a monitoring source tracker to prove cleanup without adding an unsubscribe callback. The initial TDD run failed because the three public modules were intentionally absent; after implementation, the first lifecycle run exposed and led to adding the test-only lazy_html dependency required by Phoenix.LiveViewTest. Because bin/dev test is currently hard-wired to web/ and package integration belongs to tasks 007B/010, focused validation ran the independently testable package directly. Existing web consumers and provisional modules, todo.md, Docker, release and quality-gate files remain untouched, and no unscoped dev check was run.",
+   "unresolved": []
+ }
+diff --git a/packages/live_query/.formatter.exs b/packages/live_query/.formatter.exs
+new file mode 100644
+index 0000000..3035d18
+--- /dev/null
++++ b/packages/live_query/.formatter.exs
+@@ -0,0 +1,4 @@
++[
++  inputs: ["*.{ex,exs}", "{config,lib,test}/**/*.{ex,exs}"],
++  plugins: [Phoenix.LiveView.HTMLFormatter]
++]
+diff --git a/packages/live_query/.gitignore b/packages/live_query/.gitignore
+new file mode 100644
+index 0000000..f1e87cb
+--- /dev/null
++++ b/packages/live_query/.gitignore
+@@ -0,0 +1,5 @@
++/_build/
++/cover/
++/deps/
++/doc/
++/live_query-*.tar
+diff --git a/packages/live_query/README.md b/packages/live_query/README.md
+new file mode 100644
+index 0000000..21087e3
+--- /dev/null
++++ b/packages/live_query/README.md
+@@ -0,0 +1,46 @@
++# LiveQuery
++
++`LiveQuery` is a small, application-independent binding for projection-backed
++Phoenix LiveView assigns. A LiveView owner registers a query, reads one coherent
++result, and refreshes that result when an injected notification source reports a
++matching invalidation.
++
++## Responsibilities
++
++- `LiveQuery.Query` describes a stable query identity, one result assign, and a
++  one-argument loader.
++- `LiveQuery.Source` injects subscription, notification classification, and
++  opaque interest matching.
++- `LiveQuery.Binding` stores registrations on the owner socket, subscribes once
++  per connected owner, and replaces query results and interests together.
++
++A loader returns `{:ok, result, interests}` or `{:error, reason}`. Interests and
++invalidations are deliberately opaque to this package. The application owns
++their vocabulary, projection mapping, query composition, and authorization.
++
++## Lifecycle
++
++Disconnected mounts read current data without subscribing. A connected owner
++subscribes before its first read. If source notifications arrive while a bind or
++rebind is installing inputs and interests, the binding reconciles the window
++with another fresh read. A new owner created by a mount or reconnect subscribes
++and reads again.
++
++Notifications are invalidation hints, not state patches or an ordered event
++log. Every currently relevant notification causes a fresh read, so duplicate or
++out-of-order delivery converges on the current projection state. A successful
++read atomically replaces the public result and complete interest set; superseded
++interests stop matching.
++
++An access error clears that query's public result and interests and is returned
++to the owner. The owner remains responsible for navigation, raising, or
++rendering a private-surface transition. Other socket assigns, including route
++and form state, are not replaced.
++
++## Non-goals
++
++The package does not create a process per query, cache shared results, infer SQL
++predicates, provide durable delivery, patch view models from events, or adapt
++LiveView streams. Subscription cleanup follows owner-process termination and
++the injected source's own subscriber monitoring; there is no separate
++unsubscribe callback.
+diff --git a/packages/live_query/config/config.exs b/packages/live_query/config/config.exs
+new file mode 100644
+index 0000000..cfd6c7d
+--- /dev/null
++++ b/packages/live_query/config/config.exs
+@@ -0,0 +1,6 @@
++import Config
++
++config :live_query, LiveQuery.TestEndpoint,
++  secret_key_base: String.duplicate("live-query-test-secret-", 4),
++  live_view: [signing_salt: "live-query-test"],
++  server: false
+diff --git a/packages/live_query/lib/live_query/binding.ex b/packages/live_query/lib/live_query/binding.ex
+new file mode 100644
+index 0000000..07f8c6a
+--- /dev/null
++++ b/packages/live_query/lib/live_query/binding.ex
+@@ -0,0 +1,319 @@
++defmodule LiveQuery.Binding do
++  @moduledoc """
++  Manages a live-query lifecycle inside its owning LiveView process.
++
++  The binding keeps registration metadata in one reserved socket assign. Each
++  registration installs exactly one public result assign. Connected binding
++  subscribes before reading, notifications refresh only matching registrations,
++  and successful reads replace a result and its opaque interests together.
++
++  Duplicate and out-of-order notifications are treated as invalidation hints:
++  every currently matching notification rereads current state rather than
++  applying the notification as a state patch.
++
++  Access errors are returned to the owning LiveView as `{query_id, reason}`
++  entries. The failed query's public result is cleared and its interests are
++  emptied, while navigation, flash, raising, and other private-surface policy
++  remain the owner's responsibility. The binding creates no process of its own.
++  """
++
++  alias LiveQuery.Query
++  alias LiveQuery.Source
++
++  @binding_assign :__live_query_binding__
++
++  @type query_error :: {query_id :: term(), reason :: term()}
++  @type result ::
++          {:ok, Phoenix.LiveView.Socket.t()}
++          | {:error, [query_error()], Phoenix.LiveView.Socket.t()}
++
++  @doc """
++  Registers and reads one query.
++
++  A disconnected socket reads without subscribing. A connected socket
++  subscribes its owning process before the read. Only one subscription is made
++  for all registrations sharing the same source.
++  """
++  @spec bind(Phoenix.LiveView.Socket.t(), Query.t(), term(), Source.t()) :: result()
++  def bind(socket, %Query{} = query, inputs, %Source{} = source) do
++    with :ok <- source_compatible(socket, source, query.id),
++         :ok <- registration_available(socket, query),
++         {:ok, socket, mailbox_before} <- prepare_connected_bind(socket, source, query.id) do
++      registration = %{query: query, inputs: inputs, interests: []}
++
++      case read_and_install(socket, registration) do
++        {:ok, socket} ->
++          reconcile_bind_window(socket, mailbox_before, query.id)
++
++        {:error, reason, socket} ->
++          {:error, [{query.id, reason}], socket}
++      end
++    else
++      {:error, errors, socket} -> {:error, errors, socket}
++    end
++  end
++
++  @doc """
++  Replaces an existing registration's route-dependent inputs.
++
++  The new read replaces the old result and interests. If it fails, the old
++  result is cleared and the old interests cannot trigger another refresh.
++  """
++  @spec rebind(Phoenix.LiveView.Socket.t(), term(), term()) :: result()
++  def rebind(socket, query_id, inputs) do
++    case fetch_registration(socket, query_id) do
++      {:ok, registration} ->
++        mailbox_before = if connected_and_subscribed?(socket), do: mailbox(), else: nil
++        registration = %{registration | inputs: inputs}
++
++        case read_and_install(socket, registration) do
++          {:ok, socket} ->
++            reconcile_bind_window(socket, mailbox_before, query_id)
++
++          {:error, reason, socket} ->
++            {:error, [{query_id, reason}], socket}
++        end
++
++      :error ->
++        {:error, [{query_id, :not_registered}], socket}
++    end
++  end
++
++  @doc """
++  Classifies one source notification and refreshes matching registrations.
++
++  Successful query refreshes replace only that query's result assign and
++  interests. Access errors are accumulated and returned to the LiveView owner
++  after all affected registrations have had a chance to refresh.
++  """
++  @spec handle_notification(Phoenix.LiveView.Socket.t(), term()) ::
++          {:ignored, Phoenix.LiveView.Socket.t()} | result()
++  def handle_notification(socket, notification) do
++    case binding_state(socket) do
++      %{source: %Source{} = source} ->
++        case Source.classify(source, notification) do
++          :ignore ->
++            {:ignored, socket}
++
++          {:ok, invalidations} when is_list(invalidations) ->
++            refresh_matching(socket, invalidations, MapSet.new())
++
++          other ->
++            {:error, [{:source, {:invalid_classification, other}}], socket}
++        end
++
++      _binding ->
++        {:ignored, socket}
++    end
++  end
++
++  defp prepare_connected_bind(socket, source, query_id) do
++    mailbox_before = if Phoenix.LiveView.connected?(socket), do: mailbox(), else: nil
++    state = binding_state(socket)
++
++    cond do
++      not Phoenix.LiveView.connected?(socket) ->
++        {:ok, put_binding(socket, %{state | source: source}), nil}
++
++      state.subscribed? ->
++        {:ok, socket, mailbox_before}
++
++      true ->
++        socket = put_binding(socket, %{state | source: source})
++
++        case Source.subscribe(source) do
++          :ok ->
++            {:ok, put_binding(socket, %{binding_state(socket) | subscribed?: true}),
++             mailbox_before}
++
++          {:error, reason} ->
++            {:error, [{query_id, {:subscription_failed, reason}}], socket}
++
++          other ->
++            {:error, [{query_id, {:invalid_subscription_result, other}}], socket}
++        end
++    end
++  end
++
++  defp read_and_install(socket, %{query: query} = registration) do
++    case Query.load(query, registration.inputs) do
++      {:ok, result, interests} when is_list(interests) ->
++        registration = %{registration | interests: interests}
++
++        socket =
++          socket
++          |> Phoenix.Component.assign(query.assign, result)
++          |> put_registration(query.id, registration)
++
++        {:ok, socket}
++
++      {:error, reason} ->
++        socket =
++          socket
++          |> Phoenix.Component.assign(query.assign, nil)
++          |> put_registration(query.id, %{registration | interests: []})
++
++        {:error, reason, socket}
++
++      other ->
++        reason = {:invalid_query_result, other}
++
++        socket =
++          socket
++          |> Phoenix.Component.assign(query.assign, nil)
++          |> put_registration(query.id, %{registration | interests: []})
++
++        {:error, reason, socket}
++    end
++  end
++
++  defp reconcile_bind_window(socket, nil, _query_id), do: {:ok, socket}
++
++  defp reconcile_bind_window(socket, mailbox_before, query_id) do
++    source = binding_state(socket).source
++
++    {notifications, invalidations} =
++      mailbox_before
++      |> new_mailbox_messages(mailbox())
++      |> Enum.reduce({[], []}, fn message, {notifications, invalidations} ->
++        case Source.classify(source, message) do
++          {:ok, message_invalidations} when is_list(message_invalidations) ->
++            {[message | notifications], message_invalidations ++ invalidations}
++
++          _ignored_or_invalid ->
++            {notifications, invalidations}
++        end
++      end)
++
++    Enum.each(Enum.reverse(notifications), &consume_message/1)
++
++    if notifications == [] do
++      {:ok, socket}
++    else
++      refresh_matching(socket, Enum.reverse(invalidations), MapSet.new([query_id]))
++    end
++  end
++
++  defp refresh_matching(socket, invalidations, forced_query_ids) do
++    state = binding_state(socket)
++
++    query_ids =
++      Enum.filter(state.order, fn query_id ->
++        MapSet.member?(forced_query_ids, query_id) or
++          registration_matches?(
++            Map.fetch!(state.registrations, query_id),
++            invalidations,
++            state.source
++          )
++      end)
++
++    case query_ids do
++      [] ->
++        {:ignored, socket}
++
++      query_ids ->
++        {socket, errors} =
++          Enum.reduce(query_ids, {socket, []}, fn query_id, {socket, errors} ->
++            registration = Map.fetch!(binding_state(socket).registrations, query_id)
++
++            case read_and_install(socket, registration) do
++              {:ok, socket} -> {socket, errors}
++              {:error, reason, socket} -> {socket, [{query_id, reason} | errors]}
++            end
++          end)
++
++        case Enum.reverse(errors) do
++          [] -> {:ok, socket}
++          errors -> {:error, errors, socket}
++        end
++    end
++  end
++
++  defp registration_matches?(registration, invalidations, source) do
++    Enum.any?(registration.interests, fn interest ->
++      Enum.any?(invalidations, &Source.matches?(source, interest, &1))
++    end)
++  end
++
++  defp source_compatible(socket, source, query_id) do
++    case binding_state(socket).source do
++      nil -> :ok
++      ^source -> :ok
++      _other -> {:error, [{query_id, :different_source}], socket}
++    end
++  end
++
++  defp registration_available(socket, query) do
++    state = binding_state(socket)
++
++    cond do
++      Map.has_key?(state.registrations, query.id) ->
++        {:error, [{query.id, :already_registered}], socket}
++
++      Enum.any?(state.registrations, fn {_id, registration} ->
++        registration.query.assign == query.assign
++      end) ->
++        {:error, [{query.id, {:assign_already_registered, query.assign}}], socket}
++
++      true ->
++        :ok
++    end
++  end
++
++  defp fetch_registration(socket, query_id) do
++    Map.fetch(binding_state(socket).registrations, query_id)
++  end
++
++  defp put_registration(socket, query_id, registration) do
++    state = binding_state(socket)
++
++    order =
++      if Map.has_key?(state.registrations, query_id) do
++        state.order
++      else
++        state.order ++ [query_id]
++      end
++
++    put_binding(socket, %{
++      state
++      | order: order,
++        registrations: Map.put(state.registrations, query_id, registration)
++    })
++  end
++
++  defp connected_and_subscribed?(socket) do
++    Phoenix.LiveView.connected?(socket) and binding_state(socket).subscribed?
++  end
++
++  defp binding_state(socket) do
++    Map.get(socket.assigns, @binding_assign, %{
++      source: nil,
++      subscribed?: false,
++      order: [],
++      registrations: %{}
++    })
++  end
++
++  defp put_binding(socket, state) do
++    Phoenix.Component.assign(socket, @binding_assign, state)
++  end
++
++  defp mailbox do
++    {:messages, messages} = Process.info(self(), :messages)
++    messages
++  end
++
++  defp new_mailbox_messages(messages_before, messages_after) do
++    Enum.reduce(messages_before, messages_after, fn message, remaining ->
++      List.delete(remaining, message)
++    end)
++  end
++
++  defp consume_message(message) do
++    receive do
++      ^message -> :ok
++    after
++      0 -> :already_consumed
++    end
++  end
++end
+diff --git a/packages/live_query/lib/live_query/query.ex b/packages/live_query/lib/live_query/query.ex
+new file mode 100644
+index 0000000..3fd14db
+--- /dev/null
++++ b/packages/live_query/lib/live_query/query.ex
+@@ -0,0 +1,49 @@
++defmodule LiveQuery.Query do
++  @moduledoc """
++  Describes one LiveView-owned query.
++
++  A query has a stable identity, owns exactly one public socket assign, and
++  reads one coherent result from its current inputs. Its interests are opaque
++  to the query and binding; only the injected source knows how to match them.
++
++  Loaders return `{:ok, result, interests}` or `{:error, reason}`. A successful
++  load replaces both the result and the complete interest list.
++  """
++
++  @enforce_keys [:id, :assign, :load]
++  defstruct [:id, :assign, :load]
++
++  @type success :: {:ok, result :: term(), interests :: [term()]}
++  @type access_error :: {:error, reason :: term()}
++  @type loader :: (inputs :: term() -> success() | access_error())
++
++  @type t :: %__MODULE__{
++          id: term(),
++          assign: atom(),
++          load: loader()
++        }
++
++  @doc """
++  Builds a query description with one stable identity, assign, and loader.
++  """
++  @spec new!(keyword()) :: t()
++  def new!(options) when is_list(options) do
++    id = Keyword.fetch!(options, :id)
++    assign = Keyword.fetch!(options, :assign)
++    load = Keyword.fetch!(options, :load)
++
++    unless is_atom(assign) do
++      raise ArgumentError, "live query assign must be an atom, got: #{inspect(assign)}"
++    end
++
++    unless is_function(load, 1) do
++      raise ArgumentError, "live query load must be a one-argument function"
++    end
++
++    %__MODULE__{id: id, assign: assign, load: load}
++  end
++
++  @doc false
++  @spec load(t(), term()) :: success() | access_error()
++  def load(%__MODULE__{load: load}, inputs), do: load.(inputs)
++end
+diff --git a/packages/live_query/lib/live_query/source.ex b/packages/live_query/lib/live_query/source.ex
+new file mode 100644
+index 0000000..323248d
+--- /dev/null
++++ b/packages/live_query/lib/live_query/source.ex
+@@ -0,0 +1,56 @@
++defmodule LiveQuery.Source do
++  @moduledoc """
++  Defines the injected source boundary for live-query notifications.
++
++  A source subscribes the owning connected LiveView process, classifies raw
++  notifications into opaque invalidations, and decides whether an invalidation
++  matches an opaque query interest. Applications retain ownership of the
++  interest and invalidation vocabulary.
++  """
++
++  @enforce_keys [:subscribe, :classify, :matches?]
++  defstruct [:subscribe, :classify, :matches?]
++
++  @type t :: %__MODULE__{
++          subscribe: (-> :ok | {:error, term()}),
++          classify: (term() -> :ignore | {:ok, [term()]}),
++          matches?: (term(), term() -> boolean())
++        }
++
++  @doc """
++  Builds a source from subscription, classification, and matching functions.
++  """
++  @spec new!(keyword()) :: t()
++  def new!(options) when is_list(options) do
++    subscribe = Keyword.fetch!(options, :subscribe)
++    classify = Keyword.fetch!(options, :classify)
++    matches? = Keyword.fetch!(options, :matches?)
++
++    unless is_function(subscribe, 0) do
++      raise ArgumentError, "live query source subscribe must be a zero-argument function"
++    end
++
++    unless is_function(classify, 1) do
++      raise ArgumentError, "live query source classify must be a one-argument function"
++    end
++
++    unless is_function(matches?, 2) do
++      raise ArgumentError, "live query source matches? must be a two-argument function"
++    end
++
++    %__MODULE__{subscribe: subscribe, classify: classify, matches?: matches?}
++  end
++
++  @doc false
++  @spec subscribe(t()) :: :ok | {:error, term()}
++  def subscribe(%__MODULE__{subscribe: subscribe}), do: subscribe.()
++
++  @doc false
++  @spec classify(t(), term()) :: :ignore | {:ok, [term()]}
++  def classify(%__MODULE__{classify: classify}, notification), do: classify.(notification)
++
++  @doc false
++  @spec matches?(t(), term(), term()) :: boolean()
++  def matches?(%__MODULE__{matches?: matches?}, interest, invalidation),
++    do: matches?.(interest, invalidation)
++end
+diff --git a/packages/live_query/mix.exs b/packages/live_query/mix.exs
+new file mode 100644
+index 0000000..cff14d2
+--- /dev/null
++++ b/packages/live_query/mix.exs
+@@ -0,0 +1,31 @@
++defmodule LiveQuery.MixProject do
++  use Mix.Project
++
++  def project do
++    [
++      app: :live_query,
++      version: "0.1.0",
++      elixir: "~> 1.15",
++      elixirc_paths: elixirc_paths(Mix.env()),
++      start_permanent: Mix.env() == :prod,
++      compilers: [:phoenix_live_view] ++ Mix.compilers(),
++      deps: deps()
++    ]
++  end
++
++  def application do
++    [
++      extra_applications: [:logger]
++    ]
++  end
++
++  defp elixirc_paths(:test), do: ["lib", "test/support"]
++  defp elixirc_paths(_environment), do: ["lib"]
++
++  defp deps do
++    [
++      {:phoenix_live_view, "~> 1.1.0"},
++      {:lazy_html, ">= 0.1.0", only: :test}
++    ]
++  end
++end
+diff --git a/packages/live_query/mix.lock b/packages/live_query/mix.lock
+new file mode 100644
+index 0000000..f86e342
+--- /dev/null
++++ b/packages/live_query/mix.lock
+@@ -0,0 +1,17 @@
++%{
++  "cc_precompiler": {:hex, :cc_precompiler, "0.1.11", "8c844d0b9fb98a3edea067f94f616b3f6b29b959b6b3bf25fee94ffe34364768", [:mix], [{:elixir_make, "~> 0.7", [hex: :elixir_make, repo: "hexpm", optional: false]}], "hexpm", "3427232caf0835f94680e5bcf082408a70b48ad68a5f5c0b02a3bea9f3a075b9"},
++  "elixir_make": {:hex, :elixir_make, "0.10.0", "16577e2583a79bb79237bbff349619ef5d80afffc07eac6e4faf0d00e2ddaf7d", [:mix], [], "hexpm", "dc1f09fb7fa68866b886abd5f0f3c83553b1a19a52359a899e92af1bb3b31982"},
++  "fine": {:hex, :fine, "0.1.6", "4bf7151493443c454aac9f2fa2f34f5fefd0346a83fb5586a016c4a135c63247", [:mix], [], "hexpm", "5638eb4495488e885ebec167fa57973e5c35e1a50c344eb7666c90ec1c4e3b12"},
++  "lazy_html": {:hex, :lazy_html, "0.1.13", "860ea816f5bc7936d1ab5ccebc388f9d1031ba9c35ed81a4db9a1c3a50737704", [:make, :mix], [{:cc_precompiler, "~> 0.1", [hex: :cc_precompiler, repo: "hexpm", optional: false]}, {:elixir_make, "~> 0.9", [hex: :elixir_make, repo: "hexpm", optional: false]}, {:fine, "~> 0.1.0", [hex: :fine, repo: "hexpm", optional: false]}], "hexpm", "9a8405d6785fe6f8423b86e0ec5f21806ef79941fe853eac3d14fbbb173c34e9"},
++  "mime": {:hex, :mime, "2.0.7", "b8d739037be7cd402aee1ba0306edfdef982687ee7e9859bee6198c1e7e2f128", [:mix], [], "hexpm", "6171188e399ee16023ffc5b76ce445eb6d9672e2e241d2df6050f3c771e80ccd"},
++  "phoenix": {:hex, :phoenix, "1.8.15", "dcdb304113660ec97e1579458824d3c34b5d2eed07a0fdf25a836a9515b63146", [:mix], [{:bandit, "~> 1.0", [hex: :bandit, repo: "hexpm", optional: true]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:phoenix_pubsub, "~> 2.1", [hex: :phoenix_pubsub, repo: "hexpm", optional: false]}, {:phoenix_template, "~> 1.0", [hex: :phoenix_template, repo: "hexpm", optional: false]}, {:phoenix_view, "~> 2.0", [hex: :phoenix_view, repo: "hexpm", optional: true]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}, {:plug_cowboy, "~> 2.7", [hex: :plug_cowboy, repo: "hexpm", optional: true]}, {:plug_crypto, "~> 2.2", [hex: :plug_crypto, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}, {:websock_adapter, "~> 0.5", [hex: :websock_adapter, repo: "hexpm", optional: false]}], "hexpm", "7b83ed6b3d544f24a29277eab7f051be38b76f390bb511bb6ddb7ec6e8e05b95"},
++  "phoenix_html": {:hex, :phoenix_html, "4.3.0", "d3577a5df4b6954cd7890c84d955c470b5310bb49647f0a114a6eeecc850f7ad", [:mix], [], "hexpm", "3eaa290a78bab0f075f791a46a981bbe769d94bc776869f4f3063a14f30497ad"},
++  "phoenix_live_view": {:hex, :phoenix_live_view, "1.1.33", "8350c8bebabfa318c9afb0970eacced9174cd72603c9be2240e99d550fcc2eed", [:mix], [{:igniter, ">= 0.6.16 and < 1.0.0-0", [hex: :igniter, repo: "hexpm", optional: true]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:lazy_html, "~> 0.1.0", [hex: :lazy_html, repo: "hexpm", optional: true]}, {:phoenix, "~> 1.6.15 or ~> 1.7.0 or ~> 1.8.0-rc", [hex: :phoenix, repo: "hexpm", optional: false]}, {:phoenix_html, "~> 3.3 or ~> 4.0", [hex: :phoenix_html, repo: "hexpm", optional: false]}, {:phoenix_template, "~> 1.0", [hex: :phoenix_template, repo: "hexpm", optional: false]}, {:phoenix_view, "~> 2.0", [hex: :phoenix_view, repo: "hexpm", optional: true]}, {:plug, "~> 1.15", [hex: :plug, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4.2 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "2030f7987f641a269634e021bcde9373e5dea993f9373e628a44da86b2330b6c"},
++  "phoenix_pubsub": {:hex, :phoenix_pubsub, "2.3.0", "03916bfbc31a5121945b3cfffe5aec647a5c97fe1dc172a319b94428562359c9", [:mix], [], "hexpm", "eec7be6e9cf02e2551d389b558402d6c637cd3973796326e7ba4bb03c6b2e91d"},
++  "phoenix_template": {:hex, :phoenix_template, "1.1.0", "b329582281b1e00e4dc664afd60ef5b489cbb356923caa3b1e00abe8651b9a18", [:mix], [{:phoenix_html, "~> 2.14.2 or ~> 3.0 or ~> 4.0", [hex: :phoenix_html, repo: "hexpm", optional: true]}], "hexpm", "eba70070de79b2c3501ef205a74a69f98ab352f3785aa15da9ed161f9fe0fd5d"},
++  "plug": {:hex, :plug, "1.20.3", "56c480c633ec2ce10140e236e15233bf576e1d323887d7c96711bd02ab5160db", [:mix], [{:mime, "~> 1.0 or ~> 2.0", [hex: :mime, repo: "hexpm", optional: false]}, {:plug_crypto, "~> 1.1.1 or ~> 1.2 or ~> 2.0", [hex: :plug_crypto, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4.3 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "be266aee1b8536ef6409d58cf39a3121319f0ec47cfa1b24024485aa0e76ad76"},
++  "plug_crypto": {:hex, :plug_crypto, "2.2.0", "144014737daaf485407f5ed77daeaad74d651b216a28c87543f8cc7043f8efc8", [:mix], [], "hexpm", "83a95744ab1c75876542b6fab135fcc176280e0f301a111c1f757fddcec95d2c"},
++  "telemetry": {:hex, :telemetry, "1.4.2", "a0cb522801dffb1c49fe6e30561badffc7b6d0e180db1300df759faa22062855", [:rebar3], [], "hexpm", "928f6495066506077862c0d1646609eed891a4326bee3126ba54b60af61febb1"},
++  "websock": {:hex, :websock, "0.5.3", "2f69a6ebe810328555b6fe5c831a851f485e303a7c8ce6c5f675abeb20ebdadc", [:mix], [], "hexpm", "6105453d7fac22c712ad66fab1d45abdf049868f253cf719b625151460b8b453"},
++  "websock_adapter": {:hex, :websock_adapter, "0.6.0", "73db5ab8aaefd1a876a97ce3e6afc96562625de69ef17a4e04426e034849d0b8", [:mix], [{:bandit, ">= 0.6.0", [hex: :bandit, repo: "hexpm", optional: true]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}, {:plug_cowboy, "~> 2.6", [hex: :plug_cowboy, repo: "hexpm", optional: true]}, {:websock, "~> 0.5", [hex: :websock, repo: "hexpm", optional: false]}], "hexpm", "50021a85bce8f203b086705d9e0c5415e2c7eb05d319111b0428fe71f9934617"},
++}
+diff --git a/packages/live_query/test/live_query/binding_test.exs b/packages/live_query/test/live_query/binding_test.exs
+new file mode 100644
+index 0000000..a8e46d1
+--- /dev/null
++++ b/packages/live_query/test/live_query/binding_test.exs
+@@ -0,0 +1,343 @@
++defmodule LiveQuery.BindingTest do
++  use ExUnit.Case, async: true
++
++  alias LiveQuery.Binding
++  alias LiveQuery.Query
++  alias LiveQuery.Source
++
++  test "a disconnected bind reads in the owner without subscribing" do
++    owner = self()
++
++    query =
++      query(:members, :members, fn inputs ->
++        send(owner, {:read, self(), inputs})
++        {:ok, %{names: ["Alice"]}, [{:club_members, inputs.club_id}]}
++      end)
++
++    socket =
++      false
++      |> socket()
++      |> Phoenix.Component.assign(:transient, :preserved)
++
++    assert {:ok, socket} = Binding.bind(socket, query, %{club_id: "club-1"}, source(owner))
++    assert_receive {:read, ^owner, %{club_id: "club-1"}}
++    refute_receive {:subscribed, _pid}
++    assert socket.assigns.members == %{names: ["Alice"]}
++    assert socket.assigns.transient == :preserved
++  end
++
++  test "a connected owner subscribes before reading and shares one subscription" do
++    owner = self()
++
++    first =
++      query(:first, :first_result, fn inputs ->
++        send(owner, {:read, :first, self(), inputs})
++        {:ok, %{value: inputs}, [:first]}
++      end)
++
++    second =
++      query(:second, :second_result, fn inputs ->
++        send(owner, {:read, :second, self(), inputs})
++        {:ok, %{value: inputs}, [:second]}
++      end)
++
++    source = source(owner)
++
++    assert {:ok, socket} = Binding.bind(socket(true), first, "one", source)
++    assert_receive {:subscribed, ^owner}
++    assert_receive {:read, :first, ^owner, "one"}
++
++    assert {:ok, socket} = Binding.bind(socket, second, "two", source)
++    assert_receive {:read, :second, ^owner, "two"}
++    refute_receive {:subscribed, _pid}
++    assert socket.assigns.second_result == %{value: "two"}
++  end
++
++  test "only matching registrations refresh and successes replace results and interests" do
++    store =
++      start_agent(%{
++        first: %{result: %{value: "first-v1"}, interests: [:first_old], reads: 0},
++        second: %{result: %{value: "second-v1"}, interests: [:second], reads: 0}
++      })
++
++    socket =
++      true
++      |> socket()
++      |> Phoenix.Component.assign(:transient, %{draft: "keep me"})
++
++    source = source(self())
++
++    assert {:ok, socket} =
++             Binding.bind(socket, stateful_query(:first, :first_result, store), :first, source)
++
++    assert {:ok, socket} =
++             Binding.bind(socket, stateful_query(:second, :second_result, store), :second, source)
++
++    flush_subscription()
++
++    Agent.update(store, fn state ->
++      put_in(state, [:first], %{
++        result: %{value: "first-v2"},
++        interests: [:first_new],
++        reads: state.first.reads
++      })
++    end)
++
++    assert {:ok, socket} = Binding.handle_notification(socket, {:change, :first_old})
++    assert socket.assigns.first_result == %{value: "first-v2"}
++    assert socket.assigns.second_result == %{value: "second-v1"}
++    assert socket.assigns.transient == %{draft: "keep me"}
++    assert read_count(store, :first) == 2
++    assert read_count(store, :second) == 1
++
++    assert {:ignored, socket} = Binding.handle_notification(socket, {:change, :first_old})
++    assert read_count(store, :first) == 2
++
++    Agent.update(store, &put_in(&1, [:first, :result], %{value: "first-v3"}))
++    assert {:ok, socket} = Binding.handle_notification(socket, {:change, :first_new})
++    assert socket.assigns.first_result == %{value: "first-v3"}
++  end
++
++  test "duplicate and out-of-order notifications reread current state without regressing" do
++    store =
++      start_agent(%{
++        current: %{result: %{version: 1}, interests: [:members], reads: 0}
++      })
++
++    query = stateful_query(:members, :members, store)
++    source = sequenced_source(self())
++
++    assert {:ok, socket} = Binding.bind(socket(true), query, :current, source)
++    flush_subscription()
++
++    Agent.update(store, &put_in(&1, [:current, :result], %{version: 2}))
++
++    assert {:ok, socket} =
++             Binding.handle_notification(socket, {:change, :members, 2})
++
++    assert {:ok, socket} =
++             Binding.handle_notification(socket, {:change, :members, 2})
++
++    Agent.update(store, &put_in(&1, [:current, :result], %{version: 3}))
++
++    assert {:ok, socket} =
++             Binding.handle_notification(socket, {:change, :members, 1})
++
++    assert socket.assigns.members == %{version: 3}
++    assert read_count(store, :current) == 4
++  end
++
++  test "route rebind replaces inputs and superseded interests" do
++    store =
++      start_agent(%{
++        old_route: %{result: %{route: :old_route}, interests: [:old_scope], reads: 0},
++        new_route: %{result: %{route: :new_route}, interests: [:new_scope], reads: 0}
++      })
++
++    query = stateful_query(:route, :route_result, store)
++    source = source(self())
++
++    assert {:ok, socket} = Binding.bind(socket(true), query, :old_route, source)
++    flush_subscription()
++    assert {:ok, socket} = Binding.rebind(socket, :route, :new_route)
++
++    assert {:ignored, socket} = Binding.handle_notification(socket, {:change, :old_scope})
++    assert read_count(store, :old_route) == 1
++    assert read_count(store, :new_route) == 1
++
++    assert {:ok, socket} = Binding.handle_notification(socket, {:change, :new_scope})
++    assert socket.assigns.route_result == %{route: :new_route}
++    assert read_count(store, :new_route) == 2
++  end
++
++  test "access errors clear successful data and interests for bind, rebind, and refresh" do
++    store =
++      start_agent(%{
++        allowed: %{result: %{secret: "allowed"}, interests: [:allowed], reads: 0},
++        forbidden: %{error: :forbidden, reads: 0},
++        missing: %{error: :not_found, reads: 0}
++      })
++
++    source = source(self())
++    initial = stateful_query(:initial, :initial_result, store)
++
++    assert {:error, [{:initial, :forbidden}], initial_socket} =
++             Binding.bind(socket(true), initial, :forbidden, source)
++
++    flush_subscription()
++    assert initial_socket.assigns.initial_result == nil
++
++    route = stateful_query(:route, :route_result, store)
++    assert {:ok, socket} = Binding.bind(socket(true), route, :allowed, source)
++    flush_subscription()
++
++    assert {:error, [{:route, :not_found}], socket} =
++             Binding.rebind(socket, :route, :missing)
++
++    assert socket.assigns.route_result == nil
++    assert {:ignored, socket} = Binding.handle_notification(socket, {:change, :allowed})
++
++    refresh = stateful_query(:refresh, :refresh_result, store)
++    assert {:ok, socket} = Binding.bind(socket, refresh, :allowed, source)
++
++    Agent.update(store, fn state ->
++      put_in(state, [:allowed], %{error: :forbidden, reads: state.allowed.reads})
++    end)
++
++    assert {:error, [{:refresh, :forbidden}], socket} =
++             Binding.handle_notification(socket, {:change, :allowed})
++
++    assert socket.assigns.refresh_result == nil
++  end
++
++  test "a relevant notification delivered during bind causes a fresh read" do
++    store = start_agent(%{reads: 0, trace: []})
++
++    source =
++      Source.new!(
++        subscribe: fn ->
++          record_trace(store, :subscribed)
++          :ok
++        end,
++        classify: fn
++          {:projection_changed, :members} ->
++            record_trace(store, :notification_classified)
++            {:ok, [:members]}
++
++          _notification ->
++            :ignore
++        end,
++        matches?: fn interest, invalidation -> interest == invalidation end
++      )
++
++    query =
++      query(:members, :members, fn :current ->
++        read_number =
++          Agent.get_and_update(store, fn state ->
++            next = state.reads + 1
++            {next, %{state | reads: next, trace: state.trace ++ [{:read, next}]}}
++          end)
++
++        if read_number == 1 do
++          send(self(), {:projection_changed, :members})
++          record_trace(store, :notification_delivered_during_read)
++        end
++
++        {:ok, %{version: read_number}, [:members]}
++      end)
++
++    assert {:ok, socket} = Binding.bind(socket(true), query, :current, source)
++    assert socket.assigns.members == %{version: 2}
++
++    assert Agent.get(store, & &1.trace) == [
++             :subscribed,
++             {:read, 1},
++             :notification_delivered_during_read,
++             :notification_classified,
++             {:read, 2}
++           ]
++
++    refute_receive {:projection_changed, :members}
++  end
++
++  test "a relevant notification delivered during rebind rereads the new registration" do
++    store = start_agent(%{old: 0, new: 0})
++
++    query =
++      query(:route, :route_result, fn input ->
++        read_number =
++          Agent.get_and_update(store, fn counts ->
++            next = Map.fetch!(counts, input) + 1
++            {next, Map.put(counts, input, next)}
++          end)
++
++        if input == :new and read_number == 1 do
++          send(self(), {:change, :new_scope})
++        end
++
++        scope = Map.fetch!(%{old: :old_scope, new: :new_scope}, input)
++        {:ok, %{route: input, version: read_number}, [scope]}
++      end)
++
++    assert {:ok, socket} = Binding.bind(socket(true), query, :old, source(self()))
++    flush_subscription()
++    assert {:ok, socket} = Binding.rebind(socket, :route, :new)
++    assert socket.assigns.route_result == %{route: :new, version: 2}
++    assert Agent.get(store, & &1) == %{old: 1, new: 2}
++    refute_receive {:change, :new_scope}
++  end
++
++  defp query(id, assign, load) do
++    Query.new!(id: id, assign: assign, load: load)
++  end
++
++  defp stateful_query(id, assign, store) do
++    query(id, assign, fn input ->
++      Agent.get_and_update(store, fn state ->
++        entry = Map.fetch!(state, input)
++        updated_entry = Map.update!(entry, :reads, &(&1 + 1))
++        state = Map.put(state, input, updated_entry)
++
++        reply =
++          case entry do
++            %{result: result, interests: interests} -> {:ok, result, interests}
++            %{error: reason} -> {:error, reason}
++          end
++
++        {reply, state}
++      end)
++    end)
++  end
++
++  defp source(test_pid) do
++    Source.new!(
++      subscribe: fn ->
++        send(test_pid, {:subscribed, self()})
++        :ok
++      end,
++      classify: fn
++        {:change, invalidation} -> {:ok, [invalidation]}
++        _notification -> :ignore
++      end,
++      matches?: fn interest, invalidation -> interest == invalidation end
++    )
++  end
++
++  defp sequenced_source(test_pid) do
++    Source.new!(
++      subscribe: fn ->
++        send(test_pid, {:subscribed, self()})
++        :ok
++      end,
++      classify: fn
++        {:change, invalidation, _sequence} -> {:ok, [invalidation]}
++        _notification -> :ignore
++      end,
++      matches?: fn interest, invalidation -> interest == invalidation end
++    )
++  end
++
++  defp socket(connected?) do
++    %Phoenix.LiveView.Socket{
++      transport_pid: if(connected?, do: self()),
++      assigns: %{__changed__: %{}}
++    }
++  end
++
++  defp start_agent(initial) do
++    child_spec = Supervisor.child_spec({Agent, fn -> initial end}, id: make_ref())
++    start_supervised!(child_spec)
++  end
++
++  defp read_count(store, input) do
++    Agent.get(store, &get_in(&1, [input, :reads]))
++  end
++
++  defp record_trace(store, event) do
++    Agent.update(store, &Map.update!(&1, :trace, fn events -> events ++ [event] end))
++  end
++
++  defp flush_subscription do
++    assert_receive {:subscribed, _pid}
++  end
++end
+diff --git a/packages/live_query/test/live_query/lifecycle_test.exs b/packages/live_query/test/live_query/lifecycle_test.exs
+new file mode 100644
+index 0000000..6b641a5
+--- /dev/null
++++ b/packages/live_query/test/live_query/lifecycle_test.exs
+@@ -0,0 +1,71 @@
++defmodule LiveQuery.LifecycleTest do
++  use ExUnit.Case, async: false
++
++  import Phoenix.ConnTest
++  import Phoenix.LiveViewTest
++
++  alias LiveQuery.SubscriptionTracker
++
++  @endpoint LiveQuery.TestEndpoint
++
++  setup do
++    start_supervised!(@endpoint)
++    :ok
++  end
++
++  test "a fresh mount after owner termination subscribes again and reads current state" do
++    store = start_agent(1)
++    tracker = start_supervised!({SubscriptionTracker, self()})
++    session = %{"store" => store, "test_pid" => self(), "tracker" => tracker}
++
++    assert {:ok, first_view, first_html} =
++             live_isolated(build_conn(), LiveQuery.FixtureLive, session: session)
++
++    assert first_html =~ ~s(data-version="1")
++    assert_receive {:fixture_subscribed, first_pid}
++    assert first_pid == first_view.pid
++    assert_receive {:fixture_read, ^first_pid, true, 1}
++
++    stop_owner(first_pid)
++    assert_receive {:subscriber_removed, ^first_pid, _reason}
++
++    Agent.update(store, fn _version -> 2 end)
++
++    assert {:ok, second_view, second_html} =
++             live_isolated(build_conn(), LiveQuery.FixtureLive, session: session)
++
++    assert second_html =~ ~s(data-version="2")
++    assert_receive {:fixture_subscribed, second_pid}
++    assert second_pid == second_view.pid
++    assert second_pid != first_pid
++    assert_receive {:fixture_read, ^second_pid, true, 2}
++  end
++
++  test "the source observes subscriber cleanup when the LiveView owner terminates" do
++    store = start_agent(1)
++    tracker = start_supervised!({SubscriptionTracker, self()})
++    session = %{"store" => store, "test_pid" => self(), "tracker" => tracker}
++
++    assert {:ok, view, _html} =
++             live_isolated(build_conn(), LiveQuery.FixtureLive, session: session)
++
++    assert_receive {:fixture_subscribed, owner}
++    assert owner == view.pid
++    assert SubscriptionTracker.subscribers(tracker) == MapSet.new([owner])
++
++    stop_owner(owner)
++    assert_receive {:subscriber_removed, ^owner, _reason}
++    assert SubscriptionTracker.subscribers(tracker) == MapSet.new()
++  end
++
++  defp start_agent(initial) do
++    child_spec = Supervisor.child_spec({Agent, fn -> initial end}, id: make_ref())
++    start_supervised!(child_spec)
++  end
++
++  defp stop_owner(owner) do
++    reference = Process.monitor(owner)
++    GenServer.stop(owner)
++    assert_receive {:DOWN, ^reference, :process, ^owner, :normal}
++  end
++end
+diff --git a/packages/live_query/test/live_query/query_test.exs b/packages/live_query/test/live_query/query_test.exs
+new file mode 100644
+index 0000000..2c86634
+--- /dev/null
++++ b/packages/live_query/test/live_query/query_test.exs
+@@ -0,0 +1,28 @@
++defmodule LiveQuery.QueryTest do
++  use ExUnit.Case, async: true
++
++  alias LiveQuery.Query
++
++  test "constructs a stable one-assign query and delegates loading" do
++    loader = fn inputs -> {:ok, %{inputs: inputs}, [{:scope, inputs}]} end
++    query = Query.new!(id: {:members, 1}, assign: :members, load: loader)
++
++    assert query.id == {:members, 1}
++    assert query.assign == :members
++
++    assert Query.load(query, "club-1") ==
++             {:ok, %{inputs: "club-1"}, [{:scope, "club-1"}]}
++  end
++
++  test "rejects a non-atom assign" do
++    assert_raise ArgumentError, "live query assign must be an atom, got: \"members\"", fn ->
++      Query.new!(id: :members, assign: "members", load: fn _inputs -> {:ok, nil, []} end)
++    end
++  end
++
++  test "rejects a loader with the wrong arity" do
++    assert_raise ArgumentError, "live query load must be a one-argument function", fn ->
++      Query.new!(id: :members, assign: :members, load: fn -> {:ok, nil, []} end)
++    end
++  end
++end
+diff --git a/packages/live_query/test/live_query/source_test.exs b/packages/live_query/test/live_query/source_test.exs
+new file mode 100644
+index 0000000..c37d180
+--- /dev/null
++++ b/packages/live_query/test/live_query/source_test.exs
+@@ -0,0 +1,60 @@
++defmodule LiveQuery.SourceTest do
++  use ExUnit.Case, async: true
++
++  alias LiveQuery.Source
++
++  test "delegates subscription, classification, and opaque matching" do
++    owner = self()
++
++    source =
++      Source.new!(
++        subscribe: fn ->
++          send(owner, :subscribed)
++          :ok
++        end,
++        classify: fn {:changed, invalidations} -> {:ok, invalidations} end,
++        matches?: fn {:scope, scope}, {:scope, candidate} -> scope == candidate end
++      )
++
++    assert Source.subscribe(source) == :ok
++    assert_receive :subscribed
++
++    assert Source.classify(source, {:changed, [{:scope, "club-1"}]}) ==
++             {:ok, [{:scope, "club-1"}]}
++
++    assert Source.matches?(source, {:scope, "club-1"}, {:scope, "club-1"})
++    refute Source.matches?(source, {:scope, "club-1"}, {:scope, "club-2"})
++  end
++
++  test "rejects callbacks with the wrong arity" do
++    assert_raise ArgumentError,
++                 "live query source subscribe must be a zero-argument function",
++                 fn ->
++                   Source.new!(
++                     subscribe: fn _owner -> :ok end,
++                     classify: fn _message -> :ignore end,
++                     matches?: fn _interest, _invalidation -> false end
++                   )
++                 end
++
++    assert_raise ArgumentError,
++                 "live query source classify must be a one-argument function",
++                 fn ->
++                   Source.new!(
++                     subscribe: fn -> :ok end,
++                     classify: fn -> :ignore end,
++                     matches?: fn _interest, _invalidation -> false end
++                   )
++                 end
++
++    assert_raise ArgumentError,
++                 "live query source matches? must be a two-argument function",
++                 fn ->
++                   Source.new!(
++                     subscribe: fn -> :ok end,
++                     classify: fn _message -> :ignore end,
++                     matches?: fn _interest -> false end
++                   )
++                 end
++  end
++end
+diff --git a/packages/live_query/test/support/fixture_live.ex b/packages/live_query/test/support/fixture_live.ex
+new file mode 100644
+index 0000000..393e1a9
+--- /dev/null
++++ b/packages/live_query/test/support/fixture_live.ex
+@@ -0,0 +1,53 @@
++defmodule LiveQuery.FixtureLive do
++  @moduledoc false
++
++  use Phoenix.LiveView
++
++  alias LiveQuery.Binding
++  alias LiveQuery.Query
++  alias LiveQuery.Source
++  alias LiveQuery.SubscriptionTracker
++
++  @impl Phoenix.LiveView
++  def mount(
++        _params,
++        %{"store" => store, "test_pid" => test_pid, "tracker" => tracker},
++        socket
++      ) do
++    source =
++      Source.new!(
++        subscribe: fn ->
++          :ok = SubscriptionTracker.subscribe(tracker, self())
++          send(test_pid, {:fixture_subscribed, self()})
++          :ok
++        end,
++        classify: fn _notification -> :ignore end,
++        matches?: fn interest, invalidation -> interest == invalidation end
++      )
++
++    query =
++      Query.new!(
++        id: :projection,
++        assign: :projection,
++        load: fn :current ->
++          version = Agent.get(store, & &1)
++          send(test_pid, {:fixture_read, self(), connected?(socket), version})
++          {:ok, %{version: version}, [{:version, version}]}
++        end
++      )
++
++    case Binding.bind(socket, query, :current, source) do
++      {:ok, socket} -> {:ok, socket}
++      {:error, errors, _socket} -> raise "fixture binding failed: #{inspect(errors)}"
++    end
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <div id="projection" data-version={@projection.version}>
++      {@projection.version}
++    </div>
++    """
++  end
++end
+diff --git a/packages/live_query/test/support/subscription_tracker.ex b/packages/live_query/test/support/subscription_tracker.ex
+new file mode 100644
+index 0000000..55237d6
+--- /dev/null
++++ b/packages/live_query/test/support/subscription_tracker.ex
+@@ -0,0 +1,39 @@
++defmodule LiveQuery.SubscriptionTracker do
++  @moduledoc false
++
++  use GenServer
++
++  def start_link(test_pid) do
++    GenServer.start_link(__MODULE__, test_pid)
++  end
++
++  def subscribe(tracker, subscriber) do
++    GenServer.call(tracker, {:subscribe, subscriber})
++  end
++
++  def subscribers(tracker) do
++    GenServer.call(tracker, :subscribers)
++  end
++
++  @impl GenServer
++  def init(test_pid) do
++    {:ok, %{test_pid: test_pid, subscribers: %{}}}
++  end
++
++  @impl GenServer
++  def handle_call({:subscribe, subscriber}, _from, state) do
++    reference = Process.monitor(subscriber)
++    subscribers = Map.put(state.subscribers, reference, subscriber)
++    {:reply, :ok, %{state | subscribers: subscribers}}
++  end
++
++  def handle_call(:subscribers, _from, state) do
++    {:reply, MapSet.new(Map.values(state.subscribers)), state}
++  end
++
++  @impl GenServer
++  def handle_info({:DOWN, reference, :process, subscriber, reason}, state) do
++    send(state.test_pid, {:subscriber_removed, subscriber, reason})
++    {:noreply, %{state | subscribers: Map.delete(state.subscribers, reference)}}
++  end
++end
+diff --git a/packages/live_query/test/support/test_endpoint.ex b/packages/live_query/test/support/test_endpoint.ex
+new file mode 100644
+index 0000000..67b4418
+--- /dev/null
++++ b/packages/live_query/test/support/test_endpoint.ex
+@@ -0,0 +1,13 @@
++defmodule LiveQuery.TestEndpoint do
++  @moduledoc false
++
++  use Phoenix.Endpoint, otp_app: :live_query
++
++  @session_options [
++    store: :cookie,
++    key: "_live_query_test",
++    signing_salt: "live-query-test"
++  ]
++
++  socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
++end
+diff --git a/packages/live_query/test/test_helper.exs b/packages/live_query/test/test_helper.exs
+new file mode 100644
+index 0000000..869559e
+--- /dev/null
++++ b/packages/live_query/test/test_helper.exs
+@@ -0,0 +1 @@
++ExUnit.start()
