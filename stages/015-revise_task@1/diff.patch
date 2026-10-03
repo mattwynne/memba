@@ -1,0 +1,188 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 01b2338..9040c19 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,11 +1,10 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008a-59e50fa-contract-lifecycle-revision-3",
++  "packet_id": "task-008a-0c2dbfb-noop-identity-revision-4",
+   "task_id": "task-008a",
+   "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against actual projector/event families and evidenced valid-scope fallbacks in the corrected migration matrix. Preserve exact scoped matching and ignore unrelated projectors; surface known malformed Membership notifications with unrecoverable person identity as contract violations rather than fallback refreshes. Audit remaining fallbacks against real current/legacy event shapes and obtain a fresh independent review.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/live_query/read_model_contract_violation_error.ex",
+     "web/lib/memba_web/live_query/memba_read_model_source.ex",
+     "web/test/memba_web/live_query/memba_read_model_source_test.exs"
+   ],
+@@ -13,29 +12,19 @@
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
+       "exit_status": 0,
+-      "evidence": "28 focused adapter tests passed with 0 failures. They prove the stable exception fields/message through direct classification, ordinary Binding.handle_notification/2, and bind-window reconciliation; complete-envelope gating; all eleven projector families; retained-row-only legacy recovery; exact tuple isolation; false auto-follow no-op; and both delivery contributors' exact mappings plus EmailDeliveryOpened no-op."
+-    },
+-    {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
+-      "exit_status": 0,
+-      "evidence": "8 accepted dashboard and conversation-detail query-vocabulary regression tests passed with 0 failures."
++      "evidence": "30 focused adapter tests passed with 0 failures. Complete false-auto-follow MessageSent and EmailDeliveryOpened notifications remain ignored; each required MessageSent identity and each required EmailDeliveryOpened identity is independently tested as a stable ReadModelContractViolationError, including both delivery projectors. The suite also retains complete-envelope gating, eleven-family dispatch, exact tuple isolation, retained-row-only MemberRemoved recovery, lifecycle-visible exceptions, and state-changing delivery mappings."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+       "exit_status": 0,
+-      "evidence": "The web application files are formatted."
++      "evidence": "All Elixir files are formatted."
+     },
+     {
+       "command": "git diff --check",
+       "exit_status": 0,
+       "evidence": "The packet diff has no whitespace errors."
+-    },
+-    {
+-      "command": "grep -R -n -E 'Memba|Commanded' packages/live_query --exclude-dir=_build --exclude-dir=deps --exclude-dir=node_modules >/tmp/task-008a-package-boundary.txt; test ! -s /tmp/task-008a-package-boundary.txt",
+-      "exit_status": 0,
+-      "evidence": "The frozen generic package still has no Memba or Commanded references."
+     }
+   ],
+-  "notes": "The initial TDD run failed as expected (28 tests, 8 failures): contract violations were returned rather than raised, both Binding lifecycle paths hid them, and incomplete envelopes reached recognized dispatch. The app-owned exception now stores only projector, source-event module and reason, with a deterministic non-sensitive message; no full payload is retained. Memba.ReadModelChanges.publish/4 and every projector after_update/3 call still supply the four-field envelope, so no publisher-shape conflict was found. No package, accepted LiveView/query consumer, projector/event/schema, plan, todo, matrix, ADR or feature file changed. Eleven-family completion table:\n| Projector | Actual source-event families | Exact/evidenced broad invalidations | No-op | Recovery | Malformed/unsupported |\n| --- | --- | --- | --- | --- | --- |\n| Club | ClubCreated/Updated; GroupCreated/GroupEmailSlugAssigned; role definition/permission and current/legacy exact role assignment/removal | club; club_groups + group; role + club_roles/club_permissions; exact member_roles + member_permissions + role | none | none | raise stable exception |\n| Membership | ClubMemberAdded/Removed; MemberAdded/Removed | exact club_members + membership + person + person_clubs | none | retained Membership row only for legacy MemberRemoved | raise; never partial/global fallback |\n| Person | six Person create/email events | exact person + person_emails | none | none | raise |\n| Group | GroupCreated; GroupEmailSlugAssigned | club_groups + exact group | none | none | raise |\n| GroupMembership | GroupMemberAdded/Removed | group_members + person + exact person_groups/group_participation | none | none | raise |\n| Role | definition/permission; current/legacy exact role assignment/removal; membership-removal compatibility events | role + club_roles; evidenced club_permissions fan-out; exact member_roles/member_permissions/role; membership-wide role/permission invalidation | none | retained Membership row only for legacy MemberRemoved | raise; never invent role_id/global fallback |\n| Message | MessageSent roots/replies | exact message/conversation/conversation_messages + evidenced club_conversations because events lack audience group | none | none | raise |\n| ConversationGroupAccess | grant/revoke | exact conversation_access/conversation/group + group_conversations collection | none | none | raise |\n| ConversationFollow | followed/unfollowed; auto-following MessageSent | exact conversation_follow + conversation | MessageSent with sender_follows_conversation false | none | raise |\n| MemberEmailDelivery | created/delivered/delayed/bounced/spam complaint | exact message_deliveries + delivery | replay-only EmailDeliveryOpened | none | raise; no row/change fallback |\n| MembaStaffEmailDelivery | created/delivered/delayed/bounced/spam complaint | exact message_deliveries + delivery, identical to member contributor | replay-only EmailDeliveryOpened | none | raise; no row/change fallback |",
++  "notes": "The focused red run matched the prediction exactly: exit 2 with 30 tests and 2 failures, each reporting \"Expected exception MembaWeb.LiveQuery.ReadModelContractViolationError but nothing was raised\" for malformed recognized no-op events. A shared required-field validator now runs before the ConversationFollow false-auto-follow decision and before either delivery projector ignores EmailDeliveryOpened; valid complete events still return :ignore, while nil identities raise with the exact ordered missing-field reason and deterministic existing message. Both delivery branches use the same path, and no row lookup, committed-changes recovery, broad scope, global fallback, package/API, exception, event, projector, schema, accepted consumer, plan, todo, matrix, ADR, or feature change was introduced. No publisher or historical event shape conflicting with the required identities was found.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+index 517ef36..15d7b65 100644
+--- a/web/lib/memba_web/live_query/memba_read_model_source.ex
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -273,20 +273,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+     do: explicit_follow_invalidations(event)
+ 
+   defp classify_conversation_follow_projector(%MessageSent{} = event) do
+-    if MessageSent.sender_follows_conversation?(event) do
+-      with_required(
++    event =
++      require_fields(
+         @conversation_follow_projector,
+         event,
+-        [:club_id, :message_id, :sender_id],
+-        fn event ->
+-          conversation_id = event.conversation_id || event.message_id
+-
+-          [
+-            {:conversation_follow, conversation_id, event.sender_id},
+-            {:conversation, conversation_id}
+-          ]
+-        end
++        [:club_id, :message_id, :sender_id]
+       )
++
++    if MessageSent.sender_follows_conversation?(event) do
++      conversation_id = event.conversation_id || event.message_id
++
++      {:ok,
++       [
++         {:conversation_follow, conversation_id, event.sender_id},
++         {:conversation, conversation_id}
++       ]}
+     else
+       :ignore
+     end
+@@ -295,7 +296,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   defp classify_conversation_follow_projector(event),
+     do: contract_violation(@conversation_follow_projector, event, :unsupported_projector_event)
+ 
+-  defp classify_delivery_projector(%EmailDeliveryOpened{}, _projector), do: :ignore
++  defp classify_delivery_projector(%EmailDeliveryOpened{} = event, projector) do
++    require_fields(projector, event, [:message_id, :delivery_id])
++    :ignore
++  end
+ 
+   defp classify_delivery_projector(event, projector) do
+     if event_module(event) in @delivery_change_events do
+@@ -474,11 +478,17 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   end
+ 
+   defp with_required(projector, values, required_fields, build, reported_event \\ nil) do
++    values = require_fields(projector, values, required_fields, reported_event)
++
++    {:ok, build.(values)}
++  end
++
++  defp require_fields(projector, values, required_fields, reported_event \\ nil) do
+     missing_fields = Enum.filter(required_fields, &is_nil(Map.get(values, &1)))
+ 
+     case missing_fields do
+       [] ->
+-        {:ok, build.(values)}
++        values
+ 
+       missing_fields ->
+         contract_violation(
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+index 9cabadc..9ad9d83 100644
+--- a/web/test/memba_web/live_query/memba_read_model_source_test.exs
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -328,6 +328,27 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+              )
+   end
+ 
++  test "surfaces malformed no-op MessageSent events before ignoring follow invalidation" do
++    complete_event = %MessageSent{
++      message_id: "conversation-2",
++      club_id: "club-1",
++      sender_id: "person-2",
++      conversation_id: nil,
++      reply_to_message_id: nil,
++      subject: "Plans",
++      body: "Meet at eight",
++      sender_follows_conversation: false
++    }
++
++    for missing_field <- [:club_id, :message_id, :sender_id] do
++      assert_contract_violation(
++        Memba.Messaging.Projectors.ConversationFollow,
++        Map.put(complete_event, missing_field, nil),
++        {:missing_required_fields, [missing_field]}
++      )
++    end
++  end
++
+   test "classifies both delivery contributors with exact message and delivery scope" do
+     source = MembaReadModelSource.new()
+ 
+@@ -839,6 +860,37 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     end
+   end
+ 
++  test "surfaces malformed replay-only EmailDeliveryOpened for both delivery projectors" do
++    delivery_id = Memba.ID.generate(:delivery)
++    message_id = Memba.ID.generate(:message)
++
++    Repo.insert!(%MemberEmailDelivery{
++      delivery_id: delivery_id,
++      message_id: message_id,
++      recipient_id: Memba.ID.generate(:person),
++      recipient_name: "Alice",
++      status: "sent"
++    })
++
++    complete_event = %EmailDeliveryOpened{
++      message_id: message_id,
++      delivery_id: delivery_id
++    }
++
++    for projector <- [
++          Memba.Messaging.Projectors.MemberEmailDelivery,
++          Memba.Messaging.Projectors.MembaStaffEmailDelivery
++        ],
++        missing_field <- [:message_id, :delivery_id] do
++      assert_contract_violation(
++        projector,
++        Map.put(complete_event, missing_field, nil),
++        {:missing_required_fields, [missing_field]},
++        %{delivery: %{delivery_id: delivery_id, message_id: message_id}}
++      )
++    end
++  end
++
+   test "does not recover malformed delivery events from committed changes or projection rows" do
+     delivery_id = Memba.ID.generate(:delivery)
+     message_id = Memba.ID.generate(:message)
