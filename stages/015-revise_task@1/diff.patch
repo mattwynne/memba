@@ -1,0 +1,719 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 55b4be8..98589cc 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,28 +1,26 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008a-e881b12-isolation-vocabulary-revision-5",
++  "packet_id": "task-008a-8cb6cc9-full-projector-isolation-revision-6",
+   "task_id": "task-008a",
+   "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against actual projector/event families and evidenced valid-scope fallbacks in the corrected migration matrix. Preserve exact scoped matching and ignore unrelated projectors; surface known malformed Membership notifications with unrecoverable person identity as contract violations rather than fallback refreshes. Audit remaining fallbacks against real current/legacy event shapes and obtain a fresh independent review.",
+   "result": "ready_for_review",
+   "changed_paths": [
+     "docs/iterations/067-live-projection-queries/migration-matrix.md",
+     "web/lib/memba_web/live_query/memba_read_model_source.ex",
+-    "web/lib/memba_web/member_dashboard_query.ex",
+     "web/lib/memba_web/member_message_detail_query.ex",
+     "web/test/memba_web/live_query/memba_read_model_source_test.exs",
+-    "web/test/memba_web/member_dashboard_query_test.exs",
+     "web/test/memba_web/member_message_detail_query_test.exs"
+   ],
+   "validation": [
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
+       "exit_status": 0,
+-      "evidence": "34 focused adapter and Binding tests passed with 0 failures. Exact invalidation sets cover all retained projector families, and direct loader counters prove unrelated same-conversation follow, cross-club Membership/GroupMembership, and unselected-group access changes stay at one read while relevant exact or conversation-wide changes advance to two."
++      "evidence": "41 focused adapter and Binding tests passed with 0 failures. Exact sets cover all eleven projector families. Loader counters prove Club compatibility no-ops and unchanged Role identities do not reread; another same-club member, same-group participant, or Role relationship stays at one load; current exact authority/Role relationships, RoleDefined, and same-club permission fan-out advance to two."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
+       "exit_status": 0,
+-      "evidence": "8 focused accepted-consumer query tests passed with 0 failures. Dashboard and conversation detail retain concrete collection, identity, authorization, follow, message, and delivery interests without producerless fallback or broad-follow vocabulary."
++      "evidence": "8 focused accepted-consumer query tests passed with 0 failures. Dashboard interests remain unchanged and justified; conversation detail retains exact current membership, person-clubs, group-participation, conversation/access, follow, message, Person, and delivery interests while excluding club_members and group_members."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -35,6 +33,6 @@
+       "evidence": "The packet diff has no whitespace errors."
+     }
+   ],
+-  "notes": "The focused red run matched the recorded prediction: the adapter command exited 2 with 34 tests and 9 failures, including unrelated Binding notifications rereading from count one to two, while the consumer command exited 2 with 8 tests and 2 failures exposing fallback and broad-follow interests. Membership and GroupMembership now invalidate changed relationship/collection/authority dependencies without Person identity; ConversationFollow emits only its exact member relationship; ConversationGroupAccess retains group collection, exact access and conversation-wide authorization but not unchanged Group identity. Both accepted consumers now register only concrete source-produced interests, and the four permitted migration-matrix rows document those dependencies. Existing envelope validation, no-op handling, legacy retained-row recovery, role/permission fan-out, MessageSent club scope, delivery convergence, package API, LiveViews, projectors and acceptance scenario remain untouched.",
++  "notes": "The recorded red predictions matched: the adapter run exited 2 with 41 tests/7 failures (Club no-ops returned invalidations, Role sets contained unexpected role or club_permissions keys, and unrelated detail notifications loaded twice), while the query run exited 2 with 8 tests/1 failure at the first broad-interest refutation. An intermediate format check found one wrapping-only issue, corrected before the successful final check. The eleven-family audit now records: Club create/update exact and compatibility no-ops ignored after field validation; Membership exact collection/relationship/authority; Person exact identity/emails; Group exact collection/identity; GroupMembership exact collection/participation; Role definition=role+club_roles, permission=club_permissions, and assignment/member-removal=exact member_roles+member_permissions; Message exact conversation plus deliberate club-conversation breadth; ConversationGroupAccess exact access plus deliberate conversation-wide authorization; ConversationFollow exact relationship with false auto-follow ignored; and both delivery contributors exact message/delivery with opened ignored. Dashboard interests were audited, rerun, and left unchanged. Conversation detail removed only club_members/group_members while retaining exact fresh-authority dependencies. Complete-envelope gating, strict equality, malformed-event exceptions, legacy retained-row recovery, MessageSent breadth, Role permission fan-out, ConversationGroupAccess breadth, delivery convergence, package API, projectors, LiveViews, todo, plan, ADRs, and acceptance files remain unchanged.",
+   "unresolved": []
+ }
+diff --git a/docs/iterations/067-live-projection-queries/migration-matrix.md b/docs/iterations/067-live-projection-queries/migration-matrix.md
+index 0b61f5b..f44df0f 100644
+--- a/docs/iterations/067-live-projection-queries/migration-matrix.md
++++ b/docs/iterations/067-live-projection-queries/migration-matrix.md
+@@ -115,7 +115,7 @@ and does not promise recovery of a lost broadcast to an uninterrupted process.
+ | Field | Current repository evidence | Required migration |
+ | --- | --- | --- |
+ | Route/session inputs | Session `club_id` and `club_id_source`; path `message_id`; optional query `group_id` for return navigation. | Bind one authorized conversation-detail result. |
+-| Reads and ordinary assigns | `MemberMessageDetail.load/3` resolves a selected active club, current Person/member, root message and club ownership, authoritative conversation access, conversation messages, author Person summaries, exact conversation follow state, and member delivery receipts/summaries. `Messaging.list_member_email_deliverys/1` reads the member receipt projection and left-joins the independently committed staff delivery projection for `reason`. These are currently spread over `selected_club`, `message`, `sender_name`, `current_member`, follow flags, `conversation_entries`, and delivery assigns. | Return the complete detail model under one assign. Interests include selected Club/current member, exact conversation and its message collection, represented author Person identities, exact current-member follow identity, exact message delivery collections contributed by both `MemberEmailDelivery` status and `MembaStaffEmailDelivery` reason rows, and the group/conversation access identities that authorize the result. |
++| Reads and ordinary assigns | `MemberMessageDetail.load/3` resolves a selected active club, current Person/member, root message and club ownership, authoritative conversation access, conversation messages, author Person summaries, exact conversation follow state, and member delivery receipts/summaries. `Messaging.list_member_email_deliverys/1` reads the member receipt projection and left-joins the independently committed staff delivery projection for `reason`. These are currently spread over `selected_club`, `message`, `sender_name`, `current_member`, follow flags, `conversation_entries`, and delivery assigns. | Return the complete detail model under one assign. Interests include selected Club; exact current membership, current Person active-club authority, and current group participation; exact conversation and its message collection; represented author Person identities; exact current-member follow identity; exact message delivery collections contributed by both `MemberEmailDelivery` status and `MembaStaffEmailDelivery` reason rows; and exact plus conversation-wide access identities that authorize the result. Another member joining/leaving the same club or group cannot alter this result, so the detail query does not register club-member or group-member collections. |
+ | Current subscription/predicate | Loads before subscribing. Exact `MemberEmailDelivery` changes refresh when `message_id` matches, but `MembaStaffEmailDelivery` reason changes are not handled; `Message` refreshes when `conversation_id` matches; follow refreshes by conversation; same-club Membership/GroupMembership changes refresh only when `person_id` is current member; ConversationGroupAccess refreshes the exact conversation. | Subscribe before read. Keep exact identity matching, plus collection scope for a newly posted reply. Treat both delivery projectors as independent contributors: either notification rereads the joined result, and the later commit notification converges it regardless of projector commit order. Recompute interests when messages/authors or delivery rows change. |
+ | Fresh authorization/access transition | Loader uses mount-captured active clubs. Access notifications rerun the loader and navigate to the selected group or `/conversations` on any error. Other matching detail notifications currently raise forbidden/not-found on reread errors. | Every relevant refresh reruns fresh active-club, current-member, group-participation, and conversation-access checks. Any access failure must remove the private result and preserve the existing leave-private-surface behavior rather than retaining stale conversation content. |
+ | LiveView-owned transient state | Reply form/body/errors/state; follow command feedback; expanded receipt groups; route params, flash, and navigation. | Preserve all of these when the detail result is replaced. |
+@@ -157,12 +157,12 @@ no-op compatibility events that specialized projectors publish.
+ 
+ | Projector / source events | Logical interests emitted | Old scope | New scope | Entry/exit and consumers | Valid broad scope / invalid payload |
+ | --- | --- | --- | --- | --- | --- |
+-| `Membership.Projectors.Club`: `ClubCreated`, `ClubUpdated` | Club identity for `club_id`; active-club collection by identity email is rederived by query rather than inferred from this event. | `club_id`; an updated event does not carry the old name/slug, but identity is unchanged. Creation has no old row. | Same `club_id`. | Club names/slugs on every result that represents that club. Creation can enter global/staff lists, which are out of scope here. | Known no-op role/group compatibility events still publish; emit their corresponding Group or Role interests. `ClubCreated`/`ClubUpdated` carry `club_id`. An unsupported event or missing required club ID is not a reason to refresh every Club query: surface a contract violation. |
++| `Membership.Projectors.Club`: changing `ClubCreated`, `ClubUpdated`; compatibility no-ops `GroupCreated`, `GroupEmailSlugAssigned`, `ClubRoleDefined`, `ClubRolePermissionGranted`, current/legacy role assignment and removal | Club identity for `club_id` only for create/update. Every compatibility handler returns the unchanged `Ecto.Multi`, so its valid publication is ignored rather than duplicating invalidations owned by Group or Role projectors. | Create/update use `club_id`; an updated event does not carry the old name/slug, but identity is unchanged. Creation has no old row. Compatibility events write no Club, Group, Role, RolePermission, RoleAssignment, or MemberPermission row in this projector. | Same `club_id` for create/update; no changed scope for compatibility no-ops. | Club names/slugs on every result that represents that club. Creation can enter global/staff lists, which are out of scope here. Compatibility publications cause no bound-query reread; the specialized projector's later publication describes any actual write. | `ClubCreated`/`ClubUpdated` require `club_id`. Before returning `:ignore`, Group compatibility events still require club/group IDs; Role definition/permission events require club/role IDs; assignment/removal events require club/membership/person/role IDs. Missing required identity or an unsupported event is a contract violation, not a broad refresh. |
+ | `Membership.Projectors.Membership`: `ClubMemberAdded`, `ClubMemberRemoved`, legacy `MemberAdded`, legacy `MemberRemoved` | Club-member collection for `club_id`; membership identity; active-clubs collection for the affected Person/current identity. | Add: no active row, but event carries destination `club_id`, `membership_id`, `person_id`. Remove: same carried club/person scope is the departing scope. | Add: same club collection now contains the row. Remove: same club collection no longer contains it. | Detects a previously absent club member entering dashboards/counts/settings and represented/current members leaving. Consumed by dashboard, settings, compose, detail, delivery, group creation, and invitation authorization/results as applicable. Membership events do not change the Person projection, so they do not invalidate a represented Person identity. | None for a missing person identity. Recover a genuinely historical omission from committed changes or the membership row where possible; if a known Membership notification has a club ID but no recoverable person ID, surface a contract violation, not a scoped or global fallback. Do not treat an unknown/partial map as another projector event. |
+ | `Membership.Projectors.Person`: `PersonCreated`, `PersonEmailAddressAdded`, `PersonEmailAddressVerified`, `PersonEmailAddressesReplaced`, `PersonPrimaryEmailAddressChanged`, `PersonEmailAddressRemoved` | Exact Person identity and that Person's email-address collection. | No club scope exists. Email events carry Person but generally do not carry a complete prior email collection; old club/group scopes are unavailable. | Same Person identity; new email collection must be reread. | Updates represented names/initials where currently available, settings email rows, authenticated-person resolution, and recipient eligibility/counts for represented group members. A new Person enters member/group results through separate membership events. | No broad fallback: each handled Person event carries `person_id`, and queries register represented/current Person identities. A known event without that identity or an unsupported event is a contract violation, not a new partial variant. |
+ | `Membership.Projectors.Group`: `GroupCreated`, `GroupEmailSlugAssigned` | Club group/discoverable-group collection for `club_id`; exact Group identity for `group_id`. | Creation has no prior row; email-slug assignment has the same group identity and no old slug in the event. | `club_id` and `group_id` carried by both events. | `GroupCreated` lets a previously absent discoverable/participating group enter dashboard and compose choices; identity changes update selected-group display/email. | No missing-ID fallback: both Group events carry `club_id` and `group_id`. Missing required identity or an unsupported event is a contract violation. |
+ | `Membership.Projectors.GroupMembership`: `GroupMemberAdded`, `GroupMemberRemoved` | Group-member collection for `group_id`; current-person participating-group collection for `(club_id, person_id)`; exact group-participation authorization relationship. | Add: no active row but destination club/group/person is carried. Remove: the carried club/group/person is the departing scope. | Same club/group scope after add; no active row after removal. | Detects absent members entering counts/lists and represented members leaving; changes discoverability, compose authorization, dashboard surfaces, and conversation authorization for the affected person. Group-membership events do not change the Person projection, so they do not invalidate a represented Person identity. | No missing-ID fallback: both GroupMembership events carry club, group and person identities. A malformed known event is a contract violation. |
+-| `Membership.Projectors.Role`: `ClubRoleDefined`, `ClubRolePermissionGranted`, exact assignment/removal events, and membership-removal compatibility events | Represented-member role-assignment collection and exact represented role identities for dashboard labels/badges; separately, exact current-person/member permission identity and club role/permission collection for authorization. | Exact `ClubRoleAssignedToMember`/`ClubRoleRemovedFromMember` and legacy role assignment/removal events carry `club_id`, `membership_id`, `person_id`, and `role_id`; assignment has no active assignment, while removal identifies the one departing assignment. `ClubMemberRemoved` carries club/membership/person but no `role_id`; legacy `MemberRemoved` requires only membership and may omit club/person. | Exact assignment enters and exact removal leaves the same club/person/role scope. Both membership-removal compatibility events deactivate **all** assignments and remove flattened permissions for the membership, so there is no single-role new scope. Role definition/permission events retain their carried club/role identity. | Exact role assignment/removal refreshes represented members' labels/badges and, when the affected member is the current actor, separately rechecks authorization. Membership removal invalidates all role labels and permissions for that membership/person. A role-definition change can alter represented labels; a permission grant can fan out current-actor authorization. | `ClubMemberRemoved` and historic `MemberRemoved` remove every role for the membership; never invent `role_id`. The legacy event may genuinely omit club/person, so recover these from committed changes or the membership row. If a changed membership has no recoverable scope, surface the contract violation instead of globally refreshing Role queries. Definition/permission and exact assignment events carry their required identities; a permission grant legitimately invalidates the club-wide permission collection because it can affect multiple members. Do not add unknown-event or missing-ID fallbacks for these known paths. |
++| `Membership.Projectors.Role`: `ClubRoleDefined`, `ClubRolePermissionGranted`, exact assignment/removal events, and membership-removal compatibility events | Definition emits exact Role identity plus the club-role collection because it changes a Role row. Permission grant emits only the club-permission collection because it changes RolePermission and may reconcile MemberPermission rows for many active memberships. Exact assignment/removal and current/legacy membership removal emit only exact member-role and member-permission relationships for the affected `(club_id, membership_id, person_id)`. | Exact `ClubRoleAssignedToMember`/`ClubRoleRemovedFromMember` and legacy role assignment/removal events carry `club_id`, `membership_id`, `person_id`, and `role_id`; assignment has no active assignment, while removal identifies the one departing assignment. `ClubMemberRemoved` carries club/membership/person but no `role_id`; legacy `MemberRemoved` requires only membership and may omit club/person. | Definition inserts/updates Role. Permission grant inserts RolePermission and can rebuild permissions for multiple members, but does not change Role. Exact assignment/removal changes one RoleAssignment plus that membership's flattened permissions, but does not change Role. Both membership-removal events deactivate all assignments and remove permissions for only that membership. | Exact role assignment/removal refreshes the affected represented member's labels/badges and, when that member is the current actor, rechecks exact authorization. Membership removal invalidates only that membership's labels and permissions. Definition refreshes club role consumers; permission grant deliberately fans out to same-club permission consumers, never another club. | `ClubMemberRemoved` and historic `MemberRemoved` remove every role for one membership; never invent `role_id` or emit club-wide permission scope. The legacy event may genuinely omit club/person, so recover these from the retained membership row. If scope is unrecoverable, surface the contract violation. Definition, permission and exact assignment events require all real identifying fields even when an ID is not emitted as an invalidation. |
+ | `Messaging.Projectors.Message`: `MessageSent` for roots and replies | Exact message identity; conversation-message collection for derived `conversation_id` (`event.conversation_id` or root `message_id`); club conversation collection. | New message has no prior row. The event carries club and exact/derivable conversation, but no audience `group_id`. | Same club and derived conversation now contain the new message. | A new root can enter the dashboard's root-time-ordered conversation collection and enters conversation detail. A reply enters conversation detail and updates dashboard-derived reply count, latest replier, and participants, but does **not** reorder dashboard rows: ordering and displayed `sent_at` remain the root's `inserted_at`. Author Person identity is registered after reread. | `MessageSent` genuinely lacks audience group: emit the club-conversation collection alongside exact conversation/message keys. Its club/message identities are required; an absent one is a contract violation, not a fallback variant. |
+ | `Messaging.Projectors.ConversationGroupAccess`: `ConversationAccessGrantedToGroup`, `ConversationAccessRevokedFromGroup` | Exact conversation-access identity; group conversation collection for `group_id`; exact Conversation identity for conversation-wide authorization. | Grant is an upsert: the relationship may be absent, or an existing conversation/group grant may already have a lower/different access level; the event identifies the relationship but does not carry that prior level. Revoke carries `club_id`, `group_id`, and `conversation_id` for the departing relationship. | Grant uses the carried relationship with its new access level; revoke leaves it. | A new grant or access-level replacement can make a conversation enter/leave a selected group's readable dashboard collection; revoke removes it. Every change forces fresh access for conversation/delivery detail. The access projector does not change the Group projection, so an unselected represented Group identity does not invalidate the query. | Both events identify the club, group and conversation. A grant may replace a prior access level, so invalidate the group collection, exact access identity, and conversation-wide authorization without knowing the old level. Missing required identities are invalid; do not add partial-relationship fallbacks. |
+ | `Messaging.Projectors.ConversationFollow`: `ConversationFollowed`, `ConversationUnfollowed`, and auto-following `MessageSent` | Exact follow identity `(conversation_id, member_id)`. | Same conversation/member; prior following value is not needed. For root `MessageSent`, conversation derives from message ID. | Same conversation/member with the new following value. | Updates only that member's follow state on conversation detail. It does not change the conversation projection, grant access or create delivery eligibility. | Follow/unfollow events carry both identities; auto-following `MessageSent` supplies sender and a root/explicit conversation ID. When `sender_follows_conversation: false`, its projection is a no-op and must not invalidate follow state. Missing required identities are invalid, not partial-scope variants. |
+@@ -180,7 +180,7 @@ types to task 003.
+ | Group creation | Current identity's active clubs and selected club membership | Selected Club and current Person/member | Current-person club role/permission |
+ | Settings | Current Person's active club memberships and email addresses | Current Person, selected and represented Clubs | Selected-club current membership |
+ | Message compose | Club members; current-person participating groups; selected-group members | Selected Club/Group and represented current/recipient Persons | Current club membership and selected-group participation |
+-| Conversation detail | Conversation messages; exact message delivery collections from both member-status and staff-reason projections | Selected Club, conversation/root message, represented message authors, exact follow, exact delivery IDs | Current club/group membership and exact conversation access |
++| Conversation detail | Conversation messages; exact message delivery collections from both member-status and staff-reason projections; no club-member or group-member collection | Selected Club, current membership, current Person/active-club authority, conversation/root message, represented message authors, exact follow, exact delivery IDs | Exact current group participation, exact conversation access, and conversation-wide authorization |
+ | Delivery detail | Exact message delivery collection from both independently committed delivery projections; conversation messages only if retained in the view model | Selected Club, conversation/root message, represented authors/recipients, exact delivery IDs | Current club/group membership and exact conversation access |
+ | Invitation | Club members | Selected Club and current Person/member | Current-person club role/permission |
+ 
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+index ada671a..ae48703 100644
+--- a/web/lib/memba_web/live_query/memba_read_model_source.ex
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -139,28 +139,48 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+     do: club_invalidations(event, @club_projector)
+ 
+   defp classify_club_projector(%GroupCreated{} = event),
+-    do: group_invalidations(event, @club_projector)
++    do: ignore_valid_noop(event, @club_projector, [:club_id, :group_id])
+ 
+   defp classify_club_projector(%GroupEmailSlugAssigned{} = event),
+-    do: group_invalidations(event, @club_projector)
++    do: ignore_valid_noop(event, @club_projector, [:club_id, :group_id])
+ 
+   defp classify_club_projector(%ClubRoleDefined{} = event),
+-    do: role_definition_invalidations(event, @club_projector)
++    do: ignore_valid_noop(event, @club_projector, [:club_id, :role_id])
+ 
+   defp classify_club_projector(%ClubRolePermissionGranted{} = event),
+-    do: role_permission_invalidations(event, @club_projector)
++    do: ignore_valid_noop(event, @club_projector, [:club_id, :role_id])
+ 
+   defp classify_club_projector(%ClubRoleAssignedToMember{} = event),
+-    do: exact_role_invalidations(event, @club_projector)
++    do:
++      ignore_valid_noop(
++        event,
++        @club_projector,
++        [:club_id, :membership_id, :person_id, :role_id]
++      )
+ 
+   defp classify_club_projector(%ClubRoleRemovedFromMember{} = event),
+-    do: exact_role_invalidations(event, @club_projector)
++    do:
++      ignore_valid_noop(
++        event,
++        @club_projector,
++        [:club_id, :membership_id, :person_id, :role_id]
++      )
+ 
+   defp classify_club_projector(%MemberRoleAssigned{} = event),
+-    do: exact_role_invalidations(event, @club_projector)
++    do:
++      ignore_valid_noop(
++        event,
++        @club_projector,
++        [:club_id, :membership_id, :person_id, :role_id]
++      )
+ 
+   defp classify_club_projector(%MemberRoleRemoved{} = event),
+-    do: exact_role_invalidations(event, @club_projector)
++    do:
++      ignore_valid_noop(
++        event,
++        @club_projector,
++        [:club_id, :membership_id, :person_id, :role_id]
++      )
+ 
+   defp classify_club_projector(event),
+     do: contract_violation(@club_projector, event, :unsupported_projector_event)
+@@ -370,10 +390,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+ 
+   defp role_permission_invalidations(event, projector) do
+     with_required(projector, event, [:club_id, :role_id], fn event ->
+-      [
+-        {:role, event.role_id},
+-        {:club_permissions, event.club_id}
+-      ]
++      [{:club_permissions, event.club_id}]
+     end)
+   end
+ 
+@@ -385,8 +402,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+       fn event ->
+         [
+           {:member_roles, event.club_id, event.membership_id, event.person_id},
+-          {:member_permissions, event.club_id, event.membership_id, event.person_id},
+-          {:role, event.role_id}
++          {:member_permissions, event.club_id, event.membership_id, event.person_id}
+         ]
+       end
+     )
+@@ -403,8 +419,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+       fn scope ->
+         [
+           {:member_roles, scope.club_id, scope.membership_id, scope.person_id},
+-          {:member_permissions, scope.club_id, scope.membership_id, scope.person_id},
+-          {:club_permissions, scope.club_id}
++          {:member_permissions, scope.club_id, scope.membership_id, scope.person_id}
+         ]
+       end,
+       reported_event
+@@ -467,6 +482,11 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+     end
+   end
+ 
++  defp ignore_valid_noop(event, projector, required_fields) do
++    require_fields(projector, event, required_fields)
++    :ignore
++  end
++
+   defp with_required(projector, values, required_fields, build, reported_event \\ nil) do
+     values = require_fields(projector, values, required_fields, reported_event)
+ 
+diff --git a/web/lib/memba_web/member_message_detail_query.ex b/web/lib/memba_web/member_message_detail_query.ex
+index e0ba2e8..847a668 100644
+--- a/web/lib/memba_web/member_message_detail_query.ex
++++ b/web/lib/memba_web/member_message_detail_query.ex
+@@ -65,11 +65,9 @@ defmodule MembaWeb.MemberMessageDetailQuery do
+ 
+     [
+       {:club, club_id},
+-      {:club_members, club_id},
+       {:membership, membership_id},
+       {:person, person_id},
+       {:person_clubs, person_id},
+-      {:group_members, group_id},
+       {:group_participation, club_id, group_id, person_id},
+       {:conversation, conversation_id},
+       {:conversation_messages, conversation_id},
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+index 895747f..e5ca5e6 100644
+--- a/web/test/memba_web/live_query/memba_read_model_source_test.exs
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -50,6 +50,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+   alias Memba.Repo
+   alias MembaWeb.LiveQuery.MembaReadModelSource
+   alias MembaWeb.LiveQuery.ReadModelContractViolationError
++  alias MembaWeb.MemberMessageDetailQuery
+ 
+   test "subscribes to the shared committed read-model topic" do
+     source = MembaReadModelSource.new()
+@@ -172,7 +173,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+ 
+     assert {:member_roles, "club-1", "membership-1", "person-1"} in invalidations
+     assert {:member_permissions, "club-1", "membership-1", "person-1"} in invalidations
+-    assert {:role, "role-1"} in invalidations
++    refute {:role, "role-1"} in invalidations
+   end
+ 
+   test "uses club-conversation invalidation for root messages and replies" do
+@@ -413,6 +414,261 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     assert_read_count(reads, 2)
+   end
+ 
++  test "conversation detail rereads only for its current member's Membership scope" do
++    {socket, reads} = bind_counting_query(conversation_detail_interests())
++
++    another_member =
++      notification(
++        Memba.Membership.Projectors.Membership,
++        %ClubMemberAdded{
++          club_id: "club-1",
++          membership_id: "membership-other",
++          person_id: "person-other"
++        }
++      )
++
++    assert {:ignored, socket} = Binding.handle_notification(socket, another_member)
++    assert_read_count(reads, 1)
++
++    current_member =
++      notification(
++        Memba.Membership.Projectors.Membership,
++        %ClubMemberAdded{
++          club_id: "club-1",
++          membership_id: "membership-current",
++          person_id: "person-current"
++        }
++      )
++
++    assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
++    assert_read_count(reads, 2)
++  end
++
++  test "conversation detail rereads only for its current member's group participation" do
++    {socket, reads} = bind_counting_query(conversation_detail_interests())
++
++    another_participant =
++      notification(
++        Memba.Membership.Projectors.GroupMembership,
++        %GroupMemberAdded{
++          club_id: "club-1",
++          group_id: "group-1",
++          membership_id: "membership-other",
++          person_id: "person-other"
++        }
++      )
++
++    assert {:ignored, socket} = Binding.handle_notification(socket, another_participant)
++    assert_read_count(reads, 1)
++
++    current_participant =
++      notification(
++        Memba.Membership.Projectors.GroupMembership,
++        %GroupMemberAdded{
++          club_id: "club-1",
++          group_id: "group-1",
++          membership_id: "membership-current",
++          person_id: "person-current"
++        }
++      )
++
++    assert {:ok, _socket} = Binding.handle_notification(socket, current_participant)
++    assert_read_count(reads, 2)
++  end
++
++  test "only Role definition changes reread a query registered for Role identity" do
++    {socket, reads} = bind_counting_query([{:role, "role-1"}])
++
++    club_compatibility_notifications =
++      Enum.map(
++        club_compatibility_noop_events(),
++        &notification(Memba.Membership.Projectors.Club, &1)
++      )
++
++    role_relationship_notifications = [
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubRolePermissionGranted{
++          club_id: "club-1",
++          role_id: "role-1",
++          permission: "club.manage_members"
++        }
++      ),
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubRoleAssignedToMember{
++          club_id: "club-1",
++          membership_id: "membership-1",
++          person_id: "person-1",
++          role_id: "role-1"
++        }
++      ),
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubRoleRemovedFromMember{
++          club_id: "club-1",
++          membership_id: "membership-1",
++          person_id: "person-1",
++          role_id: "role-1"
++        }
++      ),
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubMemberRemoved{
++          club_id: "club-1",
++          membership_id: "membership-1",
++          person_id: "person-1"
++        }
++      )
++    ]
++
++    Enum.each(
++      club_compatibility_notifications ++ role_relationship_notifications,
++      fn notification ->
++        assert {:ignored, ^socket} = Binding.handle_notification(socket, notification)
++        assert_read_count(reads, 1)
++      end
++    )
++
++    role_defined =
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubRoleDefined{
++          club_id: "club-1",
++          role_id: "role-1",
++          role_key: "admin",
++          name: "Admin"
++        }
++      )
++
++    assert {:ok, _socket} = Binding.handle_notification(socket, role_defined)
++    assert_read_count(reads, 2)
++  end
++
++  test "Role assignment changes reread only the affected member relationship" do
++    for interest_name <- [:member_roles, :member_permissions] do
++      {socket, reads} =
++        bind_counting_query([
++          {interest_name, "club-1", "membership-current", "person-current"}
++        ])
++
++      another_member_events = [
++        %ClubRoleAssignedToMember{
++          club_id: "club-1",
++          membership_id: "membership-other",
++          person_id: "person-other",
++          role_id: "role-1"
++        },
++        %ClubRoleRemovedFromMember{
++          club_id: "club-1",
++          membership_id: "membership-other",
++          person_id: "person-other",
++          role_id: "role-1"
++        },
++        %MemberRoleAssigned{
++          club_id: "club-1",
++          membership_id: "membership-other",
++          person_id: "person-other",
++          role_id: "role-1"
++        },
++        %MemberRoleRemoved{
++          club_id: "club-1",
++          membership_id: "membership-other",
++          person_id: "person-other",
++          role_id: "role-1"
++        }
++      ]
++
++      Enum.each(another_member_events, fn event ->
++        assert {:ignored, ^socket} =
++                 Binding.handle_notification(
++                   socket,
++                   notification(Memba.Membership.Projectors.Role, event)
++                 )
++
++        assert_read_count(reads, 1)
++      end)
++
++      current_member =
++        notification(
++          Memba.Membership.Projectors.Role,
++          %ClubRoleAssignedToMember{
++            club_id: "club-1",
++            membership_id: "membership-current",
++            person_id: "person-current",
++            role_id: "role-1"
++          }
++        )
++
++      assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
++      assert_read_count(reads, 2)
++    end
++  end
++
++  test "Role member removal does not reread another membership in the same club" do
++    {socket, reads} =
++      bind_counting_query([
++        {:member_roles, "club-1", "membership-current", "person-current"},
++        {:member_permissions, "club-1", "membership-current", "person-current"}
++      ])
++
++    another_member =
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubMemberRemoved{
++          club_id: "club-1",
++          membership_id: "membership-other",
++          person_id: "person-other"
++        }
++      )
++
++    assert {:ignored, socket} = Binding.handle_notification(socket, another_member)
++    assert_read_count(reads, 1)
++
++    current_member =
++      notification(
++        Memba.Membership.Projectors.Role,
++        %MemberRemoved{
++          club_id: "club-1",
++          membership_id: "membership-current",
++          person_id: "person-current"
++        }
++      )
++
++    assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
++    assert_read_count(reads, 2)
++  end
++
++  test "Role permission fan-out rereads only queries for the affected club" do
++    {socket, reads} = bind_counting_query([{:club_permissions, "club-1"}])
++
++    another_club =
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubRolePermissionGranted{
++          club_id: "club-2",
++          role_id: "role-2",
++          permission: "club.manage_members"
++        }
++      )
++
++    assert {:ignored, socket} = Binding.handle_notification(socket, another_club)
++    assert_read_count(reads, 1)
++
++    same_club =
++      notification(
++        Memba.Membership.Projectors.Role,
++        %ClubRolePermissionGranted{
++          club_id: "club-1",
++          role_id: "role-1",
++          permission: "club.manage_members"
++        }
++      )
++
++    assert {:ok, _socket} = Binding.handle_notification(socket, same_club)
++    assert_read_count(reads, 2)
++  end
++
+   test "does not reread for access on an unselected represented group" do
+     {socket, reads} =
+       bind_counting_query([
+@@ -512,7 +768,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     end
+   end
+ 
+-  test "covers every Club projector event family including group and role compatibility events" do
++  test "covers Club writes and ignores validated compatibility no-ops" do
+     assert_family_invalidations(
+       Memba.Membership.Projectors.Club,
+       [
+@@ -522,58 +778,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+       [{:club, "club-1"}]
+     )
+ 
+-    assert_family_invalidations(
++    assert_family_ignored(
+       Memba.Membership.Projectors.Club,
+-      [
+-        %GroupCreated{
+-          club_id: "club-1",
+-          group_id: "group-1",
+-          group_key: "group-1",
+-          name: "Group"
+-        },
+-        %GroupEmailSlugAssigned{
+-          club_id: "club-1",
+-          group_id: "group-1",
+-          email_slug: "group"
+-        }
+-      ],
+-      [{:club_groups, "club-1"}, {:group, "group-1"}]
+-    )
+-
+-    assert_family_invalidations(
+-      Memba.Membership.Projectors.Club,
+-      [
+-        %ClubRoleDefined{
+-          club_id: "club-1",
+-          role_id: "role-1",
+-          role_key: "admin",
+-          name: "Admin"
+-        }
+-      ],
+-      [{:role, "role-1"}, {:club_roles, "club-1"}]
+-    )
+-
+-    assert_family_invalidations(
+-      Memba.Membership.Projectors.Club,
+-      [
+-        %ClubRolePermissionGranted{
+-          club_id: "club-1",
+-          role_id: "role-1",
+-          permission: "club.manage_members"
+-        }
+-      ],
+-      [{:role, "role-1"}, {:club_permissions, "club-1"}]
++      club_compatibility_noop_events()
+     )
++  end
+ 
+-    assert_family_invalidations(
+-      Memba.Membership.Projectors.Club,
+-      exact_role_events(),
+-      [
+-        {:member_roles, "club-1", "membership-1", "person-1"},
+-        {:member_permissions, "club-1", "membership-1", "person-1"},
+-        {:role, "role-1"}
+-      ]
+-    )
++  test "requires real identifying fields before ignoring Club compatibility no-ops" do
++    for event <- club_compatibility_noop_events(),
++        missing_field <- club_compatibility_required_fields(event) do
++      assert_contract_violation(
++        Memba.Membership.Projectors.Club,
++        Map.put(event, missing_field, nil),
++        {:missing_required_fields, [missing_field]}
++      )
++    end
+   end
+ 
+   test "covers current and legacy Membership entry and exit with symmetric exact scope" do
+@@ -640,8 +859,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+       row_event,
+       [
+         {:member_roles, club_id, membership_id, person_id},
+-        {:member_permissions, club_id, membership_id, person_id},
+-        {:club_permissions, club_id}
++        {:member_permissions, club_id, membership_id, person_id}
+       ]
+     )
+   end
+@@ -781,7 +999,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+           permission: "club.manage_members"
+         }
+       ],
+-      [{:role, "role-1"}, {:club_permissions, "club-1"}]
++      [{:club_permissions, "club-1"}]
+     )
+ 
+     assert_family_invalidations(
+@@ -789,8 +1007,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+       exact_role_events(),
+       [
+         {:member_roles, "club-1", "membership-1", "person-1"},
+-        {:member_permissions, "club-1", "membership-1", "person-1"},
+-        {:role, "role-1"}
++        {:member_permissions, "club-1", "membership-1", "person-1"}
+       ]
+     )
+ 
+@@ -810,8 +1027,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+       ],
+       [
+         {:member_roles, "club-1", "membership-1", "person-1"},
+-        {:member_permissions, "club-1", "membership-1", "person-1"},
+-        {:club_permissions, "club-1"}
++        {:member_permissions, "club-1", "membership-1", "person-1"}
+       ]
+     )
+   end
+@@ -1271,10 +1487,62 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     ]
+   end
+ 
++  defp club_compatibility_noop_events do
++    [
++      %GroupCreated{
++        club_id: "club-1",
++        group_id: "group-1",
++        group_key: "group-1",
++        name: "Group"
++      },
++      %GroupEmailSlugAssigned{
++        club_id: "club-1",
++        group_id: "group-1",
++        email_slug: "group"
++      },
++      %ClubRoleDefined{
++        club_id: "club-1",
++        role_id: "role-1",
++        role_key: "admin",
++        name: "Admin"
++      },
++      %ClubRolePermissionGranted{
++        club_id: "club-1",
++        role_id: "role-1",
++        permission: "club.manage_members"
++      }
++      | exact_role_events()
++    ]
++  end
++
++  defp club_compatibility_required_fields(%GroupCreated{}), do: [:club_id, :group_id]
++  defp club_compatibility_required_fields(%GroupEmailSlugAssigned{}), do: [:club_id, :group_id]
++  defp club_compatibility_required_fields(%ClubRoleDefined{}), do: [:club_id, :role_id]
++
++  defp club_compatibility_required_fields(%ClubRolePermissionGranted{}),
++    do: [:club_id, :role_id]
++
++  defp club_compatibility_required_fields(%event{})
++       when event in [
++              ClubRoleAssignedToMember,
++              ClubRoleRemovedFromMember,
++              MemberRoleAssigned,
++              MemberRoleRemoved
++            ],
++       do: [:club_id, :membership_id, :person_id, :role_id]
++
+   defp assert_family_invalidations(projector, events, expected) do
+     Enum.each(events, &assert_invalidations(projector, &1, expected))
+   end
+ 
++  defp assert_family_ignored(projector, events) do
++    source = MembaReadModelSource.new()
++
++    Enum.each(events, fn event ->
++      assert :ignore = Source.classify(source, notification(projector, event))
++    end)
++  end
++
+   defp assert_invalidations(projector, event, expected, changes \\ %{}) do
+     source = MembaReadModelSource.new()
+ 
+@@ -1360,6 +1628,26 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     {socket, reads}
+   end
+ 
++  defp conversation_detail_interests do
++    MemberMessageDetailQuery.interests(%{
++      selected_club: %{club_id: "club-1"},
++      current_member: %{
++        id: "person-current",
++        membership_id: "membership-current"
++      },
++      conversation_audience: %{
++        conversation_id: "conversation-1",
++        group_id: "group-1"
++      },
++      message: %{
++        message_id: "conversation-1",
++        sender_id: "person-author"
++      },
++      conversation_entries: [],
++      member_email_delivery_ids: []
++    })
++  end
++
+   defp assert_read_count(reads, expected) do
+     assert Agent.get(reads, & &1) == expected
+   end
+diff --git a/web/test/memba_web/member_message_detail_query_test.exs b/web/test/memba_web/member_message_detail_query_test.exs
+index 2551c4e..3c421ff 100644
+--- a/web/test/memba_web/member_message_detail_query_test.exs
++++ b/web/test/memba_web/member_message_detail_query_test.exs
+@@ -58,11 +58,9 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
+ 
+     for interest <- [
+           {:club, "club-1"},
+-          {:club_members, "club-1"},
+           {:membership, "membership-current"},
+           {:person, "person-current"},
+           {:person_clubs, "person-current"},
+-          {:group_members, "group-1"},
+           {:group_participation, "club-1", "group-1", "person-current"},
+           {:conversation, "message-root"},
+           {:conversation_messages, "message-root"},
+@@ -79,6 +77,8 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
+       assert interest in interests
+     end
+ 
++    refute {:club_members, "club-1"} in interests
++    refute {:group_members, "group-1"} in interests
+     refute {:person, "person-not-represented"} in interests
+     refute {:conversation_follows, "message-root"} in interests
+     refute {:member_conversation_follows, "person-current"} in interests
