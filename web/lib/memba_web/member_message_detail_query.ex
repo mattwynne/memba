@@ -8,8 +8,8 @@ defmodule MembaWeb.MemberMessageDetailQuery do
   delivery model with a replacement set of app-private interests.
   """
 
+  alias LiveQuery.Query
   alias Memba.Accounts
-  alias MembaWeb.LiveQuery.Query
   alias MembaWeb.MemberMessageDetail
 
   @fallback_families [
@@ -24,7 +24,7 @@ defmodule MembaWeb.MemberMessageDetailQuery do
   ]
 
   @doc """
-  Returns the extraction-facing query descriptor for conversation detail.
+  Returns the app-owned query descriptor for conversation detail.
   """
   @spec query() :: Query.t()
   def query do

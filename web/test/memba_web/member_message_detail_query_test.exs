@@ -4,7 +4,7 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
   alias Memba.Membership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
-  alias MembaWeb.LiveQuery.Query
+  alias LiveQuery.Query
   alias MembaWeb.MemberMessageDetailQuery
 
   test "describes one coherent message-detail result assign" do

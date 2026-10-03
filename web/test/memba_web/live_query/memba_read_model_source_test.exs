@@ -16,8 +16,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
+  alias LiveQuery.Source
   alias MembaWeb.LiveQuery.MembaReadModelSource
-  alias MembaWeb.LiveQuery.Source
 
   test "subscribes to the shared committed read-model topic" do
     source = MembaReadModelSource.new()

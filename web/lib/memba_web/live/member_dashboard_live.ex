@@ -10,6 +10,7 @@ defmodule MembaWeb.MemberDashboardLive do
   require Logger
 
   alias Commanded.Commands.ExecutionResult
+  alias LiveQuery.Binding
   alias Memba.Accounts
   alias Memba.ID
   alias Memba.Membership
@@ -19,7 +20,6 @@ defmodule MembaWeb.MemberDashboardLive do
   alias Memba.Messaging
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
-  alias MembaWeb.LiveQuery.Binding
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberDashboardQuery
 

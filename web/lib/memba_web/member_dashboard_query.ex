@@ -7,9 +7,9 @@ defmodule MembaWeb.MemberDashboardQuery do
   refresh cannot be authorized by a mount-time club snapshot.
   """
 
+  alias LiveQuery.Query
   alias Memba.Accounts
   alias MembaWeb.MemberDashboardPresentation
-  alias MembaWeb.LiveQuery.Query
 
   @fallback_families [
     :club,
@@ -23,7 +23,7 @@ defmodule MembaWeb.MemberDashboardQuery do
   ]
 
   @doc """
-  Returns the app-private provisional descriptor for the dashboard binding.
+  Returns the app-owned descriptor for the dashboard binding.
 
   Inputs contain the routed club ID, authenticated email and optional selected
   group ID. A successful read returns the coherent dashboard plus a complete
@@ -64,7 +64,7 @@ defmodule MembaWeb.MemberDashboardQuery do
   end
 
   @doc """
-  Builds the dashboard's provisional collection, identity and authorization
+  Builds the dashboard's collection, identity and authorization
   interests from one successful result.
   """
   def interests(dashboard) when is_map(dashboard) do

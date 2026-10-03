@@ -10,8 +10,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
 
   require Logger
 
+  alias LiveQuery.Binding
   alias Memba.Messaging
-  alias MembaWeb.LiveQuery.Binding
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberMessageDetailQuery
 

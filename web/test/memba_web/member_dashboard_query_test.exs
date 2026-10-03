@@ -5,7 +5,7 @@ defmodule MembaWeb.MemberDashboardQueryTest do
   alias Memba.Membership
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias MembaWeb.MemberDashboardQuery
-  alias MembaWeb.LiveQuery.Query
+  alias LiveQuery.Query
 
   test "reloads active-club authority from the normalized authenticated email on every call" do
     alice = create_active_member(email: "Alice@Example.com", club_name: "Alpine Club")
@@ -58,7 +58,7 @@ defmodule MembaWeb.MemberDashboardQueryTest do
              )
   end
 
-  test "the provisional descriptor returns one dashboard and replacement interests" do
+  test "the package descriptor returns one dashboard and replacement interests" do
     query = MemberDashboardQuery.query()
 
     assert query.id == :member_dashboard

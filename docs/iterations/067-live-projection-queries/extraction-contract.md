@@ -23,9 +23,10 @@ extraction, but it must preserve these semantics:
   flash, disclosure, command, or other transient owner state.
 
 The contract is represented by the types and moduledocs in
-`MembaWeb.LiveQuery.Query`, `MembaWeb.LiveQuery.Source`, and
-`MembaWeb.LiveQuery.Binding`. `binding_test.exs` locks subscription ordering,
-one-subscription ownership, relevant-only refresh, atomic interest replacement,
-route rebind, result clearing, bind-window reconciliation, and fresh connected
-mount behavior. The dashboard and conversation-detail tests prove the same
-contract against two materially different consumers.
+`LiveQuery.Query`, `LiveQuery.Source`, and `LiveQuery.Binding` under
+`packages/live_query`. The package's binding and lifecycle tests lock
+subscription ordering, one-subscription ownership, relevant-only refresh,
+atomic interest replacement, route rebind, result clearing, bind-window
+reconciliation, fresh connected mount behavior, reconnect behavior, and
+subscriber cleanup. The dashboard and conversation-detail tests prove the same
+contract against two materially different application consumers.

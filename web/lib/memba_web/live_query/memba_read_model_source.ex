@@ -1,15 +1,14 @@
 defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   @moduledoc """
-  Provisional Memba adapter for committed read-model notifications.
+  Memba adapter for committed read-model notifications.
 
   The adapter keeps projector and event knowledge outside the generic live-query
-  lifecycle. Its invalidation tuples are deliberately app-private while the
-  dashboard and conversation-detail integrations prove the eventual contract.
+  lifecycle package. Its invalidation tuples remain deliberately app-private.
   """
 
+  alias LiveQuery.Source
   alias Memba.ReadModelChanges
   alias Memba.Messaging
-  alias MembaWeb.LiveQuery.Source
 
   @club_projector Memba.Membership.Projectors.Club
   @membership_projector Memba.Membership.Projectors.Membership
