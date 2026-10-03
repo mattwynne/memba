@@ -1,0 +1,661 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 98589cc..59ff625 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,26 +1,28 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008a-8cb6cc9-full-projector-isolation-revision-6",
++  "packet_id": "task-008a-c0227b5-selected-club-authority-revision-7",
+   "task_id": "task-008a",
+   "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against actual projector/event families and evidenced valid-scope fallbacks in the corrected migration matrix. Preserve exact scoped matching and ignore unrelated projectors; surface known malformed Membership notifications with unrecoverable person identity as contract violations rather than fallback refreshes. Audit remaining fallbacks against real current/legacy event shapes and obtain a fresh independent review.",
+   "result": "ready_for_review",
+   "changed_paths": [
+     "docs/iterations/067-live-projection-queries/migration-matrix.md",
+     "web/lib/memba_web/live_query/memba_read_model_source.ex",
++    "web/lib/memba_web/member_dashboard_query.ex",
+     "web/lib/memba_web/member_message_detail_query.ex",
+     "web/test/memba_web/live_query/memba_read_model_source_test.exs",
++    "web/test/memba_web/member_dashboard_query_test.exs",
+     "web/test/memba_web/member_message_detail_query_test.exs"
+   ],
+   "validation": [
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
+       "exit_status": 0,
+-      "evidence": "41 focused adapter and Binding tests passed with 0 failures. Exact sets cover all eleven projector families. Loader counters prove Club compatibility no-ops and unchanged Role identities do not reread; another same-club member, same-group participant, or Role relationship stays at one load; current exact authority/Role relationships, RoleDefined, and same-club permission fan-out advance to two."
++      "evidence": "44 focused adapter and Binding tests passed with 0 failures. Current add/remove and recovered legacy Membership scope now has exactly club_members, membership, person_club and person_clubs. Complete production dashboard/detail interests prove other-club current-Person changes stay at one load, selected-club current-Person changes advance from one to two, and another selected-club Person advances dashboard only. The eleven recognized projector families were audited against both complete interest sets."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
+       "exit_status": 0,
+-      "evidence": "8 focused accepted-consumer query tests passed with 0 failures. Dashboard interests remain unchanged and justified; conversation detail retains exact current membership, person-clubs, group-participation, conversation/access, follow, message, Person, and delivery interests while excluding club_members and group_members."
++      "evidence": "8 focused query tests passed with 0 failures. Complete-set assertions prove dashboard has 31 unique interests and detail has 16, both include selected-club person_club and exclude person_clubs while retaining every represented identity, collection and authorization dependency."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -33,6 +35,6 @@
+       "evidence": "The packet diff has no whitespace errors."
+     }
+   ],
+-  "notes": "The recorded red predictions matched: the adapter run exited 2 with 41 tests/7 failures (Club no-ops returned invalidations, Role sets contained unexpected role or club_permissions keys, and unrelated detail notifications loaded twice), while the query run exited 2 with 8 tests/1 failure at the first broad-interest refutation. An intermediate format check found one wrapping-only issue, corrected before the successful final check. The eleven-family audit now records: Club create/update exact and compatibility no-ops ignored after field validation; Membership exact collection/relationship/authority; Person exact identity/emails; Group exact collection/identity; GroupMembership exact collection/participation; Role definition=role+club_roles, permission=club_permissions, and assignment/member-removal=exact member_roles+member_permissions; Message exact conversation plus deliberate club-conversation breadth; ConversationGroupAccess exact access plus deliberate conversation-wide authorization; ConversationFollow exact relationship with false auto-follow ignored; and both delivery contributors exact message/delivery with opened ignored. Dashboard interests were audited, rerun, and left unchanged. Conversation detail removed only club_members/group_members while retaining exact fresh-authority dependencies. Complete-envelope gating, strict equality, malformed-event exceptions, legacy retained-row recovery, MessageSent breadth, Role permission fan-out, ConversationGroupAccess breadth, delivery convergence, package API, projectors, LiveViews, todo, plan, ADRs, and acceptance files remain unchanged.",
++  "notes": "The recorded TDD diagnostics matched before production edits: the adapter run exited 2 with 44 tests/5 failures because exact Membership sets lacked person_club and both real query lists reread through person_clubs; the query run exited 2 with 8 tests/2 failures showing unexpected person_clubs and missing person_club. Membership now emits all four justified keys for current and recovered legacy events, retaining person_clubs for true all-active-clubs consumers. Dashboard selected-club Membership refresh intersects club_members plus person_club, detail intersects only person_club, and a different-club change intersects neither query. The complete eleven-family audit records Club=club for both; Membership=club_members/person_club for dashboard and person_club for detail; Person=exact person for both; Group=club_groups/group dashboard only; GroupMembership=group_members/person_groups/group_participation for dashboard and exact participation for detail; Role=club_permissions dashboard only; Message=conversation/conversation_messages plus deliberate club_conversations breadth for dashboard and exact conversation scopes for detail; ConversationGroupAccess=group_conversations/access/conversation for dashboard and access/conversation for detail; Follow=detail exact relationship only; and both delivery contributors=detail exact message_deliveries/delivery only. MessageSent club breadth, Role permission fan-out, ConversationGroupAccess conversation-wide authorization, strict equality, complete-envelope gating, malformed-event exceptions, legacy retained-row recovery, validated no-ops and delivery behavior remain intact. No package, LiveView, route, template, form, projector, event, projection schema, publisher, plan, todo, ADR or acceptance feature changed; task 008A remains unchecked for fresh independent review.",
+   "unresolved": []
+ }
+diff --git a/docs/iterations/067-live-projection-queries/migration-matrix.md b/docs/iterations/067-live-projection-queries/migration-matrix.md
+index f44df0f..d9ef2b2 100644
+--- a/docs/iterations/067-live-projection-queries/migration-matrix.md
++++ b/docs/iterations/067-live-projection-queries/migration-matrix.md
+@@ -75,7 +75,7 @@ and does not promise recovery of a lost broadcast to an uninterrupted process.
+ | Field | Current repository evidence | Required migration |
+ | --- | --- | --- |
+ | Route/session inputs | Session `club_id` and `club_id_source`; path `group_id`; targeted-add path `person_id`; `live_action` selects Conversations, Members, or targeted add. | Pass route identity into the dashboard query while retaining URL section and targeted-add coordination in the LiveView. Route changes reread the same coherent query. |
+-| Reads and ordinary assigns | `MemberDashboardPresentation.load/4` uses the mount-captured active clubs, `Membership.list_active_members_of_club/1`, discoverable and authoritative participating groups, `Authorization.authorize_manage_members/2`, group members, `Messaging.list_conversations_for_group/1`, conversation access, Person-backed names/initials, represented members' projected role labels, member counts, and group email data. It currently spreads `selected_club`, `current_member`, `groups`, `selected_group`, access flags, `members`, counts, `messages`, `message_rows`, admission candidates, and permission flags across ordinary assigns. | Return that display and authorization data as one dashboard result. Interests include the selected club; club-member, discoverable-group, current-person participation, selected-group-member, selected-group-conversation, and represented-member role-assignment collections; represented Person/group/conversation/role identities; current-person permission/access identities; and dependent delivery data only if the final dashboard model actually displays it. Represented-member role interests refresh labels and badges independently of the current actor's manage-members authorization interests. |
++| Reads and ordinary assigns | `MemberDashboardPresentation.load/4` uses the mount-captured active clubs, `Membership.list_active_members_of_club/1`, discoverable and authoritative participating groups, `Authorization.authorize_manage_members/2`, group members, `Messaging.list_conversations_for_group/1`, conversation access, Person-backed names/initials, represented members' projected role labels, member counts, and group email data. It currently spreads `selected_club`, `current_member`, `groups`, `selected_group`, access flags, `members`, counts, `messages`, `message_rows`, admission candidates, and permission flags across ordinary assigns. | Return that display and authorization data as one dashboard result. Interests include the selected club; exact selected-club authority for the current Person; club-member, discoverable-group, current-person participation, selected-group-member, selected-group-conversation, and represented-member role-assignment collections; represented Person/group/conversation/role identities; current-person permission/access identities; and dependent delivery data only if the final dashboard model actually displays it. The query deliberately does not register the current Person's all-active-clubs collection. Represented-member role interests refresh labels and badges independently of the current actor's manage-members authorization interests. |
+ | Current subscription/predicate | Calls `load/4` before subscribing. It then refreshes every dashboard result for any `MemberEmailDelivery` notification, regardless of club/message, and for same-club `Group`, `GroupMembership`, `Membership`, `Role`, or `ConversationGroupAccess` notifications. `handle_params/3` also reloads. `Message`, `Person`, and `Club` notifications are not handled. | Subscribe before the connected read and replace only the dashboard result when logical interests match. Add collection interests so a previously absent member/group/conversation can enter and a represented row can leave. Remove the current unscoped delivery refresh unless delivery data remains a real dashboard dependency. |
+ | Fresh authorization/access transition | Refresh currently reuses `current_identity_clubs`. `:forbidden` raises the existing forbidden treatment; an invalid/missing selected group uses the existing not-found treatment. A route patch already rereads selected-group access. | Rebuild active clubs, current member, manage-members permission, group participation, and selected-group access from the authenticated email on every refresh. Preserve forbidden versus not-found treatment and never retain member or conversation rows after access fails. |
+ | LiveView-owned transient state | `active_section` and route IDs; targeted member resolution/focus/success preservation; picker open/query/form state; admission/removal operation state; access-request state; command feedback, flash, and navigation. | Query refresh must not replace these. Targeted member authorization remains coordinated by the route/LiveView around the coherent dashboard result. |
+@@ -115,7 +115,7 @@ and does not promise recovery of a lost broadcast to an uninterrupted process.
+ | Field | Current repository evidence | Required migration |
+ | --- | --- | --- |
+ | Route/session inputs | Session `club_id` and `club_id_source`; path `message_id`; optional query `group_id` for return navigation. | Bind one authorized conversation-detail result. |
+-| Reads and ordinary assigns | `MemberMessageDetail.load/3` resolves a selected active club, current Person/member, root message and club ownership, authoritative conversation access, conversation messages, author Person summaries, exact conversation follow state, and member delivery receipts/summaries. `Messaging.list_member_email_deliverys/1` reads the member receipt projection and left-joins the independently committed staff delivery projection for `reason`. These are currently spread over `selected_club`, `message`, `sender_name`, `current_member`, follow flags, `conversation_entries`, and delivery assigns. | Return the complete detail model under one assign. Interests include selected Club; exact current membership, current Person active-club authority, and current group participation; exact conversation and its message collection; represented author Person identities; exact current-member follow identity; exact message delivery collections contributed by both `MemberEmailDelivery` status and `MembaStaffEmailDelivery` reason rows; and exact plus conversation-wide access identities that authorize the result. Another member joining/leaving the same club or group cannot alter this result, so the detail query does not register club-member or group-member collections. |
++| Reads and ordinary assigns | `MemberMessageDetail.load/3` resolves a selected active club, current Person/member, root message and club ownership, authoritative conversation access, conversation messages, author Person summaries, exact conversation follow state, and member delivery receipts/summaries. `Messaging.list_member_email_deliverys/1` reads the member receipt projection and left-joins the independently committed staff delivery projection for `reason`. These are currently spread over `selected_club`, `message`, `sender_name`, `current_member`, follow flags, `conversation_entries`, and delivery assigns. | Return the complete detail model under one assign. Interests include selected Club; exact current membership, selected-club authority for the current Person, and current group participation; exact conversation and its message collection; represented author Person identities; exact current-member follow identity; exact message delivery collections contributed by both `MemberEmailDelivery` status and `MembaStaffEmailDelivery` reason rows; and exact plus conversation-wide access identities that authorize the result. The query deliberately does not register the Person's all-active-clubs collection. Another member joining/leaving the same club or group cannot alter this result, so the detail query does not register club-member or group-member collections. |
+ | Current subscription/predicate | Loads before subscribing. Exact `MemberEmailDelivery` changes refresh when `message_id` matches, but `MembaStaffEmailDelivery` reason changes are not handled; `Message` refreshes when `conversation_id` matches; follow refreshes by conversation; same-club Membership/GroupMembership changes refresh only when `person_id` is current member; ConversationGroupAccess refreshes the exact conversation. | Subscribe before read. Keep exact identity matching, plus collection scope for a newly posted reply. Treat both delivery projectors as independent contributors: either notification rereads the joined result, and the later commit notification converges it regardless of projector commit order. Recompute interests when messages/authors or delivery rows change. |
+ | Fresh authorization/access transition | Loader uses mount-captured active clubs. Access notifications rerun the loader and navigate to the selected group or `/conversations` on any error. Other matching detail notifications currently raise forbidden/not-found on reread errors. | Every relevant refresh reruns fresh active-club, current-member, group-participation, and conversation-access checks. Any access failure must remove the private result and preserve the existing leave-private-surface behavior rather than retaining stale conversation content. |
+ | LiveView-owned transient state | Reply form/body/errors/state; follow command feedback; expanded receipt groups; route params, flash, and navigation. | Preserve all of these when the detail result is replaced. |
+@@ -158,7 +158,7 @@ no-op compatibility events that specialized projectors publish.
+ | Projector / source events | Logical interests emitted | Old scope | New scope | Entry/exit and consumers | Valid broad scope / invalid payload |
+ | --- | --- | --- | --- | --- | --- |
+ | `Membership.Projectors.Club`: changing `ClubCreated`, `ClubUpdated`; compatibility no-ops `GroupCreated`, `GroupEmailSlugAssigned`, `ClubRoleDefined`, `ClubRolePermissionGranted`, current/legacy role assignment and removal | Club identity for `club_id` only for create/update. Every compatibility handler returns the unchanged `Ecto.Multi`, so its valid publication is ignored rather than duplicating invalidations owned by Group or Role projectors. | Create/update use `club_id`; an updated event does not carry the old name/slug, but identity is unchanged. Creation has no old row. Compatibility events write no Club, Group, Role, RolePermission, RoleAssignment, or MemberPermission row in this projector. | Same `club_id` for create/update; no changed scope for compatibility no-ops. | Club names/slugs on every result that represents that club. Creation can enter global/staff lists, which are out of scope here. Compatibility publications cause no bound-query reread; the specialized projector's later publication describes any actual write. | `ClubCreated`/`ClubUpdated` require `club_id`. Before returning `:ignore`, Group compatibility events still require club/group IDs; Role definition/permission events require club/role IDs; assignment/removal events require club/membership/person/role IDs. Missing required identity or an unsupported event is a contract violation, not a broad refresh. |
+-| `Membership.Projectors.Membership`: `ClubMemberAdded`, `ClubMemberRemoved`, legacy `MemberAdded`, legacy `MemberRemoved` | Club-member collection for `club_id`; membership identity; active-clubs collection for the affected Person/current identity. | Add: no active row, but event carries destination `club_id`, `membership_id`, `person_id`. Remove: same carried club/person scope is the departing scope. | Add: same club collection now contains the row. Remove: same club collection no longer contains it. | Detects a previously absent club member entering dashboards/counts/settings and represented/current members leaving. Consumed by dashboard, settings, compose, detail, delivery, group creation, and invitation authorization/results as applicable. Membership events do not change the Person projection, so they do not invalidate a represented Person identity. | None for a missing person identity. Recover a genuinely historical omission from committed changes or the membership row where possible; if a known Membership notification has a club ID but no recoverable person ID, surface a contract violation, not a scoped or global fallback. Do not treat an unknown/partial map as another projector event. |
++| `Membership.Projectors.Membership`: `ClubMemberAdded`, `ClubMemberRemoved`, legacy `MemberAdded`, legacy `MemberRemoved` | Club-member collection for `club_id`; membership identity; exact selected-club authority relationship for `(club_id, person_id)`; and the all-active-clubs collection for the affected Person. Every valid current event and recovered legacy event emits all four keys. | Add: no active row, but event carries destination `club_id`, `membership_id`, `person_id`. Remove: same carried club/person scope is the departing scope. | Add: same club collection and Person's active-clubs collection now contain the row, and the exact Person/club relationship exists. Remove: the row leaves both collections and the exact relationship no longer exists. | Detects a previously absent club member entering dashboards/counts/settings and represented/current members leaving. Dashboard and conversation detail consume exact selected-club authority, so the same Person changing Membership in another club does not refresh them. Settings will consume the Person-wide collection because it displays all active clubs. Other selected-club queries consume the exact relationship as they migrate. Membership events do not change the Person projection, so they do not invalidate a represented Person identity. | None for a missing person identity. Recover a genuinely historical omission from committed changes or the membership row where possible; if a known Membership notification has a club ID but no recoverable person ID, surface a contract violation, not a scoped or global fallback. Do not treat an unknown/partial map as another projector event. |
+ | `Membership.Projectors.Person`: `PersonCreated`, `PersonEmailAddressAdded`, `PersonEmailAddressVerified`, `PersonEmailAddressesReplaced`, `PersonPrimaryEmailAddressChanged`, `PersonEmailAddressRemoved` | Exact Person identity and that Person's email-address collection. | No club scope exists. Email events carry Person but generally do not carry a complete prior email collection; old club/group scopes are unavailable. | Same Person identity; new email collection must be reread. | Updates represented names/initials where currently available, settings email rows, authenticated-person resolution, and recipient eligibility/counts for represented group members. A new Person enters member/group results through separate membership events. | No broad fallback: each handled Person event carries `person_id`, and queries register represented/current Person identities. A known event without that identity or an unsupported event is a contract violation, not a new partial variant. |
+ | `Membership.Projectors.Group`: `GroupCreated`, `GroupEmailSlugAssigned` | Club group/discoverable-group collection for `club_id`; exact Group identity for `group_id`. | Creation has no prior row; email-slug assignment has the same group identity and no old slug in the event. | `club_id` and `group_id` carried by both events. | `GroupCreated` lets a previously absent discoverable/participating group enter dashboard and compose choices; identity changes update selected-group display/email. | No missing-ID fallback: both Group events carry `club_id` and `group_id`. Missing required identity or an unsupported event is a contract violation. |
+ | `Membership.Projectors.GroupMembership`: `GroupMemberAdded`, `GroupMemberRemoved` | Group-member collection for `group_id`; current-person participating-group collection for `(club_id, person_id)`; exact group-participation authorization relationship. | Add: no active row but destination club/group/person is carried. Remove: the carried club/group/person is the departing scope. | Same club/group scope after add; no active row after removal. | Detects absent members entering counts/lists and represented members leaving; changes discoverability, compose authorization, dashboard surfaces, and conversation authorization for the affected person. Group-membership events do not change the Person projection, so they do not invalidate a represented Person identity. | No missing-ID fallback: both GroupMembership events carry club, group and person identities. A malformed known event is a contract violation. |
+@@ -176,14 +176,36 @@ types to task 003.
+ 
+ | Planned binding | Collection scopes (including absent-row entry) | Represented/exact identities | Authorization interests |
+ | --- | --- | --- | --- |
+-| Dashboard | Club members; discoverable groups; current-person participating groups; selected-group members; selected-group conversations; represented members' role assignments | Selected Club/Group, represented Persons, roles, and conversations/messages | Current membership, current-person club permissions (separate from represented-member label/badge interests), selected-group participation, conversation access |
++| Dashboard | Club members; discoverable groups; current-person participating groups; selected-group members; selected-group conversations; represented members' role assignments | Selected Club/Group, represented Persons, roles, and conversations/messages | Exact selected-club current-Person relationship (not the Person-wide active-clubs collection), current membership, current-person club permissions (separate from represented-member label/badge interests), selected-group participation, conversation access |
+ | Group creation | Current identity's active clubs and selected club membership | Selected Club and current Person/member | Current-person club role/permission |
+ | Settings | Current Person's active club memberships and email addresses | Current Person, selected and represented Clubs | Selected-club current membership |
+ | Message compose | Club members; current-person participating groups; selected-group members | Selected Club/Group and represented current/recipient Persons | Current club membership and selected-group participation |
+-| Conversation detail | Conversation messages; exact message delivery collections from both member-status and staff-reason projections; no club-member or group-member collection | Selected Club, current membership, current Person/active-club authority, conversation/root message, represented message authors, exact follow, exact delivery IDs | Exact current group participation, exact conversation access, and conversation-wide authorization |
++| Conversation detail | Conversation messages; exact message delivery collections from both member-status and staff-reason projections; no club-member, group-member, or Person-wide active-clubs collection | Selected Club, current membership, current Person, conversation/root message, represented message authors, exact follow, exact delivery IDs | Exact selected-club current-Person relationship, exact current group participation, exact conversation access, and conversation-wide authorization |
+ | Delivery detail | Exact message delivery collection from both independently committed delivery projections; conversation messages only if retained in the view model | Selected Club, conversation/root message, represented authors/recipients, exact delivery IDs | Current club/group membership and exact conversation access |
+ | Invitation | Club members | Selected Club and current Person/member | Current-person club role/permission |
+ 
++### Accepted-consumer projector audit
++
++The complete production interest sets for the dashboard and conversation
++detail are exercised against representative valid notifications from every
++recognized projector family. The intersections below are the expected exact
++matches; “ignore” means the notification has no intersection with that
++query's interests.
++
++| Projector family | Dashboard intersection and result | Conversation-detail intersection and result |
++| --- | --- | --- |
++| Club | `club` refreshes the represented selected Club. | `club` refreshes the represented selected Club. |
++| Membership | A selected-club current-Person change intersects `club_members` and `person_club`; another selected-club Person intersects only `club_members`; the current Person in another club is ignored. | A selected-club current-Person change intersects only `person_club`; another selected-club Person and the current Person in another club are ignored. |
++| Person | Exact represented `person` refreshes; another Person is ignored. | Exact current/author `person` refreshes; another Person is ignored. |
++| Group | `club_groups` and represented `group` refresh. | Ignored because detail does not display a Group projection row. |
++| GroupMembership | Current selected-group participation intersects `group_members`, `person_groups`, and exact `group_participation`. | Only exact current `group_participation` intersects; another participant is ignored. |
++| Role | Same-club permission fan-out intersects `club_permissions`; definitions and exact represented/current relationships retain their narrower keys. | Ignored because detail has no Role or permission dependency. |
++| Message | A new reply intersects exact `conversation`, `conversation_messages`, and the deliberate `club_conversations` scope required because `MessageSent` has no audience group. | A new reply intersects exact `conversation` and `conversation_messages`. |
++| ConversationGroupAccess | Intersects selected `group_conversations`, exact `conversation_access`, and conversation-wide `conversation` authorization. | Intersects exact `conversation_access` and deliberate conversation-wide `conversation` authorization. |
++| ConversationFollow | Ignored because dashboard does not display follow state. | Exact current-member `conversation_follow` refreshes; another member's follow is ignored. |
++| MemberEmailDelivery | Ignored because dashboard displays no delivery result. | Exact `message_deliveries` and represented `delivery` refresh the joined member status. |
++| MembaStaffEmailDelivery | Ignored because dashboard displays no delivery result. | Exact `message_deliveries` and represented `delivery` refresh the independently committed staff reason. |
++
+ ## Focused proof and remaining gaps
+ 
+ The listed evidence is current proof, not proof of the future package binding.
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+index ae48703..47c6da5 100644
+--- a/web/lib/memba_web/live_query/memba_read_model_source.ex
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -348,6 +348,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+         [
+           {:club_members, scope.club_id},
+           {:membership, scope.membership_id},
++          {:person_club, scope.club_id, scope.person_id},
+           {:person_clubs, scope.person_id}
+         ]
+       end,
+diff --git a/web/lib/memba_web/member_dashboard_query.ex b/web/lib/memba_web/member_dashboard_query.ex
+index af661c5..ee11b07 100644
+--- a/web/lib/memba_web/member_dashboard_query.ex
++++ b/web/lib/memba_web/member_dashboard_query.ex
+@@ -80,7 +80,7 @@ defmodule MembaWeb.MemberDashboardQuery do
+       {:group_participation, club_id, group_id, current_person_id},
+       {:membership, current_membership_id},
+       {:person, current_person_id},
+-      {:person_clubs, current_person_id},
++      {:person_club, club_id, current_person_id},
+       {:member_permissions, club_id, current_membership_id, current_person_id},
+       {:club_permissions, club_id},
+       {:club_roles, club_id}
+diff --git a/web/lib/memba_web/member_message_detail_query.ex b/web/lib/memba_web/member_message_detail_query.ex
+index 847a668..17c8ea8 100644
+--- a/web/lib/memba_web/member_message_detail_query.ex
++++ b/web/lib/memba_web/member_message_detail_query.ex
+@@ -67,7 +67,7 @@ defmodule MembaWeb.MemberMessageDetailQuery do
+       {:club, club_id},
+       {:membership, membership_id},
+       {:person, person_id},
+-      {:person_clubs, person_id},
++      {:person_club, club_id, person_id},
+       {:group_participation, club_id, group_id, person_id},
+       {:conversation, conversation_id},
+       {:conversation_messages, conversation_id},
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+index e5ca5e6..7faea9d 100644
+--- a/web/test/memba_web/live_query/memba_read_model_source_test.exs
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -50,6 +50,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+   alias Memba.Repo
+   alias MembaWeb.LiveQuery.MembaReadModelSource
+   alias MembaWeb.LiveQuery.ReadModelContractViolationError
++  alias MembaWeb.MemberDashboardQuery
+   alias MembaWeb.MemberMessageDetailQuery
+ 
+   test "subscribes to the shared committed read-model topic" do
+@@ -93,6 +94,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+ 
+     assert {:club_members, "club-1"} in invalidations
+     assert {:membership, "membership-1"} in invalidations
++    assert {:person_club, "club-1", "person-1"} in invalidations
+     assert {:person_clubs, "person-1"} in invalidations
+   end
+ 
+@@ -414,34 +416,89 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     assert_read_count(reads, 2)
+   end
+ 
+-  test "conversation detail rereads only for its current member's Membership scope" do
+-    {socket, reads} = bind_counting_query(conversation_detail_interests())
++  test "actual dashboard and detail interests ignore current-Person Membership in another club" do
++    notification =
++      notification(
++        Memba.Membership.Projectors.Membership,
++        %ClubMemberAdded{
++          club_id: "club-2",
++          membership_id: "membership-other-club",
++          person_id: "person-current"
++        }
++      )
+ 
+-    another_member =
++    for interests <- [dashboard_interests(), conversation_detail_interests()] do
++      {socket, reads} = bind_counting_query(interests)
++
++      assert {:ignored, ^socket} = Binding.handle_notification(socket, notification)
++      assert_read_count(reads, 1)
++    end
++  end
++
++  test "actual dashboard and detail interests reread for current-Person Membership in selected club" do
++    notification =
+       notification(
+         Memba.Membership.Projectors.Membership,
+         %ClubMemberAdded{
+           club_id: "club-1",
+-          membership_id: "membership-other",
+-          person_id: "person-other"
++          membership_id: "membership-new",
++          person_id: "person-current"
+         }
+       )
+ 
+-    assert {:ignored, socket} = Binding.handle_notification(socket, another_member)
+-    assert_read_count(reads, 1)
++    for interests <- [dashboard_interests(), conversation_detail_interests()] do
++      {socket, reads} = bind_counting_query(interests)
+ 
+-    current_member =
++      assert {:ok, _socket} = Binding.handle_notification(socket, notification)
++      assert_read_count(reads, 2)
++    end
++  end
++
++  test "actual dashboard alone rereads for another Person's Membership in selected club" do
++    notification =
+       notification(
+         Memba.Membership.Projectors.Membership,
+         %ClubMemberAdded{
+           club_id: "club-1",
+-          membership_id: "membership-current",
+-          person_id: "person-current"
++          membership_id: "membership-other",
++          person_id: "person-other"
+         }
+       )
+ 
+-    assert {:ok, _socket} = Binding.handle_notification(socket, current_member)
+-    assert_read_count(reads, 2)
++    {dashboard_socket, dashboard_reads} = bind_counting_query(dashboard_interests())
++
++    assert {:ok, _socket} =
++             Binding.handle_notification(dashboard_socket, notification)
++
++    assert_read_count(dashboard_reads, 2)
++
++    {detail_socket, detail_reads} =
++      bind_counting_query(conversation_detail_interests())
++
++    assert {:ignored, ^detail_socket} =
++             Binding.handle_notification(detail_socket, notification)
++
++    assert_read_count(detail_reads, 1)
++  end
++
++  test "audits all projector families against complete dashboard and detail interests" do
++    source = MembaReadModelSource.new()
++    dashboard = MapSet.new(dashboard_interests())
++    detail = MapSet.new(conversation_detail_interests())
++
++    for {_family, projector, event, expected_dashboard, expected_detail} <-
++          query_family_audit_cases() do
++      assert {:ok, invalidations} =
++               Source.classify(source, notification(projector, event))
++
++      invalidations = MapSet.new(invalidations)
++
++      assert MapSet.intersection(dashboard, invalidations) ==
++               MapSet.new(expected_dashboard)
++
++      assert MapSet.intersection(detail, invalidations) ==
++               MapSet.new(expected_detail)
++    end
+   end
+ 
+   test "conversation detail rereads only for its current member's group participation" do
+@@ -823,6 +880,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+       [
+         {:club_members, "club-1"},
+         {:membership, "membership-1"},
++        {:person_club, "club-1", "person-1"},
+         {:person_clubs, "person-1"}
+       ]
+     )
+@@ -849,6 +907,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     expected = [
+       {:club_members, club_id},
+       {:membership, membership_id},
++      {:person_club, club_id, person_id},
+       {:person_clubs, person_id}
+     ]
+ 
+@@ -1628,6 +1687,43 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     {socket, reads}
+   end
+ 
++  defp dashboard_interests do
++    MemberDashboardQuery.interests(%{
++      selected_club: %{club_id: "club-1"},
++      selected_group: %{group_id: "group-1"},
++      current_member: %{
++        id: "person-current",
++        membership_id: "membership-current",
++        roles: ["Membership Admin"]
++      },
++      groups: [
++        %{club_id: "club-1", group_id: "group-1"},
++        %{club_id: "club-1", group_id: "group-2"}
++      ],
++      members: [
++        %{
++          id: "person-current",
++          membership_id: "membership-current",
++          roles: ["Membership Admin"]
++        },
++        %{id: "person-member", membership_id: "membership-member", roles: ["Trip Lead"]}
++      ],
++      custom_group_member_candidates: [
++        %{id: "person-candidate", membership_id: "membership-candidate", roles: []}
++      ],
++      message_rows: [
++        %{
++          message_id: "message-root",
++          conversation_id: "conversation-1",
++          sender_id: "person-author",
++          originator_id: "person-originator",
++          latest_replier_id: "person-replier",
++          participants: [%{id: "person-participant"}]
++        }
++      ]
++    })
++  end
++
+   defp conversation_detail_interests do
+     MemberMessageDetailQuery.interests(%{
+       selected_club: %{club_id: "club-1"},
+@@ -1644,10 +1740,164 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+         sender_id: "person-author"
+       },
+       conversation_entries: [],
+-      member_email_delivery_ids: []
++      member_email_delivery_ids: ["delivery-1"]
+     })
+   end
+ 
++  defp query_family_audit_cases do
++    [
++      {
++        :club,
++        Memba.Membership.Projectors.Club,
++        %ClubUpdated{club_id: "club-1", name: "Updated", slug: "updated"},
++        [{:club, "club-1"}],
++        [{:club, "club-1"}]
++      },
++      {
++        :membership,
++        Memba.Membership.Projectors.Membership,
++        %ClubMemberAdded{
++          club_id: "club-1",
++          membership_id: "membership-new",
++          person_id: "person-current"
++        },
++        [
++          {:club_members, "club-1"},
++          {:person_club, "club-1", "person-current"}
++        ],
++        [{:person_club, "club-1", "person-current"}]
++      },
++      {
++        :person,
++        Memba.Membership.Projectors.Person,
++        %PersonEmailAddressAdded{
++          person_id: "person-current",
++          email: "current@example.com",
++          normalized_email: "current@example.com"
++        },
++        [{:person, "person-current"}],
++        [{:person, "person-current"}]
++      },
++      {
++        :group,
++        Memba.Membership.Projectors.Group,
++        %GroupEmailSlugAssigned{
++          club_id: "club-1",
++          group_id: "group-1",
++          email_slug: "planning"
++        },
++        [{:club_groups, "club-1"}, {:group, "group-1"}],
++        []
++      },
++      {
++        :group_membership,
++        Memba.Membership.Projectors.GroupMembership,
++        %GroupMemberAdded{
++          club_id: "club-1",
++          group_id: "group-1",
++          membership_id: "membership-current",
++          person_id: "person-current"
++        },
++        [
++          {:group_members, "group-1"},
++          {:person_groups, "club-1", "person-current"},
++          {:group_participation, "club-1", "group-1", "person-current"}
++        ],
++        [{:group_participation, "club-1", "group-1", "person-current"}]
++      },
++      {
++        :role,
++        Memba.Membership.Projectors.Role,
++        %ClubRolePermissionGranted{
++          club_id: "club-1",
++          role_id: "role-1",
++          permission: "club.manage_members"
++        },
++        [{:club_permissions, "club-1"}],
++        []
++      },
++      {
++        :message,
++        Memba.Messaging.Projectors.Message,
++        %MessageSent{
++          message_id: "message-new",
++          club_id: "club-1",
++          sender_id: "person-author",
++          conversation_id: "conversation-1",
++          reply_to_message_id: "message-root",
++          subject: "Re: Plans",
++          body: "Count me in"
++        },
++        [
++          {:conversation, "conversation-1"},
++          {:conversation_messages, "conversation-1"},
++          {:club_conversations, "club-1"}
++        ],
++        [
++          {:conversation, "conversation-1"},
++          {:conversation_messages, "conversation-1"}
++        ]
++      },
++      {
++        :conversation_access,
++        Memba.Messaging.Projectors.ConversationGroupAccess,
++        %ConversationAccessGrantedToGroup{
++          club_id: "club-1",
++          group_id: "group-1",
++          conversation_id: "conversation-1",
++          access_level: "write"
++        },
++        [
++          {:group_conversations, "group-1"},
++          {:conversation_access, "group-1", "conversation-1"},
++          {:conversation, "conversation-1"}
++        ],
++        [
++          {:conversation_access, "group-1", "conversation-1"},
++          {:conversation, "conversation-1"}
++        ]
++      },
++      {
++        :conversation_follow,
++        Memba.Messaging.Projectors.ConversationFollow,
++        %ConversationFollowed{
++          follow_id: "follow-1",
++          club_id: "club-1",
++          conversation_id: "conversation-1",
++          member_id: "person-current"
++        },
++        [],
++        [{:conversation_follow, "conversation-1", "person-current"}]
++      },
++      {
++        :member_delivery,
++        Memba.Messaging.Projectors.MemberEmailDelivery,
++        %EmailDeliveryDelivered{
++          message_id: "conversation-1",
++          delivery_id: "delivery-1"
++        },
++        [],
++        [
++          {:message_deliveries, "conversation-1"},
++          {:delivery, "delivery-1"}
++        ]
++      },
++      {
++        :staff_delivery,
++        Memba.Messaging.Projectors.MembaStaffEmailDelivery,
++        %EmailDeliveryDelivered{
++          message_id: "conversation-1",
++          delivery_id: "delivery-1"
++        },
++        [],
++        [
++          {:message_deliveries, "conversation-1"},
++          {:delivery, "delivery-1"}
++        ]
++      }
++    ]
++  end
++
+   defp assert_read_count(reads, expected) do
+     assert Agent.get(reads, & &1) == expected
+   end
+diff --git a/web/test/memba_web/member_dashboard_query_test.exs b/web/test/memba_web/member_dashboard_query_test.exs
+index 807d2b4..2abecef 100644
+--- a/web/test/memba_web/member_dashboard_query_test.exs
++++ b/web/test/memba_web/member_dashboard_query_test.exs
+@@ -97,55 +97,43 @@ defmodule MembaWeb.MemberDashboardQueryTest do
+ 
+     interests = MemberDashboardQuery.interests(dashboard)
+ 
+-    for collection_interest <- [
+-          {:club_members, "club-1"},
+-          {:club_groups, "club-1"},
+-          {:person_groups, "club-1", "person-1"},
+-          {:group_members, "group-1"},
+-          {:group_conversations, "group-1"},
+-          {:club_conversations, "club-1"}
+-        ] do
+-      assert collection_interest in interests
+-    end
+-
+-    for identity_interest <- [
+-          {:club, "club-1"},
+-          {:group, "group-1"},
+-          {:group, "group-2"},
+-          {:membership, "membership-1"},
+-          {:person, "person-1"},
+-          {:person, "person-2"},
+-          {:person, "person-3"},
+-          {:person, "person-4"},
+-          {:person, "person-5"},
+-          {:person, "person-6"},
+-          {:person, "person-7"},
+-          {:conversation, "conversation-1"},
+-          {:conversation_messages, "conversation-1"},
+-          {:message, "message-1"}
+-        ] do
+-      assert identity_interest in interests
+-    end
+-
+-    for role_interest <- [
+-          {:member_roles, "club-1", "membership-1", "person-1"},
+-          {:member_roles, "club-1", "membership-2", "person-2"},
+-          {:member_roles, "club-1", "membership-3", "person-3"},
+-          {:member_permissions, "club-1", "membership-1", "person-1"},
+-          {:club_roles, "club-1"},
+-          {:club_permissions, "club-1"}
+-        ] do
+-      assert role_interest in interests
+-    end
+-
+-    assert {:conversation_access, "group-1", "conversation-1"} in interests
+-    assert {:group_participation, "club-1", "group-1", "person-1"} in interests
+-    refute {:member_permissions, "club-1", "membership-2", "person-2"} in interests
+-
+-    refute Enum.any?(interests, fn interest ->
+-             match?({:fallback, _family}, interest) or
+-               match?({:fallback, _family, _club_id}, interest)
+-           end)
++    expected_interests = [
++      {:club, "club-1"},
++      {:club_members, "club-1"},
++      {:club_groups, "club-1"},
++      {:club_conversations, "club-1"},
++      {:person_groups, "club-1", "person-1"},
++      {:group_members, "group-1"},
++      {:group_conversations, "group-1"},
++      {:group_participation, "club-1", "group-1", "person-1"},
++      {:membership, "membership-1"},
++      {:person, "person-1"},
++      {:person_club, "club-1", "person-1"},
++      {:member_permissions, "club-1", "membership-1", "person-1"},
++      {:club_permissions, "club-1"},
++      {:club_roles, "club-1"},
++      {:group, "group-1"},
++      {:group, "group-2"},
++      {:member_roles, "club-1", "membership-1", "person-1"},
++      {:person, "person-2"},
++      {:membership, "membership-2"},
++      {:member_roles, "club-1", "membership-2", "person-2"},
++      {:person, "person-3"},
++      {:membership, "membership-3"},
++      {:member_roles, "club-1", "membership-3", "person-3"},
++      {:conversation, "conversation-1"},
++      {:conversation_messages, "conversation-1"},
++      {:conversation_access, "group-1", "conversation-1"},
++      {:message, "message-1"},
++      {:person, "person-4"},
++      {:person, "person-5"},
++      {:person, "person-6"},
++      {:person, "person-7"}
++    ]
++
++    assert MapSet.new(interests) == MapSet.new(expected_interests)
++    assert length(interests) == length(expected_interests)
++    refute {:person_clubs, "person-1"} in interests
+   end
+ 
+   defp create_active_member(attrs) do
+diff --git a/web/test/memba_web/member_message_detail_query_test.exs b/web/test/memba_web/member_message_detail_query_test.exs
+index 3c421ff..e4bbef7 100644
+--- a/web/test/memba_web/member_message_detail_query_test.exs
++++ b/web/test/memba_web/member_message_detail_query_test.exs
+@@ -56,37 +56,28 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
+ 
+     interests = MemberMessageDetailQuery.interests(detail)
+ 
+-    for interest <- [
+-          {:club, "club-1"},
+-          {:membership, "membership-current"},
+-          {:person, "person-current"},
+-          {:person_clubs, "person-current"},
+-          {:group_participation, "club-1", "group-1", "person-current"},
+-          {:conversation, "message-root"},
+-          {:conversation_messages, "message-root"},
+-          {:conversation_access, "group-1", "message-root"},
+-          {:message, "message-root"},
+-          {:message, "message-reply"},
+-          {:person, "person-author-1"},
+-          {:person, "person-author-2"},
+-          {:conversation_follow, "message-root", "person-current"},
+-          {:message_deliveries, "message-root"},
+-          {:delivery, "delivery-1"},
+-          {:delivery, "delivery-2"}
+-        ] do
+-      assert interest in interests
+-    end
+-
+-    refute {:club_members, "club-1"} in interests
+-    refute {:group_members, "group-1"} in interests
+-    refute {:person, "person-not-represented"} in interests
+-    refute {:conversation_follows, "message-root"} in interests
+-    refute {:member_conversation_follows, "person-current"} in interests
+-
+-    refute Enum.any?(interests, fn interest ->
+-             match?({:fallback, _family}, interest) or
+-               match?({:fallback, _family, _club_id}, interest)
+-           end)
++    expected_interests = [
++      {:club, "club-1"},
++      {:membership, "membership-current"},
++      {:person, "person-current"},
++      {:person_club, "club-1", "person-current"},
++      {:group_participation, "club-1", "group-1", "person-current"},
++      {:conversation, "message-root"},
++      {:conversation_messages, "message-root"},
++      {:conversation_access, "group-1", "message-root"},
++      {:conversation_follow, "message-root", "person-current"},
++      {:message_deliveries, "message-root"},
++      {:message, "message-root"},
++      {:person, "person-author-1"},
++      {:message, "message-reply"},
++      {:person, "person-author-2"},
++      {:delivery, "delivery-1"},
++      {:delivery, "delivery-2"}
++    ]
++
++    assert MapSet.new(interests) == MapSet.new(expected_interests)
++    assert length(interests) == length(expected_interests)
++    refute {:person_clubs, "person-current"} in interests
+   end
+ 
+   test "descriptor returns complete replacement interests with each successful read" do
