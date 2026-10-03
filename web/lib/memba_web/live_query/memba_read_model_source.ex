@@ -273,20 +273,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     do: explicit_follow_invalidations(event)
 
   defp classify_conversation_follow_projector(%MessageSent{} = event) do
-    if MessageSent.sender_follows_conversation?(event) do
-      with_required(
+    event =
+      require_fields(
         @conversation_follow_projector,
         event,
-        [:club_id, :message_id, :sender_id],
-        fn event ->
-          conversation_id = event.conversation_id || event.message_id
-
-          [
-            {:conversation_follow, conversation_id, event.sender_id},
-            {:conversation, conversation_id}
-          ]
-        end
+        [:club_id, :message_id, :sender_id]
       )
+
+    if MessageSent.sender_follows_conversation?(event) do
+      conversation_id = event.conversation_id || event.message_id
+
+      {:ok,
+       [
+         {:conversation_follow, conversation_id, event.sender_id},
+         {:conversation, conversation_id}
+       ]}
     else
       :ignore
     end
@@ -295,7 +296,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   defp classify_conversation_follow_projector(event),
     do: contract_violation(@conversation_follow_projector, event, :unsupported_projector_event)
 
-  defp classify_delivery_projector(%EmailDeliveryOpened{}, _projector), do: :ignore
+  defp classify_delivery_projector(%EmailDeliveryOpened{} = event, projector) do
+    require_fields(projector, event, [:message_id, :delivery_id])
+    :ignore
+  end
 
   defp classify_delivery_projector(event, projector) do
     if event_module(event) in @delivery_change_events do
@@ -474,11 +478,17 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   end
 
   defp with_required(projector, values, required_fields, build, reported_event \\ nil) do
+    values = require_fields(projector, values, required_fields, reported_event)
+
+    {:ok, build.(values)}
+  end
+
+  defp require_fields(projector, values, required_fields, reported_event \\ nil) do
     missing_fields = Enum.filter(required_fields, &is_nil(Map.get(values, &1)))
 
     case missing_fields do
       [] ->
-        {:ok, build.(values)}
+        values
 
       missing_fields ->
         contract_violation(

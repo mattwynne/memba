@@ -328,6 +328,27 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
              )
   end
 
+  test "surfaces malformed no-op MessageSent events before ignoring follow invalidation" do
+    complete_event = %MessageSent{
+      message_id: "conversation-2",
+      club_id: "club-1",
+      sender_id: "person-2",
+      conversation_id: nil,
+      reply_to_message_id: nil,
+      subject: "Plans",
+      body: "Meet at eight",
+      sender_follows_conversation: false
+    }
+
+    for missing_field <- [:club_id, :message_id, :sender_id] do
+      assert_contract_violation(
+        Memba.Messaging.Projectors.ConversationFollow,
+        Map.put(complete_event, missing_field, nil),
+        {:missing_required_fields, [missing_field]}
+      )
+    end
+  end
+
   test "classifies both delivery contributors with exact message and delivery scope" do
     source = MembaReadModelSource.new()
 
@@ -836,6 +857,37 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
                projector
                |> notification(event)
                |> then(&Source.classify(MembaReadModelSource.new(), &1))
+    end
+  end
+
+  test "surfaces malformed replay-only EmailDeliveryOpened for both delivery projectors" do
+    delivery_id = Memba.ID.generate(:delivery)
+    message_id = Memba.ID.generate(:message)
+
+    Repo.insert!(%MemberEmailDelivery{
+      delivery_id: delivery_id,
+      message_id: message_id,
+      recipient_id: Memba.ID.generate(:person),
+      recipient_name: "Alice",
+      status: "sent"
+    })
+
+    complete_event = %EmailDeliveryOpened{
+      message_id: message_id,
+      delivery_id: delivery_id
+    }
+
+    for projector <- [
+          Memba.Messaging.Projectors.MemberEmailDelivery,
+          Memba.Messaging.Projectors.MembaStaffEmailDelivery
+        ],
+        missing_field <- [:message_id, :delivery_id] do
+      assert_contract_violation(
+        projector,
+        Map.put(complete_event, missing_field, nil),
+        {:missing_required_fields, [missing_field]},
+        %{delivery: %{delivery_id: delivery_id, message_id: message_id}}
+      )
     end
   end
 
