@@ -1,0 +1,725 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index c736d00..ad432b5 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,18 +1,18 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-009b-481e80a-settings-live-binding-1",
+-  "task_id": "task-009b",
+-  "todo_line": "- [ ] 009B Migrate `MembaWeb.MySettingsLive` to its accepted settings query-result assign, preserving tab routes, add-email form/validation and verification command feedback while refreshing selected-club, Person, club-membership and email-row data with fresh access checks.",
++  "packet_id": "task-009c-5b39ca0-message-compose-binding-1",
++  "task_id": "task-009c",
++  "todo_line": "- [ ] 009C Migrate `MembaWeb.MemberMessageLive.New` to its accepted compose-context query-result assign, preserving route/audience semantics, typed message form, validation, send/retry state, navigation and UI while refreshing recipient eligibility and counts with fresh access checks.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/live/my_settings_live.ex",
+-    "web/test/memba_web/live/my_settings_live_test.exs"
++    "web/lib/memba_web/live/member_message_live/new.ex",
++    "web/test/memba_web/live/member_message_live/new_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/my_settings_live_test.exs test/memba_web/member_settings_query_test.exs test/memba_web/live_query/memba_read_model_source_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/new_test.exs test/memba_web/live/member_message_live/new_send_test.exs test/memba_web/member_message_compose_query_test.exs test/memba_web/live_query/memba_read_model_source_test.exs",
+       "exit_status": 0,
+-      "evidence": "65 tests, 0 failures; covers the migrated settings LiveView, existing settings routes and email commands, accepted settings query, and committed read-model source adapter."
++      "evidence": "80 tests, 0 failures; covers compose routes, rendering, live exact invalidations and isolation, fresh access loss, form preservation, send/validation/retry behavior, the accepted compose query, and the committed read-model source adapter."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -25,6 +25,6 @@
+       "evidence": "No whitespace errors."
+     }
+   ],
+-  "notes": "MySettingsLive now binds the accepted :member_settings query to the sole projection-backed :settings assign through MembaReadModelSource using current_identity_email. Manual PubSub subscription, four independent projection assigns, direct projection loaders, independent email-row refreshes, and page-specific Person event filtering are removed; render-only flattening preserves the existing template, while successful add/make-primary/remove commands coherently rebind the query. Focused proof covers coherent Club, Person, membership, and email replacement; club-chip entry/exit; exact unrelated-Person isolation; fresh selected-club access loss with ForbiddenError; and preservation of active tab plus typed add-email/error state. Existing routes, rendering, verification delivery feedback, privacy-safe errors, and email command behavior remain green. The first TDD run failed with 14 tests and 3 failures before binding, and a corrected single-test red run confirmed the missing :settings result. The command test now authenticates through a stable verified alternate while removing the old primary, matching the fresh authenticated-email contract. Changes are limited to the reported LiveView and focused test paths; no accepted query, adapter, package, feature, plan, todo, ADR, migration matrix, projector, event, schema, command, route, or later LiveView changed. Task 009B remains unchecked, and no dev check or other unscoped full-suite command ran.",
++  "notes": "MemberMessageLive.New now binds the accepted :member_message_compose query to the sole projection-backed :compose_context assign through MembaReadModelSource using current_identity_email. Manual PubSub subscription, mount-captured club authorization, five independent projection assigns, the direct compose loader, projector allowlist, and page-specific notification predicate are removed; render-only flattening preserves the existing DOM, while send-time consistency uses Binding.rebind/3 and keeps command authorization unchanged. Focused proof covers selected-group participant entry/exit, represented-Person recipient eligibility, exact Club/Group copy refresh, unrelated Club/Group/Person isolation, club and selected-group access loss, and preservation of validation plus typed form state. Existing route, send, validation, retry, provider-failure, projection-lag, and navigation tests remain green. The initial red TDD run exposed the missing Club refresh; a second failure was invalid fixture setup that attempted to null the non-null legacy Person.email and was corrected by changing the projected primary-email row. An initial formatter invocation used repository-relative paths even though the wrapper runs from web/; the corrected web-relative invocation and final formatting check succeeded. Changes are limited to the reported LiveView and focused test paths; task 009C remains unchecked, no acceptance feature or other delivery document changed, and no dev check or other unscoped full-suite command ran.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index e0f0f86..98ea916 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -10,53 +10,46 @@ defmodule MembaWeb.MemberMessageLive.New do
+ 
+   require Logger
+ 
+-  alias Memba.Accounts
+-  alias Memba.Membership
+-  alias Memba.Membership.SystemGroups
++  alias LiveQuery.Binding
+   alias Memba.Messaging
+   alias Memba.Messaging.Projectors.Message, as: MessageProjector
+-  alias Memba.ReadModelChanges
+   alias MembaWeb.ClubSite
++  alias MembaWeb.LiveQuery.MembaReadModelSource
++  alias MembaWeb.MemberMessageComposeQuery
+ 
+-  @compose_context_projectors [
+-    Memba.Membership.Projectors.Group,
+-    Memba.Membership.Projectors.GroupMembership,
+-    Memba.Membership.Projectors.Membership
+-  ]
++  @compose_query_id :member_message_compose
+ 
+   @impl Phoenix.LiveView
+   def mount(params, session, socket) when is_map(params) do
+-    params = put_session_club_id(params, session) |> put_club_id_source(session)
+-    socket = ensure_identity_assigns(socket)
++    route_params = params |> put_session_club_id(session) |> put_club_id_source(session)
+ 
+-    case params do
++    case route_params do
+       %{"club_id" => club_id} ->
+-        case compose_context(
+-               club_id,
+-               Map.get(params, "group_id"),
+-               socket.assigns.current_identity,
+-               socket.assigns.current_identity_clubs
++        socket =
++          socket
++          |> ensure_identity_assigns()
++          |> assign(:route_params, route_params)
++          |> assign_initial_send_state()
++          |> assign(:message_form, message_form())
++
++        case Binding.bind(
++               socket,
++               MemberMessageComposeQuery.query(),
++               compose_query_inputs(club_id, route_params, socket),
++               MembaReadModelSource.new()
+              ) do
+-          {:ok, compose_assigns} ->
+-            {:ok,
+-             socket
+-             |> assign(:route_params, params)
+-             |> assign(compose_assigns)
+-             |> subscribe_to_read_model_changes()
+-             |> assign_initial_send_state()
+-             |> assign(:message_form, message_form())}
+-
+-          {:error, :forbidden} ->
+-            forbidden!(socket)
+-
+-          {:error, :not_found} ->
+-            not_found!(socket)
++          {:ok, socket} ->
++            {:ok, socket}
++
++          {:error, errors, socket} ->
++            initial_binding_error!(errors, socket)
+         end
+ 
+       _params ->
+         {:ok,
+          socket
+-         |> assign(:route_params, params)
++         |> ensure_identity_assigns()
++         |> assign(:route_params, route_params)
+          |> assign_empty_compose_context()}
+     end
+   end
+@@ -70,14 +63,16 @@ defmodule MembaWeb.MemberMessageLive.New do
+   end
+ 
+   @impl Phoenix.LiveView
+-  def handle_info(
+-        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
+-        %{assigns: %{route_params: %{"club_id" => club_id}}} = socket
+-      )
+-      when projector in @compose_context_projectors do
+-    case reload_compose_context(socket) do
+-      {:ok, socket} -> {:noreply, socket}
+-      {:error, socket} -> {:noreply, leave_private_surface(socket)}
++  def handle_info({:read_model_changed, _change} = notification, socket) do
++    case Binding.handle_notification(socket, notification) do
++      {:ignored, socket} ->
++        {:noreply, socket}
++
++      {:ok, socket} ->
++        {:noreply, socket}
++
++      {:error, errors, socket} ->
++        {:noreply, refresh_binding_error(errors, socket)}
+     end
+   end
+ 
+@@ -85,12 +80,12 @@ defmodule MembaWeb.MemberMessageLive.New do
+ 
+   @impl Phoenix.LiveView
+   def handle_event("send_message", %{"message" => message_params}, socket) do
+-    case reload_compose_context(socket) do
++    case Binding.rebind(socket, @compose_query_id, compose_query_inputs(socket)) do
+       {:ok, socket} ->
+         send_message(socket, message_params)
+ 
+-      {:error, socket} ->
+-        {:noreply, leave_private_surface(socket)}
++      {:error, errors, socket} ->
++        {:noreply, refresh_binding_error(errors, socket)}
+     end
+   end
+ 
+@@ -108,7 +103,9 @@ defmodule MembaWeb.MemberMessageLive.New do
+   end
+ 
+   @impl Phoenix.LiveView
+-  def render(assigns) do
++  def render(%{compose_context: compose_context} = assigns) when is_map(compose_context) do
++    assigns = assign(assigns, compose_context)
++
+     ~H"""
+     <Layouts.club_site
+       flash={@flash}
+@@ -339,40 +336,20 @@ defmodule MembaWeb.MemberMessageLive.New do
+     """
+   end
+ 
+-  defp ensure_identity_assigns(socket) do
+-    socket
+-    |> assign_new(:current_identity, fn -> nil end)
+-    |> assign_new(:current_identity_clubs, fn -> [] end)
++  def render(%{compose_context: nil} = assigns) do
++    ~H"""
++    <div id="member-message-compose-cleared"></div>
++    """
+   end
+ 
+-  defp subscribe_to_read_model_changes(socket) do
+-    if connected?(socket) do
+-      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+-    end
+-
++  defp ensure_identity_assigns(socket) do
+     socket
+-  end
+-
+-  defp reload_compose_context(socket) do
+-    route_params = socket.assigns.route_params
+-
+-    case compose_context(
+-           Map.get(route_params, "club_id"),
+-           Map.get(route_params, "group_id"),
+-           socket.assigns.current_identity,
+-           socket.assigns.current_identity_clubs
+-         ) do
+-      {:ok, compose_assigns} -> {:ok, assign(socket, compose_assigns)}
+-      {:error, _reason} -> {:error, socket}
+-    end
++    |> assign_new(:current_identity, fn -> nil end)
++    |> assign_new(:current_identity_email, fn -> nil end)
+   end
+ 
+   defp leave_private_surface(socket) do
+-    route_params = socket.assigns.route_params
+-
+-    socket
+-    |> assign_empty_compose_context()
+-    |> push_navigate(to: access_lost_path(route_params))
++    push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
+   end
+ 
+   defp send_message(socket, message_params) do
+@@ -413,7 +390,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+            selected_club: %{club_id: club_id},
+            current_member: %{id: sender_id},
+            audience_group: %{group_id: audience_group_id}
+-         } <- socket.assigns do
++         } <- socket.assigns.compose_context do
+       message_id = Memba.ID.generate(:message)
+ 
+       attrs = %{
+@@ -439,83 +416,64 @@ defmodule MembaWeb.MemberMessageLive.New do
+ 
+   defp log_send_failure(socket, reason) do
+     inspected_reason = inspect(reason)
++    compose_context = socket.assigns.compose_context
+ 
+     Logger.error("Member message send failed: #{inspected_reason}",
+-      club_id: selected_club_id(socket.assigns.selected_club, socket.assigns.route_params),
+-      sender_id: current_member_id(socket.assigns.current_member),
++      club_id: selected_club_id(compose_context.selected_club, socket.assigns.route_params),
++      sender_id: current_member_id(compose_context.current_member),
+       reason: inspected_reason
+     )
+   end
+ 
+-  defp compose_context(club_id, requested_group_id, current_identity, current_identity_clubs) do
+-    with selected_club when not is_nil(selected_club) <-
+-           selected_club(current_identity_clubs, club_id),
+-         club_members <- Membership.list_active_members_of_club(club_id),
+-         current_member when not is_nil(current_member) <-
+-           current_member_for_identity(club_members, current_identity) do
+-      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
+-      group_id = requested_group_id || SystemGroups.everyone_group_id(club_id)
+-
+-      compose_group_context(
+-        selected_club,
+-        current_member,
+-        groups,
+-        group_id,
+-        requested_group_id
+-      )
+-    else
+-      _not_authorized -> {:error, :forbidden}
+-    end
++  defp compose_query_inputs(socket) do
++    route_params = socket.assigns.route_params
++    compose_query_inputs(Map.get(route_params, "club_id"), route_params, socket)
+   end
+ 
+-  defp compose_group_context(
+-         selected_club,
+-         current_member,
+-         groups,
+-         group_id,
+-         requested_group_id
+-       ) do
+-    case Enum.find(groups, &(&1.group_id == group_id)) do
+-      nil when is_nil(requested_group_id) ->
+-        {:error, :forbidden}
+-
+-      nil ->
+-        {:error, :not_found}
+-
+-      audience_group ->
+-        members = Membership.list_active_members_of_group(audience_group.group_id)
+-        active_member_count = Enum.count(members)
+-
+-        {:ok,
+-         %{
+-           selected_club: selected_club,
+-           current_member: current_member,
+-           audience_group: audience_group,
+-           active_member_count: active_member_count,
+-           message_audience: message_audience(selected_club, audience_group, active_member_count)
+-         }}
+-    end
++  defp compose_query_inputs(club_id, route_params, socket) do
++    %{
++      club_id: club_id,
++      group_id: Map.get(route_params, "group_id"),
++      authenticated_email: socket.assigns.current_identity_email
++    }
+   end
+ 
+-  defp selected_club(current_identity_clubs, club_id) do
+-    Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
+-  end
++  defp initial_binding_error!(
++         [{@compose_query_id, :forbidden} | _errors],
++         socket
++       ),
++       do: forbidden!(socket)
+ 
+-  defp current_member_for_identity(_members, nil), do: nil
++  defp initial_binding_error!(
++         [{@compose_query_id, :not_found} | _errors],
++         socket
++       ),
++       do: not_found!(socket)
+ 
+-  defp current_member_for_identity(members, identity) do
+-    identity_email = Accounts.normalize_email(identity.email)
++  defp initial_binding_error!(errors, _socket) do
++    raise "member message compose live query failed: #{inspect(errors)}"
++  end
+ 
+-    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
++  defp refresh_binding_error(errors, socket) do
++    if Enum.any?(errors, fn
++         {@compose_query_id, reason} when reason in [:forbidden, :not_found] -> true
++         _other -> false
++       end) do
++      leave_private_surface(socket)
++    else
++      raise "member message compose live query refresh failed: #{inspect(errors)}"
++    end
+   end
+ 
+   defp assign_empty_compose_context(socket) do
+     socket
+-    |> assign(:selected_club, nil)
+-    |> assign(:current_member, nil)
+-    |> assign(:audience_group, nil)
+-    |> assign(:active_member_count, nil)
+-    |> assign(:message_audience, message_audience(nil, nil, nil))
++    |> assign(:compose_context, %{
++      selected_club: nil,
++      current_member: nil,
++      audience_group: nil,
++      active_member_count: nil,
++      message_audience: message_audience(nil, nil, nil)
++    })
+     |> assign_initial_send_state()
+     |> assign(:message_form, message_form())
+   end
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 3e1f456..f1e7d20 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -294,6 +294,322 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     refute render(view) =~ "Send to all current members"
+   end
+ 
++  test "an open selected-group compose screen refreshes participant entry and exit", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Kootenay Mountaineering Club",
++        club_id: alice.club_id,
++        slug: "kmc"
++      )
++
++    trip_planning_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='1']"
++           )
++
++    add_group_member(trip_planning_group, bob)
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.GroupMembership,
++      %Memba.Membership.Events.GroupMemberAdded{
++        club_id: alice.club_id,
++        group_id: trip_planning_group.group_id,
++        membership_id: bob.membership_id,
++        person_id: bob.person_id
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='2']"
++           )
++
++    Repo.update_all(
++      from(group_membership in GroupMembership,
++        where:
++          group_membership.group_id == ^trip_planning_group.group_id and
++            group_membership.membership_id == ^bob.membership_id
++      ),
++      set: [active: false]
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.GroupMembership,
++      %Memba.Membership.Events.GroupMemberRemoved{
++        club_id: alice.club_id,
++        group_id: trip_planning_group.group_id,
++        membership_id: bob.membership_id,
++        person_id: bob.person_id
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='1']"
++           )
++  end
++
++  test "represented Person eligibility refreshes while unrelated Person changes are isolated", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Kootenay Mountaineering Club",
++        club_id: alice.club_id
++      )
++
++    unrelated =
++      create_active_member(
++        email: "unrelated@example.com",
++        name: "Unrelated Person",
++        club_name: "Unrelated Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/new")
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='2']"
++           )
++
++    Repo.update_all(
++      from(email_address in Memba.Membership.Projections.PersonEmailAddress,
++        where:
++          email_address.person_id == ^bob.person_id and
++            email_address.is_primary == true
++      ),
++      set: [is_primary: false]
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Person,
++      %Memba.Membership.Events.PersonPrimaryEmailAddressChanged{
++        person_id: unrelated.person_id,
++        primary_email: "unrelated+new@example.com",
++        normalized_email: "unrelated+new@example.com"
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='2']"
++           )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Person,
++      %Memba.Membership.Events.PersonPrimaryEmailAddressChanged{
++        person_id: bob.person_id,
++        primary_email: "bob+new@example.com",
++        normalized_email: "bob+new@example.com"
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='1']"
++           )
++  end
++
++  test "represented Club and Group changes refresh exact compose copy", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    unrelated =
++      create_active_member(
++        email: "unrelated@example.com",
++        name: "Unrelated Person",
++        club_name: "Unrelated Club"
++      )
++
++    trip_planning_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning",
++        email_slug: "trip-planning"
++      )
++
++    unrelated_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "unrelated",
++        name: "Unrelated"
++      )
++
++    add_group_member(trip_planning_group, alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
++
++    Repo.update_all(
++      from(club in Club, where: club.club_id == ^alice.club_id),
++      set: [name: "Kootenay Alpine Club"]
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Club,
++      %Memba.Membership.Events.ClubUpdated{
++        club_id: unrelated.club_id,
++        name: "Other Club",
++        slug: "other"
++      }
++    )
++
++    assert has_element?(view, "#member-compose-selected-club", "Kootenay Mountaineering Club")
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Club,
++      %Memba.Membership.Events.ClubUpdated{
++        club_id: alice.club_id,
++        name: "Kootenay Alpine Club",
++        slug: "kmc"
++      }
++    )
++
++    assert has_element?(view, "#member-compose-selected-club", "Kootenay Alpine Club")
++
++    Repo.update_all(
++      from(group in Group, where: group.group_id == ^trip_planning_group.group_id),
++      set: [name: "Alpine Planning", email_slug: "alpine-planning"]
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Group,
++      %Memba.Membership.Events.GroupEmailSlugAssigned{
++        club_id: alice.club_id,
++        group_id: unrelated_group.group_id,
++        email_slug: "unrelated"
++      }
++    )
++
++    assert has_element?(view, "h1", "New message to Trip Planning")
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Group,
++      %Memba.Membership.Events.GroupEmailSlugAssigned{
++        club_id: alice.club_id,
++        group_id: trip_planning_group.group_id,
++        email_slug: "alpine-planning"
++      }
++    )
++
++    assert has_element?(view, "h1", "New message to Alpine Planning")
++
++    assert has_element?(
++             view,
++             "#member-compose-inbound-email-link[href='mailto:alpine-planning@kmc.clubs.memba.io']"
++           )
++  end
++
++  test "a relevant refresh preserves validation and typed message state", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Kootenay Mountaineering Club",
++        club_id: alice.club_id,
++        everyone_group?: false
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/new")
++
++    view
++    |> element("#member-message-compose-form")
++    |> render_submit(%{
++      "message" => %{
++        "subject" => "Saturday trail plan",
++        "body" => "  "
++      }
++    })
++
++    assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
++    assert has_element?(view, "#member-message-subject-input[value='Saturday trail plan']")
++
++    insert_everyone_group_membership!(alice.club_id, bob.membership_id, bob.person_id)
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.GroupMembership,
++      %Memba.Membership.Events.GroupMemberAdded{
++        club_id: alice.club_id,
++        group_id: SystemGroups.everyone_group_id(alice.club_id),
++        membership_id: bob.membership_id,
++        person_id: bob.person_id
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='2']"
++           )
++
++    assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
++    assert has_element?(view, "#member-message-subject-input[value='Saturday trail plan']")
++  end
++
+   test "an open compose screen leaves private audience metadata after access is removed", %{
+     conn: conn
+   } do
+@@ -364,6 +680,41 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     assert_redirect(view, ~p"/groups/#{private_group.group_id}")
+   end
+ 
++  test "an open compose screen leaves the private surface after club membership is removed", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/new")
++
++    Repo.update_all(
++      from(membership in Membership,
++        where: membership.membership_id == ^alice.membership_id
++      ),
++      set: [active: false]
++    )
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Membership,
++      %Memba.Membership.Events.ClubMemberRemoved{
++        club_id: alice.club_id,
++        membership_id: alice.membership_id,
++        person_id: alice.person_id
++      }
++    )
++
++    assert_redirect(view, ~p"/conversations")
++  end
++
+   test "recipient count follows members with primary email addresses", %{conn: conn} do
+     alice =
+       create_active_member(
