@@ -12,8 +12,11 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
   alias Memba.Membership.Club, as: ClubAggregate
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Permissions
@@ -111,6 +114,243 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     assert_raise MembaWeb.ForbiddenError, fn ->
       live(conn, ~p"/groups/new")
     end
+  end
+
+  test "a relevant committed change refreshes the coherent context and preserves form state", %{
+    conn: conn
+  } do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+    club = Membership.get_club(robin.club_id)
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+
+    view
+    |> form("#member-group-new-form", group: %{name: "Trips"})
+    |> render_change()
+
+    %{socket: before_socket} = :sys.get_state(view.pid)
+    group_id = before_socket.assigns.group_id
+    route_params = before_socket.assigns.route_params
+    preview = before_socket.assigns.email_preview
+
+    refute Map.has_key?(before_socket.assigns, :selected_club)
+    refute Map.has_key?(before_socket.assigns, :current_member)
+
+    club
+    |> Ecto.Changeset.change(name: "West Coast Alpine Club")
+    |> Repo.update!()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %ClubUpdated{
+        club_id: robin.club_id,
+        name: "West Coast Alpine Club",
+        slug: club.slug
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-group-new-selected-club[data-club-id='#{robin.club_id}']",
+             "West Coast Alpine Club"
+           )
+
+    %{socket: after_socket} = :sys.get_state(view.pid)
+
+    assert after_socket.assigns.group_creation_context.selected_club.name ==
+             "West Coast Alpine Club"
+
+    assert after_socket.assigns.group_creation_context.current_member.id == robin.person_id
+    assert after_socket.assigns.group_id == group_id
+    assert after_socket.assigns.route_params == route_params
+    assert after_socket.assigns.form.params == %{"name" => "Trips"}
+    assert after_socket.assigns.form_valid?
+    assert after_socket.assigns.email_preview == preview
+
+    assert has_element?(view, "#member-group-name-input[value='Trips']")
+
+    assert has_element?(
+             view,
+             "#member-group-email-preview[data-state='available']",
+             ClubInboundEmailAddress.address(club, "trips")
+           )
+  end
+
+  test "a relevant refresh preserves an in-progress validation error", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+    club = Membership.get_club(robin.club_id)
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+
+    view
+    |> form("#member-group-new-form", group: %{name: ""})
+    |> render_change()
+
+    %{socket: before_socket} = :sys.get_state(view.pid)
+    group_id = before_socket.assigns.group_id
+    preview = before_socket.assigns.email_preview
+
+    club
+    |> Ecto.Changeset.change(name: "West Coast Alpine Club")
+    |> Repo.update!()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %ClubUpdated{
+        club_id: robin.club_id,
+        name: "West Coast Alpine Club",
+        slug: club.slug
+      }
+    )
+
+    assert has_element?(view, "#member-group-name-input[aria-invalid='true']")
+    assert has_element?(view, "#member-group-name-input-error-1", "Give the group a name.")
+    assert has_element?(view, "#member-group-email-preview[data-state='empty']", "")
+
+    %{socket: after_socket} = :sys.get_state(view.pid)
+    assert after_socket.assigns.group_id == group_id
+    assert after_socket.assigns.form.params == %{"name" => ""}
+    refute after_socket.assigns.form_valid?
+    assert after_socket.assigns.email_preview == preview
+  end
+
+  test "an unrelated committed change leaves the context and transient state untouched", %{
+    conn: conn
+  } do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    other =
+      create_active_member(
+        email: "other@example.com",
+        name: "Other Member",
+        club_name: "Other Club"
+      )
+
+    grant_manage_members!(robin)
+    club = Membership.get_club(robin.club_id)
+    other_club = Membership.get_club(other.club_id)
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+
+    view
+    |> form("#member-group-new-form", group: %{name: "Trips"})
+    |> render_change()
+
+    %{socket: before_socket} = :sys.get_state(view.pid)
+
+    club
+    |> Ecto.Changeset.change(name: "Must Not Be Loaded")
+    |> Repo.update!()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %ClubUpdated{
+        club_id: other.club_id,
+        name: other_club.name,
+        slug: other_club.slug
+      }
+    )
+
+    assert has_element?(view, "#member-group-new-selected-club", "West Coast Paddlers")
+    refute has_element?(view, "#member-group-new-selected-club", "Must Not Be Loaded")
+
+    %{socket: after_socket} = :sys.get_state(view.pid)
+
+    assert after_socket.assigns.group_creation_context ==
+             before_socket.assigns.group_creation_context
+
+    assert after_socket.assigns.group_id == before_socket.assigns.group_id
+    assert after_socket.assigns.route_params == before_socket.assigns.route_params
+    assert after_socket.assigns.form.params == %{"name" => "Trips"}
+    assert after_socket.assigns.form_valid?
+    assert after_socket.assigns.email_preview == before_socket.assigns.email_preview
+  end
+
+  test "fresh club-membership loss leaves an already-open private surface", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+
+    MembershipProjection
+    |> where([membership], membership.membership_id == ^robin.membership_id)
+    |> Repo.update_all(set: [active: false])
+
+    monitor = Process.monitor(view.pid)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %ClubMemberRemoved{
+        club_id: robin.club_id,
+        membership_id: robin.membership_id,
+        person_id: robin.person_id
+      }
+    )
+
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
+  end
+
+  test "fresh manage-members loss leaves an already-open private surface", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    conn = signed_in_club_host(conn, "robin@example.com", robin)
+    {:ok, view, _html} = live(conn, ~p"/groups/new")
+
+    revoke_projected_manage_members!(robin)
+    monitor = Process.monitor(view.pid)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Role,
+      %ClubRoleRemovedFromMember{
+        club_id: robin.club_id,
+        membership_id: robin.membership_id,
+        person_id: robin.person_id,
+        role_id: Memba.ID.generate(:role)
+      }
+    )
+
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
   end
 
   test "signed-out visitors are redirected and can return to the club's new-group route", %{
@@ -741,6 +981,19 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
         where: member_permission.membership_id == ^member.membership_id,
         where: member_permission.person_id == ^member.person_id,
         where: member_permission.permission == ^Permissions.club_manage_members()
+    )
+  end
+
+  defp notify_read_model_change(view, projector, source_event) do
+    send(
+      view.pid,
+      {:read_model_changed,
+       %{
+         projector: projector,
+         source_event: source_event,
+         metadata: %{},
+         changes: %{}
+       }}
     )
   end
 

@@ -11,34 +11,44 @@ defmodule MembaWeb.MemberGroupLive.New do
 
   import Ecto.Changeset
 
-  alias Memba.Accounts
+  alias LiveQuery.Binding
   alias Memba.Membership
-  alias Memba.Membership.Authorization
   alias MembaWeb.ClubSite
+  alias MembaWeb.LiveQuery.MembaReadModelSource
+  alias MembaWeb.MemberGroupCreationQuery
 
   @empty_group %{"name" => ""}
   @group_form_types %{name: :string}
+  @group_creation_query_id :member_group_creation
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
     route_params = params |> put_session_club_id(session) |> put_club_id_source(session)
 
-    with club_id when is_binary(club_id) <- Map.get(route_params, "club_id"),
-         {:ok, group_context} <-
-           group_context(
-             club_id,
-             socket.assigns.current_identity,
-             socket.assigns.current_identity_clubs
+    with club_id when is_binary(club_id) <- Map.get(route_params, "club_id") do
+      socket =
+        socket
+        |> assign(:route_params, route_params)
+        |> assign(:group_id, Memba.ID.generate(:group))
+        |> assign_group_form(@empty_group, nil, empty_preview())
+
+      case Binding.bind(
+             socket,
+             MemberGroupCreationQuery.query(),
+             %{
+               club_id: club_id,
+               authenticated_email: socket.assigns.current_identity_email
+             },
+             MembaReadModelSource.new()
            ) do
-      {:ok,
-       socket
-       |> assign(:route_params, route_params)
-       |> assign(group_context)
-       |> assign(:group_id, Memba.ID.generate(:group))
-       |> assign_group_form(@empty_group, nil, empty_preview())}
+        {:ok, socket} ->
+          {:ok, socket}
+
+        {:error, errors, socket} ->
+          group_creation_binding_error!(errors, socket)
+      end
     else
-      _missing_or_forbidden_context ->
-        forbidden!()
+      _missing_club_id -> forbidden!()
     end
   end
 
@@ -59,7 +69,7 @@ defmodule MembaWeb.MemberGroupLive.New do
          assign_group_form(
            socket,
            group_params,
-           duplicate_name_message(existing_name, socket.assigns.selected_club.name),
+           duplicate_name_message(existing_name, selected_club(socket).name),
            empty_preview("")
          )}
 
@@ -73,9 +83,9 @@ defmodule MembaWeb.MemberGroupLive.New do
 
   def handle_event("create_group", %{"group" => group_params}, socket) do
     attrs = %{
-      club_id: socket.assigns.selected_club.club_id,
+      club_id: selected_club(socket).club_id,
       group_id: socket.assigns.group_id,
-      actor_person_id: socket.assigns.current_member.id,
+      actor_person_id: current_member(socket).id,
       name: Map.get(group_params, "name")
     }
 
@@ -95,7 +105,7 @@ defmodule MembaWeb.MemberGroupLive.New do
          assign_group_form(
            socket,
            group_params,
-           duplicate_name_message(nil, socket.assigns.selected_club.name),
+           duplicate_name_message(nil, selected_club(socket).name),
            empty_preview("")
          )}
 
@@ -103,9 +113,7 @@ defmodule MembaWeb.MemberGroupLive.New do
         {:noreply,
          socket
          |> put_flash(:error, "You no longer have permission to create groups.")
-         |> push_navigate(
-           to: groups_path(socket.assigns.selected_club, socket.assigns.route_params)
-         )}
+         |> push_navigate(to: groups_path(selected_club(socket), socket.assigns.route_params))}
 
       {:error, :authorization_state_mismatch} ->
         {:noreply,
@@ -122,7 +130,25 @@ defmodule MembaWeb.MemberGroupLive.New do
   end
 
   @impl Phoenix.LiveView
-  def render(assigns) do
+  def handle_info({:read_model_changed, _change} = notification, socket) do
+    case Binding.handle_notification(socket, notification) do
+      {:ignored, socket} ->
+        {:noreply, socket}
+
+      {:ok, socket} ->
+        {:noreply, socket}
+
+      {:error, errors, socket} ->
+        group_creation_binding_error!(errors, socket)
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  @impl Phoenix.LiveView
+  def render(%{group_creation_context: group_creation_context} = assigns) do
+    assigns = assign(assigns, group_creation_context)
+
     ~H"""
     <Layouts.club_site
       flash={@flash}
@@ -268,32 +294,10 @@ defmodule MembaWeb.MemberGroupLive.New do
     """
   end
 
-  defp group_context(club_id, current_identity, current_identity_clubs) do
-    with selected_club when not is_nil(selected_club) <-
-           Enum.find(current_identity_clubs, &(&1.club_id == club_id)),
-         current_member when not is_nil(current_member) <-
-           current_member(club_id, current_identity),
-         :ok <- Authorization.authorize_manage_members(club_id, current_member.id) do
-      {:ok, %{selected_club: selected_club, current_member: current_member}}
-    else
-      _missing_or_forbidden_context -> {:error, :forbidden}
-    end
-  end
-
-  defp current_member(_club_id, nil), do: nil
-
-  defp current_member(club_id, identity) do
-    identity_email = Accounts.normalize_email(identity.email)
-
-    club_id
-    |> Membership.list_active_members_of_club()
-    |> Enum.find(fn member -> Accounts.normalize_email(member.email) == identity_email end)
-  end
-
   defp preview_group(socket, group_params) do
     Membership.preview_custom_group(%{
-      club_id: socket.assigns.selected_club.club_id,
-      actor_person_id: socket.assigns.current_member.id,
+      club_id: selected_club(socket).club_id,
+      actor_person_id: current_member(socket).id,
       name: Map.get(group_params, "name")
     })
   end
@@ -324,7 +328,7 @@ defmodule MembaWeb.MemberGroupLive.New do
         assign_group_form(
           socket,
           group_params,
-          duplicate_name_message(existing_name, socket.assigns.selected_club.name),
+          duplicate_name_message(existing_name, selected_club(socket).name),
           empty_preview("")
         )
 
@@ -375,11 +379,24 @@ defmodule MembaWeb.MemberGroupLive.New do
      |> push_navigate(
        to:
          created_group_path(
-           socket.assigns.selected_club,
+           selected_club(socket),
            socket.assigns.route_params,
            socket.assigns.group_id
          )
      )}
+  end
+
+  defp selected_club(socket), do: socket.assigns.group_creation_context.selected_club
+  defp current_member(socket), do: socket.assigns.group_creation_context.current_member
+
+  defp group_creation_binding_error!(
+         [{@group_creation_query_id, :forbidden} | _errors],
+         _socket
+       ),
+       do: forbidden!()
+
+  defp group_creation_binding_error!(errors, _socket) do
+    raise "member group creation live query failed: #{inspect(errors)}"
   end
 
   defp put_session_club_id(params, session) do
