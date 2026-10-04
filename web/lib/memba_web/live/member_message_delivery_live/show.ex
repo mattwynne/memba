@@ -2,49 +2,42 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
   @moduledoc """
   LiveView entry point for the member-facing per-message delivery details page.
 
-  The delivery route reuses the member message detail loader so it has the same
-  selected-club authorization checks and receipt presentation model as the
-  conversation page.
+  The delivery route binds one fresh-authorized delivery query so committed
+  receipt status, staff reason, represented people, and access changes replace
+  one coherent result while route and browser-owned state remain intact.
   """
   use MembaWeb, :live_view
 
-  alias Memba.ReadModelChanges
+  alias LiveQuery.Binding
   alias MembaWeb.ClubSite
-  alias MembaWeb.MemberMessageDetail
+  alias MembaWeb.LiveQuery.MembaReadModelSource
+  alias MembaWeb.MemberMessageDeliveryQuery
 
-  @access_projectors [
-    Memba.Membership.Projectors.GroupMembership,
-    Memba.Membership.Projectors.Membership,
-    Memba.Messaging.Projectors.ConversationGroupAccess
-  ]
+  @delivery_detail_query_id :member_message_delivery
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
     params = put_session_club_id(params, session) |> put_club_id_source(session)
-    socket = ensure_identity_assigns(socket)
+
+    socket =
+      socket
+      |> ensure_identity_assigns()
+      |> assign(:current_identity_email, identity_email(socket.assigns[:current_identity]))
+      |> assign(:route_params, params)
 
     case params do
       %{"club_id" => _club_id, "message_id" => _message_id} ->
-        case MemberMessageDetail.load(
-               params,
-               socket.assigns.current_identity_clubs,
-               socket.assigns.current_identity
+        case Binding.bind(
+               socket,
+               MemberMessageDeliveryQuery.query(),
+               delivery_detail_query_inputs(socket),
+               MembaReadModelSource.new()
              ) do
-          {:ok, detail_assigns} ->
-            if connected?(socket) do
-              Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
-            end
+          {:ok, socket} ->
+            {:ok, socket}
 
-            {:ok,
-             socket
-             |> assign(:route_params, params)
-             |> assign(detail_assigns)}
-
-          {:error, :forbidden} ->
-            forbidden!(socket)
-
-          {:error, :not_found} ->
-            not_found!(socket)
+          {:error, errors, socket} ->
+            initial_binding_error!(errors, socket)
         end
 
       _params ->
@@ -57,22 +50,25 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_info(
-        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id} = event}},
-        %{assigns: %{selected_club: %{club_id: club_id}}} = socket
-      )
-      when projector in @access_projectors do
-    if access_change_relevant?(projector, event, socket) do
-      {:noreply, refresh_access_or_leave(socket)}
-    else
-      {:noreply, socket}
+  def handle_info({:read_model_changed, _change} = notification, socket) do
+    case Binding.handle_notification(socket, notification) do
+      {:ignored, socket} ->
+        {:noreply, socket}
+
+      {:ok, socket} ->
+        {:noreply, socket}
+
+      {:error, errors, socket} ->
+        {:noreply, refresh_binding_error(errors, socket)}
     end
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
-  def render(%{message: _message} = assigns) do
+  def render(%{delivery_detail: delivery_detail} = assigns) when is_map(delivery_detail) do
+    assigns = assign(assigns, delivery_detail)
+
     ~H"""
     <Layouts.club_site
       flash={@flash}
@@ -238,34 +234,49 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
     """
   end
 
+  def render(%{delivery_detail: nil} = assigns) do
+    ~H"""
+    <div id="member-message-delivery-detail-cleared"></div>
+    """
+  end
+
   def render(_assigns) do
     raise "MemberMessageDeliveryLive.Show requires a loaded message before rendering"
   end
 
-  defp refresh_access_or_leave(socket) do
-    case MemberMessageDetail.load(
-           socket.assigns.route_params,
-           socket.assigns.current_identity_clubs,
-           socket.assigns.current_identity
-         ) do
-      {:ok, detail_assigns} ->
-        assign(socket, detail_assigns)
-
-      {:error, _reason} ->
-        push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
-    end
+  defp delivery_detail_query_inputs(socket) do
+    %{
+      club_id: Map.get(socket.assigns.route_params, "club_id"),
+      message_id: Map.get(socket.assigns.route_params, "message_id"),
+      authenticated_email: socket.assigns.current_identity_email
+    }
   end
 
-  defp access_change_relevant?(
-         Memba.Messaging.Projectors.ConversationGroupAccess,
-         event,
+  defp initial_binding_error!(
+         [{@delivery_detail_query_id, :forbidden} | _errors],
          socket
-       ) do
-    Map.get(event, :conversation_id) == conversation_message_id(socket.assigns.message)
+       ),
+       do: forbidden!(socket)
+
+  defp initial_binding_error!(
+         [{@delivery_detail_query_id, :not_found} | _errors],
+         socket
+       ),
+       do: not_found!(socket)
+
+  defp initial_binding_error!(errors, _socket) do
+    raise "member message delivery live query failed: #{inspect(errors)}"
   end
 
-  defp access_change_relevant?(_membership_projector, event, socket) do
-    Map.get(event, :person_id) == socket.assigns.current_member.id
+  defp refresh_binding_error(errors, socket) do
+    if Enum.any?(errors, fn
+         {@delivery_detail_query_id, reason} when reason in [:forbidden, :not_found] -> true
+         _other -> false
+       end) do
+      push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
+    else
+      raise "member message delivery live query refresh failed: #{inspect(errors)}"
+    end
   end
 
   defp put_session_club_id(params, session) do
@@ -386,8 +397,10 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
   defp ensure_identity_assigns(socket) do
     socket
     |> assign_new(:current_identity, fn -> nil end)
-    |> assign_new(:current_identity_clubs, fn -> [] end)
   end
+
+  defp identity_email(%{email: email}), do: email
+  defp identity_email(_identity), do: nil
 
   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
 
