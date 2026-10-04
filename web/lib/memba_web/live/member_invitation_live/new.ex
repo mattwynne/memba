@@ -7,40 +7,46 @@ defmodule MembaWeb.MemberInvitationLive.New do
   """
   use MembaWeb, :live_view
 
-  alias Memba.Accounts
+  alias LiveQuery.Binding
   alias Memba.Membership
-  alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
   alias MembaWeb.ClubSite
+  alias MembaWeb.LiveQuery.MembaReadModelSource
+  alias MembaWeb.MemberInvitationQuery
 
   @empty_invitation %{"email" => ""}
   @empty_errors %{email: []}
+  @invitation_query_id :member_invitation
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
-    params = put_session_club_id(params, session) |> put_club_id_source(session)
-    socket = ensure_identity_assigns(socket)
+    route_params = params |> put_session_club_id(session) |> put_club_id_source(session)
 
-    with club_id when is_binary(club_id) <- Map.get(params, "club_id"),
-         {:ok, invitation_assigns} <-
-           invitation_context(
-             club_id,
-             socket.assigns.current_identity,
-             socket.assigns.current_identity_clubs
+    with club_id when is_binary(club_id) <- Map.get(route_params, "club_id") do
+      socket =
+        socket
+        |> assign(:route_params, route_params)
+        |> assign_form(@empty_invitation, @empty_errors)
+
+      case Binding.bind(
+             socket,
+             MemberInvitationQuery.query(),
+             invitation_query_inputs(club_id, socket),
+             MembaReadModelSource.new()
            ) do
-      {:ok,
-       socket
-       |> assign(:route_params, params)
-       |> assign(invitation_assigns)
-       |> assign_form(@empty_invitation, @empty_errors)}
+        {:ok, socket} ->
+          {:ok, socket}
+
+        {:error, errors, socket} ->
+          invitation_binding_error!(errors, socket)
+      end
     else
-      _missing_or_forbidden_context ->
-        forbidden!(socket)
+      _missing_club_id -> forbidden!()
     end
   end
 
-  def mount(_params, _session, socket), do: forbidden!(socket)
+  def mount(_params, _session, _socket), do: forbidden!()
 
   @impl Phoenix.LiveView
   def handle_event("validate_invitation", %{"invitation" => invitation_params}, socket) do
@@ -48,39 +54,36 @@ defmodule MembaWeb.MemberInvitationLive.New do
   end
 
   def handle_event("send_invitation", %{"invitation" => invitation_params}, socket) do
-    with {:ok, invited_email} <- invitation_email(invitation_params),
-         club_id <- selected_club_id(socket.assigns.selected_club, socket.assigns.route_params),
-         pending? = pending_invitation?(club_id, invited_email.normalized_email),
-         {:ok, invitation} <-
-           Membership.invite_club_member(
-             %{"club_id" => club_id, "email" => invited_email.normalized_email},
-             consistency: :strong
-           ),
-         :ok <-
-           deliver_invitation(
-             invitation,
-             invited_email.normalized_email,
-             socket.assigns.selected_club
-           ) do
-      {:noreply,
-       socket
-       |> put_flash(:info, success_message(invited_email.normalized_email, pending?))
-       |> assign_form(@empty_invitation, @empty_errors)}
-    else
+    case invitation_email(invitation_params) do
+      {:ok, invited_email} ->
+        reauthorize_and_send_invitation(socket, invited_email, invitation_params)
+
       {:error, :invalid_email} ->
         {:noreply,
          assign_form(socket, invitation_params, %{email: ["Enter a valid email address."]})}
-
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, failure_message(reason))
-         |> assign_form(invitation_params, @empty_errors)}
     end
   end
 
   @impl Phoenix.LiveView
-  def render(assigns) do
+  def handle_info({:read_model_changed, _change} = notification, socket) do
+    case Binding.handle_notification(socket, notification) do
+      {:ignored, socket} ->
+        {:noreply, socket}
+
+      {:ok, socket} ->
+        {:noreply, socket}
+
+      {:error, errors, socket} ->
+        invitation_binding_error!(errors, socket)
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  @impl Phoenix.LiveView
+  def render(%{invitation_context: invitation_context} = assigns) do
+    assigns = assign(assigns, invitation_context)
+
     ~H"""
     <Layouts.club_site
       flash={@flash}
@@ -219,6 +222,41 @@ defmodule MembaWeb.MemberInvitationLive.New do
     """
   end
 
+  defp reauthorize_and_send_invitation(socket, invited_email, invitation_params) do
+    case Binding.rebind(socket, @invitation_query_id, invitation_query_inputs(socket)) do
+      {:ok, socket} ->
+        send_invitation(socket, invited_email, invitation_params)
+
+      {:error, errors, socket} ->
+        invitation_binding_error!(errors, socket)
+    end
+  end
+
+  defp send_invitation(socket, invited_email, invitation_params) do
+    selected_club = socket.assigns.invitation_context.selected_club
+    club_id = selected_club.club_id
+    normalized_email = invited_email.normalized_email
+    pending? = pending_invitation?(club_id, normalized_email)
+
+    with {:ok, invitation} <-
+           Membership.invite_club_member(
+             %{"club_id" => club_id, "email" => normalized_email},
+             consistency: :strong
+           ),
+         :ok <- deliver_invitation(invitation, normalized_email, selected_club) do
+      {:noreply,
+       socket
+       |> put_flash(:info, success_message(normalized_email, pending?))
+       |> assign_form(@empty_invitation, @empty_errors)}
+    else
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, failure_message(reason))
+         |> assign_form(invitation_params, @empty_errors)}
+    end
+  end
+
   defp assign_form(socket, params, errors) do
     socket
     |> assign(:invitation_params, invitation_params(params))
@@ -287,40 +325,25 @@ defmodule MembaWeb.MemberInvitationLive.New do
 
   defp failure_message(reason), do: "Could not send invitation: #{inspect(reason)}"
 
-  defp ensure_identity_assigns(socket) do
-    socket
-    |> assign_new(:current_identity, fn -> nil end)
-    |> assign_new(:current_identity_clubs, fn -> [] end)
+  defp invitation_query_inputs(socket) do
+    invitation_query_inputs(Map.get(socket.assigns.route_params, "club_id"), socket)
   end
 
-  defp invitation_context(club_id, current_identity, current_identity_clubs) do
-    with selected_club when not is_nil(selected_club) <-
-           selected_club(current_identity_clubs, club_id),
-         members <- Membership.list_active_members_of_club(club_id),
-         current_member when not is_nil(current_member) <-
-           current_member_for_identity(members, current_identity),
-         :ok <- Authorization.authorize_manage_members(club_id, current_member.id) do
-      {:ok,
-       %{
-         selected_club: selected_club,
-         current_member: current_member,
-         active_member_count: Enum.count(members)
-       }}
-    else
-      _not_authorized -> {:error, :forbidden}
-    end
+  defp invitation_query_inputs(club_id, socket) do
+    %{
+      club_id: club_id,
+      authenticated_email: socket.assigns.current_identity_email
+    }
   end
 
-  defp selected_club(current_identity_clubs, club_id) do
-    Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
-  end
+  defp invitation_binding_error!(
+         [{@invitation_query_id, :forbidden} | _errors],
+         _socket
+       ),
+       do: forbidden!()
 
-  defp current_member_for_identity(_members, nil), do: nil
-
-  defp current_member_for_identity(members, identity) do
-    identity_email = Accounts.normalize_email(identity.email)
-
-    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
+  defp invitation_binding_error!(errors, _socket) do
+    raise "member invitation live query failed: #{inspect(errors)}"
   end
 
   defp put_session_club_id(params, session) do
@@ -380,5 +403,5 @@ defmodule MembaWeb.MemberInvitationLive.New do
     end
   end
 
-  defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
+  defp forbidden!, do: raise(MembaWeb.ForbiddenError)
 end
