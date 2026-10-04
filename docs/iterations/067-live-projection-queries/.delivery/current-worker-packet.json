@@ -2,126 +2,120 @@
   "attempt": "implementation",
   "candidate_origins": [],
   "completion_evidence_required": [
-    "List all changed paths and confirm they are limited to `web/lib/memba_web/member_group_creation_query.ex` and `web/test/memba_web/member_group_creation_query_test.exs`.",
-    "Report the query descriptor ID, public assign and input shape, and show that a successful load returns exactly selected Club and current member.",
-    "Explain the fresh read sequence from normalized authenticated email through active clubs, Person, active selected-club membership and manage-members authorization.",
-    "Report proof that attached-email authentication resolves the member by Person ID rather than requiring the displayed primary email to equal the sign-in email.",
-    "Report proof that selected-club membership deactivation and manage-members permission loss each cause a subsequent load to return `{:error, :forbidden}`.",
-    "Report the exact nine-interest set and cardinality, including `person_clubs`, exact member role/permission interests and club-wide role/permission interests.",
-    "Confirm the result and interests exclude generated group identity, form/preview/retry/command state, club-member-wide breadth and all Group, messaging and delivery dependencies.",
-    "Report successful exit status, test count and failure count for the combined focused query and existing LiveView regression command.",
+    "List all changed paths and confirm they are limited to `web/lib/memba_web/member_settings_query.ex` and `web/test/memba_web/member_settings_query_test.exs`.",
+    "Report the query descriptor ID, public assign and input shape, and show that a successful result has exactly `selected_club`, `current_person`, `current_person_clubs` and `current_person_email_addresses`.",
+    "Explain the fresh read sequence from normalized authenticated email through active clubs, selected Club, current Person, active membership rows and email rows.",
+    "Report proof that normalized attached-email authentication resolves the same current Person and settings data.",
+    "Report proof that a non-selected active membership entering or leaving changes the result and represented Club interests on the next load.",
+    "Report proof that selected-club membership loss causes a subsequent load to return `{:error, :forbidden}`.",
+    "Report the exact interest set and cardinality for a result with at least two active clubs, including `person`, `person_emails`, `person_clubs`, selected `person_club` and deduplicated represented `club` identities.",
+    "Confirm the result and interests exclude tab, add-email form/error, command, flash, navigation, club-member-wide, Group, role, permission, messaging and delivery state.",
+    "Report successful exit status, test count and failure count for the combined focused query and unchanged MySettingsLive regression command.",
     "Report successful format and diff checks.",
-    "Confirm no LiveView wiring, source adapter, package, projector, projection, command, plan, todo, matrix, ADR or acceptance feature changed, and task 008B remains unchecked for independent review."
+    "Confirm no LiveView wiring, source adapter, package, accepted query, projector, projection, command, plan, todo, matrix, ADR or acceptance feature changed, and task 008C remains unchecked for independent review."
   ],
   "constraints": [
-    "Keep the implementation to the new app-owned query module and its focused query test; existing group-creation LiveView tests may be executed but must remain unchanged.",
-    "Use only existing read APIs and the accepted `LiveQuery.Query` package API; do not query projection schemas directly from the new query.",
-    "Treat routed club ID and authenticated email as stable inputs, but treat active clubs, Person, membership, roles and permission as fresh data on every load.",
-    "Return the existing `:forbidden` result for every missing or unauthorized group-creation context; do not invent a new domain or access policy.",
-    "Return only `selected_club` and `current_member`; manage-members authorization is a prerequisite, not a display boolean.",
-    "Match the current member by freshly resolved Person ID so attached-email authentication remains valid even when the displayed member row contains a different primary email.",
-    "Use exact set equality and cardinality to prove all nine interests and prevent accidental broadening or omission.",
-    "Include both exact current-member role/permission interests and club-wide role-definition/permission interests because the returned role labels and manage-members permission can change through independently projected role events.",
-    "Preserve submit-time aggregate authorization and all existing command consistency behavior; the query does not authorize a later command permanently.",
-    "Leave task 008B unchecked and return one candidate for independent review."
+    "Keep implementation changes to the new app-owned settings query module and its focused query test; existing MySettingsLive tests may be executed but must remain unchanged.",
+    "Use only existing read APIs and the accepted `LiveQuery.Query` package API; do not query projection schemas from the production query module.",
+    "Treat routed club ID and authenticated email as stable inputs, but treat active clubs, Person identity, memberships, represented Clubs and email rows as fresh data on every load.",
+    "Preserve the current settings access contract by returning only `{:error, :forbidden}` for missing or unauthorized context; do not invent a new domain or access policy.",
+    "Resolve current Person through the normalized authenticated email so an attached email recognized by the existing identity APIs maps to the same Person and settings data.",
+    "Verify selected-club membership against the fresh active membership rows before returning a result, so a partially stale or foreign selected Club cannot retain private settings data.",
+    "Use exact set equality and cardinality in focused tests, including deduplication when the selected Club also appears among represented active clubs.",
+    "Use `person_clubs` for active membership collection entry/exit, `person_emails` for email-row replacement, exact `person` for displayed Person data, exact `person_club` for selected-club authority, and exact `club` for each represented Club.",
+    "Preserve all existing email command behavior and authorization; a successful query read does not authorize later commands permanently.",
+    "Leave task 008C unchecked and return one candidate for independent review."
   ],
   "focused_validation": [
-    "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_group_creation_query_test.exs test/memba_web/live/member_group_live/new_test.exs",
+    "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_settings_query_test.exs test/memba_web/live/my_settings_live_test.exs",
     "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
     "git diff --check"
   ],
-  "outcome": "Introduce one app-owned group-creation context query that freshly resolves the routed Club, authenticated Person, active membership and manage-members authority on every load, returns only the coherent selected-club/current-member result with complete replacement interests, and has focused tests proving its fresh authorization and exact dependency set without wiring or changing the LiveView.",
-  "packet_id": "task-008b-ef0b156-group-creation-query-1",
+  "outcome": "Introduce one app-owned settings query that freshly resolves selected-club authority and the current Person on every load, returns one coherent four-field settings model with complete replacement interests for membership, email and represented-Club changes, and has focused tests without wiring or changing MySettingsLive.",
+  "packet_id": "task-008c-34a236d-settings-query-1",
   "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
   "references": [
     {
-      "facts": "The approved technical model requires every view-specific query to perform a fresh authorized read, return one coherent result plus complete replacement interests, and leave transient UI state with the LiveView. Implementation step 4 owns app-specific authorized queries; step 5 separately owns LiveView migration.",
+      "facts": "The approved technical model requires each view-specific query to return one coherent result and complete replacement interests, perform fresh authorization on every read, and leave transient UI state and access-error navigation with the LiveView. Implementation step 4 owns app-specific authorized queries; step 5 separately owns LiveView migration.",
       "path": "docs/iterations/067-live-projection-queries/plan.md"
     },
     {
-      "facts": "Task 008B is the first unchecked obligation and specifically requires one fresh-authorized group-creation context query with complete Club, member, Person and manage-members interests, independent of transient form state.",
+      "facts": "Task 008C is the first unchecked obligation and specifically requires a fresh-authorized settings query covering selected Club, current Person, active club memberships, email rows and complete identity and collection interests.",
       "path": "docs/iterations/067-live-projection-queries/todo.md"
     },
     {
-      "facts": "The binding checkpoint preceding this planner visit accepted task 008A and leaves 008B as the first pending line; no unaccepted candidate origin must be carried into this implementation attempt.",
+      "facts": "The binding checkpoint records task 008B as accepted and leaves task 008C first in `pending_before`; no unaccepted candidate origin must be carried into this implementation attempt.",
       "path": "docs/iterations/067-live-projection-queries/.delivery/_guard/planner-guard-baseline.json"
     },
     {
-      "facts": "The `MembaWeb.MemberGroupLive.New` entry defines one group-creation result containing freshly authorized selected Club/current member, fresh active-club and manage-members checks, Club/Membership/Person/role/permission dependencies, and explicit exclusion of generated identity, typed input, preview, errors and command state. Its interest matrix includes the current identity's active clubs and selected-club relationship.",
+      "facts": "The MySettingsLive entry defines one settings model containing selected Club, current Person, current active club memberships and email-address rows. It requires fresh authenticated-email and selected-club authority, Person-wide active-club and email collections, selected and represented Club identities, selected-club membership authority, and exclusion of tab/form/error/feedback state.",
       "path": "docs/iterations/067-live-projection-queries/migration-matrix.md"
     },
     {
-      "facts": "A query has one stable identity and public assign; its one-argument loader returns `{:ok, result, interests}` or `{:error, reason}`, and every success replaces the complete interest set. Access errors and transient owner state remain LiveView responsibilities.",
+      "facts": "A query has one stable ID and public assign; its loader returns `{:ok, result, interests}` or `{:error, reason}`, and each success replaces the complete result and interest set. A failed read clears only the query result, while forms, routes, flash and navigation remain owner responsibilities.",
       "path": "docs/iterations/067-live-projection-queries/extraction-contract.md"
     },
     {
-      "facts": "This accepted app query demonstrates the `LiveQuery.Query.new!/1` descriptor, normalized authenticated-email input, fresh `Accounts.list_active_clubs_for_email/1` authority, coherent result and app-private replacement interests. Its deliberate omission of `person_clubs` is dashboard-specific and does not override the group-creation matrix.",
-      "path": "web/lib/memba_web/member_dashboard_query.ex"
+      "facts": "The current LiveView independently assigns `selected_club`, `current_person`, `current_person_clubs` and `current_person_email_addresses`; reads selected Club and Person before subscribing; refreshes only email rows for matching Person events; and separately owns active tab, add-email form/error, commands, feedback and rendering.",
+      "path": "web/lib/memba_web/live/my_settings_live.ex"
     },
     {
-      "facts": "This second accepted consumer confirms the app query convention: stable query ID and assign, a loader translating successful models to complete interests, and preservation of existing `:forbidden`/`:not_found` semantics.",
-      "path": "web/lib/memba_web/member_message_detail_query.ex"
+      "facts": "Existing regression coverage protects profile/club/email rendering, route-backed tab selection, email command flows and exact-Person notification isolation. These tests should run unchanged; open-page migration and new lifecycle proofs remain later obligations.",
+      "path": "web/test/memba_web/live/my_settings_live_test.exs"
     },
     {
-      "facts": "The current private `group_context/3` returns exactly `selected_club` and `current_member`, raises the existing forbidden treatment on context failure, and keeps generated group ID, form, preview, retry and command behavior in the LiveView. It currently receives mount-captured clubs and matches the member by primary email, both of which the standalone fresh query must avoid.",
-      "path": "web/lib/memba_web/live/member_group_live/new.ex"
+      "facts": "The newly accepted adjacent query demonstrates the app convention for a `LiveQuery.Query.new!/1` descriptor, normalized authenticated-email input, fresh active-club and Person resolution, coherent result, forbidden collapse and app-private replacement interests.",
+      "path": "web/lib/memba_web/member_group_creation_query.ex"
     },
     {
-      "facts": "Existing tests protect route and mount authorization, preview behavior, stale-preview command rechecks, technical retries, authorization-state mismatch, submit-time permission loss, generated identity preservation and navigation. Run them unchanged; task 008B does not add open-page binding behavior.",
-      "path": "web/test/memba_web/live/member_group_live/new_test.exs"
-    },
-    {
-      "facts": "`Accounts.normalize_email/1` and `Accounts.list_active_clubs_for_email/1` provide the normalized identity and current active-club authority that must be reread for every query load.",
+      "facts": "`Accounts.normalize_email/1` rejects non-binary and blank values, and `Accounts.list_active_clubs_for_email/1` returns the current active Club projections for the authenticated email. The selected routed Club must be resolved from this fresh list on every load.",
       "path": "web/lib/memba/accounts.ex"
     },
     {
-      "facts": "`Membership.get_person_by_email/1` resolves a Person through projected email-address rows, including an attached authenticated email, while `Membership.list_active_members_of_club/1` returns active member maps with membership ID, Person ID, name, primary email and role labels. Match these reads by Person ID.",
+      "facts": "`Membership.get_person_by_email/1` resolves primary or attached email addresses to the Person; `list_active_club_memberships_for_person/1` returns ordered membership rows with membership and represented Club data; and `list_person_email_addresses/1` returns the ordered primary/alternate email rows required by settings.",
       "path": "web/lib/memba/membership.ex"
     },
     {
-      "facts": "`Authorization.authorize_manage_members/2` reads the current projected member permission and returns `:ok` or `{:error, :unauthorized}`; invoke it with the freshly resolved routed club and Person.",
-      "path": "web/lib/memba/membership/authorization.ex"
-    },
-    {
-      "facts": "The accepted source emits exact `club`, `membership`, `person_club`, `person_clubs`, `member_roles`, `member_permissions`, `club_roles` and `club_permissions` invalidations, while Person notifications emit the represented `person` identity. No adapter change is needed.",
+      "facts": "The accepted adapter emits `club` for Club changes; `membership`, `person_club` and `person_clubs` for every valid membership entry/exit; and both `person` and `person_emails` for every supported Person event. Exact tuple matching means the proposed settings interests refresh only the affected Person or represented Club.",
       "path": "web/lib/memba_web/live_query/memba_read_model_source.ex"
     },
     {
-      "facts": "Accepted architecture keeps Memba-specific query composition and authorization in the app, returns one coherent view model per query assign, and uses complete interests so relevant committed changes trigger a fresh authorized read.",
+      "facts": "Accepted architecture keeps Memba-specific query composition and authorization in the app, binds one coherent view model to one assign, and refreshes from projections when a complete query interest matches a committed notification.",
       "path": "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md"
     },
     {
-      "facts": "Focused tests should avoid sleeps, use existing deterministic projection and process synchronization patterns, and validate the smallest relevant files before broader checks.",
+      "facts": "Focused tests should use deterministic projection updates and process synchronization, avoid sleeps, and validate the smallest relevant files before broader checks.",
       "path": "docs/reference/elixir-mix-tests.md"
     }
   ],
   "scenario_focus": null,
   "schema_version": 1,
   "scope": [
-    "Add `MembaWeb.MemberGroupCreationQuery` in `web/lib/memba_web/member_group_creation_query.ex`, following the accepted `LiveQuery.Query` descriptor pattern with stable ID `:member_group_creation`, public assign `:group_creation_context`, and inputs containing only `club_id` and `authenticated_email`.",
-    "Implement `load/2` so every invocation normalizes the authenticated email, rereads `Accounts.list_active_clubs_for_email/1`, finds the routed selected Club in that fresh set, resolves the current Person with `Membership.get_person_by_email/1`, rereads `Membership.list_active_members_of_club/1`, matches the current member by Person ID, and reruns `Authorization.authorize_manage_members/2`.",
-    "Return `{:ok, %{selected_club: selected_club, current_member: current_member}}` only after every fresh authority step succeeds; collapse missing, invalid, inactive, foreign-club and unauthorized inputs to the existing `{:error, :forbidden}` group-creation semantics.",
-    "Resolve membership by the freshly resolved Person ID rather than comparing only the member row's primary email, so an authenticated attached email accepted by the existing identity APIs resolves the same current Person and membership.",
-    "Derive exactly these nine replacement interests from a successful context: `{:club, club_id}`, `{:membership, membership_id}`, `{:person, person_id}`, `{:person_club, club_id, person_id}`, `{:person_clubs, person_id}`, `{:member_roles, club_id, membership_id, person_id}`, `{:member_permissions, club_id, membership_id, person_id}`, `{:club_roles, club_id}`, and `{:club_permissions, club_id}`.",
-    "Add `web/test/memba_web/member_group_creation_query_test.exs` covering the descriptor ID/assign, coherent two-key result, normalized and alternate-email identity resolution, fresh selected-club membership loss, fresh manage-members permission loss, fail-closed invalid inputs, and exact set equality/cardinality for all nine interests.",
-    "In the focused tests, prove the result contains no generated group ID, form, typed name, preview, validation, retry or command state, and prove the interests contain no club-member-wide, Group, group-membership, conversation, delivery or generated-future-group dependency.",
-    "Run the existing group-creation LiveView tests unchanged as focused regression evidence that introducing the standalone query does not alter current route, form, preview, submit-time authorization or navigation behavior."
+    "Add `MembaWeb.MemberSettingsQuery` in `web/lib/memba_web/member_settings_query.ex`, following the accepted `LiveQuery.Query` descriptor pattern with stable ID `:member_settings`, public assign `:settings`, and inputs containing only `club_id` and `authenticated_email`.",
+    "Implement the loader so every invocation normalizes the authenticated email, rereads `Accounts.list_active_clubs_for_email/1`, resolves the routed selected Club from that fresh set, resolves the current Person with `Membership.get_person_by_email/1`, and then rereads `Membership.list_active_club_memberships_for_person/1` and `Membership.list_person_email_addresses/1`.",
+    "Require the selected club to remain represented in the freshly loaded active club-membership rows for the resolved Person. Return the existing `{:error, :forbidden}` settings semantics for missing, invalid, inactive, foreign-club or unresolved identity contexts.",
+    "Return exactly one coherent map with keys `selected_club`, `current_person`, `current_person_clubs`, and `current_person_email_addresses`, preserving the shapes and stable ordering supplied by the existing context APIs.",
+    "Derive replacement interests containing `{:person, person_id}`, `{:person_emails, person_id}`, `{:person_clubs, person_id}`, `{:person_club, selected_club_id, person_id}`, and one deduplicated `{:club, club_id}` for the selected Club and every Club represented by `current_person_clubs`.",
+    "Do not add exact membership interests for every row: every valid membership entry or exit already emits the Person-wide `person_clubs` collection key, while `person_club` separately represents selected-club authority. Do not add the broader `club_members` collection because another Person joining a represented club cannot change this settings result.",
+    "Add `web/test/memba_web/member_settings_query_test.exs` covering descriptor ID/assign, the exact four-key coherent result, normalized and attached-email identity resolution, multiple active club rows and email rows, fresh removal of a non-selected club with interest replacement, fresh selected-club membership loss, fail-closed invalid inputs, and exact set equality/cardinality for the complete interests.",
+    "In focused tests, prove represented Club interests update as the active-club collection changes, selected-club loss returns `{:error, :forbidden}`, and neither the result nor interests contain tab, add-email form, validation/error, command, flash, navigation, Group, messaging, delivery, role or permission state.",
+    "Run the existing MySettingsLive tests unchanged as regression evidence that adding the standalone query does not alter current routes, tab patches, email commands, hand-written notification behavior or rendering."
   ],
   "scope_exclusions": [
-    "Do not wire `MemberGroupLive.New` to `LiveQuery.Binding`; that migration, notification handling and private-surface transition belong to task 009.",
-    "Do not change `MemberGroupLive.New.group_context/3`, its mount behavior, render assigns, preview flow, generated group identity, form state, retry behavior, command handling, flash or navigation.",
-    "Do not move group-name or email-address preview, name uniqueness, command authorization or aggregate consistency checks into the query.",
-    "Do not add `{:club_members, club_id}` merely because the loader uses a member-list API; another member entering or leaving does not alter this result.",
-    "Do not add Group, group-membership, message, conversation, follow, delivery or generated future-group interests.",
-    "Do not modify `MembaReadModelSource`; its accepted mappings already emit the nine required Club, Membership, Person and Role invalidations.",
-    "Do not modify the generic live-query package, dashboard query, conversation-detail query, projectors, projections, commands, event contracts or publishers.",
-    "Do not edit the approved plan, todo, migration matrix, ADRs, acceptance features or other iteration documentation.",
-    "Do not implement tasks 008C through 011 or migrate any other LiveView.",
+    "Do not wire `MySettingsLive` to `LiveQuery.Binding`; one-result assignment, notification replacement and access-error transition belong to task 009.",
+    "Do not change `MySettingsLive.mount/3`, `handle_params/3`, `handle_info/2`, event handlers, render assigns, tab routing, email forms, validation state, command feedback, flash or navigation.",
+    "Do not remove or rewrite the current hand-written `ReadModelChanges` subscription and Person-event predicate in this query-only task.",
+    "Do not move email-address commands, verification delivery, form normalization or command authorization into the query.",
+    "Do not add `club_members`, Group, group-membership, role, permission, message, conversation, follow or delivery interests.",
+    "Do not modify `MembaReadModelSource`; its accepted Club, Membership and Person mappings already emit every required settings invalidation.",
+    "Do not modify the generic live-query package, accepted dashboard/group-creation/conversation-detail queries, projectors, projections, commands, event contracts or publishers.",
+    "Do not edit the approved plan, todo, migration matrix, extraction contract, ADRs, acceptance features or other iteration documentation.",
+    "Do not implement tasks 008D through 011 or migrate any LiveView.",
     "Do not reactivate or rerun the already-green `Bob sees Alice join without reloading` acceptance scenario.",
     "Do not run `dev check`, `dev check --quick`, `dev ci` or another unscoped full-suite command; the deterministic workflow and explicit final-validation task own the iteration-wide gate."
   ],
-  "source_baseline": "ef0b156a11d5acc055025e43db3438b20e32b35f",
-  "task_id": "task-008b",
-  "todo_line": "- [ ] 008B Introduce and focused-test one fresh-authorized group-creation context query with complete club, member, Person and manage-members interests, composed from existing read APIs and independent of LiveView transient form state.",
+  "source_baseline": "34a236d87416549adc94294e30e69037ead93f5f",
+  "task_id": "task-008c",
+  "todo_line": "- [ ] 008C Introduce and focused-test one fresh-authorized settings query for selected club, current Person, active club memberships and email rows, with complete identity and collection interests.",
   "todo_path": "docs/iterations/067-live-projection-queries/todo.md"
 }
