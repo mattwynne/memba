@@ -1,0 +1,410 @@
+diff --git a/.dockerignore b/.dockerignore
+index 97d09bf..808f398 100644
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -13,6 +13,13 @@ web/deps
+ # Where 3rd-party dependencies like ExDoc output generated docs.
+ web/doc
+ 
++# Standalone LiveQuery package artifacts are never production build inputs.
++packages/live_query/_build
++packages/live_query/cover
++packages/live_query/deps
++packages/live_query/doc
++packages/live_query/live_query-*.tar
++
+ # Ignore .fetch files in case you like to edit your project deps locally.
+ .fetch
+ 
+diff --git a/.fabro/workflows/scripts/test_dev_checkout_boundary.sh b/.fabro/workflows/scripts/test_dev_checkout_boundary.sh
+index 776f3c9..7b59150 100755
+--- a/.fabro/workflows/scripts/test_dev_checkout_boundary.sh
++++ b/.fabro/workflows/scripts/test_dev_checkout_boundary.sh
+@@ -13,7 +13,11 @@ log_file="$tmpdir/invocations.log"
+ foreign_pg="$foreign_root/.devenv/postgres-socket"
+ source_pg="$source_root/.devenv/postgres-socket"
+ 
+-mkdir -p "$source_root/bin" "$source_root/web" "$source_root/.devenv/state/postgres"
++mkdir -p \
++  "$source_root/bin" \
++  "$source_root/packages/live_query" \
++  "$source_root/web" \
++  "$source_root/.devenv/state/postgres"
+ mkdir -p "$foreign_root/bin" "$foreign_root/.devenv/state/postgres"
+ mkdir -p "$tools_dir"
+ cp "$repo_root/bin/dev" "$source_root/bin/dev"
+@@ -79,6 +83,36 @@ exec "\$@"
+ SH
+ chmod +x "$tools_dir/devenv"
+ 
++cat > "$tools_dir/elixir" <<'SH'
++#!/usr/bin/env bash
++exit 0
++SH
++chmod +x "$tools_dir/elixir"
++
++cat > "$tools_dir/mix" <<SH
++#!/usr/bin/env bash
++set -euo pipefail
++printf 'package_mix cwd=%s args=%s DEVENV_ROOT=%s PGHOST=%s PGPORT=%s\n' \
++  "\$PWD" "\$*" "\${DEVENV_ROOT:-<unset>}" "\${PGHOST:-<unset>}" "\${PGPORT:-<unset>}" >> "$log_file"
++if [ "\$PWD" != "$source_root/packages/live_query" ]; then
++  echo "package mix ran from wrong cwd: \$PWD" >&2
++  exit 51
++fi
++if [ "\${DEVENV_ROOT:-}" != "$source_root" ]; then
++  echo "package mix saw wrong DEVENV_ROOT: \${DEVENV_ROOT:-<unset>}" >&2
++  exit 52
++fi
++if [ "\${PGHOST:-}" = "$foreign_pg" ]; then
++  echo "package mix inherited foreign PGHOST" >&2
++  exit 53
++fi
++if [ "\${1:-}" != "test" ]; then
++  echo "package mix expected test, got: \$*" >&2
++  exit 54
++fi
++SH
++chmod +x "$tools_dir/mix"
++
+ cat > "$source_root/bin/mix" <<SH
+ #!/usr/bin/env bash
+ set -euo pipefail
+@@ -128,6 +162,11 @@ assert_mismatched_context_uses_source_checkout() {
+     cat "$log_file" >&2
+     exit 1
+   fi
++  if ! grep -q "^package_mix cwd=$source_root/packages/live_query args=test DEVENV_ROOT=$source_root PGHOST=$source_pg" "$log_file"; then
++    echo "expected package tests to run from the source checkout with its devenv context" >&2
++    cat "$log_file" >&2
++    exit 1
++  fi
+ }
+ 
+ # A shell marker from another checkout must not allow that checkout's wrapper or
+@@ -189,5 +228,10 @@ if ! grep -q "^source_mix .*DEVENV_ROOT=$source_root .*PGHOST=$source_pg" "$log_
+   cat "$log_file" >&2
+   exit 1
+ fi
++if ! grep -q "^package_mix cwd=$source_root/packages/live_query args=test DEVENV_ROOT=$source_root PGHOST=$source_pg" "$log_file"; then
++  echo "expected same-checkout nested command to run package tests from the source checkout" >&2
++  cat "$log_file" >&2
++  exit 1
++fi
+ 
+ printf 'dev checkout-boundary tests passed\n'
+diff --git a/.fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh b/.fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh
+index 6538354..4b25b09 100755
+--- a/.fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh
++++ b/.fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh
+@@ -10,23 +10,116 @@ dev_script="$repo_root/bin/dev"
+ export MEMBA_DEVENV_SHELL=1
+ export DEVENV_ROOT=/dev
+ # shellcheck disable=SC1090
+-source <(awk '
+-  /^case "\$\{1:-\}" in$/ {
+-    case_line = $0
+-    if ((getline next_line) <= 0) {
+-      print case_line
+-      next
+-    }
+-    if (next_line ~ /^[[:space:]]+test\)/) {
+-      exit
+-    }
+-    print case_line
+-    print next_line
+-    next
++source <(sed -n '
++  /^case "${1:-}" in$/ {
++    N
++    /\n[[:space:]]*test)/q
++    P
++    D
+   }
+-  { print }
++  p
+ ' "$dev_script")
+ 
++tmpdir=$(mktemp -d)
++trap 'rm -rf "$tmpdir"' EXIT
++repo_root="$tmpdir/repo"
++invocations="$tmpdir/invocations.log"
++mkdir -p \
++  "$repo_root/acceptance-tests/node_modules/.bin" \
++  "$repo_root/bin" \
++  "$repo_root/packages/live_query" \
++  "$repo_root/web" \
++  "$tmpdir/toolchain"
++touch \
++  "$repo_root/acceptance-tests/package-lock.json" \
++  "$repo_root/acceptance-tests/node_modules/.package-lock.json" \
++  "$repo_root/acceptance-tests/node_modules/.bin/cucumber-js" \
++  "$repo_root/acceptance-tests/node_modules/.bin/playwright"
++chmod +x \
++  "$repo_root/acceptance-tests/node_modules/.bin/cucumber-js" \
++  "$repo_root/acceptance-tests/node_modules/.bin/playwright"
++
++cat > "$tmpdir/toolchain/elixir" <<'SH'
++#!/usr/bin/env bash
++exit 0
++SH
++chmod +x "$tmpdir/toolchain/elixir"
++
++cat > "$tmpdir/toolchain/mix" <<SH
++#!/usr/bin/env bash
++set -euo pipefail
++printf 'package cwd=%s args=%s\n' "\$PWD" "\$*" >> "$invocations"
++exit "\${PACKAGE_MIX_STATUS:-0}"
++SH
++chmod +x "$tmpdir/toolchain/mix"
++
++cat > "$repo_root/bin/mix" <<SH
++#!/usr/bin/env bash
++set -euo pipefail
++printf 'web cwd=%s args=%s\n' "\$PWD" "\$*" >> "$invocations"
++exit "\${WEB_MIX_STATUS:-0}"
++SH
++chmod +x "$repo_root/bin/mix"
++
++export PATH="$repo_root/bin:$tmpdir/toolchain:$PATH"
++
++export PACKAGE_MIX_STATUS=29
++export WEB_MIX_STATUS=0
++if _precommit; then
++  echo "Expected _precommit to preserve the package-test failure" >&2
++  exit 1
++else
++  status=$?
++fi
++if [ "$status" -ne 29 ]; then
++  echo "Expected _precommit status 29, got $status" >&2
++  exit 1
++fi
++if grep -q '^web .*args=precommit$' "$invocations"; then
++  echo "Expected package-test failure to stop before web precommit" >&2
++  exit 1
++fi
++
++: > "$invocations"
++export PACKAGE_MIX_STATUS=31
++if _setup; then
++  echo "Expected _setup to preserve the package dependency failure" >&2
++  exit 1
++else
++  status=$?
++fi
++if [ "$status" -ne 31 ]; then
++  echo "Expected _setup status 31, got $status" >&2
++  exit 1
++fi
++if grep -q '^web .*args=deps.get$' "$invocations"; then
++  echo "Expected package dependency failure to stop before web dependency setup" >&2
++  exit 1
++fi
++
++: > "$invocations"
++export PACKAGE_MIX_STATUS=0
++_setup
++if ! grep -q "^package cwd=$repo_root/packages/live_query args=deps.get$" "$invocations"; then
++  echo "Expected _setup to fetch standalone package dependencies" >&2
++  exit 1
++fi
++if ! grep -q "^web cwd=$repo_root/web args=deps.get$" "$invocations"; then
++  echo "Expected _setup to retain web dependency setup" >&2
++  exit 1
++fi
++
++: > "$invocations"
++_precommit
++if ! grep -q "^package cwd=$repo_root/packages/live_query args=test$" "$invocations"; then
++  echo "Expected _precommit to run standalone package tests" >&2
++  exit 1
++fi
++if ! grep -q "^web cwd=$repo_root/web args=precommit$" "$invocations"; then
++  echo "Expected _precommit to retain web precommit" >&2
++  exit 1
++fi
++
+ start_postgres() { :; }
+ _setup() { :; }
+ 
+@@ -35,6 +128,8 @@ acceptance() {
+   acceptance_calls=$((acceptance_calls + 1))
+ }
+ 
++responsive_check() { :; }
++
+ precommit() {
+   return 23
+ }
+diff --git a/.github/workflows/continuous-delivery.yml b/.github/workflows/continuous-delivery.yml
+index 12e3b52..69c74bd 100644
+--- a/.github/workflows/continuous-delivery.yml
++++ b/.github/workflows/continuous-delivery.yml
+@@ -44,10 +44,12 @@ jobs:
+             /tmp/home/.hex
+             /tmp/home/.mix
+             /tmp/home/.npm
++            packages/live_query/deps
++            packages/live_query/_build
+             web/deps
+             web/_build
+             acceptance-tests/node_modules
+-          key: ${{ runner.os }}-memba-dev-${{ hashFiles('devenv.lock', 'devenv.yaml', 'devenv.nix', 'web/mix.lock', 'acceptance-tests/package-lock.json') }}
++          key: ${{ runner.os }}-memba-dev-${{ hashFiles('devenv.lock', 'devenv.yaml', 'devenv.nix', 'packages/live_query/mix.lock', 'web/mix.lock', 'acceptance-tests/package-lock.json') }}
+           restore-keys: |
+             ${{ runner.os }}-memba-dev-
+ 
+diff --git a/Dockerfile b/Dockerfile
+index a912e0b..afae87a 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -20,10 +20,16 @@ RUN mix local.hex --force && mix local.rebar --force
+ 
+ ENV MIX_ENV=prod
+ 
+-COPY web/mix.exs web/mix.lock ./
++COPY packages/live_query/mix.exs packages/live_query/mix.lock packages/live_query/
++COPY web/mix.exs web/mix.lock web/
++
++WORKDIR /app/web
++
+ RUN mix deps.get --only $MIX_ENV
+ RUN mkdir config
+ 
++COPY packages/live_query/config /app/packages/live_query/config
++COPY packages/live_query/lib /app/packages/live_query/lib
+ COPY web/config/config.exs web/config/${MIX_ENV}.exs config/
+ RUN mix deps.compile
+ 
+@@ -55,7 +61,7 @@ ENV LANG=en_US.UTF-8 \
+ WORKDIR /app
+ RUN chown nobody /app
+ 
+-COPY --from=builder --chown=nobody:root /app/_build/prod/rel/memba ./
++COPY --from=builder --chown=nobody:root /app/web/_build/prod/rel/memba ./
+ 
+ USER nobody
+ 
+diff --git a/bin/dev b/bin/dev
+index f1ca7d4..494a713 100755
+--- a/bin/dev
++++ b/bin/dev
+@@ -452,6 +452,22 @@ mix() {
+   "$repo_root/bin/mix" "$@"
+ }
+ 
++package_mix() {
++  local elixir_executable package_mix_executable
++  elixir_executable="$(command -v elixir)"
++  package_mix_executable="$(dirname "$elixir_executable")/mix"
++
++  if [ ! -x "$package_mix_executable" ]; then
++    echo "Could not find Mix beside the active Elixir executable: $elixir_executable" >&2
++    return 1
++  fi
++
++  (
++    cd "$repo_root/packages/live_query"
++    "$package_mix_executable" "$@"
++  )
++}
++
+ if ! command -v argc >/dev/null 2>&1; then
+   echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
+   exit 1
+@@ -751,6 +767,7 @@ precommit() {
+ }
+ 
+ _precommit() {
++  package_mix test || return $?
+   (cd "$repo_root/web" && local_test_email_env mix precommit)
+ }
+ 
+@@ -770,6 +787,21 @@ _setup() {
+   echo "Installing Rebar..."
+   mix local.rebar --force
+ 
++  echo "Fetching LiveQuery package dependencies..."
++  local package_deps_get_log package_deps_get_status
++  package_deps_get_log=$(mktemp)
++  if package_mix deps.get >"$package_deps_get_log" 2>&1; then
++    package_deps_get_status=0
++  else
++    package_deps_get_status=$?
++  fi
++  if [ "$package_deps_get_status" -ne 0 ]; then
++    cat "$package_deps_get_log" >&2
++    rm -f "$package_deps_get_log"
++    return "$package_deps_get_status"
++  fi
++  rm -f "$package_deps_get_log"
++
+   echo "Fetching web dependencies..."
+   local deps_get_log
+   deps_get_log=$(mktemp)
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 5b963b3..bd5b260 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,31 +1,46 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-009e-7cb6a78-invitation-binding-1",
+-  "task_id": "task-009e",
+-  "todo_line": "- [ ] 009E Migrate `MembaWeb.MemberInvitationLive.New` to its accepted invitation-context query-result assign, preserving group-aware return routes, invitation form/validation, resend and delivery feedback, command state, navigation and UI while refreshing member counts and fresh manage-members access.",
++  "packet_id": "task-010-0b851f0-package-build-gate-1",
++  "task_id": "task-010",
++  "todo_line": "- [ ] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/live/member_invitation_live/new.ex",
+-    "web/test/memba_web/live/member_invitation_live/new_test.exs",
+-    "web/test/memba_web/live/member_invitation_live/send_test.exs"
++    ".dockerignore",
++    ".fabro/workflows/scripts/test_dev_checkout_boundary.sh",
++    ".fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh",
++    ".github/workflows/continuous-delivery.yml",
++    "Dockerfile",
++    "bin/dev"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_invitation_live/new_test.exs test/memba_web/live/member_invitation_live/send_test.exs test/memba_web/member_invitation_query_test.exs test/memba_web/live_query/memba_read_model_source_test.exs",
++      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" deps.get; \"$package_mix\" test'",
+       "exit_status": 0,
+-      "evidence": "70 tests, 0 failures; focused proof covers selected-club member entry/exit count refresh, coherent-result-only socket state, relevant-refresh form/error preservation, unrelated-club isolation, delivered membership and manage-members access loss, submit-time reauthorization, existing routes/UI, invitation/resend/delivery feedback, and accepted query/source behavior."
++      "evidence": "Ran from packages/live_query using its own mix.lock and test support: 15 tests, 0 failures; no PostgreSQL service was required."
+     },
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
++      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" format --check-formatted'",
+       "exit_status": 0,
+-      "evidence": "Formatting check completed successfully."
++      "evidence": "The standalone LiveQuery package is formatted."
+     },
+     {
+-      "command": "git diff --check",
++      "command": "bash .fabro/workflows/scripts/test_dev_checkout_boundary.sh && bash .fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh",
+       "exit_status": 0,
+-      "evidence": "No whitespace errors."
++      "evidence": "Package tests and web precommit both ran from the current checkout; package dependency/test failures retained their exact non-zero status and stopped before later web commands; same-checkout and foreign-checkout devenv isolation remained intact."
++    },
++    {
++      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'web_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd web; MIX_ENV=prod \"$web_mix\" deps.get --only prod; MIX_ENV=prod \"$web_mix\" release --overwrite; test -f _build/prod/rel/memba/lib/live_query-0.1.0/ebin/live_query.app'",
++      "exit_status": 0,
++      "evidence": "The production release assembled successfully and contains web/_build/prod/rel/memba/lib/live_query-0.1.0/ebin/live_query.app."
++    },
++    {
++      "command": "bash -n bin/dev && git diff --check",
++      "exit_status": 0,
++      "evidence": "The development command has valid shell syntax and the candidate diff has no whitespace errors."
+     }
+   ],
+-  "notes": "The invitation LiveView now initializes route and form state before one :member_invitation binding, uses only the :invitation_context projection-backed socket assign, delegates committed notifications to MembaReadModelSource through LiveQuery.Binding, and rebinds with the authenticated email before the actor-neutral invitation command. Successful refreshes preserve form, validation, route and feedback state; forbidden refreshes or pre-command reauthorization leave the private surface via the existing ForbiddenError policy, while unexpected binding/source errors remain visible. Focused TDD first produced 6 expected failures against the mount-only implementation, then passed after migration. No manual subscription, page-specific projector predicate, second result, acceptance-feature/package/plan/todo change, or unscoped full-suite command was introduced; task 009E remains unchecked.",
+-  "unresolved": []
++  "notes": "bin/dev adds a package-aware Mix helper resolved beside active Elixir, fetches standalone package dependencies during setup, and runs package tests before preserved web precommit with exact failure propagation. .fabro/workflows/scripts/test_dev_checkout_boundary.sh proves package and web checks use the current checkout under same/foreign devenv contexts; test_dev_quality_gate_exit_status.sh proves package setup/test failures stop later web commands without masking status and successful sequencing retains web setup/precommit. Dockerfile copies package/web manifests before web deps.get, copies only package config/lib before deps.compile, builds at /app/web and copies that release; .dockerignore excludes generated package build/dependency/doc/coverage artifacts; package tests/test support are never copied. .github/workflows/continuous-delivery.yml caches package deps/build using packages/live_query/mix.lock. The initial TDD shell regressions failed because package setup/tests were absent, then passed after integration. Docker, Podman, Buildah and nerdctl are unavailable, so no image build is claimed; local release proof and Docker COPY ordering were verified instead. web/mix.exs, both lockfiles, LiveQuery/Memba behavior, LiveViews, features, plan, todo, ADRs and delivery metadata other than this required latest-worker-result were unchanged.",
++  "unresolved": [
++    "An actual Docker image build and runtime-image inspection remain to be performed in an environment with a Docker-compatible CLI and daemon; this sandbox has no docker, podman, buildah or nerdctl executable."
++  ]
+ }
