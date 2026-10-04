@@ -8,40 +8,39 @@ defmodule MembaWeb.MySettingsLive do
   """
   use MembaWeb, :live_view
 
+  alias LiveQuery.Binding
   alias Memba.Membership
-  alias Memba.Membership.Events.PersonEmailAddressAdded
-  alias Memba.Membership.Events.PersonEmailAddressRemoved
-  alias Memba.Membership.Events.PersonEmailAddressVerified
-  alias Memba.Membership.Events.PersonEmailAddressesReplaced
-  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.PersonEmailAddressVerificationEmail
-  alias Memba.ReadModelChanges
+  alias MembaWeb.LiveQuery.MembaReadModelSource
+  alias MembaWeb.MemberSettingsQuery
+
+  @settings_query_id :member_settings
 
   @impl Phoenix.LiveView
-  def mount(_params, session, socket) do
-    with {:ok, selected_club} <- selected_club(session),
-         {:ok, current_person} <- current_person(socket.assigns[:current_identity]) do
-      if connected?(socket) do
-        Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
-      end
+  def mount(_params, %{"club_id" => club_id}, socket) when is_binary(club_id) do
+    socket =
+      assign(socket,
+        page_title: "Account settings",
+        add_email_form: to_form(%{"email" => ""}, as: :email_address),
+        add_email_error: nil,
+        active_tab: :profile
+      )
 
-      {:ok,
-       assign(socket,
-         page_title: "Account settings",
-         selected_club: selected_club,
-         current_person: current_person,
-         current_person_clubs:
-           Membership.list_active_club_memberships_for_person(current_person.person_id),
-         current_person_email_addresses:
-           Membership.list_person_email_addresses(current_person.person_id),
-         add_email_form: to_form(%{"email" => ""}, as: :email_address),
-         add_email_error: nil,
-         active_tab: :profile
-       )}
-    else
-      _missing_context -> forbidden!()
+    case Binding.bind(
+           socket,
+           MemberSettingsQuery.query(),
+           settings_inputs(club_id, socket),
+           MembaReadModelSource.new()
+         ) do
+      {:ok, socket} ->
+        {:ok, socket}
+
+      {:error, errors, socket} ->
+        settings_binding_error!(errors, socket)
     end
   end
+
+  def mount(_params, _session, _socket), do: forbidden!()
 
   @impl Phoenix.LiveView
   def handle_params(_params, _uri, socket) do
@@ -49,15 +48,16 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   @impl Phoenix.LiveView
-  def handle_info(
-        {:read_model_changed,
-         %{projector: Memba.Membership.Projectors.Person, source_event: event}},
-        %{assigns: %{current_person: current_person}} = socket
-      ) do
-    if person_email_address_change_for_person?(event, current_person.person_id) do
-      {:noreply, refresh_person_email_addresses(socket)}
-    else
-      {:noreply, socket}
+  def handle_info({:read_model_changed, _change} = notification, socket) do
+    case Binding.handle_notification(socket, notification) do
+      {:ignored, socket} ->
+        {:noreply, socket}
+
+      {:ok, socket} ->
+        {:noreply, socket}
+
+      {:error, errors, socket} ->
+        settings_binding_error!(errors, socket)
     end
   end
 
@@ -67,9 +67,9 @@ defmodule MembaWeb.MySettingsLive do
   def handle_event(
         "add_email_address",
         %{"email_address" => %{"email" => email}},
-        %{assigns: %{current_person: current_person}} = socket
+        socket
       ) do
-    attrs = %{person_id: current_person.person_id, email: email}
+    attrs = %{person_id: current_person(socket).person_id, email: email}
 
     case add_pending_email_address_and_deliver_verification(socket, attrs) do
       :ok ->
@@ -78,7 +78,7 @@ defmodule MembaWeb.MySettingsLive do
          |> put_flash(:info, verification_email_sent_message())
          |> assign(:add_email_error, nil)
          |> assign(:add_email_form, to_form(%{"email" => ""}, as: :email_address))
-         |> refresh_person_email_addresses()}
+         |> refresh_settings()}
 
       {:error, reason} ->
         {:noreply,
@@ -100,14 +100,14 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   def handle_event("make_primary", %{"email" => email}, socket) do
-    attrs = %{person_id: socket.assigns.current_person.person_id, email: email}
+    attrs = %{person_id: current_person(socket).person_id, email: email}
 
     case Membership.make_person_email_address_primary(attrs, consistency: :strong) do
       :ok ->
-        {:noreply, refresh_person_email_addresses(socket)}
+        {:noreply, refresh_settings(socket)}
 
       {:ok, _result} ->
-        {:noreply, refresh_person_email_addresses(socket)}
+        {:noreply, refresh_settings(socket)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, email_action_error_message(reason))}
@@ -115,14 +115,14 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   def handle_event("remove_email", %{"email" => email}, socket) do
-    attrs = %{person_id: socket.assigns.current_person.person_id, email: email}
+    attrs = %{person_id: current_person(socket).person_id, email: email}
 
     case Membership.remove_person_email_address(attrs, consistency: :strong) do
       :ok ->
-        {:noreply, refresh_person_email_addresses(socket)}
+        {:noreply, refresh_settings(socket)}
 
       {:ok, _result} ->
-        {:noreply, refresh_person_email_addresses(socket)}
+        {:noreply, refresh_settings(socket)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, email_action_error_message(reason))}
@@ -130,7 +130,9 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   @impl Phoenix.LiveView
-  def render(assigns) do
+  def render(%{settings: settings} = assigns) do
+    assigns = assign(assigns, settings)
+
     ~H"""
     <Layouts.club_site
       flash={@flash}
@@ -431,30 +433,13 @@ defmodule MembaWeb.MySettingsLive do
     """
   end
 
-  defp selected_club(session) when is_map(session) do
-    case Membership.get_club(Map.get(session, "club_id")) do
-      nil -> {:error, :forbidden}
-      club -> {:ok, club}
+  defp current_person(socket), do: socket.assigns.settings.current_person
+
+  defp refresh_settings(socket) do
+    case Binding.rebind(socket, @settings_query_id, settings_inputs(socket)) do
+      {:ok, socket} -> socket
+      {:error, errors, socket} -> settings_binding_error!(errors, socket)
     end
-  end
-
-  defp selected_club(_session), do: {:error, :forbidden}
-
-  defp current_person(%{email: email}) when is_binary(email) do
-    case Membership.get_person_by_email(email) do
-      nil -> {:error, :forbidden}
-      person -> {:ok, person}
-    end
-  end
-
-  defp current_person(_identity), do: {:error, :forbidden}
-
-  defp refresh_person_email_addresses(socket) do
-    assign(
-      socket,
-      :current_person_email_addresses,
-      Membership.list_person_email_addresses(socket.assigns.current_person.person_id)
-    )
   end
 
   defp add_pending_email_address_and_deliver_verification(socket, attrs) do
@@ -468,7 +453,7 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   defp deliver_person_email_address_verification(socket, email) do
-    attrs = %{person_id: socket.assigns.current_person.person_id, email: email}
+    attrs = %{person_id: current_person(socket).person_id, email: email}
 
     with {:ok, %{issuer_result: %{token: token}}} <-
            Membership.resend_person_email_address_verification(attrs),
@@ -503,37 +488,23 @@ defmodule MembaWeb.MySettingsLive do
   defp email_action_error_message(_reason),
     do: "We could not update that email address. Please try again."
 
-  defp person_email_address_change_for_person?(
-         %PersonEmailAddressAdded{person_id: person_id},
-         person_id
-       ),
-       do: true
+  defp settings_inputs(club_id, socket) do
+    %{
+      club_id: club_id,
+      authenticated_email: socket.assigns.current_identity_email
+    }
+  end
 
-  defp person_email_address_change_for_person?(
-         %PersonEmailAddressVerified{person_id: person_id},
-         person_id
-       ),
-       do: true
+  defp settings_inputs(socket) do
+    settings_inputs(socket.assigns.settings.selected_club.club_id, socket)
+  end
 
-  defp person_email_address_change_for_person?(
-         %PersonPrimaryEmailAddressChanged{person_id: person_id},
-         person_id
-       ),
-       do: true
+  defp settings_binding_error!([{@settings_query_id, :forbidden} | _errors], _socket),
+    do: forbidden!()
 
-  defp person_email_address_change_for_person?(
-         %PersonEmailAddressRemoved{person_id: person_id},
-         person_id
-       ),
-       do: true
-
-  defp person_email_address_change_for_person?(
-         %PersonEmailAddressesReplaced{person_id: person_id},
-         person_id
-       ),
-       do: true
-
-  defp person_email_address_change_for_person?(_event, _person_id), do: false
+  defp settings_binding_error!(errors, _socket) do
+    raise "member settings live query failed: #{inspect(errors)}"
+  end
 
   defp active_tab(:clubs), do: :clubs
   defp active_tab(:emails), do: :emails

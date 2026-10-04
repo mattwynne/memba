@@ -5,6 +5,7 @@ defmodule MembaWeb.MySettingsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership, as: MembershipContext
+  alias Memba.Membership.Events.{ClubMemberAdded, ClubMemberRemoved, ClubUpdated}
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.ReadModelChanges
@@ -435,10 +436,11 @@ defmodule MembaWeb.MySettingsLiveTest do
       )
 
     add_verified_email_address!(member.person_id, "new.primary@example.com")
+    add_verified_email_address!(member.person_id, "settings.session@example.com")
 
     {:ok, view, _html} =
       conn
-      |> signed_in_club_host(club, member.email)
+      |> signed_in_club_host(club, "settings.session@example.com")
       |> live(~p"/my/settings/emails")
 
     old_primary_row = "#my-settings-email-row-old-primary-example-com"
@@ -534,6 +536,225 @@ defmodule MembaWeb.MySettingsLiveTest do
     refute has_element?(view, "#my-settings-panel-emails[hidden]")
     assert has_element?(view, "#my-settings-panel-profile[hidden]")
     assert has_element?(view, "#my-settings-panel-clubs[hidden]")
+  end
+
+  test "a relevant change refreshes one coherent settings result and preserves tab and form errors",
+       %{conn: conn} do
+    club = insert_membership_club!(name: "Coherent Settings Club", slug: "coherent-settings")
+    other_club = insert_membership_club!(name: "Coherent Other Club", slug: "coherent-other")
+
+    member =
+      create_commanded_active_member(club,
+        email: "coherent.settings@example.com",
+        name: "Coherent Member"
+      )
+
+    _other_member =
+      create_commanded_active_member(club,
+        email: "coherent.used@example.com",
+        name: "Coherent Other Member"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings/emails")
+
+    view
+    |> form("#my-settings-add-email-form",
+      email_address: %{email: "coherent.used@example.com"}
+    )
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#my-settings-add-email-error",
+             "That email address is already in use by another Memba user."
+           )
+
+    %{socket: before_socket} = :sys.get_state(view.pid)
+
+    assert before_socket.assigns.settings.selected_club.club_id == club.club_id
+    assert before_socket.assigns.settings.current_person.person_id == member.person_id
+    refute Map.has_key?(before_socket.assigns, :selected_club)
+    refute Map.has_key?(before_socket.assigns, :current_person)
+    refute Map.has_key?(before_socket.assigns, :current_person_clubs)
+    refute Map.has_key?(before_socket.assigns, :current_person_email_addresses)
+
+    club
+    |> Ecto.Changeset.change(name: "Coherent Settings Renamed")
+    |> Repo.update!()
+
+    member
+    |> Ecto.Changeset.change(name: "Coherent Member Renamed")
+    |> Repo.update!()
+
+    insert_membership_person_email_address!(
+      person_id: member.person_id,
+      email: "coherent.alternate@example.com",
+      is_primary: false
+    )
+
+    Repo.insert!(%Membership{
+      membership_id: Memba.ID.generate(:membership),
+      club_id: other_club.club_id,
+      person_id: member.person_id,
+      active: true
+    })
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %ClubUpdated{
+        club_id: club.club_id,
+        name: "Coherent Settings Renamed",
+        slug: club.slug
+      }
+    )
+
+    assert has_element?(view, "#my-settings-profile-name", "Coherent Member Renamed")
+
+    assert has_element?(
+             view,
+             "#my-settings-club-chip-#{club.club_id}",
+             "Coherent Settings Renamed"
+           )
+
+    assert has_element?(
+             view,
+             "#my-settings-club-chip-#{other_club.club_id}",
+             "Coherent Other Club"
+           )
+
+    assert has_element?(
+             view,
+             "#my-settings-email-row-coherent-alternate-example-com",
+             "coherent.alternate@example.com"
+           )
+
+    assert has_element?(
+             view,
+             "#my-settings[data-active-tab='emails'] #settings-add-email-input" <>
+               "[value='coherent.used@example.com']"
+           )
+
+    assert has_element?(
+             view,
+             "#my-settings-add-email-error",
+             "That email address is already in use by another Memba user."
+           )
+
+    %{socket: after_socket} = :sys.get_state(view.pid)
+
+    assert after_socket.assigns.active_tab == :emails
+
+    assert after_socket.assigns.add_email_form.params == %{
+             "email" => "coherent.used@example.com"
+           }
+
+    assert after_socket.assigns.add_email_error ==
+             "That email address is already in use by another Memba user."
+  end
+
+  test "membership changes add and remove club chips on an already-open settings page", %{
+    conn: conn
+  } do
+    selected_club = insert_membership_club!(name: "Selected Club", slug: "selected-club")
+    other_club = insert_membership_club!(name: "Joining Club", slug: "joining-club")
+
+    member =
+      create_active_member(selected_club,
+        email: "club.chips@example.com",
+        name: "Club Chips"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(selected_club, member.email)
+      |> live(~p"/my/settings/clubs")
+
+    refute has_element?(view, "#my-settings-club-chip-#{other_club.club_id}")
+
+    membership_id = Memba.ID.generate(:membership)
+
+    Repo.insert!(%Membership{
+      membership_id: membership_id,
+      club_id: other_club.club_id,
+      person_id: member.person_id,
+      active: true
+    })
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %ClubMemberAdded{
+        club_id: other_club.club_id,
+        membership_id: membership_id,
+        person_id: member.person_id
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#my-settings-club-chip-#{other_club.club_id}",
+             "Joining Club"
+           )
+
+    Membership
+    |> where([membership], membership.membership_id == ^membership_id)
+    |> Repo.update_all(set: [active: false])
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %ClubMemberRemoved{
+        club_id: other_club.club_id,
+        membership_id: membership_id,
+        person_id: member.person_id
+      }
+    )
+
+    refute has_element?(view, "#my-settings-club-chip-#{other_club.club_id}")
+    assert has_element?(view, "#my-settings[data-active-tab='clubs']")
+  end
+
+  test "selected-club membership loss closes an already-open settings surface", %{conn: conn} do
+    club = insert_membership_club!(name: "Access Loss Club", slug: "access-loss")
+
+    member =
+      create_active_member(club,
+        email: "access.loss@example.com",
+        name: "Access Loss"
+      )
+
+    membership =
+      Repo.get_by!(Membership,
+        club_id: club.club_id,
+        person_id: member.person_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings")
+
+    Membership
+    |> where([row], row.membership_id == ^membership.membership_id)
+    |> Repo.update_all(set: [active: false])
+
+    monitor = Process.monitor(view.pid)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %ClubMemberRemoved{
+        club_id: club.club_id,
+        membership_id: membership.membership_id,
+        person_id: member.person_id
+      }
+    )
+
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
   end
 
   test "refreshes email rows after a matching person email-address read-model notification", %{
@@ -691,6 +912,19 @@ defmodule MembaWeb.MySettingsLiveTest do
          },
          metadata: %{},
          changes: %{person_id: person_id}
+       }}
+    )
+  end
+
+  defp notify_read_model_change(view, projector, source_event) do
+    send(
+      view.pid,
+      {:read_model_changed,
+       %{
+         projector: projector,
+         source_event: source_event,
+         metadata: %{},
+         changes: %{}
        }}
     )
   end
