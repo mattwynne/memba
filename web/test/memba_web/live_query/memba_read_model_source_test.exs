@@ -50,6 +50,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   alias Memba.Repo
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.LiveQuery.ReadModelContractViolationError
+  alias MembaWeb.MemberDashboardPresentation
   alias MembaWeb.MemberDashboardQuery
   alias MembaWeb.MemberMessageDetailQuery
 
@@ -489,11 +490,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     assert root.message_id == root.conversation_id
     assert reply.conversation_id == root.message_id
     assert reply.reply_to_message_id == root.message_id
+    assert root.originator_id == root.sender_id
+
+    participant_ids = Enum.map(root.participants, & &1.id)
+
+    assert root.latest_replier_id != root.originator_id
+    assert root.latest_replier_id in participant_ids
+    assert root.reply_count == 2
+    assert root.reply_count == length(participant_ids)
 
     interests = MemberDashboardQuery.interests(dashboard)
+    expected_interests = expected_dashboard_interests()
 
-    assert MapSet.new(interests) == MapSet.new(expected_dashboard_interests())
-    assert length(interests) == length(expected_dashboard_interests())
+    assert MapSet.new(interests) == MapSet.new(expected_interests)
+    assert length(interests) == 30
+    assert length(expected_interests) == 30
   end
 
   test "builds complete detail interests from a coherent production-shaped result" do
@@ -1725,6 +1736,29 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
   end
 
   defp dashboard_result do
+    message_rows =
+      MemberDashboardPresentation.present_message_rows(
+        [
+          %{
+            message_id: "conversation-1",
+            conversation_id: "conversation-1",
+            sender_id: "person-author",
+            subject: "Plans",
+            body: "Who can join?",
+            inserted_at: nil,
+            reply_count: 2,
+            latest_replier_id: "person-replier",
+            latest_replier_name: "Latest Replier",
+            participant_ids: ["person-participant", "person-replier"]
+          }
+        ],
+        %{
+          "person-author" => "Message Author",
+          "person-participant" => "Conversation Participant",
+          "person-replier" => "Latest Replier"
+        }
+      )
+
     %{
       selected_club: %{club_id: "club-1"},
       selected_group: %{group_id: "group-1"},
@@ -1748,16 +1782,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       custom_group_member_candidates: [
         %{id: "person-candidate", membership_id: "membership-candidate", roles: []}
       ],
-      message_rows: [
-        %{
-          message_id: "conversation-1",
-          conversation_id: "conversation-1",
-          sender_id: "person-author",
-          originator_id: "person-originator",
-          latest_replier_id: "person-replier",
-          participants: [%{id: "person-participant"}]
-        }
-      ]
+      message_rows: message_rows
     }
   end
 
@@ -1819,7 +1844,6 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       {:conversation_access, "group-1", "conversation-1"},
       {:message, "conversation-1"},
       {:person, "person-author"},
-      {:person, "person-originator"},
       {:person, "person-replier"},
       {:person, "person-participant"}
     ]
