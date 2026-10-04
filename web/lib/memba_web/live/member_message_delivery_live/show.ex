@@ -34,7 +34,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
                MembaReadModelSource.new()
              ) do
           {:ok, socket} ->
-            {:ok, socket}
+            {:ok, synchronize_delivery_detail_shell(socket)}
 
           {:error, errors, socket} ->
             initial_binding_error!(errors, socket)
@@ -56,7 +56,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
         {:noreply, socket}
 
       {:ok, socket} ->
-        {:noreply, socket}
+        {:noreply, synchronize_delivery_detail_shell(socket)}
 
       {:error, errors, socket} ->
         {:noreply, refresh_binding_error(errors, socket)}
@@ -186,6 +186,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
               data-receipt-count={group.count}
               class="delivery-group"
               open={delivery_group_open?(group.status)}
+              phx-mounted={JS.ignore_attributes(["open"])}
             >
               <summary
                 id={"member-delivery-group-toggle-#{status_slug(group.status)}"}
@@ -252,6 +253,14 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
     }
   end
 
+  defp synchronize_delivery_detail_shell(
+         %{assigns: %{delivery_detail: %{page_title: page_title}}} = socket
+       ) do
+    assign(socket, :page_title, page_title)
+  end
+
+  defp synchronize_delivery_detail_shell(socket), do: socket
+
   defp initial_binding_error!(
          [{@delivery_detail_query_id, :forbidden} | _errors],
          socket
@@ -273,7 +282,9 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
          {@delivery_detail_query_id, reason} when reason in [:forbidden, :not_found] -> true
          _other -> false
        end) do
-      push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
+      socket
+      |> assign(:page_title, nil)
+      |> push_navigate(to: access_lost_path(socket.assigns.route_params))
     else
       raise "member message delivery live query refresh failed: #{inspect(errors)}"
     end
