@@ -1,31 +1,46 @@
 {
   "schema_version": 1,
-  "packet_id": "task-009e-7cb6a78-invitation-binding-1",
-  "task_id": "task-009e",
-  "todo_line": "- [ ] 009E Migrate `MembaWeb.MemberInvitationLive.New` to its accepted invitation-context query-result assign, preserving group-aware return routes, invitation form/validation, resend and delivery feedback, command state, navigation and UI while refreshing member counts and fresh manage-members access.",
+  "packet_id": "task-010-0b851f0-package-build-gate-1",
+  "task_id": "task-010",
+  "todo_line": "- [ ] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments.",
   "result": "ready_for_review",
   "changed_paths": [
-    "web/lib/memba_web/live/member_invitation_live/new.ex",
-    "web/test/memba_web/live/member_invitation_live/new_test.exs",
-    "web/test/memba_web/live/member_invitation_live/send_test.exs"
+    ".dockerignore",
+    ".fabro/workflows/scripts/test_dev_checkout_boundary.sh",
+    ".fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh",
+    ".github/workflows/continuous-delivery.yml",
+    "Dockerfile",
+    "bin/dev"
   ],
   "validation": [
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_invitation_live/new_test.exs test/memba_web/live/member_invitation_live/send_test.exs test/memba_web/member_invitation_query_test.exs test/memba_web/live_query/memba_read_model_source_test.exs",
+      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" deps.get; \"$package_mix\" test'",
       "exit_status": 0,
-      "evidence": "70 tests, 0 failures; focused proof covers selected-club member entry/exit count refresh, coherent-result-only socket state, relevant-refresh form/error preservation, unrelated-club isolation, delivered membership and manage-members access loss, submit-time reauthorization, existing routes/UI, invitation/resend/delivery feedback, and accepted query/source behavior."
+      "evidence": "Ran from packages/live_query using its own mix.lock and test support: 15 tests, 0 failures; no PostgreSQL service was required."
     },
     {
-      "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" format --check-formatted'",
       "exit_status": 0,
-      "evidence": "Formatting check completed successfully."
+      "evidence": "The standalone LiveQuery package is formatted."
     },
     {
-      "command": "git diff --check",
+      "command": "bash .fabro/workflows/scripts/test_dev_checkout_boundary.sh && bash .fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh",
       "exit_status": 0,
-      "evidence": "No whitespace errors."
+      "evidence": "Package tests and web precommit both ran from the current checkout; package dependency/test failures retained their exact non-zero status and stopped before later web commands; same-checkout and foreign-checkout devenv isolation remained intact."
+    },
+    {
+      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'web_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd web; MIX_ENV=prod \"$web_mix\" deps.get --only prod; MIX_ENV=prod \"$web_mix\" release --overwrite; test -f _build/prod/rel/memba/lib/live_query-0.1.0/ebin/live_query.app'",
+      "exit_status": 0,
+      "evidence": "The production release assembled successfully and contains web/_build/prod/rel/memba/lib/live_query-0.1.0/ebin/live_query.app."
+    },
+    {
+      "command": "bash -n bin/dev && git diff --check",
+      "exit_status": 0,
+      "evidence": "The development command has valid shell syntax and the candidate diff has no whitespace errors."
     }
   ],
-  "notes": "The invitation LiveView now initializes route and form state before one :member_invitation binding, uses only the :invitation_context projection-backed socket assign, delegates committed notifications to MembaReadModelSource through LiveQuery.Binding, and rebinds with the authenticated email before the actor-neutral invitation command. Successful refreshes preserve form, validation, route and feedback state; forbidden refreshes or pre-command reauthorization leave the private surface via the existing ForbiddenError policy, while unexpected binding/source errors remain visible. Focused TDD first produced 6 expected failures against the mount-only implementation, then passed after migration. No manual subscription, page-specific projector predicate, second result, acceptance-feature/package/plan/todo change, or unscoped full-suite command was introduced; task 009E remains unchecked.",
-  "unresolved": []
+  "notes": "bin/dev adds a package-aware Mix helper resolved beside active Elixir, fetches standalone package dependencies during setup, and runs package tests before preserved web precommit with exact failure propagation. .fabro/workflows/scripts/test_dev_checkout_boundary.sh proves package and web checks use the current checkout under same/foreign devenv contexts; test_dev_quality_gate_exit_status.sh proves package setup/test failures stop later web commands without masking status and successful sequencing retains web setup/precommit. Dockerfile copies package/web manifests before web deps.get, copies only package config/lib before deps.compile, builds at /app/web and copies that release; .dockerignore excludes generated package build/dependency/doc/coverage artifacts; package tests/test support are never copied. .github/workflows/continuous-delivery.yml caches package deps/build using packages/live_query/mix.lock. The initial TDD shell regressions failed because package setup/tests were absent, then passed after integration. Docker, Podman, Buildah and nerdctl are unavailable, so no image build is claimed; local release proof and Docker COPY ordering were verified instead. web/mix.exs, both lockfiles, LiveQuery/Memba behavior, LiveViews, features, plan, todo, ADRs and delivery metadata other than this required latest-worker-result were unchanged.",
+  "unresolved": [
+    "An actual Docker image build and runtime-image inspection remain to be performed in an environment with a Docker-compatible CLI and daemon; this sandbox has no docker, podman, buildah or nerdctl executable."
+  ]
 }
