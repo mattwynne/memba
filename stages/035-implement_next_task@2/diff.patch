@@ -1,0 +1,414 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 8431eb1..2aefc47 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,18 +1,18 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008b-ef0b156-group-creation-query-1",
+-  "task_id": "task-008b",
+-  "todo_line": "- [ ] 008B Introduce and focused-test one fresh-authorized group-creation context query with complete club, member, Person and manage-members interests, composed from existing read APIs and independent of LiveView transient form state.",
++  "packet_id": "task-008c-34a236d-settings-query-1",
++  "task_id": "task-008c",
++  "todo_line": "- [ ] 008C Introduce and focused-test one fresh-authorized settings query for selected club, current Person, active club memberships and email rows, with complete identity and collection interests.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/member_group_creation_query.ex",
+-    "web/test/memba_web/member_group_creation_query_test.exs"
++    "web/lib/memba_web/member_settings_query.ex",
++    "web/test/memba_web/member_settings_query_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_group_creation_query_test.exs test/memba_web/live/member_group_live/new_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_settings_query_test.exs test/memba_web/live/my_settings_live_test.exs",
+       "exit_status": 0,
+-      "evidence": "17 focused query and unchanged group-creation LiveView regression tests passed with 0 failures."
++      "evidence": "16 focused query and unchanged MySettingsLive regression tests passed with 0 failures."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -25,6 +25,6 @@
+       "evidence": "The packet diff has no whitespace errors."
+     }
+   ],
+-  "notes": "Added the app-owned :member_group_creation query for public assign :group_creation_context with only club_id and authenticated_email inputs. Every load normalizes the email, freshly resolves active clubs, the selected Club, Person identity, active selected-club membership by Person ID, and manage-members permission; missing or unauthorized contexts fail closed as :forbidden. The result contains only selected_club and current_member, while its exact nine interests cover club, membership, person, person_club, person_clubs, exact member roles/permissions, and club-wide roles/permissions. Tests prove normalized and attached-email identity, membership and permission loss on subsequent loads, fail-closed inputs, exact interest set/cardinality, and exclusion of generated group, form, preview, retry, command, club-member-wide, Group, messaging, and delivery state. The initial TDD run failed as expected with 5 tests because the module was absent; the implemented focused loop then passed. Implementation changes are limited to the two reported code/test paths, in addition to this required worker-result artifact; no LiveView wiring, source adapter, package, projector, projection, command, plan, todo, matrix, ADR, or acceptance feature changed, and task 008B remains unchecked.",
++  "notes": "Added the app-owned :member_settings query for public assign :settings with only club_id and authenticated_email inputs. Every successful load normalizes the authenticated email, freshly reads active clubs, resolves the selected Club and current Person (including attached-email identity), rereads the Person's ordered active membership and email rows, and verifies the selected relationship before returning exactly selected_club, current_person, current_person_clubs and current_person_email_addresses; inaccessible contexts fail closed as :forbidden. For a two-club result, the exact six deduplicated interests are person, person_emails, person_clubs, the selected person_club relationship, and both represented club identities. Tests prove non-selected membership departure and entry replace both the result and represented Club interests, selected-club loss is forbidden, invalid contexts fail closed, and transient form/routing plus club-member-wide, Group, role, permission, messaging and delivery state are excluded. The initial five-test TDD run failed as expected because the module was absent, and an initial format check identified one corrected line-wrap mismatch; all final focused validations pass. Implementation changes are limited to the two reported code/test paths, in addition to this required worker-result artifact; no LiveView wiring, source adapter, package, accepted query, projector, projection, command, plan, todo, matrix, ADR or acceptance feature changed, and task 008C remains unchecked.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/member_settings_query.ex b/web/lib/memba_web/member_settings_query.ex
+new file mode 100644
+index 0000000..90d1b67
+--- /dev/null
++++ b/web/lib/memba_web/member_settings_query.ex
+@@ -0,0 +1,99 @@
++defmodule MembaWeb.MemberSettingsQuery do
++  @moduledoc """
++  Loads the fresh-authorized projection data shown by member settings.
++
++  The routed club and authenticated email are stable query inputs. Every load
++  resolves active-club authority, Person identity, active memberships, and
++  Person email rows again. Tab, form, command, flash, and navigation state
++  remain owned by the LiveView.
++  """
++
++  alias LiveQuery.Query
++  alias Memba.Accounts
++  alias Memba.Membership
++
++  @doc """
++  Returns the app-owned descriptor for the settings result.
++  """
++  @spec query() :: Query.t()
++  def query do
++    Query.new!(
++      id: :member_settings,
++      assign: :settings,
++      load: fn inputs ->
++        case load(inputs.club_id, inputs.authenticated_email) do
++          {:ok, settings} -> {:ok, settings, interests(settings)}
++          {:error, reason} -> {:error, reason}
++        end
++      end
++    )
++  end
++
++  @doc """
++  Returns the selected Club and current Person's settings projection data.
++
++  Missing, invalid, inactive, foreign-club, and unresolved identity contexts
++  retain the existing settings `:forbidden` treatment.
++  """
++  @spec load(term(), term()) :: {:ok, map()} | {:error, :forbidden}
++  def load(club_id, authenticated_email) do
++    normalized_email = Accounts.normalize_email(authenticated_email)
++
++    with normalized_email when is_binary(normalized_email) <- normalized_email,
++         selected_club when not is_nil(selected_club) <-
++           find_selected_club(club_id, normalized_email),
++         current_person when not is_nil(current_person) <-
++           Membership.get_person_by_email(normalized_email),
++         current_person_clubs <-
++           Membership.list_active_club_memberships_for_person(current_person.person_id),
++         true <-
++           Enum.any?(
++             current_person_clubs,
++             &(&1.club_id == selected_club.club_id)
++           ) do
++      {:ok,
++       %{
++         selected_club: selected_club,
++         current_person: current_person,
++         current_person_clubs: current_person_clubs,
++         current_person_email_addresses:
++           Membership.list_person_email_addresses(current_person.person_id)
++       }}
++    else
++      _missing_or_forbidden_context -> {:error, :forbidden}
++    end
++  end
++
++  @doc """
++  Derives the complete Person collections, selected relationship, and
++  represented Club interests for a settings result.
++  """
++  @spec interests(map()) :: [term()]
++  def interests(settings) when is_map(settings) do
++    selected_club = Map.fetch!(settings, :selected_club)
++    current_person = Map.fetch!(settings, :current_person)
++    current_person_clubs = Map.fetch!(settings, :current_person_clubs)
++
++    person_id = Map.fetch!(current_person, :person_id)
++    selected_club_id = Map.fetch!(selected_club, :club_id)
++
++    club_interests =
++      [selected_club_id | Enum.map(current_person_clubs, &Map.fetch!(&1, :club_id))]
++      |> Enum.uniq()
++      |> Enum.map(&{:club, &1})
++
++    [
++      {:person, person_id},
++      {:person_emails, person_id},
++      {:person_clubs, person_id},
++      {:person_club, selected_club_id, person_id}
++      | club_interests
++    ]
++  end
++
++  defp find_selected_club(club_id, normalized_email) do
++    normalized_email
++    |> Accounts.list_active_clubs_for_email()
++    |> Enum.find(&(&1.club_id == club_id))
++  end
++end
+diff --git a/web/test/memba_web/member_settings_query_test.exs b/web/test/memba_web/member_settings_query_test.exs
+new file mode 100644
+index 0000000..10cc431
+--- /dev/null
++++ b/web/test/memba_web/member_settings_query_test.exs
+@@ -0,0 +1,265 @@
++defmodule MembaWeb.MemberSettingsQueryTest do
++  use Memba.DataCase, async: false
++
++  alias LiveQuery.Query
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias MembaWeb.MemberSettingsQuery
++
++  test "describes and loads one coherent settings result with exact interests" do
++    settings = create_settings_context()
++    query = MemberSettingsQuery.query()
++
++    assert query.id == :member_settings
++    assert query.assign == :settings
++
++    assert {:ok, result, interests} =
++             Query.load(query, %{
++               club_id: settings.selected_club_id,
++               authenticated_email: "  MEMBER@EXAMPLE.COM "
++             })
++
++    assert Map.keys(result) |> Enum.sort() == [
++             :current_person,
++             :current_person_clubs,
++             :current_person_email_addresses,
++             :selected_club
++           ]
++
++    assert result.selected_club.club_id == settings.selected_club_id
++    assert result.current_person.person_id == settings.person_id
++
++    assert Enum.map(result.current_person_clubs, & &1.club_id) == [
++             settings.selected_club_id,
++             settings.other_club_id
++           ]
++
++    assert Enum.map(result.current_person_email_addresses, & &1.email) == [
++             "member@example.com",
++             "member.alternate@example.com"
++           ]
++
++    expected_interests = [
++      {:person, settings.person_id},
++      {:person_emails, settings.person_id},
++      {:person_clubs, settings.person_id},
++      {:person_club, settings.selected_club_id, settings.person_id},
++      {:club, settings.selected_club_id},
++      {:club, settings.other_club_id}
++    ]
++
++    assert MapSet.new(interests) == MapSet.new(expected_interests)
++    assert length(interests) == 6
++
++    excluded_result_keys = [
++      :active_tab,
++      :add_email_form,
++      :add_email_error,
++      :command,
++      :flash,
++      :navigation,
++      :group,
++      :role,
++      :permission,
++      :message,
++      :delivery
++    ]
++
++    refute Enum.any?(excluded_result_keys, &Map.has_key?(result, &1))
++
++    excluded_interest_names = [
++      :club_members,
++      :membership,
++      :group,
++      :group_members,
++      :group_participation,
++      :member_roles,
++      :member_permissions,
++      :club_roles,
++      :club_permissions,
++      :message,
++      :conversation,
++      :delivery,
++      :message_deliveries
++    ]
++
++    refute Enum.any?(interests, fn interest ->
++             elem(interest, 0) in excluded_interest_names
++           end)
++  end
++
++  test "normalizes an attached authenticated email and resolves the same Person settings" do
++    settings = create_settings_context()
++
++    assert {:ok, result} =
++             MemberSettingsQuery.load(
++               settings.selected_club_id,
++               "  MEMBER.ALTERNATE@EXAMPLE.COM "
++             )
++
++    assert result.current_person.person_id == settings.person_id
++    assert result.current_person.email == "member@example.com"
++    assert result.selected_club.club_id == settings.selected_club_id
++
++    assert Enum.map(result.current_person_clubs, & &1.club_id) == [
++             settings.selected_club_id,
++             settings.other_club_id
++           ]
++
++    assert Enum.map(result.current_person_email_addresses, & &1.email) == [
++             "member@example.com",
++             "member.alternate@example.com"
++           ]
++  end
++
++  test "freshly replaces active memberships and represented Club interests" do
++    settings = create_settings_context()
++    query = MemberSettingsQuery.query()
++
++    inputs = %{
++      club_id: settings.selected_club_id,
++      authenticated_email: "member@example.com"
++    }
++
++    assert {:ok, initial_result, initial_interests} = Query.load(query, inputs)
++
++    assert Enum.map(initial_result.current_person_clubs, & &1.club_id) == [
++             settings.selected_club_id,
++             settings.other_club_id
++           ]
++
++    assert {:club, settings.other_club_id} in initial_interests
++
++    MembershipProjection
++    |> where(
++      [membership],
++      membership.membership_id == ^settings.other_membership_id
++    )
++    |> Repo.update_all(set: [active: false])
++
++    assert {:ok, result_after_departure, interests_after_departure} =
++             Query.load(query, inputs)
++
++    assert Enum.map(result_after_departure.current_person_clubs, & &1.club_id) == [
++             settings.selected_club_id
++           ]
++
++    refute {:club, settings.other_club_id} in interests_after_departure
++    assert length(interests_after_departure) == 5
++
++    entered_club = insert_membership_club!(name: "Third Club")
++    entered_membership_id = Memba.ID.generate(:membership)
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: entered_membership_id,
++      club_id: entered_club.club_id,
++      person_id: settings.person_id,
++      active: true
++    })
++
++    assert {:ok, result_after_entry, interests_after_entry} = Query.load(query, inputs)
++
++    assert Enum.map(result_after_entry.current_person_clubs, & &1.club_id) == [
++             settings.selected_club_id,
++             entered_club.club_id
++           ]
++
++    assert {:club, entered_club.club_id} in interests_after_entry
++    refute {:club, settings.other_club_id} in interests_after_entry
++    assert length(interests_after_entry) == 6
++  end
++
++  test "freshly rejects selected-club membership loss" do
++    settings = create_settings_context()
++
++    assert {:ok, _result} =
++             MemberSettingsQuery.load(
++               settings.selected_club_id,
++               "member@example.com"
++             )
++
++    MembershipProjection
++    |> where(
++      [membership],
++      membership.membership_id == ^settings.selected_membership_id
++    )
++    |> Repo.update_all(set: [active: false])
++
++    assert {:error, :forbidden} =
++             MemberSettingsQuery.load(
++               settings.selected_club_id,
++               "member@example.com"
++             )
++  end
++
++  test "fails closed for missing, invalid, inactive, foreign, and unresolved contexts" do
++    settings = create_settings_context()
++
++    inactive_club = insert_membership_club!(name: "Inactive Club")
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: inactive_club.club_id,
++      person_id: settings.person_id,
++      active: false
++    })
++
++    foreign_club = insert_membership_club!(name: "Foreign Club")
++
++    invalid_contexts = [
++      {nil, "member@example.com"},
++      {"not-a-club-id", "member@example.com"},
++      {inactive_club.club_id, "member@example.com"},
++      {foreign_club.club_id, "member@example.com"},
++      {settings.selected_club_id, nil},
++      {settings.selected_club_id, ""},
++      {settings.selected_club_id, "unknown@example.com"}
++    ]
++
++    for {club_id, authenticated_email} <- invalid_contexts do
++      assert {:error, :forbidden} =
++               MemberSettingsQuery.load(club_id, authenticated_email)
++    end
++  end
++
++  defp create_settings_context do
++    selected_club = insert_membership_club!(name: "Alpha Club")
++    other_club = insert_membership_club!(name: "Beta Club")
++
++    person =
++      insert_membership_person!(
++        name: "Member Example",
++        email: "member@example.com"
++      )
++
++    insert_membership_person_email_address!(
++      person_id: person.person_id,
++      email: "member.alternate@example.com",
++      is_primary: false
++    )
++
++    selected_membership_id = Memba.ID.generate(:membership)
++    other_membership_id = Memba.ID.generate(:membership)
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: selected_membership_id,
++      club_id: selected_club.club_id,
++      person_id: person.person_id,
++      active: true
++    })
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: other_membership_id,
++      club_id: other_club.club_id,
++      person_id: person.person_id,
++      active: true
++    })
++
++    %{
++      selected_club_id: selected_club.club_id,
++      selected_membership_id: selected_membership_id,
++      other_club_id: other_club.club_id,
++      other_membership_id: other_membership_id,
++      person_id: person.person_id
++    }
++  end
++end
