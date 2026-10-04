@@ -1,0 +1,300 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 2aefc47..d001d30 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,30 +1,30 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008c-34a236d-settings-query-1",
+-  "task_id": "task-008c",
+-  "todo_line": "- [ ] 008C Introduce and focused-test one fresh-authorized settings query for selected club, current Person, active club memberships and email rows, with complete identity and collection interests.",
++  "packet_id": "task-008d1-f0f68f4-group-participant-eligibility-1",
++  "task_id": "task-008d1",
++  "todo_line": "- [ ] 008D1 Extend and focused-test the Membership group-member read API so callers can obtain every active audience participant's Person identity independently of primary-email eligibility, while preserving its existing recipient-only behavior and ordering by default.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/member_settings_query.ex",
+-    "web/test/memba_web/member_settings_query_test.exs"
++    "web/lib/memba/membership.ex",
++    "web/test/memba/membership/query_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_settings_query_test.exs test/memba_web/live/my_settings_live_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/query_test.exs test/memba/membership/no_crud_spike_test.exs test/memba_web/live/member_message_live/new_test.exs",
+       "exit_status": 0,
+-      "evidence": "16 focused query and unchanged MySettingsLive regression tests passed with 0 failures."
++      "evidence": "51 tests, 0 failures; covers the Membership query contract, no-CRUD boundary, and unchanged compose LiveView recipient-count behavior."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+       "exit_status": 0,
+-      "evidence": "All Elixir files are formatted."
++      "evidence": "Formatting check completed successfully."
+     },
+     {
+       "command": "git diff --check",
+       "exit_status": 0,
+-      "evidence": "The packet diff has no whitespace errors."
++      "evidence": "No whitespace errors."
+     }
+   ],
+-  "notes": "Added the app-owned :member_settings query for public assign :settings with only club_id and authenticated_email inputs. Every successful load normalizes the authenticated email, freshly reads active clubs, resolves the selected Club and current Person (including attached-email identity), rereads the Person's ordered active membership and email rows, and verifies the selected relationship before returning exactly selected_club, current_person, current_person_clubs and current_person_email_addresses; inaccessible contexts fail closed as :forbidden. For a two-club result, the exact six deduplicated interests are person, person_emails, person_clubs, the selected person_club relationship, and both represented club identities. Tests prove non-selected membership departure and entry replace both the result and represented Club interests, selected-club loss is forbidden, invalid contexts fail closed, and transient form/routing plus club-member-wide, Group, role, permission, messaging and delivery state are excluded. The initial five-test TDD run failed as expected because the module was absent, and an initial format check identified one corrected line-wrap mismatch; all final focused validations pass. Implementation changes are limited to the two reported code/test paths, in addition to this required worker-result artifact; no LiveView wiring, source adapter, package, accepted query, projector, projection, command, plan, todo, matrix, ADR or acceptance feature changed, and task 008C remains unchecked.",
++  "notes": "Added list_active_members_of_group/2 with opts defaulting to [], where include_without_primary_email: true retains the active group/member and projected-Person joins but left-joins primary email and returns nil when absent; the one-argument recipient-only behavior, exact plain-map shape, name/Person-ID ordering, alphabetical active roles, invalid-ID behavior, group isolation, and inactive/mismatched/missing-Person exclusions are covered. The initial TDD run failed as expected with 33 tests, 2 failures because /2 did not exist; the focused query run then passed 33 tests. No compose query or LiveView wiring, source adapter, package, authoritative recipient resolution, projector/schema/command/event, plan/matrix/ADR, acceptance feature, or todo line changed.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 86ef315..57dce25 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -1013,9 +1013,16 @@ defmodule Memba.Membership do
+   alphabetically for each member. Members whose group row or club membership is
+   inactive, members of other groups, members without a projected person, and
+   invalid group IDs are excluded.
++
++  By default, members without a primary email address are excluded. Pass
++  `include_without_primary_email: true` to include every otherwise eligible
++  participant, with `:email` set to `nil` when no primary email row exists.
+   """
+-  def list_active_members_of_group(group_id) do
++  def list_active_members_of_group(group_id, opts \\ []) when is_list(opts) do
+     with {:ok, group_id} <- ID.cast(:group, group_id) do
++      include_without_primary_email? =
++        Keyword.get(opts, :include_without_primary_email, false)
++
+       members =
+         GroupMembershipProjection
+         |> join(:inner, [group_membership], membership in MembershipProjection,
+@@ -1028,7 +1035,7 @@ defmodule Memba.Membership do
+           on: person.person_id == membership.person_id
+         )
+         |> join(
+-          :inner,
++          :left,
+           [_group_membership, _membership, person],
+           primary_email_address in PersonEmailAddress,
+           on:
+@@ -1043,6 +1050,7 @@ defmodule Memba.Membership do
+           [group_membership, membership, _person, _primary_email_address],
+           group_membership.active == true and membership.active == true
+         )
++        |> require_primary_email_unless_included(include_without_primary_email?)
+         |> order_by([_group_membership, _membership, person, _primary_email_address],
+           asc: person.name,
+           asc: person.person_id
+@@ -1068,6 +1076,16 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp require_primary_email_unless_included(query, true), do: query
++
++  defp require_primary_email_unless_included(query, false) do
++    where(
++      query,
++      [_group_membership, _membership, _person, primary_email_address],
++      not is_nil(primary_email_address.id)
++    )
++  end
++
+   @doc """
+   List the groups an active club member may discover in the given club.
+ 
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 7f3d798..00cb4f7 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -14,8 +14,10 @@ defmodule Memba.Membership.QueryTest do
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Group, as: GroupProjection
++  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Projections.PersonEmailAddress
+   alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
+   alias Memba.Membership.SystemGroups
+@@ -283,7 +285,7 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
+-  describe "list_active_members_of_group/1" do
++  describe "list_active_members_of_group/1 and list_active_members_of_group/2" do
+     test "returns active members of the selected group with public member summaries" do
+       club = create_club("Kootenay Mountaineering Club")
+       other_club = create_club("Nelson Cycling Club")
+@@ -338,6 +340,125 @@ defmodule Memba.Membership.QueryTest do
+       assert admin_person_id == alice.person_id
+     end
+ 
++    test "optionally includes active participants without primary email addresses" do
++      club = create_club("Kootenay Mountaineering Club")
++      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
++
++      eligible = create_person(name: "Same Name", email: "eligible@example.com")
++      ineligible = create_person(name: "Same Name", email: "ineligible@example.com")
++
++      eligible_membership_id = add_member(club.club_id, eligible.person_id)
++      ineligible_membership_id = add_member(club.club_id, ineligible.person_id)
++
++      Repo.get_by!(PersonEmailAddress,
++        person_id: ineligible.person_id,
++        is_primary: true
++      )
++      |> Repo.delete!()
++
++      zebra_role_id = define_role(club.club_id, role_key: "zebra", name: "Zebra")
++      alpine_role_id = define_role(club.club_id, role_key: "alpine", name: "Alpine")
++
++      assign_role(
++        club.club_id,
++        ineligible_membership_id,
++        ineligible.person_id,
++        zebra_role_id
++      )
++
++      assign_role(
++        club.club_id,
++        ineligible_membership_id,
++        ineligible.person_id,
++        alpine_role_id
++      )
++
++      eligible_summary = %{
++        membership_id: eligible_membership_id,
++        id: eligible.person_id,
++        name: "Same Name",
++        email: "eligible@example.com",
++        roles: ["Admin"]
++      }
++
++      ineligible_summary = %{
++        membership_id: ineligible_membership_id,
++        id: ineligible.person_id,
++        name: "Same Name",
++        email: nil,
++        roles: ["Alpine", "Zebra"]
++      }
++
++      assert Membership.list_active_members_of_group(everyone_group_id) == [eligible_summary]
++
++      assert Membership.list_active_members_of_group(
++               everyone_group_id,
++               include_without_primary_email: true
++             ) ==
++               Enum.sort_by([eligible_summary, ineligible_summary], &{&1.name, &1.id})
++    end
++
++    test "eligibility mode preserves active membership scope and projected-person requirements" do
++      club = create_club("Kootenay Mountaineering Club")
++      other_club = create_club("Nelson Cycling Club")
++      selected_group_id = SystemGroups.everyone_group_id(club.club_id)
++
++      included =
++        insert_projected_group_participant(club.club_id, selected_group_id, "Included")
++
++      _inactive_group_membership =
++        insert_projected_group_participant(
++          club.club_id,
++          selected_group_id,
++          "Inactive group membership",
++          group_membership_active: false
++        )
++
++      _inactive_club_membership =
++        insert_projected_group_participant(
++          club.club_id,
++          selected_group_id,
++          "Inactive club membership",
++          membership_active: false
++        )
++
++      _mismatched_membership_scope =
++        insert_projected_group_participant(
++          club.club_id,
++          selected_group_id,
++          "Mismatched membership scope",
++          group_membership_club_id: other_club.club_id
++        )
++
++      _missing_person =
++        insert_projected_group_participant(
++          club.club_id,
++          selected_group_id,
++          "Missing Person",
++          project_person: false
++        )
++
++      _other_group =
++        insert_projected_group_participant(
++          club.club_id,
++          Memba.ID.generate(:group),
++          "Other group"
++        )
++
++      assert Membership.list_active_members_of_group(
++               selected_group_id,
++               include_without_primary_email: true
++             ) == [
++               %{
++                 membership_id: included.membership_id,
++                 id: included.person_id,
++                 name: "Included",
++                 email: nil,
++                 roles: []
++               }
++             ]
++    end
++
+     test "excludes members whose group membership or club membership is inactive" do
+       club = create_club("Kootenay Mountaineering Club")
+       alice = create_person(name: "Alice", email: "alice@example.com")
+@@ -357,6 +478,11 @@ defmodule Memba.Membership.QueryTest do
+       assert Membership.list_active_members_of_group(Memba.ID.generate(:group)) == []
+       assert Membership.list_active_members_of_group(nil) == []
+       assert Membership.list_active_members_of_group("not-a-uuid") == []
++
++      assert Membership.list_active_members_of_group(
++               "not-a-uuid",
++               include_without_primary_email: true
++             ) == []
+     end
+   end
+ 
+@@ -1031,6 +1157,36 @@ defmodule Memba.Membership.QueryTest do
+              )
+   end
+ 
++  defp insert_projected_group_participant(club_id, group_id, name, opts \\ []) do
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    if Keyword.get(opts, :project_person, true) do
++      Repo.insert!(%PersonProjection{
++        person_id: person_id,
++        name: name,
++        email: "#{person_id}@example.com"
++      })
++    end
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: membership_id,
++      club_id: club_id,
++      person_id: person_id,
++      active: Keyword.get(opts, :membership_active, true)
++    })
++
++    Repo.insert!(%GroupMembershipProjection{
++      club_id: Keyword.get(opts, :group_membership_club_id, club_id),
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id,
++      active: Keyword.get(opts, :group_membership_active, true)
++    })
++
++    %{membership_id: membership_id, person_id: person_id}
++  end
++
+   defp remove_group_member(club_id, group_id, membership_id, person_id) do
+     assert :ok =
+              App.dispatch(
