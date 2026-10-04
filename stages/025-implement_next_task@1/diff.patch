@@ -1,0 +1,321 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index a294a69..8431eb1 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,22 +1,18 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008a-5fe939c-presenter-coherence-revision-9",
+-  "task_id": "task-008a",
+-  "todo_line": "- [ ] 008A Complete and focused-test the Memba committed-read-model adapter against actual projector/event families and evidenced valid-scope fallbacks in the corrected migration matrix. Preserve exact scoped matching and ignore unrelated projectors; surface known malformed Membership notifications with unrecoverable person identity as contract violations rather than fallback refreshes. Audit remaining fallbacks against real current/legacy event shapes and obtain a fresh independent review.",
++  "packet_id": "task-008b-ef0b156-group-creation-query-1",
++  "task_id": "task-008b",
++  "todo_line": "- [ ] 008B Introduce and focused-test one fresh-authorized group-creation context query with complete club, member, Person and manage-members interests, composed from existing read APIs and independent of LiveView transient form state.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/test/memba_web/live_query/memba_read_model_source_test.exs"
++    "web/lib/memba_web/member_group_creation_query.ex",
++    "web/test/memba_web/member_group_creation_query_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live_query/memba_read_model_source_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_group_creation_query_test.exs test/memba_web/live/member_group_live/new_test.exs",
+       "exit_status": 0,
+-      "evidence": "46 focused adapter and Binding tests passed with 0 failures. The presenter-derived dashboard fixture produces exactly 30 interests, the coherent detail fixture remains at 13 interests, and all eleven projector-family intersections and Membership Binding loader counts passed."
+-    },
+-    {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_dashboard_query_test.exs test/memba_web/member_message_detail_query_test.exs",
+-      "exit_status": 0,
+-      "evidence": "8 supporting production-shape query tests passed with 0 failures."
++      "evidence": "17 focused query and unchanged group-creation LiveView regression tests passed with 0 failures."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -29,6 +25,6 @@
+       "evidence": "The packet diff has no whitespace errors."
+     }
+   ],
+-  "notes": "The dashboard message row is now constructed by public MemberDashboardPresentation.present_message_rows/2 from one coherent conversation: message_id and conversation_id are conversation-1; person-author is both sender and originator; the distinct person-replier is the latest replier and is rendered with person-participant; reply_count is two; and the audited reply retains conversation-1 in both conversation_id and reply_to_message_id. The exact complete dashboard set is now 30 interests, dropping only impossible person-originator while retaining person-author, person-replier and person-participant. The complete detail set remains 13 with its root/message/author assertions unchanged. The unchanged eleven-family audit proves Club for both; Membership club_members/person_club for dashboard and person_club for detail; represented Person for both; Group only for dashboard; GroupMembership collection/exact scopes for dashboard and exact participation for detail; Role only for dashboard; Message conversation/conversation_messages/club breadth for dashboard and exact conversation scopes for detail; ConversationGroupAccess group/access/conversation for dashboard and access/conversation for detail; Follow only for detail; and both delivery contributors only for detail. Loader counts remain other-club current Person one/one, selected-club current Person two/two, and another selected-club Person dashboard two/detail one. A superseded path-qualified format probe failed only because the root bin/mix wrapper resolves paths from web/; the packet's exact unqualified format command subsequently passed. No application, query, presenter, messaging, migration-matrix, package, LiveView, projector, event, projection-schema, publisher, approved-plan, todo, ADR or acceptance-feature file changed. Task 008A remains unchecked for fresh independent review; no extra review, Slack contact, impersonation, acceptance or publication action was taken.",
++  "notes": "Added the app-owned :member_group_creation query for public assign :group_creation_context with only club_id and authenticated_email inputs. Every load normalizes the email, freshly resolves active clubs, the selected Club, Person identity, active selected-club membership by Person ID, and manage-members permission; missing or unauthorized contexts fail closed as :forbidden. The result contains only selected_club and current_member, while its exact nine interests cover club, membership, person, person_club, person_clubs, exact member roles/permissions, and club-wide roles/permissions. Tests prove normalized and attached-email identity, membership and permission loss on subsequent loads, fail-closed inputs, exact interest set/cardinality, and exclusion of generated group, form, preview, retry, command, club-member-wide, Group, messaging, and delivery state. The initial TDD run failed as expected with 5 tests because the module was absent; the implemented focused loop then passed. Implementation changes are limited to the two reported code/test paths, in addition to this required worker-result artifact; no LiveView wiring, source adapter, package, projector, projection, command, plan, todo, matrix, ADR, or acceptance feature changed, and task 008B remains unchecked.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/member_group_creation_query.ex b/web/lib/memba_web/member_group_creation_query.ex
+new file mode 100644
+index 0000000..d699b17
+--- /dev/null
++++ b/web/lib/memba_web/member_group_creation_query.ex
+@@ -0,0 +1,97 @@
++defmodule MembaWeb.MemberGroupCreationQuery do
++  @moduledoc """
++  Loads a fresh-authorized context for member group creation.
++
++  The routed club and authenticated email are stable query inputs. Every load
++  resolves active-club authority, Person identity, active membership, and
++  manage-members permission again. Form, preview, generated identity, retry,
++  and command state remain owned by the LiveView.
++  """
++
++  alias LiveQuery.Query
++  alias Memba.Accounts
++  alias Memba.Membership
++  alias Memba.Membership.Authorization
++
++  @doc """
++  Returns the app-owned descriptor for the group-creation context.
++  """
++  @spec query() :: Query.t()
++  def query do
++    Query.new!(
++      id: :member_group_creation,
++      assign: :group_creation_context,
++      load: fn inputs ->
++        case load(inputs.club_id, inputs.authenticated_email) do
++          {:ok, context} -> {:ok, context, interests(context)}
++          {:error, reason} -> {:error, reason}
++        end
++      end
++    )
++  end
++
++  @doc """
++  Returns the selected Club and current member after fresh authorization.
++
++  Missing, inactive, foreign-club, and unauthorized contexts retain the
++  existing group-creation `:forbidden` treatment.
++  """
++  @spec load(term(), term()) :: {:ok, map()} | {:error, :forbidden}
++  def load(club_id, authenticated_email) do
++    normalized_email = Accounts.normalize_email(authenticated_email)
++
++    with normalized_email when is_binary(normalized_email) <- normalized_email,
++         selected_club when not is_nil(selected_club) <-
++           find_selected_club(club_id, normalized_email),
++         person when not is_nil(person) <-
++           Membership.get_person_by_email(normalized_email),
++         current_member when not is_nil(current_member) <-
++           find_current_member(selected_club.club_id, person.person_id),
++         :ok <-
++           Authorization.authorize_manage_members(
++             selected_club.club_id,
++             person.person_id
++           ) do
++      {:ok, %{selected_club: selected_club, current_member: current_member}}
++    else
++      _missing_or_forbidden_context -> {:error, :forbidden}
++    end
++  end
++
++  @doc """
++  Derives the complete Club, member, Person, role, and permission interests.
++  """
++  @spec interests(map()) :: [term()]
++  def interests(context) when is_map(context) do
++    selected_club = Map.fetch!(context, :selected_club)
++    current_member = Map.fetch!(context, :current_member)
++
++    club_id = Map.fetch!(selected_club, :club_id)
++    membership_id = Map.fetch!(current_member, :membership_id)
++    person_id = Map.fetch!(current_member, :id)
++
++    [
++      {:club, club_id},
++      {:membership, membership_id},
++      {:person, person_id},
++      {:person_club, club_id, person_id},
++      {:person_clubs, person_id},
++      {:member_roles, club_id, membership_id, person_id},
++      {:member_permissions, club_id, membership_id, person_id},
++      {:club_roles, club_id},
++      {:club_permissions, club_id}
++    ]
++  end
++
++  defp find_selected_club(club_id, normalized_email) do
++    normalized_email
++    |> Accounts.list_active_clubs_for_email()
++    |> Enum.find(&(&1.club_id == club_id))
++  end
++
++  defp find_current_member(club_id, person_id) do
++    club_id
++    |> Membership.list_active_members_of_club()
++    |> Enum.find(&(&1.id == person_id))
++  end
++end
+diff --git a/web/test/memba_web/member_group_creation_query_test.exs b/web/test/memba_web/member_group_creation_query_test.exs
+new file mode 100644
+index 0000000..629d2a7
+--- /dev/null
++++ b/web/test/memba_web/member_group_creation_query_test.exs
+@@ -0,0 +1,170 @@
++defmodule MembaWeb.MemberGroupCreationQueryTest do
++  use Memba.DataCase, async: false
++
++  alias LiveQuery.Query
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.MemberPermission
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias MembaWeb.MemberGroupCreationQuery
++
++  test "describes and loads one coherent group-creation context with exact interests" do
++    member = create_authorized_member()
++    query = MemberGroupCreationQuery.query()
++
++    assert query.id == :member_group_creation
++    assert query.assign == :group_creation_context
++
++    assert {:ok, context, interests} =
++             Query.load(query, %{
++               club_id: member.club_id,
++               authenticated_email: "  MEMBER@EXAMPLE.COM "
++             })
++
++    assert Map.keys(context) |> Enum.sort() == [:current_member, :selected_club]
++    assert context.selected_club.club_id == member.club_id
++    assert context.current_member.id == member.person_id
++    assert context.current_member.membership_id == member.membership_id
++
++    expected_interests = [
++      {:club, member.club_id},
++      {:membership, member.membership_id},
++      {:person, member.person_id},
++      {:person_club, member.club_id, member.person_id},
++      {:person_clubs, member.person_id},
++      {:member_roles, member.club_id, member.membership_id, member.person_id},
++      {:member_permissions, member.club_id, member.membership_id, member.person_id},
++      {:club_roles, member.club_id},
++      {:club_permissions, member.club_id}
++    ]
++
++    assert MapSet.new(interests) == MapSet.new(expected_interests)
++    assert length(interests) == 9
++
++    refute Map.has_key?(context, :group_id)
++    refute Map.has_key?(context, :form)
++    refute Map.has_key?(context, :name)
++    refute Map.has_key?(context, :preview)
++    refute Map.has_key?(context, :errors)
++    refute Map.has_key?(context, :retry_key)
++    refute Map.has_key?(context, :command)
++
++    excluded_interest_names = [
++      :club_members,
++      :club_groups,
++      :group,
++      :group_members,
++      :group_participation,
++      :conversation,
++      :message,
++      :delivery
++    ]
++
++    refute Enum.any?(interests, fn interest ->
++             elem(interest, 0) in excluded_interest_names
++           end)
++  end
++
++  test "resolves attached-email authentication to membership by Person ID" do
++    member = create_authorized_member()
++
++    insert_membership_person_email_address!(
++      person_id: member.person_id,
++      email: "member.attached@example.com",
++      is_primary: false
++    )
++
++    assert {:ok, context} =
++             MemberGroupCreationQuery.load(
++               member.club_id,
++               " MEMBER.ATTACHED@EXAMPLE.COM "
++             )
++
++    assert context.current_member.id == member.person_id
++    assert context.current_member.email == "member@example.com"
++  end
++
++  test "freshly rejects a deactivated selected-club membership" do
++    member = create_authorized_member()
++
++    assert {:ok, _context} =
++             MemberGroupCreationQuery.load(member.club_id, "member@example.com")
++
++    MembershipProjection
++    |> where([membership], membership.membership_id == ^member.membership_id)
++    |> Repo.update_all(set: [active: false])
++
++    assert {:error, :forbidden} =
++             MemberGroupCreationQuery.load(member.club_id, "member@example.com")
++  end
++
++  test "freshly rejects loss of manage-members permission" do
++    member = create_authorized_member()
++
++    assert {:ok, _context} =
++             MemberGroupCreationQuery.load(member.club_id, "member@example.com")
++
++    MemberPermission
++    |> where([permission], permission.club_id == ^member.club_id)
++    |> where([permission], permission.membership_id == ^member.membership_id)
++    |> where([permission], permission.person_id == ^member.person_id)
++    |> where(
++      [permission],
++      permission.permission == ^Permissions.club_manage_members()
++    )
++    |> Repo.delete_all()
++
++    assert {:error, :forbidden} =
++             MemberGroupCreationQuery.load(member.club_id, "member@example.com")
++  end
++
++  test "fails closed for missing, invalid, inactive, and foreign contexts" do
++    member = create_authorized_member()
++
++    invalid_contexts = [
++      {nil, "member@example.com"},
++      {"not-a-club-id", "member@example.com"},
++      {Memba.ID.generate(:club), "member@example.com"},
++      {member.club_id, nil},
++      {member.club_id, ""},
++      {member.club_id, "unknown@example.com"}
++    ]
++
++    for {club_id, authenticated_email} <- invalid_contexts do
++      assert {:error, :forbidden} =
++               MemberGroupCreationQuery.load(club_id, authenticated_email)
++    end
++  end
++
++  defp create_authorized_member do
++    club = insert_membership_club!(name: "Query Club")
++
++    person =
++      insert_membership_person!(
++        name: "Member Example",
++        email: "member@example.com"
++      )
++
++    membership_id = Memba.ID.generate(:membership)
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: membership_id,
++      club_id: club.club_id,
++      person_id: person.person_id,
++      active: true
++    })
++
++    Repo.insert!(%MemberPermission{
++      club_id: club.club_id,
++      membership_id: membership_id,
++      person_id: person.person_id,
++      permission: Permissions.club_manage_members(),
++      grant_count: 1
++    })
++
++    %{
++      club_id: club.club_id,
++      membership_id: membership_id,
++      person_id: person.person_id
++    }
++  end
++end
