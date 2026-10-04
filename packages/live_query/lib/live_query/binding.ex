@@ -41,13 +41,9 @@ defmodule LiveQuery.Binding do
          {:ok, socket, mailbox_before} <- prepare_connected_bind(socket, source, query.id) do
       registration = %{query: query, inputs: inputs, interests: []}
 
-      case read_and_install(socket, registration) do
-        {:ok, socket} ->
-          reconcile_bind_window(socket, mailbox_before, query.id)
-
-        {:error, reason, socket} ->
-          {:error, [{query.id, reason}], socket}
-      end
+      socket
+      |> read_and_install(registration)
+      |> reconcile_bind_window(mailbox_before, query.id)
     else
       {:error, errors, socket} -> {:error, errors, socket}
     end
@@ -66,13 +62,9 @@ defmodule LiveQuery.Binding do
         mailbox_before = if connected_and_subscribed?(socket), do: mailbox(), else: nil
         registration = %{registration | inputs: inputs}
 
-        case read_and_install(socket, registration) do
-          {:ok, socket} ->
-            reconcile_bind_window(socket, mailbox_before, query_id)
-
-          {:error, reason, socket} ->
-            {:error, [{query_id, reason}], socket}
-        end
+        socket
+        |> read_and_install(registration)
+        |> reconcile_bind_window(mailbox_before, query_id)
 
       :error ->
         {:error, [{query_id, :not_registered}], socket}
@@ -167,9 +159,11 @@ defmodule LiveQuery.Binding do
     end
   end
 
-  defp reconcile_bind_window(socket, nil, _query_id), do: {:ok, socket}
+  defp reconcile_bind_window(read_result, nil, query_id),
+    do: public_read_result(read_result, query_id)
 
-  defp reconcile_bind_window(socket, mailbox_before, query_id) do
+  defp reconcile_bind_window(read_result, mailbox_before, query_id) do
+    socket = read_result_socket(read_result)
     source = binding_state(socket).source
 
     {notifications, invalidations} =
@@ -188,11 +182,19 @@ defmodule LiveQuery.Binding do
     Enum.each(Enum.reverse(notifications), &consume_message/1)
 
     if notifications == [] do
-      {:ok, socket}
+      public_read_result(read_result, query_id)
     else
       refresh_matching(socket, Enum.reverse(invalidations), MapSet.new([query_id]))
     end
   end
+
+  defp read_result_socket({:ok, socket}), do: socket
+  defp read_result_socket({:error, _reason, socket}), do: socket
+
+  defp public_read_result({:ok, socket}, _query_id), do: {:ok, socket}
+
+  defp public_read_result({:error, reason, socket}, query_id),
+    do: {:error, [{query_id, reason}], socket}
 
   defp refresh_matching(socket, invalidations, forced_query_ids) do
     state = binding_state(socket)

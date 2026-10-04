@@ -267,6 +267,125 @@ defmodule LiveQuery.BindingTest do
     refute_receive {:change, :new_scope}
   end
 
+  test "a classified notification crossing an initial access error recovers current data" do
+    store = start_agent(%{reads: 0})
+
+    query =
+      query(:members, :members, fn :current ->
+        read_number =
+          Agent.get_and_update(store, fn state ->
+            next = state.reads + 1
+            {next, %{state | reads: next}}
+          end)
+
+        if read_number == 1 do
+          send(self(), {:change, :members})
+          {:error, :forbidden}
+        else
+          {:ok, %{version: read_number}, [:members]}
+        end
+      end)
+
+    assert {:ok, socket} = Binding.bind(socket(true), query, :current, source(self()))
+    assert socket.assigns.members == %{version: 2}
+    assert Agent.get(store, & &1.reads) == 2
+    refute_receive {:change, :members}
+
+    assert {:ok, socket} = Binding.handle_notification(socket, {:change, :members})
+    assert socket.assigns.members == %{version: 3}
+  end
+
+  test "a classified notification crossing a route access error recovers only the new route" do
+    store = start_agent(%{old: 0, new: 0})
+
+    query =
+      query(:route, :route_result, fn input ->
+        read_number =
+          Agent.get_and_update(store, fn counts ->
+            next = Map.fetch!(counts, input) + 1
+            {next, Map.put(counts, input, next)}
+          end)
+
+        case {input, read_number} do
+          {:old, _read_number} ->
+            {:ok, %{route: :old, version: read_number}, [:old_scope]}
+
+          {:new, 1} ->
+            send(self(), {:change, :new_scope})
+            {:error, :forbidden}
+
+          {:new, _read_number} ->
+            {:ok, %{route: :new, version: read_number}, [:new_scope]}
+        end
+      end)
+
+    assert {:ok, socket} = Binding.bind(socket(true), query, :old, source(self()))
+    flush_subscription()
+
+    assert {:ok, socket} = Binding.rebind(socket, :route, :new)
+    assert socket.assigns.route_result == %{route: :new, version: 2}
+    assert Agent.get(store, & &1) == %{old: 1, new: 2}
+    refute_receive {:change, :new_scope}
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, {:change, :old_scope})
+    assert Agent.get(store, & &1) == %{old: 1, new: 2}
+
+    assert {:ok, socket} = Binding.handle_notification(socket, {:change, :new_scope})
+    assert socket.assigns.route_result == %{route: :new, version: 3}
+  end
+
+  test "a repeated access error after a crossing notification remains cleared and does not retry" do
+    store = start_agent(%{reads: 0})
+
+    query =
+      query(:members, :members, fn :current ->
+        read_number =
+          Agent.get_and_update(store, fn state ->
+            next = state.reads + 1
+            {next, %{state | reads: next}}
+          end)
+
+        case read_number do
+          1 ->
+            send(self(), {:change, :members})
+            {:error, :forbidden}
+
+          2 ->
+            {:error, :not_found}
+
+          _later_read ->
+            flunk("bind-window reconciliation retried more than once")
+        end
+      end)
+
+    assert {:error, [{:members, :not_found}], socket} =
+             Binding.bind(socket(true), query, :current, source(self()))
+
+    assert socket.assigns.members == nil
+    assert Agent.get(store, & &1.reads) == 2
+    refute_receive {:change, :members}
+
+    assert {:ignored, socket} = Binding.handle_notification(socket, {:change, :members})
+    assert socket.assigns.members == nil
+    assert Agent.get(store, & &1.reads) == 2
+  end
+
+  test "an access error without a crossing notification reads only once" do
+    store = start_agent(%{reads: 0})
+
+    query =
+      query(:members, :members, fn :current ->
+        Agent.update(store, &Map.update!(&1, :reads, fn reads -> reads + 1 end))
+        {:error, :forbidden}
+      end)
+
+    assert {:error, [{:members, :forbidden}], socket} =
+             Binding.bind(socket(true), query, :current, source(self()))
+
+    assert socket.assigns.members == nil
+    assert Agent.get(store, & &1.reads) == 1
+  end
+
   defp query(id, assign, load) do
     Query.new!(id: id, assign: assign, load: load)
   end
