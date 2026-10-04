@@ -1,0 +1,326 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json b/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
+index f3fcbda..d405785 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/current-worker-packet.json
+@@ -2,143 +2,98 @@
+   "attempt": "implementation",
+   "candidate_origins": [],
+   "completion_evidence_required": [
+-    "List every changed path and explain how each change contributes to Docker/release inclusion, package setup, quality-gate execution or its focused regression proof.",
+-    "Report the standalone package test command, exit status and exact test/failure count, confirming it ran from `packages/live_query` rather than `web`.",
+-    "Report focused shell-regression exits demonstrating that package and web checks both run from the current checkout and that a failing package check cannot be masked by a successful later command.",
+-    "Report the production release command and the exact `live_query-0.1.0/ebin/live_query.app` path found in the assembled release.",
+-    "If Docker is available, report the image build command, exit status and runtime-image inspection of the LiveQuery application file. If unavailable, record the missing tool/daemon explicitly and provide the local release proof plus the Docker manifest/source copy ordering used.",
+-    "Confirm package tests and test support are excluded from production inputs and generated package build/dependency artifacts are excluded from the Docker context or narrowly bypassed.",
+-    "Confirm the existing web path dependency and independent package/web lockfile boundaries were preserved, with any unavoidable manifest or lockfile change called out precisely.",
+-    "Confirm no LiveQuery behavior, Memba application behavior, LiveView, feature, plan, todo, ADR or delivery-artifact change was made.",
+-    "Return all focused validation exit statuses and `git diff --check` evidence, leaving task 010 unchecked for independent review."
++    "List every changed path and explain how it contributes specifically to bind/rebind error-window reconciliation or its focused proof.",
++    "Report the initial focused test failure before the implementation change, including the concrete assertion or unexpected stale error that demonstrated the gap.",
++    "Report focused tests proving initial-bind recovery, route-rebind recovery, repeated-error clearing and no-notification one-read behavior.",
++    "Report the binding test file command, exit status and exact test/failure count.",
++    "Report the complete standalone package test command, exit status and exact test/failure count.",
++    "Report package formatting and `git diff --check` exit statuses.",
++    "Confirm each crossing window performs no more than one reconciliation reread and that the notification is consumed.",
++    "Confirm a final error leaves the public assign nil and interests empty, while a successful retry installs only the new result and interests.",
++    "Confirm no Memba application code, LiveView, feature, step definition, plan, ADR, migration matrix, delivery metadata or task 011B scope was changed.",
++    "Leave task 011A unchecked and return the candidate for independent review."
+   ],
+   "constraints": [
+-    "Preserve every accepted implementation and the package's frozen generic/Memba separation.",
+-    "Package tests must execute as the `packages/live_query` Mix project with its own lockfile, test configuration and support modules.",
+-    "Web application compilation and release resolution continue to use the web project's dependency graph and lockfile.",
+-    "The package setup/test command and existing web precommit must each propagate non-zero status immediately; do not rely on ambient `set -e` inside the quality-gate lock wrapper.",
+-    "Docker dependency manifests must be available before `mix deps.get`, and package production source must be available before `mix deps.compile`.",
+-    "Production Docker instructions must not depend on package test support or generated local package artifacts.",
+-    "Keep local, CI and nested-devenv checkout isolation intact; do not resolve Mix from a foreign Memba checkout.",
+-    "Do not require PostgreSQL for standalone package tests, which exercise a package-owned endpoint and in-memory collaborators.",
+-    "Do not claim an actual Docker image build if no Docker-compatible daemon is available in the worker sandbox; distinguish local production-release proof from image proof.",
+-    "Keep the change bounded to package/build/quality-gate integration and directly affected focused shell regressions."
++    "Subscribe before the connected initial read and retain one shared source subscription per LiveView owner.",
++    "Only messages newly delivered after the bind or rebind mailbox snapshot may participate in that window's reconciliation.",
++    "Only notifications successfully classified by the source trigger the conservative reread; pre-existing and ignored messages must retain their existing handling.",
++    "Perform at most one reconciliation reread for the captured window. Notifications generated by that reread must not create an inline retry loop.",
++    "When the reconciliation reread succeeds, atomically install its result and complete interests and return success rather than the stale first error.",
++    "When the reconciliation reread fails, return its final error with the public result nil and interests empty; never resurrect old route data or old interests.",
++    "When no classified notification crossed the window, preserve the original first-read error and read count.",
++    "Preserve existing successful bind/rebind behavior, relevant-only ordinary refresh, duplicate/out-of-order handling and transient socket assigns.",
++    "Keep the package independent of Memba and Commanded and create no additional runtime process.",
++    "Use deterministic mailbox assertions and existing test helpers; do not use timing sleeps."
+   ],
+   "focused_validation": [
+-    "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" deps.get; \"$package_mix\" test'",
++    "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" test test/live_query/binding_test.exs'",
++    "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" test'",
+     "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" format --check-formatted'",
+-    "bash .fabro/workflows/scripts/test_dev_checkout_boundary.sh && bash .fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh",
+-    "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'web_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd web; MIX_ENV=prod \"$web_mix\" deps.get --only prod; MIX_ENV=prod \"$web_mix\" release --overwrite; test -f _build/prod/rel/memba/lib/live_query-0.1.0/ebin/live_query.app'",
+-    "bash -n bin/dev && git diff --check"
++    "git diff --check"
+   ],
+-  "outcome": "The accepted local LiveQuery path dependency resolves and compiles in the production Docker/release layout, the resulting release contains the LiveQuery OTP application, and the supported `dev check` path prepares and runs the package's standalone tests as well as the existing web and acceptance gates with failures propagated correctly.",
+-  "packet_id": "task-010-0b851f0-package-build-gate-1",
++  "outcome": "A connected initial bind or route rebind that receives a classified source notification during an access-error read performs exactly one conservative reread: a now-authorized result is installed with its complete interests, while a repeated error is returned as the final outcome with the result and interests still cleared.",
++  "packet_id": "task-011a-91505d3-bind-error-reconcile-1",
+   "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+   "references": [
+     {
+-      "facts": "Approved implementation step 6 requires the local package to integrate with `web/mix.exs`, the production Docker release and `dev check`; acceptance criteria require the production release to include the package and the quality gate to execute its tests.",
++      "facts": "The technical model requires a notification received across the first read and interest-installation window to trigger conservative reconciliation. The validation plan requires relevant bind-time races while preserving fresh authorization and clearing private data on access failure.",
+       "path": "docs/iterations/067-live-projection-queries/plan.md"
+     },
+     {
+-      "facts": "Task 010 is the first unchecked obligation. Task 011 separately retains residual focused proof, package lifecycle/race coverage and final full `dev check`.",
++      "facts": "Task 011A is the first unchecked obligation and isolates the remaining error-window lifecycle case. Task 011B separately retains all accepted focused-proof reruns and final full dev check.",
+       "path": "docs/iterations/067-live-projection-queries/todo.md"
+     },
+     {
+-      "facts": "The accepted architecture places the reusable binding in a local Mix path-dependency package independent of Memba and Commanded, and explicitly records build and test integration as a consequence.",
+-      "path": "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md"
+-    },
+-    {
+-      "facts": "The accepted package boundary is represented by `LiveQuery.Query`, `LiveQuery.Source` and `LiveQuery.Binding`; package tests lock the frozen subscription, refresh, rebind, reconciliation, reconnect and cleanup semantics. This task integrates that contract without redesigning it.",
++      "facts": "The frozen contract says a connected bind subscribes before its first read, notifications delivered across the bind window are reconciled, rebind replaces inputs/result/interests, and failed reads clear the public result and interests before returning the error to the owner.",
+       "path": "docs/iterations/067-live-projection-queries/extraction-contract.md"
+     },
+     {
+-      "facts": "The web project already declares `{:live_query, path: \"../packages/live_query\"}` as a normal runtime dependency. Its `precommit` alias compiles, checks unused dependencies, formats and runs only the web project's test alias; dependency tests are not automatically executed.",
+-      "path": "web/mix.exs"
+-    },
+-    {
+-      "facts": "LiveQuery is an independent OTP application with its own dependency graph, lockfile and test-only `test/support` compilation path. Its tests must run from this project rather than being treated as web test files.",
+-      "path": "packages/live_query/mix.exs"
++      "facts": "The accepted architecture assigns subscription ownership to the LiveView and requires relevant committed changes to trigger fresh authorized reads without patching fields from events.",
++      "path": "docs/adr/0027-use-live-projection-queries-for-liveview-reads.md"
+     },
+     {
+-      "facts": "The package is application-independent and owns only generic query, source and binding responsibilities; Memba authorization, invalidation vocabulary and projector mapping must remain outside it.",
+-      "path": "packages/live_query/README.md"
++      "facts": "`bind/4` and `rebind/3` currently call `reconcile_bind_window/3` only from the successful `read_and_install/2` branch. Their error branches return immediately after installing a registration with an empty interest set, so a classified notification delivered during that failed read cannot force the current reread.",
++      "path": "packages/live_query/lib/live_query/binding.ex"
+     },
+     {
+-      "facts": "The standalone package tests cover disconnected and connected binding, one-owner subscription, relevant-only refresh, atomic result/interest replacement, duplicate and out-of-order notifications, access-error clearing and bind/rebind reconciliation.",
++      "facts": "Existing tests prove successful bind-window and rebind-window reconciliation and ordinary bind/rebind/refresh error clearing, but do not combine a crossing notification with a first read that returns an error.",
+       "path": "packages/live_query/test/live_query/binding_test.exs"
+     },
+     {
+-      "facts": "Lifecycle proof uses a package-owned Phoenix endpoint and test support to verify fresh connected mounts, reconnection-style owner replacement and subscriber cleanup, confirming why the package must be tested in its own Mix project.",
+-      "path": "packages/live_query/test/live_query/lifecycle_test.exs"
+-    },
+-    {
+-      "facts": "The builder currently works at `/app`, copies only `web/mix.exs` and `web/mix.lock`, then runs `mix deps.get` and `mix deps.compile`. From that manifest the accepted path dependency resolves to `/packages/live_query`, which is never copied, so the current production image cannot resolve or compile it.",
+-      "path": "Dockerfile"
+-    },
+-    {
+-      "facts": "Docker context exclusions cover web build/dependency artifacts but do not currently cover corresponding `packages/live_query` artifacts that standalone package setup and tests can generate.",
+-      "path": ".dockerignore"
+-    },
+-    {
+-      "facts": "`_setup/0` currently fetches only web dependencies, `_precommit/0` runs only web `mix precommit`, and `_check/0` delegates to those before browser acceptance. `with_quality_gate_lock/1` temporarily disables immediate shell exit, so newly sequenced package and web commands must explicitly preserve failures.",
+-      "path": "bin/dev"
+-    },
+-    {
+-      "facts": "The checkout-local Mix wrapper deliberately resolves the real executable and always changes into `web`; invoking it after `cd packages/live_query` would still run the wrong project unless the integration adds an explicit project-aware path.",
+-      "path": "bin/mix"
+-    },
+-    {
+-      "facts": "Both the devenv `mix` script and interactive shell convenience function are web-oriented, while `devenv test` invokes `bin/dev setup` followed by `bin/dev check`. Package invocation must bypass or safely generalize the web-only convenience without breaking existing callers.",
+-      "path": "devenv.nix"
+-    },
+-    {
+-      "facts": "The existing focused shell harness models only a web checkout and currently expects one web `precommit` invocation. It must be adapted if `bin/dev` starts invoking a second Mix project, while preserving foreign-checkout isolation assertions.",
+-      "path": ".fabro/workflows/scripts/test_dev_checkout_boundary.sh"
+-    },
+-    {
+-      "facts": "This regression proves `_ci` and `_check` stop after a precommit failure and preserve its status. New package-before-web sequencing needs equivalent proof that a package failure is not masked.",
+-      "path": ".fabro/workflows/scripts/test_dev_quality_gate_exit_status.sh"
+-    },
+-    {
+-      "facts": "CI runs `devenv test`, so correct `bin/dev` integration reaches CI automatically. Existing caches include web dependencies/builds but neither package paths nor `packages/live_query/mix.lock` in the cache key.",
+-      "path": ".github/workflows/continuous-delivery.yml"
++      "facts": "A generic query loader returns either a coherent result with its complete opaque interests or an error. The correction must preserve this public result contract.",
++      "path": "packages/live_query/lib/live_query/query.ex"
+     },
+     {
+-      "facts": "The repository quality gate is full `dev check`, which runs Mix precommit/ExUnit and browser acceptance. This worker should add package execution to that path while leaving the deterministic post-worker node to run the unscoped gate.",
+-      "path": "docs/reference/project-guidelines.md"
++      "facts": "The source owns generic subscription, notification classification and opaque interest matching. Error-window reconciliation must continue using these callbacks without importing application concepts.",
++      "path": "packages/live_query/lib/live_query/source.ex"
+     },
+     {
+-      "facts": "Mix tasks should be inspected and focused tests should be used for diagnosis; broad dependency cleaning is discouraged. The package and parent project should retain their independent project and lockfile boundaries.",
++      "facts": "Process tests must use supervised processes and message synchronization rather than sleeps or `Process.alive?/1`; focused Mix tests should be used before broader validation.",
+       "path": "docs/reference/elixir-mix-tests.md"
+     }
+   ],
+   "scenario_focus": null,
+   "schema_version": 1,
+   "scope": [
+-    "Preserve the existing `{:live_query, path: \"../packages/live_query\"}` dependency in `web/mix.exs`; change it only if focused dependency or release proof exposes a concrete integration defect.",
+-    "Adjust the production Docker builder layout or copy ordering so the repository-relative LiveQuery path project exists before web `mix deps.get`, its production configuration and library source exist before `mix deps.compile`, and the runner copies the release from the corresponding final builder path.",
+-    "Keep package tests, test support and package-only test configuration out of the production release. Avoid copying generated package `_build`, `deps`, coverage or documentation artifacts into the Docker context or image; update `.dockerignore` or use narrowly scoped `COPY` instructions as appropriate.",
+-    "Teach the supported `bin/dev` setup path to fetch the standalone package's locked dependencies in addition to the web dependencies, with package setup failures returned immediately.",
+-    "Teach the standard precommit path used by `dev check` to run the package in `packages/live_query` as its own Mix project, then retain the existing web precommit behavior. Ensure a package failure cannot be masked by a later successful web command while `with_quality_gate_lock/1` is operating under `set +e`.",
+-    "Use a checkout-local, project-aware way to invoke the real Mix executable for the package. Do not let the repository `bin/mix` wrapper or devenv's web-oriented `mix` convenience function silently redirect package commands into `web`.",
+-    "Update the directly affected shell regression harnesses, or add one focused harness, to prove package tests and web precommit are both invoked from the current checkout, package failure prevents a false-green quality gate, and existing checkout/devenv isolation remains intact.",
+-    "If package dependency/build caches are retained by CI, include the package lockfile and package build/dependency directories consistently without changing the semantics of `devenv test` or `dev check`.",
+-    "Produce a local production release and verify its `lib` directory contains `live_query-0.1.0/ebin/live_query.app`. If a Docker daemon is available, additionally build the actual image and inspect the same application file in the runtime image; otherwise report the unavailable Docker CLI explicitly and return the local release plus Docker copy-order evidence.",
+-    "Keep package and web lockfiles independently authoritative: standalone package checks use `packages/live_query/mix.lock`, while the parent production release resolves through `web/mix.lock`."
++    "Add focused package tests for an initial connected bind whose first loader call delivers a classified notification and returns an access error, then whose single reconciliation read succeeds with current result and interests.",
++    "Add focused package tests for a route rebind whose first read of the new inputs delivers a classified notification and returns an access error, then whose single reconciliation read succeeds and supersedes the old route result and interests.",
++    "Prove the bounded failure case: when the reconciliation read also returns an access error, return that final error, keep the query's public assign nil and interests empty, consume the crossing notification, and do not retry again.",
++    "Prove that an error read with no newly classified notification preserves the existing one-read error behavior.",
++    "Adjust `LiveQuery.Binding` so bind-window classification can determine the outcome after either a successful or failed first read while reusing the existing generic notification classification and forced-query refresh responsibilities.",
++    "Keep the successful bind/rebind reconciliation behavior and all ordinary notification refresh behavior unchanged."
+   ],
+   "scope_exclusions": [
+-    "Do not change the accepted LiveQuery query, source or binding API or its runtime semantics.",
+-    "Do not add the residual lifecycle, reconnect or bind-window coverage owned by task 011.",
+-    "Do not modify member queries, the Memba notification adapter, LiveViews, projectors, domain behavior, routes or UI.",
+-    "Do not edit acceptance features, step definitions, the approved plan, todo, migration matrix, extraction contract, ADRs or delivery metadata.",
+-    "Do not publish the package to Hex, introduce an umbrella, add a process per query or move Memba-specific code into the package.",
+-    "Do not opportunistically upgrade, align or regenerate unrelated package or web dependencies; preserve the two existing lockfile boundaries unless a required integration command makes a minimal lock correction unavoidable and explain it.",
+-    "Do not reactivate or rerun the already-green `Bob sees Alice join without reloading` scenario; it is accepted under task 006A and does not exercise package/build integration.",
+-    "Do not run `dev check`, `dev check --quick`, `dev ci` or another unscoped full application suite during this worker visit. The deterministic workflow owns its post-worker gate, and task 011 retains final exact-state validation.",
+-    "Leave task 010 unchecked and return the integration candidate for independent review."
++    "Do not change Memba queries, notification keys, projector mapping, authorization policy, LiveViews, routes, UI or member-page tests.",
++    "Do not edit acceptance features or step definitions, and do not reactivate the already-accepted Bob-sees-Alice scenario.",
++    "Do not introduce repeated retries, polling, sleeps, a process per query, durable notification claims or a global cache.",
++    "Do not broaden the package API or expose Memba- or Commanded-specific concepts from the generic package.",
++    "Do not change access-error navigation or rendering policy; the LiveView owner continues to decide how a final query error is handled.",
++    "Do not add unrelated defensive API tests or refactor the package beyond what is needed for the error-window reconciliation contract.",
++    "Do not run `dev check`, `dev check --quick`, `dev ci` or another unscoped full repository suite during this worker visit; task 011B owns final exact-state validation and the deterministic workflow owns its post-worker gate.",
++    "Leave task 011A unchecked and return the bounded candidate for independent review."
+   ],
+-  "source_baseline": "0b851f0a8a8a3315f462fb0c95cfcd2d32c32e30",
+-  "task_id": "task-010",
+-  "todo_line": "- [ ] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments.",
++  "source_baseline": "91505d37a9ce1e2c266277ab36f0440ebed9bc17",
++  "task_id": "task-011a",
++  "todo_line": "- [ ] 011A Reconcile classified notifications that arrive while an initial bind or route rebind returns an access error, proving one conservative retry can recover current data while a repeated error leaves the result and interests cleared.",
+   "todo_path": "docs/iterations/067-live-projection-queries/todo.md"
+ }
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/execution-state.json b/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
+index 4e02cb0..b665dcb 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/execution-state.json
+@@ -19,7 +19,8 @@
+     "- [x] 009B Migrate `MembaWeb.MySettingsLive` to its accepted settings query-result assign, preserving tab routes, add-email form/validation and verification command feedback while refreshing selected-club, Person, club-membership and email-row data with fresh access checks.",
+     "- [x] 009C Migrate `MembaWeb.MemberMessageLive.New` to its accepted compose-context query-result assign, preserving route/audience semantics, typed message form, validation, send/retry state, navigation and UI while refreshing recipient eligibility and counts with fresh access checks.",
+     "- [x] 009D Migrate `MembaWeb.MemberMessageDeliveryLive.Show` to its accepted delivery-detail query-result assign, preserving routes, disclosure state, access transitions, navigation and UI while converging exact-message member status and staff reason updates from independently committed projectors.",
+-    "- [x] 009E Migrate `MembaWeb.MemberInvitationLive.New` to its accepted invitation-context query-result assign, preserving group-aware return routes, invitation form/validation, resend and delivery feedback, command state, navigation and UI while refreshing member counts and fresh manage-members access."
++    "- [x] 009E Migrate `MembaWeb.MemberInvitationLive.New` to its accepted invitation-context query-result assign, preserving group-aware return routes, invitation form/validation, resend and delivery feedback, command state, navigation and UI while refreshing member counts and fresh manage-members access.",
++    "- [x] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments."
+   ],
+   "candidate_origins": [],
+   "coverage_map": [
+@@ -44,66 +45,71 @@
+         "- [x] 009B Migrate `MembaWeb.MySettingsLive` to its accepted settings query-result assign, preserving tab routes, add-email form/validation and verification command feedback while refreshing selected-club, Person, club-membership and email-row data with fresh access checks.",
+         "- [x] 009C Migrate `MembaWeb.MemberMessageLive.New` to its accepted compose-context query-result assign, preserving route/audience semantics, typed message form, validation, send/retry state, navigation and UI while refreshing recipient eligibility and counts with fresh access checks.",
+         "- [x] 009D Migrate `MembaWeb.MemberMessageDeliveryLive.Show` to its accepted delivery-detail query-result assign, preserving routes, disclosure state, access transitions, navigation and UI while converging exact-message member status and staff reason updates from independently committed projectors.",
+-        "- [x] 009E Migrate `MembaWeb.MemberInvitationLive.New` to its accepted invitation-context query-result assign, preserving group-aware return routes, invitation form/validation, resend and delivery feedback, command state, navigation and UI while refreshing member counts and fresh manage-members access."
++        "- [x] 009E Migrate `MembaWeb.MemberInvitationLive.New` to its accepted invitation-context query-result assign, preserving group-aware return routes, invitation form/validation, resend and delivery feedback, command state, navigation and UI while refreshing member counts and fresh manage-members access.",
++        "- [x] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments."
+       ],
+       "pending_task_ids": [],
+-      "scope": "Accepted migration inventory, dashboard and conversation-detail vertical proofs, stakeholder scenario, frozen generic package contract, committed-read-model adapter audit, all app-owned query prerequisites, and every in-scope member LiveView migration."
++      "scope": "Accepted migration inventory, dashboard and conversation-detail vertical proofs, stakeholder scenario, generic package extraction, committed-read-model adapter, app-owned query prerequisites, all seven member LiveView migrations, and package build/quality-gate integration."
+     },
+     {
+       "accepted_task_lines": [],
+       "pending_task_ids": [
+-        "task-010"
++        "task-011a"
+       ],
+-      "scope": "Complete local path-dependency, production release, Docker-context and standard quality-gate integration for the accepted LiveQuery package."
++      "scope": "Close the remaining generic package bind-window race when the first initial-bind or route-rebind read returns an access error."
+     },
+     {
+       "accepted_task_lines": [],
+       "pending_task_ids": [
+-        "task-011"
++        "task-011b"
+       ],
+-      "scope": "Close residual per-page and package lifecycle proof gaps and run final exact-state validation."
++      "scope": "Reconfirm accepted member-page and package proof on the completed implementation and run the final exact-state quality gate."
+     }
+   ],
+   "pending_obligations": [
+     {
+       "candidate_origins": [],
+       "coverage": [
+-        "Preserve and verify the existing `web/mix.exs` local path dependency",
+-        "Make the local package available before Docker dependency resolution and compilation",
+-        "Include the compiled LiveQuery OTP application in the production release",
+-        "Fetch the package's standalone locked dependencies through the supported development setup",
+-        "Run the package's own tests as part of the standard `dev check` precommit path",
+-        "Preserve web precommit, browser acceptance and quality-gate failure propagation",
+-        "Exercise the package integration in local devenv and CI-supported workflows"
++        "Initial connected bind retries once when a classified notification arrives while the first query read returns an access error",
++        "Route rebind retries once against the new inputs when a classified notification arrives while the first rebind read returns an access error",
++        "A successful retry installs the current coherent result and complete interests",
++        "A retry that still fails returns the final access error and leaves the public result and interests cleared",
++        "No notification or an unclassified notification preserves the original error behavior without an extra read",
++        "Bind-window notification consumption remains bounded and cannot create a retry loop"
+       ],
+-      "origin": "Approved implementation step 6.",
++      "origin": "The residual package lifecycle and bind-window race portion of approved implementation step 7. Direct inspection found that successful initial binds and rebinds reconcile classified notifications delivered during their read windows, while the corresponding error branches return immediately without reconciliation.",
+       "replaces": [
+-        "- [ ] 007 Integrate the package with `web/mix.exs`, Docker release build and `dev check` so both package and web tests run in supported environments."
++        "- [ ] 011 Close the remaining focused proof gaps for every migrated member page, complete package lifecycle/race coverage, and run final `dev check`.",
++        "- [ ] 008 Add the focused acceptance example, focused tests per migrated member page and a real committed-projector-to-open-LiveView test, plus package unit tests for matching/mount/change/reconnect races; run `dev check`.",
++        "- [ ] 011 Implement the approved Bob-sees-Alice-join acceptance example, close remaining focused proof gaps for every migrated member page, complete package lifecycle/race coverage, and run final `dev check`."
+       ],
+       "status": "prepared",
+-      "task_id": "task-010",
+-      "todo_line": "- [ ] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments."
++      "task_id": "task-011a",
++      "todo_line": "- [ ] 011A Reconcile classified notifications that arrive while an initial bind or route rebind returns an access error, proving one conservative retry can recover current data while a repeated error leaves the result and interests cleared."
+     },
+     {
+       "candidate_origins": [],
+       "coverage": [
+-        "Focused proof for every migrated member page",
+-        "Residual package lifecycle, bind-window and reconnect race coverage",
+-        "Final full `dev check` on the exact clean or staged state"
++        "Re-run focused evidence for all seven migrated club-member LiveViews and their app-owned queries",
++        "Re-run the complete generic package lifecycle and race suite after task 011A",
++        "Preserve the accepted real committed-projector-to-open-LiveView scenario evidence",
++        "Repair only failures observed against approved iteration obligations",
++        "Run final full `dev check` on the exact clean worktree or complete staged diff"
+       ],
+-      "origin": "Remainder of approved implementation step 7 after the stakeholder scenario and committed-projector open-LiveView proof were split into accepted task 006A.",
++      "origin": "The focused consumer-proof and final exact-state validation portion of approved implementation step 7, retained after separating the concrete bind/rebind error-window lifecycle defect into task 011A.",
+       "replaces": [
++        "- [ ] 011 Close the remaining focused proof gaps for every migrated member page, complete package lifecycle/race coverage, and run final `dev check`.",
+         "- [ ] 008 Add the focused acceptance example, focused tests per migrated member page and a real committed-projector-to-open-LiveView test, plus package unit tests for matching/mount/change/reconnect races; run `dev check`.",
+         "- [ ] 011 Implement the approved Bob-sees-Alice-join acceptance example, close remaining focused proof gaps for every migrated member page, complete package lifecycle/race coverage, and run final `dev check`."
+       ],
+       "status": "pending",
+-      "task_id": "task-011",
+-      "todo_line": "- [ ] 011 Close the remaining focused proof gaps for every migrated member page, complete package lifecycle/race coverage, and run final `dev check`."
++      "task_id": "task-011b",
++      "todo_line": "- [ ] 011B Re-run the accepted focused proof for every migrated member page and the package lifecycle/race contract, repair only an observed regression, and run final `dev check` on the exact state."
+     }
+   ],
+   "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+-  "planner_note": "The binding checkpoint for this planner visit is current HEAD 0b851f0a8a8a3315f462fb0c95cfcd2d32c32e30, not the baseline artifact's predecessor. All checked todo lines, including independently accepted task 009E, are preserved exactly. The existing task 010 and 011 split still accounts for every remaining approved obligation, so todo.md required no edit. Task 010 is the first unchecked line and remains one bounded build-and-quality-gate integration slice: `web/mix.exs` already declares the accepted path dependency, but the Docker builder copies only the web manifests before dependency resolution and never copies `packages/live_query`, while `bin/dev` setup and precommit currently prepare and test only the web project. The packet therefore preserves the accepted package API and consumers while fixing Docker/release inclusion, standalone package dependency setup, package-test execution through `dev check`, and focused orchestration regressions. Task 011 continues to own residual behavior/lifecycle proof and the final full exact-state `dev check`. There is no unaccepted candidate provenance. The sole approved acceptance scenario is already green and accepted under task 006A; package/build integration is explicit technical work with no appropriate new scenario, so scenario_focus is null.",
++  "planner_note": "The binding checkpoint for this planner visit is current HEAD 91505d37a9ce1e2c266277ab36f0440ebed9bc17, not the guard baseline's predecessor. All 21 checked todo lines, including independently accepted task 010, are preserved exactly and there is no unaccepted candidate provenance. Direct inspection of the accepted page tests shows that tasks 005, 006 and 009A through 009E already provide the required focused evidence for every migrated member page, while accepted task 007A covers ordinary successful bind/rebind races, fresh-owner reconnect and subscriber cleanup. One residual package case remains: LiveQuery.Binding reconciles classified bind-window notifications only after a successful first read; its initial-bind and route-rebind error branches return immediately, so a notification crossing an access-error read cannot conservatively recover current state. The former task 011 was therefore split into bounded task 011A for that package correction and task 011B for exact-state focused reruns and final dev check. Both children explicitly retain the replaced task-011 lineage. The approved Bob-sees-Alice scenario is already green and accepted under task 006A; task 011A is generic technical lifecycle work with no appropriate new scenario, so scenario_focus is null. No dev check was run for this planner-only todo edit.",
+   "schema_version": 1,
+-  "source_baseline": "0b851f0a8a8a3315f462fb0c95cfcd2d32c32e30",
++  "source_baseline": "91505d37a9ce1e2c266277ab36f0440ebed9bc17",
+   "todo_path": "docs/iterations/067-live-projection-queries/todo.md"
+ }
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/planner-result.json b/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
+index 33171a3..113b4f0 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/planner-result.json
+@@ -2,6 +2,6 @@
+   "decision": "ready",
+   "plan_path": "docs/iterations/067-live-projection-queries/plan.md",
+   "schema_version": 1,
+-  "source_baseline": "0b851f0a8a8a3315f462fb0c95cfcd2d32c32e30",
++  "source_baseline": "91505d37a9ce1e2c266277ab36f0440ebed9bc17",
+   "todo_path": "docs/iterations/067-live-projection-queries/todo.md"
+ }
