@@ -1,0 +1,523 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index 0e9c5e0..393c14a 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,18 +1,18 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-008f-e9eec54-invitation-context-query-1",
+-  "task_id": "task-008f",
+-  "todo_line": "- [ ] 008F Introduce and focused-test one fresh-authorized invitation context query with club-member collection, current member, Person and manage-members interests, composed from existing read APIs and independent of LiveView transient form state.",
++  "packet_id": "task-009a-4621875-group-live-binding-1",
++  "task_id": "task-009a",
++  "todo_line": "- [ ] 009A Migrate `MembaWeb.MemberGroupLive.New` to its accepted group-creation query-result assign, preserving initial forbidden semantics, applying the existing forbidden private-surface treatment on delivered access loss, and retaining generated group identity, typed form/preview/error state, command retry behavior, navigation and UI.",
+   "result": "ready_for_review",
+   "changed_paths": [
+-    "web/lib/memba_web/member_invitation_query.ex",
+-    "web/test/memba_web/member_invitation_query_test.exs"
++    "web/lib/memba_web/live/member_group_live/new.ex",
++    "web/test/memba_web/live/member_group_live/new_test.exs"
+   ],
+   "validation": [
+     {
+-      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/member_invitation_query_test.exs test/memba_web/member_group_creation_query_test.exs test/memba_web/live/member_invitation_live/new_test.exs test/memba_web/live_query/memba_read_model_source_test.exs",
++      "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_group_live/new_test.exs test/memba_web/member_group_creation_query_test.exs test/memba_web/live_query/memba_read_model_source_test.exs",
+       "exit_status": 0,
+-      "evidence": "66 tests, 0 failures; covers the new invitation query, accepted authorization-query pattern, current invitation page, and committed read-model source adapter."
++      "evidence": "68 tests, 0 failures; covers the migrated group-creation LiveView, accepted query descriptor, and committed read-model source adapter."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -25,6 +25,6 @@
+       "evidence": "No whitespace errors."
+     }
+   ],
+-  "notes": "Added the :member_invitation descriptor on :invitation_context with stable club_id and authenticated_email inputs and exactly selected_club, current_member, and active_member_count in its result. Every load normalizes identity, rereads active clubs, resolves the current Person and selected-club member by Person ID, counts the existing active-member read result, and rechecks manage-members permission. Focused proof covers normalized primary and attached-email identity, count entry/exit, selected membership and permission loss, fail-closed missing/invalid/inactive/foreign/unresolved contexts, and exclusion of invitation/form/error/resend/delivery/command/route/flash/navigation state. Interests are club, club_members, exact membership, current person, exact person_club, exact member_roles/member_permissions, and same-club club_roles/club_permissions; accepted adapter events map respectively from Club, Membership, Person, and Role projectors. Actual event structs prove selected-club membership, current Person, exact role/permission, and same-club permission matches while unrelated Club, Person, membership, and role scopes do not. The same Person's Membership change in another club stays isolated because no person_clubs interest is registered. The initial TDD run failed as expected with 7 tests and 7 failures because the query module was absent; the implementation then passed all focused checks. Implementation changes are limited to the two reported code/test paths: no LiveView wiring, existing query, adapter, package, read API, projector, schema, command, event, route, plan, todo, matrix, ADR, acceptance feature, or other delivery metadata changed, and task 008F remains unchecked.",
++  "notes": "MemberGroupLive.New now binds the accepted :member_group_creation query to the sole projection-backed :group_creation_context assign using current_identity_email and MembaReadModelSource. The superseded group_context/3 and email-comparison member lookup are removed; render-only flattening preserves the existing template while preview/create commands read the coherent context. Focused proof shows an exact Club invalidation rereads the result, generated group ID plus route/form/available-preview/validation-error state survive successful refreshes, another club's notification neither reloads the context nor changes transient state, and delivered membership or manage-members loss exits with the existing ForbiddenError treatment. Existing route, initial authorization, preview, stale-preview, creation, retry, navigation, authorization-mismatch, and submit-time permission-loss tests remain green. The initial TDD run failed as expected with 17 tests and 4 failures before LiveView binding was implemented. Changes are limited to the reported LiveView and focused test paths; no query, adapter, package, feature, plan, todo, ADR, migration matrix, projector, event, schema, command, route, or later LiveView was changed, and task 009A remains unchecked.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live/member_group_live/new.ex b/web/lib/memba_web/live/member_group_live/new.ex
+index 09872f7..48ceeca 100644
+--- a/web/lib/memba_web/live/member_group_live/new.ex
++++ b/web/lib/memba_web/live/member_group_live/new.ex
+@@ -11,34 +11,44 @@ defmodule MembaWeb.MemberGroupLive.New do
+ 
+   import Ecto.Changeset
+ 
+-  alias Memba.Accounts
++  alias LiveQuery.Binding
+   alias Memba.Membership
+-  alias Memba.Membership.Authorization
+   alias MembaWeb.ClubSite
++  alias MembaWeb.LiveQuery.MembaReadModelSource
++  alias MembaWeb.MemberGroupCreationQuery
+ 
+   @empty_group %{"name" => ""}
+   @group_form_types %{name: :string}
++  @group_creation_query_id :member_group_creation
+ 
+   @impl Phoenix.LiveView
+   def mount(params, session, socket) when is_map(params) do
+     route_params = params |> put_session_club_id(session) |> put_club_id_source(session)
+ 
+-    with club_id when is_binary(club_id) <- Map.get(route_params, "club_id"),
+-         {:ok, group_context} <-
+-           group_context(
+-             club_id,
+-             socket.assigns.current_identity,
+-             socket.assigns.current_identity_clubs
++    with club_id when is_binary(club_id) <- Map.get(route_params, "club_id") do
++      socket =
++        socket
++        |> assign(:route_params, route_params)
++        |> assign(:group_id, Memba.ID.generate(:group))
++        |> assign_group_form(@empty_group, nil, empty_preview())
++
++      case Binding.bind(
++             socket,
++             MemberGroupCreationQuery.query(),
++             %{
++               club_id: club_id,
++               authenticated_email: socket.assigns.current_identity_email
++             },
++             MembaReadModelSource.new()
+            ) do
+-      {:ok,
+-       socket
+-       |> assign(:route_params, route_params)
+-       |> assign(group_context)
+-       |> assign(:group_id, Memba.ID.generate(:group))
+-       |> assign_group_form(@empty_group, nil, empty_preview())}
++        {:ok, socket} ->
++          {:ok, socket}
++
++        {:error, errors, socket} ->
++          group_creation_binding_error!(errors, socket)
++      end
+     else
+-      _missing_or_forbidden_context ->
+-        forbidden!()
++      _missing_club_id -> forbidden!()
+     end
+   end
+ 
+@@ -59,7 +69,7 @@ defmodule MembaWeb.MemberGroupLive.New do
+          assign_group_form(
+            socket,
+            group_params,
+-           duplicate_name_message(existing_name, socket.assigns.selected_club.name),
++           duplicate_name_message(existing_name, selected_club(socket).name),
+            empty_preview("")
+          )}
+ 
+@@ -73,9 +83,9 @@ defmodule MembaWeb.MemberGroupLive.New do
+ 
+   def handle_event("create_group", %{"group" => group_params}, socket) do
+     attrs = %{
+-      club_id: socket.assigns.selected_club.club_id,
++      club_id: selected_club(socket).club_id,
+       group_id: socket.assigns.group_id,
+-      actor_person_id: socket.assigns.current_member.id,
++      actor_person_id: current_member(socket).id,
+       name: Map.get(group_params, "name")
+     }
+ 
+@@ -95,7 +105,7 @@ defmodule MembaWeb.MemberGroupLive.New do
+          assign_group_form(
+            socket,
+            group_params,
+-           duplicate_name_message(nil, socket.assigns.selected_club.name),
++           duplicate_name_message(nil, selected_club(socket).name),
+            empty_preview("")
+          )}
+ 
+@@ -103,9 +113,7 @@ defmodule MembaWeb.MemberGroupLive.New do
+         {:noreply,
+          socket
+          |> put_flash(:error, "You no longer have permission to create groups.")
+-         |> push_navigate(
+-           to: groups_path(socket.assigns.selected_club, socket.assigns.route_params)
+-         )}
++         |> push_navigate(to: groups_path(selected_club(socket), socket.assigns.route_params))}
+ 
+       {:error, :authorization_state_mismatch} ->
+         {:noreply,
+@@ -122,7 +130,25 @@ defmodule MembaWeb.MemberGroupLive.New do
+   end
+ 
+   @impl Phoenix.LiveView
+-  def render(assigns) do
++  def handle_info({:read_model_changed, _change} = notification, socket) do
++    case Binding.handle_notification(socket, notification) do
++      {:ignored, socket} ->
++        {:noreply, socket}
++
++      {:ok, socket} ->
++        {:noreply, socket}
++
++      {:error, errors, socket} ->
++        group_creation_binding_error!(errors, socket)
++    end
++  end
++
++  def handle_info(_message, socket), do: {:noreply, socket}
++
++  @impl Phoenix.LiveView
++  def render(%{group_creation_context: group_creation_context} = assigns) do
++    assigns = assign(assigns, group_creation_context)
++
+     ~H"""
+     <Layouts.club_site
+       flash={@flash}
+@@ -268,32 +294,10 @@ defmodule MembaWeb.MemberGroupLive.New do
+     """
+   end
+ 
+-  defp group_context(club_id, current_identity, current_identity_clubs) do
+-    with selected_club when not is_nil(selected_club) <-
+-           Enum.find(current_identity_clubs, &(&1.club_id == club_id)),
+-         current_member when not is_nil(current_member) <-
+-           current_member(club_id, current_identity),
+-         :ok <- Authorization.authorize_manage_members(club_id, current_member.id) do
+-      {:ok, %{selected_club: selected_club, current_member: current_member}}
+-    else
+-      _missing_or_forbidden_context -> {:error, :forbidden}
+-    end
+-  end
+-
+-  defp current_member(_club_id, nil), do: nil
+-
+-  defp current_member(club_id, identity) do
+-    identity_email = Accounts.normalize_email(identity.email)
+-
+-    club_id
+-    |> Membership.list_active_members_of_club()
+-    |> Enum.find(fn member -> Accounts.normalize_email(member.email) == identity_email end)
+-  end
+-
+   defp preview_group(socket, group_params) do
+     Membership.preview_custom_group(%{
+-      club_id: socket.assigns.selected_club.club_id,
+-      actor_person_id: socket.assigns.current_member.id,
++      club_id: selected_club(socket).club_id,
++      actor_person_id: current_member(socket).id,
+       name: Map.get(group_params, "name")
+     })
+   end
+@@ -324,7 +328,7 @@ defmodule MembaWeb.MemberGroupLive.New do
+         assign_group_form(
+           socket,
+           group_params,
+-          duplicate_name_message(existing_name, socket.assigns.selected_club.name),
++          duplicate_name_message(existing_name, selected_club(socket).name),
+           empty_preview("")
+         )
+ 
+@@ -375,13 +379,26 @@ defmodule MembaWeb.MemberGroupLive.New do
+      |> push_navigate(
+        to:
+          created_group_path(
+-           socket.assigns.selected_club,
++           selected_club(socket),
+            socket.assigns.route_params,
+            socket.assigns.group_id
+          )
+      )}
+   end
+ 
++  defp selected_club(socket), do: socket.assigns.group_creation_context.selected_club
++  defp current_member(socket), do: socket.assigns.group_creation_context.current_member
++
++  defp group_creation_binding_error!(
++         [{@group_creation_query_id, :forbidden} | _errors],
++         _socket
++       ),
++       do: forbidden!()
++
++  defp group_creation_binding_error!(errors, _socket) do
++    raise "member group creation live query failed: #{inspect(errors)}"
++  end
++
+   defp put_session_club_id(params, session) do
+     case {Map.get(params, "club_id"), Map.get(session, "club_id")} do
+       {nil, club_id} when is_binary(club_id) -> Map.put(params, "club_id", club_id)
+diff --git a/web/test/memba_web/live/member_group_live/new_test.exs b/web/test/memba_web/live/member_group_live/new_test.exs
+index c8d3254..072f3b2 100644
+--- a/web/test/memba_web/live/member_group_live/new_test.exs
++++ b/web/test/memba_web/live/member_group_live/new_test.exs
+@@ -12,8 +12,11 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
+   alias Memba.Membership.Club, as: ClubAggregate
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Events.ClubMemberAdded
++  alias Memba.Membership.Events.ClubMemberRemoved
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
++  alias Memba.Membership.Events.ClubRoleRemovedFromMember
++  alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.GroupCreated
+   alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Permissions
+@@ -113,6 +116,243 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
+     end
+   end
+ 
++  test "a relevant committed change refreshes the coherent context and preserves form state", %{
++    conn: conn
++  } do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    grant_manage_members!(robin)
++    club = Membership.get_club(robin.club_id)
++
++    conn = signed_in_club_host(conn, "robin@example.com", robin)
++    {:ok, view, _html} = live(conn, ~p"/groups/new")
++
++    view
++    |> form("#member-group-new-form", group: %{name: "Trips"})
++    |> render_change()
++
++    %{socket: before_socket} = :sys.get_state(view.pid)
++    group_id = before_socket.assigns.group_id
++    route_params = before_socket.assigns.route_params
++    preview = before_socket.assigns.email_preview
++
++    refute Map.has_key?(before_socket.assigns, :selected_club)
++    refute Map.has_key?(before_socket.assigns, :current_member)
++
++    club
++    |> Ecto.Changeset.change(name: "West Coast Alpine Club")
++    |> Repo.update!()
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Club,
++      %ClubUpdated{
++        club_id: robin.club_id,
++        name: "West Coast Alpine Club",
++        slug: club.slug
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-group-new-selected-club[data-club-id='#{robin.club_id}']",
++             "West Coast Alpine Club"
++           )
++
++    %{socket: after_socket} = :sys.get_state(view.pid)
++
++    assert after_socket.assigns.group_creation_context.selected_club.name ==
++             "West Coast Alpine Club"
++
++    assert after_socket.assigns.group_creation_context.current_member.id == robin.person_id
++    assert after_socket.assigns.group_id == group_id
++    assert after_socket.assigns.route_params == route_params
++    assert after_socket.assigns.form.params == %{"name" => "Trips"}
++    assert after_socket.assigns.form_valid?
++    assert after_socket.assigns.email_preview == preview
++
++    assert has_element?(view, "#member-group-name-input[value='Trips']")
++
++    assert has_element?(
++             view,
++             "#member-group-email-preview[data-state='available']",
++             ClubInboundEmailAddress.address(club, "trips")
++           )
++  end
++
++  test "a relevant refresh preserves an in-progress validation error", %{conn: conn} do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    grant_manage_members!(robin)
++    club = Membership.get_club(robin.club_id)
++
++    conn = signed_in_club_host(conn, "robin@example.com", robin)
++    {:ok, view, _html} = live(conn, ~p"/groups/new")
++
++    view
++    |> form("#member-group-new-form", group: %{name: ""})
++    |> render_change()
++
++    %{socket: before_socket} = :sys.get_state(view.pid)
++    group_id = before_socket.assigns.group_id
++    preview = before_socket.assigns.email_preview
++
++    club
++    |> Ecto.Changeset.change(name: "West Coast Alpine Club")
++    |> Repo.update!()
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Club,
++      %ClubUpdated{
++        club_id: robin.club_id,
++        name: "West Coast Alpine Club",
++        slug: club.slug
++      }
++    )
++
++    assert has_element?(view, "#member-group-name-input[aria-invalid='true']")
++    assert has_element?(view, "#member-group-name-input-error-1", "Give the group a name.")
++    assert has_element?(view, "#member-group-email-preview[data-state='empty']", "")
++
++    %{socket: after_socket} = :sys.get_state(view.pid)
++    assert after_socket.assigns.group_id == group_id
++    assert after_socket.assigns.form.params == %{"name" => ""}
++    refute after_socket.assigns.form_valid?
++    assert after_socket.assigns.email_preview == preview
++  end
++
++  test "an unrelated committed change leaves the context and transient state untouched", %{
++    conn: conn
++  } do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    other =
++      create_active_member(
++        email: "other@example.com",
++        name: "Other Member",
++        club_name: "Other Club"
++      )
++
++    grant_manage_members!(robin)
++    club = Membership.get_club(robin.club_id)
++    other_club = Membership.get_club(other.club_id)
++
++    conn = signed_in_club_host(conn, "robin@example.com", robin)
++    {:ok, view, _html} = live(conn, ~p"/groups/new")
++
++    view
++    |> form("#member-group-new-form", group: %{name: "Trips"})
++    |> render_change()
++
++    %{socket: before_socket} = :sys.get_state(view.pid)
++
++    club
++    |> Ecto.Changeset.change(name: "Must Not Be Loaded")
++    |> Repo.update!()
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Club,
++      %ClubUpdated{
++        club_id: other.club_id,
++        name: other_club.name,
++        slug: other_club.slug
++      }
++    )
++
++    assert has_element?(view, "#member-group-new-selected-club", "West Coast Paddlers")
++    refute has_element?(view, "#member-group-new-selected-club", "Must Not Be Loaded")
++
++    %{socket: after_socket} = :sys.get_state(view.pid)
++
++    assert after_socket.assigns.group_creation_context ==
++             before_socket.assigns.group_creation_context
++
++    assert after_socket.assigns.group_id == before_socket.assigns.group_id
++    assert after_socket.assigns.route_params == before_socket.assigns.route_params
++    assert after_socket.assigns.form.params == %{"name" => "Trips"}
++    assert after_socket.assigns.form_valid?
++    assert after_socket.assigns.email_preview == before_socket.assigns.email_preview
++  end
++
++  test "fresh club-membership loss leaves an already-open private surface", %{conn: conn} do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    grant_manage_members!(robin)
++
++    conn = signed_in_club_host(conn, "robin@example.com", robin)
++    {:ok, view, _html} = live(conn, ~p"/groups/new")
++
++    MembershipProjection
++    |> where([membership], membership.membership_id == ^robin.membership_id)
++    |> Repo.update_all(set: [active: false])
++
++    monitor = Process.monitor(view.pid)
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Membership,
++      %ClubMemberRemoved{
++        club_id: robin.club_id,
++        membership_id: robin.membership_id,
++        person_id: robin.person_id
++      }
++    )
++
++    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
++  end
++
++  test "fresh manage-members loss leaves an already-open private surface", %{conn: conn} do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    grant_manage_members!(robin)
++
++    conn = signed_in_club_host(conn, "robin@example.com", robin)
++    {:ok, view, _html} = live(conn, ~p"/groups/new")
++
++    revoke_projected_manage_members!(robin)
++    monitor = Process.monitor(view.pid)
++
++    notify_read_model_change(
++      view,
++      Memba.Membership.Projectors.Role,
++      %ClubRoleRemovedFromMember{
++        club_id: robin.club_id,
++        membership_id: robin.membership_id,
++        person_id: robin.person_id,
++        role_id: Memba.ID.generate(:role)
++      }
++    )
++
++    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
++  end
++
+   test "signed-out visitors are redirected and can return to the club's new-group route", %{
+     conn: conn
+   } do
+@@ -744,6 +984,19 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
+     )
+   end
+ 
++  defp notify_read_model_change(view, projector, source_event) do
++    send(
++      view.pid,
++      {:read_model_changed,
++       %{
++         projector: projector,
++         source_event: source_event,
++         metadata: %{},
++         changes: %{}
++       }}
++    )
++  end
++
+   defp group_event?(club_id, group_id) do
+     App
+     |> EventStore.stream_forward(club_id)
