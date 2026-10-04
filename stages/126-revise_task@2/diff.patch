@@ -1,0 +1,181 @@
+diff --git a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+index ba317bc..ba58832 100644
+--- a/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
++++ b/docs/iterations/067-live-projection-queries/.delivery/latest-worker-result.json
+@@ -1,6 +1,6 @@
+ {
+   "schema_version": 1,
+-  "packet_id": "task-009d-de561b6-delivery-detail-binding-1",
++  "packet_id": "task-009d-c903b57-title-disclosure-revision-2",
+   "task_id": "task-009d",
+   "todo_line": "- [ ] 009D Migrate `MembaWeb.MemberMessageDeliveryLive.Show` to its accepted delivery-detail query-result assign, preserving routes, disclosure state, access transitions, navigation and UI while converging exact-message member status and staff reason updates from independently committed projectors.",
+   "result": "ready_for_review",
+@@ -12,7 +12,7 @@
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_delivery_live/show_test.exs test/memba_web/member_message_delivery_query_test.exs test/memba_web/live_query/memba_read_model_source_test.exs test/memba_web/live/member_message_live/show_test.exs",
+       "exit_status": 0,
+-      "evidence": "88 tests, 0 failures; delivery routes and access transitions, receipt presentation, exact member-status and staff-reason refresh, independent-projector convergence, unrelated-message isolation, represented Person refresh, accepted delivery query/source behavior, and conversation detail all remained green."
++      "evidence": "89 tests, 0 failures; focused coverage includes the initial root-layout title, title synchronization after a relevant result replacement, open-attribute preservation instructions with established disclosure defaults, exact member-status/staff-reason convergence, isolation, fresh access loss, routes, flash, back links, receipt presentation, and zero-recipient behavior."
+     },
+     {
+       "command": "PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted",
+@@ -25,6 +25,6 @@
+       "evidence": "No whitespace errors."
+     }
+   ],
+-  "notes": "MemberMessageDeliveryLive.Show now binds the accepted :member_message_delivery query through MembaReadModelSource using retained current_identity_email, with :delivery_detail as its sole projection-backed result assign. Manual PubSub subscription, mount-captured club authorization, direct MemberMessageDetail loading, the projector allowlist, page predicates, and spread projection assigns were removed. Focused proof covers exact status/group/count/percentage refresh, exact staff reason refresh, both projector commit orders, unrelated-message isolation, fresh membership/group/conversation access loss, exact represented-sender refresh, and preservation of route/back-link/flash/stable native-disclosure DOM and zero-recipient behavior. A staff-first reason remains intentionally hidden by the accepted presentation until member status becomes a delivery problem, then the later exact member notification converges the joined result. The initial red TDD run showed the old page ignored exact delivery invalidations; fixture-order and formatting issues introduced while adding proof were corrected. Task 009D remains unchecked, no acceptance feature or iteration planning artifact changed, and no dev check or other unscoped full-suite command ran.",
++  "notes": "The retained task 009D candidate and its review-revise provenance are preserved. It now mirrors delivery_detail.page_title into the socket shell after initial bind and each successful relevant refresh, while ignored notifications remain no-ops and access-loss handling clears the private title before navigation. Every stable receipt-group details element uses JS.ignore_attributes([\"open\"]) without changing the server-rendered delivery-problem-open/non-problem-closed defaults, IDs, copy, or ordering. The sole projection-backed result remains :delivery_detail; no LiveView disclosure state, manual subscription, page predicate, second result, acceptance feature, plan, or todo change was introduced. Superseded TDD runs first exposed the missing title and then confirmed the title-refresh expectation; a transient formatting-check failure was corrected before final validation. Phoenix.LiveViewTest reports the root title including the layout suffix on initial render and the raw updated page-title value after a connected title patch. Only this required latest-worker-result delivery artifact was updated; task 009D remains unchecked, and no dev check or other unscoped full-suite command ran.",
+   "unresolved": []
+ }
+diff --git a/web/lib/memba_web/live/member_message_delivery_live/show.ex b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+index 8d09ba7..09919fd 100644
+--- a/web/lib/memba_web/live/member_message_delivery_live/show.ex
++++ b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+@@ -34,7 +34,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+                MembaReadModelSource.new()
+              ) do
+           {:ok, socket} ->
+-            {:ok, socket}
++            {:ok, synchronize_delivery_detail_shell(socket)}
+ 
+           {:error, errors, socket} ->
+             initial_binding_error!(errors, socket)
+@@ -56,7 +56,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+         {:noreply, socket}
+ 
+       {:ok, socket} ->
+-        {:noreply, socket}
++        {:noreply, synchronize_delivery_detail_shell(socket)}
+ 
+       {:error, errors, socket} ->
+         {:noreply, refresh_binding_error(errors, socket)}
+@@ -186,6 +186,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+               data-receipt-count={group.count}
+               class="delivery-group"
+               open={delivery_group_open?(group.status)}
++              phx-mounted={JS.ignore_attributes(["open"])}
+             >
+               <summary
+                 id={"member-delivery-group-toggle-#{status_slug(group.status)}"}
+@@ -252,6 +253,14 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+     }
+   end
+ 
++  defp synchronize_delivery_detail_shell(
++         %{assigns: %{delivery_detail: %{page_title: page_title}}} = socket
++       ) do
++    assign(socket, :page_title, page_title)
++  end
++
++  defp synchronize_delivery_detail_shell(socket), do: socket
++
+   defp initial_binding_error!(
+          [{@delivery_detail_query_id, :forbidden} | _errors],
+          socket
+@@ -273,7 +282,9 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+          {@delivery_detail_query_id, reason} when reason in [:forbidden, :not_found] -> true
+          _other -> false
+        end) do
+-      push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
++      socket
++      |> assign(:page_title, nil)
++      |> push_navigate(to: access_lost_path(socket.assigns.route_params))
+     else
+       raise "member message delivery live query refresh failed: #{inspect(errors)}"
+     end
+diff --git a/web/test/memba_web/live/member_message_delivery_live/show_test.exs b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+index a6bb90e..53fe98e 100644
+--- a/web/test/memba_web/live/member_message_delivery_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.Events.EmailDeliveryDelayed
++  alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+   alias Memba.Repo
+@@ -68,6 +69,8 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+       |> signed_in_club_host("alice@example.com", alice)
+       |> live(~p"/messages/#{message.message_id}/delivery")
+ 
++    assert page_title(view) == "Trip planning night · Memba"
++
+     assert has_element?(
+              view,
+              "#member-message-delivery-detail" <>
+@@ -157,6 +160,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+     assert has_element?(
+              view,
+              "#member-delivery-group-delivery-problem.delivery-group[open]" <>
++               "[phx-mounted*='ignore_attrs'][phx-mounted*='open']" <>
+                "[data-receipt-status='delivery problem']" <>
+                "[data-receipt-count='1']",
+              "Didn't go through"
+@@ -165,6 +169,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+     assert has_element?(
+              view,
+              "#member-delivery-group-delivered.delivery-group" <>
++               "[phx-mounted*='ignore_attrs'][phx-mounted*='open']" <>
+                "[data-receipt-status='delivered']" <>
+                "[data-receipt-count='1']",
+              "Delivered"
+@@ -199,6 +204,58 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+            )
+   end
+ 
++  test "root-layout title follows a successful relevant delivery-detail replacement", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Original delivery title"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/#{message.message_id}/delivery")
++
++    assert page_title(view) == "Original delivery title · Memba"
++
++    message =
++      message
++      |> Ecto.Changeset.change(subject: "Updated delivery title")
++      |> Repo.update!()
++
++    notify_read_model_change(
++      view,
++      Memba.Messaging.Projectors.Message,
++      %MessageSent{
++        message_id: message.message_id,
++        club_id: message.club_id,
++        sender_id: message.sender_id,
++        conversation_id: message.conversation_id,
++        reply_to_message_id: message.reply_to_message_id,
++        subject: message.subject,
++        body: message.body
++      }
++    )
++
++    assert has_element?(
++             view,
++             "#member-delivery-message-subject",
++             "Delivery — “Updated delivery title”"
++           )
++
++    assert page_title(view) == "Updated delivery title"
++  end
++
+   test "routed delivery page rejects messages outside the selected active club", %{conn: conn} do
+     alice =
+       create_active_member(
