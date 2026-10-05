@@ -7,9 +7,8 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.CommandDispatch
   alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.PostMemberMessageReply
-  alias Memba.Messaging.Commands.FollowConversation
-  alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationGroupAccess
+  alias Memba.Messaging.ConversationFollowPreparation
   alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.ConversationGroupAccessQueries
   alias Memba.Messaging.ConversationListing
@@ -172,8 +171,8 @@ defmodule Memba.Messaging do
   """
   def follow_conversation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- follow_conversation_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- ConversationFollowPreparation.prepare_follow(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -199,8 +198,8 @@ defmodule Memba.Messaging do
   """
   def unfollow_conversation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- unfollow_conversation_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- ConversationFollowPreparation.prepare_unfollow(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -639,42 +638,6 @@ defmodule Memba.Messaging do
     do: CommandDispatch.dispatch(command, dispatch_opts)
 
   defp send_club_message_command(attrs), do: SendClubMessage.prepare(attrs)
-
-  defp follow_conversation_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
-         {:ok, member_id} <- fetch_required(attrs, :member_id) do
-      {:ok,
-       %FollowConversation{
-         club_id: club_id,
-         conversation_id: conversation_id,
-         member_id: member_id
-       }}
-    end
-  end
-
-  defp unfollow_conversation_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
-         {:ok, member_id} <- fetch_required(attrs, :member_id) do
-      {:ok,
-       %UnfollowConversation{
-         club_id: club_id,
-         conversation_id: conversation_id,
-         member_id: member_id
-       }}
-    end
-  end
-
-  defp fetch_required(attrs, key) do
-    string_key = Atom.to_string(key)
-
-    case attrs do
-      %{^key => value} -> {:ok, value}
-      %{^string_key => value} -> {:ok, value}
-      _attrs -> {:error, {:missing_required_attribute, key}}
-    end
-  end
 
   defp fetch_conversation_root(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
