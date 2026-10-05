@@ -1,0 +1,94 @@
+digraph GoalDirectedBddPilot {
+    graph [
+        goal="Rehearse one approved historical BDD scenario without publication",
+        default_fidelity="summary:high",
+        max_node_visits=18,
+        model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; } #call_shot { reasoning_effort: medium; } #final_report { reasoning_effort: low; }"
+    ]
+    rankdir=LR
+    start [shape=Mdiamond]
+    exit [shape=Msquare]
+
+    source_gate [
+        label="Verify historical replay source and clean checkout",
+        shape=parallelogram,
+        script="set -eu\ntest \"$(git rev-parse HEAD)\" = '{{ inputs.expected_source_head }}' || { echo 'Wrong historical source HEAD' >&2; exit 1; }\ntest -z \"$(git status --porcelain)\" || { echo 'Dirty historical source checkout' >&2; exit 1; }\ntest -f '{{ inputs.plan_path }}'\ntest -f 'web/test/features/step_definitions/custom_group_access_request_steps.exs'",
+        timeout="120s"
+    ]
+    call_shot [
+        label="Predict intended behaviour failure before implementation",
+        shape=box,
+        prompt="@call_shot.md",
+        output_schema="@shot.json",
+        fidelity="truncate",
+        // Fabro stops BEFORE the max visit: 2 permits one actual call.
+        max_visits=2
+    ]
+    observe_predicted_red [
+        label="Tag @wip, save prediction, run focused scenario",
+        shape=parallelogram,
+        stdin_source="output.call_shot",
+        output_schema="routing",
+        script="python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py before '{{ inputs.plan_path }}'",
+        timeout="660s"
+    ]
+    implement_scenario [
+        label="Implement only scenario behaviour and focused unit tests",
+        shape=box,
+        prompt="@implement.md",
+        fidelity="truncate",
+        timeout="2400s",
+        max_visits=3
+    ]
+    observe_green [
+        label="Run exact @wip scenario after implementation",
+        shape=parallelogram,
+        output_schema="routing",
+        script="python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py after '{{ inputs.plan_path }}'",
+        timeout="660s"
+    ]
+    review_candidate [
+        label="Independent read-only review",
+        shape=box,
+        prompt="@review.md",
+        output_schema="@review.json",
+        fidelity="truncate",
+        max_visits=3
+    ]
+    apply_review [
+        label="Guard review verdict and accept evidence",
+        shape=parallelogram,
+        stdin_source="output.review_candidate",
+        output_schema="routing",
+        script="python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py verdict '{{ inputs.plan_path }}'"
+    ]
+    final_gate [
+        label="Verify accepted WIP proof (no publication)",
+        shape=parallelogram,
+        script="python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py final '{{ inputs.plan_path }}' && PATH=\"$PWD/bin:$PATH\" dev ci",
+        timeout="1800s"
+    ]
+    final_report [label="Report pilot outcome, cost and next risks", shape=box, prompt="@final_report.md"]
+    stopped [shape=parallelogram, label="Stop: preserve unaccepted candidate", script="echo 'BDD historical pilot stopped; inspect prior gate and saved candidate. Nothing was published.' >&2\nexit 1"]
+
+    start -> source_gate
+    source_gate -> call_shot [condition="outcome=succeeded"]
+    source_gate -> stopped
+    call_shot -> observe_predicted_red [condition="outcome=succeeded"]
+    call_shot -> stopped
+    observe_predicted_red -> implement_scenario [condition="outcome=succeeded"]
+    observe_predicted_red -> stopped
+    implement_scenario -> observe_green [condition="outcome=succeeded"]
+    implement_scenario -> stopped
+    observe_green -> review_candidate [condition="outcome=succeeded && preferred_label=review"]
+    observe_green -> implement_scenario [condition="outcome=succeeded && preferred_label=rework"]
+    observe_green -> stopped
+    review_candidate -> apply_review [condition="outcome=succeeded"]
+    review_candidate -> stopped
+    apply_review -> final_gate [condition="outcome=succeeded && preferred_label=accept"]
+    apply_review -> implement_scenario [condition="outcome=succeeded && preferred_label=revise"]
+    apply_review -> stopped
+    final_gate -> final_report [condition="outcome=succeeded"]
+    final_gate -> stopped
+    final_report -> exit
+}
