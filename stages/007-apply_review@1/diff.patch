@@ -1,0 +1,34 @@
+diff --git a/acceptance-tests/features/custom_group_access_requests.feature b/acceptance-tests/features/custom_group_access_requests.feature
+index 5d87160..d5625de 100644
+--- a/acceptance-tests/features/custom_group_access_requests.feature
++++ b/acceptance-tests/features/custom_group_access_requests.feature
+@@ -11,7 +11,6 @@ Feature: Asking to be added to a group
+ 
+   Rule: Asking to join sends a standard message to the club admins
+ 
+-    @wip
+     Scenario: Eve asks to join Board
+       When Eve requests access to Board
+       Then a standard message identifying Eve and Board should be sent to the KMC Admin Group
+diff --git a/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/accepted.json b/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/accepted.json
+new file mode 100644
+index 0000000..b4a76c9
+--- /dev/null
++++ b/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/accepted.json
+@@ -0,0 +1,6 @@
++{
++  "after_sha256": "00bfebfe993888bb9fd47ef1667d730a1e0e0ff2a0a4c133bfa0d46a315a2cbb",
++  "before_sha256": "fb472a70cc5366f3bb5a50f8b1566b36270d4cdd92243175307d6c08f453ded1",
++  "decision": "accept",
++  "scenario": "Eve asks to join Board"
++}
+diff --git a/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/review.json b/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/review.json
+new file mode 100644
+index 0000000..6d3049b
+--- /dev/null
++++ b/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/review.json
+@@ -0,0 +1,4 @@
++{
++  "decision": "accept",
++  "reason": "Before observation genuinely failed for missing product behaviour: before.json shows predicted_red/exit 2 with 'function Memba.Messaging.request_group_access/2 is undefined or private' during 'When Eve requests access to Board', while 176 other scenarios compiled and ran fine, so this is a real missing-capability failure, not flaky infra. After observation (after.json, status green, exit 0, '177 tests, 0 failures, 176 excluded' for scenario_name 'Eve asks to join Board') shows exactly the single @wip scenario passing; the other scenario outline remains @todo and untouched. I independently re-ran that scenario with bin/dev test --only scenario_name:\"Eve asks to join Board\" and reproduced the green result. git diff a775936..b7cb28d --stat touches only web/lib/memba/messaging.ex, the new web/test/memba/messaging/request_group_access_test.exs, and after.json; the step-definition file custom_group_access_request_steps.exs (pre-existing from commit 56e325e) is unchanged and still asserts real facts (message subject/body, exact Alice+Dan recipients, exact Add-URL text, Eve's continued non-membership, and on the reject path absence of message/recipients/conversation access) \u2014 the scenario driver was not weakened. The production change is narrow: Messaging.request_group_access/2 reuses existing authorize_at_stable_checkpoint, dispatch_command, resolve_group_recipients, fetch_required_id, and SystemGroups helpers rather than inventing new mechanisms; it authoritatively rechecks active club membership, rejects built-in/cross-club groups, restricts recipients to the club's existing Admin Group members (no broader disclosure), and a dedicated test proves client-supplied sender/audience/subject/body are ignored. The GET add-member page/LiveView remains correctly deferred to later plan steps, keeping this the minimal slice for this one scenario. Relevant unit tests pass: the 5 new tests in request_group_access_test.exs (0 failures) and the full web/test/memba/messaging/ suite (284 tests, 0 failures). No other production, feature, or step-definition files were touched, and the @wip tag remains on the scenario, so publication has not occurred and other observable behaviour is preserved. No distinct bounded technical gaps or new business/architecture questions were found."
++}
