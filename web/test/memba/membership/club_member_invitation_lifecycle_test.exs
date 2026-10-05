@@ -12,6 +12,51 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
   alias Memba.Membership.Roles
 
   describe "club member invitation lifecycle application API" do
+    test "invitation reads reject malformed inputs and keep club and token scope" do
+      club_id = Memba.ID.generate(:club)
+      other_club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+
+      assert {:ok, %{invitation_token: token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "Robin@Example.COM"},
+                 consistency: :strong
+               )
+
+      assert %ClubInvitationProjection{invitation_id: ^invitation_id} =
+               Membership.get_pending_club_member_invitation_by_email(
+                 club_id,
+                 " robin@EXAMPLE.com "
+               )
+
+      for invalid_id <- [nil, "not-an-id", other_club_id] do
+        assert is_nil(Membership.get_club_member_invitation(invalid_id))
+      end
+
+      for invalid_email <- [nil, "", "not-an-email"] do
+        assert is_nil(
+                 Membership.get_pending_club_member_invitation_by_email(club_id, invalid_email)
+               )
+      end
+
+      assert is_nil(
+               Membership.get_pending_club_member_invitation_by_email(
+                 other_club_id,
+                 "robin@example.com"
+               )
+             )
+
+      assert is_nil(
+               Membership.get_pending_club_member_invitation_by_email(nil, "robin@example.com")
+             )
+
+      assert is_nil(Membership.get_club_member_invitation_by_token(nil))
+      assert is_nil(Membership.get_club_member_invitation_by_token("wrong-token"))
+
+      assert %ClubInvitationProjection{invitation_id: ^invitation_id} =
+               Membership.get_club_member_invitation_by_token(token)
+    end
+
     test "pending invitation creation stores only the invitation before profile completion" do
       club_id = Memba.ID.generate(:club)
       invitation_id = Memba.ID.generate(:club_invitation)

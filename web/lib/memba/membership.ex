@@ -21,7 +21,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.InvitationAcceptance
-  alias Memba.Membership.ProjectedIdentityLookup
+  alias Memba.Membership.InvitationQueries
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.GroupName
@@ -1260,8 +1260,7 @@ defmodule Memba.Membership do
 
   Returns `nil` for missing, invalid, or unknown invitation IDs.
   """
-  def get_club_member_invitation(invitation_id),
-    do: ProjectedIdentityLookup.club_invitation(invitation_id)
+  def get_club_member_invitation(invitation_id), do: InvitationQueries.get(invitation_id)
 
   @doc """
   Fetch the pending invitation for a club/email pair.
@@ -1269,19 +1268,8 @@ defmodule Memba.Membership do
   Email lookup is normalized by trimming whitespace and comparing
   case-insensitively. Accepted invitations and invalid inputs return `nil`.
   """
-  def get_pending_club_member_invitation_by_email(club_id, email) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, email} <- EmailAddresses.normalize_email(email) do
-      ClubInvitation
-      |> where([invitation], invitation.club_id == ^club_id)
-      |> where([invitation], invitation.normalized_email == ^email.normalized_email)
-      |> where([invitation], invitation.status == "pending")
-      |> limit(1)
-      |> Repo.one()
-    else
-      _invalid -> nil
-    end
-  end
+  def get_pending_club_member_invitation_by_email(club_id, email),
+    do: InvitationQueries.get_pending_by_email(club_id, email)
 
   @doc """
   Fetch a projected club member invitation by plaintext invitation token.
@@ -1290,13 +1278,7 @@ defmodule Memba.Membership do
   and accepted invitations can be found so accepted links can be reopened
   idempotently without creating duplicate memberships.
   """
-  def get_club_member_invitation_by_token(token) when is_binary(token) do
-    token
-    |> InvitationToken.hash_token()
-    |> then(&Repo.get_by(ClubInvitation, token_hash: &1))
-  end
-
-  def get_club_member_invitation_by_token(_token), do: nil
+  def get_club_member_invitation_by_token(token), do: InvitationQueries.get_by_token(token)
 
   @doc """
   Return whether a person currently has an app-defined club-scoped permission.
