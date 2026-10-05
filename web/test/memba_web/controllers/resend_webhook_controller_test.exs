@@ -89,6 +89,45 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     end)
   end
 
+  test "accepts duplicate delivery reports but rejects a conflicting reason", %{conn: conn} do
+    %{recipients: [bob]} = message = send_message_to(["Bob"])
+    payload = realistic_resend_payload(:delayed, message, bob, reason: "temporary outage")
+
+    assert %{"status" => "accepted"} =
+             conn |> post_resend_event(payload) |> json_response(202)
+
+    assert_eventually(fn ->
+      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "delayed"
+    end)
+
+    assert %{"status" => "accepted"} =
+             conn |> recycle() |> post_resend_event(payload) |> json_response(202)
+
+    assert %{"errors" => %{"detail" => detail}} =
+             conn
+             |> recycle()
+             |> post_resend_event(
+               realistic_resend_payload(:delayed, message, bob, reason: "different outage")
+             )
+             |> json_response(422)
+
+    assert detail =~ "conflicting_delivery_status_reason"
+  end
+
+  test "rejects a delayed report without a reason", %{conn: conn} do
+    %{recipients: [bob]} = message = send_message_to(["Bob"])
+
+    payload =
+      :delayed
+      |> realistic_resend_payload(message, bob, reason: "temporary outage")
+      |> update_in(["data"], &Map.delete(&1, "reason"))
+
+    assert %{"errors" => %{"detail" => detail}} =
+             conn |> post_resend_event(payload) |> json_response(422)
+
+    assert detail =~ "invalid_reason"
+  end
+
   test "maps Resend events with tag maps", %{conn: conn} do
     %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
 

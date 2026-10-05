@@ -4,7 +4,7 @@ defmodule MembaWeb.PostmarkWebhookController do
   require Logger
 
   alias Memba.Accounts
-  alias Memba.Messaging
+  alias MembaWeb.EmailDeliveryStatusAdapter
 
   @successful_status :accepted
 
@@ -77,21 +77,9 @@ defmodule MembaWeb.PostmarkWebhookController do
     else
       params
       |> status_report_attrs(event_type)
-      |> report_status(event_type)
+      |> EmailDeliveryStatusAdapter.report(event_type)
     end
   end
-
-  defp report_status(attrs, :delivered),
-    do: Messaging.report_email_delivery_delivered(attrs)
-
-  defp report_status(attrs, :delayed),
-    do: Messaging.report_email_delivery_delayed(attrs)
-
-  defp report_status(attrs, :bounced),
-    do: Messaging.report_email_delivery_bounced(attrs)
-
-  defp report_status(attrs, :spam_complaint),
-    do: Messaging.report_email_delivery_spam_complaint(attrs)
 
   defp report_auth_email_progress(params, event_type) do
     case event_auth_email_request_id(params) do

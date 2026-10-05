@@ -2,6 +2,7 @@ defmodule MembaWeb.ResendWebhookController do
   use MembaWeb, :controller
 
   alias Memba.Messaging
+  alias MembaWeb.EmailDeliveryStatusAdapter
   alias MembaWeb.ResendInboundEmailParser
   alias MembaWeb.ResendReceivedEmail
 
@@ -62,8 +63,7 @@ defmodule MembaWeb.ResendWebhookController do
     with {:ok, event_type} <- resend_event_type(params) do
       params
       |> status_report_attrs(event_type)
-      |> report_status(event_type)
-      |> normalize_dispatch_result()
+      |> EmailDeliveryStatusAdapter.report(event_type)
     end
   end
 
@@ -96,22 +96,6 @@ defmodule MembaWeb.ResendWebhookController do
       attrs
     end
   end
-
-  defp report_status(attrs, :delivered),
-    do: Messaging.report_email_delivery_delivered(attrs)
-
-  defp report_status(attrs, :delayed),
-    do: Messaging.report_email_delivery_delayed(attrs)
-
-  defp report_status(attrs, :bounced),
-    do: Messaging.report_email_delivery_bounced(attrs)
-
-  defp report_status(attrs, :spam_complaint),
-    do: Messaging.report_email_delivery_spam_complaint(attrs)
-
-  defp normalize_dispatch_result(:ok), do: :ok
-  defp normalize_dispatch_result({:ok, _result}), do: :ok
-  defp normalize_dispatch_result({:error, _reason} = error), do: error
 
   defp event_message_id(params) do
     params

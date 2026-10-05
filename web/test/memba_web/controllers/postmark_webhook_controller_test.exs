@@ -175,6 +175,47 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
     end)
   end
 
+  test "accepts duplicate delivery reports but rejects a conflicting status", %{conn: conn} do
+    %{recipients: [bob]} = message = send_message_to(["Bob"])
+    payload = realistic_postmark_payload(:delivered, message, bob)
+
+    assert %{"status" => "accepted"} =
+             conn |> post_postmark_event(payload) |> json_response(202)
+
+    assert_eventually(fn ->
+      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "delivered"
+    end)
+
+    assert %{"status" => "accepted"} =
+             conn |> recycle() |> post_postmark_event(payload) |> json_response(202)
+
+    assert %{"errors" => %{"detail" => detail}} =
+             conn
+             |> recycle()
+             |> post_postmark_event(
+               realistic_postmark_payload(:bounced, message, bob,
+                 reason: "mailbox does not exist"
+               )
+             )
+             |> json_response(422)
+
+    assert detail =~ "invalid_delivery_status_transition"
+  end
+
+  test "rejects a delivery report for an unknown delivery", %{conn: conn} do
+    %{recipients: [bob]} = message = send_message_to(["Bob"])
+
+    payload =
+      :delivered
+      |> realistic_postmark_payload(message, bob)
+      |> put_in(["Metadata", "memba_delivery_id"], Memba.ID.generate(:delivery))
+
+    assert %{"errors" => %{"detail" => detail}} =
+             conn |> post_postmark_event(payload) |> json_response(422)
+
+    assert detail =~ "unknown_delivery"
+  end
+
   test "routes auth-stream delivered events to auth-email progress", %{conn: conn} do
     {:ok, %AuthEmailRequest{} = request} = sent_auth_email_request()
 

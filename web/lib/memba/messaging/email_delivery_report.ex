@@ -2,8 +2,8 @@ defmodule Memba.Messaging.EmailDeliveryReport do
   @moduledoc """
   Prepare provider-neutral delivery-status commands for the Messaging aggregate.
 
-  Webhook controllers translate and authenticate provider payloads before calling
-  the public Messaging reporting API. The aggregate owns transition validation,
+  Webhook controllers translate and authenticate provider payloads before preparing
+  and dispatching commands. The aggregate owns transition validation,
   reason normalization, and idempotency; this module only prepares commands.
   """
 
