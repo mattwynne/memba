@@ -13,6 +13,8 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+  alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.ClubMemberAdded
@@ -31,7 +33,13 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     create_club(club_id)
     add_member(club_id, membership_id, person_id)
 
-    assert {:ok, %Commanded.Commands.ExecutionResult{events: [_group_created]}} =
+    assert {:ok,
+            %Commanded.Commands.ExecutionResult{
+              events: [
+                %GroupCreated{group_id: ^group_id},
+                %GroupEmailSlugAssigned{group_id: ^group_id}
+              ]
+            }} =
              CommandDispatch.dispatch(
                %CreateGroup{
                  club_id: club_id,
