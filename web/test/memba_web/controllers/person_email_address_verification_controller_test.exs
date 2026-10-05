@@ -60,6 +60,37 @@ defmodule MembaWeb.PersonEmailAddressVerificationControllerTest do
              |> Enum.any?()
     end
 
+    test "consumes a verification link once even after a successful verification", %{conn: conn} do
+      person_id = create_person!(email: "once.primary@example.com")
+      token = verification_token!(person_id, "once.pending@example.com")
+
+      assert html_response(get(conn, ~p"/my/settings/email-verifications/#{token}"), 200) =~
+               "Email verified, you can close this browser."
+
+      assert html_response(get(conn, ~p"/my/settings/email-verifications/#{token}"), 422) =~
+               "This verification link is invalid or expired."
+
+      assert %PersonEmailAddress{verified_at: %DateTime{}} =
+               Repo.get_by(PersonEmailAddress,
+                 person_id: person_id,
+                 normalized_email: "once.pending@example.com"
+               )
+    end
+
+    test "rejects a token when its email address is no longer pending", %{conn: conn} do
+      person_id = create_person!(email: "pending.primary@example.com")
+      token = verification_token!(person_id, "pending.alternate@example.com")
+
+      assert :ok =
+               Membership.verify_person_email_address(
+                 %{person_id: person_id, email: "pending.alternate@example.com"},
+                 consistency: :strong
+               )
+
+      assert html_response(get(conn, ~p"/my/settings/email-verifications/#{token}"), 422) =~
+               "This verification link is invalid or expired."
+    end
+
     test "renders a calm invalid/expired state for an unknown token", %{conn: conn} do
       conn = get(conn, ~p"/my/settings/email-verifications/not-a-real-token")
 

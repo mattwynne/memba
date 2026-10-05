@@ -492,6 +492,74 @@ defmodule MembaWeb.MySettingsLiveTest do
              )
   end
 
+  test "make-primary rejects a forged email belonging to another person", %{conn: conn} do
+    club = insert_membership_club!(name: "Primary Scope Club", slug: "primary-scope")
+
+    member =
+      create_commanded_active_member(club,
+        email: "scope.member@example.com",
+        name: "Scoped Member"
+      )
+
+    other =
+      create_commanded_active_member(club,
+        email: "scope.other@example.com",
+        name: "Other Member"
+      )
+
+    add_verified_email_address!(other.person_id, "scope.alternate@example.com")
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings/emails")
+
+    refute has_element?(view, "#my-settings-make-primary-scope-alternate-example-com")
+    render_hook(view, "make_primary", %{"email" => "scope.alternate@example.com"})
+
+    assert has_element?(view, "#flash-error", "We could not update that email address.")
+
+    assert %PersonEmailAddress{is_primary: false} =
+             Repo.get_by!(PersonEmailAddress,
+               person_id: other.person_id,
+               normalized_email: "scope.alternate@example.com"
+             )
+
+    assert %PersonEmailAddress{is_primary: true} =
+             Repo.get_by!(PersonEmailAddress,
+               person_id: member.person_id,
+               normalized_email: "scope.member@example.com"
+             )
+  end
+
+  test "make-primary refuses a pending address even when the event is forged", %{conn: conn} do
+    club = insert_membership_club!(name: "Pending Primary Club", slug: "pending-primary")
+
+    member =
+      create_commanded_active_member(club,
+        email: "pending.owner@example.com",
+        name: "Pending Owner"
+      )
+
+    add_pending_email_address!(member.person_id, "pending.candidate@example.com")
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings/emails")
+
+    refute has_element?(view, "#my-settings-make-primary-pending-candidate-example-com")
+    render_hook(view, "make_primary", %{"email" => "pending.candidate@example.com"})
+
+    assert has_element?(view, "#flash-error", "We could not update that email address.")
+
+    assert %PersonEmailAddress{is_primary: false, verified_at: nil} =
+             Repo.get_by!(PersonEmailAddress,
+               person_id: member.person_id,
+               normalized_email: "pending.candidate@example.com"
+             )
+  end
+
   test "direct tab routes restore the selected settings tab", %{conn: conn} do
     club = insert_membership_club!(name: "Direct Settings Club", slug: "direct-settings")
     member = create_active_member(club, email: "direct.settings@example.com", name: "Direct Tab")

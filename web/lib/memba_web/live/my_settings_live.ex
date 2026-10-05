@@ -104,7 +104,12 @@ defmodule MembaWeb.MySettingsLive do
   def handle_event("make_primary", %{"email" => email}, socket) do
     attrs = %{person_id: current_person(socket).person_id, email: email}
 
-    case Membership.make_person_email_address_primary(attrs, consistency: :strong) do
+    result =
+      with {:ok, command} <- PersonEmailAddressCommands.prepare_make_primary(attrs) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    case result do
       :ok ->
         {:noreply, refresh_settings(socket)}
 
