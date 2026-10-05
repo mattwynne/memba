@@ -2,6 +2,8 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.ClubMember.Remove
+  alias Memba.Membership.CommandDispatch
   alias MembaWeb.Admin.ClubSlugForm
   alias MembaWeb.ClubSite
 
@@ -67,7 +69,12 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   end
 
   def handle_event("remove_member", %{"membership_id" => membership_id}, socket) do
-    case Membership.remove_member(%{"membership_id" => membership_id}, consistency: :strong) do
+    result =
+      with {:ok, command} <- Remove.prepare(%{"membership_id" => membership_id}) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    case result do
       :ok ->
         {:noreply,
          socket

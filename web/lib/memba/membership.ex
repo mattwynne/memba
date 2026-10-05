@@ -11,16 +11,14 @@ defmodule Memba.Membership do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.CustomGroup
   alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubMember
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddPersonEmailAddress
-  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
-  alias Memba.Membership.Commands.RemoveClubMember
-  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
@@ -31,7 +29,6 @@ defmodule Memba.Membership do
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
-  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroups
@@ -509,8 +506,8 @@ defmodule Memba.Membership do
   custom-group conversation follows have been cleared.
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- remove_member_command(attrs) do
-      dispatch_member_lifecycle_command(command, dispatch_opts)
+    with {:ok, command} <- ClubMember.Remove.prepare(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -526,8 +523,8 @@ defmodule Memba.Membership do
   """
   def assign_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, attrs} <- put_membership_administrator_role_id(attrs) do
-      assign_member_role_as_club_member(attrs, dispatch_opts)
+    with {:ok, command} <- ClubMember.Role.prepare_assign_administrator(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -543,8 +540,8 @@ defmodule Memba.Membership do
   """
   def remove_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, attrs} <- put_membership_administrator_role_id(attrs) do
-      remove_member_role_as_club_member(attrs, dispatch_opts)
+    with {:ok, command} <- ClubMember.Role.prepare_remove_administrator(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -559,13 +556,8 @@ defmodule Memba.Membership do
   """
   def assign_member_role_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- assign_member_role_command(attrs),
-         :ok <-
-           Authorization.authorize_manage_members(
-             command.club_id,
-             command.assigned_by_person_id
-           ) do
-      dispatch_system_group_membership_command(command, dispatch_opts)
+    with {:ok, command} <- ClubMember.Role.prepare_assign(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -580,13 +572,8 @@ defmodule Memba.Membership do
   """
   def remove_member_role_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- remove_member_role_command(attrs),
-         :ok <-
-           Authorization.authorize_manage_members(
-             command.club_id,
-             command.removed_by_person_id
-           ) do
-      dispatch_system_group_membership_command(command, dispatch_opts)
+    with {:ok, command} <- ClubMember.Role.prepare_remove(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -2130,81 +2117,6 @@ defmodule Memba.Membership do
      }}
   end
 
-  defp remove_member_command(attrs) do
-    with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
-         {:ok, club_id, person_id} <- removal_identity(attrs, membership_id) do
-      {:ok,
-       %RemoveClubMember{
-         club_id: club_id,
-         membership_id: membership_id,
-         person_id: person_id
-       }}
-    end
-  end
-
-  defp removal_identity(attrs, membership_id) do
-    case {fetch_optional(attrs, :club_id), fetch_optional(attrs, :person_id)} do
-      {{:ok, club_id}, {:ok, person_id}} ->
-        {:ok, club_id, person_id}
-
-      {:error, :error} ->
-        case Repo.get(MembershipProjection, membership_id) do
-          %MembershipProjection{club_id: club_id, person_id: person_id} ->
-            {:ok, club_id, person_id}
-
-          nil ->
-            {:error, :not_found}
-        end
-
-      {:error, {:ok, _person_id}} ->
-        {:error, {:missing_required_attribute, :club_id}}
-
-      {{:ok, _club_id}, :error} ->
-        {:error, {:missing_required_attribute, :person_id}}
-    end
-  end
-
-  defp assign_member_role_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
-         {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, role_id} <- fetch_required(attrs, :role_id),
-         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
-      {:ok,
-       %AssignClubRoleToMember{
-         club_id: club_id,
-         membership_id: membership_id,
-         person_id: person_id,
-         role_id: role_id,
-         assigned_by_person_id: actor_person_id
-       }}
-    end
-  end
-
-  defp remove_member_role_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
-         {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, role_id} <- fetch_required(attrs, :role_id),
-         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
-      {:ok,
-       %RemoveClubRoleFromMember{
-         club_id: club_id,
-         membership_id: membership_id,
-         person_id: person_id,
-         role_id: role_id,
-         removed_by_person_id: actor_person_id
-       }}
-    end
-  end
-
-  defp put_membership_administrator_role_id(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, club_id} <- cast_club_id(club_id) do
-      {:ok, Map.put(attrs, :role_id, Roles.membership_administrator_role_id(club_id))}
-    end
-  end
-
   defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do
     if active_member_of_club_by_email?(command.club_id, command.email) do
       {:error, :already_active_member}
@@ -2768,46 +2680,12 @@ defmodule Memba.Membership do
   end
 
   defp dispatch_system_group_membership_command(command, dispatch_opts) do
-    dispatch(command, system_group_membership_consistency(dispatch_opts))
+    dispatch(command, CommandDispatch.system_group_membership_consistency(dispatch_opts))
   end
 
   defp dispatch_member_lifecycle_command(command, dispatch_opts) do
-    dispatch(command, member_lifecycle_consistency(dispatch_opts))
+    dispatch(command, CommandDispatch.system_group_membership_consistency(dispatch_opts))
   end
-
-  defp member_lifecycle_consistency(dispatch_opts) do
-    system_group_membership_consistency(dispatch_opts)
-  end
-
-  defp system_group_membership_consistency(dispatch_opts) do
-    Keyword.update(
-      dispatch_opts,
-      :consistency,
-      [SystemGroupMembership],
-      &include_system_group_membership_consistency/1
-    )
-  end
-
-  defp include_system_group_membership_consistency(:strong), do: :strong
-  defp include_system_group_membership_consistency(:eventual), do: [SystemGroupMembership]
-
-  defp include_system_group_membership_consistency(handlers) when is_list(handlers) do
-    if Enum.any?(handlers, &system_group_membership_handler?/1) do
-      handlers
-    else
-      [SystemGroupMembership | handlers]
-    end
-  end
-
-  defp include_system_group_membership_consistency(consistency), do: consistency
-
-  defp system_group_membership_handler?(SystemGroupMembership), do: true
-
-  defp system_group_membership_handler?(handler) when is_binary(handler) do
-    handler == inspect(SystemGroupMembership)
-  end
-
-  defp system_group_membership_handler?(_handler), do: false
 
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do

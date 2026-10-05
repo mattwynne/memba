@@ -19,6 +19,13 @@ defmodule Memba.Membership.CommandDispatch do
 
   alias Memba.Membership.{CustomGroupAdmission, CustomGroupRemoval}
   alias Memba.Membership.Events.{GroupMemberAdded, GroupMemberRemoved}
+  alias Memba.Membership.Policies.SystemGroupMembership
+
+  alias Memba.Membership.Commands.{
+    RemoveClubMember,
+    AssignClubRoleToMember,
+    RemoveClubRoleFromMember
+  }
 
   def dispatch(command, opts \\ [])
 
@@ -33,6 +40,49 @@ defmodule Memba.Membership.CommandDispatch do
   def dispatch(%RemoveCustomGroupMember{} = command, opts) do
     dispatch_custom_group_removal(command, opts)
   end
+
+  def dispatch(%RemoveClubMember{} = command, opts) do
+    raw_dispatch(command, system_group_membership_consistency(opts))
+  end
+
+  def dispatch(%AssignClubRoleToMember{} = command, opts) do
+    raw_dispatch(command, system_group_membership_consistency(opts))
+  end
+
+  def dispatch(%RemoveClubRoleFromMember{} = command, opts) do
+    raw_dispatch(command, system_group_membership_consistency(opts))
+  end
+
+  @doc false
+  def system_group_membership_consistency(dispatch_opts) do
+    Keyword.update(
+      dispatch_opts,
+      :consistency,
+      [SystemGroupMembership],
+      &include_system_group_membership_consistency/1
+    )
+  end
+
+  defp include_system_group_membership_consistency(:strong), do: :strong
+  defp include_system_group_membership_consistency(:eventual), do: [SystemGroupMembership]
+
+  defp include_system_group_membership_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &system_group_membership_handler?/1) do
+      handlers
+    else
+      [SystemGroupMembership | handlers]
+    end
+  end
+
+  defp include_system_group_membership_consistency(consistency), do: consistency
+
+  defp system_group_membership_handler?(SystemGroupMembership), do: true
+
+  defp system_group_membership_handler?(handler) when is_binary(handler) do
+    handler == inspect(SystemGroupMembership)
+  end
+
+  defp system_group_membership_handler?(_handler), do: false
 
   defp raw_dispatch(command, opts) do
     case App.dispatch(command, opts) do
