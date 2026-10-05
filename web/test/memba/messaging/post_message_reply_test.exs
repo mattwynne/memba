@@ -17,10 +17,69 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.PostMemberMessageReply
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Recipient
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Repo
+
+  test "preparation keeps fixed identity, root reference, authoritative audience and follower recipients without dispatch" do
+    club_id = Memba.ID.generate(:club)
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    carol = create_person(name: "Carol", email: "carol@example.com")
+    add_member(club_id, alice.person_id)
+    add_member(club_id, bob.person_id)
+    add_member(club_id, carol.person_id)
+    root_id = send_root_message(club_id, alice.person_id)
+    follow_conversation(club_id, root_id, bob.person_id)
+    follow_conversation(club_id, root_id, carol.person_id)
+    reply_id = Memba.ID.generate(:message)
+
+    assert {:ok,
+            %PostMessageReply{
+              message_id: ^reply_id,
+              conversation_id: ^root_id,
+              reply_to_message_id: ^root_id,
+              club_id: ^club_id,
+              subject: "Trip planning night",
+              body: "Here are the maps",
+              operation_intent: "fixed-intent",
+              recipients: [%Recipient{person_id: carol_id}]
+            }} =
+             PostMemberMessageReply.prepare(%{
+               "message_id" => reply_id,
+               "conversation_id" => root_id,
+               "sender_id" => bob.person_id,
+               "body" => "Here are the maps",
+               "operation_intent" => "fixed-intent"
+             })
+
+    assert carol_id == carol.person_id
+    refute Repo.get(MessageProjection, reply_id)
+  end
+
+  test "preparation denies a departed sender before dispatch" do
+    club_id = Memba.ID.generate(:club)
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    add_member(club_id, alice.person_id)
+    bob_membership_id = add_member(club_id, bob.person_id)
+    root_id = send_root_message(club_id, alice.person_id)
+    remove_member(club_id, bob_membership_id, bob.person_id)
+    reply_id = Memba.ID.generate(:message)
+
+    assert {:error, :not_current_member} =
+             PostMemberMessageReply.prepare(%{
+               message_id: reply_id,
+               conversation_id: root_id,
+               sender_id: bob.person_id,
+               body: "Too late"
+             })
+
+    refute Repo.get(MessageProjection, reply_id)
+  end
 
   test "a current club member can post a reply and email only current followers except themself" do
     club_id = Memba.ID.generate(:club)

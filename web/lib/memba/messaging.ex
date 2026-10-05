@@ -11,6 +11,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.AuthorizationCheckpoint
   alias Memba.Messaging.CommandDispatch
   alias Memba.Messaging.SendClubMessage
+  alias Memba.Messaging.PostMemberMessageReply
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
@@ -139,17 +140,8 @@ defmodule Memba.Messaging do
   """
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <-
-           authorize_at_stable_checkpoint(
-             fn ->
-               with {:ok, command} <- post_message_reply_command(attrs),
-                    :ok <- authorize_reply_sender(command) do
-                 {:ok, command}
-               end
-             end,
-             projections: [ConversationFollowProjector]
-           ),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- PostMemberMessageReply.prepare(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end

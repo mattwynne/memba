@@ -11,10 +11,10 @@ defmodule MembaWeb.MemberMessageLive.Show do
   require Logger
 
   alias LiveQuery.Binding
-  alias Memba.Messaging
   alias Memba.Messaging.CommandDispatch
   alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.MemberSubmission
+  alias Memba.Messaging.PostMemberMessageReply
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberMessageDetailQuery
 
@@ -111,7 +111,10 @@ defmodule MembaWeb.MemberMessageLive.Show do
          )}
       else
         case MemberSubmission.submit(operation, fn attrs ->
-               Messaging.post_message_reply(attrs, consistency: :strong)
+               with {:ok, command} <- PostMemberMessageReply.prepare(attrs),
+                    {:ok, result} <- CommandDispatch.dispatch(command, consistency: :strong) do
+                 result
+               end
              end) do
           {:accepted, _reply_message_id} ->
             {:noreply,
