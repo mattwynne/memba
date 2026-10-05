@@ -54,6 +54,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Recipient
   alias Memba.ProjectionBarrier
   alias Memba.Repo
+  alias MembaWeb.ClubSite
 
   import Ecto.Query
 
@@ -98,6 +99,29 @@ defmodule Memba.Messaging do
                {:ok, command}
              end
            end),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Ask to join a club's non-built-in group by sending a fixed Admin Group message.
+
+  This is the composite `RequestGroupAccess` action: the caller supplies only
+  `:message_id`, `:club_id`, `:requester_person_id` and `:group_id`. Messaging
+  resolves the requester's current active club membership and the target
+  group's identity through Membership's public API at a stable authorization
+  checkpoint, then composes the fixed subject/body (naming the requester and
+  group, with the club-hosted member-management URL) and dispatches the
+  existing `SendMessage` command to the club's Admin Group. The caller cannot
+  supply a different sender, destination, subject or body. Requesting creates
+  no request record, access grant or membership; the requester remains outside
+  the group until an authorised person explicitly adds them.
+  """
+  def request_group_access(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <-
+           authorize_at_stable_checkpoint(fn -> request_group_access_command(attrs) end),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -2042,6 +2066,86 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp request_group_access_command(attrs) do
+    with {:ok, message_id} <- fetch_required(attrs, :message_id),
+         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+         {:ok, requester_person_id} <-
+           fetch_required_id(attrs, :requester_person_id, :person),
+         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
+         :ok <- authorize_group_access_requester(club_id, requester_person_id),
+         {:ok, group} <- fetch_requestable_group(club_id, group_id),
+         {:ok, requester} <- fetch_required_person(requester_person_id),
+         {:ok, club} <- fetch_required_club(club_id) do
+      admin_group_id = SystemGroups.admin_group_id(club_id)
+
+      {:ok,
+       %SendMessage{
+         message_id: message_id,
+         club_id: club_id,
+         sender_id: requester_person_id,
+         audience_group_id: admin_group_id,
+         subject: "Access request: #{group.name}",
+         body:
+           group_access_request_body(
+             requester.name,
+             club.name,
+             group,
+             ClubSite.url(club, "/groups/#{group_id}/members/add/#{requester_person_id}")
+           ),
+         recipients: resolve_group_recipients(club_id, admin_group_id)
+       }}
+    end
+  end
+
+  defp authorize_group_access_requester(club_id, requester_person_id) do
+    if Membership.active_member_of_club_authoritatively?(club_id, requester_person_id) do
+      :ok
+    else
+      {:error, :member_not_active}
+    end
+  end
+
+  defp fetch_requestable_group(club_id, group_id) do
+    case Membership.get_group(group_id) do
+      %{club_id: ^club_id} = group ->
+        if SystemGroups.custom_group?(group) do
+          {:ok, group}
+        else
+          {:error, :built_in_group}
+        end
+
+      _missing_or_foreign_group ->
+        {:error, :group_not_found}
+    end
+  end
+
+  defp fetch_required_person(person_id) do
+    case Membership.get_person(person_id) do
+      nil -> {:error, :person_not_found}
+      person -> {:ok, person}
+    end
+  end
+
+  defp fetch_required_club(club_id) do
+    case Membership.get_club(club_id) do
+      nil -> {:error, :club_not_found}
+      club -> {:ok, club}
+    end
+  end
+
+  defp group_access_request_body(requester_name, club_name, group, add_member_url) do
+    """
+    #{requester_name} would like to join #{group.name}.
+
+    #{requester_name} asked from #{group.name}'s page in #{club_name}.
+
+    You'll confirm on the website before #{requester_name} is added.
+
+    Add #{requester_name} to #{group.name}:
+    #{add_member_url}
+    """
+  end
+
   defp post_message_reply_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
@@ -2164,6 +2268,7 @@ defmodule Memba.Messaging do
   defp invalid_id_reason(:conversation_id), do: :invalid_conversation_id
   defp invalid_id_reason(:club_id), do: :invalid_club_id
   defp invalid_id_reason(:group_id), do: :invalid_group_id
+  defp invalid_id_reason(:requester_person_id), do: :invalid_requester_person_id
 
   defp fetch_conversation_root(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
