@@ -29,6 +29,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.EmailDeliveryReport
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubEmailPreparation
@@ -50,9 +51,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
-  alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
-  alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
   alias Memba.Repo
@@ -699,13 +698,7 @@ defmodule Memba.Messaging do
 
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
-  def get_email_delivery(delivery_id) do
-    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
-      Repo.get(EmailDeliveryProjection, delivery_id)
-    else
-      :error -> nil
-    end
-  end
+  def get_email_delivery(delivery_id), do: DeliveryQueries.get_email_delivery(delivery_id)
 
   @doc """
   Resolve a persisted outbound RFC Message-ID to its Memba message context.
@@ -779,31 +772,16 @@ defmodule Memba.Messaging do
   recipient name and ID to provide deterministic assertions for acceptance
   plumbing.
   """
-  def list_recipient_deliveries(message_id) do
-    with {:ok, message_id} <- ID.cast(:message, message_id) do
-      EmailDeliveryProjection
-      |> where([delivery], delivery.message_id == ^message_id)
-      |> order_by([delivery], asc: delivery.recipient_name, asc: delivery.recipient_id)
-      |> Repo.all()
-    else
-      :error -> []
-    end
-  end
+  def list_recipient_deliveries(message_id),
+    do: DeliveryQueries.list_recipient_deliveries(message_id)
 
   @doc """
   Fetch a member-facing email delivery read model by delivery UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
-  def get_member_email_delivery(delivery_id) do
-    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
-      MemberEmailDeliveryProjection
-      |> Repo.get(delivery_id)
-      |> normalize_member_email_delivery()
-    else
-      :error -> nil
-    end
-  end
+  def get_member_email_delivery(delivery_id),
+    do: DeliveryQueries.get_member_email_delivery(delivery_id)
 
   @doc """
   Fetch a member-facing email delivery for a recipient on a message.
@@ -811,18 +789,8 @@ defmodule Memba.Messaging do
   Invalid or missing IDs return `nil`. The status uses the simplified
   member vocabulary: sent, delivered, or delivery problem.
   """
-  def get_member_email_delivery(message_id, recipient_id) do
-    with {:ok, message_id} <- ID.cast(:message, message_id),
-         {:ok, recipient_id} <- ID.cast(:person, recipient_id) do
-      Repo.get_by(MemberEmailDeliveryProjection,
-        message_id: message_id,
-        recipient_id: recipient_id
-      )
-      |> normalize_member_email_delivery()
-    else
-      :error -> nil
-    end
-  end
+  def get_member_email_delivery(message_id, recipient_id),
+    do: DeliveryQueries.get_member_email_delivery(message_id, recipient_id)
 
   @doc """
   List member-facing email email deliveries for a projected message.
@@ -831,36 +799,16 @@ defmodule Memba.Messaging do
   recipient name and ID to provide deterministic assertions for acceptance
   plumbing.
   """
-  def list_member_email_deliverys(message_id) do
-    with {:ok, message_id} <- ID.cast(:message, message_id) do
-      from(receipt in MemberEmailDeliveryProjection,
-        left_join: deliverability in MembaStaffEmailDeliveryProjection,
-        on: deliverability.delivery_id == receipt.delivery_id,
-        where: receipt.message_id == ^message_id,
-        order_by: [asc: receipt.recipient_name, asc: receipt.recipient_id],
-        select_merge: %{reason: deliverability.reason}
-      )
-      |> Repo.all()
-      |> Enum.map(&normalize_member_email_delivery/1)
-    else
-      :error -> []
-    end
-  end
+  def list_member_email_deliverys(message_id),
+    do: DeliveryQueries.list_member_email_deliverys(message_id)
 
   @doc """
   Fetch an Memba staff email delivery read model by delivery UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
-  def get_memba_staff_email_delivery(delivery_id) do
-    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
-      MembaStaffEmailDeliveryProjection
-      |> Repo.get(delivery_id)
-      |> normalize_memba_staff_email_delivery()
-    else
-      :error -> nil
-    end
-  end
+  def get_memba_staff_email_delivery(delivery_id),
+    do: DeliveryQueries.get_memba_staff_email_delivery(delivery_id)
 
   @doc """
   Fetch an Memba staff email email delivery for a recipient on a message.
@@ -868,18 +816,8 @@ defmodule Memba.Messaging do
   Invalid or missing IDs return `nil`. This view keeps detailed delivery status
   and reason text for delayed, bounced, and spam complaint reports.
   """
-  def get_memba_staff_email_delivery(message_id, recipient_id) do
-    with {:ok, message_id} <- ID.cast(:message, message_id),
-         {:ok, recipient_id} <- ID.cast(:person, recipient_id) do
-      Repo.get_by(MembaStaffEmailDeliveryProjection,
-        message_id: message_id,
-        recipient_id: recipient_id
-      )
-      |> normalize_memba_staff_email_delivery()
-    else
-      :error -> nil
-    end
-  end
+  def get_memba_staff_email_delivery(message_id, recipient_id),
+    do: DeliveryQueries.get_memba_staff_email_delivery(message_id, recipient_id)
 
   @doc """
   List Memba-staff-facing email deliveries for the deliveries overview.
@@ -889,18 +827,7 @@ defmodule Memba.Messaging do
   `message_id: message_id` to narrow the overview to one projected message.
   Invalid options return an empty list.
   """
-  def list_operator_deliveries(opts \\ []) do
-    if is_list(opts) do
-      with {:ok, query} <- operator_deliveries_query(opts) do
-        Repo.all(query)
-        |> Enum.map(&normalize_memba_staff_email_delivery/1)
-      else
-        :error -> []
-      end
-    else
-      []
-    end
-  end
+  def list_operator_deliveries(opts \\ []), do: DeliveryQueries.list_operator_deliveries(opts)
 
   @doc """
   List Memba staff email email deliveries for a projected message.
@@ -909,30 +836,8 @@ defmodule Memba.Messaging do
   recipient name and ID to provide deterministic assertions for acceptance
   plumbing.
   """
-  def list_operator_email_deliveries(message_id) do
-    with {:ok, message_id} <- ID.cast(:message, message_id) do
-      MembaStaffEmailDeliveryProjection
-      |> where([deliverability], deliverability.message_id == ^message_id)
-      |> order_by([deliverability],
-        asc: deliverability.recipient_name,
-        asc: deliverability.recipient_id
-      )
-      |> Repo.all()
-      |> Enum.map(&normalize_memba_staff_email_delivery/1)
-    else
-      :error -> []
-    end
-  end
-
-  defp normalize_member_email_delivery(nil), do: nil
-
-  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{} = receipt), do: receipt
-
-  defp normalize_memba_staff_email_delivery(nil), do: nil
-
-  defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
-    delivery
-  end
+  def list_operator_email_deliveries(message_id),
+    do: DeliveryQueries.list_operator_email_deliveries(message_id)
 
   defp conversation_id_for_message(%MessageProjection{conversation_id: conversation_id}) do
     case ID.cast(:message, conversation_id) do
@@ -968,37 +873,6 @@ defmodule Memba.Messaging do
       asc: message.message_id
     )
     |> Repo.all()
-  end
-
-  defp operator_deliveries_query(opts) do
-    query =
-      from deliverability in MembaStaffEmailDeliveryProjection,
-        left_join: dispatch in EmailDeliveryProjection,
-        on: dispatch.delivery_id == deliverability.delivery_id,
-        join: message in MessageProjection,
-        on: message.message_id == deliverability.message_id,
-        order_by: [desc: deliverability.updated_at, desc: deliverability.delivery_id],
-        select_merge: %{
-          message_subject: message.subject,
-          event_at: deliverability.updated_at,
-          dispatch_status: dispatch.status,
-          dispatch_attempt_count: dispatch.attempt_count,
-          dispatch_latest_error: dispatch.latest_error,
-          dispatch_latest_detail: dispatch.latest_detail
-        }
-
-    case Keyword.fetch(opts, :message_id) do
-      {:ok, message_id} ->
-        with {:ok, message_id} <- ID.cast(:message, message_id) do
-          {:ok,
-           where(query, [deliverability, _message], deliverability.message_id == ^message_id)}
-        else
-          :error -> :error
-        end
-
-      :error ->
-        {:ok, query}
-    end
   end
 
   defp normalize_inbound_source_lookup(value) do
