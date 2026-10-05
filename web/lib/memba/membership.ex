@@ -5,7 +5,6 @@ defmodule Memba.Membership do
 
   import Ecto.Query
 
-  alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership.AddMember
   alias Memba.Membership.ClubCommands
@@ -16,11 +15,9 @@ defmodule Memba.Membership do
   alias Memba.Membership.CustomGroup
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMember
-  alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.InvitationAcceptance
   alias Memba.Membership.InvitationIssuanceWorkflow
   alias Memba.Membership.InvitationQueries
-  alias Memba.Membership.GroupName
   alias Memba.Membership.PersonEmailAddressCommands
   alias Memba.Membership.PersonEmailVerification
   alias Memba.Membership.PersonCommands
@@ -29,7 +26,6 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroupBackfillQueries
   alias Memba.Membership.Projections.Club
-  alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.ProjectionBarrier
   alias Memba.Repo
 
@@ -115,21 +111,7 @@ defmodule Memba.Membership do
   on submit so the Club aggregate can recheck authority and identity claims at
   the serialized write boundary.
   """
-  def preview_custom_group(attrs) when is_map(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, club_id} <- cast_id(:club, club_id, :not_found),
-         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
-         {:ok, actor_person_id} <- cast_id(:person, actor_person_id, :unauthorized),
-         :ok <- Authorization.authorize_manage_members(club_id, actor_person_id),
-         %Club{} = club <- Repo.get(Club, club_id),
-         {:ok, submitted_name} <- fetch_required(attrs, :name),
-         {:ok, name} <- GroupName.normalize(submitted_name) do
-      custom_group_identity_preview(club, name)
-    else
-      nil -> {:error, :not_found}
-      {:error, _reason} = error -> error
-    end
-  end
+  def preview_custom_group(attrs) when is_map(attrs), do: CustomGroup.Preview.call(attrs)
 
   @doc """
   Update a club's staff-managed display name and public slug.
@@ -839,63 +821,6 @@ defmodule Memba.Membership do
     Authorization.has_permission?(club_id, person_id, permission)
   end
 
-  defp cast_id(type, id, error) do
-    case ID.cast(type, id) do
-      {:ok, cast_id} -> {:ok, cast_id}
-      :error -> {:error, error}
-    end
-  end
-
-  defp custom_group_identity_preview(%Club{} = club, name) do
-    name_uniqueness_key = GroupName.uniqueness_key(name)
-
-    case Repo.get_by(GroupProjection,
-           club_id: club.club_id,
-           name_uniqueness_key: name_uniqueness_key
-         ) do
-      nil ->
-        available_custom_group_identity_preview(club, name)
-
-      %GroupProjection{name: existing_name} ->
-        {:error, {:group_name_already_defined, existing_name}}
-    end
-  end
-
-  defp available_custom_group_identity_preview(%Club{} = club, name) do
-    club_id = club.club_id
-
-    occupied_email_slugs =
-      GroupProjection
-      |> where([group], group.club_id == ^club_id)
-      |> where([group], not is_nil(group.email_slug))
-      |> select([group], group.email_slug)
-      |> Repo.all()
-      |> MapSet.new()
-
-    unsuffixed_email_slug = CustomGroupSlug.allocate(name, MapSet.new())
-    email_slug = CustomGroupSlug.allocate(name, occupied_email_slugs)
-
-    collision_group_name =
-      if email_slug == unsuffixed_email_slug do
-        nil
-      else
-        GroupProjection
-        |> where([group], group.club_id == ^club_id)
-        |> where([group], group.email_slug == ^unsuffixed_email_slug)
-        |> select([group], group.name)
-        |> Repo.one()
-      end
-
-    {:ok,
-     %{
-       name: name,
-       email_slug: email_slug,
-       email_address: ClubInboundEmailAddress.address(club, email_slug),
-       unsuffixed_email_slug: unsuffixed_email_slug,
-       collision_group_name: collision_group_name
-     }}
-  end
-
   defp cast_ids(type, ids) do
     ids
     |> Enum.reduce([], fn id, valid_ids ->
@@ -906,15 +831,5 @@ defmodule Memba.Membership do
     end)
     |> Enum.uniq()
     |> Enum.reverse()
-  end
-
-  defp fetch_required(attrs, key) when is_atom(key) do
-    string_key = Atom.to_string(key)
-
-    case attrs do
-      %{^key => value} -> {:ok, value}
-      %{^string_key => value} -> {:ok, value}
-      _attrs -> {:error, {:missing_required_attribute, key}}
-    end
   end
 end
