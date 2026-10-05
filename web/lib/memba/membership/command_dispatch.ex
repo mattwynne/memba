@@ -4,7 +4,7 @@ defmodule Memba.Membership.CommandDispatch do
   internal policy and reconciliation commands.
 
   Preserve established transition results and explicit Commanded returning
-  contracts. The system-group backfill remains a separate operational workflow.
+  contracts, including the options supplied by backfill and seed callers.
   """
   require Logger
 
@@ -16,6 +16,7 @@ defmodule Memba.Membership.CommandDispatch do
     CreateCustomGroup,
     AddCustomGroupMember,
     RemoveCustomGroupMember,
+    CreateGroup,
     AddGroupMember,
     RemoveGroupMember,
     ReconcileLegacyAdminHistory
@@ -57,8 +58,9 @@ defmodule Memba.Membership.CommandDispatch do
     dispatch_custom_group_removal(command, opts)
   end
 
-  # Internal policy and repair callers own their consistency, metadata and
-  # returning contracts; do not route these through the custom-group workflow.
+  # Internal policy, backfill and repair callers own their consistency, metadata
+  # and returning contracts; do not route these through the custom-group workflow.
+  def dispatch(%CreateGroup{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%AddGroupMember{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%RemoveGroupMember{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%ReconcileLegacyAdminHistory{} = command, opts), do: raw_dispatch(command, opts)

@@ -30,7 +30,18 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
     create_club(club_id)
     add_member(club_id, membership_id, person_id)
-    create_group(club_id, group_id)
+
+    assert {:ok, %Commanded.Commands.ExecutionResult{events: [_group_created]}} =
+             CommandDispatch.dispatch(
+               %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: "board",
+                 name: "Board"
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
 
     command = %AddGroupMember{
       club_id: club_id,

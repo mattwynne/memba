@@ -12,7 +12,7 @@ defmodule Memba.Membership.SystemGroups.Backfill do
   require Logger
 
   alias Memba.Membership
-  alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Projectors.Group
@@ -170,7 +170,7 @@ defmodule Memba.Membership.SystemGroups.Backfill do
   end
 
   defp dispatch_membership!(phase, command, _consistency) do
-    case MembershipApp.dispatch(command, consistency: :eventual) do
+    case CommandDispatch.dispatch(command, consistency: :eventual) do
       :ok -> :ok
       {:ok, _result} -> :ok
       {:error, reason} -> raise backfill_error(phase, command, reason)
