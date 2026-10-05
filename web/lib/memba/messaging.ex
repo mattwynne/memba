@@ -27,6 +27,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationAccess
+  alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.ConversationListing
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
@@ -523,7 +524,7 @@ defmodule Memba.Messaging do
          {:ok, conversation_id} <- conversation_id_for_message(message),
          %MessageProjection{club_id: club_id} <-
            fetch_conversation_root_projection(conversation_id),
-         true <- ConversationListing.canonical_group?(conversation_id, group_id) do
+         true <- ConversationAudience.canonical_group?(conversation_id, group_id) do
       list_projected_conversation_messages(conversation_id, club_id)
     else
       _invalid_missing_or_inaccessible -> []
@@ -582,26 +583,8 @@ defmodule Memba.Messaging do
   dispatch use this event-sourced decision. Missing and multi-group audiences
   fail closed.
   """
-  def resolve_conversation_audience(conversation_id) do
-    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
-         %Message{
-           message_id: ^conversation_id,
-           club_id: club_id,
-           group_access: group_access
-         } <- App.aggregate_state(Message, conversation_id),
-         {:ok, group_id, access_level} <- canonical_group_access(group_access) do
-      {:ok,
-       %{
-         conversation_id: conversation_id,
-         club_id: club_id,
-         group_id: group_id,
-         access_level: access_level
-       }}
-    else
-      {:error, _reason} = error -> error
-      _invalid_or_missing -> {:error, :conversation_audience_not_found}
-    end
-  end
+  def resolve_conversation_audience(conversation_id),
+    do: ConversationAudience.resolve(conversation_id)
 
   @doc """
   Return whether a person has the requested access to a projected conversation.
@@ -993,7 +976,8 @@ defmodule Memba.Messaging do
   defp authoritative_conversation_group_id_for_posting(conversation_id, club_id) do
     with %Message{club_id: ^club_id, group_access: group_access} <-
            App.aggregate_state(Message, conversation_id),
-         {:ok, group_id, _access_level} <- canonical_group_access(group_access) do
+         {:ok, group_id, _access_level} <-
+           ConversationAudience.canonical_group_access(group_access) do
       {:ok, group_id}
     else
       _missing_or_ambiguous -> {:error, :not_current_member}
@@ -2051,7 +2035,8 @@ defmodule Memba.Messaging do
            club_id: ^club_id,
            group_access: group_access
          } <- App.aggregate_state(Message, conversation_id),
-         {:ok, group_id, granted_access_level} <- canonical_group_access(group_access) do
+         {:ok, group_id, granted_access_level} <-
+           ConversationAudience.canonical_group_access(group_access) do
       grant_levels = ConversationAccess.grant_levels_including(access_level)
 
       granted_access_level in grant_levels and
@@ -2060,17 +2045,6 @@ defmodule Memba.Messaging do
       _invalid_missing_or_inaccessible -> false
     end
   end
-
-  defp canonical_group_access(group_access) when map_size(group_access) == 1 do
-    [{group_id, access_level}] = Map.to_list(group_access)
-    {:ok, group_id, access_level}
-  end
-
-  defp canonical_group_access(group_access) when map_size(group_access) == 0,
-    do: {:error, :conversation_audience_not_found}
-
-  defp canonical_group_access(_ambiguous),
-    do: {:error, :ambiguous_conversation_audience}
 
   defp ensure_stop_follow_scope(
          %MessageProjection{club_id: club_id, message_id: conversation_id},

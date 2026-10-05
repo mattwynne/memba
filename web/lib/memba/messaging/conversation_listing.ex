@@ -11,7 +11,7 @@ defmodule Memba.Messaging.ConversationListing do
 
   alias Memba.ID
   alias Memba.Membership
-  alias Memba.Messaging
+  alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -33,7 +33,7 @@ defmodule Memba.Messaging.ConversationListing do
       group_id
       |> conversations_for_group_query()
       |> Repo.all()
-      |> Enum.filter(&canonical_group?(&1.conversation_id, group_id))
+      |> Enum.filter(&ConversationAudience.canonical_group?(&1.conversation_id, group_id))
       |> add_latest_replier_names()
     else
       :error -> []
@@ -198,13 +198,5 @@ defmodule Memba.Messaging.ConversationListing do
 
       Map.put(row, :latest_replier_name, latest_replier_name)
     end)
-  end
-
-  @doc false
-  def canonical_group?(conversation_id, group_id) do
-    case Messaging.resolve_conversation_audience(conversation_id) do
-      {:ok, %{group_id: ^group_id}} -> true
-      _missing_or_ambiguous -> false
-    end
   end
 end
