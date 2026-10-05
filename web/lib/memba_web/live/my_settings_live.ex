@@ -13,6 +13,7 @@ defmodule MembaWeb.MySettingsLive do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonEmailAddressCommands
   alias Memba.Membership.PersonEmailAddressVerificationEmail
+  alias MembaWeb.PersonEmailAddressTransition
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberSettingsQuery
 
@@ -124,7 +125,12 @@ defmodule MembaWeb.MySettingsLive do
   def handle_event("remove_email", %{"email" => email}, socket) do
     attrs = %{person_id: current_person(socket).person_id, email: email}
 
-    case Membership.remove_person_email_address(attrs, consistency: :strong) do
+    result =
+      attrs
+      |> PersonEmailAddressCommands.prepare_remove()
+      |> PersonEmailAddressTransition.dispatch_prepared(consistency: :strong)
+
+    case result do
       :ok ->
         {:noreply, refresh_settings(socket)}
 

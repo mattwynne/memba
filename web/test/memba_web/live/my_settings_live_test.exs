@@ -492,6 +492,48 @@ defmodule MembaWeb.MySettingsLiveTest do
              )
   end
 
+  test "remove-email rejects forged addresses and the primary address", %{conn: conn} do
+    club = insert_membership_club!(name: "Remove Scope Club", slug: "remove-scope")
+
+    member =
+      create_commanded_active_member(club,
+        email: "remove.member@example.com",
+        name: "Remove Member"
+      )
+
+    other =
+      create_commanded_active_member(club,
+        email: "remove.other@example.com",
+        name: "Remove Other"
+      )
+
+    add_pending_email_address!(other.person_id, "remove.alternate@example.com")
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings/emails")
+
+    refute has_element?(view, "#my-settings-remove-email-remove-alternate-example-com")
+    render_hook(view, "remove_email", %{"email" => "remove.alternate@example.com"})
+    assert has_element?(view, "#flash-error", "We could not update that email address.")
+
+    render_hook(view, "remove_email", %{"email" => member.email})
+    assert has_element?(view, "#flash-error", "We could not update that email address.")
+
+    assert %PersonEmailAddress{is_primary: false} =
+             Repo.get_by!(PersonEmailAddress,
+               person_id: other.person_id,
+               normalized_email: "remove.alternate@example.com"
+             )
+
+    assert %PersonEmailAddress{is_primary: true} =
+             Repo.get_by!(PersonEmailAddress,
+               person_id: member.person_id,
+               normalized_email: "remove.member@example.com"
+             )
+  end
+
   test "make-primary rejects a forged email belonging to another person", %{conn: conn} do
     club = insert_membership_club!(name: "Primary Scope Club", slug: "primary-scope")
 

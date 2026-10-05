@@ -2,7 +2,9 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.PersonEmailAddressCommands
   alias MembaWeb.Admin.PersonEmailAddressForm
+  alias MembaWeb.PersonEmailAddressTransition
 
   import MembaWeb.Admin.PeopleLive.PersonEditorComponents
 
@@ -39,13 +41,12 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
   def handle_event("save_person", %{"person" => person_params}, socket) do
     with {:ok, attrs} <- PersonEmailAddressForm.validate(person_params),
          :ok <-
-           Membership.replace_person_email_addresses(
-             %{
-               "person_id" => socket.assigns.person_id,
-               "email_addresses" => attrs.email_addresses
-             },
-             consistency: :strong
-           ) do
+           %{
+             "person_id" => socket.assigns.person_id,
+             "email_addresses" => attrs.email_addresses
+           }
+           |> PersonEmailAddressCommands.prepare_replace()
+           |> PersonEmailAddressTransition.dispatch_prepared(consistency: :strong) do
       {:noreply,
        socket
        |> put_flash(:info, "Person updated")
