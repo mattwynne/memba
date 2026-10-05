@@ -6,7 +6,6 @@ defmodule Memba.Messaging do
   alias Commanded.Commands.ExecutionResult
   alias Memba.ID
   alias Memba.Membership
-  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.App
   alias Memba.Messaging.AuthorizationCheckpoint
   alias Memba.Messaging.CommandDispatch
@@ -18,7 +17,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReceiveInboundEmail
-  alias Memba.Messaging.Commands.RequestGroupAccess
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationAccess
@@ -44,6 +42,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Message
   alias Memba.Messaging.MessageQueries
   alias Memba.Messaging.MessageSourceQueries
+  alias Memba.Messaging.RequestGroupAccess
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
@@ -54,7 +53,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Recipient
   alias Memba.Repo
-  alias MembaWeb.ClubSite
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -91,12 +89,8 @@ defmodule Memba.Messaging do
   """
   def request_group_access(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, request} <- request_group_access_command(attrs),
-         {:ok, command} <-
-           authorize_at_stable_checkpoint(fn ->
-             request_group_access_send_command(request)
-           end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- RequestGroupAccess.prepare(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -1303,69 +1297,6 @@ defmodule Memba.Messaging do
 
   defp send_club_message_command(attrs), do: SendClubMessage.prepare(attrs)
 
-  defp request_group_access_command(attrs) do
-    with {:ok, message_id} <- fetch_required_id(attrs, :message_id, :message),
-         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
-         {:ok, requester_person_id} <-
-           fetch_required_id(attrs, :requester_person_id, :person),
-         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group) do
-      {:ok,
-       %RequestGroupAccess{
-         operation_intent: Map.get(attrs, "operation_intent"),
-         message_id: message_id,
-         club_id: club_id,
-         requester_person_id: requester_person_id,
-         group_id: group_id
-       }}
-    end
-  end
-
-  defp request_group_access_send_command(%RequestGroupAccess{} = request) do
-    with {:ok, target} <-
-           Membership.resolve_custom_group_target_authoritatively(
-             request.club_id,
-             request.requester_person_id,
-             request.group_id
-           ),
-         :ok <- reject_current_group_member(target) do
-      admin_group_id = SystemGroups.admin_group_id(target.club.club_id)
-
-      {:ok,
-       %SendMessage{
-         operation_intent: request.operation_intent,
-         message_id: request.message_id,
-         club_id: target.club.club_id,
-         sender_id: target.person.person_id,
-         audience_group_id: admin_group_id,
-         subject: "Access request: #{target.group.name}",
-         body: request_group_access_body(target),
-         recipients: resolve_group_recipients(target.club.club_id, admin_group_id)
-       }}
-    end
-  end
-
-  defp reject_current_group_member(%{active_group_member?: false}), do: :ok
-  defp reject_current_group_member(%{active_group_member?: true}), do: {:error, :already_member}
-
-  defp request_group_access_body(target) do
-    add_url =
-      ClubSite.url(
-        target.club,
-        "/groups/#{target.group.group_id}/members/add/#{target.person.person_id}"
-      )
-
-    """
-    #{target.person.name} would like to join #{target.group.name}.
-
-    #{target.person.name} asked from #{target.group.name}'s page in #{target.club.name}.
-
-    Add #{target.person.name} to #{target.group.name}:
-    #{add_url}
-
-    You'll confirm on the website before #{target.person.name} is added.
-    """
-  end
-
   defp post_message_reply_command(attrs) do
     ReplyCommand.prepare(attrs, fn club_id, conversation_id, group_id, sender_id ->
       resolve_reply_recipients(club_id, conversation_id, group_id, except_person_id: sender_id)
@@ -1407,21 +1338,6 @@ defmodule Memba.Messaging do
       _attrs -> {:error, {:missing_required_attribute, key}}
     end
   end
-
-  defp fetch_required_id(attrs, key, type) do
-    with {:ok, value} <- fetch_required(attrs, key) do
-      case ID.cast(type, value) do
-        {:ok, ^value} -> {:ok, value}
-        :error -> {:error, invalid_id_reason(key)}
-      end
-    end
-  end
-
-  defp invalid_id_reason(:conversation_id), do: :invalid_conversation_id
-  defp invalid_id_reason(:message_id), do: :invalid_message_id
-  defp invalid_id_reason(:club_id), do: :invalid_club_id
-  defp invalid_id_reason(:group_id), do: :invalid_group_id
-  defp invalid_id_reason(:requester_person_id), do: :invalid_person_id
 
   defp fetch_conversation_root(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
@@ -1503,15 +1419,6 @@ defmodule Memba.Messaging do
     else
       :ok
     end
-  end
-
-  defp resolve_group_recipients(club_id, group_id, opts \\ []) do
-    except_person_id = Keyword.get(opts, :except_person_id)
-
-    club_id
-    |> Membership.list_active_members_of_group_authoritatively(group_id)
-    |> Enum.reject(&(&1.id == except_person_id))
-    |> Enum.map(&resolved_recipient/1)
   end
 
   defp resolve_reply_recipients(club_id, conversation_id, group_id, opts) do

@@ -18,8 +18,9 @@ defmodule MembaWeb.MemberDashboardLive do
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.GroupWelcomeEmail
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch, as: MessagingCommandDispatch
   alias Memba.Messaging.MemberSubmission
+  alias Memba.Messaging.RequestGroupAccess
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
   alias MembaWeb.LiveQuery.MembaReadModelSource
@@ -112,7 +113,9 @@ defmodule MembaWeb.MemberDashboardLive do
     if MemberSubmission.same_intent?(operation, :group_access, attrs) do
       result =
         MemberSubmission.submit(operation, fn attrs ->
-          Messaging.request_group_access(attrs, consistency: :strong)
+          with {:ok, command} <- RequestGroupAccess.prepare(attrs) do
+            MessagingCommandDispatch.dispatch(command, consistency: :strong)
+          end
         end)
 
       case result do

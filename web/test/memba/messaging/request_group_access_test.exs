@@ -18,10 +18,12 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.RequestGroupAccess
   alias MembaWeb.ClubSite
 
   setup do
@@ -34,6 +36,65 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
     end)
 
     :ok
+  end
+
+  test "prepares a trusted Admin message without dispatching it" do
+    %{club: club, board_id: board_id, alice: alice, dan: dan, eve: eve} =
+      setup_requestable_group()
+
+    message_id = Memba.ID.generate(:message)
+    intent = Memba.ID.generate(:message)
+    before_count = count_events(MessageSent)
+    add_url = ClubSite.url(club, "/groups/#{board_id}/members/add/#{eve.person_id}")
+
+    assert {:ok,
+            %SendMessage{
+              message_id: ^message_id,
+              operation_intent: ^intent,
+              sender_id: sender_id,
+              audience_group_id: audience_group_id,
+              subject: "Access request: Board",
+              body: body,
+              recipients: recipients
+            }} =
+             RequestGroupAccess.prepare(%{
+               "message_id" => message_id,
+               "operation_intent" => intent,
+               "club_id" => club.club_id,
+               "requester_person_id" => eve.person_id,
+               "group_id" => board_id,
+               "subject" => "Forged",
+               "recipients" => []
+             })
+
+    assert sender_id == eve.person_id
+    assert audience_group_id == SystemGroups.admin_group_id(club.club_id)
+    assert body =~ add_url
+
+    assert Enum.sort(Enum.map(recipients, & &1.person_id)) ==
+             Enum.sort([alice.person_id, dan.person_id])
+
+    assert count_events(MessageSent) == before_count
+  end
+
+  test "preparation preserves missing, unauthorized, and active-target errors" do
+    %{club: club, board_id: board_id, eve: eve} = setup_requestable_group()
+
+    attrs = %{
+      message_id: Memba.ID.generate(:message),
+      club_id: club.club_id,
+      requester_person_id: eve.person_id,
+      group_id: board_id
+    }
+
+    assert {:error, {:missing_required_attribute, :message_id}} =
+             RequestGroupAccess.prepare(Map.delete(attrs, :message_id))
+
+    assert {:error, :group_not_defined} =
+             RequestGroupAccess.prepare(%{attrs | group_id: Memba.ID.generate(:group)})
+
+    add_group_member!(club.club_id, board_id, eve)
+    assert {:error, :already_member} = RequestGroupAccess.prepare(attrs)
   end
 
   test "sends one fixed ordinary Admin message from authoritative facts and leaves the requester outside the target group" do
