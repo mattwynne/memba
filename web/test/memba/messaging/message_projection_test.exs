@@ -131,6 +131,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
     assert is_nil(Messaging.get_message(nil))
     assert is_nil(Messaging.get_message("not-a-uuid"))
 
+    assert Messaging.list_messages_for_club(Memba.ID.generate(:club)) == []
+    assert Messaging.list_messages_for_club(nil) == []
+    assert Messaging.list_messages_for_club("not-a-uuid") == []
+
     assert Messaging.list_conversation_messages(Memba.ID.generate(:message)) == []
     assert Messaging.list_conversation_messages(nil) == []
     assert Messaging.list_conversation_messages("not-a-uuid") == []
