@@ -1,10 +1,11 @@
 # Goal-directed BDD delivery — parallel experiment (design draft)
 
-This is a proposed *separate* implementation workflow, not a modification to
-`iteration-implementation` and not an approved way to publish yet. The design
-requires a suitable pilot and an explicit launch decision. It accepts the
-validated iteration plan and **agreed scenarios**, not a predicted implementation
-task list. Scenario identities are behaviour coverage, not worker packets.
+This is a *separate*, non-publishing **one-scenario historical rehearsal**, not a
+replacement for `iteration-implementation`. The pilot graph exercises the first
+BDD loop using `Eve asks to join Board` from iteration 066. It accepts an old
+approved plan and its agreed example, **not** a predicted implementation task
+list. It neither completes 066's other examples nor claims whole-plan conformance.
+The full multi-scenario design below is the target if this bounded test works.
 
 ## Non-negotiable scenario loop
 
@@ -68,12 +69,14 @@ licenses unscoped implementation under a fabricated red.
 
 ## Pilot and open engineering work
 
-Build alongside the old graph; do not alter `bin/dev fabro deliver` until a
-separate pilot has passed. First implement and test the deterministic
-scenario/manifest/evidence guard with isolated fixture repositories and a fake
-runner. Then wire a new graph and native schema-validated agent outputs; test
-routing, restart, technical review revision, surprise-red, zero-selected,
-partial check, final conformance and failure paths with Fabro runtime fixtures.
+The first graph and deterministic gate cover **one** historical domain scenario.
+Its isolated tests cover red/green, wrong red, undefined step, zero selected,
+feature-level `@todo`, changed scenario, reviewer veto and missing checkpoint.
+It has schema-validated shot and review output, and no publication node. Before
+using this as a real delivery workflow, generalize it to an approved scenario
+manifest, cover browser examples at their own boundary, and test routing,
+restart, revision budgets, final conformance and failure paths with Fabro
+runtime fixtures. Do not alter `bin/dev fabro deliver` while it is a pilot.
 Reuse existing preflight and publication *policies*, not the old task-packet or
 `todo.md` acceptance artifact format; those scripts currently require their
 own task-specific evidence and cannot safely be invoked unchanged. Keep
@@ -83,5 +86,9 @@ Limit the pilot by wall time and model cost, checkpoint/review cadence and a
 same-finding no-progress stop. Compare total delivery time, Matt interruptions
 by reason, review findings, focused and final failures, recovery effort and
 quality against the current workflow. Explicitly stop rather than extending
-budgets or auto-publishing when evidence is absent. Select a suitable pilot
-iteration/slice and budget with Matt before running the experiment.
+budgets or auto-publishing when evidence is absent. This rehearsal uses a disposable checkout of **pre-implementation iteration
+066** with the already-agreed domain step driver, moved from feature-level
+`@todo` to scenario-level `@todo`. Its target red is the missing *product*
+command, not a missing step definition. The pilot stops without publication
+even if its focused scenario and `dev ci` pass. Keep a 30-minute working budget
+and at most two revision visits; stop on any missing or contradictory evidence.
