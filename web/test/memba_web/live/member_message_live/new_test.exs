@@ -294,6 +294,322 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     refute render(view) =~ "Send to all current members"
   end
 
+  test "an open selected-group compose screen refreshes participant entry and exit", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Kootenay Mountaineering Club",
+        club_id: alice.club_id,
+        slug: "kmc"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='1']"
+           )
+
+    add_group_member(trip_planning_group, bob)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.GroupMembership,
+      %Memba.Membership.Events.GroupMemberAdded{
+        club_id: alice.club_id,
+        group_id: trip_planning_group.group_id,
+        membership_id: bob.membership_id,
+        person_id: bob.person_id
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='2']"
+           )
+
+    Repo.update_all(
+      from(group_membership in GroupMembership,
+        where:
+          group_membership.group_id == ^trip_planning_group.group_id and
+            group_membership.membership_id == ^bob.membership_id
+      ),
+      set: [active: false]
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.GroupMembership,
+      %Memba.Membership.Events.GroupMemberRemoved{
+        club_id: alice.club_id,
+        group_id: trip_planning_group.group_id,
+        membership_id: bob.membership_id,
+        person_id: bob.person_id
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='1']"
+           )
+  end
+
+  test "represented Person eligibility refreshes while unrelated Person changes are isolated", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Kootenay Mountaineering Club",
+        club_id: alice.club_id
+      )
+
+    unrelated =
+      create_active_member(
+        email: "unrelated@example.com",
+        name: "Unrelated Person",
+        club_name: "Unrelated Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='2']"
+           )
+
+    Repo.update_all(
+      from(email_address in Memba.Membership.Projections.PersonEmailAddress,
+        where:
+          email_address.person_id == ^bob.person_id and
+            email_address.is_primary == true
+      ),
+      set: [is_primary: false]
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonPrimaryEmailAddressChanged{
+        person_id: unrelated.person_id,
+        primary_email: "unrelated+new@example.com",
+        normalized_email: "unrelated+new@example.com"
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='2']"
+           )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonPrimaryEmailAddressChanged{
+        person_id: bob.person_id,
+        primary_email: "bob+new@example.com",
+        normalized_email: "bob+new@example.com"
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='1']"
+           )
+  end
+
+  test "represented Club and Group changes refresh exact compose copy", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    unrelated =
+      create_active_member(
+        email: "unrelated@example.com",
+        name: "Unrelated Person",
+        club_name: "Unrelated Club"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning",
+        email_slug: "trip-planning"
+      )
+
+    unrelated_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "unrelated",
+        name: "Unrelated"
+      )
+
+    add_group_member(trip_planning_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
+
+    Repo.update_all(
+      from(club in Club, where: club.club_id == ^alice.club_id),
+      set: [name: "Kootenay Alpine Club"]
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %Memba.Membership.Events.ClubUpdated{
+        club_id: unrelated.club_id,
+        name: "Other Club",
+        slug: "other"
+      }
+    )
+
+    assert has_element?(view, "#member-compose-selected-club", "Kootenay Mountaineering Club")
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %Memba.Membership.Events.ClubUpdated{
+        club_id: alice.club_id,
+        name: "Kootenay Alpine Club",
+        slug: "kmc"
+      }
+    )
+
+    assert has_element?(view, "#member-compose-selected-club", "Kootenay Alpine Club")
+
+    Repo.update_all(
+      from(group in Group, where: group.group_id == ^trip_planning_group.group_id),
+      set: [name: "Alpine Planning", email_slug: "alpine-planning"]
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Group,
+      %Memba.Membership.Events.GroupEmailSlugAssigned{
+        club_id: alice.club_id,
+        group_id: unrelated_group.group_id,
+        email_slug: "unrelated"
+      }
+    )
+
+    assert has_element?(view, "h1", "New message to Trip Planning")
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Group,
+      %Memba.Membership.Events.GroupEmailSlugAssigned{
+        club_id: alice.club_id,
+        group_id: trip_planning_group.group_id,
+        email_slug: "alpine-planning"
+      }
+    )
+
+    assert has_element?(view, "h1", "New message to Alpine Planning")
+
+    assert has_element?(
+             view,
+             "#member-compose-inbound-email-link[href='mailto:alpine-planning@kmc.clubs.memba.io']"
+           )
+  end
+
+  test "a relevant refresh preserves validation and typed message state", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Kootenay Mountaineering Club",
+        club_id: alice.club_id,
+        everyone_group?: false
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Saturday trail plan",
+        "body" => "  "
+      }
+    })
+
+    assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
+    assert has_element?(view, "#member-message-subject-input[value='Saturday trail plan']")
+
+    insert_everyone_group_membership!(alice.club_id, bob.membership_id, bob.person_id)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.GroupMembership,
+      %Memba.Membership.Events.GroupMemberAdded{
+        club_id: alice.club_id,
+        group_id: SystemGroups.everyone_group_id(alice.club_id),
+        membership_id: bob.membership_id,
+        person_id: bob.person_id
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='2']"
+           )
+
+    assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
+    assert has_element?(view, "#member-message-subject-input[value='Saturday trail plan']")
+  end
+
   test "an open compose screen leaves private audience metadata after access is removed", %{
     conn: conn
   } do
@@ -362,6 +678,41 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     )
 
     assert_redirect(view, ~p"/groups/#{private_group.group_id}")
+  end
+
+  test "an open compose screen leaves the private surface after club membership is removed", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
+
+    Repo.update_all(
+      from(membership in Membership,
+        where: membership.membership_id == ^alice.membership_id
+      ),
+      set: [active: false]
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %Memba.Membership.Events.ClubMemberRemoved{
+        club_id: alice.club_id,
+        membership_id: alice.membership_id,
+        person_id: alice.person_id
+      }
+    )
+
+    assert_redirect(view, ~p"/conversations")
   end
 
   test "recipient count follows members with primary email addresses", %{conn: conn} do

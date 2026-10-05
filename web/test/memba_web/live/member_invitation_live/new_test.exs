@@ -1,8 +1,13 @@
 defmodule MembaWeb.MemberInvitationLive.NewTest do
   use MembaWeb.ConnCase, async: true
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.MemberPermission
@@ -177,6 +182,275 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     |> assert_invitation_form_is_email_only()
   end
 
+  test "selected-club members enter and leave an already-open invitation context", %{
+    conn: conn
+  } do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_id: robin.club_id,
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-new[data-active-member-count='2']"
+           )
+
+    %{socket: initial_socket} = :sys.get_state(view.pid)
+    assert initial_socket.assigns.invitation_context.active_member_count == 2
+    refute Map.has_key?(initial_socket.assigns, :selected_club)
+    refute Map.has_key?(initial_socket.assigns, :current_member)
+    refute Map.has_key?(initial_socket.assigns, :active_member_count)
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_id: robin.club_id,
+        club_name: "West Coast Paddlers"
+      )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %ClubMemberAdded{
+        club_id: robin.club_id,
+        membership_id: carol.membership_id,
+        person_id: carol.person_id
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-new[data-active-member-count='3']"
+           )
+
+    Membership
+    |> where([membership], membership.membership_id == ^bob.membership_id)
+    |> Repo.update_all(set: [active: false])
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %ClubMemberRemoved{
+        club_id: robin.club_id,
+        membership_id: bob.membership_id,
+        person_id: bob.person_id
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-new[data-active-member-count='2']"
+           )
+  end
+
+  test "a relevant refresh preserves typed invitation input and validation errors", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
+
+    view
+    |> form("#member-club-invitation-form", invitation: %{email: "not-an-email"})
+    |> render_change()
+
+    club = Memba.Membership.get_club(robin.club_id)
+
+    club
+    |> Ecto.Changeset.change(name: "West Coast Alpine Club")
+    |> Repo.update!()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %ClubUpdated{
+        club_id: robin.club_id,
+        name: "West Coast Alpine Club",
+        slug: club.slug
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-selected-club",
+             "West Coast Alpine Club"
+           )
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-email-input[value='not-an-email'][aria-invalid='true']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-email-input-error-1",
+             "Enter a valid email address."
+           )
+
+    %{socket: socket} = :sys.get_state(view.pid)
+    assert socket.assigns.form.params == %{"email" => "not-an-email"}
+    assert socket.assigns.form_errors == %{email: ["Enter a valid email address."]}
+  end
+
+  test "an unrelated-club notification leaves context, form, and route state untouched", %{
+    conn: conn
+  } do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    other =
+      create_active_member(
+        email: "other@example.com",
+        name: "Other Member",
+        club_name: "Other Club"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new?#{[group_id: "selected-group"]}")
+
+    view
+    |> form("#member-club-invitation-form", invitation: %{email: "dana@example.com"})
+    |> render_change()
+
+    %{socket: before_socket} = :sys.get_state(view.pid)
+    selected_club = Memba.Membership.get_club(robin.club_id)
+    other_club = Memba.Membership.get_club(other.club_id)
+
+    selected_club
+    |> Ecto.Changeset.change(name: "Must Not Be Loaded")
+    |> Repo.update!()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Club,
+      %ClubUpdated{
+        club_id: other.club_id,
+        name: other_club.name,
+        slug: other_club.slug
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-selected-club",
+             "West Coast Paddlers"
+           )
+
+    refute has_element?(view, "#member-club-invitation-selected-club", "Must Not Be Loaded")
+    assert has_element?(view, "#member-club-invitation-email-input[value='dana@example.com']")
+
+    assert has_element?(
+             view,
+             "#cancel-member-club-invitation-link[href='/groups/selected-group']"
+           )
+
+    %{socket: after_socket} = :sys.get_state(view.pid)
+    assert after_socket.assigns.invitation_context == before_socket.assigns.invitation_context
+    assert after_socket.assigns.route_params == before_socket.assigns.route_params
+    assert after_socket.assigns.form.params == before_socket.assigns.form.params
+    assert after_socket.assigns.form_errors == before_socket.assigns.form_errors
+  end
+
+  test "fresh club-membership loss leaves an already-open private surface", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
+
+    Membership
+    |> where([membership], membership.membership_id == ^robin.membership_id)
+    |> Repo.update_all(set: [active: false])
+
+    monitor = Process.monitor(view.pid)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %ClubMemberRemoved{
+        club_id: robin.club_id,
+        membership_id: robin.membership_id,
+        person_id: robin.person_id
+      }
+    )
+
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
+  end
+
+  test "fresh manage-members loss leaves an already-open private surface", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
+
+    revoke_projected_manage_members!(robin)
+    monitor = Process.monitor(view.pid)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Role,
+      %ClubRoleRemovedFromMember{
+        club_id: robin.club_id,
+        membership_id: robin.membership_id,
+        person_id: robin.person_id,
+        role_id: Memba.ID.generate(:role)
+      }
+    )
+
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
+  end
+
   test "routed GET requires the current club member to have club.manage_members", %{conn: conn} do
     alice =
       create_active_member(
@@ -305,6 +579,29 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
       permission: Permissions.club_manage_members(),
       grant_count: 1
     })
+  end
+
+  defp revoke_projected_manage_members!(member) do
+    Repo.delete_all(
+      from member_permission in MemberPermission,
+        where: member_permission.club_id == ^member.club_id,
+        where: member_permission.membership_id == ^member.membership_id,
+        where: member_permission.person_id == ^member.person_id,
+        where: member_permission.permission == ^Permissions.club_manage_members()
+    )
+  end
+
+  defp notify_read_model_change(view, projector, source_event) do
+    send(
+      view.pid,
+      {:read_model_changed,
+       %{
+         projector: projector,
+         source_event: source_event,
+         metadata: %{},
+         changes: %{}
+       }}
+    )
   end
 
   defp assert_invitation_form_is_email_only(html) do

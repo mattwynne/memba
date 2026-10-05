@@ -1,7 +1,7 @@
 # Live projection queries for open LiveViews
 
 Date: 2026-09-28
-Status: implementing
+Status: merged
 
 ## Goal
 

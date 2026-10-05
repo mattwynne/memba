@@ -10,53 +10,47 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   require Logger
 
-  alias Memba.Membership
-  alias Memba.Membership.SystemGroups
+  alias LiveQuery.Binding
   alias Memba.Messaging
   alias Memba.Messaging.MemberSubmission
   alias Memba.Messaging.Projectors.Message, as: MessageProjector
-  alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
+  alias MembaWeb.LiveQuery.MembaReadModelSource
+  alias MembaWeb.MemberMessageComposeQuery
 
-  @compose_context_projectors [
-    Memba.Membership.Projectors.Group,
-    Memba.Membership.Projectors.GroupMembership,
-    Memba.Membership.Projectors.Membership
-  ]
+  @compose_query_id :member_message_compose
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
-    params = put_session_club_id(params, session) |> put_club_id_source(session)
-    socket = ensure_identity_assigns(socket)
+    route_params = params |> put_session_club_id(session) |> put_club_id_source(session)
 
-    case params do
+    case route_params do
       %{"club_id" => club_id} ->
-        case compose_context(
-               club_id,
-               Map.get(params, "group_id"),
-               socket.assigns.current_identity,
-               socket.assigns.current_identity_clubs
+        socket =
+          socket
+          |> ensure_identity_assigns()
+          |> assign(:route_params, route_params)
+          |> assign_initial_send_state()
+          |> assign(:message_form, message_form())
+
+        case Binding.bind(
+               socket,
+               MemberMessageComposeQuery.query(),
+               compose_query_inputs(club_id, route_params, socket),
+               MembaReadModelSource.new()
              ) do
-          {:ok, compose_assigns} ->
-            {:ok,
-             socket
-             |> assign(:route_params, params)
-             |> assign(compose_assigns)
-             |> subscribe_to_read_model_changes()
-             |> assign_initial_send_state()
-             |> assign(:message_form, message_form())}
+          {:ok, socket} ->
+            {:ok, socket}
 
-          {:error, :forbidden} ->
-            forbidden!(socket)
-
-          {:error, :not_found} ->
-            not_found!(socket)
+          {:error, errors, socket} ->
+            initial_binding_error!(errors, socket)
         end
 
       _params ->
         {:ok,
          socket
-         |> assign(:route_params, params)
+         |> ensure_identity_assigns()
+         |> assign(:route_params, route_params)
          |> assign_empty_compose_context()}
     end
   end
@@ -70,14 +64,16 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   @impl Phoenix.LiveView
-  def handle_info(
-        {:read_model_changed, %{projector: projector, source_event: %{club_id: club_id}}},
-        %{assigns: %{route_params: %{"club_id" => club_id}}} = socket
-      )
-      when projector in @compose_context_projectors do
-    case reload_compose_context(socket) do
-      {:ok, socket} -> {:noreply, socket}
-      {:error, socket} -> {:noreply, leave_private_surface(socket)}
+  def handle_info({:read_model_changed, _change} = notification, socket) do
+    case Binding.handle_notification(socket, notification) do
+      {:ignored, socket} ->
+        {:noreply, socket}
+
+      {:ok, socket} ->
+        {:noreply, socket}
+
+      {:error, errors, socket} ->
+        {:noreply, refresh_binding_error(errors, socket)}
     end
   end
 
@@ -85,12 +81,12 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   @impl Phoenix.LiveView
   def handle_event("send_message", %{"message" => message_params}, socket) do
-    case reload_compose_context(socket) do
+    case Binding.rebind(socket, @compose_query_id, compose_query_inputs(socket)) do
       {:ok, socket} ->
         send_message(socket, message_params)
 
-      {:error, socket} ->
-        {:noreply, leave_private_surface(socket)}
+      {:error, errors, socket} ->
+        {:noreply, refresh_binding_error(errors, socket)}
     end
   end
 
@@ -114,7 +110,9 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   @impl Phoenix.LiveView
-  def render(assigns) do
+  def render(%{compose_context: compose_context} = assigns) when is_map(compose_context) do
+    assigns = assign(assigns, compose_context)
+
     ~H"""
     <Layouts.club_site
       flash={@flash}
@@ -350,40 +348,20 @@ defmodule MembaWeb.MemberMessageLive.New do
     """
   end
 
+  def render(%{compose_context: nil} = assigns) do
+    ~H"""
+    <div id="member-message-compose-cleared"></div>
+    """
+  end
+
   defp ensure_identity_assigns(socket) do
     socket
     |> assign_new(:current_identity, fn -> nil end)
-    |> assign_new(:current_identity_clubs, fn -> [] end)
-  end
-
-  defp subscribe_to_read_model_changes(socket) do
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
-    end
-
-    socket
-  end
-
-  defp reload_compose_context(socket) do
-    route_params = socket.assigns.route_params
-
-    case compose_context(
-           Map.get(route_params, "club_id"),
-           Map.get(route_params, "group_id"),
-           socket.assigns.current_identity,
-           socket.assigns.current_identity_clubs
-         ) do
-      {:ok, compose_assigns} -> {:ok, assign(socket, compose_assigns)}
-      {:error, _reason} -> {:error, socket}
-    end
+    |> assign_new(:current_identity_email, fn -> nil end)
   end
 
   defp leave_private_surface(socket) do
-    route_params = socket.assigns.route_params
-
-    socket
-    |> assign_empty_compose_context()
-    |> push_navigate(to: access_lost_path(route_params))
+    push_navigate(socket, to: access_lost_path(socket.assigns.route_params))
   end
 
   defp send_message(socket, message_params) do
@@ -397,9 +375,9 @@ defmodule MembaWeb.MemberMessageLive.New do
        |> assign(:message_form, message_form(message_params))}
     else
       attrs = %{
-        "club_id" => socket.assigns.selected_club.club_id,
-        "sender_id" => socket.assigns.current_member.id,
-        "audience_group_id" => socket.assigns.audience_group.group_id,
+        "club_id" => socket.assigns.compose_context.selected_club.club_id,
+        "sender_id" => socket.assigns.compose_context.current_member.id,
+        "audience_group_id" => socket.assigns.compose_context.audience_group.group_id,
         "subject" => Map.get(message_params, "subject", ""),
         "body" => Map.get(message_params, "body", "")
       }
@@ -449,81 +427,64 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   defp log_send_failure(socket, reason) do
     inspected_reason = inspect(reason)
+    compose_context = socket.assigns.compose_context
 
     Logger.error("Member message send failed: #{inspected_reason}",
-      club_id: selected_club_id(socket.assigns.selected_club, socket.assigns.route_params),
-      sender_id: current_member_id(socket.assigns.current_member),
+      club_id: selected_club_id(compose_context.selected_club, socket.assigns.route_params),
+      sender_id: current_member_id(compose_context.current_member),
       reason: inspected_reason
     )
   end
 
-  defp compose_context(club_id, requested_group_id, current_identity, current_identity_clubs) do
-    with selected_club when not is_nil(selected_club) <-
-           selected_club(current_identity_clubs, club_id),
-         club_members <- Membership.list_active_members_of_club(club_id),
-         current_member when not is_nil(current_member) <-
-           current_member_for_identity(club_members, current_identity) do
-      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
-      group_id = requested_group_id || SystemGroups.everyone_group_id(club_id)
+  defp compose_query_inputs(socket) do
+    route_params = socket.assigns.route_params
+    compose_query_inputs(Map.get(route_params, "club_id"), route_params, socket)
+  end
 
-      compose_group_context(
-        selected_club,
-        current_member,
-        groups,
-        group_id,
-        requested_group_id
-      )
+  defp compose_query_inputs(club_id, route_params, socket) do
+    %{
+      club_id: club_id,
+      group_id: Map.get(route_params, "group_id"),
+      authenticated_email: socket.assigns.current_identity_email
+    }
+  end
+
+  defp initial_binding_error!(
+         [{@compose_query_id, :forbidden} | _errors],
+         socket
+       ),
+       do: forbidden!(socket)
+
+  defp initial_binding_error!(
+         [{@compose_query_id, :not_found} | _errors],
+         socket
+       ),
+       do: not_found!(socket)
+
+  defp initial_binding_error!(errors, _socket) do
+    raise "member message compose live query failed: #{inspect(errors)}"
+  end
+
+  defp refresh_binding_error(errors, socket) do
+    if Enum.any?(errors, fn
+         {@compose_query_id, reason} when reason in [:forbidden, :not_found] -> true
+         _other -> false
+       end) do
+      leave_private_surface(socket)
     else
-      _not_authorized -> {:error, :forbidden}
+      raise "member message compose live query refresh failed: #{inspect(errors)}"
     end
-  end
-
-  defp compose_group_context(
-         selected_club,
-         current_member,
-         groups,
-         group_id,
-         requested_group_id
-       ) do
-    case Enum.find(groups, &(&1.group_id == group_id)) do
-      nil when is_nil(requested_group_id) ->
-        {:error, :forbidden}
-
-      nil ->
-        {:error, :not_found}
-
-      audience_group ->
-        members = Membership.list_active_members_of_group(audience_group.group_id)
-        active_member_count = Enum.count(members)
-
-        {:ok,
-         %{
-           selected_club: selected_club,
-           current_member: current_member,
-           audience_group: audience_group,
-           active_member_count: active_member_count,
-           message_audience: message_audience(selected_club, audience_group, active_member_count)
-         }}
-    end
-  end
-
-  defp selected_club(current_identity_clubs, club_id) do
-    Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
-  end
-
-  defp current_member_for_identity(_members, nil), do: nil
-
-  defp current_member_for_identity(members, identity) do
-    Membership.find_member_for_email(members, identity.email)
   end
 
   defp assign_empty_compose_context(socket) do
     socket
-    |> assign(:selected_club, nil)
-    |> assign(:current_member, nil)
-    |> assign(:audience_group, nil)
-    |> assign(:active_member_count, nil)
-    |> assign(:message_audience, message_audience(nil, nil, nil))
+    |> assign(:compose_context, %{
+      selected_club: nil,
+      current_member: nil,
+      audience_group: nil,
+      active_member_count: nil,
+      message_audience: message_audience(nil, nil, nil)
+    })
     |> assign_initial_send_state()
     |> assign(:message_form, message_form())
   end

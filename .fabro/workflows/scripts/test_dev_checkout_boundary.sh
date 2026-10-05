@@ -13,7 +13,11 @@ log_file="$tmpdir/invocations.log"
 foreign_pg="$foreign_root/.devenv/postgres-socket"
 source_pg="$source_root/.devenv/postgres-socket"
 
-mkdir -p "$source_root/bin" "$source_root/web" "$source_root/.devenv/state/postgres"
+mkdir -p \
+  "$source_root/bin" \
+  "$source_root/packages/live_query" \
+  "$source_root/web" \
+  "$source_root/.devenv/state/postgres"
 mkdir -p "$foreign_root/bin" "$foreign_root/.devenv/state/postgres"
 mkdir -p "$tools_dir"
 cp "$repo_root/bin/dev" "$source_root/bin/dev"
@@ -79,6 +83,36 @@ exec "\$@"
 SH
 chmod +x "$tools_dir/devenv"
 
+cat > "$tools_dir/elixir" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+chmod +x "$tools_dir/elixir"
+
+cat > "$tools_dir/mix" <<SH
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'package_mix cwd=%s args=%s DEVENV_ROOT=%s PGHOST=%s PGPORT=%s\n' \
+  "\$PWD" "\$*" "\${DEVENV_ROOT:-<unset>}" "\${PGHOST:-<unset>}" "\${PGPORT:-<unset>}" >> "$log_file"
+if [ "\$PWD" != "$source_root/packages/live_query" ]; then
+  echo "package mix ran from wrong cwd: \$PWD" >&2
+  exit 51
+fi
+if [ "\${DEVENV_ROOT:-}" != "$source_root" ]; then
+  echo "package mix saw wrong DEVENV_ROOT: \${DEVENV_ROOT:-<unset>}" >&2
+  exit 52
+fi
+if [ "\${PGHOST:-}" = "$foreign_pg" ]; then
+  echo "package mix inherited foreign PGHOST" >&2
+  exit 53
+fi
+if [ "\${1:-}" != "test" ]; then
+  echo "package mix expected test, got: \$*" >&2
+  exit 54
+fi
+SH
+chmod +x "$tools_dir/mix"
+
 cat > "$source_root/bin/mix" <<SH
 #!/usr/bin/env bash
 set -euo pipefail
@@ -125,6 +159,11 @@ assert_mismatched_context_uses_source_checkout() {
   fi
   if ! grep -q "^source_mix .*DEVENV_ROOT=$source_root .*PGHOST=$source_pg" "$log_file"; then
     echo "expected source mix to run with source checkout DEVENV_ROOT and PGHOST" >&2
+    cat "$log_file" >&2
+    exit 1
+  fi
+  if ! grep -q "^package_mix cwd=$source_root/packages/live_query args=test DEVENV_ROOT=$source_root PGHOST=$source_pg" "$log_file"; then
+    echo "expected package tests to run from the source checkout with its devenv context" >&2
     cat "$log_file" >&2
     exit 1
   fi
@@ -186,6 +225,11 @@ if grep -q '^foreign_mix\|^devenv ' "$log_file"; then
 fi
 if ! grep -q "^source_mix .*DEVENV_ROOT=$source_root .*PGHOST=$source_pg" "$log_file"; then
   echo "expected same-checkout nested command to use source mix wrapper" >&2
+  cat "$log_file" >&2
+  exit 1
+fi
+if ! grep -q "^package_mix cwd=$source_root/packages/live_query args=test DEVENV_ROOT=$source_root PGHOST=$source_pg" "$log_file"; then
+  echo "expected same-checkout nested command to run package tests from the source checkout" >&2
   cat "$log_file" >&2
   exit 1
 fi

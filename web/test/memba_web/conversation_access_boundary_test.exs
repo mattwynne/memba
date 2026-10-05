@@ -5,7 +5,11 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
 
   @member_conversation_sources [
     "lib/memba_web/member_dashboard_presentation.ex",
+    "lib/memba_web/member_dashboard_query.ex",
     "lib/memba_web/member_message_detail.ex",
+    "lib/memba_web/member_message_detail_query.ex",
+    "lib/memba_web/member_message_compose_query.ex",
+    "lib/memba_web/member_message_delivery_query.ex",
     "lib/memba_web/live/member_dashboard_live.ex",
     "lib/memba_web/live/member_message_live/new.ex",
     "lib/memba_web/live/member_message_live/show.ex",
@@ -43,10 +47,12 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
 
   test "detail and compose access use public context authorization boundaries" do
     detail_source = read_source!("lib/memba_web/member_message_detail.ex")
-    compose_source = read_source!("lib/memba_web/live/member_message_live/new.ex")
+    compose_query_source = read_source!("lib/memba_web/member_message_compose_query.ex")
+    compose_live_source = read_source!("lib/memba_web/live/member_message_live/new.ex")
 
     assert detail_source =~ "Messaging.member_has_conversation_access?("
-    assert compose_source =~ "Membership.list_active_groups_for_member("
+    assert compose_live_source =~ "MemberMessageComposeQuery.query()"
+    assert compose_query_source =~ "Membership.list_active_groups_for_member("
   end
 
   defp read_source!(relative_path) do

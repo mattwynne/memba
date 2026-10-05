@@ -207,6 +207,53 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
     assert_no_email_sent()
   end
 
+  test "submit reauthorizes before the actor-neutral invitation command", %{conn: conn} do
+    Process.flag(:trap_exit, true)
+
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
+
+    Repo.delete_all(
+      from member_permission in MemberPermission,
+        where: member_permission.club_id == ^robin.club_id,
+        where: member_permission.membership_id == ^robin.membership_id,
+        where: member_permission.person_id == ^robin.person_id,
+        where: member_permission.permission == ^Permissions.club_manage_members()
+    )
+
+    monitor = Process.monitor(view.pid)
+
+    assert catch_exit(
+             view
+             |> form("#member-club-invitation-form",
+               invitation: %{email: "dana@example.com"}
+             )
+             |> render_submit()
+           )
+
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
+
+    assert is_nil(
+             Membership.get_pending_club_member_invitation_by_email(
+               robin.club_id,
+               "dana@example.com"
+             )
+           )
+
+    assert_no_email_sent()
+  end
+
   defp signed_in_club_host(conn, email, club) do
     conn
     |> club_host(club)

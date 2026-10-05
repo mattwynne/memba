@@ -7,9 +7,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Person
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging
+  alias Memba.Messaging.Events.ConversationFollowed
+  alias Memba.Messaging.Events.EmailDeliveryDelayed
+  alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.Projections.MemberEmailDelivery
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -1116,6 +1121,547 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute render(view) =~ "Members by delivery status"
   end
 
+  test "a committed reply enters an already-open conversation", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Open conversation"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(alice.email, alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    reply_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 "message_id" => reply_id,
+                 "conversation_id" => message.message_id,
+                 "sender_id" => bob.person_id,
+                 "body" => "This arrived while the page stayed open."
+               },
+               consistency: :strong
+             )
+
+    assert has_element?(
+             view,
+             "#member-conversation[data-message-count='2'] " <>
+               "#member-conversation-entry-#{reply_id}",
+             "This arrived while the page stayed open."
+           )
+  end
+
+  test "represented-author Person refresh is exact and replaces only the coherent result", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Clark",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Exact author refresh"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(bob.email, bob)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(view, "#member-conversation-entry-#{message.message_id}", "Alice Adams")
+
+    alice.person_id
+    |> then(&Repo.get!(Person, &1))
+    |> Ecto.Changeset.change(name: "Alice Updated")
+    |> Repo.update!()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: carol.person_id,
+        email: carol.email,
+        normalized_email: carol.email
+      }
+    )
+
+    refute has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}",
+             "Alice Updated"
+           )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: alice.person_id,
+        email: alice.email,
+        normalized_email: alice.email
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}",
+             "Alice Updated"
+           )
+
+    %{socket: socket} = :sys.get_state(view.pid)
+    assert is_map(socket.assigns.message_detail)
+    refute Map.has_key?(socket.assigns, :message)
+    refute Map.has_key?(socket.assigns, :selected_club)
+    refute Map.has_key?(socket.assigns, :conversation_entries)
+  end
+
+  test "another club, conversation, message and delivery do not refresh the open result", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    other =
+      create_active_member(
+        email: "other@example.com",
+        name: "Other Member",
+        club_name: "Other Club",
+        slug: "other-club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Scoped conversation"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(alice.email, alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    pending_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Scoped conversation",
+        body: "Only an exact conversation invalidation should reveal me."
+      )
+
+    unrelated_message_id = Memba.ID.generate(:message)
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.Message,
+      %MessageSent{
+        message_id: unrelated_message_id,
+        club_id: other.club_id,
+        sender_id: other.person_id,
+        conversation_id: unrelated_message_id,
+        reply_to_message_id: nil,
+        subject: "Other conversation",
+        body: "Unrelated"
+      }
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.MemberEmailDelivery,
+      %Memba.Messaging.Events.EmailDeliveryDelivered{
+        message_id: unrelated_message_id,
+        delivery_id: Memba.ID.generate(:delivery)
+      }
+    )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %Memba.Membership.Events.ClubMemberAdded{
+        club_id: other.club_id,
+        membership_id: other.membership_id,
+        person_id: other.person_id
+      }
+    )
+
+    assert has_element?(view, "#member-conversation[data-message-count='1']")
+    refute has_element?(view, "#member-conversation-entry-#{pending_reply.message_id}")
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.Message,
+      %MessageSent{
+        message_id: pending_reply.message_id,
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: pending_reply.subject,
+        body: pending_reply.body
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-conversation[data-message-count='2'] " <>
+               "#member-conversation-entry-#{pending_reply.message_id}"
+           )
+  end
+
+  test "follow invalidation matches the exact current member", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Exact follow"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(alice.email, alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='false']"
+           )
+
+    alice_follow =
+      Messaging.get_conversation_follow(message.message_id, alice.person_id)
+      |> Ecto.Changeset.change(following: true)
+      |> Repo.update!()
+
+    assert :ok =
+             Messaging.follow_conversation_as_current_member(
+               %{
+                 club_id: alice.club_id,
+                 conversation_id: message.message_id,
+                 member_id: bob.person_id
+               },
+               consistency: :strong
+             )
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='false']"
+           )
+
+    assert :ok =
+             Memba.Messaging.Projectors.ConversationFollow.after_update(
+               %ConversationFollowed{
+                 follow_id: alice_follow.follow_id,
+                 club_id: alice.club_id,
+                 conversation_id: message.message_id,
+                 member_id: alice.person_id
+               },
+               %{},
+               %{messaging_conversation_follow: alice_follow}
+             )
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='true']"
+           )
+  end
+
+  test "independent delivery commits converge in member-first and staff-first order", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Delivery convergence"
+      )
+
+    member_first_id = Memba.ID.generate(:delivery)
+    staff_first_id = Memba.ID.generate(:delivery)
+
+    Repo.delete_all(
+      from(delivery in MembaStaffEmailDelivery,
+        where: delivery.message_id == ^message.message_id
+      )
+    )
+
+    for {delivery_id, recipient_id, recipient_name} <- [
+          {member_first_id, alice.person_id, "Alice Adams"},
+          {staff_first_id, bob.person_id, "Bob Builder"}
+        ] do
+      create_member_email_delivery(
+        delivery_id: delivery_id,
+        message_id: message.message_id,
+        recipient_id: recipient_id,
+        recipient_name: recipient_name,
+        status: "sent"
+      )
+
+      create_memba_staff_email_delivery(
+        delivery_id: delivery_id,
+        message_id: message.message_id,
+        recipient_id: recipient_id,
+        recipient_name: recipient_name,
+        reason: nil
+      )
+    end
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(alice.email, alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    member_first_receipt =
+      member_first_id
+      |> Messaging.get_member_email_delivery()
+      |> Ecto.Changeset.change(status: "delivery problem")
+      |> Repo.update!()
+
+    publish_delivery_change(
+      Memba.Messaging.Projectors.MemberEmailDelivery,
+      message.message_id,
+      member_first_receipt,
+      nil
+    )
+
+    assert %{status: "delivery problem", reason: nil} =
+             live_receipt(view, alice.person_id)
+
+    member_first_staff =
+      member_first_id
+      |> Messaging.get_memba_staff_email_delivery()
+      |> Ecto.Changeset.change(status: "delayed", reason: "Mailbox temporarily unavailable")
+      |> Repo.update!()
+
+    publish_delivery_change(
+      Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+      message.message_id,
+      member_first_staff,
+      member_first_staff.reason
+    )
+
+    assert %{status: "delivery problem", reason: "Mailbox temporarily unavailable"} =
+             live_receipt(view, alice.person_id)
+
+    staff_first =
+      staff_first_id
+      |> Messaging.get_memba_staff_email_delivery()
+      |> Ecto.Changeset.change(status: "delayed", reason: "Provider retrying")
+      |> Repo.update!()
+
+    publish_delivery_change(
+      Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+      message.message_id,
+      staff_first,
+      staff_first.reason
+    )
+
+    assert %{status: "sent", reason: "Provider retrying"} =
+             live_receipt(view, bob.person_id)
+
+    staff_first_receipt =
+      staff_first_id
+      |> Messaging.get_member_email_delivery()
+      |> Ecto.Changeset.change(status: "delivery problem")
+      |> Repo.update!()
+
+    publish_delivery_change(
+      Memba.Messaging.Projectors.MemberEmailDelivery,
+      message.message_id,
+      staff_first_receipt,
+      nil
+    )
+
+    assert %{status: "delivery problem", reason: "Provider retrying"} =
+             live_receipt(view, bob.person_id)
+
+    refute has_element?(view, "#member-receipt-summary")
+    refute has_element?(view, "#member-receipts-section")
+  end
+
+  test "relevant refresh preserves reply validation, route and disclosure state", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    private_group = create_group(alice.club_id, "Private Planning")
+    add_group_member(private_group, alice)
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Preserve transient state",
+        audience_group_id: private_group.group_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> club_host(alice)
+      |> init_test_session(%{
+        IdentityAuth.identity_session_key() => alice.email,
+        "phoenix_flash" => %{"info" => "Keep this feedback visible."}
+      })
+      |> live(~p"/messages/#{message.message_id}?#{[group_id: private_group.group_id]}")
+
+    view
+    |> element("#member-message-reply-form")
+    |> render_submit(%{"reply" => %{"body" => "  "}})
+
+    render_hook(view, "toggle_receipt_group", %{"status" => "delivered"})
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: alice.person_id,
+        email: alice.email,
+        normalized_email: alice.email
+      }
+    )
+
+    assert has_element?(view, "#member-message-detail[data-reply-state='composing']")
+    assert has_element?(view, "#member-message-reply-body-error", "Reply body can’t be blank.")
+
+    assert has_element?(
+             view,
+             "a#back-to-club-home-link[href='/groups/#{private_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='false']"
+           )
+
+    %{socket: socket} = :sys.get_state(view.pid)
+    assert socket.assigns.reply_form.params == %{"body" => "  "}
+    assert socket.assigns.reply_error == nil
+    assert socket.assigns.route_params["group_id"] == private_group.group_id
+    assert MapSet.member?(socket.assigns.expanded_receipt_groups, "delivered")
+    assert Phoenix.Flash.get(socket.assigns.flash, :info) == "Keep this feedback visible."
+  end
+
+  test "fresh club-membership loss leaves an already-open private surface", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Membership-gated details"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(bob.email, alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert :ok =
+             Memba.Membership.remove_member(
+               %{membership_id: bob.membership_id},
+               consistency: :strong
+             )
+
+    assert_redirect(view, ~p"/conversations")
+  end
+
   defp signed_in_club_host(conn, email, club) do
     conn
     |> club_host(club)
@@ -1190,6 +1736,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     |> Map.from_struct()
     |> Map.put(:person_id, person_id)
     |> Map.put(:membership_id, membership_id)
+    |> Map.put(:email, Keyword.fetch!(attrs, :email))
   end
 
   defp create_group(club_id, name) do
@@ -1302,6 +1849,41 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
     })
+  end
+
+  defp create_memba_staff_email_delivery(attrs) do
+    Repo.insert!(%MembaStaffEmailDelivery{
+      delivery_id: Keyword.fetch!(attrs, :delivery_id),
+      message_id: Keyword.fetch!(attrs, :message_id),
+      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+      recipient_address: "member@example.com",
+      channel: "email",
+      status: "sent",
+      reason: Keyword.fetch!(attrs, :reason)
+    })
+  end
+
+  defp publish_delivery_change(projector, message_id, delivery, reason) do
+    assert :ok =
+             projector.after_update(
+               %EmailDeliveryDelayed{
+                 message_id: message_id,
+                 delivery_id: delivery.delivery_id,
+                 reason: reason || "Member-facing delivery problem"
+               },
+               %{},
+               %{delivery_change: delivery}
+             )
+  end
+
+  defp live_receipt(view, recipient_id) do
+    %{socket: socket} = :sys.get_state(view.pid)
+
+    Enum.find(
+      socket.assigns.message_detail.member_email_delivery_records,
+      &(&1.recipient_id == recipient_id)
+    )
   end
 
   defp normalize_whitespace(text) do

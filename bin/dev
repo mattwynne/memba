@@ -452,6 +452,22 @@ mix() {
   "$repo_root/bin/mix" "$@"
 }
 
+package_mix() {
+  local elixir_executable package_mix_executable
+  elixir_executable="$(command -v elixir)"
+  package_mix_executable="$(dirname "$elixir_executable")/mix"
+
+  if [ ! -x "$package_mix_executable" ]; then
+    echo "Could not find Mix beside the active Elixir executable: $elixir_executable" >&2
+    return 1
+  fi
+
+  (
+    cd "$repo_root/packages/live_query"
+    "$package_mix_executable" "$@"
+  )
+}
+
 if ! command -v argc >/dev/null 2>&1; then
   echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
   exit 1
@@ -751,6 +767,7 @@ precommit() {
 }
 
 _precommit() {
+  package_mix test || return $?
   (cd "$repo_root/web" && local_test_email_env mix precommit)
 }
 
@@ -769,6 +786,21 @@ _setup() {
 
   echo "Installing Rebar..."
   mix local.rebar --force
+
+  echo "Fetching LiveQuery package dependencies..."
+  local package_deps_get_log package_deps_get_status
+  package_deps_get_log=$(mktemp)
+  if package_mix deps.get >"$package_deps_get_log" 2>&1; then
+    package_deps_get_status=0
+  else
+    package_deps_get_status=$?
+  fi
+  if [ "$package_deps_get_status" -ne 0 ]; then
+    cat "$package_deps_get_log" >&2
+    rm -f "$package_deps_get_log"
+    return "$package_deps_get_status"
+  fi
+  rm -f "$package_deps_get_log"
 
   echo "Fetching web dependencies..."
   local deps_get_log
