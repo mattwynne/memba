@@ -19,11 +19,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
-  alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
-  alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
-  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.RequestGroupAccess
   alias Memba.Messaging.Commands.SendMessage
@@ -34,6 +30,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.CurrentMemberConversationFollow
+  alias Memba.Messaging.EmailDeliveryReport
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
@@ -388,8 +385,8 @@ defmodule Memba.Messaging do
   """
   def report_email_delivery_delivered(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_email_delivery_delivered_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- EmailDeliveryReport.delivered(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -399,8 +396,8 @@ defmodule Memba.Messaging do
   """
   def report_email_delivery_delayed(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_email_delivery_delayed_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- EmailDeliveryReport.delayed(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -410,8 +407,8 @@ defmodule Memba.Messaging do
   """
   def report_email_delivery_bounced(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_email_delivery_bounced_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- EmailDeliveryReport.bounced(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -421,8 +418,8 @@ defmodule Memba.Messaging do
   """
   def report_email_delivery_spam_complaint(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_email_delivery_spam_complaint_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- EmailDeliveryReport.spam_complaint(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -1877,52 +1874,6 @@ defmodule Memba.Messaging do
          club_id: club_id,
          conversation_id: conversation_id,
          member_id: member_id
-       }}
-    end
-  end
-
-  defp report_email_delivery_delivered_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
-      {:ok, %ReportEmailDeliveryDelivered{message_id: message_id, delivery_id: delivery_id}}
-    end
-  end
-
-  defp report_email_delivery_delayed_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
-         {:ok, reason} <- fetch_required(attrs, :reason) do
-      {:ok,
-       %ReportEmailDeliveryDelayed{
-         message_id: message_id,
-         delivery_id: delivery_id,
-         reason: reason
-       }}
-    end
-  end
-
-  defp report_email_delivery_bounced_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
-         {:ok, reason} <- fetch_required(attrs, :reason) do
-      {:ok,
-       %ReportEmailDeliveryBounced{
-         message_id: message_id,
-         delivery_id: delivery_id,
-         reason: reason
-       }}
-    end
-  end
-
-  defp report_email_delivery_spam_complaint_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
-         {:ok, reason} <- fetch_required(attrs, :reason) do
-      {:ok,
-       %ReportEmailDeliverySpamComplaint{
-         message_id: message_id,
-         delivery_id: delivery_id,
-         reason: reason
        }}
     end
   end
