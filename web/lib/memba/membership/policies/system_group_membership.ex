@@ -14,7 +14,7 @@ defmodule Memba.Membership.Policies.SystemGroupMembership do
     consistency: :strong,
     start_from: :origin
 
-  alias Memba.Membership.App
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.ClubMemberAdded
@@ -131,7 +131,7 @@ defmodule Memba.Membership.Policies.SystemGroupMembership do
   end
 
   defp dispatch(command) do
-    case App.dispatch(command, consistency: [GroupMembership]) do
+    case CommandDispatch.dispatch(command, consistency: [GroupMembership]) do
       :ok -> :ok
       {:error, reason} when reason in [:not_created, :group_not_defined] -> :ok
       {:error, _reason} = error -> error

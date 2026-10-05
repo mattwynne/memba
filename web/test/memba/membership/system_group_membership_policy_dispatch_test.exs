@@ -4,6 +4,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   alias Commanded.EventStore
   alias Memba.Membership.App
   alias Memba.Membership.Club
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -20,6 +21,39 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
+
+  test "internal group commands preserve explicit returning and consistency options" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+
+    create_club(club_id)
+    add_member(club_id, membership_id, person_id)
+    create_group(club_id, group_id)
+
+    command = %AddGroupMember{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id
+    }
+
+    assert {:ok, %Commanded.Commands.ExecutionResult{events: [%GroupMemberAdded{}]}} =
+             CommandDispatch.dispatch(command, returning: :execution_result, consistency: :strong)
+
+    assert {:ok, %Commanded.Commands.ExecutionResult{events: [%GroupMemberRemoved{}]}} =
+             CommandDispatch.dispatch(
+               %Memba.Membership.Commands.RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+  end
 
   test "ClubMemberAdded and ClubMemberRemoved dispatch idempotent Everyone membership commands" do
     club_id = Memba.ID.generate(:club)

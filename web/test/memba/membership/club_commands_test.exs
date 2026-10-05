@@ -4,7 +4,7 @@ defmodule Memba.Membership.ClubCommandsTest do
   alias Memba.Membership
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.CommandDispatch
-  alias Memba.Membership.Commands.{CreateClub, UpdateClub}
+  alias Memba.Membership.Commands.{CreateClub, ReconcileLegacyAdminHistory, UpdateClub}
 
   test "create preparation accepts atom/string keys, derives a slug, and does not dispatch" do
     club_id = Memba.ID.generate(:club)
@@ -62,6 +62,21 @@ defmodule Memba.Membership.ClubCommandsTest do
     # cannot be prepared again after its slug has been projected.
     assert {:error, :slug_taken} =
              ClubCommands.prepare_create(%{club_id: club_id, name: "Alpine", slug: "alpine"})
+  end
+
+  test "reconciliation command preserves raw errors with explicit repair dispatch options" do
+    command = %ReconcileLegacyAdminHistory{
+      club_id: Memba.ID.generate(:club),
+      membership_id: Memba.ID.generate(:membership),
+      person_id: Memba.ID.generate(:person)
+    }
+
+    assert {:error, :not_created} =
+             CommandDispatch.dispatch(command,
+               consistency: [Memba.Membership.Projectors.Role],
+               metadata: %{"operation_id" => "test-repair"},
+               returning: :execution_result
+             )
   end
 
   test "projected duplicate guard rejects another club but allows own slug for update" do

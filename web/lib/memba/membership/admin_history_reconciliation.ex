@@ -16,6 +16,7 @@ defmodule Memba.Membership.AdminHistoryReconciliation do
   alias Memba.BuildInfo
   alias Memba.Membership.App
   alias Memba.Membership.Club
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
   alias Memba.Membership.Events.ClubRoleAssignedToMember
   alias Memba.Membership.Events.ClubRoleDefined
@@ -288,7 +289,7 @@ defmodule Memba.Membership.AdminHistoryReconciliation do
         returning: :execution_result
       ]
 
-      case App.dispatch(command, dispatch_opts) do
+      case CommandDispatch.dispatch(command, dispatch_opts) do
         :ok ->
           {:cont,
            {:ok, Map.put(appended_by_key, candidate_key(candidate), candidate.events_planned)}}

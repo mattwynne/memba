@@ -1,9 +1,10 @@
 defmodule Memba.Membership.CommandDispatch do
   @moduledoc """
-  Web-facing Commanded adapter for prepared Membership commands.
+  Sole Commanded dispatch boundary for prepared Membership commands, including
+  internal policy and reconciliation commands.
 
-  Preserve the established transition result and explicit Commanded returning
-  contracts. Policy/backfill dispatches still use the application directly.
+  Preserve established transition results and explicit Commanded returning
+  contracts. The system-group backfill remains a separate operational workflow.
   """
   require Logger
 
@@ -14,7 +15,10 @@ defmodule Memba.Membership.CommandDispatch do
   alias Memba.Membership.Commands.{
     CreateCustomGroup,
     AddCustomGroupMember,
-    RemoveCustomGroupMember
+    RemoveCustomGroupMember,
+    AddGroupMember,
+    RemoveGroupMember,
+    ReconcileLegacyAdminHistory
   }
 
   alias Memba.Membership.{CustomGroupAdmission, CustomGroupRemoval}
@@ -52,6 +56,12 @@ defmodule Memba.Membership.CommandDispatch do
   def dispatch(%RemoveCustomGroupMember{} = command, opts) do
     dispatch_custom_group_removal(command, opts)
   end
+
+  # Internal policy and repair callers own their consistency, metadata and
+  # returning contracts; do not route these through the custom-group workflow.
+  def dispatch(%AddGroupMember{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%RemoveGroupMember{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%ReconcileLegacyAdminHistory{} = command, opts), do: raw_dispatch(command, opts)
 
   # Match member lifecycle consistency: a re-add must not outrun the prior
   # removal's follow cleanup on the same Club stream.
