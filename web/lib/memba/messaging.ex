@@ -30,6 +30,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.EmailDeliveryReport
+  alias Memba.Messaging.EveryoneConversationAccessBackfillQueries
   alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
@@ -548,7 +549,7 @@ defmodule Memba.Messaging do
   """
   def list_everyone_conversation_access_backfill_page(cursor \\ nil, limit \\ 1_000),
     do:
-      ConversationGroupAccessQueries.list_everyone_conversation_access_backfill_page(
+      EveryoneConversationAccessBackfillQueries.list_everyone_conversation_access_backfill_page(
         cursor,
         limit
       )

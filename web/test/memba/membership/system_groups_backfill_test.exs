@@ -245,6 +245,54 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
            ) == 1
   end
 
+  test "page cursors advance over scanned sources even when entries are already backfilled" do
+    club = seed_historic_club!()
+    first = add_active_member!(club.club_id)
+    second = add_active_member!(club.club_id)
+    assign_admin_role!(club.club_id, first)
+    assign_admin_role!(club.club_id, second)
+    root = send_historic_root_conversation!(club.club_id, first.person_id)
+
+    assert %{entries: [definition, _admin], source_count: 1, next_cursor: club_id} =
+             Membership.list_system_group_definition_backfill_page("", 1)
+
+    assert definition.club_id == club.club_id
+    assert club_id == club.club_id
+
+    assert %{entries: [everyone], source_count: 1, next_cursor: membership_id} =
+             Membership.list_everyone_group_membership_backfill_page(nil, 1)
+
+    assert membership_id == Enum.min([first.membership_id, second.membership_id])
+    assert everyone.membership_id == membership_id
+    assert everyone.group_id == SystemGroups.everyone_group_id(club.club_id)
+
+    assert %{entries: [admin], source_count: 1, next_cursor: ^membership_id} =
+             Membership.list_admin_group_membership_backfill_page(nil, 1)
+
+    assert admin.group_id == SystemGroups.admin_group_id(club.club_id)
+
+    assert %{entries: [%{conversation_id: ^root}], source_count: 1, next_cursor: ^root} =
+             Messaging.list_everyone_conversation_access_backfill_page(nil, 1)
+
+    assert %{entries: [%{membership_id: second_id}], source_count: 1} =
+             Membership.list_everyone_group_membership_backfill_page(membership_id, 1)
+
+    assert second_id == Enum.max([first.membership_id, second.membership_id])
+    Backfill.run!(page_size: 1)
+
+    assert %{entries: [], source_count: 1, next_cursor: ^club_id} =
+             Membership.list_system_group_definition_backfill_page(nil, 1)
+
+    assert %{entries: [], source_count: 1, next_cursor: ^membership_id} =
+             Membership.list_everyone_group_membership_backfill_page(nil, 1)
+
+    assert %{entries: [], source_count: 1, next_cursor: ^membership_id} =
+             Membership.list_admin_group_membership_backfill_page(nil, 1)
+
+    assert %{entries: [], source_count: 1, next_cursor: ^root} =
+             Messaging.list_everyone_conversation_access_backfill_page(nil, 1)
+  end
+
   test "backfill traverses multiple keyset pages" do
     fixtures =
       for _index <- 1..3 do
