@@ -29,7 +29,10 @@ defmodule Memba.Membership.CommandDispatch do
     ReplacePersonEmailAddresses,
     RemovePersonEmailAddress,
     MakePersonEmailAddressPrimary,
-    VerifyPersonEmailAddress
+    VerifyPersonEmailAddress,
+    CreatePerson,
+    AddClubMember,
+    AcceptClubMemberInvitation
   }
 
   def dispatch(command, opts \\ [])
@@ -63,6 +66,11 @@ defmodule Memba.Membership.CommandDispatch do
   def dispatch(%RemovePersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%MakePersonEmailAddressPrimary{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%VerifyPersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
+
+  # Invitation acceptance owns the consistency and result shape of each step.
+  def dispatch(%CreatePerson{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%AddClubMember{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%AcceptClubMemberInvitation{} = command, opts), do: raw_dispatch(command, opts)
 
   @doc false
   def system_group_membership_consistency(dispatch_opts) do

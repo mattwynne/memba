@@ -520,6 +520,139 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
     end
 
+    test "profile retry rejects different explicit IDs after person and membership steps" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = deterministic_invitation_person_id(invitation_id)
+      membership_id = deterministic_invitation_membership_id(invitation_id)
+
+      create_club!(club_id)
+
+      assert {:ok, %{invitation_token: token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
+                 consistency: :strong
+               )
+
+      assert {:error, :paused} =
+               Membership.complete_invited_club_member_profile(
+                 %{invitation_id: invitation_id, name: "Robin"},
+                 after_invitation_membership_added: fn -> {:error, :paused} end
+               )
+
+      assert {:error, :invitation_person_mismatch} =
+               Membership.complete_invited_club_member_profile(%{
+                 invitation_id: invitation_id,
+                 name: "Robin",
+                 person_id: Memba.ID.generate(:person)
+               })
+
+      assert {:error, :invitation_membership_mismatch} =
+               Membership.complete_invited_club_member_profile(%{
+                 invitation_id: invitation_id,
+                 name: "Robin",
+                 membership_id: Memba.ID.generate(:membership)
+               })
+
+      assert %ClubInvitationProjection{status: "pending"} =
+               Membership.get_club_member_invitation_by_token(token)
+
+      assert one_active_membership!(club_id, person_id).membership_id == membership_id
+
+      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
+               Membership.complete_invited_club_member_profile(%{
+                 invitation_id: invitation_id,
+                 name: "Robin"
+               })
+
+      assert admin_assignment_count(club_id, membership_id) == 1
+    end
+
+    test "existing-person acceptance refuses a person without the invited email" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = Memba.ID.generate(:person)
+
+      create_club!(club_id)
+
+      assert :ok =
+               Membership.create_person(
+                 %{person_id: person_id, name: "Other", email: "other@example.com"},
+                 consistency: :strong
+               )
+
+      assert {:ok, %{invitation_token: token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
+                 consistency: :strong
+               )
+
+      assert {:error, :invitation_email_mismatch} =
+               Membership.accept_club_member_invitation_for_existing_person(%{
+                 invitation_id: invitation_id,
+                 person_id: person_id
+               })
+
+      assert [] = Membership.list_active_members_of_club(club_id)
+
+      assert %ClubInvitationProjection{status: "pending"} =
+               Membership.get_club_member_invitation_by_token(token)
+    end
+
+    test "recovered membership belongs to the invited club, not another club" do
+      invited_club_id = Memba.ID.generate(:club)
+      other_club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = Memba.ID.generate(:person)
+      other_membership_id = Memba.ID.generate(:membership)
+      invited_membership_id = deterministic_invitation_membership_id(invitation_id)
+
+      create_club!(invited_club_id)
+
+      assert :ok =
+               Membership.create_club(
+                 membership_club_attrs(club_id: other_club_id, name: "Other Club"),
+                 consistency: :strong
+               )
+
+      assert :ok =
+               Membership.create_person(
+                 %{person_id: person_id, name: "Robin", email: "robin@example.com"},
+                 consistency: :strong
+               )
+
+      assert :ok =
+               Membership.add_member(
+                 %{
+                   membership_id: other_membership_id,
+                   club_id: other_club_id,
+                   person_id: person_id
+                 },
+                 consistency: :strong
+               )
+
+      assert {:ok, _invitation} =
+               Membership.invite_club_member(
+                 %{
+                   invitation_id: invitation_id,
+                   club_id: invited_club_id,
+                   email: "robin@example.com"
+                 },
+                 consistency: :strong
+               )
+
+      assert {:ok, %{membership_id: ^invited_membership_id}} =
+               Membership.accept_club_member_invitation_for_existing_person(%{
+                 invitation_id: invitation_id,
+                 person_id: person_id
+               })
+
+      assert one_active_membership!(invited_club_id, person_id).membership_id ==
+               invited_membership_id
+
+      assert one_active_membership!(other_club_id, person_id).membership_id == other_membership_id
+    end
+
     test "accepted invitation token can be reused for lookup without duplicate membership creation" do
       club_id = Memba.ID.generate(:club)
       invitation_id = Memba.ID.generate(:club_invitation)
