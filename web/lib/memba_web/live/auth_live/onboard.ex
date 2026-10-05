@@ -3,6 +3,8 @@ defmodule MembaWeb.AuthLive.Onboard do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonCommands
   alias MembaWeb.IdentityAuth
 
   @impl Phoenix.LiveView
@@ -103,10 +105,14 @@ defmodule MembaWeb.AuthLive.Onboard do
   end
 
   defp create_staff_person(email, name) do
-    Membership.create_person(
-      %{person_id: Memba.ID.generate(:person), name: name, email: email},
-      consistency: :strong
-    )
+    with {:ok, command} <-
+           PersonCommands.prepare_create(%{
+             person_id: Memba.ID.generate(:person),
+             name: name,
+             email: email
+           }) do
+      CommandDispatch.dispatch(command, consistency: :strong)
+    end
   end
 
   defp staff_person?(email), do: not is_nil(Membership.get_person_by_email(email))

@@ -72,8 +72,10 @@ defmodule Memba.Membership.CommandDispatch do
   def dispatch(%CreateClub{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%UpdateClub{} = command, opts), do: raw_dispatch(command, opts)
 
-  # Invitation acceptance owns the consistency and result shape of each step.
+  # CreatePerson preserves the caller's consistency and Commanded returning mode.
   def dispatch(%CreatePerson{} = command, opts), do: raw_dispatch(command, opts)
+
+  # Invitation acceptance owns the consistency and result shape of each step.
   def dispatch(%AddClubMember{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%AcceptClubMemberInvitation{} = command, opts), do: raw_dispatch(command, opts)
 

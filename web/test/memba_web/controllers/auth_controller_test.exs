@@ -682,6 +682,33 @@ defmodule MembaWeb.AuthControllerTest do
                Memba.Membership.get_person_by_email("pat@memba.io")
     end
 
+    test "shows the duplicate-email error when another person claims the email after mount", %{
+      conn: conn
+    } do
+      {:ok, view, _html} =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> live(~p"/auth/onboard")
+
+      assert :ok =
+               Memba.Membership.create_person(
+                 %{
+                   person_id: Memba.ID.generate(:person),
+                   name: "Existing",
+                   email: "pat@memba.io"
+                 },
+                 consistency: :strong
+               )
+
+      response =
+        view
+        |> form("#staff-onboarding-form", staff: %{name: "Pat Staff"})
+        |> render_submit()
+
+      assert response =~ "That email address is already in use."
+      assert has_element?(view, "#staff-onboarding-form")
+    end
+
     test "keeps first-time staff on onboarding when the name is blank", %{conn: conn} do
       {:ok, view, _html} =
         conn

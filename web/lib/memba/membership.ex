@@ -17,7 +17,6 @@ defmodule Memba.Membership do
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMember
   alias Memba.Membership.Commands.AddClubMember
-  alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.CustomGroupSlug
@@ -28,6 +27,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.PersonEmailAddressVerificationRevocation
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
@@ -159,10 +159,8 @@ defmodule Memba.Membership do
   `"person_id"`.
   """
   def create_person(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- create_person_command(attrs),
-         {:ok, email_addresses} <- normalize_command_email_addresses(command),
-         :ok <- PersonEmailAddressCommands.prevent_duplicate(command.person_id, email_addresses) do
-      dispatch(command, dispatch_opts)
+    with {:ok, command} <- PersonCommands.prepare_create(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -990,14 +988,6 @@ defmodule Memba.Membership do
     |> Enum.reverse()
   end
 
-  defp create_person_command(attrs) do
-    with {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, name} <- fetch_required(attrs, :name),
-         {:ok, email_attrs} <- create_person_email_attrs(attrs) do
-      {:ok, struct!(CreatePerson, Map.merge(%{person_id: person_id, name: name}, email_attrs))}
-    end
-  end
-
   defp add_member_command(attrs) do
     with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
          {:ok, club_id} <- fetch_required(attrs, :club_id),
@@ -1119,16 +1109,6 @@ defmodule Memba.Membership do
     {:error, :email_address_already_verified}
   end
 
-  defp normalize_command_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
-    with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
-      {:ok, [%{normalized_email: normalized_email}]}
-    end
-  end
-
-  defp normalize_command_email_addresses(%CreatePerson{email_addresses: email_addresses}) do
-    EmailAddresses.validate_set(email_addresses)
-  end
-
   defp person_email_address_verification_request(%PersonEmailAddress{} = email_address) do
     %{
       person_id: email_address.person_id,
@@ -1238,24 +1218,6 @@ defmodule Memba.Membership do
 
   defp timestamp(opts) do
     Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)
-  end
-
-  defp create_person_email_attrs(attrs) do
-    case fetch_optional(attrs, :email_addresses) do
-      {:ok, email_addresses} ->
-        email_attrs =
-          case fetch_optional(attrs, :email) do
-            {:ok, email} -> %{email: email, email_addresses: email_addresses}
-            :error -> %{email_addresses: email_addresses}
-          end
-
-        {:ok, email_attrs}
-
-      :error ->
-        with {:ok, email} <- fetch_required(attrs, :email) do
-          {:ok, %{email: email}}
-        end
-    end
   end
 
   defp cast_person_id(person_id) do

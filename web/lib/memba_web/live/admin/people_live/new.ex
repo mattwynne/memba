@@ -2,6 +2,8 @@ defmodule MembaWeb.Admin.PeopleLive.New do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonCommands
   alias MembaWeb.Admin.PersonEmailAddressForm
 
   import MembaWeb.Admin.PeopleLive.PersonEditorComponents
@@ -33,15 +35,13 @@ defmodule MembaWeb.Admin.PeopleLive.New do
 
   def handle_event("create_person", %{"person" => person_params}, socket) do
     with {:ok, attrs} <- PersonEmailAddressForm.validate(person_params),
-         :ok <-
-           Membership.create_person(
-             %{
-               "person_id" => Memba.ID.generate(:person),
-               "name" => attrs.name,
-               "email_addresses" => attrs.email_addresses
-             },
-             consistency: :strong
-           ) do
+         {:ok, command} <-
+           PersonCommands.prepare_create(%{
+             "person_id" => Memba.ID.generate(:person),
+             "name" => attrs.name,
+             "email_addresses" => attrs.email_addresses
+           }),
+         :ok <- CommandDispatch.dispatch(command, consistency: :strong) do
       {:noreply,
        socket
        |> put_flash(:info, "Person created")
