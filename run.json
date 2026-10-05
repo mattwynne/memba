@@ -721,7 +721,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-10-05T07:15:28.089297708Z",
-  "last_event_at": "2026-10-05T07:30:54.421395659Z",
+  "last_event_at": "2026-10-05T07:34:33.876200830Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1049,9 +1049,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 676,
       "checkpoint": {
-        "timestamp": "2026-10-05T07:30:54.424252824Z",
+        "timestamp": "2026-10-05T07:30:58.362215150Z",
         "current_node": "observe_green",
         "completed_nodes": [
           "start",
@@ -1062,33 +1062,195 @@
         ],
         "node_retries": {},
         "context_values": {
+          "last_stage": "implement_scenario",
+          "thread.resume_red.current_node": "implement_scenario",
+          "internal.retry_count.observe_green": 0,
+          "last_response": "## Summary\n\nI implemented the smallest production capability needed for the `@wip` scenario **\"Eve asks to join Board\"** in `acceptance-tests/features/custom_group_access_requests.feature` to go green",
+          "outcome": "succeeded",
+          "response.implement_scenario": "## Summary\n\nI implemented the smallest production capability needed for the `@wip` scenario **\"Eve asks to join Board\"** in `acceptance-tests/features/custom_group_access_requests.feature` to go green, using the pre-recorded `predicted_red` evidence in `docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/before.json` as the outer-loop target (missing function `Memba.Messaging.request_group_access/2`).\n\n**What was added** (`web/lib/memba/messaging.ex`, +105 lines):\n- `Messaging.request_group_access/2` — the `RequestGroupAccess` composite command described in the plan's domain model. It accepts only `:message_id`, `:club_id`, `:requester_person_id`, `:group_id`; resolves the requester's **current active club membership authoritatively** (`Membership.active_member_of_club_authoritatively?/2`) inside the existing `authorize_at_stable_checkpoint` pattern (same ordering guarantee used by `send_club_message_as_current_member`); rejects built-in groups and cross-club groups; composes the fixed subject/body naming the requester and group plus the safe `/groups/:group_id/members/add/:person_id` URL; and dispatches the existing `SendMessage` command to the club's Admin Group using the existing recipient-resolution helper. Client-supplied `sender_id`/`subject`/`body`/`audience_group_id` are structurally ignored since the command builder never reads them from caller input.\n- No new aggregate, event, or request entity — matching the plan's explicit constraint.\n\n**Tests written first and run** (`web/test/memba/messaging/request_group_access_test.exs`, new file, 5 tests, all passing):\n1. Happy path: fixed message, exact subject/body, Admin recipients, write access grant, no group membership, no follow/read access for Eve.\n2. Rejects a requester who is not currently an active club member (`{:error, :member_not_active}`).\n3. Rejects a request targeting a built-in group (`{:error, :built_in_group}`).\n4. Rejects a group belonging to another club (`{:error, :group_not_found}`).\n5. Ignores client-supplied sender/subject/body/audience overrides.\n\n**Verification performed** (via `./bin/dev test ...`, Postgres-backed, targeted runs only):\n- `test/memba/messaging/request_group_access_test.exs` — 5/5 passing.\n- The focused acceptance scenario exactly as the gate ran it: `mix test test/features/domain_cucumber_acceptance_test.exs --only \"scenario_name:Eve asks to join Board\"` — **1 test, 0 failures, 176 excluded** (previously 1 failure per `before.json`).\n- Full `web/test/memba/messaging/` directory — 284 tests, 0 failures (no regressions to existing Messaging behaviour).\n- `mix compile --warnings-as-errors --force` — clean, no new warnings.\n\n**Not run**: the full `dev check` / browser acceptance suite, per the explicit instruction to avoid an unbounded suite in this worker node, and the `@todo` outlier scenario in the same feature (out of scope for this rehearsal).\n\n**Scope respected**: no edits to the feature file (`@wip` left intact), no edits to `.delivery/goal-directed-bdd/`, no edits to the plan/domain-model docs, no widening of generic messaging/compose permissions (the generic `send_club_message_as_current_member` authorization path is untouched), no commit created — the working tree is left as the checkpoint for `observe_green` and review to evaluate.",
+          "thread.source_gate.current_node": "resume_red",
+          "thread.start.current_node": "source_gate",
+          "internal.fidelity": "summary:high",
+          "failure_signature": "",
+          "failure_class": "",
+          "graph.rankdir": "LR",
+          "graph.max_node_visits": "18",
+          "graph.model_stylesheet": "* { provider: anthropic; model: claude-sonnet-5; reasoning_effort: high; } #call_shot { reasoning_effort: medium; } #final_report { reasoning_effort: low; }",
+          "internal.retry_count.implement_scenario": 0,
+          "internal.run_id": "01M45EKSVMVZJF071CH3WCHVZV",
+          "preferred_label": "review",
+          "internal.thread_id": "implement_scenario",
+          "internal.work_dir": "/workspace/memba",
+          "current_node": "observe_green",
+          "graph.default_fidelity": "summary:high",
+          "graph.goal": "Rehearse an approved historical BDD scenario without publication",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.source_gate": 0,
+          "internal.retry_count.resume_red": 0,
+          "internal.retry_count.start": 0,
+          "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
+          "thread.implement_scenario.current_node": "observe_green"
+        },
+        "node_outcomes": {
+          "resume_red": {
+            "status": "succeeded",
+            "preferred_label": "resume",
+            "context_updates": {
+              "command.output": "blob://sha256/696551f8bcb9ba3c2e21d207cbce40eb2a8573149136ab6861736fa98be250c4"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py resume 'docs/iterations/066-request-group-access/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 276,
+              "active_time_ms": 276
+            }
+          },
+          "observe_green": {
+            "status": "succeeded",
+            "preferred_label": "review",
+            "context_updates": {
+              "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a"
+            },
+            "notes": "Script completed: python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py after 'docs/iterations/066-request-group-access/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 21693,
+              "active_time_ms": 21693
+            }
+          },
+          "source_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+            },
+            "notes": "Script completed: set -eu\ntest \"$(git rev-parse HEAD)\" = '20dd6c3b3a594dc2e45792e42f18416002feb96e' || { echo 'Wrong historical source HEAD' >&2; exit 1; }\ntest -z \"$(git status --porcelain)\" || { echo 'Dirty historical source checkout' >&2; exit 1; }\ntest -f 'docs/iterations/066-request-group-access/plan.md'\ntest -f 'web/test/features/step_definitions/custom_group_access_request_steps.exs'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 484,
+              "active_time_ms": 484
+            }
+          },
+          "implement_scenario": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_scenario",
+              "last_response": "## Summary\n\nI implemented the smallest production capability needed for the `@wip` scenario **\"Eve asks to join Board\"** in `acceptance-tests/features/custom_group_access_requests.feature` to go green",
+              "response.implement_scenario": "## Summary\n\nI implemented the smallest production capability needed for the `@wip` scenario **\"Eve asks to join Board\"** in `acceptance-tests/features/custom_group_access_requests.feature` to go green, using the pre-recorded `predicted_red` evidence in `docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/before.json` as the outer-loop target (missing function `Memba.Messaging.request_group_access/2`).\n\n**What was added** (`web/lib/memba/messaging.ex`, +105 lines):\n- `Messaging.request_group_access/2` — the `RequestGroupAccess` composite command described in the plan's domain model. It accepts only `:message_id`, `:club_id`, `:requester_person_id`, `:group_id`; resolves the requester's **current active club membership authoritatively** (`Membership.active_member_of_club_authoritatively?/2`) inside the existing `authorize_at_stable_checkpoint` pattern (same ordering guarantee used by `send_club_message_as_current_member`); rejects built-in groups and cross-club groups; composes the fixed subject/body naming the requester and group plus the safe `/groups/:group_id/members/add/:person_id` URL; and dispatches the existing `SendMessage` command to the club's Admin Group using the existing recipient-resolution helper. Client-supplied `sender_id`/`subject`/`body`/`audience_group_id` are structurally ignored since the command builder never reads them from caller input.\n- No new aggregate, event, or request entity — matching the plan's explicit constraint.\n\n**Tests written first and run** (`web/test/memba/messaging/request_group_access_test.exs`, new file, 5 tests, all passing):\n1. Happy path: fixed message, exact subject/body, Admin recipients, write access grant, no group membership, no follow/read access for Eve.\n2. Rejects a requester who is not currently an active club member (`{:error, :member_not_active}`).\n3. Rejects a request targeting a built-in group (`{:error, :built_in_group}`).\n4. Rejects a group belonging to another club (`{:error, :group_not_found}`).\n5. Ignores client-supplied sender/subject/body/audience overrides.\n\n**Verification performed** (via `./bin/dev test ...`, Postgres-backed, targeted runs only):\n- `test/memba/messaging/request_group_access_test.exs` — 5/5 passing.\n- The focused acceptance scenario exactly as the gate ran it: `mix test test/features/domain_cucumber_acceptance_test.exs --only \"scenario_name:Eve asks to join Board\"` — **1 test, 0 failures, 176 excluded** (previously 1 failure per `before.json`).\n- Full `web/test/memba/messaging/` directory — 284 tests, 0 failures (no regressions to existing Messaging behaviour).\n- `mix compile --warnings-as-errors --force` — clean, no new warnings.\n\n**Not run**: the full `dev check` / browser acceptance suite, per the explicit instruction to avoid an unbounded suite in this worker node, and the `@todo` outlier scenario in the same feature (out of scope for this rehearsal).\n\n**Scope respected**: no edits to the feature file (`@wip` left intact), no edits to `.delivery/goal-directed-bdd/`, no edits to the plan/domain-model docs, no widening of generic messaging/compose permissions (the generic `send_club_message_as_current_member` authorization path is untouched), no commit created — the working tree is left as the checkpoint for `observe_green` and review to evaluate."
+            },
+            "notes": "Stage completed: implement_scenario",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 168092,
+                    "output_tokens": 46629,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 9332738,
+                    "cache_write_tokens": 1263604
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 1263604,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 5827962
+            },
+            "files_touched": [
+              "/workspace/memba/web/lib/memba/messaging.ex",
+              "/workspace/memba/web/test/memba/messaging/request_group_access_test.exs"
+            ],
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 516016,
+              "tool_time_ms": 373408,
+              "active_time_ms": 889424
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "review_candidate",
+        "git_commit_sha": "b7cb28d25383657395cacf17b48a0d14b5f78741",
+        "node_visits": {
+          "start": 1,
+          "resume_red": 1,
+          "source_gate": 1,
+          "observe_green": 1,
+          "implement_scenario": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/after.json b/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/after.json\nnew file mode 100644\nindex 0000000..ab8390a\n--- /dev/null\n+++ b/docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/after.json\n@@ -0,0 +1,8 @@\n+{\n+  \"exit_status\": 0,\n+  \"feature_sha256\": \"9edd7d7f15a0781267eaadb183c4d62fc8f116259b06a474c3fb5ccdbe80abb8\",\n+  \"output_sha256\": \"00bfebfe993888bb9fd47ef1667d730a1e0e0ff2a0a4c133bfa0d46a315a2cbb\",\n+  \"output_tail\": \"Memba dev environment\\nWeb app: web/\\nAcceptance tests: acceptance-tests/\\nErlang/OTP 27 [erts-15.2.7.8] [source] [64-bit] [smp:8:2] [ds:8:2:10] [async-threads:1] [jit:ns]\\n\\nElixir 1.18.4 (compiled with Erlang/OTP 27)\\nInstalling Hex...\\n* creating /tmp/home/.mix/archives/hex-2.5.1\\nInstalling Rebar...\\n* creating /tmp/home/.mix/elixir/1-18-otp-27/rebar3\\nFetching web dependencies...\\nChecking acceptance-test dependencies...\\nAcceptance-test npm dependencies already installed.\\n\\n07:30:42.753 [debug] QUERY OK db=0.2ms\\nSELECT club_id::text FROM membership_clubs []\\n\\n07:30:42.757 [debug] QUERY OK db=0.8ms\\nSELECT DISTINCT ON (club_id)\\n  club_id::text,\\n  membership_id::text,\\n  person_id::text\\nFROM membership_memberships\\nWHERE active = TRUE\\nORDER BY club_id, inserted_at, membership_id\\n []\\n\\n07:30:42.960 [debug] QUERY OK db=0.3ms\\nSELECT group_id, name FROM membership_groups []\\nRunning ExUnit with seed: 431355, max_cases: 4\\nExcluding tags: [:test]\\nIncluding tags: [scenario_name: \\\"Eve asks to join Board\\\"]\\n\\n.\\nFinished in 10.8 seconds (0.00s async, 10.8s sync)\\n177 tests, 0 failures, 176 excluded\\n\\nEntering Memba devenv for root=/repos/mattwynne/memba sha=3f97ccc.\\n\\u2022 Validating lock\\n\\u2713 Validating lock in 23.0ms\\n\\u2022 Configuring shell\\n\\u2022 Configuring cachix\\n\\u2713 Configuring cachix in 2.67ms\\n\\u2022 Evaluating shell\\n\\u2713 Evaluating shell in 640\\u00b5s (cached)\\n\\u2713 Configuring shell in 6.86ms\\n\\u2022 Loading tasks\\n\\u2022 Evaluating devenv.config.task.config\\n\\u2713 Evaluating devenv.config.task.config in 226\\u00b5s (cached)\\n\\u2713 Loading tasks in 1.34ms\\n\\u2022 Running tasks\\n\\u2022 Running devenv:files:cleanup\\n\\u2713 Running devenv:files:cleanup in 10.5ms\\n\\u2022 Running devenv:enterShell\\n\\u2713 Running devenv:enterShell in 14.5ms\\n\\u2022 Running devenv:enterTest\\n\\u2713 Running devenv:enterTest in 7.62\\u00b5s (no command)\\n\\u2713 Running tasks in 25.4ms\\n\\u2728 devenv 2.1.0 is out of date. Please update to 2.1.2: https://devenv.sh/getting-started/#installation\\n\",\n+  \"scenario\": \"Eve asks to join Board\",\n+  \"status\": \"green\"\n+}\n",
+        "summary": {
+          "files_changed": 3,
+          "additions": 374,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-10-05T07:34:33.880740349Z",
+        "current_node": "review_candidate",
+        "completed_nodes": [
+          "start",
+          "source_gate",
+          "resume_red",
+          "implement_scenario",
+          "observe_green",
+          "review_candidate"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.implement_scenario": 0,
           "internal.run_id": "01M45EKSVMVZJF071CH3WCHVZV",
           "graph.goal": "Rehearse an approved historical BDD scenario without publication",
-          "internal.fidelity": "summary:high",
+          "internal.fidelity": "truncate",
           "failure_signature": "",
-          "current_node": "observe_green",
+          "current_node": "review_candidate",
           "graph.default_fidelity": "summary:high",
           "graph.max_node_visits": "18",
           "internal.retry_count.source_gate": 0,
           "thread.source_gate.current_node": "resume_red",
-          "internal.thread_id": "implement_scenario",
+          "internal.thread_id": "observe_green",
           "internal.retry_count.observe_green": 0,
+          "response.review_candidate": "{\"decision\":\"accept\",\"reason\":\"Before observation genuinely failed for missing product behaviour: before.json shows predicted_red/exit 2 with 'function Memba.Messaging.request_group_access/2 is undefined or private' during 'When Eve requests access to Board', while 176 other scenarios compiled and ran fine, so this is a real missing-capability failure, not flaky infra. After observation (after.json, status green, exit 0, '177 tests, 0 failures, 176 excluded' for scenario_name 'Eve asks to join Board') shows exactly the single @wip scenario passing; the other scenario outline remains @todo and untouched. I independently re-ran that scenario with bin/dev test --only scenario_name:\\\"Eve asks to join Board\\\" and reproduced the green result. git diff a775936..b7cb28d --stat touches only web/lib/memba/messaging.ex, the new web/test/memba/messaging/request_group_access_test.exs, and after.json; the step-definition file custom_group_access_request_steps.exs (pre-existing from commit 56e325e) is unchanged and still asserts real facts (message subject/body, exact Alice+Dan recipients, exact Add-URL text, Eve's continued non-membership, and on the reject path absence of message/recipients/conversation access) — the scenario driver was not weakened. The production change is narrow: Messaging.request_group_access/2 reuses existing authorize_at_stable_checkpoint, dispatch_command, resolve_group_recipients, fetch_required_id, and SystemGroups helpers rather than inventing new mechanisms; it authoritatively rechecks active club membership, rejects built-in/cross-club groups, restricts recipients to the club's existing Admin Group members (no broader disclosure), and a dedicated test proves client-supplied sender/audience/subject/body are ignored. The GET add-member page/LiveView remains correctly deferred to later plan steps, keeping this the minimal slice for this one scenario. Relevant unit tests pass: the 5 new tests in request_group_access_test.exs (0 failures) and the full web/test/memba/messaging/ suite (284 tests, 0 failures). No other production, feature, or step-definition files were touched, and the @wip tag remains on the scenario, so publication has not occurred and other observable behaviour is preserved. No distinct bounded technical gaps or new business/architecture questions were found.\"}",
           "thread.implement_scenario.current_node": "observe_green",
+          "output.review_candidate": {
+            "decision": "accept",
+            "reason": "Before observation genuinely failed for missing product behaviour: before.json shows predicted_red/exit 2 with 'function Memba.Messaging.request_group_access/2 is undefined or private' during 'When Eve requests access to Board', while 176 other scenarios compiled and ran fine, so this is a real missing-capability failure, not flaky infra. After observation (after.json, status green, exit 0, '177 tests, 0 failures, 176 excluded' for scenario_name 'Eve asks to join Board') shows exactly the single @wip scenario passing; the other scenario outline remains @todo and untouched. I independently re-ran that scenario with bin/dev test --only scenario_name:\"Eve asks to join Board\" and reproduced the green result. git diff a775936..b7cb28d --stat touches only web/lib/memba/messaging.ex, the new web/test/memba/messaging/request_group_access_test.exs, and after.json; the step-definition file custom_group_access_request_steps.exs (pre-existing from commit 56e325e) is unchanged and still asserts real facts (message subject/body, exact Alice+Dan recipients, exact Add-URL text, Eve's continued non-membership, and on the reject path absence of message/recipients/conversation access) — the scenario driver was not weakened. The production change is narrow: Messaging.request_group_access/2 reuses existing authorize_at_stable_checkpoint, dispatch_command, resolve_group_recipients, fetch_required_id, and SystemGroups helpers rather than inventing new mechanisms; it authoritatively rechecks active club membership, rejects built-in/cross-club groups, restricts recipients to the club's existing Admin Group members (no broader disclosure), and a dedicated test proves client-supplied sender/audience/subject/body are ignored. The GET add-member page/LiveView remains correctly deferred to later plan steps, keeping this the minimal slice for this one scenario. Relevant unit tests pass: the 5 new tests in request_group_access_test.exs (0 failures) and the full web/test/memba/messaging/ suite (284 tests, 0 failures). No other production, feature, or step-definition files were touched, and the @wip tag remains on the scenario, so publication has not occurred and other observable behaviour is preserved. No distinct bounded technical gaps or new business/architecture questions were found."
+          },
           "internal.work_dir": "/workspace/memba",
           "failure_class": "",
           "thread.start.current_node": "source_gate",
           "preferred_label": "review",
-          "last_response": "## Summary\n\nI implemented the smallest production capability needed for the `@wip` scenario **\"Eve asks to join Board\"** in `acceptance-tests/features/custom_group_access_requests.feature` to go green",
+          "last_response": "{\"decision\":\"accept\",\"reason\":\"Before observation genuinely failed for missing product behaviour: before.json shows predicted_red/exit 2 with 'function Memba.Messaging.request_group_access/2 is undefi",
           "graph.model_stylesheet": "* { provider: anthropic; model: claude-sonnet-5; reasoning_effort: high; } #call_shot { reasoning_effort: medium; } #final_report { reasoning_effort: low; }",
           "outcome": "succeeded",
+          "thread.observe_green.current_node": "review_candidate",
           "internal.retry_count.start": 0,
           "command.output": "blob://sha256/1c8ebe2d05b3a40f602383e4e51c6f016257f36adeb8b457951b94131aa6926a",
           "graph.rankdir": "LR",
           "internal.retry_count.resume_red": 0,
-          "last_stage": "implement_scenario",
+          "last_stage": "review_candidate",
           "internal.node_visit_count": 1,
           "response.implement_scenario": "## Summary\n\nI implemented the smallest production capability needed for the `@wip` scenario **\"Eve asks to join Board\"** in `acceptance-tests/features/custom_group_access_requests.feature` to go green, using the pre-recorded `predicted_red` evidence in `docs/iterations/066-request-group-access/.delivery/goal-directed-bdd/before.json` as the outer-loop target (missing function `Memba.Messaging.request_group_access/2`).\n\n**What was added** (`web/lib/memba/messaging.ex`, +105 lines):\n- `Messaging.request_group_access/2` — the `RequestGroupAccess` composite command described in the plan's domain model. It accepts only `:message_id`, `:club_id`, `:requester_person_id`, `:group_id`; resolves the requester's **current active club membership authoritatively** (`Membership.active_member_of_club_authoritatively?/2`) inside the existing `authorize_at_stable_checkpoint` pattern (same ordering guarantee used by `send_club_message_as_current_member`); rejects built-in groups and cross-club groups; composes the fixed subject/body naming the requester and group plus the safe `/groups/:group_id/members/add/:person_id` URL; and dispatches the existing `SendMessage` command to the club's Admin Group using the existing recipient-resolution helper. Client-supplied `sender_id`/`subject`/`body`/`audience_group_id` are structurally ignored since the command builder never reads them from caller input.\n- No new aggregate, event, or request entity — matching the plan's explicit constraint.\n\n**Tests written first and run** (`web/test/memba/messaging/request_group_access_test.exs`, new file, 5 tests, all passing):\n1. Happy path: fixed message, exact subject/body, Admin recipients, write access grant, no group membership, no follow/read access for Eve.\n2. Rejects a requester who is not currently an active club member (`{:error, :member_not_active}`).\n3. Rejects a request targeting a built-in group (`{:error, :built_in_group}`).\n4. Rejects a group belonging to another club (`{:error, :group_not_found}`).\n5. Ignores client-supplied sender/subject/body/audience overrides.\n\n**Verification performed** (via `./bin/dev test ...`, Postgres-backed, targeted runs only):\n- `test/memba/messaging/request_group_access_test.exs` — 5/5 passing.\n- The focused acceptance scenario exactly as the gate ran it: `mix test test/features/domain_cucumber_acceptance_test.exs --only \"scenario_name:Eve asks to join Board\"` — **1 test, 0 failures, 176 excluded** (previously 1 failure per `before.json`).\n- Full `web/test/memba/messaging/` directory — 284 tests, 0 failures (no regressions to existing Messaging behaviour).\n- `mix compile --warnings-as-errors --force` — clean, no new warnings.\n\n**Not run**: the full `dev check` / browser acceptance suite, per the explicit instruction to avoid an unbounded suite in this worker node, and the `@todo` outlier scenario in the same feature (out of scope for this rehearsal).\n\n**Scope respected**: no edits to the feature file (`@wip` left intact), no edits to `.delivery/goal-directed-bdd/`, no edits to the plan/domain-model docs, no widening of generic messaging/compose permissions (the generic `send_club_message_as_current_member` authorization path is untouched), no commit created — the working tree is left as the checkpoint for `observe_green` and review to evaluate.",
+          "internal.retry_count.review_candidate": 0,
           "thread.resume_red.current_node": "implement_scenario"
         },
         "node_outcomes": {
@@ -1167,6 +1329,48 @@
               "active_time_ms": 276
             }
           },
+          "review_candidate": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"decision\":\"accept\",\"reason\":\"Before observation genuinely failed for missing product behaviour: before.json shows predicted_red/exit 2 with 'function Memba.Messaging.request_group_access/2 is undefi",
+              "response.review_candidate": "{\"decision\":\"accept\",\"reason\":\"Before observation genuinely failed for missing product behaviour: before.json shows predicted_red/exit 2 with 'function Memba.Messaging.request_group_access/2 is undefined or private' during 'When Eve requests access to Board', while 176 other scenarios compiled and ran fine, so this is a real missing-capability failure, not flaky infra. After observation (after.json, status green, exit 0, '177 tests, 0 failures, 176 excluded' for scenario_name 'Eve asks to join Board') shows exactly the single @wip scenario passing; the other scenario outline remains @todo and untouched. I independently re-ran that scenario with bin/dev test --only scenario_name:\\\"Eve asks to join Board\\\" and reproduced the green result. git diff a775936..b7cb28d --stat touches only web/lib/memba/messaging.ex, the new web/test/memba/messaging/request_group_access_test.exs, and after.json; the step-definition file custom_group_access_request_steps.exs (pre-existing from commit 56e325e) is unchanged and still asserts real facts (message subject/body, exact Alice+Dan recipients, exact Add-URL text, Eve's continued non-membership, and on the reject path absence of message/recipients/conversation access) — the scenario driver was not weakened. The production change is narrow: Messaging.request_group_access/2 reuses existing authorize_at_stable_checkpoint, dispatch_command, resolve_group_recipients, fetch_required_id, and SystemGroups helpers rather than inventing new mechanisms; it authoritatively rechecks active club membership, rejects built-in/cross-club groups, restricts recipients to the club's existing Admin Group members (no broader disclosure), and a dedicated test proves client-supplied sender/audience/subject/body are ignored. The GET add-member page/LiveView remains correctly deferred to later plan steps, keeping this the minimal slice for this one scenario. Relevant unit tests pass: the 5 new tests in request_group_access_test.exs (0 failures) and the full web/test/memba/messaging/ suite (284 tests, 0 failures). No other production, feature, or step-definition files were touched, and the @wip tag remains on the scenario, so publication has not occurred and other observable behaviour is preserved. No distinct bounded technical gaps or new business/architecture questions were found.\"}",
+              "last_stage": "review_candidate",
+              "output.review_candidate": {
+                "decision": "accept",
+                "reason": "Before observation genuinely failed for missing product behaviour: before.json shows predicted_red/exit 2 with 'function Memba.Messaging.request_group_access/2 is undefined or private' during 'When Eve requests access to Board', while 176 other scenarios compiled and ran fine, so this is a real missing-capability failure, not flaky infra. After observation (after.json, status green, exit 0, '177 tests, 0 failures, 176 excluded' for scenario_name 'Eve asks to join Board') shows exactly the single @wip scenario passing; the other scenario outline remains @todo and untouched. I independently re-ran that scenario with bin/dev test --only scenario_name:\"Eve asks to join Board\" and reproduced the green result. git diff a775936..b7cb28d --stat touches only web/lib/memba/messaging.ex, the new web/test/memba/messaging/request_group_access_test.exs, and after.json; the step-definition file custom_group_access_request_steps.exs (pre-existing from commit 56e325e) is unchanged and still asserts real facts (message subject/body, exact Alice+Dan recipients, exact Add-URL text, Eve's continued non-membership, and on the reject path absence of message/recipients/conversation access) — the scenario driver was not weakened. The production change is narrow: Messaging.request_group_access/2 reuses existing authorize_at_stable_checkpoint, dispatch_command, resolve_group_recipients, fetch_required_id, and SystemGroups helpers rather than inventing new mechanisms; it authoritatively rechecks active club membership, rejects built-in/cross-club groups, restricts recipients to the club's existing Admin Group members (no broader disclosure), and a dedicated test proves client-supplied sender/audience/subject/body are ignored. The GET add-member page/LiveView remains correctly deferred to later plan steps, keeping this the minimal slice for this one scenario. Relevant unit tests pass: the 5 new tests in request_group_access_test.exs (0 failures) and the full web/test/memba/messaging/ suite (284 tests, 0 failures). No other production, feature, or step-definition files were touched, and the @wip tag remains on the scenario, so publication has not occurred and other observable behaviour is preserved. No distinct bounded technical gaps or new business/architecture questions were found."
+              }
+            },
+            "notes": "Stage completed: review_candidate",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 44829,
+                    "output_tokens": 9656,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 498019,
+                    "cache_write_tokens": 122752
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 122752,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 592687
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 105542,
+              "tool_time_ms": 109488,
+              "active_time_ms": 215030
+            }
+          },
           "observe_green": {
             "status": "succeeded",
             "preferred_label": "review",
@@ -1183,11 +1387,12 @@
             }
           }
         },
-        "next_node_id": "review_candidate",
+        "next_node_id": "apply_review",
         "node_visits": {
           "start": 1,
           "source_gate": 1,
           "implement_scenario": 1,
+          "review_candidate": 1,
           "resume_red": 1,
           "observe_green": 1
         }
@@ -1527,7 +1732,12 @@
       "first_event_seq": 669,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py after 'docs/iterations/066-request-group-access/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-10-05T07:30:54.422873487Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -1552,6 +1762,12 @@
       "started_at": "2026-10-05T07:30:32.725840277Z",
       "handler": "command",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 21695,
+        "inference_time_ms": 0,
+        "tool_time_ms": 21693,
+        "active_time_ms": 21693
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1561,7 +1777,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "resume_red@1": {
       "first_event_seq": 35,
@@ -1613,6 +1829,211 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "review_candidate@1": {
+      "first_event_seq": 679,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-10-05T07:30:58.366532858Z",
+      "handler": "agent",
+      "graph_visit": 1,
+      "live_inference_ms": 105522,
+      "live_tool_ms": 109495,
+      "usage": {
+        "input_tokens": 44829,
+        "output_tokens": 9656,
+        "total_tokens": 675256,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 498019,
+        "cache_write_tokens": 122752,
+        "total_usd_micros": 592687
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "Agent",
+          "description": "Launch a child agent for an independent task. Agents run in the background by default and notify the parent when they finish. Set run_in_background to false to wait for the result synchronously.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "AskUserQuestion",
+          "description": "Ask the human up to four questions when a decision is genuinely theirs to make. The UI automatically provides an Other option for custom text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "Bash",
+          "description": "Execute a Bash command in a fresh foreground non-login shell. Use this for searches, git inspection, builds, tests, package managers, and terminal operations. Prefer `rg` for content search and `rg --files` for file discovery. Working-directory and environment changes do not persist between calls. `timeout` is in milliseconds, defaults to 120000, and is capped at 600000.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "Edit",
+          "description": "Edit a file by replacing an exact string. The old_string must be an exact match and unique unless replace_all is true; include surrounding context when needed. Read the file first and preserve existing indentation.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "Read",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "SendMessage",
+          "description": "Send additional instructions to a background agent by its task ID. A running agent receives them at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "TaskCreate",
+          "description": "Create pending tasks in the current session. Use concise subjects, descriptions, optional activeForm text, and metadata. Check TaskList first to avoid duplicate tasks.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskGet",
+          "description": "Get one task by taskId, including subject, status, description, owner, blockedBy, and blocks.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskList",
+          "description": "List tasks for the current session, including status, owner, and blocking dependencies. Use TaskGet with a taskId for full description and dependency details.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskOutput",
+          "description": "Get a background agent's current status or wait for its final output. Automatic completion notifications make ordinary polling unnecessary.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "TaskStop",
+          "description": "Stop a running or completed background agent by task ID.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "TaskUpdate",
+          "description": "Update an existing task's status, text, owner, metadata, or dependencies. Valid statuses are pending, in_progress, completed, and deleted. After completing a task, call TaskList to find newly unblocked work.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "WebFetch",
+          "description": "Fetch an HTTP or HTTPS URL and answer the supplied prompt from its contents.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "Write",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "context_window_tokens": 1000000,
+        "input_tokens": 51989,
+        "usage_percent": 5.1989,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-10-05T07:34:33.876138698Z",
+        "event_seq": 843,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2528,
+            "usage_percent": 0.2528
+          },
+          {
+            "category": "tools",
+            "tokens": 2836,
+            "usage_percent": 0.2836
+          },
+          {
+            "category": "memory",
+            "tokens": 1112,
+            "usage_percent": 0.1112
+          },
+          {
+            "category": "conversation",
+            "tokens": 45504,
+            "usage_percent": 4.5504
+          },
+          {
+            "category": "other",
+            "tokens": 9,
+            "usage_percent": 0.0009
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "running"
     }
   }
 }
