@@ -8,6 +8,9 @@ defmodule Memba.Messaging do
   alias Memba.Membership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.App
+  alias Memba.Messaging.AuthorizationCheckpoint
+  alias Memba.Messaging.CommandDispatch
+  alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
@@ -52,13 +55,10 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
-  alias Memba.ProjectionBarrier
   alias Memba.Repo
   alias MembaWeb.ClubSite
 
   import Ecto.Query
-
-  @default_authorization_stability_timeout 5_000
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -118,14 +118,8 @@ defmodule Memba.Messaging do
   """
   def send_club_message_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <-
-           authorize_at_stable_checkpoint(fn ->
-             with {:ok, command} <- send_club_message_command(attrs),
-                  :ok <- authorize_message_sender(command) do
-               {:ok, command}
-             end
-           end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- SendClubMessage.prepare_current_member(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -1287,13 +1281,8 @@ defmodule Memba.Messaging do
     |> Map.fetch!(field)
   end
 
-  defp dispatch_command(command, dispatch_opts) do
-    case App.dispatch(command, dispatch_opts) do
-      :ok -> {:ok, :ok}
-      {:ok, _result} = ok -> {:ok, ok}
-      {:error, _reason} = error -> error
-    end
-  end
+  defp dispatch_command(command, dispatch_opts),
+    do: CommandDispatch.dispatch(command, dispatch_opts)
 
   defp dispatch_ok(command, dispatch_opts) do
     case dispatch_command(command, dispatch_opts) do
@@ -2022,28 +2011,7 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp send_club_message_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
-         {:ok, sender_id} <- fetch_required(attrs, :sender_id),
-         {:ok, subject} <- fetch_required(attrs, :subject),
-         {:ok, body} <- fetch_required(attrs, :body),
-         {:ok, audience_group} <- resolve_audience_group(attrs, club_id) do
-      audience_group_id = audience_group.group_id
-
-      {:ok,
-       %SendMessage{
-         operation_intent: Map.get(attrs, "operation_intent"),
-         message_id: message_id,
-         club_id: club_id,
-         sender_id: sender_id,
-         audience_group_id: audience_group_id,
-         subject: subject,
-         body: body,
-         recipients: resolve_group_recipients(club_id, audience_group_id)
-       }}
-    end
-  end
+  defp send_club_message_command(attrs), do: SendClubMessage.prepare(attrs)
 
   defp request_group_access_command(attrs) do
     with {:ok, message_id} <- fetch_required_id(attrs, :message_id, :message),
@@ -2106,27 +2074,6 @@ defmodule Memba.Messaging do
 
     You'll confirm on the website before #{target.person.name} is added.
     """
-  end
-
-  defp resolve_audience_group(attrs, club_id) do
-    audience_group_id =
-      optional_audience_group_id(attrs, SystemGroups.everyone_group_id(club_id))
-
-    with {:ok, audience_group_id} <- ID.cast(:group, audience_group_id) do
-      case Membership.get_group(audience_group_id) do
-        %{club_id: ^club_id} = audience_group -> {:ok, audience_group}
-        _missing_or_foreign_group -> {:error, :audience_group_not_found}
-      end
-    else
-      :error -> {:error, :invalid_audience_group_id}
-    end
-  end
-
-  defp optional_audience_group_id(attrs, default_group_id) do
-    case fetch_required(attrs, :audience_group_id) do
-      {:ok, audience_group_id} -> audience_group_id
-      {:error, {:missing_required_attribute, :audience_group_id}} -> default_group_id
-    end
   end
 
   defp post_message_reply_command(attrs) do
@@ -2278,18 +2225,6 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp authorize_message_sender(%SendMessage{} = command) do
-    if Membership.active_member_of_group_authoritatively?(
-         command.club_id,
-         command.audience_group_id,
-         command.sender_id
-       ) do
-      :ok
-    else
-      {:error, :not_current_member}
-    end
-  end
-
   defp authorize_current_member_conversation_action(command) do
     with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),
          :ok <- require_conversation_in_club(root_message, command.club_id),
@@ -2307,60 +2242,8 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp authorize_at_stable_checkpoint(authorization) when is_function(authorization, 0) do
-    authorize_at_stable_checkpoint(authorization, [])
-  end
-
-  defp authorize_at_stable_checkpoint(authorization, opts)
-       when is_function(authorization, 0) and is_list(opts) do
-    deadline =
-      System.monotonic_time(:millisecond) + authorization_stability_timeout()
-
-    authorize_at_stable_checkpoint(
-      authorization,
-      Keyword.get(opts, :projections, []),
-      deadline
-    )
-  end
-
-  defp authorize_at_stable_checkpoint(authorization, projections, deadline) do
-    if System.monotonic_time(:millisecond) >= deadline do
-      {:error, :authorization_stability_timeout}
-    else
-      checkpoint = ProjectionBarrier.current_checkpoint()
-
-      with :ok <- await_authorization_projections(projections, checkpoint, deadline),
-           {:ok, authorized} <- authorization.() do
-        if ProjectionBarrier.current_checkpoint() == checkpoint do
-          {:ok, authorized}
-        else
-          authorize_at_stable_checkpoint(authorization, projections, deadline)
-        end
-      end
-    end
-  end
-
-  defp await_authorization_projections([], _checkpoint, _deadline), do: :ok
-
-  defp await_authorization_projections(projections, checkpoint, deadline) do
-    timeout = max(deadline - System.monotonic_time(:millisecond), 0)
-
-    case ProjectionBarrier.await(projections, checkpoint: checkpoint, timeout: timeout) do
-      {:ok, _result} -> :ok
-      {:error, :timeout, _result} -> {:error, :authorization_stability_timeout}
-    end
-  end
-
-  defp authorization_stability_timeout do
-    case Application.get_env(
-           :memba,
-           :authorization_stability_timeout,
-           @default_authorization_stability_timeout
-         ) do
-      timeout when is_integer(timeout) and timeout >= 0 -> timeout
-      _invalid -> @default_authorization_stability_timeout
-    end
-  end
+  defp authorize_at_stable_checkpoint(authorization, opts \\ []),
+    do: AuthorizationCheckpoint.run(authorization, opts)
 
   defp member_has_authoritative_conversation_access?(
          conversation_id,

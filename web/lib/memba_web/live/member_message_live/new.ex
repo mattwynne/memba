@@ -11,9 +11,10 @@ defmodule MembaWeb.MemberMessageLive.New do
   require Logger
 
   alias LiveQuery.Binding
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch
   alias Memba.Messaging.MemberSubmission
   alias Memba.Messaging.Projectors.Message, as: MessageProjector
+  alias Memba.Messaging.SendClubMessage
   alias MembaWeb.ClubSite
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberMessageComposeQuery
@@ -393,9 +394,9 @@ defmodule MembaWeb.MemberMessageLive.New do
          )}
       else
         case MemberSubmission.submit(operation, fn attrs ->
-               Messaging.send_club_message_as_current_member(attrs,
-                 consistency: [MessageProjector]
-               )
+               with {:ok, command} <- SendClubMessage.prepare_current_member(attrs) do
+                 CommandDispatch.dispatch(command, consistency: [MessageProjector])
+               end
              end) do
           {:accepted, message_id} ->
             {:noreply,
