@@ -8,6 +8,7 @@ defmodule Memba.Membership do
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership.App
+  alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.AuthoritativeMembershipQueries
@@ -16,11 +17,9 @@ defmodule Memba.Membership do
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMember
   alias Memba.Membership.Commands.AddClubMember
-  alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.ResendClubMemberInvitation
-  alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.InvitationAcceptance
   alias Memba.Membership.InvitationQueries
@@ -38,7 +37,6 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.PersonEmailAddress
-  alias Memba.Membership.Slug
   alias Memba.ProjectionBarrier
   alias Memba.Repo
 
@@ -52,9 +50,8 @@ defmodule Memba.Membership do
   `"club_id"`.
   """
   def create_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- create_club_command(attrs),
-         :ok <- prevent_duplicate_club_slug(command) do
-      dispatch(command, dispatch_opts)
+    with {:ok, command} <- ClubCommands.prepare_create(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -150,9 +147,8 @@ defmodule Memba.Membership do
   used by another projected club.
   """
   def update_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- update_club_command(attrs),
-         :ok <- prevent_duplicate_club_slug(command) do
-      dispatch(command, dispatch_opts)
+    with {:ok, command} <- ClubCommands.prepare_update(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -994,24 +990,6 @@ defmodule Memba.Membership do
     |> Enum.reverse()
   end
 
-  defp create_club_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, name} <- fetch_required(attrs, :name),
-         {:ok, slug} <- club_slug(attrs, name) do
-      {:ok, %CreateClub{club_id: club_id, name: name, slug: slug}}
-    end
-  end
-
-  defp update_club_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, club_id} <- cast_club_id(club_id),
-         {:ok, name} <- fetch_required(attrs, :name),
-         {:ok, slug} <- fetch_required(attrs, :slug),
-         {:ok, slug} <- Slug.validate(slug) do
-      {:ok, %UpdateClub{club_id: club_id, name: name, slug: slug}}
-    end
-  end
-
   defp create_person_command(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, name} <- fetch_required(attrs, :name),
@@ -1139,21 +1117,6 @@ defmodule Memba.Membership do
 
   defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: %DateTime{}}) do
     {:error, :email_address_already_verified}
-  end
-
-  defp prevent_duplicate_club_slug(%CreateClub{} = command) do
-    case Repo.get_by(Club, slug: command.slug) do
-      nil -> :ok
-      %Club{} -> {:error, :slug_taken}
-    end
-  end
-
-  defp prevent_duplicate_club_slug(%UpdateClub{} = command) do
-    case Repo.get_by(Club, slug: command.slug) do
-      nil -> :ok
-      %Club{club_id: club_id} when club_id == command.club_id -> :ok
-      %Club{} -> {:error, :slug_taken}
-    end
   end
 
   defp normalize_command_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
@@ -1295,25 +1258,10 @@ defmodule Memba.Membership do
     end
   end
 
-  defp cast_club_id(club_id) do
-    case ID.cast(:club, club_id) do
-      {:ok, club_id} -> {:ok, club_id}
-      :error -> {:error, :invalid_club_id}
-    end
-  end
-
   defp cast_person_id(person_id) do
     case ID.cast(:person, person_id) do
       {:ok, person_id} -> {:ok, person_id}
       :error -> {:error, :invalid_person_id}
-    end
-  end
-
-  defp club_slug(attrs, name) do
-    case fetch_optional(attrs, :slug) do
-      {:ok, ""} -> Slug.default_from_name(name) |> Slug.validate()
-      {:ok, slug} -> Slug.validate(slug)
-      :error -> Slug.default_from_name(name) |> Slug.validate()
     end
   end
 

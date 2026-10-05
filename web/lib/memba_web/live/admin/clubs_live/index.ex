@@ -2,6 +2,8 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch
   alias MembaWeb.Admin.ClubSlugForm
 
   @impl Phoenix.LiveView
@@ -29,7 +31,12 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
       |> Map.take(["name", "slug"])
       |> Map.put("club_id", Memba.ID.generate(:club))
 
-    case Membership.create_club(attrs, consistency: :strong) do
+    result =
+      with {:ok, command} <- ClubCommands.prepare_create(attrs) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    case result do
       :ok ->
         {:noreply, assign_club_created(socket)}
 

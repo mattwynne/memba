@@ -2,6 +2,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubMember.Remove
   alias Memba.Membership.CommandDispatch
   alias MembaWeb.Admin.ClubSlugForm
@@ -39,7 +40,12 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
       |> Map.take(["name", "slug"])
       |> Map.put("club_id", socket.assigns.club_id)
 
-    case Membership.update_club(attrs, consistency: :strong) do
+    result =
+      with {:ok, command} <- ClubCommands.prepare_update(attrs) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    case result do
       :ok ->
         {:noreply,
          socket

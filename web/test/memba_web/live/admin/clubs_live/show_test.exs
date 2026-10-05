@@ -258,6 +258,28 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     refute has_element?(view, "#update-club-button[disabled]")
   end
 
+  test "update submit rechecks duplicate slug on server even when client validation is bypassed",
+       %{
+         conn: conn
+       } do
+    club = create_membership_club!(name: "Alpine Club", slug: "alpine")
+    other = create_membership_club!(name: "Cycling Club", slug: "cycling")
+
+    {:ok, view, _html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}")
+
+    render_hook(view, "update_club", %{
+      "club" => %{"name" => "Changed Club", "slug" => other.slug}
+    })
+
+    assert has_element?(view, "#flash-error", "Could not update club: :slug taken")
+    assert input_value(render(view), "#edit-club-name-input") == "Changed Club"
+    assert input_value(render(view), "#edit-club-slug-input") == "cycling"
+    assert Membership.get_club(club.club_id).slug == "alpine"
+  end
+
   test "people and member lists show primary and alternate email addresses distinctly", %{
     conn: conn
   } do
