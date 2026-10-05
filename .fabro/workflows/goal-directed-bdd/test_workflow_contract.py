@@ -16,7 +16,11 @@ class WorkflowContractTest(unittest.TestCase):
         self.assertRegex(shot.group(1), r"max_visits=2\b")
         self.assertIn("resume_red -> implement_scenario [condition=\"outcome=succeeded && preferred_label=resume\"]", graph)
         self.assertIn("call_shot -> observe_predicted_red", graph)
-        self.assertIn("observe_predicted_red -> implement_scenario [condition=\"outcome=succeeded\"]", graph)
+        self.assertIn("observe_predicted_red -> implement_scenario [condition=\"outcome=succeeded && preferred_label=implement\"]", graph)
+        self.assertIn("observe_predicted_red -> diagnose_surprise [condition=\"outcome=succeeded && preferred_label=repredict\"]", graph)
+        self.assertIn("resume_red -> diagnose_surprise [condition=\"outcome=succeeded && preferred_label=repredict\"]", graph)
+        self.assertIn("diagnose_surprise -> observe_repredicted_red", graph)
+        self.assertIn("observe_repredicted_red -> implement_scenario [condition=\"outcome=succeeded && preferred_label=implement\"]", graph)
         self.assertNotIn("publish_to_main", graph)
 
 

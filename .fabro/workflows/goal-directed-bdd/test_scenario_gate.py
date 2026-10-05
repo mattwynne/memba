@@ -2,6 +2,10 @@
 """Isolated, no-database contract tests for the non-publishing BDD pilot gate."""
 
 import importlib.util
+import io
+import json
+import subprocess
+from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
 import unittest
@@ -55,11 +59,105 @@ class ScenarioGateTest(unittest.TestCase):
         self.assertNotIn("@wip", self.feature.read_text())
         gate.final(self.root, self.plan)
 
-    def test_wrong_red_does_not_start_worker(self):
-        with patch.object(gate, "run", return_value=(2, "unexpected database error\n1 test, 1 failure")):
-            with self.assertRaisesRegex(gate.GateError, "did not fail for the predicted behaviour"):
+    def test_wrong_product_red_is_preserved_and_repredicted_before_worker(self):
+        output = "function Memba.Messaging.send_group_access_request/2 is undefined\n1 test, 1 failure"
+        with patch.object(gate, "run", return_value=(2, output)):
+            routing = io.StringIO()
+            with redirect_stdout(routing):
                 gate.before(self.root, self.plan, self.shot)
+            self.assertEqual(json.loads(routing.getvalue()), {"preferred_next_label": "repredict"})
+            first = gate.load(gate.artifact(self.plan, "before.json"))
+            self.assertEqual(first["status"], "surprise")
+            with patch.object(gate, "trusted_before"), patch.object(gate, "trusted_unchanged_candidate"):
+                routing = io.StringIO()
+                with redirect_stdout(routing):
+                    gate.resume(self.root, self.plan)
+                self.assertEqual(json.loads(routing.getvalue()), {"preferred_next_label": "repredict"})
+                revised = {"decision": "repredict", "reason": "The missing API has a different name",
+                           "predicted_failure": "function Memba.Messaging.send_group_access_request/2 is undefined"}
+                routing = io.StringIO()
+                with redirect_stdout(routing):
+                    gate.before(self.root, self.plan, revised)
+            self.assertEqual(json.loads(routing.getvalue()), {"preferred_next_label": "implement"})
+        self.assertEqual(gate.load(gate.artifact(self.plan, "shot-01.json")), first)
+        second = gate.load(gate.artifact(self.plan, "before.json"))
+        self.assertEqual(second["status"], "predicted_red")
+        self.assertEqual(second["attempt"], 2)
+        self.assertEqual(second["feature_sha256"], first["feature_sha256"])
+        self.assertNotEqual(second["predicted_failure"], first["predicted_failure"])
+
+    def test_second_wrong_prediction_stops_without_third_attempt(self):
+        output = "another missing behaviour at the product boundary\n1 test, 1 failure"
+        with patch.object(gate, "run", return_value=(2, output)):
+            gate.before(self.root, self.plan, self.shot)
+            with patch.object(gate, "trusted_before"), patch.object(gate, "trusted_unchanged_candidate"):
+                routing = io.StringIO()
+                with redirect_stdout(routing):
+                    gate.before(self.root, self.plan, {"decision": "repredict", "reason": "Different missing API",
+                                                     "predicted_failure": "another missing behaviour that does not match"})
+                self.assertEqual(json.loads(routing.getvalue()), {"preferred_next_label": "stop"})
+                with self.assertRaisesRegex(gate.GateError, "Only one unchanged surprising red"):
+                    gate.before(self.root, self.plan, self.shot)
         self.assertEqual(gate.load(gate.artifact(self.plan, "before.json"))["status"], "surprise")
+        self.assertEqual(gate.load(gate.artifact(self.plan, "shot-01.json"))["attempt"], 1)
+
+    def test_diagnosis_may_block_without_rerunning(self):
+        with patch.object(gate, "run", return_value=(2, "unrelated error\n1 test, 1 failure")):
+            gate.before(self.root, self.plan, self.shot)
+        with patch.object(gate, "trusted_before"), patch.object(gate, "trusted_unchanged_candidate"), patch.object(gate, "run") as runner:
+            routing = io.StringIO()
+            with redirect_stdout(routing):
+                gate.before(self.root, self.plan, {"decision": "blocked", "reason": "Not a product failure"})
+            runner.assert_not_called()
+            self.assertEqual(json.loads(routing.getvalue()), {"preferred_next_label": "stop"})
+        self.assertEqual(gate.load(gate.artifact(self.plan, "before.json"))["status"], "surprise")
+        with patch.object(gate, "trusted_before"):
+            with self.assertRaisesRegex(gate.GateError, "blocked diagnosis"):
+                gate.resume(self.root, self.plan)
+
+    def test_tampered_first_observation_cannot_be_accepted(self):
+        output = "function Memba.Messaging.send_group_access_request/2 is undefined\n1 test, 1 failure"
+        with patch.object(gate, "run", return_value=(2, output)):
+            gate.before(self.root, self.plan, self.shot)
+            with patch.object(gate, "trusted_before"), patch.object(gate, "trusted_unchanged_candidate"):
+                gate.before(self.root, self.plan, {"decision": "repredict", "reason": "Corrected missing API",
+                                                  "predicted_failure": "function Memba.Messaging.send_group_access_request/2 is undefined"})
+        prior = gate.artifact(self.plan, "shot-01.json")
+        prior.write_text(prior.read_text().replace("surprise", "predicted_red"))
+        with patch.object(gate, "trusted_before"), patch.object(gate, "run") as runner:
+            with self.assertRaisesRegex(gate.GateError, "Original surprise was modified"):
+                gate.after(self.root, self.plan)
+            runner.assert_not_called()
+
+    def test_already_green_does_not_turn_into_reprediction(self):
+        with patch.object(gate, "run", return_value=(0, "1 test, 0 failures")):
+            with self.assertRaisesRegex(gate.GateError, "already_green"):
+                gate.before(self.root, self.plan, self.shot)
+        self.assertEqual(gate.load(gate.artifact(self.plan, "before.json"))["status"], "already_green")
+
+    def test_cannot_repredict_after_feature_changes(self):
+        with patch.object(gate, "run", return_value=(2, "unexpected red\n1 test, 1 failure")):
+            gate.before(self.root, self.plan, self.shot)
+        self.feature.write_text(self.feature.read_text().replace("Eve requests access", "Eve directly joins"))
+        with patch.object(gate, "trusted_before"), patch.object(gate, "trusted_unchanged_candidate"):
+            with self.assertRaisesRegex(gate.GateError, "unchanged surprising red"):
+                gate.before(self.root, self.plan, {"decision": "repredict", "reason": "Mismatch",
+                                                    "predicted_failure": "unexpected red but more specific"})
+
+    def test_diagnostic_model_may_not_commit_candidate_edits(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        before = gate.artifact(self.plan, "before.json")
+        gate.save(before, {"status": "surprise"})
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                        "commit", "-qm", "fabro: observe_predicted_red (succeeded)"], cwd=self.root, check=True)
+        gate.trusted_unchanged_candidate(self.root, self.plan)
+        (self.root / "product_code.ex").write_text("bad change\n")
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                        "commit", "-qm", "diagnose_surprise changed product code"], cwd=self.root, check=True)
+        with self.assertRaisesRegex(gate.GateError, "Diagnosis edited"):
+            gate.trusted_unchanged_candidate(self.root, self.plan)
 
     def test_undefined_step_is_not_product_red(self):
         with patch.object(gate, "run", return_value=(2, "No matching step definition\n1 test, 1 failure")):

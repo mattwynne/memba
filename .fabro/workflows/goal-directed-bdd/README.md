@@ -25,8 +25,11 @@ For **each agreed executable scenario**, in plan order:
    `@todo` if present), and run *only* that scenario. Record command, exit
    status, selected-test count, output hash and diagnostic. Red must be the
    predicted *behaviour* failure, not a missing step, harness failure, timeout,
-   unrelated assertion or zero selected tests. Surprise red or green stops for
-   clarification/replanning; neither silently authorizes implementation.
+   unrelated assertion or zero selected tests. A surprising red must first
+   preserve its original prediction and observation, then be diagnosed and
+   repredicted **before** a second focused run; a bounded mismatch or blocked
+   diagnosis stops. Missing steps, zero selection and already-green scenarios
+   never turn into retroactively predicted reds or authorize implementation.
 3. Implement only what is needed for this scenario, with supporting failing
    unit/application/LiveView tests where they expose the design or edge cases.
    Run those focused tests and rerun the `@wip` scenario. Keep unrelated state
@@ -73,13 +76,15 @@ licenses unscoped implementation under a fabricated red.
 ## Pilot and open engineering work
 
 The first graph and deterministic gate cover **one** historical domain scenario.
-Its isolated tests cover red/green, wrong red, undefined step, zero selected,
-feature-level `@todo`, changed scenario, reviewer veto and missing checkpoint.
+Its isolated tests cover red/green, a bounded wrong-prediction feedback loop,
+blocked diagnosis, unexpected green, undefined step, zero selected, feature-level
+`@todo`, changed scenario, reviewer veto and missing checkpoint.
 It has schema-validated shot and review output, and no publication node. Before
 using this as a real delivery workflow, generalize it to an approved scenario
 manifest, cover browser examples at their own boundary, and test routing,
 restart, revision budgets, final conformance and failure paths with Fabro
-runtime fixtures. Do not alter `bin/dev fabro deliver` while it is a pilot.
+runtime fixtures. The wrong-prediction branch is fixture-tested but has not
+been exercised in a live Fabro run; the recorded 066 run predated this branch. Do not alter `bin/dev fabro deliver` while it is a pilot.
 Reuse existing preflight and publication *policies*, not the old task-packet or
 `todo.md` acceptance artifact format; those scripts currently require their
 own task-specific evidence and cannot safely be invoked unchanged. Keep

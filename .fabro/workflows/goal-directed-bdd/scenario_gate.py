@@ -109,36 +109,82 @@ def ensure_one(output: str) -> None:
 
 def before(root: Path, plan: Path, shot: dict) -> None:
     feature, index = selected_feature(root, plan)
+    prior_path = artifact(plan, "before.json")
+    prior = load(prior_path) if prior_path.exists() else None
+    if prior:
+        trusted_before(root, plan)
+        trusted_unchanged_candidate(root, plan)
+        if (prior.get("status") != "surprise" or prior.get("attempt") != 1
+                or active_wip(root) != [(feature, index)]
+                or sha(feature.read_bytes()) != prior.get("feature_sha256")):
+            raise GateError("Only one unchanged surprising red may be predicted again")
+        if shot.get("decision") == "blocked":
+            reason = shot.get("reason")
+            if not isinstance(reason, str) or not reason.strip():
+                raise GateError("Blocked diagnosis needs a reason")
+            save(artifact(plan, "diagnosis.json"), {"decision": "blocked", "reason": reason})
+            print(json.dumps({"preferred_next_label": "stop"}))
+            return
+        if shot.get("decision") != "repredict" or not isinstance(shot.get("reason"), str) or not shot["reason"].strip():
+            raise GateError("A new prediction must explain the first mismatch")
+        # Never erase the surprising first observation, even when the next run is green.
+        save(artifact(plan, "shot-01.json"), prior)
+        attempt = 2
+    else:
+        if active_wip(root):
+            raise GateError("Pilot must start with no active @wip scenario")
+        attempt = 1
     expected = shot.get("predicted_failure")
     if not isinstance(expected, str) or len(expected.strip()) < 16:
-        raise GateError("A specific predicted failure must be recorded before the first run")
-    if active_wip(root) or artifact(plan, "before.json").exists():
-        raise GateError("Pilot must start with no active or previously tested @wip scenario")
+        raise GateError("A specific predicted failure must be recorded before execution")
+    if prior and expected == prior.get("predicted_failure"):
+        raise GateError("A revised prediction must differ from the original wrong prediction")
     tag(feature, index, activate=True)
     record = {"scenario": NAME, "feature": FEATURE, "predicted_failure": expected,
-              "feature_sha256": sha(feature.read_bytes()), "status": "pending"}
-    save(artifact(plan, "before.json"), record)  # Written before executing the scenario.
+              "feature_sha256": sha(feature.read_bytes()), "status": "pending", "attempt": attempt}
+    if prior:
+        record["revision_reason"] = shot["reason"]
+        record["prior_observation_sha256"] = sha(artifact(plan, "shot-01.json").read_bytes())
+    save(prior_path, record)  # Prediction is durable before executing the scenario.
     code, output = run(root)
     ensure_one(output)
     record.update(exit_status=code, output_sha256=sha(output.encode()), output_tail=output[-12000:])
     if "No matching step definition" in output or "No scenarios" in output:
         record["status"] = "harness_failure"
-    elif code != 0 and expected in output:
+    elif code == 0:
+        record["status"] = "already_green"
+    elif expected in output:
         record["status"] = "predicted_red"
     else:
         record["status"] = "surprise"
-    save(artifact(plan, "before.json"), record)
-    if record["status"] != "predicted_red":
-        raise GateError(f"Scenario did not fail for the predicted behaviour: {record['status']}; {output[-1200:]}")
-    print(json.dumps({"preferred_next_label": "implement"}))
+    save(prior_path, record)
+    if record["status"] == "predicted_red":
+        label = "implement"
+    elif record["status"] == "surprise" and attempt == 1:
+        label = "repredict"
+    elif record["status"] == "surprise":
+        label = "stop"
+    else:
+        raise GateError(f"Not an intended product red: {record['status']}; {output[-1200:]}")
+    print(json.dumps({"preferred_next_label": label}))
 
 
 def trusted_before(root: Path, plan: Path) -> None:
     path = artifact(plan, "before.json").relative_to(root).as_posix()
     subject = subprocess.check_output(["git", "log", "-1", "--format=%s", "--", path], cwd=root, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain", "--", path], cwd=root, text=True).strip()
-    if "observe_predicted_red" not in subject or dirty:
-        raise GateError("Predicted-red evidence was not preserved by the trusted gate checkpoint")
+    if not any(node in subject for node in ("observe_predicted_red", "observe_repredicted_red")) or dirty:
+        raise GateError("Scenario evidence was not preserved by the trusted gate checkpoint")
+
+
+def trusted_unchanged_candidate(root: Path, plan: Path) -> None:
+    """A diagnostic model must not edit any tracked candidate file before the revised shot."""
+    path = artifact(plan, "before.json").relative_to(root).as_posix()
+    anchor = subprocess.check_output(["git", "log", "-1", "--format=%H", "--", path], cwd=root, text=True).strip()
+    if not anchor or subprocess.run(["git", "diff", "--quiet", anchor, "HEAD", "--"], cwd=root).returncode != 0:
+        raise GateError("Diagnosis edited the candidate before its revised prediction")
+    if subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip():
+        raise GateError("Dirty candidate before its revised prediction")
 
 
 def resume(root: Path, plan: Path) -> None:
@@ -151,16 +197,42 @@ def resume(root: Path, plan: Path) -> None:
     trusted_before(root, plan)
     record = load(prior)
     feature, index = selected_feature(root, plan)
-    if (record.get("status") != "predicted_red" or record.get("scenario") != NAME
-            or active_wip(root) != [(feature, index)]
+    if (record.get("scenario") != NAME or active_wip(root) != [(feature, index)]
             or sha(feature.read_bytes()) != record.get("feature_sha256")):
-        raise GateError("Cannot resume missing/stale @wip red evidence")
-    print(json.dumps({"preferred_next_label": "resume"}))
+        raise GateError("Cannot resume missing/stale @wip evidence")
+    if record.get("status") == "predicted_red":
+        label = "resume"
+    elif record.get("status") == "surprise" and record.get("attempt") == 1:
+        if artifact(plan, "diagnosis.json").exists():
+            raise GateError("A blocked diagnosis cannot be silently restarted")
+        trusted_unchanged_candidate(root, plan)
+        label = "repredict"
+    else:
+        raise GateError("No retry allowed for missing, completed or exhausted red evidence")
+    print(json.dumps({"preferred_next_label": label}))
+
+
+def verify_surprise_lineage(plan: Path, record: dict) -> None:
+    prior_path = artifact(plan, "shot-01.json")
+    if record.get("attempt") == 1:
+        if prior_path.exists():
+            raise GateError("Unexpected prior surprise for a first prediction")
+        return
+    if record.get("attempt") != 2 or not prior_path.is_file():
+        raise GateError("Missing bounded prediction history")
+    if sha(prior_path.read_bytes()) != record.get("prior_observation_sha256"):
+        raise GateError("Original surprise was modified after the revised prediction")
+    prior = load(prior_path)
+    if (prior.get("status") != "surprise" or prior.get("attempt") != 1
+            or prior.get("feature_sha256") != record.get("feature_sha256")
+            or prior.get("predicted_failure") == record.get("predicted_failure")):
+        raise GateError("Invalid original surprise in prediction history")
 
 
 def after(root: Path, plan: Path) -> None:
     trusted_before(root, plan)
     record = load(artifact(plan, "before.json"))
+    verify_surprise_lineage(plan, record)
     if record.get("status") != "predicted_red" or record.get("scenario") != NAME:
         raise GateError("No recorded intended red; cannot review or implement")
     feature, index = selected_feature(root, plan)
@@ -177,6 +249,7 @@ def after(root: Path, plan: Path) -> None:
 def verdict(root: Path, plan: Path, review: dict) -> None:
     trusted_before(root, plan)
     before_record = load(artifact(plan, "before.json"))
+    verify_surprise_lineage(plan, before_record)
     after_record = load(artifact(plan, "after.json"))
     feature, index = selected_feature(root, plan)
     if (before_record.get("status") != "predicted_red" or after_record.get("status") != "green"
