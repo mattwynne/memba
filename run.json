@@ -1,0 +1,750 @@
+{
+  "title": "Rehearse an approved historical BDD scenario without publication",
+  "spec": {
+    "run_id": "01M45EKSVMVZJF071CH3WCHVZV",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Rehearse an approved historical BDD scenario without publication"
+        },
+        "working_dir": null,
+        "metadata": {
+          "purpose": "historical-bdd-resume"
+        },
+        "inputs": {
+          "plan_path": "docs/iterations/066-request-group-access/plan.md",
+          "expected_source_head": "20dd6c3b3a594dc2e45792e42f18416002feb96e"
+        },
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-5",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [
+            {
+              "type": "command",
+              "command": [
+                "bash",
+                "/workspace/memba/.fabro/workflows/iteration-implementation/prepare_mix.sh"
+              ]
+            }
+          ],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 2,
+            "memory": "3072MB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "GoalDirectedBddPilot",
+      "nodes": {
+        "call_shot": {
+          "id": "call_shot",
+          "attrs": {
+            "label": {
+              "String": "Predict intended behaviour failure before implementation"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "output_schema": {
+              "String": "{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"predicted_failure\"],\n  \"properties\": {\n    \"predicted_failure\": {\"type\": \"string\", \"minLength\": 16}\n  }\n}\n"
+            },
+            "reasoning_effort": {
+              "String": "medium"
+            },
+            "prompt": {
+              "String": "You are selecting the first feedback for a **non-publishing historical BDD rehearsal** of iteration 066. Read `docs/iterations/066-request-group-access/plan.md` and `acceptance-tests/features/custom_group_access_requests.feature`. Only the single scenario `Eve asks to join Board` is in scope; its step driver has been prepared independently, with no iteration 066 product implementation yet. Inspect the existing Messaging public API and the scenario step driver, but DO NOT edit code, feature files or tests and DO NOT run the scenario. Output only the structured `predicted_failure`: a specific diagnostic of the intended *missing product behaviour*, not a missing/undefined Cucumber step, a harness error, timeout or blanket 'it fails'. A deterministic gate will set `@wip`, record your prediction before execution, run the focused scenario and stop if your diagnostic is not observed. Do not claim this is a complete iteration or authorize publication."
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "max_visits": {
+              "Integer": 2
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "fidelity": {
+              "String": "truncate"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "provider": {
+              "String": "anthropic"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            }
+          }
+        },
+        "implement_scenario": {
+          "id": "implement_scenario",
+          "attrs": {
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "max_visits": {
+              "Integer": 3
+            },
+            "label": {
+              "String": "Implement only scenario behaviour and focused unit tests"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "prompt": {
+              "String": "Implement the **one active `@wip` scenario** in `acceptance-tests/features/custom_group_access_requests.feature`: `Eve asks to join Board`. Read `docs/iterations/066-request-group-access/plan.md` and `.delivery/goal-directed-bdd/before.json` (and `.delivery/goal-directed-bdd/after.json` if revising). The gate has already run the scenario **before** product implementation and recorded its intended red. Do not substitute your own claim for that evidence.\n\nUse the scenario as the outer loop. Implement the smallest production capability needed for Eve's request to become a fixed ordinary Admin Group message with the named recipients and safe targeted URL, without adding her to Board. Write focused unit/application tests first where they shape command responsibility, validation and privacy, run those tests and the focused `@wip` scenario. Keep all relevant access checks; do not widen generic messaging permission, change unrelated scenarios, edit `.delivery/goal-directed-bdd/` evidence, change the approved plan, remove `@wip`, or mark the work accepted. The deterministic `observe_green` and independent reviewer own those transitions. Preserve a coherent checkpoint even if you cannot finish within the time budget; explicitly describe blockers rather than silently weakening tests or expanding scope. This is a historical **single-scenario, no-publication rehearsal**: no branch pushes, no `main` changes, no attempt to finish the rest of 066 or run an unbounded suite in this worker node.\n"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "anthropic"
+            }
+          }
+        },
+        "observe_green": {
+          "id": "observe_green",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "label": {
+              "String": "Run exact @wip scenario after implementation"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "script": {
+              "String": "python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py after 'docs/iterations/066-request-group-access/plan.md'"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 660,
+                "nanos": 0
+              }
+            }
+          }
+        },
+        "observe_predicted_red": {
+          "id": "observe_predicted_red",
+          "attrs": {
+            "timeout": {
+              "Duration": {
+                "secs": 660,
+                "nanos": 0
+              }
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "script": {
+              "String": "python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py before 'docs/iterations/066-request-group-access/plan.md'"
+            },
+            "stdin_source": {
+              "String": "output.call_shot"
+            },
+            "label": {
+              "String": "Tag @wip, save prediction, run focused scenario"
+            }
+          }
+        },
+        "review_candidate": {
+          "id": "review_candidate",
+          "attrs": {
+            "label": {
+              "String": "Independent read-only review"
+            },
+            "prompt": {
+              "String": "Independently review the **single-scenario** historical candidate. Do not edit files. Inspect `docs/iterations/066-request-group-access/plan.md`, the active feature `acceptance-tests/features/custom_group_access_requests.feature`, `.delivery/goal-directed-bdd/{before,after}.json`, focused unit-test evidence and `git diff` since the gate baseline. Return structured decision `accept`, `revise` or `blocked`, with concrete reason. Verify the actual before observation failed for missing product behaviour, after passed exactly one `@wip` scenario, the scenario driver was not weakened, the production change is the narrowest coherent solution with required authorization/recipient privacy, relevant unit tests pass and other observable behaviour is preserved. A passing scenario alone is insufficient. Distinct bounded technical findings => `revise`; genuine new business/architecture decision or unsafe scope => `blocked`. An accepted checkpoint is **not publication**; the gate removes `@wip` only after it validates your verdict and evidence. Do not request Matt merely to authorize a specified technical repair.\n"
+            },
+            "max_visits": {
+              "Integer": 3
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "output_schema": {
+              "String": "{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"decision\", \"reason\"],\n  \"properties\": {\n    \"decision\": {\"type\": \"string\", \"enum\": [\"accept\", \"revise\", \"blocked\"]},\n    \"reason\": {\"type\": \"string\", \"minLength\": 1}\n  }\n}\n"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "shape": {
+              "String": "box"
+            }
+          }
+        },
+        "source_gate": {
+          "id": "source_gate",
+          "attrs": {
+            "script": {
+              "String": "set -eu\ntest \"$(git rev-parse HEAD)\" = '20dd6c3b3a594dc2e45792e42f18416002feb96e' || { echo 'Wrong historical source HEAD' >&2; exit 1; }\ntest -z \"$(git status --porcelain)\" || { echo 'Dirty historical source checkout' >&2; exit 1; }\ntest -f 'docs/iterations/066-request-group-access/plan.md'\ntest -f 'web/test/features/step_definitions/custom_group_access_request_steps.exs'"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 120,
+                "nanos": 0
+              }
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Verify historical replay source and clean checkout"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "stopped": {
+          "id": "stopped",
+          "attrs": {
+            "label": {
+              "String": "Stop: preserve unaccepted candidate"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "echo 'BDD historical pilot stopped; inspect prior gate and saved candidate. Nothing was published.' >&2\nexit 1"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "final_gate": {
+          "id": "final_gate",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Verify accepted WIP proof (no publication)"
+            },
+            "script": {
+              "String": "python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py final 'docs/iterations/066-request-group-access/plan.md' && PATH=\"$PWD/bin:$PATH\" dev ci"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 1800,
+                "nanos": 0
+              }
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "anthropic"
+            }
+          }
+        },
+        "final_report": {
+          "id": "final_report",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "label": {
+              "String": "Report pilot outcome, cost and next risks"
+            },
+            "prompt": {
+              "String": "Read the historical pilot's `.delivery/goal-directed-bdd/` evidence and run summary. Report: chosen old iteration/scenario, whether predicted red matched, changes and focused unit tests, observed green, independent review outcome, final `dev ci` exact-state exit, elapsed time and review/rework count if available, remaining work in the *original* iteration and any BDD loop friction. Explicitly say this was a bounded **non-publishing** rehearsal; no complete plan conformance or main publication was attempted. Do not modify files.\n"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "provider": {
+              "String": "anthropic"
+            }
+          }
+        },
+        "resume_red": {
+          "id": "resume_red",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py resume 'docs/iterations/066-request-group-access/plan.md'"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "label": {
+              "String": "Resume only a trusted saved red or begin fresh"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 120,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "provider": {
+              "String": "anthropic"
+            }
+          }
+        },
+        "apply_review": {
+          "id": "apply_review",
+          "attrs": {
+            "label": {
+              "String": "Guard review verdict and accept evidence"
+            },
+            "script": {
+              "String": "python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py verdict 'docs/iterations/066-request-group-access/plan.md'"
+            },
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "stdin_source": {
+              "String": "output.review_candidate"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "source_gate",
+          "attrs": {}
+        },
+        {
+          "from": "source_gate",
+          "to": "resume_red",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "source_gate",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "resume_red",
+          "to": "call_shot",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=new"
+            }
+          }
+        },
+        {
+          "from": "resume_red",
+          "to": "implement_scenario",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=resume"
+            }
+          }
+        },
+        {
+          "from": "resume_red",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "call_shot",
+          "to": "observe_predicted_red",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "call_shot",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "observe_predicted_red",
+          "to": "implement_scenario",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "observe_predicted_red",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "implement_scenario",
+          "to": "observe_green",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "implement_scenario",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "observe_green",
+          "to": "review_candidate",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=review"
+            }
+          }
+        },
+        {
+          "from": "observe_green",
+          "to": "implement_scenario",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=rework"
+            }
+          }
+        },
+        {
+          "from": "observe_green",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "review_candidate",
+          "to": "apply_review",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "review_candidate",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "apply_review",
+          "to": "final_gate",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=accept"
+            }
+          }
+        },
+        {
+          "from": "apply_review",
+          "to": "implement_scenario",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=revise"
+            }
+          }
+        },
+        {
+          "from": "apply_review",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "final_gate",
+          "to": "final_report",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "final_gate",
+          "to": "stopped",
+          "attrs": {}
+        },
+        {
+          "from": "final_report",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "model_stylesheet": {
+          "String": "* { provider: anthropic; model: claude-sonnet-5; reasoning_effort: high; } #call_shot { reasoning_effort: medium; } #final_report { reasoning_effort: low; }"
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        },
+        "rankdir": {
+          "String": "LR"
+        },
+        "max_node_visits": {
+          "Integer": 18
+        },
+        "goal": {
+          "String": "Rehearse an approved historical BDD scenario without publication"
+        }
+      }
+    },
+    "graph_source": "digraph GoalDirectedBddPilot {\n    graph [\n        goal=\"Rehearse one approved historical BDD scenario without publication\",\n        default_fidelity=\"summary:high\",\n        max_node_visits=18,\n        model_stylesheet=\"* { provider: anthropic; model: claude-sonnet-5; reasoning_effort: high; } #call_shot { reasoning_effort: medium; } #final_report { reasoning_effort: low; }\"\n    ]\n    rankdir=LR\n    start [shape=Mdiamond]\n    exit [shape=Msquare]\n\n    source_gate [\n        label=\"Verify historical replay source and clean checkout\",\n        shape=parallelogram,\n        script=\"set -eu\\ntest \\\"$(git rev-parse HEAD)\\\" = '{{ inputs.expected_source_head }}' || { echo 'Wrong historical source HEAD' >&2; exit 1; }\\ntest -z \\\"$(git status --porcelain)\\\" || { echo 'Dirty historical source checkout' >&2; exit 1; }\\ntest -f '{{ inputs.plan_path }}'\\ntest -f 'web/test/features/step_definitions/custom_group_access_request_steps.exs'\",\n        timeout=\"120s\"\n    ]\n    resume_red [\n        label=\"Resume only a trusted saved red or begin fresh\",\n        shape=parallelogram,\n        output_schema=\"routing\",\n        script=\"python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py resume '{{ inputs.plan_path }}'\",\n        timeout=\"120s\"\n    ]\n    call_shot [\n        label=\"Predict intended behaviour failure before implementation\",\n        shape=box,\n        prompt=\"@call_shot.md\",\n        output_schema=\"@shot.json\",\n        fidelity=\"truncate\",\n        // Fabro stops BEFORE the max visit: 2 permits one actual call.\n        max_visits=2\n    ]\n    observe_predicted_red [\n        label=\"Tag @wip, save prediction, run focused scenario\",\n        shape=parallelogram,\n        stdin_source=\"output.call_shot\",\n        output_schema=\"routing\",\n        script=\"python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py before '{{ inputs.plan_path }}'\",\n        timeout=\"660s\"\n    ]\n    implement_scenario [\n        label=\"Implement only scenario behaviour and focused unit tests\",\n        shape=box,\n        prompt=\"@implement.md\",\n        fidelity=\"truncate\",\n        timeout=\"2400s\",\n        max_visits=3\n    ]\n    observe_green [\n        label=\"Run exact @wip scenario after implementation\",\n        shape=parallelogram,\n        output_schema=\"routing\",\n        script=\"python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py after '{{ inputs.plan_path }}'\",\n        timeout=\"660s\"\n    ]\n    review_candidate [\n        label=\"Independent read-only review\",\n        shape=box,\n        prompt=\"@review.md\",\n        output_schema=\"@review.json\",\n        fidelity=\"truncate\",\n        max_visits=3\n    ]\n    apply_review [\n        label=\"Guard review verdict and accept evidence\",\n        shape=parallelogram,\n        stdin_source=\"output.review_candidate\",\n        output_schema=\"routing\",\n        script=\"python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py verdict '{{ inputs.plan_path }}'\"\n    ]\n    final_gate [\n        label=\"Verify accepted WIP proof (no publication)\",\n        shape=parallelogram,\n        script=\"python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py final '{{ inputs.plan_path }}' && PATH=\\\"$PWD/bin:$PATH\\\" dev ci\",\n        timeout=\"1800s\"\n    ]\n    final_report [label=\"Report pilot outcome, cost and next risks\", shape=box, prompt=\"@final_report.md\"]\n    stopped [shape=parallelogram, label=\"Stop: preserve unaccepted candidate\", script=\"echo 'BDD historical pilot stopped; inspect prior gate and saved candidate. Nothing was published.' >&2\\nexit 1\"]\n\n    start -> source_gate\n    source_gate -> resume_red [condition=\"outcome=succeeded\"]\n    source_gate -> stopped\n    resume_red -> call_shot [condition=\"outcome=succeeded && preferred_label=new\"]\n    resume_red -> implement_scenario [condition=\"outcome=succeeded && preferred_label=resume\"]\n    resume_red -> stopped\n    call_shot -> observe_predicted_red [condition=\"outcome=succeeded\"]\n    call_shot -> stopped\n    observe_predicted_red -> implement_scenario [condition=\"outcome=succeeded\"]\n    observe_predicted_red -> stopped\n    implement_scenario -> observe_green [condition=\"outcome=succeeded\"]\n    implement_scenario -> stopped\n    observe_green -> review_candidate [condition=\"outcome=succeeded && preferred_label=review\"]\n    observe_green -> implement_scenario [condition=\"outcome=succeeded && preferred_label=rework\"]\n    observe_green -> stopped\n    review_candidate -> apply_review [condition=\"outcome=succeeded\"]\n    review_candidate -> stopped\n    apply_review -> final_gate [condition=\"outcome=succeeded && preferred_label=accept\"]\n    apply_review -> implement_scenario [condition=\"outcome=succeeded && preferred_label=revise\"]\n    apply_review -> stopped\n    final_gate -> final_report [condition=\"outcome=succeeded\"]\n    final_gate -> stopped\n    final_report -> exit\n}\n",
+    "workflow_slug": "goal-directed-bdd",
+    "source_directory": "/tmp/memba-066-bdd-resume",
+    "labels": {
+      "purpose": "historical-bdd-resume"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "01339018f8d418198ce6080e79c5e5d0ae3b2a86dfd94b32cbee3ffdd26b6dc1",
+    "definition_blob": "4baa095e0590e8cef650ae9cc827a97b1dc535fb7def5b50f4ff186050297455",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "experiment/066-bdd-resume",
+      "sha": "20dd6c3b3a594dc2e45792e42f18416002feb96e",
+      "dirty": "clean"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M45EKSVMVZJF071CH3WCHVZV",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-05T07:14:23.946121126Z",
+  "last_event_at": "2026-10-05T07:15:28.071907373Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:latest"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+      "runtime": {
+        "id": "599293fce8e6291a547b98f6c1315db3e331549f026c7612121d26fd8771fab2",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "experiment/066-bdd-resume",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
