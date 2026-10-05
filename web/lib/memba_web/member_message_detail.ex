@@ -141,7 +141,7 @@ defmodule MembaWeb.MemberMessageDetail do
       )
 
     member_email_deliverys =
-      Messaging.list_member_email_deliverys(root_message.message_id)
+      Messaging.list_member_email_deliverys(message.message_id)
 
     receipt_model =
       MemberEmailDeliveryPresentation.present_receipts(member_email_deliverys)

@@ -26,4 +26,6 @@
 - [x] 009E Migrate `MembaWeb.MemberInvitationLive.New` to its accepted invitation-context query-result assign, preserving group-aware return routes, invitation form/validation, resend and delivery feedback, command state, navigation and UI while refreshing member counts and fresh manage-members access.
 - [x] 010 Complete package integration with `web/mix.exs`, the production Docker build/release and `dev check` so package and web tests run in supported environments.
 - [x] 011A Reconcile classified notifications that arrive while an initial bind or route rebind returns an access error, proving one conservative retry can recover current data while a repeated error leaves the result and interests cleared.
-- [ ] 011B Re-run the accepted focused proof for every migrated member page and the package lifecycle/race contract, repair only an observed regression, and run final `dev check` on the exact state.
+- [x] 011B Re-run the accepted focused proof for every migrated member page and the package lifecycle/race contract, repair only an observed regression, and run final `dev check` on the exact state.
+
+Manual recovery and independent review evidence: [delivery-recovery.md](delivery-recovery.md).

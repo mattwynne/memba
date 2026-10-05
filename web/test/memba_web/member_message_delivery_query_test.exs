@@ -190,9 +190,18 @@ defmodule MembaWeb.MemberMessageDeliveryQueryTest do
              )
   end
 
-  test "a routed reply presents its metadata but retains the root delivery scope" do
+  test "a routed reply shows only its own receipts and refreshes only for its deliveries" do
     context = create_delivery_context()
     reply = create_reply(context.message, context.viewer, "Reply body")
+
+    reply_delivery =
+      Repo.insert!(%MemberEmailDelivery{
+        delivery_id: Memba.ID.generate(:delivery),
+        message_id: reply.message_id,
+        recipient_id: context.viewer.person_id,
+        recipient_name: "Viewer Example",
+        status: "sent"
+      })
 
     assert {:ok, result} =
              MemberMessageDeliveryQuery.load(
@@ -202,15 +211,54 @@ defmodule MembaWeb.MemberMessageDeliveryQueryTest do
              )
 
     interests = MemberMessageDeliveryQuery.interests(result)
+    source = MembaReadModelSource.new()
 
     assert result.message.message_id == reply.message_id
     assert result.message.conversation_id == context.message.message_id
-    assert result.delivery_message_id == context.message.message_id
-    assert result.member_email_delivery_ids == [context.delivery.delivery_id]
-    assert {:message, reply.message_id} in interests
-    assert {:message, context.message.message_id} in interests
-    assert {:message_deliveries, context.message.message_id} in interests
-    refute {:message_deliveries, reply.message_id} in interests
+    assert result.delivery_message_id == reply.message_id
+    assert result.member_email_delivery_ids == [reply_delivery.delivery_id]
+    assert [%{recipient_id: viewer_id, status: "sent"}] = result.member_email_deliverys
+    assert viewer_id == context.viewer.person_id
+    assert {:message_deliveries, reply.message_id} in interests
+    assert {:delivery, reply_delivery.delivery_id} in interests
+    refute {:message_deliveries, context.message.message_id} in interests
+    refute {:delivery, context.delivery.delivery_id} in interests
+
+    for projector <- [
+          Memba.Messaging.Projectors.MemberEmailDelivery,
+          Memba.Messaging.Projectors.MembaStaffEmailDelivery
+        ] do
+      for {message_id, delivery_id, matches?} <- [
+            {reply.message_id, reply_delivery.delivery_id, true},
+            {context.message.message_id, context.delivery.delivery_id, false}
+          ] do
+        change =
+          notification(projector, %EmailDeliveryDelivered{
+            message_id: message_id,
+            delivery_id: delivery_id
+          })
+
+        assert {:ok, invalidations} = Source.classify(source, change)
+        assert query_matches?(source, interests, invalidations) == matches?
+      end
+    end
+
+    Repo.insert!(%MembaStaffEmailDelivery{
+      delivery_id: reply_delivery.delivery_id,
+      message_id: reply.message_id,
+      recipient_id: context.viewer.person_id,
+      recipient_name: "Viewer Example",
+      recipient_address: context.viewer.email,
+      channel: "email",
+      status: "sent",
+      reason: nil
+    })
+
+    update_staff_delivery(reply_delivery.delivery_id, "delayed", "Temporary delay")
+    assert_reply_delivery(context, reply, reply_delivery, "sent", nil)
+
+    update_member_delivery(reply_delivery.delivery_id, "delivery problem")
+    assert_reply_delivery(context, reply, reply_delivery, "delivery problem", "Temporary delay")
   end
 
   test "both delivery projector notifications match the exact root scope and unrelated messages do not" do
@@ -473,6 +521,28 @@ defmodule MembaWeb.MemberMessageDeliveryQueryTest do
     MembaStaffEmailDelivery
     |> where([delivery], delivery.delivery_id == ^delivery_id)
     |> Repo.update_all(set: [status: status, reason: reason])
+  end
+
+  defp assert_reply_delivery(context, reply, reply_delivery, status, reason) do
+    assert {:ok, result} =
+             MemberMessageDeliveryQuery.load(
+               context.club_id,
+               reply.message_id,
+               context.viewer.email
+             )
+
+    assert result.member_email_delivery_ids == [reply_delivery.delivery_id]
+    assert [%{status: ^status, reason: ^reason}] = result.member_email_deliverys
+
+    assert {:ok, root_result} =
+             MemberMessageDeliveryQuery.load(
+               context.club_id,
+               context.message.message_id,
+               context.viewer.email
+             )
+
+    assert root_result.member_email_delivery_ids == [context.delivery.delivery_id]
+    assert [%{status: "delivered"}] = root_result.member_email_deliverys
   end
 
   defp assert_delivery(context, status, reason) do

@@ -83,16 +83,16 @@ defmodule MembaWeb.MemberMessageDeliveryQuery do
   end
 
   defp delivery_detail(detail) do
-    root_message = Map.fetch!(detail, :root_message)
+    message = Map.fetch!(detail, :message)
 
     %{
       page_title: Map.fetch!(detail, :page_title),
       selected_club: Map.fetch!(detail, :selected_club),
       current_member: Map.fetch!(detail, :current_member),
-      message: Map.fetch!(detail, :message),
+      message: message,
       conversation_audience: Map.fetch!(detail, :conversation_audience),
       sender_name: Map.fetch!(detail, :sender_name),
-      delivery_message_id: Map.fetch!(root_message, :message_id),
+      delivery_message_id: Map.fetch!(message, :message_id),
       member_email_deliverys: Map.fetch!(detail, :member_email_deliverys),
       member_email_delivery_ids: Map.fetch!(detail, :member_email_delivery_ids),
       member_email_delivery_count: Map.fetch!(detail, :member_email_delivery_count),

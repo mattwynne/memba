@@ -393,6 +393,22 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
         subject: "Re: Trip planning night"
       )
 
+    root_delivery =
+      create_member_email_delivery(
+        message_id: conversation.message_id,
+        recipient_id: alice.person_id,
+        recipient_name: "Alice Adams",
+        status: "delivered"
+      )
+
+    reply_delivery =
+      create_member_email_delivery(
+        message_id: reply.message_id,
+        recipient_id: alice.person_id,
+        recipient_name: "Alice Adams",
+        status: "sent"
+      )
+
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
@@ -408,6 +424,41 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
              view,
              "a#member-delivery-back-to-conversation-link[href='/messages/#{reply.message_id}']"
            )
+
+    assert has_element?(
+             view,
+             "#member-message-delivery-detail[data-message-id='#{reply.message_id}']"
+           )
+
+    assert %{status: "sent"} = live_receipt(view, alice.person_id)
+
+    root_delivery =
+      root_delivery
+      |> Ecto.Changeset.change(status: "delivery problem")
+      |> Repo.update!()
+
+    publish_delivery_change(
+      Memba.Messaging.Projectors.MemberEmailDelivery,
+      conversation.message_id,
+      root_delivery,
+      nil
+    )
+
+    assert %{status: "sent"} = live_receipt(view, alice.person_id)
+
+    reply_delivery =
+      reply_delivery
+      |> Ecto.Changeset.change(status: "delivery problem")
+      |> Repo.update!()
+
+    publish_delivery_change(
+      Memba.Messaging.Projectors.MemberEmailDelivery,
+      reply.message_id,
+      reply_delivery,
+      nil
+    )
+
+    assert %{status: "delivery problem"} = live_receipt(view, alice.person_id)
   end
 
   test "delivery page preserves selected-group context when returning to the conversation", %{

@@ -54,14 +54,14 @@ defmodule MembaWeb.MemberMessageDetailQuery do
     selected_club = Map.fetch!(detail, :selected_club)
     current_member = Map.fetch!(detail, :current_member)
     audience = Map.fetch!(detail, :conversation_audience)
-    root_message = Map.get(detail, :root_message, Map.fetch!(detail, :message))
+    message = Map.fetch!(detail, :message)
 
     club_id = Map.fetch!(selected_club, :club_id)
     person_id = Map.fetch!(current_member, :id)
     membership_id = Map.fetch!(current_member, :membership_id)
     group_id = Map.fetch!(audience, :group_id)
     conversation_id = Map.fetch!(audience, :conversation_id)
-    delivery_message_id = Map.fetch!(root_message, :message_id)
+    delivery_message_id = Map.fetch!(message, :message_id)
 
     [
       {:club, club_id},

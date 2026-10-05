@@ -80,6 +80,27 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
     refute {:person_clubs, "person-current"} in interests
   end
 
+  test "a routed reply detail tracks its receipts without subscribing to root deliveries" do
+    detail = %{
+      selected_club: %{club_id: "club-1"},
+      current_member: %{id: "viewer", membership_id: "membership-1"},
+      conversation_audience: %{conversation_id: "root", group_id: "group-1"},
+      root_message: %{message_id: "root", sender_id: "author"},
+      message: %{message_id: "reply", sender_id: "viewer"},
+      conversation_entries: [
+        %{message: %{message_id: "root", sender_id: "author"}},
+        %{message: %{message_id: "reply", sender_id: "viewer"}}
+      ],
+      member_email_delivery_ids: ["reply-delivery"]
+    }
+
+    interests = MemberMessageDetailQuery.interests(detail)
+
+    assert {:message_deliveries, "reply"} in interests
+    assert {:delivery, "reply-delivery"} in interests
+    refute {:message_deliveries, "root"} in interests
+  end
+
   test "descriptor returns complete replacement interests with each successful read" do
     query = MemberMessageDetailQuery.query()
 
