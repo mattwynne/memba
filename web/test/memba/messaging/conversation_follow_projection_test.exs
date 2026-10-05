@@ -87,6 +87,16 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
     assert Messaging.list_conversation_followers(conversation_id) == []
   end
 
+  test "invalid follow query IDs return the documented empty shapes" do
+    conversation_id = Memba.ID.generate(:message)
+    member_id = Memba.ID.generate(:person)
+
+    assert Messaging.get_conversation_follow("invalid", member_id) == nil
+    assert Messaging.get_conversation_follow(conversation_id, "invalid") == nil
+    refute Messaging.following_conversation?("invalid", member_id)
+    assert Messaging.list_conversation_followers("invalid") == []
+  end
+
   test "repeated follow and unfollow commands are idempotent" do
     club_id = Memba.ID.generate(:club)
     conversation_id = Memba.ID.generate(:message)
@@ -171,7 +181,7 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
       |> Messaging.list_conversation_followers()
       |> Enum.map(& &1.member_id)
 
-    assert Enum.sort(follower_ids) == Enum.sort([alice_id, bob_id])
+    assert follower_ids == Enum.sort([alice_id, bob_id])
 
     refute Messaging.following_conversation?(root_message_id, carol_id)
   end

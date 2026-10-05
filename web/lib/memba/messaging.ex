@@ -24,8 +24,9 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationGroupAccess
   alias Memba.Messaging.ConversationAudience
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
   alias Memba.Messaging.ConversationListing
-  alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.EmailDeliveryReport
@@ -48,8 +49,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projectors.ConversationFollow,
     as: ConversationFollowProjector
 
-  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
-  alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -513,27 +512,14 @@ defmodule Memba.Messaging do
 
   Invalid IDs or missing follow rows return `nil`.
   """
-  def get_conversation_follow(conversation_id, member_id) do
-    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
-         {:ok, member_id} <- ID.cast(:person, member_id) do
-      Repo.get(
-        ConversationFollowProjection,
-        ConversationFollowers.follow_id(conversation_id, member_id)
-      )
-    else
-      :error -> nil
-    end
-  end
+  def get_conversation_follow(conversation_id, member_id),
+    do: ConversationFollowQueries.get_conversation_follow(conversation_id, member_id)
 
   @doc """
   Return whether a member currently follows a conversation.
   """
-  def following_conversation?(conversation_id, member_id) do
-    case get_conversation_follow(conversation_id, member_id) do
-      %ConversationFollowProjection{following: true} -> true
-      _not_following -> false
-    end
-  end
+  def following_conversation?(conversation_id, member_id),
+    do: ConversationFollowQueries.following_conversation?(conversation_id, member_id)
 
   @doc """
   Return whether a group has the requested access to a projected conversation.
@@ -542,16 +528,13 @@ defmodule Memba.Messaging do
   `"write"` grant satisfies both read and write checks; a stored `"read"` grant
   satisfies only read checks. Invalid IDs or access levels return `false`.
   """
-  def group_has_conversation_access?(conversation_id, group_id, access_level) do
-    with {:ok, group_id} <- ID.cast(:group, group_id),
-         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level),
-         {:ok, %{group_id: ^group_id, access_level: granted_access_level}} <-
-           resolve_conversation_audience(conversation_id) do
-      granted_access_level in ConversationAccess.grant_levels_including(access_level)
-    else
-      _invalid_missing_or_ambiguous -> false
-    end
-  end
+  def group_has_conversation_access?(conversation_id, group_id, access_level),
+    do:
+      ConversationGroupAccessQueries.group_has_conversation_access?(
+        conversation_id,
+        group_id,
+        access_level
+      )
 
   @doc """
   Resolve a conversation's one current group audience from its root aggregate.
@@ -561,7 +544,7 @@ defmodule Memba.Messaging do
   fail closed.
   """
   def resolve_conversation_audience(conversation_id),
-    do: ConversationAudience.resolve(conversation_id)
+    do: ConversationGroupAccessQueries.resolve_conversation_audience(conversation_id)
 
   @doc """
   Return whether a person has the requested access to a projected conversation.
@@ -576,25 +559,14 @@ defmodule Memba.Messaging do
   inactive memberships, and conversations without a qualifying grant return
   `false`.
   """
-  def member_has_conversation_access?(message_id, club_id, person_id, access_level) do
-    with {:ok, message_id} <- ID.cast(:message, message_id),
-         {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, person_id} <- ID.cast(:person, person_id),
-         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level),
-         %MessageProjection{club_id: ^club_id} = message <-
-           Repo.get(MessageProjection, message_id),
-         {:ok, conversation_id} <- conversation_id_for_message(message),
-         %MessageProjection{club_id: ^club_id} <-
-           fetch_conversation_root_projection(conversation_id),
-         {:ok, %{club_id: ^club_id, group_id: group_id, access_level: granted_access_level}} <-
-           resolve_conversation_audience(conversation_id),
-         true <-
-           Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id) do
-      granted_access_level in ConversationAccess.grant_levels_including(access_level)
-    else
-      _invalid_missing_or_inaccessible -> false
-    end
-  end
+  def member_has_conversation_access?(message_id, club_id, person_id, access_level),
+    do:
+      ConversationGroupAccessQueries.member_has_conversation_access?(
+        message_id,
+        club_id,
+        person_id,
+        access_level
+      )
 
   @doc """
   Return one keyset page of legacy root conversations with no group access.
@@ -607,32 +579,12 @@ defmodule Memba.Messaging do
   previous page; callers keep it in process only and may safely restart from
   `nil`.
   """
-  def list_everyone_conversation_access_backfill_page(cursor \\ nil, limit \\ 1_000) do
-    root_conversations =
-      MessageProjection
-      |> where([message], message.message_id == message.conversation_id)
-      |> after_backfill_cursor(:message_id, cursor)
-      |> order_by([message], asc: message.message_id)
-      |> limit(^normalize_backfill_page_size(limit))
-      |> select([message], %{
-        conversation_id: message.message_id,
-        club_id: message.club_id
-      })
-      |> Repo.all()
-
-    entries =
-      root_conversations
-      |> Enum.map(fn root ->
-        Map.put(root, :group_id, SystemGroups.everyone_group_id(root.club_id))
-      end)
-      |> reject_conversations_with_access()
-
-    %{
-      entries: entries,
-      next_cursor: backfill_next_cursor(root_conversations, :conversation_id),
-      source_count: length(root_conversations)
-    }
-  end
+  def list_everyone_conversation_access_backfill_page(cursor \\ nil, limit \\ 1_000),
+    do:
+      ConversationGroupAccessQueries.list_everyone_conversation_access_backfill_page(
+        cursor,
+        limit
+      )
 
   @doc """
   List current projected followers for a conversation.
@@ -641,16 +593,8 @@ defmodule Memba.Messaging do
   current participation in the conversation's group is applied when a reply is
   posted.
   """
-  def list_conversation_followers(conversation_id) do
-    with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
-      ConversationFollowProjection
-      |> where([follow], follow.conversation_id == ^conversation_id and follow.following == true)
-      |> order_by([follow], asc: follow.member_id)
-      |> Repo.all()
-    else
-      :error -> []
-    end
-  end
+  def list_conversation_followers(conversation_id),
+    do: ConversationFollowQueries.list_conversation_followers(conversation_id)
 
   @doc """
   List projected messages for the Memba staff operations Messages index.
@@ -879,39 +823,6 @@ defmodule Memba.Messaging do
     value
     |> String.trim()
     |> String.downcase()
-  end
-
-  defp reject_conversations_with_access([]), do: []
-
-  defp reject_conversations_with_access(entries) do
-    conversation_ids = Enum.map(entries, & &1.conversation_id)
-
-    conversations_with_access =
-      ConversationGroupAccessProjection
-      |> where([access], access.conversation_id in ^conversation_ids)
-      |> select([access], access.conversation_id)
-      |> Repo.all()
-      |> MapSet.new()
-
-    Enum.reject(entries, &MapSet.member?(conversations_with_access, &1.conversation_id))
-  end
-
-  defp after_backfill_cursor(query, _field, nil), do: query
-  defp after_backfill_cursor(query, _field, ""), do: query
-
-  defp after_backfill_cursor(query, field, cursor) when is_binary(cursor) do
-    where(query, [row], field(row, ^field) > ^cursor)
-  end
-
-  defp normalize_backfill_page_size(limit) when is_integer(limit) and limit > 0, do: limit
-  defp normalize_backfill_page_size(_limit), do: 1_000
-
-  defp backfill_next_cursor([], _field), do: nil
-
-  defp backfill_next_cursor(rows, field) do
-    rows
-    |> List.last()
-    |> Map.fetch!(field)
   end
 
   defp dispatch_command(command, dispatch_opts),
