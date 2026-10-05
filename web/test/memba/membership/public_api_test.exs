@@ -926,6 +926,47 @@ defmodule Memba.Membership.PublicApiTest do
              )
   end
 
+  test "verification issuer injection preserves result and error shapes without dispatch" do
+    person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: "pending@example.com"},
+               consistency: :strong
+             )
+
+    request = %{person_id: person_id, email: "pending@example.com"}
+    events_before = count_events()
+
+    assert {:ok, %{person_id: ^person_id, normalized_email: "pending@example.com"}} =
+             Membership.resend_person_email_address_verification(request,
+               verification_issuer: fn _ -> :ok end
+             )
+
+    assert {:error, :delivery_failed} =
+             Membership.resend_person_email_address_verification(request,
+               verification_issuer: fn _ -> {:error, :delivery_failed} end
+             )
+
+    assert {:error, :invalid_email_address_verification_issuer} =
+             Membership.resend_person_email_address_verification(request,
+               verification_issuer: :invalid
+             )
+
+    assert {:error, {:unexpected_email_address_verification_issuer_result, :unexpected}} =
+             Membership.resend_person_email_address_verification(request,
+               verification_issuer: fn _ -> :unexpected end
+             )
+
+    assert count_events() == events_before
+  end
+
   test "resend_person_email_address_verification/2 stores a scoped 15-minute one-use token" do
     person_id = Memba.ID.generate(:person)
     now = ~U[2026-07-13 21:00:00.000000Z]

@@ -20,24 +20,19 @@ defmodule Memba.Membership do
   alias Memba.Membership.InvitationAcceptance
   alias Memba.Membership.InvitationIssuanceWorkflow
   alias Memba.Membership.InvitationQueries
-  alias Memba.Membership.EmailAddressVerificationToken
-  alias Memba.Membership.EmailAddresses
   alias Memba.Membership.GroupName
-  alias Memba.Membership.InvitationToken
   alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.PersonEmailVerification
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
-  alias Memba.Membership.PersonEmailAddressVerificationRevocation
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroupBackfillQueries
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group, as: GroupProjection
-  alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.ProjectionBarrier
   alias Memba.Repo
 
-  @person_email_address_verification_token_ttl_seconds 15 * 60
   @group_access_projectors [GroupMembershipProjector, MembershipProjector]
 
   @doc """
@@ -170,13 +165,7 @@ defmodule Memba.Membership do
   """
   def replace_person_email_addresses(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    {revoker, dispatch_opts} = PersonEmailAddressVerificationRevocation.revoker(dispatch_opts)
-
-    with {:ok, command, requests} <- PersonEmailAddressCommands.prepare_replace(attrs) do
-      command
-      |> CommandDispatch.dispatch(dispatch_opts)
-      |> PersonEmailAddressVerificationRevocation.after_dispatch(requests, revoker)
-    end
+    PersonEmailVerification.replace(attrs, dispatch_opts)
   end
 
   @doc """
@@ -204,16 +193,7 @@ defmodule Memba.Membership do
   """
   def resend_person_email_address_verification(attrs, opts \\ [])
       when is_map(attrs) and is_list(opts) do
-    with {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, person_id} <- cast_person_id(person_id),
-         {:ok, email} <- fetch_required(attrs, :email),
-         {:ok, %{normalized_email: normalized_email}} <- EmailAddresses.normalize_email(email),
-         {:ok, email_address} <-
-           pending_person_email_address_for_verification(person_id, normalized_email) do
-      email_address
-      |> person_email_address_verification_request()
-      |> issue_person_email_address_verification(opts)
-    end
+    PersonEmailVerification.resend(attrs, opts)
   end
 
   @doc """
@@ -225,20 +205,8 @@ defmodule Memba.Membership do
   def consume_person_email_address_verification_token(token, opts \\ [])
 
   def consume_person_email_address_verification_token(token, opts)
-      when is_binary(token) and is_list(opts) do
-    token_hash = hash_person_email_address_verification_token(token)
-    now = timestamp(opts)
-
-    EmailAddressVerificationToken.consume(token_hash, now, fn verification_token ->
-      with {:ok, email_address} <-
-             pending_person_email_address_for_verification(
-               verification_token.person_id,
-               verification_token.normalized_email
-             ) do
-        {:ok, person_email_address_verification_request(email_address)}
-      end
-    end)
-  end
+      when is_binary(token) and is_list(opts),
+      do: PersonEmailVerification.consume(token, opts)
 
   def consume_person_email_address_verification_token(_token, _opts), do: {:error, :not_found}
 
@@ -251,9 +219,7 @@ defmodule Memba.Membership do
   """
   def verify_person_email_address(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- PersonEmailAddressCommands.prepare_verify(attrs) do
-      CommandDispatch.dispatch(command, dispatch_opts)
-    end
+    PersonEmailVerification.verify(attrs, dispatch_opts)
   end
 
   @doc """
@@ -267,16 +233,7 @@ defmodule Memba.Membership do
   """
   def verify_pending_person_email_address_for_sign_in(email, dispatch_opts \\ [])
       when is_list(dispatch_opts) do
-    case pending_person_email_address_for_sign_in(email) do
-      {:ok, %PersonEmailAddress{} = email_address} ->
-        email_address
-        |> person_email_address_verification_request()
-        |> verify_person_email_address(dispatch_opts)
-        |> normalize_sign_in_verification_result()
-
-      :not_pending ->
-        :ok
-    end
+    PersonEmailVerification.verify_for_sign_in(email, dispatch_opts)
   end
 
   @doc """
@@ -294,13 +251,7 @@ defmodule Memba.Membership do
   """
   def remove_person_email_address(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    {revoker, dispatch_opts} = PersonEmailAddressVerificationRevocation.revoker(dispatch_opts)
-
-    with {:ok, command, requests} <- PersonEmailAddressCommands.prepare_remove(attrs) do
-      command
-      |> CommandDispatch.dispatch(dispatch_opts)
-      |> PersonEmailAddressVerificationRevocation.after_dispatch(requests, revoker)
-    end
+    PersonEmailVerification.remove(attrs, dispatch_opts)
   end
 
   @doc """
@@ -957,107 +908,6 @@ defmodule Memba.Membership do
     |> Enum.reverse()
   end
 
-  defp pending_person_email_address_for_verification(person_id, normalized_email) do
-    PersonEmailAddress
-    |> where([email_address], email_address.person_id == ^person_id)
-    |> where([email_address], email_address.normalized_email == ^normalized_email)
-    |> limit(1)
-    |> Repo.one()
-    |> ensure_pending_person_email_address()
-  end
-
-  defp pending_person_email_address_for_sign_in(email) do
-    case normalize_email(email) do
-      nil ->
-        :not_pending
-
-      normalized_email ->
-        PersonEmailAddress
-        |> where([email_address], email_address.normalized_email == ^normalized_email)
-        |> where([email_address], is_nil(email_address.verified_at))
-        |> limit(1)
-        |> Repo.one()
-        |> case do
-          %PersonEmailAddress{} = email_address -> {:ok, email_address}
-          nil -> :not_pending
-        end
-    end
-  end
-
-  defp normalize_sign_in_verification_result(:ok), do: :ok
-  defp normalize_sign_in_verification_result({:ok, _result}), do: :ok
-  defp normalize_sign_in_verification_result({:error, _reason} = error), do: error
-
-  defp ensure_pending_person_email_address(nil), do: {:error, :pending_email_address_not_found}
-
-  defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: nil} = email_address) do
-    {:ok, email_address}
-  end
-
-  defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: %DateTime{}}) do
-    {:error, :email_address_already_verified}
-  end
-
-  defp person_email_address_verification_request(%PersonEmailAddress{} = email_address) do
-    %{
-      person_id: email_address.person_id,
-      email: email_address.email,
-      normalized_email: email_address.normalized_email
-    }
-  end
-
-  defp issue_person_email_address_verification(request, opts) do
-    issuer =
-      case Keyword.fetch(opts, :verification_issuer) do
-        {:ok, issuer} ->
-          issuer
-
-        :error ->
-          fn request -> default_person_email_address_verification_issuer(request, opts) end
-      end
-
-    case issue_person_email_address_verification_with(issuer, request) do
-      :ok -> {:ok, request}
-      {:ok, issuer_result} -> {:ok, Map.put(request, :issuer_result, issuer_result)}
-      {:error, reason} -> {:error, reason}
-      other -> {:error, {:unexpected_email_address_verification_issuer_result, other}}
-    end
-  end
-
-  defp issue_person_email_address_verification_with(issuer, request)
-       when is_function(issuer, 1) do
-    issuer.(request)
-  end
-
-  defp issue_person_email_address_verification_with(_issuer, _request) do
-    {:error, :invalid_email_address_verification_issuer}
-  end
-
-  defp default_person_email_address_verification_issuer(request, opts) do
-    token = InvitationToken.generate_token()
-    now = timestamp(opts)
-    expires_at = DateTime.add(now, @person_email_address_verification_token_ttl_seconds, :second)
-
-    attrs = %{
-      person_id: request.person_id,
-      normalized_email: request.normalized_email,
-      token_hash: hash_person_email_address_verification_token(token),
-      expires_at: expires_at
-    }
-
-    case EmailAddressVerificationToken.insert(attrs) do
-      {:ok, %EmailAddressVerificationToken{} = verification_token} ->
-        {:ok, %{token: token, expires_at: verification_token.expires_at}}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  defp hash_person_email_address_verification_token(token) when is_binary(token) do
-    :crypto.hash(:sha256, token)
-  end
-
   defp fetch_required(attrs, key) when is_atom(key) do
     string_key = Atom.to_string(key)
 
@@ -1067,24 +917,4 @@ defmodule Memba.Membership do
       _attrs -> {:error, {:missing_required_attribute, key}}
     end
   end
-
-  defp timestamp(opts) do
-    Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)
-  end
-
-  defp cast_person_id(person_id) do
-    case ID.cast(:person, person_id) do
-      {:ok, person_id} -> {:ok, person_id}
-      :error -> {:error, :invalid_person_id}
-    end
-  end
-
-  defp normalize_email(email) when is_binary(email) do
-    case email |> String.trim() |> String.downcase() do
-      "" -> nil
-      normalized_email -> normalized_email
-    end
-  end
-
-  defp normalize_email(_email), do: nil
 end
