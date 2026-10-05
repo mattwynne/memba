@@ -12,6 +12,9 @@ defmodule MembaWeb.MemberDashboardLive do
   alias LiveQuery.Binding
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.CustomGroup.Admit
+  alias Memba.Membership.CustomGroup.Remove
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.GroupWelcomeEmail
@@ -216,17 +219,16 @@ defmodule MembaWeb.MemberDashboardLive do
              person_id,
              group_id
            ),
+         {:ok, command} <-
+           Admit.prepare(%{
+             club_id: target.club.club_id,
+             group_id: target.group.group_id,
+             membership_id: target.membership.membership_id,
+             person_id: target.person.person_id,
+             actor_person_id: actor_person_id
+           }),
          {:ok, %CustomGroupAdmission{} = admission} <-
-           Membership.add_custom_group_member(
-             %{
-               club_id: target.club.club_id,
-               group_id: target.group.group_id,
-               membership_id: target.membership.membership_id,
-               person_id: target.person.person_id,
-               actor_person_id: actor_person_id
-             },
-             consistency: :strong
-           ) do
+           CommandDispatch.dispatch(command, consistency: :strong) do
       admission
       |> deliver_targeted_group_welcome(target)
       |> log_group_welcome_delivery_failure(admission)
@@ -255,7 +257,12 @@ defmodule MembaWeb.MemberDashboardLive do
       actor_person_id: socket.assigns.dashboard.current_member.id
     }
 
-    case Membership.add_custom_group_member(attrs, consistency: :strong) do
+    result =
+      with {:ok, command} <- Admit.prepare(attrs) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    case result do
       {:ok, %CustomGroupAdmission{} = admission} ->
         admission
         |> deliver_group_welcome(socket)
@@ -315,7 +322,12 @@ defmodule MembaWeb.MemberDashboardLive do
         removal_operation_id: operation_id
       }
 
-      case Membership.remove_custom_group_member(attrs, consistency: :strong) do
+      result =
+        with {:ok, command} <- Remove.prepare(attrs) do
+          CommandDispatch.dispatch(command, consistency: :strong)
+        end
+
+      case result do
         {:ok, %CustomGroupRemoval{}} ->
           self_leave? = person_id == socket.assigns.dashboard.current_member.id
 

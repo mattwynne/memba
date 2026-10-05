@@ -3,40 +3,32 @@ defmodule Memba.Membership do
   Public application service and query API for the Membership bounded context.
   """
 
-  require Logger
-
   import Ecto.Query
 
-  alias Memba.BuildInfo
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership.App
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.CustomGroup
   alias Memba.Membership.Authorization
   alias Memba.Membership.Commands.AddClubMember
-  alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
-  alias Memba.Membership.Commands.CreateCustomGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveClubMember
-  alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
-  alias Memba.Membership.CustomGroupAdmission
-  alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
-  alias Memba.Membership.Events.GroupMemberAdded
-  alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.GroupName
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Policies.SystemGroupMembership
@@ -85,10 +77,8 @@ defmodule Memba.Membership do
   """
   def create_custom_group(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- create_custom_group_command(attrs) do
-      command
-      |> dispatch(dispatch_opts)
-      |> diagnose_custom_group_authorization(command)
+    with {:ok, command} <- CustomGroup.Create.prepare(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -112,8 +102,8 @@ defmodule Memba.Membership do
   """
   def add_custom_group_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- add_custom_group_member_command(attrs) do
-      dispatch_custom_group_admission(command, dispatch_opts)
+    with {:ok, command} <- CustomGroup.Admit.prepare(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -130,8 +120,8 @@ defmodule Memba.Membership do
   """
   def remove_custom_group_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- remove_custom_group_member_command(attrs) do
-      dispatch_custom_group_removal(command, dispatch_opts)
+    with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -2020,57 +2010,6 @@ defmodule Memba.Membership do
     end
   end
 
-  defp create_custom_group_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, group_id} <- fetch_required(attrs, :group_id),
-         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
-         {:ok, name} <- fetch_required(attrs, :name) do
-      {:ok,
-       %CreateCustomGroup{
-         club_id: club_id,
-         group_id: group_id,
-         actor_person_id: actor_person_id,
-         name: name
-       }}
-    end
-  end
-
-  defp add_custom_group_member_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, group_id} <- fetch_required(attrs, :group_id),
-         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
-         {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
-      {:ok,
-       %AddCustomGroupMember{
-         club_id: club_id,
-         group_id: group_id,
-         membership_id: membership_id,
-         person_id: person_id,
-         actor_person_id: actor_person_id
-       }}
-    end
-  end
-
-  defp remove_custom_group_member_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, group_id} <- fetch_required(attrs, :group_id),
-         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
-         {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
-         {:ok, removal_operation_id} <- fetch_required(attrs, :removal_operation_id) do
-      {:ok,
-       %RemoveCustomGroupMember{
-         club_id: club_id,
-         group_id: group_id,
-         membership_id: membership_id,
-         person_id: person_id,
-         actor_person_id: actor_person_id,
-         removal_operation_id: removal_operation_id
-       }}
-    end
-  end
-
   defp update_club_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, club_id} <- cast_club_id(club_id),
@@ -2836,97 +2775,6 @@ defmodule Memba.Membership do
     dispatch(command, member_lifecycle_consistency(dispatch_opts))
   end
 
-  defp dispatch_custom_group_admission(command, dispatch_opts) do
-    if explicit_commanded_returning_mode?(dispatch_opts) do
-      dispatch(command, dispatch_opts)
-    else
-      dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
-
-      case dispatch(command, dispatch_opts) do
-        {:ok, %Commanded.Commands.ExecutionResult{} = result} ->
-          {:ok, custom_group_admission(command, result)}
-
-        {:error, _reason} = error ->
-          error
-      end
-    end
-  end
-
-  defp dispatch_custom_group_removal(command, dispatch_opts) do
-    if explicit_commanded_returning_mode?(dispatch_opts) do
-      dispatch(command, dispatch_opts)
-    else
-      dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
-
-      case dispatch(command, dispatch_opts) do
-        {:ok, %Commanded.Commands.ExecutionResult{} = result} ->
-          {:ok, custom_group_removal(command, result)}
-
-        {:error, _reason} = error ->
-          error
-      end
-    end
-  end
-
-  defp explicit_commanded_returning_mode?(dispatch_opts) do
-    Keyword.has_key?(dispatch_opts, :returning) or
-      Keyword.get(dispatch_opts, :include_execution_result) == true or
-      Keyword.get(dispatch_opts, :include_aggregate_version) == true
-  end
-
-  defp custom_group_admission(command, %Commanded.Commands.ExecutionResult{events: events}) do
-    transition =
-      if Enum.any?(events, fn
-           %GroupMemberAdded{
-             club_id: club_id,
-             group_id: group_id,
-             membership_id: membership_id,
-             person_id: person_id
-           } ->
-             club_id == command.club_id and group_id == command.group_id and
-               membership_id == command.membership_id and person_id == command.person_id
-
-           _event ->
-             false
-         end) do
-        :member_added
-      else
-        :already_member
-      end
-
-    %CustomGroupAdmission{
-      club_id: command.club_id,
-      group_id: command.group_id,
-      membership_id: command.membership_id,
-      person_id: command.person_id,
-      actor_person_id: command.actor_person_id,
-      transition: transition
-    }
-  end
-
-  defp custom_group_removal(command, %Commanded.Commands.ExecutionResult{events: events}) do
-    unless Enum.empty?(events) or
-             Enum.any?(events, fn
-               %GroupMemberRemoved{removal_operation_id: operation_id} ->
-                 operation_id == command.removal_operation_id
-
-               _event ->
-                 false
-             end) do
-      raise "custom-group removal dispatch returned an unexpected event set"
-    end
-
-    %CustomGroupRemoval{
-      club_id: command.club_id,
-      group_id: command.group_id,
-      membership_id: command.membership_id,
-      person_id: command.person_id,
-      actor_person_id: command.actor_person_id,
-      removal_operation_id: command.removal_operation_id,
-      transition: :member_removed
-    }
-  end
-
   defp member_lifecycle_consistency(dispatch_opts) do
     system_group_membership_consistency(dispatch_opts)
   end
@@ -2966,64 +2814,6 @@ defmodule Memba.Membership do
       :ok -> :ok
       {:ok, _result} = ok -> ok
       {:error, _reason} = error -> error
-    end
-  end
-
-  defp diagnose_custom_group_authorization(
-         {:error, :unauthorized},
-         %CreateCustomGroup{} = command
-       ) do
-    case Authorization.authorize_manage_members(command.club_id, command.actor_person_id) do
-      :ok ->
-        log_custom_group_authorization_state_mismatch(command, true, :ok)
-        {:error, :authorization_state_mismatch}
-
-      {:error, :unauthorized} ->
-        {:error, :unauthorized}
-
-      other ->
-        log_custom_group_authorization_state_mismatch(command, false, other)
-        {:error, :authorization_state_mismatch}
-    end
-  end
-
-  defp diagnose_custom_group_authorization(result, %CreateCustomGroup{}), do: result
-
-  defp log_custom_group_authorization_state_mismatch(
-         %CreateCustomGroup{} = command,
-         projected_grant,
-         projection_authorization_result
-       ) do
-    event = %{
-      event: "custom_group_creation_authorization_state_mismatch",
-      club_id: command.club_id,
-      actor_person_id: command.actor_person_id,
-      group_id: command.group_id,
-      command_name: inspect(command.__struct__),
-      command_classification: "custom_group_creation",
-      projected_grant: projected_grant,
-      projection_authorization_result: inspect(projection_authorization_result),
-      aggregate_authorized: false,
-      git_sha: git_sha()
-    }
-
-    Logger.error("custom_group_creation_authorization_state_mismatch #{Jason.encode!(event)}",
-      event: "custom_group_creation_authorization_state_mismatch",
-      club_id: command.club_id,
-      actor_person_id: command.actor_person_id,
-      group_id: command.group_id,
-      command_name: inspect(command.__struct__),
-      command_classification: "custom_group_creation",
-      projected_grant: projected_grant,
-      aggregate_authorized: false,
-      git_sha: event.git_sha
-    )
-  end
-
-  defp git_sha do
-    case BuildInfo.git_sha() do
-      {:ok, sha} -> sha
-      :error -> nil
     end
   end
 

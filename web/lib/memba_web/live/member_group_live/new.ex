@@ -13,6 +13,8 @@ defmodule MembaWeb.MemberGroupLive.New do
 
   alias LiveQuery.Binding
   alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.CustomGroup.Create
   alias MembaWeb.ClubSite
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberGroupCreationQuery
@@ -89,7 +91,12 @@ defmodule MembaWeb.MemberGroupLive.New do
       name: Map.get(group_params, "name")
     }
 
-    case Membership.create_custom_group(attrs, consistency: :strong) do
+    result =
+      with {:ok, command} <- Create.prepare(attrs) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    case result do
       :ok ->
         navigate_to_created_group(socket, group_params)
 
