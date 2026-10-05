@@ -32,6 +32,20 @@ class ScenarioGateTest(unittest.TestCase):
         self.assertNotIn("@todo", self.feature.read_text())
         self.assertEqual(gate.load(gate.artifact(self.plan, "before.json"))["status"], "predicted_red")
 
+    def test_new_rehearsal_or_saved_red_checkpoint_routes_without_retesting_red(self):
+        with patch.object(gate, "trusted_before"):
+            gate.resume(self.root, self.plan)
+            self.predicted_red()
+            gate.resume(self.root, self.plan)
+        self.assertEqual(gate.load(gate.artifact(self.plan, "before.json"))["status"], "predicted_red")
+
+    def test_resume_refuses_stale_red(self):
+        self.predicted_red()
+        self.feature.write_text(self.feature.read_text().replace("@wip", "@todo"))
+        with patch.object(gate, "trusted_before"):
+            with self.assertRaisesRegex(gate.GateError, "stale"):
+                gate.resume(self.root, self.plan)
+
     def test_intended_red_then_green_and_review_accept(self):
         self.predicted_red()
         with patch.object(gate, "trusted_before"):

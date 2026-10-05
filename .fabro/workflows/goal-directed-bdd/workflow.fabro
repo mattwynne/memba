@@ -3,7 +3,7 @@ digraph GoalDirectedBddPilot {
         goal="Rehearse one approved historical BDD scenario without publication",
         default_fidelity="summary:high",
         max_node_visits=18,
-        model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; } #call_shot { reasoning_effort: medium; } #final_report { reasoning_effort: low; }"
+        model_stylesheet="* { provider: anthropic; model: claude-sonnet-5; reasoning_effort: high; } #call_shot { reasoning_effort: medium; } #final_report { reasoning_effort: low; }"
     ]
     rankdir=LR
     start [shape=Mdiamond]
@@ -13,6 +13,13 @@ digraph GoalDirectedBddPilot {
         label="Verify historical replay source and clean checkout",
         shape=parallelogram,
         script="set -eu\ntest \"$(git rev-parse HEAD)\" = '{{ inputs.expected_source_head }}' || { echo 'Wrong historical source HEAD' >&2; exit 1; }\ntest -z \"$(git status --porcelain)\" || { echo 'Dirty historical source checkout' >&2; exit 1; }\ntest -f '{{ inputs.plan_path }}'\ntest -f 'web/test/features/step_definitions/custom_group_access_request_steps.exs'",
+        timeout="120s"
+    ]
+    resume_red [
+        label="Resume only a trusted saved red or begin fresh",
+        shape=parallelogram,
+        output_schema="routing",
+        script="python3 -B .fabro/workflows/goal-directed-bdd/scenario_gate.py resume '{{ inputs.plan_path }}'",
         timeout="120s"
     ]
     call_shot [
@@ -72,8 +79,11 @@ digraph GoalDirectedBddPilot {
     stopped [shape=parallelogram, label="Stop: preserve unaccepted candidate", script="echo 'BDD historical pilot stopped; inspect prior gate and saved candidate. Nothing was published.' >&2\nexit 1"]
 
     start -> source_gate
-    source_gate -> call_shot [condition="outcome=succeeded"]
+    source_gate -> resume_red [condition="outcome=succeeded"]
     source_gate -> stopped
+    resume_red -> call_shot [condition="outcome=succeeded && preferred_label=new"]
+    resume_red -> implement_scenario [condition="outcome=succeeded && preferred_label=resume"]
+    resume_red -> stopped
     call_shot -> observe_predicted_red [condition="outcome=succeeded"]
     call_shot -> stopped
     observe_predicted_red -> implement_scenario [condition="outcome=succeeded"]

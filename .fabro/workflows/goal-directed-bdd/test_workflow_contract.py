@@ -14,6 +14,7 @@ class WorkflowContractTest(unittest.TestCase):
         # Fabro 0.316 stops before reaching max_visits. A value of one
         # prevents the first call; two allows exactly one prediction call.
         self.assertRegex(shot.group(1), r"max_visits=2\b")
+        self.assertIn("resume_red -> implement_scenario [condition=\"outcome=succeeded && preferred_label=resume\"]", graph)
         self.assertIn("call_shot -> observe_predicted_red", graph)
         self.assertIn("observe_predicted_red -> implement_scenario [condition=\"outcome=succeeded\"]", graph)
         self.assertNotIn("publish_to_main", graph)
