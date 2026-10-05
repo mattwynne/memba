@@ -8,7 +8,6 @@ defmodule Memba.Membership do
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership.AddMember
-  alias Memba.Membership.App
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.MembershipQueries
@@ -17,10 +16,9 @@ defmodule Memba.Membership do
   alias Memba.Membership.CustomGroup
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMember
-  alias Memba.Membership.Commands.InviteClubMember
-  alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.CustomGroupSlug
   alias Memba.Membership.InvitationAcceptance
+  alias Memba.Membership.InvitationIssuanceWorkflow
   alias Memba.Membership.InvitationQueries
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
@@ -34,7 +32,6 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroupBackfillQueries
   alias Memba.Membership.Projections.Club
-  alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.ProjectionBarrier
@@ -341,25 +338,7 @@ defmodule Memba.Membership do
   """
   def invite_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command, invitation_token} <- invite_club_member_command(attrs),
-         :ok <- prevent_inviting_active_club_member(command) do
-      case get_pending_club_member_invitation_by_email(command.club_id, command.email) do
-        %ClubInvitation{} = invitation ->
-          resend_pending_club_member_invitation(invitation, dispatch_opts)
-
-        nil ->
-          with {:ok, dispatch_result} <-
-                 dispatch_invitation_token_command(command, dispatch_opts) do
-            {:ok,
-             invitation_token_result(
-               command.invitation_id,
-               invitation_token,
-               :execution_result,
-               dispatch_result
-             )}
-          end
-      end
-    end
+    InvitationIssuanceWorkflow.invite(attrs, dispatch_opts)
   end
 
   @doc """
@@ -371,17 +350,7 @@ defmodule Memba.Membership do
   """
   def resend_club_member_invitation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, invitation} <- pending_invitation_for_resend(attrs),
-         {:ok, command, invitation_token} <- resend_club_member_invitation_command(invitation),
-         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
-      {:ok,
-       invitation_token_result(
-         command.invitation_id,
-         invitation_token,
-         :execution_result,
-         dispatch_result
-       )}
-    end
+    InvitationIssuanceWorkflow.resend(attrs, dispatch_opts)
   end
 
   @doc """
@@ -988,78 +957,6 @@ defmodule Memba.Membership do
     |> Enum.reverse()
   end
 
-  defp invite_club_member_command(attrs) do
-    with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, email} <- fetch_required(attrs, :email),
-         {:ok, invitation_id} <- invitation_id(attrs) do
-      invitation_token = InvitationToken.generate_token()
-
-      {:ok,
-       %InviteClubMember{
-         invitation_id: invitation_id,
-         club_id: club_id,
-         email: email,
-         token_hash: InvitationToken.hash_token(invitation_token)
-       }, invitation_token}
-    end
-  end
-
-  defp resend_club_member_invitation_command(%ClubInvitation{} = invitation) do
-    invitation_token = InvitationToken.generate_token()
-
-    {:ok,
-     %ResendClubMemberInvitation{
-       invitation_id: invitation.invitation_id,
-       token_hash: InvitationToken.hash_token(invitation_token)
-     }, invitation_token}
-  end
-
-  defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do
-    if active_member_of_club_by_email?(command.club_id, command.email) do
-      {:error, :already_active_member}
-    else
-      :ok
-    end
-  end
-
-  defp pending_invitation_for_resend(attrs) do
-    case fetch_optional(attrs, :invitation_id) do
-      {:ok, invitation_id} ->
-        invitation_id
-        |> get_club_member_invitation()
-        |> ensure_pending_invitation()
-
-      :error ->
-        with {:ok, club_id} <- fetch_required(attrs, :club_id),
-             {:ok, email} <- fetch_required(attrs, :email) do
-          club_id
-          |> get_pending_club_member_invitation_by_email(email)
-          |> ensure_pending_invitation()
-        end
-    end
-  end
-
-  defp ensure_pending_invitation(nil), do: {:error, :pending_invitation_not_found}
-
-  defp ensure_pending_invitation(%ClubInvitation{status: "pending"} = invitation),
-    do: {:ok, invitation}
-
-  defp ensure_pending_invitation(%ClubInvitation{status: "accepted"}),
-    do: {:error, :already_accepted}
-
-  defp resend_pending_club_member_invitation(%ClubInvitation{} = invitation, dispatch_opts) do
-    with {:ok, command, invitation_token} <- resend_club_member_invitation_command(invitation),
-         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
-      {:ok,
-       invitation_token_result(
-         command.invitation_id,
-         invitation_token,
-         :execution_result,
-         dispatch_result
-       )}
-    end
-  end
-
   defp pending_person_email_address_for_verification(person_id, normalized_email) do
     PersonEmailAddress
     |> where([email_address], email_address.person_id == ^person_id)
@@ -1161,22 +1058,6 @@ defmodule Memba.Membership do
     :crypto.hash(:sha256, token)
   end
 
-  defp dispatch_invitation_token_command(command, dispatch_opts) do
-    case dispatch(command, dispatch_opts) do
-      :ok -> {:ok, :ok}
-      {:ok, _result} = ok -> ok
-      {:error, _reason} = error -> error
-    end
-  end
-
-  defp dispatch(command, dispatch_opts) do
-    case App.dispatch(command, dispatch_opts) do
-      :ok -> :ok
-      {:ok, _result} = ok -> ok
-      {:error, _reason} = error -> error
-    end
-  end
-
   defp fetch_required(attrs, key) when is_atom(key) do
     string_key = Atom.to_string(key)
 
@@ -1184,23 +1065,6 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> {:error, {:missing_required_attribute, key}}
-    end
-  end
-
-  defp invitation_id(attrs) do
-    case fetch_optional(attrs, :invitation_id) do
-      {:ok, invitation_id} -> {:ok, invitation_id}
-      :error -> {:ok, ID.generate(:club_invitation)}
-    end
-  end
-
-  defp fetch_optional(attrs, key) when is_atom(key) do
-    string_key = Atom.to_string(key)
-
-    case attrs do
-      %{^key => value} -> {:ok, value}
-      %{^string_key => value} -> {:ok, value}
-      _attrs -> :error
     end
   end
 
@@ -1223,21 +1087,4 @@ defmodule Memba.Membership do
   end
 
   defp normalize_email(_email), do: nil
-
-  defp invitation_token_result(invitation_id, invitation_token, :execution_result, :ok) do
-    %{invitation_id: invitation_id, invitation_token: invitation_token}
-  end
-
-  defp invitation_token_result(
-         invitation_id,
-         invitation_token,
-         :execution_result,
-         execution_result
-       ) do
-    %{
-      invitation_id: invitation_id,
-      invitation_token: invitation_token,
-      execution_result: execution_result
-    }
-  end
 end

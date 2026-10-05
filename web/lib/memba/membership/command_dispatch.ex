@@ -34,6 +34,8 @@ defmodule Memba.Membership.CommandDispatch do
     CreateClub,
     UpdateClub,
     AddClubMember,
+    InviteClubMember,
+    ResendClubMemberInvitation,
     AcceptClubMemberInvitation
   }
 
@@ -81,6 +83,11 @@ defmodule Memba.Membership.CommandDispatch do
   # CreatePerson preserves the caller's consistency and Commanded returning mode.
   def dispatch(%CreatePerson{} = command, opts), do: raw_dispatch(command, opts)
 
+  # Issuance workflow owns token handling and result shape; preserve caller options.
+  def dispatch(%InviteClubMember{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%ResendClubMemberInvitation{} = command, opts), do: raw_dispatch(command, opts)
+
+  # Invitation acceptance owns the consistency and result shape of each step.
   def dispatch(%AcceptClubMemberInvitation{} = command, opts), do: raw_dispatch(command, opts)
 
   @doc false
