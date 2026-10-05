@@ -20,10 +20,16 @@ RUN mix local.hex --force && mix local.rebar --force
 
 ENV MIX_ENV=prod
 
-COPY web/mix.exs web/mix.lock ./
+COPY packages/live_query/mix.exs packages/live_query/mix.lock packages/live_query/
+COPY web/mix.exs web/mix.lock web/
+
+WORKDIR /app/web
+
 RUN mix deps.get --only $MIX_ENV
 RUN mkdir config
 
+COPY packages/live_query/config /app/packages/live_query/config
+COPY packages/live_query/lib /app/packages/live_query/lib
 COPY web/config/config.exs web/config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
@@ -55,7 +61,7 @@ ENV LANG=en_US.UTF-8 \
 WORKDIR /app
 RUN chown nobody /app
 
-COPY --from=builder --chown=nobody:root /app/_build/prod/rel/memba ./
+COPY --from=builder --chown=nobody:root /app/web/_build/prod/rel/memba ./
 
 USER nobody
 

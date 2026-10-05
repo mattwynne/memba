@@ -14,6 +14,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.Role
   alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.SystemGroups
@@ -56,6 +57,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/conversations")
 
+    assert page_title(view) == "Alpine Club · Memba"
+
     assert has_element?(
              view,
              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
@@ -84,6 +87,23 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-message-#{message.message_id}")
     assert has_element?(view, "#club-member-#{alice.person_id}")
     assert has_element?(view, "#club-member-#{bob.person_id}")
+
+    %{socket: socket} = :sys.get_state(view.pid)
+
+    assert socket.assigns.dashboard.selected_club.club_id == alice.club_id
+
+    for projection_assign <- [
+          :selected_club,
+          :selected_group,
+          :current_member,
+          :members,
+          :active_member_count,
+          :messages,
+          :message_rows,
+          :current_member_can_manage_members?
+        ] do
+      refute Map.has_key?(socket.assigns, projection_assign)
+    end
   end
 
   test "Everyone fallback renders the resolved group as selected in the rail and header", %{
@@ -170,6 +190,455 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-group-rail-other #member-group-link-#{new_group.group_id}",
              "New Planning"
+           )
+  end
+
+  test "club members enter, reorder, update the count and leave an already-open dashboard", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members")
+
+    zoe =
+      create_active_member(
+        email: "zoe@example.com",
+        name: "Zoe Zed",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    aaron =
+      create_active_member(
+        email: "aaron@example.com",
+        name: "Aaron Able",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    assert has_element?(
+             view,
+             "#active-members-list[data-active-member-count='3']"
+           )
+
+    assert rendered_member_names(view) == ["Aaron Able", "Alice Adams", "Zoe Zed"]
+
+    assert :ok =
+             Memba.Membership.remove_member(
+               %{membership_id: zoe.membership_id},
+               consistency: :strong
+             )
+
+    assert has_element?(
+             view,
+             "#active-members-list[data-active-member-count='2']"
+           )
+
+    refute has_element?(view, "#club-member-#{zoe.person_id}")
+    assert has_element?(view, "#club-member-#{aaron.person_id}")
+  end
+
+  test "selected-group members enter, reorder, update the count and leave an open list", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{private_group.group_id}/members")
+
+    refute has_element?(view, "#club-member-#{bob.person_id}")
+
+    add_group_member(private_group, bob)
+
+    assert has_element?(
+             view,
+             "#active-members-list[data-active-member-count='2']"
+           )
+
+    assert rendered_member_names(view) == ["Alice Adams", "Bob Builder"]
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveGroupMember{
+                 club_id: alice.club_id,
+                 group_id: private_group.group_id,
+                 membership_id: bob.membership_id,
+                 person_id: bob.person_id
+               },
+               consistency: :strong
+             )
+
+    assert has_element?(
+             view,
+             "#active-members-list[data-active-member-count='1']"
+           )
+
+    refute has_element?(view, "#club-member-#{bob.person_id}")
+  end
+
+  test "represented Person and Group invalidations are exact through the Memba source", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    local_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "local_planning",
+        name: "Local Planning"
+      )
+
+    outsider =
+      create_active_member(
+        email: "outsider@example.com",
+        name: "Outsider",
+        club_name: "Other Club"
+      )
+
+    foreign_group =
+      create_group(
+        club_id: outsider.club_id,
+        group_key: "foreign_planning",
+        name: "Foreign Planning"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members")
+
+    Person
+    |> where([person], person.person_id == ^bob.person_id)
+    |> Repo.update_all(set: [name: "Bob Changed"])
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: outsider.person_id,
+        email: "other@example.com",
+        normalized_email: "other@example.com"
+      }
+    )
+
+    assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Builder")
+    refute render(view) =~ "Bob Changed"
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: bob.person_id,
+        email: "bob+other@example.com",
+        normalized_email: "bob+other@example.com"
+      }
+    )
+
+    assert has_element?(view, "#club-member-#{bob.person_id}", "Bob Changed")
+
+    Group
+    |> where([group], group.group_id == ^local_group.group_id)
+    |> Repo.update_all(set: [name: "Local Changed"])
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Group,
+      %Memba.Membership.Events.GroupEmailSlugAssigned{
+        club_id: outsider.club_id,
+        group_id: foreign_group.group_id,
+        email_slug: "foreign-planning"
+      }
+    )
+
+    assert has_element?(view, "#member-group-link-#{local_group.group_id}", "Local Planning")
+    refute render(view) =~ "Local Changed"
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Group,
+      %Memba.Membership.Events.GroupEmailSlugAssigned{
+        club_id: alice.club_id,
+        group_id: local_group.group_id,
+        email_slug: "local-planning"
+      }
+    )
+
+    assert has_element?(view, "#member-group-link-#{local_group.group_id}", "Local Changed")
+  end
+
+  test "a conversation-only represented Person refreshes only for its exact notification", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    guest =
+      insert_membership_person!(
+        person_id: Memba.ID.generate(:person),
+        name: "Guest Replier",
+        email: "guest@example.com"
+      )
+
+    outsider =
+      insert_membership_person!(
+        person_id: Memba.ID.generate(:person),
+        name: "Outside Person",
+        email: "outside@example.com"
+      )
+
+    root =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Guest conditions"
+      )
+
+    create_message(
+      club_id: alice.club_id,
+      sender_id: guest.person_id,
+      conversation_id: root.message_id,
+      reply_to_message_id: root.message_id,
+      subject: "Guest conditions",
+      body: "The guest route is clear."
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    activity_selector =
+      "#member-message-#{root.message_id} " <>
+        "[data-testid='message-reply-activity'][data-latest-replier-id='#{guest.person_id}']"
+
+    assert has_element?(view, activity_selector, "latest from Guest Replier")
+    refute has_element?(view, "#club-member-#{guest.person_id}")
+
+    Person
+    |> where([person], person.person_id == ^guest.person_id)
+    |> Repo.update_all(set: [name: "Changed Guest"])
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: outsider.person_id,
+        email: "outside+other@example.com",
+        normalized_email: "outside+other@example.com"
+      }
+    )
+
+    assert has_element?(view, activity_selector, "latest from Guest Replier")
+    refute render(view) =~ "Changed Guest"
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Person,
+      %Memba.Membership.Events.PersonEmailAddressAdded{
+        person_id: guest.person_id,
+        email: "guest+other@example.com",
+        normalized_email: "guest+other@example.com"
+      }
+    )
+
+    assert has_element?(view, activity_selector, "latest from Changed Guest")
+  end
+
+  test "represented-member role assignment, definition and removal refresh badges", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members")
+
+    role = create_role(club_id: alice.club_id, role_key: "trip_lead", name: "Trip Lead")
+    assignment = assign_role(bob, role)
+
+    role_selector = "#club-member-#{bob.person_id} .member-row__role"
+    refute has_element?(view, role_selector)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Role,
+      %Memba.Membership.Events.ClubRoleAssignedToMember{
+        club_id: alice.club_id,
+        membership_id: bob.membership_id,
+        person_id: bob.person_id,
+        role_id: role.role_id
+      }
+    )
+
+    assert has_element?(view, role_selector, "Trip Lead")
+
+    role
+    |> Ecto.Changeset.change(name: "Expedition Lead")
+    |> Repo.update!()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Role,
+      %Memba.Membership.Events.ClubRoleDefined{
+        club_id: alice.club_id,
+        role_id: role.role_id,
+        role_key: role.role_key,
+        name: "Expedition Lead"
+      }
+    )
+
+    assert has_element?(view, role_selector, "Expedition Lead")
+    refute has_element?(view, role_selector, "Trip Lead")
+
+    RoleAssignment
+    |> where(
+      [role_assignment],
+      role_assignment.membership_id == ^assignment.membership_id and
+        role_assignment.role_id == ^assignment.role_id
+    )
+    |> Repo.delete_all()
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Role,
+      %Memba.Membership.Events.ClubRoleRemovedFromMember{
+        club_id: alice.club_id,
+        membership_id: bob.membership_id,
+        person_id: bob.person_id,
+        role_id: role.role_id
+      }
+    )
+
+    refute has_element?(view, role_selector)
+  end
+
+  test "a dashboard result replacement preserves the open member picker and its query", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{private_group.group_id}/members")
+
+    view
+    |> element("#member-section-action-add-group-member")
+    |> render_click()
+
+    view
+    |> form("#custom-group-member-search-form", member_search: %{query: "nobody"})
+    |> render_change()
+
+    new_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "new_planning",
+        name: "New Planning"
+      )
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Group,
+      %Memba.Membership.Events.GroupCreated{
+        club_id: alice.club_id,
+        group_id: new_group.group_id,
+        group_key: new_group.group_key,
+        name: new_group.name
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-group-rail-other #member-group-link-#{new_group.group_id}",
+             "New Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-action-add-group-member[aria-expanded='true']"
+           )
+
+    assert has_element?(
+             view,
+             "#custom-group-member-search-form input[name='member_search[query]'][value='nobody']"
            )
   end
 
@@ -335,6 +804,90 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
   end
 
+  test "a route patch replaces selected-group interests and ignores the old group's unrepresented changes",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    old_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "old_planning",
+        name: "Old Planning"
+      )
+
+    new_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "new_planning",
+        name: "New Planning"
+      )
+
+    add_group_member(old_group, alice)
+    add_group_member(new_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{old_group.group_id}")
+
+    view
+    |> element("#member-group-link-#{new_group.group_id}")
+    |> render_click()
+
+    assert_patch(view, ~p"/groups/#{new_group.group_id}")
+    assert has_element?(view, "#member-group-name", "New Planning")
+
+    Repo.insert!(%GroupMembership{
+      club_id: alice.club_id,
+      group_id: new_group.group_id,
+      membership_id: bob.membership_id,
+      person_id: bob.person_id,
+      active: true
+    })
+
+    unrepresented_membership_id = Memba.ID.generate(:membership)
+    unrepresented_person_id = Memba.ID.generate(:person)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.GroupMembership,
+      %Memba.Membership.Events.GroupMemberAdded{
+        club_id: alice.club_id,
+        group_id: old_group.group_id,
+        membership_id: unrepresented_membership_id,
+        person_id: unrepresented_person_id
+      }
+    )
+
+    refute has_element?(view, "#club-member-#{bob.person_id}")
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.GroupMembership,
+      %Memba.Membership.Events.GroupMemberAdded{
+        club_id: alice.club_id,
+        group_id: new_group.group_id,
+        membership_id: bob.membership_id,
+        person_id: bob.person_id
+      }
+    )
+
+    assert has_element?(view, "#club-member-#{bob.person_id}")
+  end
+
   test "a committed role change removes the outside-admin member surface", %{conn: conn} do
     alice =
       create_active_member(
@@ -391,6 +944,38 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-group-access-title")
     refute has_element?(view, "#member-section-tabs")
     refute has_element?(view, "#club-member-#{bob.person_id}")
+  end
+
+  test "selected-club membership loss performs a fresh authorized read", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members")
+
+    Membership
+    |> where([membership], membership.membership_id == ^alice.membership_id)
+    |> Repo.update_all(set: [active: false])
+
+    monitor = Process.monitor(view.pid)
+
+    notify_read_model_change(
+      view,
+      Memba.Membership.Projectors.Membership,
+      %Memba.Membership.Events.ClubMemberRemoved{
+        club_id: alice.club_id,
+        membership_id: alice.membership_id,
+        person_id: alice.person_id
+      }
+    )
+
+    assert_receive {:DOWN, ^monitor, :process, _pid, _reason}
   end
 
   test "a committed conversation-access change removes the conversation from an open dashboard",
@@ -1835,6 +2420,152 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "#member-message-list-empty",
              "No club messages yet"
            )
+  end
+
+  test "a Message notification adds a newly readable root to an open conversation list", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    projected_message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Fresh route conditions",
+        body: "The projection is ready."
+      )
+
+    Repo.delete_all(
+      from(access in ConversationGroupAccess,
+        where: access.conversation_id == ^projected_message.message_id
+      )
+    )
+
+    Repo.delete!(projected_message)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    assert has_element?(view, "#member-message-list-empty")
+
+    message =
+      insert_group_accessible_message!(
+        message_id: projected_message.message_id,
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: projected_message.subject,
+        body: projected_message.body,
+        inserted_at: projected_message.inserted_at
+      )
+
+    assert Enum.any?(
+             Memba.Messaging.list_conversations_for_group(
+               SystemGroups.everyone_group_id(alice.club_id)
+             ),
+             &(&1.message_id == message.message_id)
+           )
+
+    refute has_element?(view, "#member-message-#{message.message_id}")
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.Message,
+      %Memba.Messaging.Events.MessageSent{
+        message_id: message.message_id,
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: message.subject,
+        body: message.body
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id}[data-message-subject='Fresh route conditions']"
+           )
+
+    refute has_element?(view, "#member-message-list-empty")
+  end
+
+  test "a reply Message notification refreshes activity and participants on the root row", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    root =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Weekend route"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    activity_selector =
+      "#member-message-#{root.message_id} [data-testid='message-reply-activity']"
+
+    assert has_element?(view, "#{activity_selector}[data-reply-count='0']", "No replies yet")
+
+    reply =
+      insert_group_accessible_message!(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: root.message_id,
+        reply_to_message_id: root.message_id,
+        subject: root.subject,
+        body: "Count me in.",
+        inserted_at: DateTime.utc_now()
+      )
+
+    assert has_element?(view, "#{activity_selector}[data-reply-count='0']", "No replies yet")
+
+    notify_read_model_change(
+      view,
+      Memba.Messaging.Projectors.Message,
+      %Memba.Messaging.Events.MessageSent{
+        message_id: reply.message_id,
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: root.message_id,
+        reply_to_message_id: root.message_id,
+        subject: reply.subject,
+        body: reply.body
+      }
+    )
+
+    assert has_element?(
+             view,
+             "#{activity_selector}[data-reply-count='1']" <>
+               "[data-latest-replier-id='#{bob.person_id}']" <>
+               "[data-latest-replier-name='Bob Builder']",
+             "1 reply · latest from Bob Builder"
+           )
+
+    assert participant_avatar_names(render(view), root.message_id) == ["Bob Builder"]
+    refute has_element?(view, "#member-message-#{reply.message_id}")
   end
 
   test "dashboard conversation rows use design-system classes and render participant avatar stacks" do
@@ -3326,6 +4057,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#{member_row_selector(member_id)} .member-row__role")
     |> Enum.map(fn role_badge -> role_badge |> LazyHTML.text() |> String.trim() end)
+  end
+
+  defp rendered_member_names(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#active-members-list .member-row__name")
+    |> Enum.map(fn member_name -> member_name |> LazyHTML.text() |> String.trim() end)
   end
 
   defp invite_member_action_count(html) do

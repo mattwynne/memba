@@ -14,8 +14,10 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Group, as: GroupProjection
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
   alias Memba.Membership.SystemGroups
@@ -283,7 +285,7 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
-  describe "list_active_members_of_group/1" do
+  describe "list_active_members_of_group/1 and list_active_members_of_group/2" do
     test "returns active members of the selected group with public member summaries" do
       club = create_club("Kootenay Mountaineering Club")
       other_club = create_club("Nelson Cycling Club")
@@ -338,6 +340,125 @@ defmodule Memba.Membership.QueryTest do
       assert admin_person_id == alice.person_id
     end
 
+    test "optionally includes active participants without primary email addresses" do
+      club = create_club("Kootenay Mountaineering Club")
+      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
+
+      eligible = create_person(name: "Same Name", email: "eligible@example.com")
+      ineligible = create_person(name: "Same Name", email: "ineligible@example.com")
+
+      eligible_membership_id = add_member(club.club_id, eligible.person_id)
+      ineligible_membership_id = add_member(club.club_id, ineligible.person_id)
+
+      Repo.get_by!(PersonEmailAddress,
+        person_id: ineligible.person_id,
+        is_primary: true
+      )
+      |> Repo.delete!()
+
+      zebra_role_id = define_role(club.club_id, role_key: "zebra", name: "Zebra")
+      alpine_role_id = define_role(club.club_id, role_key: "alpine", name: "Alpine")
+
+      assign_role(
+        club.club_id,
+        ineligible_membership_id,
+        ineligible.person_id,
+        zebra_role_id
+      )
+
+      assign_role(
+        club.club_id,
+        ineligible_membership_id,
+        ineligible.person_id,
+        alpine_role_id
+      )
+
+      eligible_summary = %{
+        membership_id: eligible_membership_id,
+        id: eligible.person_id,
+        name: "Same Name",
+        email: "eligible@example.com",
+        roles: ["Admin"]
+      }
+
+      ineligible_summary = %{
+        membership_id: ineligible_membership_id,
+        id: ineligible.person_id,
+        name: "Same Name",
+        email: nil,
+        roles: ["Alpine", "Zebra"]
+      }
+
+      assert Membership.list_active_members_of_group(everyone_group_id) == [eligible_summary]
+
+      assert Membership.list_active_members_of_group(
+               everyone_group_id,
+               include_without_primary_email: true
+             ) ==
+               Enum.sort_by([eligible_summary, ineligible_summary], &{&1.name, &1.id})
+    end
+
+    test "eligibility mode preserves active membership scope and projected-person requirements" do
+      club = create_club("Kootenay Mountaineering Club")
+      other_club = create_club("Nelson Cycling Club")
+      selected_group_id = SystemGroups.everyone_group_id(club.club_id)
+
+      included =
+        insert_projected_group_participant(club.club_id, selected_group_id, "Included")
+
+      _inactive_group_membership =
+        insert_projected_group_participant(
+          club.club_id,
+          selected_group_id,
+          "Inactive group membership",
+          group_membership_active: false
+        )
+
+      _inactive_club_membership =
+        insert_projected_group_participant(
+          club.club_id,
+          selected_group_id,
+          "Inactive club membership",
+          membership_active: false
+        )
+
+      _mismatched_membership_scope =
+        insert_projected_group_participant(
+          club.club_id,
+          selected_group_id,
+          "Mismatched membership scope",
+          group_membership_club_id: other_club.club_id
+        )
+
+      _missing_person =
+        insert_projected_group_participant(
+          club.club_id,
+          selected_group_id,
+          "Missing Person",
+          project_person: false
+        )
+
+      _other_group =
+        insert_projected_group_participant(
+          club.club_id,
+          Memba.ID.generate(:group),
+          "Other group"
+        )
+
+      assert Membership.list_active_members_of_group(
+               selected_group_id,
+               include_without_primary_email: true
+             ) == [
+               %{
+                 membership_id: included.membership_id,
+                 id: included.person_id,
+                 name: "Included",
+                 email: nil,
+                 roles: []
+               }
+             ]
+    end
+
     test "excludes members whose group membership or club membership is inactive" do
       club = create_club("Kootenay Mountaineering Club")
       alice = create_person(name: "Alice", email: "alice@example.com")
@@ -357,6 +478,11 @@ defmodule Memba.Membership.QueryTest do
       assert Membership.list_active_members_of_group(Memba.ID.generate(:group)) == []
       assert Membership.list_active_members_of_group(nil) == []
       assert Membership.list_active_members_of_group("not-a-uuid") == []
+
+      assert Membership.list_active_members_of_group(
+               "not-a-uuid",
+               include_without_primary_email: true
+             ) == []
     end
   end
 
@@ -1029,6 +1155,36 @@ defmodule Memba.Membership.QueryTest do
                },
                consistency: :strong
              )
+  end
+
+  defp insert_projected_group_participant(club_id, group_id, name, opts \\ []) do
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+
+    if Keyword.get(opts, :project_person, true) do
+      Repo.insert!(%PersonProjection{
+        person_id: person_id,
+        name: name,
+        email: "#{person_id}@example.com"
+      })
+    end
+
+    Repo.insert!(%MembershipProjection{
+      membership_id: membership_id,
+      club_id: club_id,
+      person_id: person_id,
+      active: Keyword.get(opts, :membership_active, true)
+    })
+
+    Repo.insert!(%GroupMembershipProjection{
+      club_id: Keyword.get(opts, :group_membership_club_id, club_id),
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      active: Keyword.get(opts, :group_membership_active, true)
+    })
+
+    %{membership_id: membership_id, person_id: person_id}
   end
 
   defp remove_group_member(club_id, group_id, membership_id, person_id) do

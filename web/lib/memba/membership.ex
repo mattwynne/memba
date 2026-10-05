@@ -1013,9 +1013,16 @@ defmodule Memba.Membership do
   alphabetically for each member. Members whose group row or club membership is
   inactive, members of other groups, members without a projected person, and
   invalid group IDs are excluded.
+
+  By default, members without a primary email address are excluded. Pass
+  `include_without_primary_email: true` to include every otherwise eligible
+  participant, with `:email` set to `nil` when no primary email row exists.
   """
-  def list_active_members_of_group(group_id) do
+  def list_active_members_of_group(group_id, opts \\ []) when is_list(opts) do
     with {:ok, group_id} <- ID.cast(:group, group_id) do
+      include_without_primary_email? =
+        Keyword.get(opts, :include_without_primary_email, false)
+
       members =
         GroupMembershipProjection
         |> join(:inner, [group_membership], membership in MembershipProjection,
@@ -1028,7 +1035,7 @@ defmodule Memba.Membership do
           on: person.person_id == membership.person_id
         )
         |> join(
-          :inner,
+          :left,
           [_group_membership, _membership, person],
           primary_email_address in PersonEmailAddress,
           on:
@@ -1043,6 +1050,7 @@ defmodule Memba.Membership do
           [group_membership, membership, _person, _primary_email_address],
           group_membership.active == true and membership.active == true
         )
+        |> require_primary_email_unless_included(include_without_primary_email?)
         |> order_by([_group_membership, _membership, person, _primary_email_address],
           asc: person.name,
           asc: person.person_id
@@ -1066,6 +1074,16 @@ defmodule Memba.Membership do
     else
       :error -> []
     end
+  end
+
+  defp require_primary_email_unless_included(query, true), do: query
+
+  defp require_primary_email_unless_included(query, false) do
+    where(
+      query,
+      [_group_membership, _membership, _person, primary_email_address],
+      not is_nil(primary_email_address.id)
+    )
   end
 
   @doc """

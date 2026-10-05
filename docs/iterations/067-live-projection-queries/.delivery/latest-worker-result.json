@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "packet_id": "task-011a-91505d3-bind-error-reconcile-1",
+  "task_id": "task-011a",
+  "todo_line": "- [ ] 011A Reconcile classified notifications that arrive while an initial bind or route rebind returns an access error, proving one conservative retry can recover current data while a repeated error leaves the result and interests cleared.",
+  "result": "ready_for_review",
+  "changed_paths": [
+    "packages/live_query/lib/live_query/binding.ex",
+    "packages/live_query/test/live_query/binding_test.exs"
+  ],
+  "validation": [
+    {
+      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" test test/live_query/binding_test.exs'",
+      "exit_status": 0,
+      "evidence": "12 tests, 0 failures. Focused cases prove initial-bind recovery, route-rebind recovery with old-route isolation, a bounded repeated-error outcome with cleared data and interests, and one read when no classified notification crosses the window."
+    },
+    {
+      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" test'",
+      "exit_status": 0,
+      "evidence": "19 tests, 0 failures across the complete standalone LiveQuery package."
+    },
+    {
+      "command": "env -u MEMBA_DEVENV_SHELL devenv shell -- bash -lc 'package_mix=\"$(dirname \"$(command -v elixir)\")/mix\"; cd packages/live_query; \"$package_mix\" format --check-formatted'",
+      "exit_status": 0,
+      "evidence": "The standalone LiveQuery package is formatted."
+    },
+    {
+      "command": "git diff --check",
+      "exit_status": 0,
+      "evidence": "The candidate diff has no whitespace errors."
+    }
+  ],
+  "notes": "The initial test-only run exited 2 with 12 tests and 3 failures: initial bind and route rebind returned the stale first :forbidden error instead of recovering, and the repeated-error case returned :forbidden instead of the reconciliation read's :not_found. LiveQuery.Binding now routes either first-read outcome through the existing mailbox-window classifier; a newly classified notification is consumed before one forced reread, while no classified notification returns the original outcome without rereading. Tests assert exactly two reads for each crossing window, demonstrate that a successful retry installs only the current result and interests, and demonstrate that a second error leaves the assign nil and interests empty so a later matching notification is ignored. packages/live_query/lib/live_query/binding.ex contains only the bounded outcome plumbing; packages/live_query/test/live_query/binding_test.exs contains the focused lifecycle proof. No Memba application code, LiveView, acceptance feature, step definition, plan, ADR, migration matrix, todo line, or task 011B scope changed; delivery metadata changed only in this required worker-result artifact. Task 011A remains unchecked, and no dev check was run because the packet reserves final exact-state validation for task 011B and the deterministic workflow.",
+  "unresolved": []
+}
