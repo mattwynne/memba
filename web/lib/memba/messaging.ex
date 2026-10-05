@@ -43,7 +43,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
   alias Memba.Messaging.MessageQueries
-  alias Memba.Messaging.OutboundMessageID
+  alias Memba.Messaging.MessageSourceQueries
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
@@ -51,14 +51,10 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Projectors.ConversationFollow,
     as: ConversationFollowProjector
 
-  alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
-  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
   alias Memba.Repo
   alias MembaWeb.ClubSite
-
-  import Ecto.Query
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -590,25 +586,8 @@ defmodule Memba.Messaging do
   Returns `nil` when the Message-ID is blank, malformed for this lookup, unknown,
   or belongs to a delivery whose message projection is absent.
   """
-  def get_outbound_message_reference(rfc_message_id) do
-    with message_id when is_binary(message_id) <- OutboundMessageID.normalize(rfc_message_id) do
-      EmailDeliveryProjection
-      |> join(:inner, [delivery], message in MessageProjection,
-        on: message.message_id == delivery.message_id
-      )
-      |> where([delivery, _message], delivery.outbound_message_id == ^message_id)
-      |> select([delivery, message], %{
-        outbound_message_id: delivery.outbound_message_id,
-        delivery_id: delivery.delivery_id,
-        message_id: message.message_id,
-        conversation_id: message.conversation_id,
-        club_id: message.club_id
-      })
-      |> Repo.one()
-    else
-      nil -> nil
-    end
-  end
+  def get_outbound_message_reference(rfc_message_id),
+    do: MessageSourceQueries.get_outbound_message_reference(rfc_message_id)
 
   @doc """
   Manual retries are disabled. Handoff recovery is owned by the dispatcher;
@@ -628,22 +607,8 @@ defmodule Memba.Messaging do
   This is a support/audit read-model query. Inbound idempotency remains owned by
   the event-sourced inbound email aggregate, not this projection.
   """
-  def get_inbound_email_source(provider, provider_message_id)
-      when is_binary(provider) and is_binary(provider_message_id) do
-    provider = normalize_inbound_source_lookup(provider)
-    provider_message_id = normalize_inbound_source_lookup(provider_message_id)
-
-    if provider == "" or provider_message_id == "" do
-      nil
-    else
-      Repo.get_by(InboundEmailSourceProjection,
-        provider: provider,
-        provider_message_id: provider_message_id
-      )
-    end
-  end
-
-  def get_inbound_email_source(_provider, _provider_message_id), do: nil
+  def get_inbound_email_source(provider, provider_message_id),
+    do: MessageSourceQueries.get_inbound_email_source(provider, provider_message_id)
 
   @doc """
   List email email deliveries for a projected message.
@@ -718,12 +683,6 @@ defmodule Memba.Messaging do
   """
   def list_operator_email_deliveries(message_id),
     do: DeliveryQueries.list_operator_email_deliveries(message_id)
-
-  defp normalize_inbound_source_lookup(value) do
-    value
-    |> String.trim()
-    |> String.downcase()
-  end
 
   defp dispatch_command(command, dispatch_opts),
     do: CommandDispatch.dispatch(command, dispatch_opts)

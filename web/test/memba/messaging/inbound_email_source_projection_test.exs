@@ -113,12 +113,34 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
                  end
   end
 
+  test "inbound source lookup is provider-scoped after normalization" do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    source =
+      Repo.insert!(%InboundEmailSourceProjection{
+        inbound_email_id: Memba.ID.generate(:inbound_email),
+        provider: "resend",
+        provider_message_id: "shared-id",
+        from_address: "alice@example.com",
+        to_address: "kmc@clubs.memba.io",
+        status: "accepted",
+        inserted_at: now,
+        updated_at: now
+      })
+
+    assert Messaging.get_inbound_email_source(" RESEND ", " SHARED-ID ") == source
+    assert is_nil(Messaging.get_inbound_email_source("postmark", "shared-id"))
+  end
+
   test "inbound source query returns nil for absent or invalid provider identity" do
     assert is_nil(Messaging.get_inbound_email_source("resend", "missing"))
     assert is_nil(Messaging.get_inbound_email_source(nil, "email-123"))
     assert is_nil(Messaging.get_inbound_email_source("resend", nil))
     assert is_nil(Messaging.get_inbound_email_source("", "email-123"))
     assert is_nil(Messaging.get_inbound_email_source("resend", ""))
+    assert is_nil(Messaging.get_inbound_email_source("  ", "email-123"))
+    assert is_nil(Messaging.get_inbound_email_source("resend", "  "))
+    assert is_nil(Messaging.get_inbound_email_source(:resend, "email-123"))
   end
 
   defp projector_metadata(event_number) do

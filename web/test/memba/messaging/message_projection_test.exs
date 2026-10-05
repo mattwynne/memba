@@ -126,6 +126,28 @@ defmodule Memba.Messaging.MessageProjectionTest do
            } = Messaging.get_email_delivery(bob_delivery_id)
   end
 
+  test "outbound reference lookup ignores invalid IDs and orphaned delivery projections" do
+    message_id = Memba.ID.generate(:message)
+    delivery_id = Memba.ID.generate(:delivery)
+    outbound_message_id = OutboundMessageID.for_delivery(delivery_id, message_id)
+
+    Repo.insert!(%EmailDeliveryProjection{
+      delivery_id: delivery_id,
+      message_id: message_id,
+      outbound_message_id: outbound_message_id,
+      recipient_id: Memba.ID.generate(:person),
+      recipient_name: "Orphan",
+      recipient_address: "orphan@example.com",
+      channel: "email",
+      status: "pending"
+    })
+
+    assert is_nil(Messaging.get_outbound_message_reference(outbound_message_id))
+    assert is_nil(Messaging.get_outbound_message_reference(nil))
+    assert is_nil(Messaging.get_outbound_message_reference(123))
+    assert is_nil(Messaging.get_outbound_message_reference("  "))
+  end
+
   test "message and delivery queries return empty results for missing or invalid IDs" do
     assert is_nil(Messaging.get_message(Memba.ID.generate(:message)))
     assert is_nil(Messaging.get_message(nil))
