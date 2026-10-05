@@ -10,6 +10,8 @@ defmodule MembaWeb.MySettingsLive do
 
   alias LiveQuery.Binding
   alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonEmailAddressCommands
   alias Memba.Membership.PersonEmailAddressVerificationEmail
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberSettingsQuery
@@ -443,10 +445,8 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   defp add_pending_email_address_and_deliver_verification(socket, attrs) do
-    with :ok <-
-           normalize_context_result(
-             Membership.add_person_email_address(attrs, consistency: :strong)
-           ),
+    with {:ok, command} <- PersonEmailAddressCommands.prepare_add(attrs),
+         :ok <- normalize_context_result(CommandDispatch.dispatch(command, consistency: :strong)),
          :ok <- deliver_person_email_address_verification(socket, attrs.email) do
       :ok
     end

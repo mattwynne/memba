@@ -24,7 +24,12 @@ defmodule Memba.Membership.CommandDispatch do
   alias Memba.Membership.Commands.{
     RemoveClubMember,
     AssignClubRoleToMember,
-    RemoveClubRoleFromMember
+    RemoveClubRoleFromMember,
+    AddPersonEmailAddress,
+    ReplacePersonEmailAddresses,
+    RemovePersonEmailAddress,
+    MakePersonEmailAddressPrimary,
+    VerifyPersonEmailAddress
   }
 
   def dispatch(command, opts \\ [])
@@ -52,6 +57,12 @@ defmodule Memba.Membership.CommandDispatch do
   def dispatch(%RemoveClubRoleFromMember{} = command, opts) do
     raw_dispatch(command, system_group_membership_consistency(opts))
   end
+
+  def dispatch(%AddPersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%ReplacePersonEmailAddresses{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%RemovePersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%MakePersonEmailAddressPrimary{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%VerifyPersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
 
   @doc false
   def system_group_membership_consistency(dispatch_opts) do
