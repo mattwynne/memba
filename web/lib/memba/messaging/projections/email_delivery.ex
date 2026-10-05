@@ -8,13 +8,14 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
 
   Dispatch diagnostics are intentionally operational rather than domain facts:
 
-    * `attempt_count` remains `0` for first-pass successes, increments when a
-      provider handoff fails, and increments for a manual retry that succeeds so
-      a previously-failed delivery shows how many provider attempts were needed.
+    * `attempt_count` counts durable possible provider handoffs, including
+      first-pass successes and attempts interrupted before the HTTP call.
     * `last_dispatch_attempted_at` records when the dispatcher most recently
       claimed the delivery for a provider handoff, whether that handoff later
       succeeds or fails.
-    * `sent_at` and `failed_at` record the latest persisted dispatch outcome.
+    * `sent_at` records confirmed provider acceptance. `uncertain` explicitly
+      means acceptance could not be established; individual attempts preserve
+      their own outcomes in `messaging_email_handoff_attempts`.
 
   `outbound_message_id` is the Memba-controlled RFC Message-ID sent in the
   outbound email. The database keeps it non-null and unique so inbound reply
@@ -33,6 +34,8 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
     field :channel, :string
     field :status, :string
     field :attempt_count, :integer, default: 0
+    field :active_attempt_id, :integer
+    field :claim_version, :integer, default: 0
     field :latest_error, :string
     field :latest_detail, :string
     field :last_dispatch_attempted_at, :utc_datetime_usec

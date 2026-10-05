@@ -306,6 +306,7 @@ defmodule Memba.Messaging.Message do
          {:ok, body} <- normalize_text(command.body, :invalid_body),
          {:ok, recipients} <- normalize_command_recipients(command) do
       message_sent = %MessageSent{
+        operation_intent: command.operation_intent,
         message_id: command.message_id,
         club_id: command.club_id,
         sender_id: command.sender_id,

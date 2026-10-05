@@ -27,7 +27,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
-  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
@@ -813,16 +812,12 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Manually retry provider dispatch for one failed email delivery.
-
-  This internal/operator-facing API does not create message or delivery events.
-  It delegates to the supervised dispatch boundary, which retries only deliveries
-  currently marked `failed` and persists the resulting delivery status and
-  diagnostics.
+  Manual retries are disabled. Handoff recovery is owned by the dispatcher;
+  a person must not create another provider handoff.
   """
   def retry_failed_email_delivery(delivery_id) do
-    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
-      EmailDeliveryDispatcher.retry_failed_delivery(delivery_id)
+    with {:ok, _valid_id} <- ID.cast(:delivery, delivery_id) do
+      {:error, :manual_retry_disabled}
     else
       :error -> {:error, :invalid_delivery_id}
     end
@@ -2038,6 +2033,7 @@ defmodule Memba.Messaging do
 
       {:ok,
        %SendMessage{
+         operation_intent: Map.get(attrs, "operation_intent"),
          message_id: message_id,
          club_id: club_id,
          sender_id: sender_id,
@@ -2057,6 +2053,7 @@ defmodule Memba.Messaging do
          {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group) do
       {:ok,
        %RequestGroupAccess{
+         operation_intent: Map.get(attrs, "operation_intent"),
          message_id: message_id,
          club_id: club_id,
          requester_person_id: requester_person_id,
@@ -2077,6 +2074,7 @@ defmodule Memba.Messaging do
 
       {:ok,
        %SendMessage{
+         operation_intent: request.operation_intent,
          message_id: request.message_id,
          club_id: target.club.club_id,
          sender_id: target.person.person_id,
@@ -2144,6 +2142,7 @@ defmodule Memba.Messaging do
            ) do
       {:ok,
        %PostMessageReply{
+         operation_intent: Map.get(attrs, "operation_intent"),
          message_id: message_id,
          club_id: root_message.club_id,
          sender_id: sender_id,

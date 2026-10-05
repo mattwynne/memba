@@ -9,6 +9,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.EmailDeliveryDispatcher
+  alias Memba.Messaging.EmailHandoffRecovery
+  alias Memba.Messaging.EmailDeliveryProviders.Postmark
+  alias Memba.Messaging.Projections.EmailHandoffAttempt
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Raising
   alias Memba.Messaging.EmailDeliveryProviders.SelectiveFailure
@@ -71,6 +74,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
         {EmailDeliveryDispatcher, name: name, dispatch_enabled: true, dispatch_observer: self()}
       )
 
+      _ = :sys.get_state(name)
+
       recipient_id = Memba.ID.generate(:person)
 
       event = %EmailDeliveryCreated{
@@ -90,6 +95,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
         status: "pending"
       )
 
+      _ = :sys.get_state(name)
+
       changes = %{
         messaging_email_delivery: %{
           delivery_id: event.delivery_id,
@@ -106,10 +113,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                         projector: EmailDeliveryProjector,
                         source_event: ^event,
                         changes: ^changes,
-                        claimed_delivery_ids: [claimed_delivery_id]
+                        claimed_delivery_ids: claimed_delivery_ids
                       }}
 
-      assert claimed_delivery_id == event.delivery_id
+      assert claimed_delivery_ids in [[], [event.delivery_id]]
 
       assert %EmailDeliveryProjection{status: "sent", sent_at: %DateTime{}} =
                Repo.get!(EmailDeliveryProjection, event.delivery_id)
@@ -133,7 +140,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                  %{messaging_member_email_delivery: %{delivery_id: event.delivery_id}}
                )
 
-      refute_receive {:email_delivery_dispatch_requested, _}
+      refute_receive {:email_delivery_dispatch_requested, %{source: :read_model_change}}
     end
 
     test "can leave read-model-change nudges observable without claiming in tests" do
@@ -506,7 +513,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                %EmailDeliveryProjection{
                  delivery_id: delivery_id,
                  status: "sent",
-                 attempt_count: 0,
+                 attempt_count: 1,
                  latest_error: nil,
                  latest_detail: nil,
                  sent_at: %DateTime{} = sent_at,
@@ -541,7 +548,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                %EmailDeliveryProjection{
                  delivery_id: delivery_id,
                  status: "sent",
-                 attempt_count: 0,
+                 attempt_count: 1,
                  latest_error: nil,
                  sent_at: %DateTime{},
                  failed_at: nil
@@ -594,12 +601,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
       assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-      assert {:error, {:not_retryable, "sent"}} =
+      assert {:error, :manual_retry_disabled} =
                Messaging.retry_failed_email_delivery(delivery.delivery_id)
 
       assert %EmailDeliveryProjection{
                status: "sent",
-               attempt_count: 0,
+               attempt_count: 1,
                latest_error: nil,
                latest_detail: nil,
                sent_at: ^sent_at,
@@ -617,25 +624,24 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert [
                %EmailDeliveryProjection{
                  delivery_id: delivery_id,
-                 status: "failed",
+                 status: "uncertain",
                  attempt_count: 1,
-                 latest_error: "unavailable",
+                 latest_error: "handoff_uncertain",
                  latest_detail: ":unavailable",
                  sent_at: nil,
-                 failed_at: %DateTime{} = failed_at
+                 failed_at: nil
                }
              ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
       assert delivery_id == delivery.delivery_id
-      assert DateTime.compare(failed_at, delivery.inserted_at) in [:gt, :eq]
 
       assert %EmailDeliveryProjection{
-               status: "failed",
+               status: "uncertain",
                attempt_count: 1,
-               latest_error: "unavailable",
+               latest_error: "handoff_uncertain",
                latest_detail: ":unavailable",
                sent_at: nil,
-               failed_at: ^failed_at
+               failed_at: nil
              } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
     end
 
@@ -649,31 +655,30 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           assert [
                    %EmailDeliveryProjection{
                      delivery_id: delivery_id,
-                     status: "failed",
+                     status: "uncertain",
                      attempt_count: 1,
-                     latest_error: "provider_exception",
+                     latest_error: "handoff_uncertain",
                      latest_detail: latest_detail,
                      sent_at: nil,
-                     failed_at: %DateTime{} = failed_at
+                     failed_at: nil
                    }
                  ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
           assert delivery_id == delivery.delivery_id
           assert latest_detail =~ "RuntimeError"
           assert latest_detail =~ "provider exploded"
-          assert DateTime.compare(failed_at, delivery.inserted_at) in [:gt, :eq]
         end)
 
       assert log =~ "email_delivery_provider_exception"
       assert log =~ "provider exploded"
 
       assert %EmailDeliveryProjection{
-               status: "failed",
+               status: "uncertain",
                attempt_count: 1,
-               latest_error: "provider_exception",
+               latest_error: "handoff_uncertain",
                latest_detail: latest_detail,
                sent_at: nil,
-               failed_at: %DateTime{}
+               failed_at: nil
              } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
 
       assert latest_detail =~ "provider exploded"
@@ -724,16 +729,16 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert [
                %EmailDeliveryProjection{
                  delivery_id: failing_delivery_id,
-                 status: "failed",
+                 status: "uncertain",
                  attempt_count: 1,
-                 latest_error: "selective_failure",
+                 latest_error: "handoff_uncertain",
                  latest_detail: latest_detail,
-                 failed_at: %DateTime{}
+                 failed_at: nil
                },
                %EmailDeliveryProjection{
                  delivery_id: successful_delivery_id,
                  status: "sent",
-                 attempt_count: 0,
+                 attempt_count: 1,
                  latest_error: nil,
                  latest_detail: nil,
                  sent_at: %DateTime{}
@@ -749,116 +754,435 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                %EmailDeliveryRequest{recipient_address: "successful.member@example.test"}
              ] = SelectiveFailure.deliveries()
 
-      assert %EmailDeliveryProjection{status: "failed", attempt_count: 1} =
+      assert %EmailDeliveryProjection{status: "uncertain", attempt_count: 1} =
                Repo.get!(EmailDeliveryProjection, failing_delivery.delivery_id)
 
-      assert %EmailDeliveryProjection{status: "sent", attempt_count: 0} =
+      assert %EmailDeliveryProjection{status: "sent", attempt_count: 1} =
                Repo.get!(EmailDeliveryProjection, successful_delivery.delivery_id)
     end
   end
 
-  describe "manual retry" do
-    test "retries a failed delivery through the internal Messaging API and marks it sent" do
-      failed_at =
-        DateTime.utc_now() |> DateTime.add(-120, :second) |> DateTime.truncate(:microsecond)
+  describe "durable handoff recovery" do
+    test "crash before the attempt is recorded releases a stale claim without counting a send" do
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+      assert {:ok, claimed} = EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id)
+      assert :not_claimed = EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id)
+      backdate_claim!(claimed)
 
-      %{message: message, delivery: delivery} =
-        insert_dispatchable_delivery!(
-          status: "failed",
-          attempt_count: 1,
-          latest_error: "unavailable",
-          latest_detail: ":unavailable",
-          failed_at: failed_at
-        )
+      EmailHandoffRecovery.sweep()
 
-      assert {:ok,
-              %EmailDeliveryProjection{
-                delivery_id: delivery_id,
-                message_id: message_id,
-                status: "sent",
-                attempt_count: 2,
-                latest_error: nil,
-                latest_detail: nil,
-                last_dispatch_attempted_at: %DateTime{} = attempted_at,
-                sent_at: %DateTime{} = sent_at,
-                failed_at: nil
-              }} = Messaging.retry_failed_email_delivery(delivery.delivery_id)
-
-      assert delivery_id == delivery.delivery_id
-      assert message_id == message.message_id
-      assert DateTime.compare(attempted_at, failed_at) in [:gt, :eq]
-      assert DateTime.compare(sent_at, attempted_at) in [:gt, :eq]
-
-      assert [%EmailDeliveryRequest{message_id: ^message_id, delivery_id: ^delivery_id}] =
-               Fake.deliveries()
-
-      assert 1 ==
-               Repo.aggregate(
-                 from(projected_delivery in EmailDeliveryProjection,
-                   where: projected_delivery.message_id == ^message.message_id
-                 ),
-                 :count
-               )
-    end
-
-    test "retries a failed delivery and records fresh diagnostics when the provider still errors" do
-      Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
-
-      failed_at =
-        DateTime.utc_now() |> DateTime.add(-120, :second) |> DateTime.truncate(:microsecond)
-
-      %{delivery: delivery} =
-        insert_dispatchable_delivery!(
-          status: "failed",
-          attempt_count: 1,
-          latest_error: "old_error",
-          latest_detail: "old detail",
-          failed_at: failed_at
-        )
-
-      assert {:ok,
-              %EmailDeliveryProjection{
-                delivery_id: delivery_id,
-                status: "failed",
-                attempt_count: 2,
-                latest_error: "unavailable",
-                latest_detail: ":unavailable",
-                last_dispatch_attempted_at: %DateTime{} = attempted_at,
-                sent_at: nil,
-                failed_at: %DateTime{} = retried_failed_at
-              }} = Messaging.retry_failed_email_delivery(delivery.delivery_id)
-
-      assert delivery_id == delivery.delivery_id
-      assert DateTime.compare(attempted_at, failed_at) in [:gt, :eq]
-      assert DateTime.compare(retried_failed_at, attempted_at) in [:gt, :eq]
-
-      assert %EmailDeliveryProjection{
-               status: "failed",
-               attempt_count: 2,
-               latest_error: "unavailable",
-               latest_detail: ":unavailable",
-               failed_at: ^retried_failed_at
-             } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
-    end
-
-    test "does not retry invalid, missing, or non-failed deliveries" do
-      pending_delivery =
-        insert_email_delivery!(delivery_id: Memba.ID.generate(:delivery), status: "pending")
-
-      assert {:error, :invalid_delivery_id} =
-               Messaging.retry_failed_email_delivery("not-a-delivery-id")
-
-      assert {:error, :not_found} =
-               Messaging.retry_failed_email_delivery(Memba.ID.generate(:delivery))
-
-      assert {:error, {:not_retryable, "pending"}} =
-               Messaging.retry_failed_email_delivery(pending_delivery.delivery_id)
+      assert %EmailDeliveryProjection{status: "pending", attempt_count: 0} =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
 
       assert [] = Fake.deliveries()
 
-      assert %EmailDeliveryProjection{status: "pending", last_dispatch_attempted_at: nil} =
-               Repo.get!(EmailDeliveryProjection, pending_delivery.delivery_id)
+      assert [%EmailDeliveryProjection{status: "sent", attempt_count: 1}] =
+               EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
     end
+
+    test "pre-ledger dispatching rows are treated as unknown, never as safe unsent work" do
+      old = DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+      delivery = insert_email_delivery!(status: "dispatching", last_dispatch_attempted_at: old)
+      EmailHandoffRecovery.sweep()
+
+      assert %EmailDeliveryProjection{status: "uncertain", attempt_count: 1} =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert %EmailHandoffAttempt{state: "uncertain", provider: "legacy_unknown"} =
+               Repo.get_by!(EmailHandoffAttempt, delivery_id: delivery.delivery_id)
+
+      assert [] = Fake.deliveries()
+    end
+
+    test "crash after possible Postmark acceptance reconciles before retrying" do
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+      assert {:ok, claimed} = EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id)
+      Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
+
+      Application.put_env(
+        :memba,
+        :email_handoff_postmark_lookup,
+        Memba.Support.PostmarkHandoffLookup
+      )
+
+      Application.put_env(:memba, :test_postmark_handoff_result, {:ok, "pm_"})
+
+      on_exit(fn ->
+        Application.delete_env(:memba, :email_handoff_postmark_lookup)
+        Application.delete_env(:memba, :test_postmark_handoff_result)
+      end)
+
+      request =
+        struct!(EmailDeliveryRequest, %{
+          delivery_id: delivery.delivery_id,
+          message_id: delivery.message_id,
+          club_id: "club_test",
+          outbound_message_id: delivery.outbound_message_id,
+          recipient_id: delivery.recipient_id,
+          recipient_name: delivery.recipient_name,
+          recipient_address: delivery.recipient_address,
+          sender_name: "Sender",
+          sender_address: "sender@example.test",
+          channel: :email,
+          subject: "Test",
+          body: "Test"
+        })
+
+      assert {:ok, attempt} = EmailHandoffRecovery.start(claimed, request)
+      backdate_claim!(claimed)
+      old = DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [started_at: old, updated_at: old]
+      )
+
+      EmailHandoffRecovery.sweep()
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [updated_at: old]
+      )
+
+      EmailHandoffRecovery.sweep()
+
+      assert %EmailDeliveryProjection{status: "sent", attempt_count: 1, sent_at: %DateTime{}} =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert %EmailHandoffAttempt{state: "accepted"} = Repo.get!(EmailHandoffAttempt, attempt.id)
+      assert %EmailDeliveryProjection{status: "sent"} = EmailHandoffRecovery.finish(attempt, :ok)
+      assert [] = Fake.deliveries()
+    end
+
+    test "multiple confirmed Postmark IDs mark acceptance and retain duplicate diagnostics" do
+      old = DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+      delivery = insert_email_delivery!(status: "dispatching", last_dispatch_attempted_at: old)
+      Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
+
+      Application.put_env(
+        :memba,
+        :email_handoff_postmark_lookup,
+        Memba.Support.PostmarkHandoffLookup
+      )
+
+      Application.put_env(
+        :memba,
+        :test_postmark_handoff_result,
+        {:ok, %{message_ids: ["pm_first", "pm_second"], duplicate_count: 1, complete?: true}}
+      )
+
+      on_exit(fn ->
+        Application.delete_env(:memba, :email_handoff_postmark_lookup)
+        Application.delete_env(:memba, :test_postmark_handoff_result)
+      end)
+
+      EmailHandoffRecovery.sweep()
+      attempt = Repo.get_by!(EmailHandoffAttempt, delivery_id: delivery.delivery_id)
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [updated_at: old]
+      )
+
+      log =
+        capture_log(fn ->
+          EmailHandoffRecovery.sweep()
+          EmailHandoffRecovery.sweep()
+        end)
+
+      assert length(String.split(log, "email_delivery_duplicate_provider_handoffs")) == 2
+
+      assert %EmailDeliveryProjection{
+               status: "sent",
+               attempt_count: 1,
+               latest_error: "duplicate_provider_handoff",
+               latest_detail: detail
+             } =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert detail =~ "pm_first, pm_second"
+
+      assert %EmailHandoffAttempt{state: "accepted", detail: ^detail} =
+               Repo.get!(EmailHandoffAttempt, attempt.id)
+    end
+
+    test "exhausted Postmark handoff keeps reconciling and late acceptance clears staff attention" do
+      old = DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+
+      delivery =
+        insert_email_delivery!(
+          status: "dispatching",
+          attempt_count: 2,
+          last_dispatch_attempted_at: old
+        )
+
+      Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
+
+      Application.put_env(
+        :memba,
+        :email_handoff_postmark_lookup,
+        Memba.Support.PostmarkHandoffLookup
+      )
+
+      Application.put_env(:memba, :test_postmark_handoff_result, :not_found)
+
+      on_exit(fn ->
+        Application.delete_env(:memba, :email_handoff_postmark_lookup)
+        Application.delete_env(:memba, :test_postmark_handoff_result)
+      end)
+
+      EmailHandoffRecovery.sweep()
+      attempt = Repo.get_by!(EmailHandoffAttempt, delivery_id: delivery.delivery_id)
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [updated_at: old]
+      )
+
+      first_log = capture_log(fn -> EmailHandoffRecovery.sweep() end)
+      assert first_log =~ "email_delivery_handoff_needs_attention"
+
+      assert %EmailDeliveryProjection{
+               status: "uncertain",
+               attempt_count: 3,
+               latest_error: "retry_budget_exhausted"
+             } =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert %EmailHandoffAttempt{state: "unconfirmed"} =
+               Repo.get!(EmailHandoffAttempt, attempt.id)
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [updated_at: old]
+      )
+
+      second_log = capture_log(fn -> EmailHandoffRecovery.sweep() end)
+      refute second_log =~ "email_delivery_handoff_needs_attention"
+
+      assert %EmailDeliveryProjection{status: "uncertain", attempt_count: 3} =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      Application.put_env(:memba, :test_postmark_handoff_result, {:ok, "pm_late_"})
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [updated_at: old]
+      )
+
+      EmailHandoffRecovery.sweep()
+
+      assert %EmailDeliveryProjection{
+               status: "sent",
+               attempt_count: 3,
+               latest_error: nil,
+               sent_at: %DateTime{}
+             } =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert %EmailHandoffAttempt{state: "accepted", detail: detail} =
+               Repo.get!(EmailHandoffAttempt, attempt.id)
+
+      assert detail =~ "pm_late_#{delivery.delivery_id}"
+      assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    end
+
+    test "Postmark lookup outage keeps uncertainty until the longer timeout, then permits a bounded retry" do
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+      assert {:ok, claimed} = EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id)
+      Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
+
+      Application.put_env(
+        :memba,
+        :email_handoff_postmark_lookup,
+        Memba.Support.PostmarkHandoffLookup
+      )
+
+      Application.put_env(:memba, :test_postmark_handoff_result, {:error, :lookup_unavailable})
+
+      on_exit(fn ->
+        Application.delete_env(:memba, :email_handoff_postmark_lookup)
+        Application.delete_env(:memba, :test_postmark_handoff_result)
+      end)
+
+      request =
+        struct!(EmailDeliveryRequest, %{
+          delivery_id: delivery.delivery_id,
+          message_id: delivery.message_id,
+          club_id: "club_test",
+          outbound_message_id: delivery.outbound_message_id,
+          recipient_id: delivery.recipient_id,
+          recipient_name: delivery.recipient_name,
+          recipient_address: delivery.recipient_address,
+          sender_name: "Sender",
+          sender_address: "sender@example.test",
+          channel: :email,
+          subject: "Test",
+          body: "Test"
+        })
+
+      assert {:ok, attempt} = EmailHandoffRecovery.start(claimed, request)
+
+      assert %EmailDeliveryProjection{status: "uncertain"} =
+               EmailHandoffRecovery.finish(attempt, {:error, :timeout})
+
+      old = DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [started_at: old, updated_at: old]
+      )
+
+      EmailHandoffRecovery.sweep()
+
+      assert %EmailDeliveryProjection{status: "uncertain", attempt_count: 1} =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert %EmailHandoffAttempt{state: "uncertain"} = Repo.get!(EmailHandoffAttempt, attempt.id)
+
+      older = DateTime.add(DateTime.utc_now(), -1900, :second) |> DateTime.truncate(:microsecond)
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [started_at: older, updated_at: older]
+      )
+
+      EmailHandoffRecovery.sweep()
+
+      assert %EmailDeliveryProjection{status: "pending", attempt_count: 1} =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert %EmailHandoffAttempt{state: "unconfirmed"} =
+               Repo.get!(EmailHandoffAttempt, attempt.id)
+    end
+
+    test "late provider acceptance after lease expiry prevents a new handoff" do
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+      assert {:ok, claimed} = EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id)
+
+      request =
+        struct!(EmailDeliveryRequest, %{
+          delivery_id: delivery.delivery_id,
+          message_id: delivery.message_id,
+          club_id: "club_test",
+          outbound_message_id: delivery.outbound_message_id,
+          recipient_id: delivery.recipient_id,
+          recipient_name: delivery.recipient_name,
+          recipient_address: delivery.recipient_address,
+          sender_name: "Sender",
+          sender_address: "sender@example.test",
+          channel: :email,
+          subject: "Test",
+          body: "Test"
+        })
+
+      assert {:ok, attempt} = EmailHandoffRecovery.start(claimed, request)
+      backdate_claim!(claimed)
+      EmailHandoffRecovery.sweep()
+
+      assert %EmailDeliveryProjection{status: "sent", attempt_count: 1} =
+               EmailHandoffRecovery.finish(attempt, :ok)
+
+      assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+      assert [] = Fake.deliveries()
+    end
+
+    test "inconclusive handoff waits, then retries automatically with an audit trail and finite budget" do
+      start_supervised!(SelectiveFailure)
+      SelectiveFailure.reset()
+      SelectiveFailure.fail_addresses(["bob.member@example.com"])
+      Application.put_env(:memba, :messaging_email_delivery_provider, SelectiveFailure)
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+
+      assert [%EmailDeliveryProjection{status: "uncertain", attempt_count: 1}] =
+               EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      attempt = Repo.get_by!(EmailHandoffAttempt, delivery_id: delivery.delivery_id)
+      old = DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+
+      Repo.update_all(from(a in EmailHandoffAttempt, where: a.id == ^attempt.id),
+        set: [started_at: old, updated_at: old]
+      )
+
+      EmailHandoffRecovery.sweep()
+
+      assert %EmailDeliveryProjection{
+               status: "pending",
+               attempt_count: 1,
+               latest_error: "handoff_uncertain"
+             } =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert %EmailHandoffAttempt{state: "unconfirmed"} =
+               Repo.get!(EmailHandoffAttempt, attempt.id)
+
+      SelectiveFailure.fail_addresses([])
+
+      assert [%EmailDeliveryProjection{status: "sent", attempt_count: 2}] =
+               EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert length(SelectiveFailure.deliveries()) == 2
+    end
+
+    test "three inconclusive handoffs exhaust the budget without inventing a failure or fourth send" do
+      start_supervised!(SelectiveFailure)
+      SelectiveFailure.reset()
+      SelectiveFailure.fail_addresses(["bob.member@example.com"])
+      Application.put_env(:memba, :messaging_email_delivery_provider, SelectiveFailure)
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+
+      log =
+        capture_log(fn ->
+          for attempt_number <- 1..3 do
+            assert [%EmailDeliveryProjection{status: "uncertain", attempt_count: ^attempt_number}] =
+                     EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+            old =
+              DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+
+            Repo.update_all(
+              from(a in EmailHandoffAttempt,
+                where: a.delivery_id == ^delivery.delivery_id and a.state == "uncertain"
+              ),
+              set: [started_at: old, updated_at: old]
+            )
+
+            EmailHandoffRecovery.sweep()
+          end
+
+          EmailHandoffRecovery.sweep()
+        end)
+
+      assert length(String.split(log, "email_delivery_handoff_needs_attention")) == 2
+
+      assert %EmailDeliveryProjection{
+               status: "uncertain",
+               attempt_count: 3,
+               latest_error: "retry_budget_exhausted",
+               latest_detail: "retry budget exhausted; provider acceptance unknown"
+             } =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+      assert length(SelectiveFailure.deliveries()) == 3
+    end
+  end
+
+  defp backdate_claim!(delivery) do
+    old = DateTime.add(DateTime.utc_now(), -1200, :second) |> DateTime.truncate(:microsecond)
+
+    Repo.update_all(
+      from(d in EmailDeliveryProjection, where: d.delivery_id == ^delivery.delivery_id),
+      set: [last_dispatch_attempted_at: old]
+    )
+  end
+
+  test "manual retries cannot resend a delivery" do
+    %{delivery: delivery} = insert_dispatchable_delivery!(status: "failed")
+
+    assert {:error, :manual_retry_disabled} =
+             Messaging.retry_failed_email_delivery(delivery.delivery_id)
+
+    assert {:error, :manual_retry_disabled} =
+             EmailDeliveryDispatcher.retry_failed_delivery(delivery.delivery_id)
+
+    assert [] = Fake.deliveries()
   end
 
   defp insert_email_delivery!(attrs) when is_list(attrs) do

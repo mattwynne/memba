@@ -9,14 +9,13 @@ defmodule MembaWeb.MemberDashboardLive do
 
   require Logger
 
-  alias Commanded.Commands.ExecutionResult
   alias Memba.Accounts
-  alias Memba.ID
   alias Memba.Membership
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.GroupWelcomeEmail
   alias Memba.Messaging
+  alias Memba.Messaging.MemberSubmission
   alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -64,6 +63,7 @@ defmodule MembaWeb.MemberDashboardLive do
          |> assign(:custom_group_member_picker_open?, false)
          |> assign(:custom_group_member_removal, nil)
          |> assign(:group_access_request_state, :idle)
+         |> assign(:group_access_request_operation, nil)
          |> assign_custom_group_member_picker_query("")
          |> assign(dashboard_assigns)}
 
@@ -88,6 +88,7 @@ defmodule MembaWeb.MemberDashboardLive do
       |> assign(:custom_group_member_picker_open?, false)
       |> assign(:custom_group_member_removal, nil)
       |> assign(:group_access_request_state, :idle)
+      |> assign(:group_access_request_operation, nil)
       |> assign_custom_group_member_picker_query("")
       |> refresh_dashboard(socket.assigns.selected_club.club_id, selected_group_id)
 
@@ -101,35 +102,53 @@ defmodule MembaWeb.MemberDashboardLive do
         %{
           assigns: %{
             can_request_group_access?: true,
-            group_access_request_state: :idle
+            group_access_request_state: state
           }
         } = socket
-      ) do
-    socket = assign(socket, :group_access_request_state, :sending)
-
-    result =
-      Messaging.request_group_access(
-        %{
-          message_id: ID.generate(:message),
-          club_id: socket.assigns.selected_club.club_id,
-          requester_person_id: socket.assigns.current_member.id,
-          group_id: socket.assigns.selected_group.group_id
-        },
-        consistency: :strong
       )
+      when state in [:idle, :uncertain] do
+    attrs = %{
+      "club_id" => socket.assigns.selected_club.club_id,
+      "requester_person_id" => socket.assigns.current_member.id,
+      "group_id" => socket.assigns.selected_group.group_id
+    }
 
-    case result do
-      :ok ->
-        {:noreply, assign(socket, :group_access_request_state, :sent)}
+    operation =
+      socket.assigns.group_access_request_operation || MemberSubmission.new(:group_access, attrs)
 
-      {:ok, %ExecutionResult{}} ->
-        {:noreply, assign(socket, :group_access_request_state, :sent)}
+    if MemberSubmission.same_intent?(operation, :group_access, attrs) do
+      result =
+        MemberSubmission.submit(operation, fn attrs ->
+          Messaging.request_group_access(attrs, consistency: :strong)
+        end)
 
-      {:error, _reason} ->
-        {:noreply,
-         socket
-         |> assign(:group_access_request_state, :idle)
-         |> put_flash(:error, "We couldn't send your request. Refresh and try again.")}
+      case result do
+        {:accepted, _id} ->
+          {:noreply,
+           socket
+           |> assign(:group_access_request_operation, operation)
+           |> assign(:group_access_request_state, :sent)}
+
+        {:rejected, _reason} ->
+          {:noreply,
+           socket
+           |> assign(:group_access_request_operation, nil)
+           |> assign(:group_access_request_state, :idle)
+           |> put_flash(:error, "Your request was not accepted. Please try again.")}
+
+        {:uncertain, _reason} ->
+          {:noreply,
+           socket
+           |> assign(:group_access_request_operation, operation)
+           |> assign(:group_access_request_state, :uncertain)}
+      end
+    else
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         "This request may already be queued. Return to the original group to retry it."
+       )}
     end
   end
 
@@ -145,7 +164,10 @@ defmodule MembaWeb.MemberDashboardLive do
           }
         } = socket
       ) do
-    {:noreply, assign(socket, :group_access_request_state, :idle)}
+    {:noreply,
+     socket
+     |> assign(:group_access_request_state, :idle)
+     |> assign(:group_access_request_operation, nil)}
   end
 
   def handle_event("reset_group_access_request", _params, socket), do: {:noreply, socket}

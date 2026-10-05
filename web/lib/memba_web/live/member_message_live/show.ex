@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
   require Logger
 
   alias Memba.Messaging
+  alias Memba.Messaging.MemberSubmission
   alias Memba.ReadModelChanges
   alias MembaWeb.MemberMessageDetail
 
@@ -127,25 +128,52 @@ defmodule MembaWeb.MemberMessageLive.Show do
        |> assign(:reply_error, nil)
        |> assign(:reply_form, reply_form(reply_params))}
     else
-      case post_current_member_reply(socket, reply_params) do
-        {:ok, _reply_message_id} ->
-          {:noreply,
-           socket
-           |> refresh_message_detail()
-           |> assign(:reply_state, :posted)
-           |> assign(:reply_body_error, nil)
-           |> assign(:reply_error, nil)
-           |> assign(:reply_form, reply_form())}
+      attrs = %{
+        "conversation_id" => socket.assigns.message.conversation_id,
+        "sender_id" => socket.assigns.current_member.id,
+        "body" => Map.get(reply_params, "body", "")
+      }
 
-        {:error, reason} ->
-          log_reply_failure(socket, reason)
+      previous = socket.assigns.reply_operation
 
-          {:noreply,
-           socket
-           |> assign(:reply_state, :failed)
-           |> assign(:reply_body_error, nil)
-           |> assign(:reply_error, reason)
-           |> assign(:reply_form, reply_form(reply_params))}
+      operation =
+        if (socket.assigns.reply_state == :posted and
+              previous) && not MemberSubmission.same_intent?(previous, :reply, attrs),
+           do: MemberSubmission.new(:reply, attrs),
+           else: previous || MemberSubmission.new(:reply, attrs)
+
+      if not MemberSubmission.same_intent?(operation, :reply, attrs) do
+        {:noreply,
+         assign(
+           socket,
+           :reply_body_error,
+           "Retry the original reply first; it may already be queued."
+         )}
+      else
+        case MemberSubmission.submit(operation, fn attrs ->
+               Messaging.post_message_reply(attrs, consistency: :strong)
+             end) do
+          {:accepted, _reply_message_id} ->
+            {:noreply,
+             socket
+             |> refresh_message_detail()
+             |> assign(:reply_operation, operation)
+             |> assign(:reply_state, :posted)
+             |> assign(:reply_body_error, nil)
+             |> assign(:reply_error, nil)
+             |> assign(:reply_form, reply_form())}
+
+          {outcome, reason} when outcome in [:rejected, :uncertain] ->
+            log_reply_failure(socket, reason)
+
+            {:noreply,
+             socket
+             |> assign(:reply_operation, if(outcome == :rejected, do: nil, else: operation))
+             |> assign(:reply_state, outcome)
+             |> assign(:reply_body_error, nil)
+             |> assign(:reply_error, reason)
+             |> assign(:reply_form, reply_form(reply_params))}
+        end
       end
     end
   end
@@ -312,31 +340,10 @@ defmodule MembaWeb.MemberMessageLive.Show do
   defp assign_initial_reply_state(socket) do
     socket
     |> assign(:reply_state, :composing)
+    |> assign(:reply_operation, nil)
     |> assign(:reply_body_error, nil)
     |> assign(:reply_error, nil)
     |> assign(:reply_form, reply_form())
-  end
-
-  defp post_current_member_reply(socket, reply_params) do
-    with %{message: %{conversation_id: conversation_id}, current_member: %{id: sender_id}} <-
-           socket.assigns do
-      reply_message_id = Memba.ID.generate(:message)
-
-      attrs = %{
-        "message_id" => reply_message_id,
-        "conversation_id" => conversation_id,
-        "sender_id" => sender_id,
-        "body" => Map.get(reply_params, "body", "")
-      }
-
-      case Messaging.post_message_reply(attrs, consistency: :strong) do
-        :ok -> {:ok, reply_message_id}
-        {:ok, _result} -> {:ok, reply_message_id}
-        {:error, reason} -> {:error, reason}
-      end
-    else
-      _missing_reply_context -> {:error, :forbidden}
-    end
   end
 
   defp blank_reply_body?(reply_params) do

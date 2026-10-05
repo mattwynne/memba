@@ -21,7 +21,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
-  alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.MessageSent
@@ -417,7 +416,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                recipient_id: ^carol_id,
                status: "sent",
                latest_error: nil,
-               attempt_count: 0
+               attempt_count: 1
              }
            ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
@@ -547,7 +546,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                %EmailDeliveryProjection{
                  delivery_id: ^carol_delivery_id,
                  status: "sent",
-                 attempt_count: 0,
+                 attempt_count: 1,
                  latest_error: nil,
                  failed_at: nil
                },
@@ -1122,7 +1121,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              pending_deliveries_for_message(message_id)
   end
 
-  test "manual retry of a failed delivery does not append duplicate message or delivery events" do
+  test "manual retry is disabled and cannot append events or hand off email" do
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
 
     club_id = Memba.ID.generate(:club)
@@ -1162,19 +1161,15 @@ defmodule Memba.Messaging.SendClubMessageTest do
     )
     |> Repo.update!()
 
-    assert {:ok,
-            %EmailDeliveryProjection{
-              delivery_id: delivery_id,
-              status: "sent",
-              attempt_count: 2
-            }} = Messaging.retry_failed_email_delivery(delivery.delivery_id)
+    assert {:error, :manual_retry_disabled} =
+             Messaging.retry_failed_email_delivery(delivery.delivery_id)
 
-    assert delivery_id == delivery.delivery_id
+    assert %EmailDeliveryProjection{status: "failed", attempt_count: 1} =
+             Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
     assert count_events(MessageSent) == 1
     assert count_events(EmailDeliveryCreated) == 1
-
-    assert [%EmailDeliveryRequest{message_id: ^message_id, delivery_id: ^delivery_id}] =
-             Fake.deliveries()
+    assert Fake.deliveries() == []
   end
 
   test "projector replay rebuilds pending delivery work without handing it to the provider" do

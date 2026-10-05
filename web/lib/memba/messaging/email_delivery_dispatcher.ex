@@ -10,9 +10,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   and publish no read-model change. The startup check restores that pending-work
   nudge after a dispatcher or application restart. The dispatcher also owns the
   provider handoff request-building boundary and persisted dispatch outcomes so
-  command application services do not call email providers directly. Failed
-  deliveries can be retried through the explicit manual retry API; the
-  dispatcher does not automatically retry failed deliveries.
+  command application services do not call email providers directly. Ambiguous
+  handoffs are reconciled and retried automatically, up to a bounded budget.
   """
 
   use GenServer
@@ -22,6 +21,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   alias Memba.Membership
   alias Memba.Messaging.EmailDeliveryProvider
+  alias Memba.Messaging.EmailHandoffRecovery
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.EmailDeliveryStatus
   alias Memba.Messaging.ConversationStopFollowToken
@@ -42,8 +42,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @name __MODULE__
   @pending_status EmailDeliveryStatus.pending()
   @dispatching_status EmailDeliveryStatus.dispatching()
-  @sent_status EmailDeliveryStatus.sent()
-  @failed_status EmailDeliveryStatus.failed()
+  @recovery_tick_ms 60_000
   @delivery_context_projectors [ConversationGroupAccessProjector, MessageProjector]
   @default_projection_timeout 5_000
   @default_projection_catch_up_retry_interval 100
@@ -66,6 +65,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     case Repo.update_all(claim_query,
            set: [
              status: @dispatching_status,
+             claim_version: 1,
              last_dispatch_attempted_at: now,
              updated_at: now
            ]
@@ -107,9 +107,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @doc """
   Claim all currently pending email deliveries and dispatch each claimed record.
 
-  Provider acceptance marks a claimed delivery as `sent`. Provider/request
-  errors mark the individual delivery as `failed`, increment the persisted
-  attempt count, and store the latest error diagnostics. If the projections
+  Provider acceptance marks a claimed delivery as `sent`. A provider error is
+  an uncertain handoff, not proof of failure; the persisted attempt ledger
+  reconciles and retries it automatically. If the projections
   needed to build the provider request have not caught up before the short
   timeout, the claim is released back to `pending` without calling the provider
   or recording a terminal failure. Recipient eligibility was fixed when the
@@ -126,38 +126,50 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   Hand one already-claimed delivery to the provider and persist the outcome.
   """
   def dispatch_claimed_delivery(%EmailDeliveryProjection{} = delivery) do
-    case deliver_to_provider(delivery) do
-      :ok ->
-        log_provider_success(delivery)
-        mark_delivery_sent(delivery)
+    request_result =
+      case EmailHandoffRecovery.latest_unconfirmed_request(delivery.delivery_id) do
+        nil ->
+          email_delivery_request(delivery)
+
+        previous ->
+          case EmailHandoffRecovery.request(previous) do
+            nil -> email_delivery_request(delivery)
+            request -> {:ok, request}
+          end
+      end
+
+    case request_result do
+      {:ok, request} ->
+        case EmailHandoffRecovery.start(delivery, request) do
+          {:ok, attempt} ->
+            result =
+              request
+              |> deliver_request_to_provider(delivery)
+              |> normalize_provider_result()
+
+            EmailHandoffRecovery.finish(attempt, result)
+
+          {:error, :not_claimed} ->
+            Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+          {:error, :provider_changed} ->
+            defer_claimed_delivery(delivery, "uncertain")
+        end
 
       {:error, reason} when reason in @projection_timeout_errors ->
         log_dispatch_deferred(delivery, reason, @pending_status)
         defer_claimed_delivery(delivery, @pending_status)
 
       {:error, reason} ->
-        log_provider_error(delivery, reason)
-        mark_delivery_failed(delivery, reason)
+        log_dispatch_deferred(delivery, reason, @pending_status)
+        defer_claimed_delivery(delivery, @pending_status)
     end
   end
 
   @doc """
-  Retry one failed email delivery by handing it to the configured provider.
-
-  This is the manual/internal retry boundary. It atomically moves a failed
-  delivery to `dispatching` before calling the provider so concurrent retry
-  attempts cannot both hand the same failed delivery to the provider. Provider
-  failure is persisted on the delivery and returned as a successful API result
-  containing the updated failed read model; lookup/retryability problems return
-  `{:error, reason}`.
+  Manual retries are deliberately disabled. Only durable recovery may retry.
   """
-  def retry_failed_delivery(delivery_id) when is_binary(delivery_id) do
-    with {:ok, %EmailDeliveryProjection{} = delivery} <- claim_failed_delivery(delivery_id) do
-      {:ok, dispatch_claimed_retry_delivery(delivery)}
-    end
-  end
-
-  def retry_failed_delivery(_delivery_id), do: {:error, :invalid_delivery_id}
+  def retry_failed_delivery(_delivery_id), do: {:error, :manual_retry_disabled}
 
   @doc """
   Hand email delivery work to the configured provider.
@@ -209,6 +221,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     }
 
     if state.dispatch_enabled do
+      send(self(), :recover_email_handoffs)
       send(self(), {:dispatch_pending_email_deliveries, %{source: :startup}})
     end
 
@@ -231,6 +244,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
     send(self(), {:dispatch_pending_email_deliveries, payload})
 
+    {:noreply, state}
+  end
+
+  def handle_info(:recover_email_handoffs, state) do
+    EmailHandoffRecovery.sweep()
+    dispatch_pending_email_deliveries(state)
+    Process.send_after(self(), :recover_email_handoffs, @recovery_tick_ms)
     {:noreply, state}
   end
 
@@ -308,104 +328,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp positive_interval(value, _fallback) when is_integer(value) and value > 0, do: value
   defp positive_interval(_value, fallback), do: fallback
 
-  defp claim_failed_delivery(delivery_id) do
-    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-
-    claim_query =
-      from delivery in EmailDeliveryProjection,
-        where: delivery.delivery_id == ^delivery_id and delivery.status == ^@failed_status
-
-    case Repo.update_all(claim_query,
-           set: [
-             status: @dispatching_status,
-             last_dispatch_attempted_at: now,
-             updated_at: now
-           ]
-         ) do
-      {1, nil} ->
-        delivery = Repo.get!(EmailDeliveryProjection, delivery_id)
-        log_retry_claimed(delivery)
-        {:ok, delivery}
-
-      {0, nil} ->
-        error = failed_delivery_retry_error(delivery_id)
-        log_retry_skipped(delivery_id, error)
-        error
-    end
-  end
-
-  defp failed_delivery_retry_error(delivery_id) do
-    case Repo.get(EmailDeliveryProjection, delivery_id) do
-      nil -> {:error, :not_found}
-      %EmailDeliveryProjection{status: status} -> {:error, {:not_retryable, status}}
-    end
-  end
-
-  defp dispatch_claimed_retry_delivery(%EmailDeliveryProjection{} = delivery) do
-    case deliver_to_provider(delivery) do
-      :ok ->
-        log_provider_success(delivery)
-        mark_delivery_sent(delivery, increment_attempt_count?: true)
-
-      {:error, reason} when reason in @projection_timeout_errors ->
-        log_dispatch_deferred(delivery, reason, @failed_status)
-        defer_claimed_delivery(delivery, @failed_status)
-
-      {:error, reason} ->
-        log_provider_error(delivery, reason)
-        mark_delivery_failed(delivery, reason)
-    end
-  end
-
-  defp mark_delivery_sent(%EmailDeliveryProjection{} = delivery, opts \\ []) do
-    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-    increment_attempt_count? = Keyword.get(opts, :increment_attempt_count?, false)
-
-    updates = [
-      set: [
-        status: @sent_status,
-        latest_error: nil,
-        latest_detail: nil,
-        sent_at: now,
-        failed_at: nil,
-        updated_at: now
-      ]
-    ]
-
-    updates =
-      if increment_attempt_count? do
-        Keyword.put(updates, :inc, attempt_count: 1)
-      else
-        updates
-      end
-
-    delivery
-    |> outcome_query()
-    |> Repo.update_all(updates)
-
-    Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
-  end
-
-  defp mark_delivery_failed(%EmailDeliveryProjection{} = delivery, reason) do
-    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-    {latest_error, latest_detail} = delivery_error_diagnostics(reason)
-
-    delivery
-    |> outcome_query()
-    |> Repo.update_all(
-      set: [
-        status: @failed_status,
-        latest_error: latest_error,
-        latest_detail: latest_detail,
-        failed_at: now,
-        updated_at: now
-      ],
-      inc: [attempt_count: 1]
-    )
-
-    Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
-  end
-
   defp defer_claimed_delivery(%EmailDeliveryProjection{} = delivery, resume_status) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
@@ -422,22 +344,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
         projected_delivery.delivery_id == ^delivery.delivery_id and
           projected_delivery.status == ^@dispatching_status
   end
-
-  defp delivery_error_diagnostics(reason) do
-    {delivery_error_name(reason), inspect(reason, limit: 50, printable_limit: 2_000)}
-  end
-
-  defp delivery_error_name(reason) when is_atom(reason), do: Atom.to_string(reason)
-
-  defp delivery_error_name(reason) when is_binary(reason), do: reason
-
-  defp delivery_error_name(reason) when is_tuple(reason) and tuple_size(reason) > 0 do
-    reason
-    |> elem(0)
-    |> delivery_error_name()
-  end
-
-  defp delivery_error_name(reason), do: inspect(reason, limit: 10, printable_limit: 200)
 
   defp email_delivery_request(%EmailDeliveryProjection{} = delivery) do
     with :ok <- await_delivery_context_projections(),
@@ -670,28 +576,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     Logger.debug("email_delivery_dispatch_claim_skipped",
       delivery_id: delivery_id,
       expected_status: @pending_status
-    )
-  end
-
-  defp log_retry_claimed(%EmailDeliveryProjection{} = delivery) do
-    Logger.info("email_delivery_retry_claimed", delivery_metadata(delivery, @dispatching_status))
-  end
-
-  defp log_retry_skipped(delivery_id, error) do
-    Logger.debug("email_delivery_retry_skipped",
-      delivery_id: delivery_id,
-      reason: inspect(error)
-    )
-  end
-
-  defp log_provider_success(%EmailDeliveryProjection{} = delivery) do
-    Logger.info("email_delivery_provider_success", delivery_metadata(delivery, @sent_status))
-  end
-
-  defp log_provider_error(%EmailDeliveryProjection{} = delivery, reason) do
-    Logger.warning(
-      "email_delivery_provider_error",
-      Keyword.merge(delivery_metadata(delivery, @failed_status), reason: inspect(reason))
     )
   end
 

@@ -21,6 +21,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
+  alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -76,6 +77,61 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     |> refute_has("#member-group-new-form input[name='group[email_slug]']")
     |> refute_has("#member-group-new-form input[name='group[club_id]']")
     |> refute_has("#member-group-new-form input[name='group[actor_person_id]']")
+  end
+
+  test "alternate sign-in resolves the same active member across member surfaces", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin.primary@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    Repo.insert!(
+      PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
+        person_id: robin.person_id,
+        email: "robin.alternate@example.com",
+        is_primary: false,
+        verified_at: DateTime.utc_now()
+      })
+    )
+
+    conn = signed_in_club_host(conn, "robin.alternate@example.com", robin)
+
+    for {path, selector} <- [
+          {"/conversations", "#member-club-home"},
+          {"/messages/new", "#member-message-compose"},
+          {"/groups/new", "#member-group-new"},
+          {"/members/invitations/new", "#member-club-invitation-new"}
+        ] do
+      {:ok, view, _html} = live(conn, path)
+      assert has_element?(view, selector)
+    end
+
+    members = Membership.list_active_members_of_club(robin.club_id)
+
+    assert %{id: robin_id, email: "robin.primary@example.com"} =
+             Membership.find_member_for_email(members, "ROBIN.ALTERNATE@example.com")
+
+    assert robin_id == robin.person_id
+    assert is_nil(Membership.find_member_for_email(members, "unknown@example.com"))
+    assert is_nil(Membership.find_member_for_email([], "robin.alternate@example.com"))
+
+    outsider =
+      create_active_member(
+        email: "outsider@example.com",
+        name: "Outsider Member",
+        club_name: "Another Club"
+      )
+
+    assert is_nil(
+             Membership.find_member_for_email(
+               Membership.list_active_members_of_club(outsider.club_id),
+               "robin.alternate@example.com"
+             )
+           )
   end
 
   test "the exact /groups/new route is not consumed as a dashboard group id" do

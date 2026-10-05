@@ -43,6 +43,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
     |> text_body(MemberMessageEmail.text_body(request))
     |> html_body(MemberMessageEmail.html_body(request))
     |> put_provider_option(:tags, tags(request))
+    |> put_provider_option(:idempotency_key, "memba/member-message/#{request.delivery_id}")
     |> header("X-Memba-Message-ID", request.message_id)
     |> header("X-Memba-Delivery-ID", request.delivery_id)
     |> header("X-Memba-Club-ID", request.club_id)

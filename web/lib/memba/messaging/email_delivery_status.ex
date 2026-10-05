@@ -9,6 +9,7 @@ defmodule Memba.Messaging.EmailDeliveryStatus do
 
   @pending "pending"
   @dispatching "dispatching"
+  @uncertain "uncertain"
   @sent "sent"
   @failed "failed"
 
@@ -17,12 +18,13 @@ defmodule Memba.Messaging.EmailDeliveryStatus do
   @bounced "bounced"
   @spam_complaint "spam_complaint"
 
-  @dispatch_lifecycle_statuses [@pending, @dispatching, @sent, @failed]
+  @dispatch_lifecycle_statuses [@pending, @dispatching, @uncertain, @sent, @failed]
   @provider_webhook_statuses [@delivered, @delayed, @bounced, @spam_complaint]
   @valid_statuses @dispatch_lifecycle_statuses ++ @provider_webhook_statuses
 
   def pending, do: @pending
   def dispatching, do: @dispatching
+  def uncertain, do: @uncertain
   def sent, do: @sent
   def failed, do: @failed
 

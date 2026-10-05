@@ -10,5 +10,5 @@ defmodule Memba.Messaging.Commands.RequestGroupAccess do
   """
 
   @enforce_keys [:message_id, :club_id, :requester_person_id, :group_id]
-  defstruct [:message_id, :club_id, :requester_person_id, :group_id]
+  defstruct [:operation_intent, :message_id, :club_id, :requester_person_id, :group_id]
 end

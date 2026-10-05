@@ -10,6 +10,7 @@ defmodule Memba.Messaging.Events.MessageSent do
   @derive Jason.Encoder
   @enforce_keys [:message_id, :club_id, :sender_id, :subject, :body]
   defstruct [
+    :operation_intent,
     :message_id,
     :club_id,
     :sender_id,

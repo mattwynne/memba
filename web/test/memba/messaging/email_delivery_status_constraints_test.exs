@@ -9,7 +9,7 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
 
   test "shared status vocabulary lists dispatch lifecycle and provider webhook statuses" do
     assert EmailDeliveryStatus.dispatch_lifecycle_statuses() ==
-             ~w(pending dispatching sent failed)
+             ~w(pending dispatching uncertain sent failed)
 
     assert EmailDeliveryStatus.provider_webhook_statuses() ==
              ~w(delivered delayed bounced spam_complaint)

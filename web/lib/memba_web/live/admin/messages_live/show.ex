@@ -234,6 +234,23 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
                     Attempts: {delivery.attempt_count || 0}
                   </p>
                   <p
+                    :if={delivery.latest_error == "retry_budget_exhausted"}
+                    id={"delivery-needs-attention-#{delivery.delivery_id}"}
+                    data-testid="delivery-needs-attention"
+                    class="font-semibold text-error"
+                  >
+                    Needs attention: provider acceptance unknown after automatic retries.
+                    Investigate provider history; do not resend manually.
+                  </p>
+                  <p
+                    :if={delivery.latest_error == "duplicate_provider_handoff"}
+                    id={"delivery-duplicate-handoffs-#{delivery.delivery_id}"}
+                    data-testid="delivery-duplicate-handoffs"
+                    class="font-semibold text-error"
+                  >
+                    Needs attention: multiple provider sends confirmed. Review the IDs below.
+                  </p>
+                  <p
                     :if={present?(delivery.latest_error)}
                     id={"delivery-latest-error-#{delivery.delivery_id}"}
                     data-testid="delivery-latest-error"
@@ -328,6 +345,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
 
   defp delivery_status_class("pending"), do: "bg-[#f3ecd8] text-[#7a5416]"
   defp delivery_status_class("dispatching"), do: "bg-[#f3ecd8] text-[#7a5416]"
+  defp delivery_status_class("uncertain"), do: "bg-[#f3ecd8] text-[#7a5416]"
   defp delivery_status_class("failed"), do: "bg-[#f6e0c9] text-[#8a3d21]"
   defp delivery_status_class("sent"), do: "bg-[#e6ece4] text-[#1f4842]"
   defp delivery_status_class("delayed"), do: "bg-[#f3ecd8] text-[#7a5416]"

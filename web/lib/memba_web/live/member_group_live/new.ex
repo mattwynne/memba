@@ -11,7 +11,6 @@ defmodule MembaWeb.MemberGroupLive.New do
 
   import Ecto.Changeset
 
-  alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Membership.Authorization
   alias MembaWeb.ClubSite
@@ -283,11 +282,9 @@ defmodule MembaWeb.MemberGroupLive.New do
   defp current_member(_club_id, nil), do: nil
 
   defp current_member(club_id, identity) do
-    identity_email = Accounts.normalize_email(identity.email)
-
     club_id
     |> Membership.list_active_members_of_club()
-    |> Enum.find(fn member -> Accounts.normalize_email(member.email) == identity_email end)
+    |> Membership.find_member_for_email(identity.email)
   end
 
   defp preview_group(socket, group_params) do

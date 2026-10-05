@@ -10,10 +10,10 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   require Logger
 
-  alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.MemberSubmission
   alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias Memba.ReadModelChanges
   alias MembaWeb.ClubSite
@@ -99,9 +99,15 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   def handle_event("try_again", _params, socket) do
+    operation =
+      if socket.assigns.compose_state == :send_failed,
+        do: nil,
+        else: socket.assigns.send_operation
+
     {:noreply,
      socket
      |> assign(:compose_state, :composing)
+     |> assign(:send_operation, operation)
      |> assign(:sent_message_id, nil)
      |> assign(:send_error, nil)
      |> assign(:body_error, nil)}
@@ -182,7 +188,7 @@ defmodule MembaWeb.MemberMessageLive.New do
         </section>
 
         <section
-          :if={@compose_state == :send_failed}
+          :if={@compose_state in [:send_failed, :uncertain]}
           id="member-compose-error-state"
           class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-error/20 bg-base-100 p-6 text-center shadow-sm sm:p-10"
         >
@@ -195,14 +201,19 @@ defmodule MembaWeb.MemberMessageLive.New do
           </p>
 
           <h1 class="mt-2 text-4xl font-semibold tracking-tight text-base-content">
-            Your message was not sent.
+            {if @compose_state == :uncertain,
+              do: "We couldn't confirm your message.",
+              else: "Your message was not accepted."}
           </h1>
 
           <p
             id="member-compose-error-summary"
             class="mx-auto mt-4 max-w-xl text-base leading-7 text-ink-2"
           >
-            No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.
+            {if @compose_state == :uncertain,
+              do:
+                "It may already be queued for delivery. Try again here with the same message; do not start another message to retry.",
+              else: "Please try again. No delivery was queued by this attempt."}
           </p>
 
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
@@ -385,55 +396,54 @@ defmodule MembaWeb.MemberMessageLive.New do
        |> assign(:body_error, "Message body can’t be blank.")
        |> assign(:message_form, message_form(message_params))}
     else
-      case send_current_member_message(socket, message_params) do
-        {:ok, message_id} ->
-          {:noreply,
-           socket
-           |> assign(:compose_state, :sent)
-           |> assign(:sent_message_id, message_id)
-           |> assign(:send_error, nil)
-           |> assign(:body_error, nil)}
-
-        {:error, reason} ->
-          log_send_failure(socket, reason)
-
-          {:noreply,
-           socket
-           |> assign(:compose_state, :send_failed)
-           |> assign(:sent_message_id, nil)
-           |> assign(:send_error, reason)
-           |> assign(:body_error, nil)
-           |> assign(:message_form, message_form(message_params))}
-      end
-    end
-  end
-
-  defp send_current_member_message(socket, message_params) do
-    with %{
-           selected_club: %{club_id: club_id},
-           current_member: %{id: sender_id},
-           audience_group: %{group_id: audience_group_id}
-         } <- socket.assigns do
-      message_id = Memba.ID.generate(:message)
-
       attrs = %{
-        "message_id" => message_id,
-        "club_id" => club_id,
-        "sender_id" => sender_id,
-        "audience_group_id" => audience_group_id,
+        "club_id" => socket.assigns.selected_club.club_id,
+        "sender_id" => socket.assigns.current_member.id,
+        "audience_group_id" => socket.assigns.audience_group.group_id,
         "subject" => Map.get(message_params, "subject", ""),
         "body" => Map.get(message_params, "body", "")
       }
 
-      case Messaging.send_club_message_as_current_member(attrs,
-             consistency: [MessageProjector]
-           ) do
-        :ok -> {:ok, message_id}
-        {:ok, _result} -> {:ok, message_id}
-        {:error, reason} -> {:error, reason}
+      operation = socket.assigns.send_operation || MemberSubmission.new(:club_message, attrs)
+
+      if not MemberSubmission.same_intent?(operation, :club_message, attrs) do
+        {:noreply,
+         assign(
+           socket,
+           :body_error,
+           "This attempt may have been sent. Retry with the original text in this form."
+         )}
+      else
+        case MemberSubmission.submit(operation, fn attrs ->
+               Messaging.send_club_message_as_current_member(attrs,
+                 consistency: [MessageProjector]
+               )
+             end) do
+          {:accepted, message_id} ->
+            {:noreply,
+             socket
+             |> assign(:send_operation, operation)
+             |> assign(:compose_state, :sent)
+             |> assign(:sent_message_id, message_id)
+             |> assign(:send_error, nil)
+             |> assign(:body_error, nil)}
+
+          {outcome, reason} when outcome in [:rejected, :uncertain] ->
+            log_send_failure(socket, reason)
+
+            {:noreply,
+             socket
+             |> assign(:send_operation, operation)
+             |> assign(
+               :compose_state,
+               if(outcome == :uncertain, do: :uncertain, else: :send_failed)
+             )
+             |> assign(:sent_message_id, nil)
+             |> assign(:send_error, reason)
+             |> assign(:body_error, nil)
+             |> assign(:message_form, message_form(message_params))}
+        end
       end
-    else
-      _missing_compose_context -> {:error, :forbidden}
     end
   end
 
@@ -504,9 +514,7 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp current_member_for_identity(_members, nil), do: nil
 
   defp current_member_for_identity(members, identity) do
-    identity_email = Accounts.normalize_email(identity.email)
-
-    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
+    Membership.find_member_for_email(members, identity.email)
   end
 
   defp assign_empty_compose_context(socket) do
@@ -523,6 +531,7 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp assign_initial_send_state(socket) do
     socket
     |> assign(:compose_state, :composing)
+    |> assign(:send_operation, nil)
     |> assign(:sent_message_id, nil)
     |> assign(:send_error, nil)
     |> assign(:body_error, nil)

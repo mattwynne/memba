@@ -8,7 +8,6 @@ defmodule MembaWeb.MemberDashboardPresentation do
   directly.
   """
 
-  alias Memba.Accounts
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership
@@ -316,14 +315,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp fetch_current_member(_members, nil), do: {:error, :forbidden}
 
   defp fetch_current_member(members, identity) do
-    identity_email =
-      identity
-      |> Map.get(:email)
-      |> Accounts.normalize_email()
-
-    case Enum.find(members, fn member ->
-           Accounts.normalize_email(member.email) == identity_email
-         end) do
+    case Membership.find_member_for_email(members, Map.get(identity, :email)) do
       nil -> {:error, :forbidden}
       current_member -> {:ok, current_member}
     end

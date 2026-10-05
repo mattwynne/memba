@@ -168,6 +168,21 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
                         label={dispatch_status(delivery)}
                         tone={dispatch_status_tone(dispatch_status(delivery))}
                       />
+                      <p
+                        :if={delivery.dispatch_latest_error == "retry_budget_exhausted"}
+                        data-test-id="delivery-needs-attention"
+                        class="font-semibold text-error"
+                      >
+                        Needs attention: provider acceptance unknown after automatic retries.
+                        Investigate provider history; do not resend manually.
+                      </p>
+                      <p
+                        :if={delivery.dispatch_latest_error == "duplicate_provider_handoff"}
+                        data-test-id="delivery-duplicate-handoffs"
+                        class="font-semibold text-error"
+                      >
+                        Needs attention: multiple provider sends confirmed. Review the IDs below.
+                      </p>
                       <p data-test-id="delivery-dispatch-attempts">
                         attempts: {dispatch_attempt_count(delivery)}
                       </p>
@@ -247,6 +262,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
 
   defp dispatch_status_tone("pending"), do: "warning"
   defp dispatch_status_tone("dispatching"), do: "warning"
+  defp dispatch_status_tone("uncertain"), do: "warning"
   defp dispatch_status_tone("failed"), do: "error"
   defp dispatch_status_tone("sent"), do: "success"
   defp dispatch_status_tone("delivered"), do: "info"

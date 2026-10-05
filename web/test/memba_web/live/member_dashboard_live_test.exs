@@ -1190,7 +1190,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#flash-error",
-             "We couldn't send your request. Refresh and try again."
+             "Your request was not accepted. Please try again."
            )
 
     assert has_element?(view, "#member-group-request-access", "Request access")

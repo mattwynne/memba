@@ -224,6 +224,61 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     )
   end
 
+  test "exhausted handoffs and confirmed duplicates have explicit staff attention signals", %{
+    conn: conn
+  } do
+    %{message_id: message_id, recipients: [exhausted, duplicate]} =
+      send_projected_message_with_recipients(["Dana", "Eli"])
+
+    exhausted.delivery_id
+    |> failed_delivery_changeset(%{
+      status: "uncertain",
+      attempt_count: 3,
+      latest_error: "retry_budget_exhausted",
+      latest_detail: "retry budget exhausted; provider acceptance unknown"
+    })
+    |> Repo.update!()
+
+    duplicate.delivery_id
+    |> failed_delivery_changeset(%{
+      status: "sent",
+      attempt_count: 2,
+      latest_error: "duplicate_provider_handoff",
+      latest_detail: "Postmark accepted 2 message(s): pm_first, pm_second"
+    })
+    |> Repo.update!()
+
+    message_html =
+      conn
+      |> sign_in_staff()
+      |> get("/admin/messages/#{message_id}")
+      |> html_response(200)
+      |> LazyHTML.from_fragment()
+
+    assert_selector_exists(message_html, "#delivery-needs-attention-#{exhausted.delivery_id}")
+    assert_selector_exists(message_html, "#delivery-duplicate-handoffs-#{duplicate.delivery_id}")
+    assert_exact_text(message_html, "#delivery-status-#{exhausted.delivery_id}", "uncertain")
+    assert_exact_text(message_html, "#delivery-status-#{duplicate.delivery_id}", "sent")
+
+    overview_html =
+      conn
+      |> recycle()
+      |> sign_in_staff()
+      |> get("/admin/deliveries")
+      |> html_response(200)
+      |> LazyHTML.from_fragment()
+
+    assert_selector_exists(
+      overview_html,
+      "[data-test-id='delivery-row-#{exhausted.delivery_id}'] [data-test-id='delivery-needs-attention']"
+    )
+
+    assert_selector_exists(
+      overview_html,
+      "[data-test-id='delivery-row-#{duplicate.delivery_id}'] [data-test-id='delivery-duplicate-handoffs']"
+    )
+  end
+
   defp send_projected_message_with_recipients(names, opts \\ []) do
     [sender | _rest] =
       recipients =

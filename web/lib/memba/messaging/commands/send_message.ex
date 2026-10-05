@@ -16,6 +16,7 @@ defmodule Memba.Messaging.Commands.SendMessage do
 
   @enforce_keys [:message_id, :club_id, :sender_id, :subject, :body, :recipients]
   defstruct [
+    :operation_intent,
     :message_id,
     :club_id,
     :sender_id,

@@ -67,6 +67,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
     refute email.html_body =~ "<script>"
 
     assert email.provider_options == %{
+             idempotency_key: "memba/member-message/#{request.delivery_id}",
              tags: [
                %{name: "memba_message_id", value: request.message_id},
                %{name: "memba_delivery_id", value: request.delivery_id},

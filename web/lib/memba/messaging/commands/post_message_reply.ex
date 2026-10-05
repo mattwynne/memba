@@ -20,6 +20,7 @@ defmodule Memba.Messaging.Commands.PostMessageReply do
     :recipients
   ]
   defstruct [
+    :operation_intent,
     :message_id,
     :club_id,
     :sender_id,

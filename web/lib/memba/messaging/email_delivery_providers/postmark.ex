@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.EmailDeliveryProviders.PostmarkConfig
+  alias Memba.Messaging.EmailDeliveryProviders.PostmarkLookup
   alias Memba.Messaging.MemberMessageEmail
 
   @behaviour EmailDeliveryProvider
@@ -31,6 +32,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
 
   def deliver(%EmailDeliveryRequest{channel: channel}),
     do: {:error, {:unsupported_delivery_channel, channel}}
+
+  def find_handoff(delivery_id, recipient, started_at),
+    do: PostmarkLookup.find(delivery_id, recipient, started_at)
 
   defp email(%EmailDeliveryRequest{} = request, %PostmarkConfig{} = config) do
     new()

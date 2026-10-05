@@ -332,7 +332,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
                "[data-audience-group-id='#{trip_planning_group.group_id}']"
            )
 
-    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
+    assert has_element?(view, "#member-compose-error-state", "Your message was not accepted.")
 
     assert has_element?(
              view,
@@ -432,7 +432,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              "#member-message-compose[data-compose-state='send_failed']"
            )
 
-    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
+    assert has_element?(view, "#member-compose-error-state", "Your message was not accepted.")
     assert Messaging.list_messages_for_club(club_id) == []
     assert Fake.deliveries() == []
 

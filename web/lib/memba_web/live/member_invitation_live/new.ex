@@ -7,7 +7,6 @@ defmodule MembaWeb.MemberInvitationLive.New do
   """
   use MembaWeb, :live_view
 
-  alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMemberInvitationEmail
@@ -318,9 +317,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
   defp current_member_for_identity(_members, nil), do: nil
 
   defp current_member_for_identity(members, identity) do
-    identity_email = Accounts.normalize_email(identity.email)
-
-    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
+    Membership.find_member_for_email(members, identity.email)
   end
 
   defp put_session_club_id(params, session) do
