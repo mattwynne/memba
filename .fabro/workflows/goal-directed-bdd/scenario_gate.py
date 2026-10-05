@@ -141,6 +141,23 @@ def trusted_before(root: Path, plan: Path) -> None:
         raise GateError("Predicted-red evidence was not preserved by the trusted gate checkpoint")
 
 
+def resume(root: Path, plan: Path) -> None:
+    prior = artifact(plan, "before.json")
+    if not prior.exists():
+        if active_wip(root):
+            raise GateError("Active @wip has no trusted predicted-red checkpoint")
+        print(json.dumps({"preferred_next_label": "new"}))
+        return
+    trusted_before(root, plan)
+    record = load(prior)
+    feature, index = selected_feature(root, plan)
+    if (record.get("status") != "predicted_red" or record.get("scenario") != NAME
+            or active_wip(root) != [(feature, index)]
+            or sha(feature.read_bytes()) != record.get("feature_sha256")):
+        raise GateError("Cannot resume missing/stale @wip red evidence")
+    print(json.dumps({"preferred_next_label": "resume"}))
+
+
 def after(root: Path, plan: Path) -> None:
     trusted_before(root, plan)
     record = load(artifact(plan, "before.json"))
@@ -189,15 +206,17 @@ def final(root: Path, plan: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[1] not in ("before", "after", "verdict", "final"):
-        print("Usage: scenario_gate.py before|after|verdict|final PLAN_PATH", file=sys.stderr)
+    if len(argv) != 3 or argv[1] not in ("resume", "before", "after", "verdict", "final"):
+        print("Usage: scenario_gate.py resume|before|after|verdict|final PLAN_PATH", file=sys.stderr)
         return 2
     try:
         root = Path.cwd().resolve()
         plan = (root / argv[2]).resolve()
         if not plan.is_relative_to(root / "docs/iterations"):
             raise GateError("Plan must be in docs/iterations")
-        if argv[1] == "before":
+        if argv[1] == "resume":
+            resume(root, plan)
+        elif argv[1] == "before":
             before(root, plan, json.load(sys.stdin))
         elif argv[1] == "after":
             after(root, plan)
