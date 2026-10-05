@@ -12,6 +12,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.CommandDispatch
   alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.PostMemberMessageReply
+  alias Memba.Messaging.ReplyCommand
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
@@ -30,7 +31,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.ConversationListing
-  alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.CurrentMemberConversationFollow
@@ -965,17 +965,6 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp authoritative_conversation_group_id_for_posting(conversation_id, club_id) do
-    with %Message{club_id: ^club_id, group_access: group_access} <-
-           App.aggregate_state(Message, conversation_id),
-         {:ok, group_id, _access_level} <-
-           ConversationAudience.canonical_group_access(group_access) do
-      {:ok, group_id}
-    else
-      _missing_or_ambiguous -> {:error, :not_current_member}
-    end
-  end
-
   defp list_projected_conversation_messages(conversation_id, club_id) do
     MessageProjection
     |> where(
@@ -1861,32 +1850,9 @@ defmodule Memba.Messaging do
   end
 
   defp post_message_reply_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
-         {:ok, sender_id} <- fetch_required(attrs, :sender_id),
-         {:ok, body} <- fetch_required(attrs, :body),
-         {:ok, root_message} <- fetch_conversation_root(conversation_id),
-         {:ok, group_id} <-
-           authoritative_conversation_group_id_for_posting(
-             conversation_id,
-             root_message.club_id
-           ) do
-      {:ok,
-       %PostMessageReply{
-         operation_intent: Map.get(attrs, "operation_intent"),
-         message_id: message_id,
-         club_id: root_message.club_id,
-         sender_id: sender_id,
-         conversation_id: conversation_id,
-         reply_to_message_id: ConversationReference.reply_to_message_id(conversation_id),
-         subject: root_message.subject,
-         body: body,
-         recipients:
-           resolve_reply_recipients(root_message.club_id, conversation_id, group_id,
-             except_person_id: sender_id
-           )
-       }}
-    end
+    ReplyCommand.prepare(attrs, fn club_id, conversation_id, group_id, sender_id ->
+      resolve_reply_recipients(club_id, conversation_id, group_id, except_person_id: sender_id)
+    end)
   end
 
   defp follow_conversation_command(attrs) do

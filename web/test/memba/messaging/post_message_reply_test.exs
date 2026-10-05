@@ -20,6 +20,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Messaging.PostMemberMessageReply
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Recipient
+  alias Memba.Messaging.ReplyCommand
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Repo
@@ -57,6 +58,38 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              })
 
     assert carol_id == carol.person_id
+    refute Repo.get(MessageProjection, reply_id)
+  end
+
+  test "shared reply construction delegates recipient policy to its caller" do
+    club_id = Memba.ID.generate(:club)
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+    root_id = send_root_message(club_id, alice.person_id)
+    reply_id = Memba.ID.generate(:message)
+    recipient = recipient(alice)
+    caller = self()
+
+    assert {:ok, %PostMessageReply{recipients: [^recipient]}} =
+             ReplyCommand.prepare(
+               %{
+                 message_id: reply_id,
+                 conversation_id: root_id,
+                 sender_id: alice.person_id,
+                 body: "Maps"
+               },
+               fn resolved_club, resolved_root, group_id, sender_id ->
+                 send(
+                   caller,
+                   {:recipient_scope, resolved_club, resolved_root, group_id, sender_id}
+                 )
+
+                 [recipient]
+               end
+             )
+
+    assert_receive {:recipient_scope, ^club_id, ^root_id, _group_id, sender_id}
+    assert sender_id == alice.person_id
     refute Repo.get(MessageProjection, reply_id)
   end
 
