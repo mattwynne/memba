@@ -47,7 +47,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
               subject: "Trip planning night",
               body: "Here are the maps",
               operation_intent: "fixed-intent",
-              recipients: [%Recipient{person_id: carol_id}]
+              recipients: [%Recipient{person_id: alice_id}, %Recipient{person_id: carol_id}]
             }} =
              PostMemberMessageReply.prepare(%{
                "message_id" => reply_id,
@@ -57,6 +57,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
                "operation_intent" => "fixed-intent"
              })
 
+    assert alice_id == alice.person_id
     assert carol_id == carol.person_id
     refute Repo.get(MessageProjection, reply_id)
   end
