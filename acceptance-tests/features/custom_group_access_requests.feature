@@ -11,7 +11,6 @@ Feature: Asking to be added to a group
 
   Rule: Asking to join sends a standard message to the club admins
 
-    @wip
     Scenario: Eve asks to join Board
       When Eve requests access to Board
       Then a standard message identifying Eve and Board should be sent to the KMC Admin Group
