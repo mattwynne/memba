@@ -7,6 +7,7 @@ defmodule Memba.Membership do
 
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
+  alias Memba.Membership.AddMember
   alias Memba.Membership.App
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
@@ -16,7 +17,6 @@ defmodule Memba.Membership do
   alias Memba.Membership.CustomGroup
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMember
-  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.CustomGroupSlug
@@ -317,8 +317,8 @@ defmodule Memba.Membership do
   cleared.
   """
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- add_member_command(attrs) do
-      dispatch_member_lifecycle_command(command, dispatch_opts)
+    with {:ok, command} <- AddMember.prepare(attrs) do
+      CommandDispatch.dispatch(command, dispatch_opts)
     end
   end
 
@@ -988,14 +988,6 @@ defmodule Memba.Membership do
     |> Enum.reverse()
   end
 
-  defp add_member_command(attrs) do
-    with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
-         {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, person_id} <- fetch_required(attrs, :person_id) do
-      {:ok, %AddClubMember{membership_id: membership_id, club_id: club_id, person_id: person_id}}
-    end
-  end
-
   defp invite_club_member_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, email} <- fetch_required(attrs, :email),
@@ -1175,10 +1167,6 @@ defmodule Memba.Membership do
       {:ok, _result} = ok -> ok
       {:error, _reason} = error -> error
     end
-  end
-
-  defp dispatch_member_lifecycle_command(command, dispatch_opts) do
-    dispatch(command, CommandDispatch.system_group_membership_consistency(dispatch_opts))
   end
 
   defp dispatch(command, dispatch_opts) do

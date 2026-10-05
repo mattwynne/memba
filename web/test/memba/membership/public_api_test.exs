@@ -1130,6 +1130,13 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert Membership.active_member_of_club?(club_id, person_id)
 
+    assert :ok =
+             Membership.add_member(%{
+               "membership_id" => membership_id,
+               "club_id" => club_id,
+               "person_id" => person_id
+             })
+
     assert {:error, :already_active_member} =
              Membership.add_member(
                %{

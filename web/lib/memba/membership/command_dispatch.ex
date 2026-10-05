@@ -51,6 +51,12 @@ defmodule Memba.Membership.CommandDispatch do
     dispatch_custom_group_removal(command, opts)
   end
 
+  # Match member lifecycle consistency: a re-add must not outrun the prior
+  # removal's follow cleanup on the same Club stream.
+  def dispatch(%AddClubMember{} = command, opts) do
+    raw_dispatch(command, system_group_membership_consistency(opts))
+  end
+
   def dispatch(%RemoveClubMember{} = command, opts) do
     raw_dispatch(command, system_group_membership_consistency(opts))
   end
@@ -75,8 +81,6 @@ defmodule Memba.Membership.CommandDispatch do
   # CreatePerson preserves the caller's consistency and Commanded returning mode.
   def dispatch(%CreatePerson{} = command, opts), do: raw_dispatch(command, opts)
 
-  # Invitation acceptance owns the consistency and result shape of each step.
-  def dispatch(%AddClubMember{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%AcceptClubMemberInvitation{} = command, opts), do: raw_dispatch(command, opts)
 
   @doc false
