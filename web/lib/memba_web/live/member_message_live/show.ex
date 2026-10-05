@@ -12,6 +12,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
 
   alias LiveQuery.Binding
   alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch
+  alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.MemberSubmission
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberMessageDetailQuery
@@ -305,12 +307,17 @@ defmodule MembaWeb.MemberMessageLive.Show do
     end
   end
 
-  defp run_current_member_follow_action(:follow, attrs) do
-    Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
-  end
+  defp run_current_member_follow_action(action, attrs) do
+    preparation =
+      case action do
+        :follow -> CurrentMemberConversationFollow.prepare_follow(attrs)
+        :unfollow -> CurrentMemberConversationFollow.prepare_unfollow(attrs)
+      end
 
-  defp run_current_member_follow_action(:unfollow, attrs) do
-    Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
+    with {:ok, command} <- preparation,
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, consistency: :strong) do
+      dispatch_result
+    end
   end
 
   defp assign_initial_reply_state(socket) do

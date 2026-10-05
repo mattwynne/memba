@@ -452,12 +452,23 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
       member_id: bob_person_id
     }
 
+    assert {:error, {:missing_required_attribute, :club_id}} =
+             Memba.Messaging.CurrentMemberConversationFollow.prepare_follow(%{})
+
+    assert {:error, :invalid_conversation_id} =
+             attrs
+             |> Map.put(:conversation_id, "invalid")
+             |> Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow()
+
     refute Messaging.member_has_conversation_access?(
              conversation_id,
              club_id,
              bob_person_id,
              :read
            )
+
+    assert {:error, :not_current_member} =
+             Memba.Messaging.CurrentMemberConversationFollow.prepare_follow(attrs)
 
     assert {:error, :not_current_member} =
              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
@@ -475,13 +486,18 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                consistency: :strong
              )
 
-    assert :ok =
-             Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
+    assert {:ok, %Memba.Messaging.Commands.FollowConversation{member_id: ^bob_person_id} = follow} =
+             Memba.Messaging.CurrentMemberConversationFollow.prepare_follow(attrs)
 
+    refute Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(follow, consistency: :strong)
     assert Messaging.following_conversation?(conversation_id, bob_person_id)
 
-    assert :ok =
-             Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
+    assert {:ok, %Memba.Messaging.Commands.UnfollowConversation{} = unfollow} =
+             Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow(attrs)
+
+    assert Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(unfollow, consistency: :strong)
 
     refute Messaging.following_conversation?(conversation_id, bob_person_id)
 
@@ -509,6 +525,9 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                },
                consistency: :strong
              )
+
+    assert {:error, :not_current_member} =
+             Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow(attrs)
 
     assert {:error, :not_current_member} =
              Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)

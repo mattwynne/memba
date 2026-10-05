@@ -30,6 +30,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
+  alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
@@ -229,14 +230,8 @@ defmodule Memba.Messaging do
   """
   def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <-
-           authorize_at_stable_checkpoint(fn ->
-             with {:ok, command} <- follow_conversation_command(attrs),
-                  :ok <- authorize_current_member_conversation_action(command) do
-               {:ok, command}
-             end
-           end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- CurrentMemberConversationFollow.prepare_follow(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -262,14 +257,8 @@ defmodule Memba.Messaging do
   """
   def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <-
-           authorize_at_stable_checkpoint(fn ->
-             with {:ok, command} <- unfollow_conversation_command(attrs),
-                  :ok <- authorize_current_member_conversation_action(command) do
-               {:ok, command}
-             end
-           end),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+    with {:ok, command} <- CurrentMemberConversationFollow.prepare_unfollow(attrs),
+         {:ok, dispatch_result} <- CommandDispatch.dispatch(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -2225,23 +2214,6 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp authorize_current_member_conversation_action(command) do
-    with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),
-         :ok <- require_conversation_in_club(root_message, command.club_id),
-         true <-
-           member_has_authoritative_conversation_access?(
-             command.conversation_id,
-             command.club_id,
-             command.member_id,
-             :read
-           ) do
-      :ok
-    else
-      false -> {:error, :not_current_member}
-      {:error, _reason} = error -> error
-    end
-  end
-
   defp authorize_at_stable_checkpoint(authorization, opts \\ []),
     do: AuthorizationCheckpoint.run(authorization, opts)
 
@@ -2280,12 +2252,6 @@ defmodule Memba.Messaging do
 
   defp canonical_group_access(_ambiguous),
     do: {:error, :ambiguous_conversation_audience}
-
-  defp require_conversation_in_club(%MessageProjection{club_id: club_id}, club_id), do: :ok
-
-  defp require_conversation_in_club(%MessageProjection{}, _club_id) do
-    {:error, :conversation_not_found}
-  end
 
   defp ensure_stop_follow_scope(
          %MessageProjection{club_id: club_id, message_id: conversation_id},
