@@ -33,6 +33,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.EmailDeliveryReport
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.GroupEmailPostingPolicy
+  alias Memba.Messaging.InboundClubEmailPreparation
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubRejectionEmail
   alias Memba.Messaging.InboundClubSender
@@ -367,18 +368,8 @@ defmodule Memba.Messaging do
   Custom-group roots additionally require current participation in that group;
   system-group posting retains its existing club-wide semantics.
   """
-  def authorize_inbound_club_email_sender(sender, destination) do
-    case authorize_at_stable_checkpoint(fn ->
-           case GroupEmailPostingPolicy.authorize(sender, destination) do
-             :ok -> {:ok, :authorized}
-             {:error, _reason, _details} = error -> error
-           end
-         end) do
-      {:ok, :authorized} -> :ok
-      {:error, _reason, _details} = error -> error
-      {:error, _reason} = error -> error
-    end
-  end
+  def authorize_inbound_club_email_sender(sender, destination),
+    do: InboundClubEmailPreparation.authorize(sender, destination)
 
   @doc """
   Report that a email delivery was accepted by the recipient server.
@@ -1110,67 +1101,8 @@ defmodule Memba.Messaging do
   end
 
   defp post_first_inbound_club_email(receive_command, dispatch_opts) do
-    case resolve_inbound_club_email_destination(receive_command.inbound_email) do
-      {:ok, %InboundClubDestination{} = destination} ->
-        post_first_inbound_club_email_to_destination(receive_command, destination, dispatch_opts)
-
-      {:error, reason, to_address} ->
-        reject_first_inbound_club_email(
-          receive_command,
-          to_address,
-          rejection_reason(reason),
-          dispatch_opts
-        )
-    end
-  end
-
-  defp post_first_inbound_club_email_to_destination(
-         receive_command,
-         %InboundClubDestination{} = destination,
-         dispatch_opts
-       ) do
-    case resolve_inbound_club_email_sender(receive_command.inbound_email) do
-      {:ok, %InboundClubSender{} = sender} ->
-        post_first_inbound_club_email_from_sender(
-          receive_command,
-          destination,
-          sender,
-          dispatch_opts
-        )
-
-      {:error, reason, _details} ->
-        reject_first_inbound_club_email(
-          receive_command,
-          destination.to_address,
-          rejection_reason(reason),
-          dispatch_opts,
-          club_name: destination.club_name
-        )
-    end
-  end
-
-  defp post_first_inbound_club_email_from_sender(
-         receive_command,
-         %InboundClubDestination{} = destination,
-         %InboundClubSender{} = sender,
-         dispatch_opts
-       ) do
-    authorize_and_post_first_inbound_club_email(
-      receive_command,
-      destination,
-      sender,
-      dispatch_opts
-    )
-  end
-
-  defp authorize_and_post_first_inbound_club_email(
-         receive_command,
-         %InboundClubDestination{} = destination,
-         %InboundClubSender{} = sender,
-         dispatch_opts
-       ) do
-    case authorize_inbound_club_email_sender(sender, destination) do
-      :ok ->
+    case InboundClubEmailPreparation.prepare(receive_command.inbound_email) do
+      {:ok, destination, sender} ->
         post_authorized_first_inbound_club_email(
           receive_command,
           destination,
@@ -1178,14 +1110,8 @@ defmodule Memba.Messaging do
           dispatch_opts
         )
 
-      {:error, reason, _details} ->
-        reject_first_inbound_club_email(
-          receive_command,
-          destination.to_address,
-          rejection_reason(reason),
-          dispatch_opts,
-          club_name: destination.club_name
-        )
+      {:reject, to_address, reason, opts} ->
+        reject_first_inbound_club_email(receive_command, to_address, reason, dispatch_opts, opts)
 
       {:error, _reason} = error ->
         error
@@ -1508,7 +1434,7 @@ defmodule Memba.Messaging do
          to_address,
          rejection_reason,
          dispatch_opts,
-         opts \\ []
+         opts
        ) do
     rejection_email_delivery_reference = ID.generate(:delivery)
 
@@ -1732,9 +1658,6 @@ defmodule Memba.Messaging do
         error
     end
   end
-
-  defp rejection_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
-  defp rejection_reason(reason) when is_binary(reason), do: reason
 
   defp grant_conversation_access_to_group_command(attrs) do
     with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
