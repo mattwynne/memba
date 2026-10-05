@@ -20,6 +20,7 @@ defmodule Memba.Membership.InvitationAcceptance do
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.ProjectedIdentityLookup
   alias Memba.Repo
 
@@ -183,14 +184,14 @@ defmodule Memba.Membership.InvitationAcceptance do
   defp explicit_identity_matches(_candidate_id, _recovered_id, error), do: {:error, error}
 
   defp person_step(person_id, nil, _name, _invitation) do
-    case ProjectedIdentityLookup.person(person_id) do
+    case PersonQueries.get_person(person_id) do
       nil -> {:ok, :create}
       %Person{} -> {:error, :invitation_person_mismatch}
     end
   end
 
   defp person_step(person_id, person_id, name, invitation) do
-    case ProjectedIdentityLookup.person(person_id) do
+    case PersonQueries.get_person(person_id) do
       %Person{name: ^name} = person ->
         if person_has_email?(person.person_id, invitation.normalized_email) do
           {:ok, :recovered}
@@ -232,7 +233,7 @@ defmodule Memba.Membership.InvitationAcceptance do
   end
 
   defp fetch_existing_person(person_id) do
-    case ProjectedIdentityLookup.person(person_id) do
+    case PersonQueries.get_person(person_id) do
       %Person{} = person -> {:ok, person}
       nil -> {:error, :person_not_found}
     end

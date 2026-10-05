@@ -753,6 +753,82 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
+  describe "person identity and contact queries" do
+    test "typed lookup and normalized email lookup distinguish verified from pending addresses" do
+      alice =
+        create_person(
+          name: "Alice",
+          email: "alice@example.com",
+          email_addresses: [
+            %{email: "alice@example.com", is_primary: true},
+            %{email: "alice+other@example.com", is_primary: false}
+          ]
+        )
+
+      pending =
+        Repo.get_by!(PersonEmailAddress,
+          person_id: alice.person_id,
+          normalized_email: "alice+other@example.com"
+        )
+
+      pending |> Ecto.Changeset.change(verified_at: nil) |> Repo.update!()
+
+      assert %PersonProjection{person_id: person_id} = Membership.get_person(alice.person_id)
+      assert person_id == alice.person_id
+      assert Membership.get_person(nil) == nil
+      assert Membership.get_person("not-a-uuid") == nil
+
+      assert %PersonProjection{person_id: ^person_id} =
+               Membership.get_person_by_email(" ALICE+OTHER@EXAMPLE.COM ")
+
+      assert Membership.get_verified_person_by_email(" ALICE+OTHER@EXAMPLE.COM ") == nil
+
+      assert %PersonProjection{person_id: ^person_id} =
+               Membership.get_verified_person_by_email(" ALICE@EXAMPLE.COM ")
+
+      for invalid <- [nil, " ", "missing@example.com"] do
+        assert Membership.get_person_by_email(invalid) == nil
+        assert Membership.get_verified_person_by_email(invalid) == nil
+      end
+    end
+
+    test "contact summaries cast IDs, ignore unknown people, and fall back to historical email" do
+      alice = create_person(name: "Alice", email: "alice@example.com")
+      alice_id = alice.person_id
+      legacy_id = Memba.ID.generate(:person)
+
+      Repo.insert!(%PersonProjection{
+        person_id: legacy_id,
+        name: "Legacy",
+        email: "legacy@example.com"
+      })
+
+      assert %{
+               ^alice_id => %{
+                 person_id: ^alice_id,
+                 name: "Alice",
+                 primary_email: "alice@example.com"
+               },
+               ^legacy_id => %{
+                 person_id: ^legacy_id,
+                 name: "Legacy",
+                 primary_email: "legacy@example.com"
+               }
+             } =
+               Membership.list_person_contact_summaries([
+                 alice.person_id,
+                 legacy_id,
+                 alice.person_id,
+                 Memba.ID.generate(:person),
+                 "not-a-uuid",
+                 nil
+               ])
+
+      assert Membership.list_person_contact_summaries(nil) == %{}
+      assert Membership.list_person_contact_summaries(["not-a-uuid"]) == %{}
+    end
+  end
+
   describe "person email address query APIs" do
     test "fetches a person's primary and alternate email addresses" do
       alice =
