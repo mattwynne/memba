@@ -6,6 +6,9 @@ BDD loop using `Eve asks to join Board` from iteration 066. It accepts an old
 approved plan and its agreed example, **not** a predicted implementation task
 list. It neither completes 066's other examples nor claims whole-plan conformance.
 The full multi-scenario design below is the target if this bounded test works.
+The observed historical result, including failed starts and limits, is in
+[rehearsal-066.md](rehearsal-066.md). It succeeded for one scenario; that does
+not make this graph a production implementation workflow.
 
 ## Non-negotiable scenario loop
 
