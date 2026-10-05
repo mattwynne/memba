@@ -15,16 +15,14 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ReplyCommand
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
-  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
-  alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
-  alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.RequestGroupAccess
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationAccess
+  alias Memba.Messaging.ConversationGroupAccess
   alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.ConversationListing
   alias Memba.Messaging.ConversationFollowers
@@ -156,7 +154,7 @@ defmodule Memba.Messaging do
     dispatch_opts =
       Keyword.put_new(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
 
-    with {:ok, command} <- grant_conversation_access_to_group_command(attrs),
+    with {:ok, command} <- ConversationGroupAccess.prepare_grant(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -174,7 +172,7 @@ defmodule Memba.Messaging do
     dispatch_opts =
       Keyword.put_new(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
 
-    with {:ok, command} <- grant_initial_conversation_access_to_group_command(attrs),
+    with {:ok, command} <- ConversationGroupAccess.prepare_initial_grant(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -191,7 +189,7 @@ defmodule Memba.Messaging do
     dispatch_opts =
       Keyword.put_new(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
 
-    with {:ok, command} <- revoke_conversation_access_from_group_command(attrs),
+    with {:ok, command} <- ConversationGroupAccess.prepare_revoke(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -1656,51 +1654,6 @@ defmodule Memba.Messaging do
 
       {:error, _reason} = error ->
         error
-    end
-  end
-
-  defp grant_conversation_access_to_group_command(attrs) do
-    with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
-         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
-         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
-         {:ok, access_level} <- fetch_required(attrs, :access_level),
-         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
-      {:ok,
-       %GrantConversationAccessToGroup{
-         conversation_id: conversation_id,
-         club_id: club_id,
-         group_id: group_id,
-         access_level: access_level
-       }}
-    end
-  end
-
-  defp grant_initial_conversation_access_to_group_command(attrs) do
-    with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
-         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
-         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
-         {:ok, access_level} <- fetch_required(attrs, :access_level),
-         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
-      {:ok,
-       %GrantInitialConversationAccessToGroup{
-         conversation_id: conversation_id,
-         club_id: club_id,
-         group_id: group_id,
-         access_level: access_level
-       }}
-    end
-  end
-
-  defp revoke_conversation_access_from_group_command(attrs) do
-    with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
-         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
-         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group) do
-      {:ok,
-       %RevokeConversationAccessFromGroup{
-         conversation_id: conversation_id,
-         club_id: club_id,
-         group_id: group_id
-       }}
     end
   end
 
