@@ -3,6 +3,14 @@ defmodule MembaWeb.AppCssTest do
 
   @app_css_path Path.expand("../../assets/css/app.css", __DIR__)
   @design_system_css_path Path.expand("../../../styles.css", __DIR__)
+  @dockerfile_path Path.expand("../../../Dockerfile", __DIR__)
+
+  test "production image copies the design-system stylesheet where app css imports it" do
+    [_, destination] =
+      Regex.run(~r/^COPY styles\.css (\S+)$/m, File.read!(@dockerfile_path))
+
+    assert destination == Path.expand("../../../styles.css", "/app/web/assets/css")
+  end
 
   test "app css imports the design-system stylesheet that defines the club-home section tab and panel rules" do
     # .section-tabs*/.section-panel live only in styles.css now (app.css @imports it,
