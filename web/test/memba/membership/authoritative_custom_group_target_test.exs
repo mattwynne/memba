@@ -232,6 +232,97 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
     end
   end
 
+  describe "authoritative group participation reads" do
+    test "use committed group state even when group membership projections lag" do
+      %{club: club, group_id: group_id, target: target} = setup_target()
+      add_group_member!(club.club_id, group_id, target)
+
+      assert Membership.active_member_of_group_authoritatively?(
+               club.club_id,
+               group_id,
+               target.person_id
+             )
+
+      assert [%{group_id: ^group_id, active_member_count: 1}] =
+               Enum.filter(
+                 Membership.list_active_groups_for_member_authoritatively(
+                   club.club_id,
+                   target.person_id
+                 ),
+                 &(&1.group_id == group_id)
+               )
+
+      assert [%{membership_id: membership_id, id: person_id, email: "eve-kmc@example.com"}] =
+               Membership.list_active_members_of_group_authoritatively(club.club_id, group_id)
+
+      assert membership_id == target.membership_id
+      assert person_id == target.person_id
+
+      projector_child_id = stop_projector!(GroupMembershipProjector)
+
+      assert :ok =
+               App.dispatch(
+                 %RemoveGroupMember{
+                   club_id: club.club_id,
+                   group_id: group_id,
+                   membership_id: target.membership_id,
+                   person_id: target.person_id
+                 },
+                 consistency: :eventual
+               )
+
+      assert %GroupMembershipProjection{active: true} =
+               Repo.get_by!(GroupMembershipProjection,
+                 group_id: group_id,
+                 membership_id: target.membership_id
+               )
+
+      refute Membership.active_member_of_group_authoritatively?(
+               club.club_id,
+               group_id,
+               target.person_id
+             )
+
+      refute Enum.any?(
+               Membership.list_active_groups_for_member_authoritatively(
+                 club.club_id,
+                 target.person_id
+               ),
+               &(&1.group_id == group_id)
+             )
+
+      assert Membership.list_active_members_of_group_authoritatively(club.club_id, group_id) == []
+
+      Memba.ProjectionBarrier.await!([ClearRemovedGroupMemberFollows], timeout: 5_000)
+      restart_projector!(projector_child_id)
+      Memba.ProjectionBarrier.await!([GroupMembershipProjector], timeout: 5_000)
+    end
+
+    test "rejects cross-club and invalid group identities" do
+      %{club: club, group_id: group_id, target: target} = setup_target()
+      %{club: other_club, target: other_target} = setup_target("ncc")
+      add_group_member!(club.club_id, group_id, target)
+
+      refute Membership.active_member_of_group_authoritatively?(
+               other_club.club_id,
+               group_id,
+               target.person_id
+             )
+
+      refute Membership.active_member_of_group_authoritatively?(
+               club.club_id,
+               group_id,
+               other_target.person_id
+             )
+
+      assert Membership.list_active_members_of_group_authoritatively(other_club.club_id, group_id) ==
+               []
+
+      assert Membership.list_active_groups_for_member_authoritatively(club.club_id, nil) == []
+      assert Membership.list_active_members_of_group_authoritatively(club.club_id, nil) == []
+    end
+  end
+
   defp setup_target(slug \\ "kmc") do
     club = create_club!(slug)
     admin = create_person!("Alice Ahmed", "alice-#{slug}@example.com")

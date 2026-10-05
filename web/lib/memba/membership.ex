@@ -9,6 +9,8 @@ defmodule Memba.Membership do
   alias Memba.ID
   alias Memba.Membership.App
   alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.CustomGroup
   alias Memba.Membership.Authorization
@@ -37,7 +39,6 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
-  alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.Projections.Role, as: RoleProjection
   alias Memba.Membership.Projections.RoleAssignment
@@ -660,29 +661,8 @@ defmodule Memba.Membership do
   member-facing settings page can show global "Member since …" chips without
   joining against Membership projections from the web layer.
   """
-  def list_active_club_memberships_for_person(person_id) do
-    with {:ok, person_id} <- ID.cast(:person, person_id) do
-      MembershipProjection
-      |> join(:inner, [membership], club in Club, on: club.club_id == membership.club_id)
-      |> where([membership, _club], membership.person_id == ^person_id)
-      |> where([membership, _club], membership.active == true)
-      |> order_by([membership, club],
-        asc: club.name,
-        asc: club.club_id,
-        asc: membership.membership_id
-      )
-      |> select([membership, club], %{
-        membership_id: membership.membership_id,
-        club_id: club.club_id,
-        club_name: club.name,
-        club_slug: club.slug,
-        member_since: membership.inserted_at
-      })
-      |> Repo.all()
-    else
-      :error -> []
-    end
-  end
+  def list_active_club_memberships_for_person(person_id),
+    do: MembershipQueries.list_active_club_memberships_for_person(person_id)
 
   @doc """
   List active members of the given club for recipient resolution and member lists.
@@ -879,48 +859,16 @@ defmodule Memba.Membership do
   case-insensitively. Results are ordered by name and ID for stable
   browser/test output. Invalid or blank email addresses return an empty list.
   """
-  def list_active_clubs_for_member_email(email) do
-    case normalize_email(email) do
-      nil ->
-        []
-
-      normalized_email ->
-        MembershipProjection
-        |> join(:inner, [membership], email_address in PersonEmailAddress,
-          on: email_address.person_id == membership.person_id
-        )
-        |> join(:inner, [membership, _email_address], club in Club,
-          on: club.club_id == membership.club_id
-        )
-        |> where([membership, _email_address, _club], membership.active == true)
-        |> where(
-          [_membership, email_address, _club],
-          email_address.normalized_email == ^normalized_email
-        )
-        |> distinct(true)
-        |> order_by([_membership, _email_address, club], asc: club.name, asc: club.club_id)
-        |> select([_membership, _email_address, club], club)
-        |> Repo.all()
-    end
-  end
+  def list_active_clubs_for_member_email(email),
+    do: MembershipQueries.list_active_clubs_for_member_email(email)
 
   @doc """
   Return whether a person currently has an active membership in a club.
 
   Invalid club or person IDs return `false`.
   """
-  def active_member_of_club?(club_id, person_id) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, person_id} <- ID.cast(:person, person_id) do
-      MembershipProjection
-      |> where([membership], membership.club_id == ^club_id)
-      |> where([membership], membership.person_id == ^person_id)
-      |> where([membership], membership.active == true)
-      |> Repo.exists?()
-    else
-      :error -> false
-    end
-  end
+  def active_member_of_club?(club_id, person_id),
+    do: MembershipQueries.active_member_of_club?(club_id, person_id)
 
   @doc """
   Return whether a person is currently an active member of a conversation group.
@@ -928,27 +876,8 @@ defmodule Memba.Membership do
   Both the projected group-membership row and the underlying club membership
   must be active. Invalid group or person IDs return `false`.
   """
-  def active_member_of_group?(group_id, person_id) do
-    with {:ok, group_id} <- ID.cast(:group, group_id),
-         {:ok, person_id} <- ID.cast(:person, person_id) do
-      GroupMembershipProjection
-      |> join(:inner, [group_membership], membership in MembershipProjection,
-        on:
-          membership.membership_id == group_membership.membership_id and
-            membership.club_id == group_membership.club_id and
-            membership.person_id == group_membership.person_id
-      )
-      |> where([group_membership, _membership], group_membership.group_id == ^group_id)
-      |> where([group_membership, _membership], group_membership.person_id == ^person_id)
-      |> where(
-        [group_membership, membership],
-        group_membership.active == true and membership.active == true
-      )
-      |> Repo.exists?()
-    else
-      :error -> false
-    end
-  end
+  def active_member_of_group?(group_id, person_id),
+    do: MembershipQueries.active_member_of_group?(group_id, person_id)
 
   @doc """
   Return whether the Club aggregate currently records a person as an active
@@ -958,16 +887,8 @@ defmodule Memba.Membership do
   where a just-committed departure may not yet be visible in Membership
   projections. Invalid IDs and missing or inactive memberships return `false`.
   """
-  def active_member_of_club_authoritatively?(club_id, person_id) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, person_id} <- ID.cast(:person, person_id),
-         %Memba.Membership.Club{club_id: ^club_id} = club <-
-           App.aggregate_state(Memba.Membership.Club, club_id) do
-      active_membership_ids_for_person(club, person_id) != []
-    else
-      _invalid_missing_or_inactive -> false
-    end
-  end
+  def active_member_of_club_authoritatively?(club_id, person_id),
+    do: AuthoritativeMembershipQueries.active_member_of_club_authoritatively?(club_id, person_id)
 
   @doc """
   Resolve an active club member and custom group from authoritative Club state.
@@ -983,43 +904,13 @@ defmodule Memba.Membership do
   `:group_not_defined`; and built-in groups return
   `:system_group_not_allowed`.
   """
-  def resolve_custom_group_target_authoritatively(club_id, person_id, group_id) do
-    with {:ok, club_id} <- cast_id(:club, club_id, :invalid_club_id),
-         {:ok, person_id} <- cast_id(:person, person_id, :invalid_person_id),
-         {:ok, group_id} <- cast_id(:group, group_id, :invalid_group_id),
-         {:ok, club} <- authoritative_club(club_id),
-         {:ok, membership_id} <- authoritative_active_membership_id(club, person_id),
-         {:ok, group} <- authoritative_custom_group(club, group_id),
-         {:ok, person} <- projected_person_display(person_id) do
-      {:ok,
-       %{
-         club: %{
-           club_id: club.club_id,
-           name: club.name,
-           slug: club.slug
-         },
-         membership: %{
-           membership_id: membership_id,
-           person_id: person_id
-         },
-         person: person,
-         group: %{
-           club_id: club.club_id,
-           group_id: group.group_id,
-           group_key: group.group_key,
-           email_slug: group.email_slug,
-           name: group.name
-         },
-         active_group_member?:
-           authoritative_group_member_for_membership?(
-             club,
-             group_id,
-             membership_id,
-             person_id
-           )
-       }}
-    end
-  end
+  def resolve_custom_group_target_authoritatively(club_id, person_id, group_id),
+    do:
+      AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
+        club_id,
+        person_id,
+        group_id
+      )
 
   @doc """
   Return whether the Club aggregate currently records a person as an active
@@ -1031,18 +922,13 @@ defmodule Memba.Membership do
   custom groups require the same active membership identity that holds the
   group membership.
   """
-  def active_member_of_group_authoritatively?(club_id, group_id, person_id) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, group_id} <- ID.cast(:group, group_id),
-         {:ok, person_id} <- ID.cast(:person, person_id),
-         %Memba.Membership.Club{club_id: ^club_id} = club <-
-           App.aggregate_state(Memba.Membership.Club, club_id),
-         true <- Map.has_key?(club.groups, group_id) do
-      authoritative_group_member?(club, group_id, person_id)
-    else
-      _invalid_missing_or_inactive -> false
-    end
-  end
+  def active_member_of_group_authoritatively?(club_id, group_id, person_id),
+    do:
+      AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
+        club_id,
+        group_id,
+        person_id
+      )
 
   @doc """
   List the Club aggregate's current groups for a participating person.
@@ -1051,28 +937,12 @@ defmodule Memba.Membership do
   display fields are taken from that same state, so stale group-membership
   projections cannot retain a private dashboard surface after removal.
   """
-  def list_active_groups_for_member_authoritatively(club_id, person_id) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, person_id} <- ID.cast(:person, person_id),
-         %Memba.Membership.Club{club_id: ^club_id} = club <-
-           App.aggregate_state(Memba.Membership.Club, club_id) do
-      club.groups
-      |> Map.values()
-      |> Enum.filter(&authoritative_group_member?(club, &1.group_id, person_id))
-      |> Enum.map(fn group ->
-        group
-        |> Map.put(:club_id, club.club_id)
-        |> Map.put(
-          :active_member_count,
-          club |> authoritative_group_memberships(group.group_id) |> Enum.count()
-        )
-        |> Map.put(:email_address, authoritative_group_email_address(club, group))
-      end)
-      |> Enum.sort_by(&{&1.name, &1.group_id})
-    else
-      _invalid_or_missing -> []
-    end
-  end
+  def list_active_groups_for_member_authoritatively(club_id, person_id),
+    do:
+      AuthoritativeMembershipQueries.list_active_groups_for_member_authoritatively(
+        club_id,
+        person_id
+      )
 
   @doc """
   List the Club aggregate's current participants in a conversation group.
@@ -1083,43 +953,12 @@ defmodule Memba.Membership do
   a participant without available contact details is omitted from recipient
   results. Invalid IDs, missing clubs, and missing groups return an empty list.
   """
-  def list_active_members_of_group_authoritatively(club_id, group_id) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, group_id} <- ID.cast(:group, group_id),
-         %Memba.Membership.Club{club_id: ^club_id} = club <-
-           App.aggregate_state(Memba.Membership.Club, club_id),
-         true <- Map.has_key?(club.groups, group_id) do
-      memberships = authoritative_group_memberships(club, group_id)
-      contact_summaries = memberships |> Enum.map(&elem(&1, 1)) |> list_person_contact_summaries()
-
-      role_names_by_membership =
-        memberships
-        |> Enum.map(&elem(&1, 0))
-        |> ClubGroupQueries.active_role_names_by_membership()
-
-      memberships
-      |> Enum.flat_map(fn {membership_id, person_id} ->
-        case Map.get(contact_summaries, person_id) do
-          %{name: name, primary_email: email} when is_binary(email) ->
-            [
-              %{
-                membership_id: membership_id,
-                id: person_id,
-                name: name,
-                email: email,
-                roles: Map.get(role_names_by_membership, membership_id, [])
-              }
-            ]
-
-          _missing_contact ->
-            []
-        end
-      end)
-      |> Enum.sort_by(&{&1.name, &1.id})
-    else
-      _invalid_or_missing -> []
-    end
-  end
+  def list_active_members_of_group_authoritatively(club_id, group_id),
+    do:
+      AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(
+        club_id,
+        group_id
+      )
 
   @doc """
   Wait until the Membership read models used by `active_member_of_group?/2`
@@ -1132,128 +971,14 @@ defmodule Memba.Membership do
     ProjectionBarrier.await(@group_access_projectors, opts)
   end
 
-  defp authoritative_club(club_id) do
-    case App.aggregate_state(Memba.Membership.Club, club_id) do
-      %Memba.Membership.Club{club_id: ^club_id} = club -> {:ok, club}
-      _missing_club -> {:error, :not_found}
-    end
-  end
-
-  defp authoritative_active_membership_id(club, person_id) do
-    case active_membership_ids_for_person(club, person_id) do
-      [] -> {:error, :member_not_active}
-      membership_ids -> {:ok, Enum.min(membership_ids)}
-    end
-  end
-
-  defp authoritative_custom_group(club, group_id) do
-    with {:ok, group} <- Map.fetch(club.groups, group_id),
-         true <- SystemGroups.custom_group?(%{club_id: club.club_id, group_id: group_id}) do
-      {:ok, group}
-    else
-      :error -> {:error, :group_not_defined}
-      false -> {:error, :system_group_not_allowed}
-    end
-  end
-
-  defp projected_person_display(person_id) do
-    case Repo.get(Person, person_id) do
-      %Person{name: name} -> {:ok, %{person_id: person_id, name: name}}
-      nil -> {:error, :person_not_found}
-    end
-  end
-
-  defp authoritative_group_email_address(club, %{email_slug: email_slug})
-       when is_binary(email_slug) do
-    ClubInboundEmailAddress.address(club.slug, email_slug)
-  end
-
-  defp authoritative_group_email_address(_club, _group), do: nil
-
-  defp authoritative_group_memberships(club, group_id) do
-    club.active_memberships
-    |> Enum.filter(fn {membership_id, person_id} ->
-      authoritative_group_member_for_membership?(
-        club,
-        group_id,
-        membership_id,
-        person_id
-      )
-    end)
-    |> Enum.sort_by(fn {membership_id, person_id} -> {person_id, membership_id} end)
-    |> Enum.uniq_by(&elem(&1, 1))
-  end
-
-  defp authoritative_group_member_for_membership?(club, group_id, membership_id, person_id) do
-    cond do
-      group_id == SystemGroups.everyone_group_id(club.club_id) ->
-        true
-
-      group_id == SystemGroups.admin_group_id(club.club_id) ->
-        MapSet.member?(club.active_admin_membership_ids, membership_id)
-
-      true ->
-        case Map.get(club.group_memberships, {group_id, membership_id}) do
-          %{person_id: ^person_id, active: true} -> true
-          _inactive_or_different_person -> false
-        end
-    end
-  end
-
-  defp authoritative_group_member?(club, group_id, person_id) do
-    active_membership_ids = active_membership_ids_for_person(club, person_id)
-
-    cond do
-      group_id == SystemGroups.everyone_group_id(club.club_id) ->
-        active_membership_ids != []
-
-      group_id == SystemGroups.admin_group_id(club.club_id) ->
-        Enum.any?(
-          active_membership_ids,
-          &MapSet.member?(club.active_admin_membership_ids, &1)
-        )
-
-      true ->
-        Enum.any?(active_membership_ids, fn membership_id ->
-          case Map.get(club.group_memberships, {group_id, membership_id}) do
-            %{person_id: ^person_id, active: true} -> true
-            _inactive_or_different_person -> false
-          end
-        end)
-    end
-  end
-
-  defp active_membership_ids_for_person(club, person_id) do
-    Enum.flat_map(club.active_memberships, fn
-      {membership_id, ^person_id} -> [membership_id]
-      {_membership_id, _other_person_id} -> []
-    end)
-  end
-
   @doc """
   Return whether an email address currently has an active membership in a club.
 
   Email lookup is normalized by trimming whitespace and comparing
   case-insensitively. Invalid club IDs and blank email addresses return `false`.
   """
-  def active_member_of_club_by_email?(club_id, email) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         normalized_email when is_binary(normalized_email) <- normalize_email(email) do
-      MembershipProjection
-      |> join(:inner, [membership], email_address in PersonEmailAddress,
-        on: email_address.person_id == membership.person_id
-      )
-      |> where([membership, _email_address], membership.club_id == ^club_id)
-      |> where([membership, _email_address], membership.active == true)
-      |> where(
-        [_membership, email_address],
-        email_address.normalized_email == ^normalized_email
-      )
-      |> Repo.exists?()
-    else
-      _invalid -> false
-    end
-  end
+  def active_member_of_club_by_email?(club_id, email),
+    do: MembershipQueries.active_member_of_club_by_email?(club_id, email)
 
   @doc """
   Fetch a projected club member invitation by typed invitation ID.
