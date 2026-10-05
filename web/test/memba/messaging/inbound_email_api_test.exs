@@ -6,6 +6,14 @@ defmodule Memba.Messaging.InboundEmailApiTest do
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailAttachment
 
+  test "receive rejects invalid input before dispatching a receipt" do
+    assert {:error, :invalid_inbound_email} = Messaging.receive_inbound_club_email(nil)
+    assert {:error, :invalid_inbound_email} = Messaging.receive_inbound_club_email(%{}, :invalid)
+
+    assert {:error, {:missing_required_attribute, :provider}} =
+             Messaging.receive_inbound_club_email(%{})
+  end
+
   describe "receive_inbound_club_email_command/1" do
     test "builds a provider-neutral inbound email command" do
       attrs = %{

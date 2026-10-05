@@ -33,9 +33,15 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert source =~ "def resolve_inbound_club_email_destination("
     assert source =~ "def resolve_inbound_club_email_sender("
 
-    assert source =~
+    inbound_source = read_source!("lib/memba/messaging/inbound_club_email.ex")
+
+    assert source =~ "do: InboundClubEmail.receive(attrs, dispatch_opts)"
+
+    assert inbound_source =~
              "Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id)"
 
+    assert inbound_source =~ "CommandDispatch.dispatch("
+    refute inbound_source =~ ~r/\bMessaging\.[a-z]/
     refute source =~ "Membership.list_discoverable_groups_for_member("
 
     list_functions =
