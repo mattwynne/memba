@@ -5,8 +5,11 @@ defmodule MembaWeb.ConversationFollowControllerTest do
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Messaging
   alias Memba.Messaging.ConversationStopFollowToken
+  alias Memba.Messaging.EmailConversationStopFollow
+  alias Memba.Messaging.Events.ConversationUnfollowed
 
   setup do
     Memba.EventSourcedCase.reset_event_sourced_system!()
@@ -72,6 +75,101 @@ defmodule MembaWeb.ConversationFollowControllerTest do
     assert Messaging.following_conversation?(conversation_id, alice.person_id)
   end
 
+  test "email workflow lets a former member stop following and preserves the result shape" do
+    club = create_club!()
+    bob = create_person!(name: "Bob Remaining Member", email: "bob@example.com")
+    alice = create_person!(name: "Alice Sender", email: "alice@example.com")
+    add_member!(club.club_id, bob.person_id)
+    membership_id = add_member!(club.club_id, alice.person_id)
+    conversation_id = send_root_message!(club.club_id, alice.person_id)
+    token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: club.club_id,
+                 membership_id: membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %{
+              club_id: club_id,
+              conversation_id: ^conversation_id,
+              member_id: member_id,
+              dispatch_result: :ok
+            }} = EmailConversationStopFollow.stop_following(token, consistency: :strong)
+
+    assert club_id == club.club_id
+    assert member_id == alice.person_id
+    refute Messaging.following_conversation?(conversation_id, alice.person_id)
+
+    assert {:ok, %{dispatch_result: :ok}} =
+             Messaging.stop_following_conversation_from_email_token(
+               token,
+               consistency: :strong
+             )
+  end
+
+  test "email workflow waits for the follow projection and changes only the token's member" do
+    club = create_club!()
+    alice = create_person!(name: "Alice Sender", email: "alice@example.com")
+    bob = create_person!(name: "Bob Follower", email: "bob@example.com")
+    add_member!(club.club_id, alice.person_id)
+    add_member!(club.club_id, bob.person_id)
+    conversation_id = send_root_message!(club.club_id, alice.person_id)
+
+    assert :ok =
+             Messaging.follow_conversation(
+               %{
+                 club_id: club.club_id,
+                 conversation_id: conversation_id,
+                 member_id: bob.person_id
+               },
+               consistency: :strong
+             )
+
+    token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)
+
+    assert {:ok, %{dispatch_result: {:ok, %Commanded.Commands.ExecutionResult{events: events}}}} =
+             Messaging.stop_following_conversation_from_email_token(
+               token,
+               consistency: :strong,
+               returning: :execution_result
+             )
+
+    assert [%ConversationUnfollowed{member_id: member_id}] = events
+    assert member_id == alice.person_id
+    refute Messaging.following_conversation?(conversation_id, alice.person_id)
+    assert Messaging.following_conversation?(conversation_id, bob.person_id)
+  end
+
+  test "email workflow normalizes invalid token and root scope without changing follow state" do
+    club = create_club!()
+    alice = create_person!(name: "Alice Sender", email: "alice@example.com")
+    add_member!(club.club_id, alice.person_id)
+    conversation_id = send_root_message!(club.club_id, alice.person_id)
+
+    assert {:error, :invalid_stop_follow_token} =
+             EmailConversationStopFollow.stop_following("invalid", consistency: :strong)
+
+    assert {:error, :invalid_stop_follow_token} =
+             EmailConversationStopFollow.stop_following(
+               stop_follow_token!(Memba.ID.generate(:club), conversation_id, alice.person_id),
+               consistency: :strong
+             )
+
+    assert {:error, :invalid_stop_follow_token} =
+             EmailConversationStopFollow.stop_following(
+               stop_follow_token!(club.club_id, Memba.ID.generate(:message), alice.person_id),
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(conversation_id, alice.person_id)
+  end
+
   defp create_club!(attrs \\ []) do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     name = Keyword.get(attrs, :name, "Kootenay Mountaineering Club")
@@ -107,15 +205,19 @@ defmodule MembaWeb.ConversationFollowControllerTest do
   end
 
   defp add_member!(club_id, person_id) do
+    membership_id = Memba.ID.generate(:membership)
+
     assert :ok =
              MembershipApp.dispatch(
                %AddClubMember{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
                },
                consistency: :strong
              )
+
+    membership_id
   end
 
   defp send_root_message!(club_id, sender_id) do

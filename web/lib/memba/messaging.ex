@@ -12,7 +12,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.ConversationGroupAccessQueries
   alias Memba.Messaging.ConversationListing
-  alias Memba.Messaging.ConversationStopFollowToken
+  alias Memba.Messaging.EmailConversationStopFollow
   alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.EmailDeliveryReport
   alias Memba.Messaging.EveryoneConversationAccessBackfillQueries
@@ -27,9 +27,6 @@ defmodule Memba.Messaging do
 
   alias Memba.Messaging.Projectors.ConversationGroupAccess,
     as: ConversationGroupAccessProjector
-
-  alias Memba.Messaging.Projections.Message, as: MessageProjection
-  alias Memba.Repo
 
   @doc """
   Send a message to the active members of a club conversation group.
@@ -228,27 +225,8 @@ defmodule Memba.Messaging do
   reduces notifications and old emails should remain useful.
   """
   def stop_following_conversation_from_email_token(token, dispatch_opts \\ [])
-      when is_list(dispatch_opts) do
-    with {:ok, scope} <- ConversationStopFollowToken.verify(token),
-         {:ok, root_message} <- fetch_conversation_root(scope.conversation_id),
-         :ok <- ensure_stop_follow_scope(root_message, scope),
-         :ok <- reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
-      case unfollow_conversation(
-             %{
-               club_id: scope.club_id,
-               conversation_id: scope.conversation_id,
-               member_id: scope.member_id
-             },
-             dispatch_opts
-           ) do
-        {:error, _reason} = error -> error
-        dispatch_result -> {:ok, Map.put(scope, :dispatch_result, dispatch_result)}
-      end
-    else
-      {:error, _reason} -> {:error, :invalid_stop_follow_token}
-      nil -> {:error, :invalid_stop_follow_token}
-    end
-  end
+      when is_list(dispatch_opts),
+      do: EmailConversationStopFollow.stop_following(token, dispatch_opts)
 
   @doc """
   Build a provider-neutral command for an inbound club-message email.
@@ -638,45 +616,4 @@ defmodule Memba.Messaging do
     do: CommandDispatch.dispatch(command, dispatch_opts)
 
   defp send_club_message_command(attrs), do: SendClubMessage.prepare(attrs)
-
-  defp fetch_conversation_root(conversation_id) do
-    with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
-      case Repo.get(MessageProjection, conversation_id) do
-        %MessageProjection{} = message -> {:ok, message}
-        nil -> {:error, :conversation_not_found}
-      end
-    else
-      :error -> {:error, :invalid_conversation_id}
-    end
-  end
-
-  defp ensure_stop_follow_scope(
-         %MessageProjection{club_id: club_id, message_id: conversation_id},
-         %{
-           club_id: club_id,
-           conversation_id: conversation_id
-         }
-       ) do
-    :ok
-  end
-
-  defp ensure_stop_follow_scope(%MessageProjection{}, _scope), do: {:error, :wrong_scope}
-
-  defp reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
-    if following_conversation?(scope.conversation_id, scope.member_id) do
-      case follow_conversation(
-             %{
-               club_id: scope.club_id,
-               conversation_id: scope.conversation_id,
-               member_id: scope.member_id
-             },
-             dispatch_opts
-           ) do
-        {:error, _reason} = error -> error
-        _dispatch_result -> :ok
-      end
-    else
-      :ok
-    end
-  end
 end
