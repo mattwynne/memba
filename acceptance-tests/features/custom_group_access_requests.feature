@@ -1,4 +1,4 @@
-@iteration-066 @todo
+@iteration-066
 Feature: Asking to be added to a group
   A member asks by sending a standard message to the club's Admin Group.
   Adding the member uses existing group membership rules.
@@ -11,6 +11,7 @@ Feature: Asking to be added to a group
 
   Rule: Asking to join sends a standard message to the club admins
 
+    @todo
     Scenario: Eve asks to join Board
       When Eve requests access to Board
       Then a standard message identifying Eve and Board should be sent to the KMC Admin Group
@@ -20,6 +21,7 @@ Feature: Asking to be added to a group
 
   Rule: The requester must still be an active member of the target club
 
+    @todo
     Scenario Outline: Someone outside KMC cannot request Board membership
       Given <membership>
       When <person> tries to request access to Board
