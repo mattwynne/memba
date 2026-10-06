@@ -1,11 +1,11 @@
 defmodule MembaWeb.Admin.MessagesLive.Index do
   use MembaWeb, :live_view
 
-  alias Memba.Messaging
+  alias Memba.Messaging.MessageQueries
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    messages = Messaging.list_operator_messages()
+    messages = MessageQueries.list_operator_messages()
 
     {:ok,
      socket

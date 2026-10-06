@@ -5,8 +5,13 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Repo
 
-  test "global staff operations indexes require staff sign-in" do
-    for path <- ["/admin/people", "/admin/messages"] do
+  test "staff message and delivery diagnostics require staff sign-in" do
+    for path <- [
+          "/admin/people",
+          "/admin/messages",
+          "/admin/messages/#{Memba.ID.generate(:message)}",
+          "/admin/deliveries"
+        ] do
       conn =
         build_conn(:get, path)
         |> get(path)

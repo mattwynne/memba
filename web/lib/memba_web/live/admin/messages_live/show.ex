@@ -1,14 +1,15 @@
 defmodule MembaWeb.Admin.MessagesLive.Show do
   use MembaWeb, :live_view
 
-  alias Memba.Messaging
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
   alias Memba.ReadModelChanges
 
   @impl Phoenix.LiveView
   def mount(%{"message_id" => message_id}, _session, socket) do
-    message = Messaging.get_message(message_id)
-    deliveries = Messaging.list_recipient_deliveries(message_id)
-    receipts = Messaging.list_member_email_deliverys(message_id)
+    message = MessageQueries.get_message(message_id)
+    deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+    receipts = DeliveryQueries.list_member_email_deliverys(message_id)
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
@@ -332,8 +333,8 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
 
   defp refresh_delivery_streams(socket) do
     message_id = socket.assigns.message_id
-    deliveries = Messaging.list_recipient_deliveries(message_id)
-    receipts = Messaging.list_member_email_deliverys(message_id)
+    deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+    receipts = DeliveryQueries.list_member_email_deliverys(message_id)
 
     socket
     |> stream(:delivery_records, deliveries, reset: true)

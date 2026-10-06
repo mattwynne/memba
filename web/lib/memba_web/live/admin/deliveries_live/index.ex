@@ -1,12 +1,12 @@
 defmodule MembaWeb.Admin.DeliveriesLive.Index do
   use MembaWeb, :live_view
 
-  alias Memba.Messaging
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.ReadModelChanges
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    deliveries = Messaging.list_operator_deliveries()
+    deliveries = DeliveryQueries.list_operator_deliveries()
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
@@ -277,7 +277,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   defp status_label(status), do: status |> to_string() |> String.capitalize()
 
   defp refresh_deliveries(socket) do
-    Messaging.list_operator_deliveries()
+    DeliveryQueries.list_operator_deliveries()
     |> then(&assign_deliveries(socket, &1, reset: true))
   end
 
