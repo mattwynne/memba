@@ -223,6 +223,13 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
         audience_group_id: SystemGroups.admin_group_id(alice.club_id)
       )
 
+    create_member_email_delivery(
+      message_id: admin_conversation.message_id,
+      recipient_id: alice.person_id,
+      recipient_name: "Alice Adams",
+      status: "delivered"
+    )
+
     assert {:ok, assigns} =
              MemberMessageDetail.load(
                %{
@@ -235,6 +242,7 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
 
     assert assigns.current_member.id == alice.person_id
     assert assigns.message.message_id == admin_conversation.message_id
+    assert assigns.member_email_delivery_count == 1
 
     assert {:error, :not_found} =
              MemberMessageDetail.load(

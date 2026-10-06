@@ -9,8 +9,9 @@ defmodule MembaWeb.MemberMessageDetail do
   """
 
   alias Memba.ID
-  alias Memba.Membership
-  alias Memba.Messaging
+  alias Memba.Membership.{ClubGroupQueries, PersonQueries}
+  alias Memba.Messaging.{ConversationFollowQueries, ConversationGroupAccessQueries}
+  alias Memba.Messaging.{DeliveryQueries, MessageQueries}
   alias MembaWeb.MemberEmailDeliveryPresentation
 
   @doc """
@@ -63,7 +64,7 @@ defmodule MembaWeb.MemberMessageDetail do
   end
 
   defp fetch_current_person(%{email: email}) do
-    case Membership.get_person_by_email(email) do
+    case PersonQueries.get_person_by_email(email) do
       nil -> {:error, :forbidden}
       current_person -> {:ok, current_person}
     end
@@ -73,7 +74,7 @@ defmodule MembaWeb.MemberMessageDetail do
 
   defp fetch_current_member(club_id, current_person) do
     case Enum.find(
-           Membership.list_active_members_of_club(club_id),
+           ClubGroupQueries.list_active_members_of_club(club_id),
            &(&1.id == current_person.person_id)
          ) do
       nil -> {:error, :forbidden}
@@ -82,7 +83,7 @@ defmodule MembaWeb.MemberMessageDetail do
   end
 
   defp fetch_message(params) do
-    case Messaging.get_message(Map.get(params, "message_id")) do
+    case MessageQueries.get_message(Map.get(params, "message_id")) do
       nil -> {:error, :not_found}
       message -> {:ok, message}
     end
@@ -99,14 +100,14 @@ defmodule MembaWeb.MemberMessageDetail do
   defp fetch_conversation_audience(message, club_id) do
     conversation_id = message.conversation_id || message.message_id
 
-    case Messaging.resolve_conversation_audience(conversation_id) do
+    case ConversationGroupAccessQueries.resolve_conversation_audience(conversation_id) do
       {:ok, %{club_id: ^club_id} = audience} -> {:ok, audience}
       _missing_mismatched_or_ambiguous -> {:error, :not_found}
     end
   end
 
   defp require_conversation_access(message, club_id, current_person) do
-    if Messaging.member_has_conversation_access?(
+    if ConversationGroupAccessQueries.member_has_conversation_access?(
          message.message_id,
          club_id,
          current_person.person_id,
@@ -119,7 +120,7 @@ defmodule MembaWeb.MemberMessageDetail do
   end
 
   defp fetch_conversation(message) do
-    conversation_messages = Messaging.list_conversation_messages(message.message_id)
+    conversation_messages = MessageQueries.list_conversation_messages(message.message_id)
 
     case conversation_messages do
       [] -> {:error, :not_found}
@@ -141,12 +142,12 @@ defmodule MembaWeb.MemberMessageDetail do
       )
 
     member_email_deliverys =
-      Messaging.list_member_email_deliverys(message.message_id)
+      DeliveryQueries.list_member_email_deliverys(message.message_id)
 
     receipt_model =
       MemberEmailDeliveryPresentation.present_receipts(member_email_deliverys)
 
-    sender = Membership.get_person(message.sender_id)
+    sender = PersonQueries.get_person(message.sender_id)
 
     %{
       page_title: message.subject,
@@ -171,14 +172,14 @@ defmodule MembaWeb.MemberMessageDetail do
   defp following_conversation?(_message, nil), do: false
 
   defp following_conversation?(%{conversation_id: conversation_id}, %{id: member_id}) do
-    Messaging.following_conversation?(conversation_id, member_id)
+    ConversationFollowQueries.following_conversation?(conversation_id, member_id)
   end
 
   defp conversation_entries(messages) do
     sender_summaries =
       messages
       |> Enum.map(& &1.sender_id)
-      |> Membership.list_person_contact_summaries()
+      |> PersonQueries.list_person_contact_summaries()
 
     Enum.map(messages, fn message ->
       %{

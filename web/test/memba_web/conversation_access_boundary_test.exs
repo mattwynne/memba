@@ -50,7 +50,7 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
     compose_query_source = read_source!("lib/memba_web/member_message_compose_query.ex")
     compose_live_source = read_source!("lib/memba_web/live/member_message_live/new.ex")
 
-    assert detail_source =~ "Messaging.member_has_conversation_access?("
+    assert detail_source =~ "ConversationGroupAccessQueries.member_has_conversation_access?("
     assert compose_live_source =~ "MemberMessageComposeQuery.query()"
     assert compose_query_source =~ "Membership.list_active_groups_for_member("
   end
