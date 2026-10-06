@@ -1,11 +1,11 @@
 defmodule MembaWeb.Admin.PeopleLive.Index do
   use MembaWeb, :live_view
 
-  alias Memba.Membership
+  alias Memba.Membership.PersonQueries
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    people = Membership.list_operator_people()
+    people = PersonQueries.list_operator_people()
 
     {:ok,
      socket

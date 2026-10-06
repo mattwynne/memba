@@ -1,7 +1,7 @@
 defmodule MembaWeb.Admin.PeopleLive.New do
   use MembaWeb, :live_view
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonCommands
   alias MembaWeb.Admin.PersonEmailAddressForm
@@ -10,7 +10,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id}, _session, socket) do
-    club = Membership.get_club(club_id)
+    club = ClubGroupQueries.get_club(club_id)
 
     {:ok,
      socket

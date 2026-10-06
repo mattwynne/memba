@@ -1,8 +1,9 @@
 defmodule MembaWeb.Admin.PeopleLive.Edit do
   use MembaWeb, :live_view
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.PersonQueries
   alias MembaWeb.Admin.PersonEmailAddressForm
   alias MembaWeb.PersonEmailAddressTransition
 
@@ -10,9 +11,9 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id, "person_id" => person_id}, _session, socket) do
-    club = Membership.get_club(club_id)
-    person = Membership.get_person(person_id)
-    email_addresses = Membership.list_person_email_addresses(person_id)
+    club = ClubGroupQueries.get_club(club_id)
+    person = PersonQueries.get_person(person_id)
+    email_addresses = PersonQueries.list_person_email_addresses(person_id)
     person_params = PersonEmailAddressForm.params_for_person(person, email_addresses)
 
     {:ok,

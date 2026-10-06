@@ -1,18 +1,21 @@
 defmodule MembaWeb.Admin.ClubsLive.Show do
   use MembaWeb, :live_view
 
-  alias Memba.Membership
   alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.ClubMember.Remove
   alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonQueries
   alias MembaWeb.Admin.ClubSlugForm
   alias MembaWeb.ClubSite
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id}, _session, socket) do
-    club = Membership.get_club(club_id)
-    people = Membership.list_people() |> people_with_email_summaries()
-    members = Membership.list_active_members_of_club(club_id) |> members_with_email_summaries()
+    club = ClubGroupQueries.get_club(club_id)
+    people = PersonQueries.list_people() |> people_with_email_summaries()
+
+    members =
+      ClubGroupQueries.list_active_members_of_club(club_id) |> members_with_email_summaries()
 
     {:ok,
      socket
@@ -565,7 +568,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   end
 
   defp refresh_club(socket) do
-    club = Membership.get_club(socket.assigns.club_id)
+    club = ClubGroupQueries.get_club(socket.assigns.club_id)
 
     socket
     |> assign(:club, club)
@@ -576,7 +579,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   defp refresh_members(socket) do
     members =
       socket.assigns.club_id
-      |> Membership.list_active_members_of_club()
+      |> ClubGroupQueries.list_active_members_of_club()
       |> members_with_email_summaries()
 
     socket
@@ -586,7 +589,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   defp people_with_email_summaries(people) do
     Enum.map(people, fn person ->
-      alternate_emails = Membership.list_person_alternate_emails(person.person_id)
+      alternate_emails = PersonQueries.list_person_alternate_emails(person.person_id)
 
       %{
         person_id: person.person_id,
@@ -600,7 +603,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   defp members_with_email_summaries(members) do
     Enum.map(members, fn member ->
-      alternate_emails = Membership.list_person_alternate_emails(member.id)
+      alternate_emails = PersonQueries.list_person_alternate_emails(member.id)
 
       %{
         membership_id: member.membership_id,

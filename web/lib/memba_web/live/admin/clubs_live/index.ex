@@ -1,14 +1,14 @@
 defmodule MembaWeb.Admin.ClubsLive.Index do
   use MembaWeb, :live_view
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.CommandDispatch
   alias MembaWeb.Admin.ClubSlugForm
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    clubs = Membership.list_clubs()
+    clubs = ClubGroupQueries.list_clubs()
 
     {:ok,
      socket
@@ -206,7 +206,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
 
   defp assign_club_created(socket) do
-    clubs = Membership.list_clubs()
+    clubs = ClubGroupQueries.list_clubs()
 
     socket
     |> put_flash(:info, "Club created")
