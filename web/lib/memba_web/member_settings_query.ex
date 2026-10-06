@@ -10,7 +10,8 @@ defmodule MembaWeb.MemberSettingsQuery do
 
   alias LiveQuery.Query
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
 
   @doc """
   Returns the app-owned descriptor for the settings result.
@@ -43,9 +44,9 @@ defmodule MembaWeb.MemberSettingsQuery do
          selected_club when not is_nil(selected_club) <-
            find_selected_club(club_id, normalized_email),
          current_person when not is_nil(current_person) <-
-           Membership.get_person_by_email(normalized_email),
+           PersonQueries.get_person_by_email(normalized_email),
          current_person_clubs <-
-           Membership.list_active_club_memberships_for_person(current_person.person_id),
+           MembershipQueries.list_active_club_memberships_for_person(current_person.person_id),
          true <-
            Enum.any?(
              current_person_clubs,
@@ -57,7 +58,7 @@ defmodule MembaWeb.MemberSettingsQuery do
          current_person: current_person,
          current_person_clubs: current_person_clubs,
          current_person_email_addresses:
-           Membership.list_person_email_addresses(current_person.person_id)
+           PersonQueries.list_person_email_addresses(current_person.person_id)
        }}
     else
       _missing_or_forbidden_context -> {:error, :forbidden}

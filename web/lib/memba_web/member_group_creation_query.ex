@@ -10,8 +10,9 @@ defmodule MembaWeb.MemberGroupCreationQuery do
 
   alias LiveQuery.Query
   alias Memba.Accounts
-  alias Memba.Membership
   alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
 
   @doc """
   Returns the app-owned descriptor for the group-creation context.
@@ -44,7 +45,7 @@ defmodule MembaWeb.MemberGroupCreationQuery do
          selected_club when not is_nil(selected_club) <-
            find_selected_club(club_id, normalized_email),
          person when not is_nil(person) <-
-           Membership.get_person_by_email(normalized_email),
+           PersonQueries.get_person_by_email(normalized_email),
          current_member when not is_nil(current_member) <-
            find_current_member(selected_club.club_id, person.person_id),
          :ok <-
@@ -91,7 +92,7 @@ defmodule MembaWeb.MemberGroupCreationQuery do
 
   defp find_current_member(club_id, person_id) do
     club_id
-    |> Membership.list_active_members_of_club()
+    |> ClubGroupQueries.list_active_members_of_club()
     |> Enum.find(&(&1.id == person_id))
   end
 end

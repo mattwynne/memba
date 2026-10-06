@@ -117,6 +117,39 @@ defmodule MembaWeb.MemberGroupCreationQueryTest do
              MemberGroupCreationQuery.load(member.club_id, "member@example.com")
   end
 
+  test "another club's manage-members permission cannot authorize the selected club" do
+    member = create_authorized_member()
+    other_club = insert_membership_club!(name: "Other Club")
+    other_membership_id = Memba.ID.generate(:membership)
+
+    Repo.insert!(%MembershipProjection{
+      membership_id: other_membership_id,
+      club_id: other_club.club_id,
+      person_id: member.person_id,
+      active: true
+    })
+
+    Repo.insert!(%MemberPermission{
+      club_id: other_club.club_id,
+      membership_id: other_membership_id,
+      person_id: member.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
+    })
+
+    MemberPermission
+    |> where([permission], permission.club_id == ^member.club_id)
+    |> Repo.delete_all()
+
+    assert {:error, :forbidden} =
+             MemberGroupCreationQuery.load(member.club_id, "member@example.com")
+
+    assert {:ok, context} =
+             MemberGroupCreationQuery.load(other_club.club_id, "member@example.com")
+
+    assert context.current_member.membership_id == other_membership_id
+  end
+
   test "fails closed for missing, invalid, inactive, and foreign contexts" do
     member = create_authorized_member()
 
