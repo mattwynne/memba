@@ -436,6 +436,25 @@ defmodule MembaWeb.AuthControllerTest do
       assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
     end
 
+    test "staff signing in through a case-varied alternate address keep their existing person", %{
+      conn: conn
+    } do
+      person = insert_membership_person!(name: "Pat Staff", email: "primary@example.com")
+
+      insert_membership_person_email_address!(
+        person_id: person.person_id,
+        email: "Pat@Memba.IO",
+        is_primary: false
+      )
+
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link(" PAT@MEMBA.IO ")
+
+      conn = get(conn, ~p"/auth/sign-in/#{token}")
+
+      assert redirected_to(conn) == ~p"/admin/clubs"
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
+    end
+
     test "redirects to a safe stored return path after sign-in" do
       assert {:ok, %{token: token}} = Accounts.request_sign_in_link("pat@memba.io")
 

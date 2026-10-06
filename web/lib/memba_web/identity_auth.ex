@@ -10,7 +10,7 @@ defmodule MembaWeb.IdentityAuth do
   import Plug.Conn
 
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.PersonQueries
   alias MembaWeb.ClubSite
 
   @identity_session_key "current_identity_email"
@@ -292,7 +292,7 @@ defmodule MembaWeb.IdentityAuth do
   defp identity_clubs(nil), do: []
   defp identity_clubs(identity), do: identity.active_clubs
 
-  defp staff_person?(email), do: not is_nil(Membership.get_person_by_email(email))
+  defp staff_person?(email), do: not is_nil(PersonQueries.get_person_by_email(email))
 
   defp redirect_to_auth(conn) do
     conn

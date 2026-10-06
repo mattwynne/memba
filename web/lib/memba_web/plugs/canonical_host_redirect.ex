@@ -5,7 +5,7 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirect do
 
   import Plug.Conn
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias MembaWeb.ClubSite
 
   @fly_hostname "memba.fly.dev"
@@ -63,7 +63,7 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirect do
   end
 
   defp redirect_to_club_url(conn, club_id, query_params) do
-    case Membership.get_club(club_id) do
+    case ClubGroupQueries.get_club(club_id) do
       nil ->
         conn
 

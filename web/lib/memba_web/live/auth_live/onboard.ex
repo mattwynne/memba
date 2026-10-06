@@ -2,9 +2,9 @@ defmodule MembaWeb.AuthLive.Onboard do
   use MembaWeb, :live_view
 
   alias Memba.Accounts
-  alias Memba.Membership
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonQueries
   alias MembaWeb.IdentityAuth
 
   @impl Phoenix.LiveView
@@ -115,7 +115,7 @@ defmodule MembaWeb.AuthLive.Onboard do
     end
   end
 
-  defp staff_person?(email), do: not is_nil(Membership.get_person_by_email(email))
+  defp staff_person?(email), do: not is_nil(PersonQueries.get_person_by_email(email))
 
   defp safe_return_to(return_to) when is_binary(return_to) do
     cond do

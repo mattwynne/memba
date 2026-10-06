@@ -37,6 +37,20 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirectTest do
     assert get_resp_header(conn, "location") == ["http://kmc.lvh.me:4002/messages/new?draft=1"]
   end
 
+  test "redirects Fly club_id URLs to the club host, preserving non-club query parameters", %{
+    conn: conn
+  } do
+    club = insert_membership_club!(name: "Alpine Club", slug: "alpine")
+
+    conn =
+      conn
+      |> Map.put(:host, "memba.fly.dev")
+      |> get("/messages/new?club_id=#{club.club_id}&draft=1")
+
+    assert response(conn, 302) == ""
+    assert get_resp_header(conn, "location") == ["http://alpine.lvh.me:4002/messages/new?draft=1"]
+  end
+
   test "leaves root-domain URLs with unknown club_id for route handling", %{conn: conn} do
     conn =
       conn

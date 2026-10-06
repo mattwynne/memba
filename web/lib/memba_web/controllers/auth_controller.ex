@@ -5,6 +5,7 @@ defmodule MembaWeb.AuthController do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Membership.PersonQueries
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
@@ -92,7 +93,7 @@ defmodule MembaWeb.AuthController do
     Accounts.staff_email?(email) and not staff_person?(email)
   end
 
-  defp staff_person?(email), do: not is_nil(Membership.get_person_by_email(email))
+  defp staff_person?(email), do: not is_nil(PersonQueries.get_person_by_email(email))
 
   defp maybe_store_staff_onboarding_return_to(conn, email, return_to) do
     if needs_staff_onboarding?(email) do

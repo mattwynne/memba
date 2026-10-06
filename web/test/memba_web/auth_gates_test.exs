@@ -49,6 +49,23 @@ defmodule MembaWeb.AuthGatesTest do
 
       assert html_response(conn, 200) =~ ~s(id="clubs-index")
     end
+
+    test "recognize an existing person by an alternate, case-varied staff email", %{conn: conn} do
+      person = insert_membership_person!(name: "Pat Staff", email: "primary@example.com")
+
+      insert_membership_person_email_address!(
+        person_id: person.person_id,
+        email: "Pat@Memba.IO",
+        is_primary: false
+      )
+
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => " PAT@MEMBA.IO "})
+        |> get(~p"/admin/clubs")
+
+      assert html_response(conn, 200) =~ ~s(id="clubs-index")
+    end
   end
 
   describe "Memba staff request routes" do

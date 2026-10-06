@@ -205,6 +205,32 @@ defmodule MembaWeb.PageControllerTest do
     refute html |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']") |> Enum.any?()
   end
 
+  test "GET / on a case-varied club host redirects a case-varied active identity", %{conn: conn} do
+    club = create_club(name: "Alpine Club", slug: "alpine")
+
+    create_active_member(
+      email: "Alice.Primary@Example.COM",
+      club_name: club.name,
+      club_id: club.club_id
+    )
+
+    conn =
+      conn
+      |> Map.put(:host, "ALPINE.LVH.ME.")
+      |> init_test_session(%{
+        IdentityAuth.identity_session_key() => " ALICE.PRIMARY@example.com "
+      })
+      |> get(~p"/")
+
+    assert redirected_to(conn, 302) == ~p"/conversations"
+  end
+
+  test "GET / with an invalid club_id returns not found rather than redirecting", %{conn: conn} do
+    conn = get(conn, ~p"/?club_id=invalid")
+
+    assert html_response(conn, 404)
+  end
+
   test "GET / on an unknown public club subdomain returns not found", %{conn: conn} do
     _club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
 

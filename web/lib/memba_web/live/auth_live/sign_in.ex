@@ -7,7 +7,7 @@ defmodule MembaWeb.AuthLive.SignIn do
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.AuthEmailProgressChanges
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias MembaWeb.ClubSite
 
   @neutral_notice "If that email address can sign in to Memba, the sign-in email is on its way."
@@ -375,7 +375,7 @@ defmodule MembaWeb.AuthLive.SignIn do
   defp sign_in_email_context(uri) when is_binary(uri) do
     with %URI{host: host} when is_binary(host) <- URI.parse(uri),
          {:ok, slug} <- ClubSite.slug_from_host(host),
-         %{name: _name} = club <- Membership.get_club_by_slug(slug) do
+         %{name: _name} = club <- ClubGroupQueries.get_club_by_slug(slug) do
       %{club: club}
     else
       _no_club_context -> %{}

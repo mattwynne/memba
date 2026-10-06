@@ -5,8 +5,10 @@ defmodule MembaWeb.PageController do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Onboarding
   alias Memba.Onboarding.NewRequestEmail
   alias MembaWeb.ClubSite
@@ -21,7 +23,7 @@ defmodule MembaWeb.PageController do
   end
 
   defp home_for_params(conn, %{"club_id" => club_id}) do
-    case Membership.get_club(club_id) do
+    case ClubGroupQueries.get_club(club_id) do
       nil -> not_found(conn)
       club -> redirect(conn, external: ClubSite.url(club))
     end
@@ -41,7 +43,7 @@ defmodule MembaWeb.PageController do
   end
 
   defp home_for_public_club_slug(conn, slug) do
-    case Membership.get_club_by_slug(slug) do
+    case ClubGroupQueries.get_club_by_slug(slug) do
       nil ->
         not_found(conn)
 
@@ -57,7 +59,7 @@ defmodule MembaWeb.PageController do
   defp signed_in_active_member?(%{assigns: %{current_identity: nil}}, _club_id), do: false
 
   defp signed_in_active_member?(%{assigns: %{current_identity: identity}}, club_id) do
-    Membership.active_member_of_club_by_email?(club_id, identity.email)
+    MembershipQueries.active_member_of_club_by_email?(club_id, identity.email)
   end
 
   def about(conn, _params) do
@@ -316,7 +318,7 @@ defmodule MembaWeb.PageController do
   end
 
   defp signed_in_get_started_requester(%{assigns: %{current_identity: %{email: email}}}) do
-    case Membership.get_person_by_email(email) do
+    case PersonQueries.get_person_by_email(email) do
       nil ->
         nil
 

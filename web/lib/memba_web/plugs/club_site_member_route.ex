@@ -6,7 +6,7 @@ defmodule MembaWeb.Plugs.ClubSiteMemberRoute do
   import Plug.Conn
   import Phoenix.Controller, only: [put_view: 2, render: 2]
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias MembaWeb.ClubSite
 
   def init(opts), do: opts
@@ -32,7 +32,7 @@ defmodule MembaWeb.Plugs.ClubSiteMemberRoute do
   end
 
   defp put_host_selected_club(conn, slug) do
-    case Membership.get_club_by_slug(slug) do
+    case ClubGroupQueries.get_club_by_slug(slug) do
       nil ->
         not_found(conn)
 
