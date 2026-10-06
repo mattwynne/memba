@@ -93,6 +93,41 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     end)
   end
 
+  test "staff resending a pending club invitation keeps its identity and reports a resend", %{
+    conn: conn
+  } do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+
+    {:ok, view, _html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}/invitations/new")
+
+    view
+    |> form("#club-member-invitation-form", invitation: %{email: " ROBIN@Example.COM "})
+    |> render_submit()
+
+    assert has_element?(view, "#flash-info", "Invitation sent to robin@example.com")
+
+    assert %ClubInvitation{resend_count: 0, invitation_id: invitation_id} =
+             Membership.get_pending_club_member_invitation_by_email(
+               club.club_id,
+               "robin@example.com"
+             )
+
+    view
+    |> form("#club-member-invitation-form", invitation: %{email: " robin@example.com "})
+    |> render_submit()
+
+    assert has_element?(view, "#flash-info", "Invitation resent to robin@example.com")
+
+    assert %ClubInvitation{resend_count: 1, invitation_id: ^invitation_id} =
+             Membership.get_pending_club_member_invitation_by_email(
+               club.club_id,
+               "robin@example.com"
+             )
+  end
+
   test "staff email invitation link carries an unknown invitee through profile completion to the club",
        %{conn: conn} do
     club_id = Memba.ID.generate(:club)

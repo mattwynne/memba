@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
   alias Memba.Membership
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.InvitationQueries
   alias MembaWeb.ClubSite
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberInvitationQuery
@@ -292,7 +293,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
   defp valid_email?(email), do: match?({:ok, _email}, EmailAddresses.normalize_email(email))
 
   defp pending_invitation?(club_id, email) do
-    not is_nil(Membership.get_pending_club_member_invitation_by_email(club_id, email))
+    not is_nil(InvitationQueries.get_pending_by_email(club_id, email))
   end
 
   defp deliver_invitation(invitation, email, club) do

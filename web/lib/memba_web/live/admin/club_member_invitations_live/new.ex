@@ -2,15 +2,17 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.InvitationQueries
 
   @empty_invitation %{"email" => ""}
   @empty_errors %{email: []}
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id}, _session, socket) do
-    club = Membership.get_club(club_id)
+    club = ClubGroupQueries.get_club(club_id)
 
     {:ok,
      socket
@@ -219,7 +221,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
   defp valid_email?(email), do: match?({:ok, _email}, EmailAddresses.normalize_email(email))
 
   defp pending_invitation?(club_id, email) do
-    not is_nil(Membership.get_pending_club_member_invitation_by_email(club_id, email))
+    not is_nil(InvitationQueries.get_pending_by_email(club_id, email))
   end
 
   defp deliver_invitation(invitation, email, club) do

@@ -11,8 +11,9 @@ defmodule MembaWeb.MemberInvitationQuery do
 
   alias LiveQuery.Query
   alias Memba.Accounts
-  alias Memba.Membership
   alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
 
   @doc """
   Returns the app-owned descriptor for the invitation context.
@@ -46,8 +47,8 @@ defmodule MembaWeb.MemberInvitationQuery do
          selected_club when not is_nil(selected_club) <-
            find_selected_club(club_id, normalized_email),
          person when not is_nil(person) <-
-           Membership.get_person_by_email(normalized_email),
-         active_members <- Membership.list_active_members_of_club(selected_club.club_id),
+           PersonQueries.get_person_by_email(normalized_email),
+         active_members <- ClubGroupQueries.list_active_members_of_club(selected_club.club_id),
          current_member when not is_nil(current_member) <-
            Enum.find(active_members, &(&1.id == person.person_id)),
          :ok <-
