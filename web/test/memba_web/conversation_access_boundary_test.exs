@@ -40,9 +40,13 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
   test "dashboard access keeps discovery and participation as separate public queries" do
     source = read_source!("lib/memba_web/member_dashboard_presentation.ex")
 
-    assert source =~ "Membership.list_discoverable_groups_for_member("
-    assert source =~ "Membership.list_active_groups_for_member_authoritatively("
-    assert source =~ "Messaging.list_conversations_for_group("
+    assert source =~ "ClubGroupQueries.list_discoverable_groups_for_member("
+
+    assert source =~
+             "AuthoritativeMembershipQueries.list_active_groups_for_member_authoritatively("
+
+    assert source =~ "AuthoritativeMembershipQueries.active_member_of_group_authoritatively?("
+    assert source =~ "ConversationListing.list_for_group("
   end
 
   test "detail and compose access use public context authorization boundaries" do

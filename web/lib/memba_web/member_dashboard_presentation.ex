@@ -11,9 +11,11 @@ defmodule MembaWeb.MemberDashboardPresentation do
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
+  alias Memba.Messaging.ConversationListing
 
   @participant_avatar_limit 3
 
@@ -49,7 +51,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   @doc """
   Load dashboard assigns scoped to an explicitly selected conversation group.
 
-  The group identity is resolved from Membership's safe discovery summaries
+  The group identity is resolved from safe discovery summaries
   after the signed-in identity has been resolved to an active member of the
   selected club. Participating members receive the member and conversation
   surfaces, club admins outside the group receive only its membership surface,
@@ -80,11 +82,13 @@ defmodule MembaWeb.MemberDashboardPresentation do
     with {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
          club_members <- load_club_members(club_id),
          {:ok, current_member} <- fetch_current_member(club_members, current_identity) do
-      groups = Membership.list_discoverable_groups_for_member(club_id, current_member.id)
+      groups = ClubGroupQueries.list_discoverable_groups_for_member(club_id, current_member.id)
 
       participating_groups_by_id =
         club_id
-        |> Membership.list_active_groups_for_member_authoritatively(current_member.id)
+        |> AuthoritativeMembershipQueries.list_active_groups_for_member_authoritatively(
+          current_member.id
+        )
         |> Map.new(&{&1.group_id, &1})
 
       groups = mark_group_participation(groups, participating_groups_by_id)
@@ -262,7 +266,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   end
 
   defp managed_group_email_address(selected_club, selected_group) do
-    case Membership.get_group(selected_group.group_id) do
+    case ClubGroupQueries.get_group(selected_group.group_id) do
       %{club_id: club_id, email_slug: email_slug}
       when club_id == selected_group.club_id ->
         ClubInboundEmailAddress.address(selected_club.slug, email_slug)
@@ -302,13 +306,13 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   defp load_club_members(club_id) do
     club_id
-    |> Membership.list_active_members_of_club()
+    |> ClubGroupQueries.list_active_members_of_club()
     |> Enum.map(&present_member/1)
   end
 
   defp load_group_members(group_id) do
     group_id
-    |> Membership.list_active_members_of_group()
+    |> ClubGroupQueries.list_active_members_of_group()
     |> Enum.map(&present_member/1)
   end
 
@@ -328,8 +332,12 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp can_manage_members?(_club_id, _current_member), do: false
 
   defp load_messages(club_id, group_id, person_id) do
-    if Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id) do
-      Messaging.list_conversations_for_group(group_id)
+    if AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
+         club_id,
+         group_id,
+         person_id
+       ) do
+      ConversationListing.list_for_group(group_id)
     else
       []
     end
