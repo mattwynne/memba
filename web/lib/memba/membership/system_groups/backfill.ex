@@ -11,14 +11,16 @@ defmodule Memba.Membership.SystemGroups.Backfill do
 
   require Logger
 
-  alias Memba.Membership
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Projectors.Group
   alias Memba.Membership.Projectors.GroupMembership
-  alias Memba.Messaging
-  alias Memba.Messaging.Projectors.ConversationGroupAccess
+  alias Memba.Membership.SystemGroupBackfillQueries
+  alias Memba.Messaging.CommandDispatch, as: MessagingCommandDispatch
+  alias Memba.Messaging.ConversationGroupAccess
+  alias Memba.Messaging.EveryoneConversationAccessBackfillQueries
+  alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
 
   @default_page_size 500
 
@@ -108,19 +110,22 @@ defmodule Memba.Membership.SystemGroups.Backfill do
   end
 
   defp fetch_page(:system_group_definitions, cursor, page_size) do
-    Membership.list_system_group_definition_backfill_page(cursor, page_size)
+    SystemGroupBackfillQueries.list_system_group_definition_backfill_page(cursor, page_size)
   end
 
   defp fetch_page(:everyone_group_memberships, cursor, page_size) do
-    Membership.list_everyone_group_membership_backfill_page(cursor, page_size)
+    SystemGroupBackfillQueries.list_everyone_group_membership_backfill_page(cursor, page_size)
   end
 
   defp fetch_page(:admin_group_memberships, cursor, page_size) do
-    Membership.list_admin_group_membership_backfill_page(cursor, page_size)
+    SystemGroupBackfillQueries.list_admin_group_membership_backfill_page(cursor, page_size)
   end
 
   defp fetch_page(:everyone_conversation_access, cursor, page_size) do
-    Messaging.list_everyone_conversation_access_backfill_page(cursor, page_size)
+    EveryoneConversationAccessBackfillQueries.list_everyone_conversation_access_backfill_page(
+      cursor,
+      page_size
+    )
   end
 
   defp dispatch_entry!(:system_group_definitions = phase, entry, opts) do
@@ -157,13 +162,16 @@ defmodule Memba.Membership.SystemGroups.Backfill do
       access_level: :write
     }
 
-    case Messaging.grant_initial_conversation_access_to_group(attrs,
-           consistency: :eventual
-         ) do
-      :ok -> :ok
-      {:ok, _result} -> :ok
-      {:error, reason} -> raise backfill_error(phase, attrs, reason)
-      other -> raise backfill_error(phase, attrs, {:unexpected_dispatch_result, other})
+    case ConversationGroupAccess.prepare_initial_grant(attrs) do
+      {:ok, command} ->
+        case MessagingCommandDispatch.dispatch(command, consistency: :eventual) do
+          {:ok, _result} -> :ok
+          {:error, reason} -> raise backfill_error(phase, attrs, reason)
+          other -> raise backfill_error(phase, attrs, {:unexpected_dispatch_result, other})
+        end
+
+      {:error, reason} ->
+        raise backfill_error(phase, attrs, reason)
     end
 
     after_command!(opts, phase, entry, attrs)
@@ -182,7 +190,7 @@ defmodule Memba.Membership.SystemGroups.Backfill do
     timeout =
       Application.get_env(:memba, :system_groups_backfill_projection_barrier_timeout, 60_000)
 
-    Memba.ProjectionBarrier.await!([Group, GroupMembership, ConversationGroupAccess],
+    Memba.ProjectionBarrier.await!([Group, GroupMembership, ConversationGroupAccessProjector],
       timeout: timeout
     )
   end
