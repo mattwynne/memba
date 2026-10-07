@@ -31,11 +31,15 @@ defmodule Memba.DevSeeds do
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Roles
   alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch, as: MessagingCommandDispatch
+  alias Memba.Messaging.ConversationFollowPreparation
   alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.EmailDeliveryProviders.Local, as: LocalDeliveryProvider
   alias Memba.Messaging.LocalDeliveryFacts
   alias Memba.Messaging.MessageQueries
   alias Memba.Messaging.MessageSourceQueries
+  alias Memba.Messaging.PostMemberMessageReply
+  alias Memba.Messaging.SendClubMessage
   alias Memba.Onboarding
   alias Memba.Onboarding.NewRequestEmail
   alias Memba.Onboarding.Request
@@ -444,11 +448,15 @@ defmodule Memba.DevSeeds do
           :ok
         else
           assert_ok!(
-            Messaging.send_club_message(
-              Map.take(message, [:message_id, :club_id, :sender_id, :subject, :body])
-              |> Map.put(:club_id, club.club_id),
-              consistency: :strong
-            ),
+            with {:ok, command} <-
+                   SendClubMessage.prepare(
+                     Map.take(message, [:message_id, :club_id, :sender_id, :subject, :body])
+                     |> Map.put(:club_id, club.club_id)
+                   ),
+                 {:ok, dispatch_result} <-
+                   MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+              dispatch_result
+            end,
             "send #{message.subject}"
           )
         end
@@ -491,15 +499,17 @@ defmodule Memba.DevSeeds do
       :ok
     else
       assert_ok!(
-        Messaging.post_message_reply(
-          %{
-            "message_id" => reply_message_id,
-            "conversation_id" => @kac_conversation_id,
-            "sender_id" => sender_id,
-            "body" => body
-          },
-          consistency: :strong
-        ),
+        with {:ok, command} <-
+               PostMemberMessageReply.prepare(%{
+                 "message_id" => reply_message_id,
+                 "conversation_id" => @kac_conversation_id,
+                 "sender_id" => sender_id,
+                 "body" => body
+               }),
+             {:ok, dispatch_result} <-
+               MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+          dispatch_result
+        end,
         "post seed reply #{reply_message_id}"
       )
     end
@@ -512,10 +522,16 @@ defmodule Memba.DevSeeds do
 
   defp follow_seed_conversation(club_id, member_id) do
     assert_ok!(
-      Messaging.follow_conversation(
-        %{club_id: club_id, conversation_id: @kac_conversation_id, member_id: member_id},
-        consistency: :strong
-      ),
+      with {:ok, command} <-
+             ConversationFollowPreparation.prepare_follow(%{
+               club_id: club_id,
+               conversation_id: @kac_conversation_id,
+               member_id: member_id
+             }),
+           {:ok, dispatch_result} <-
+             MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+        dispatch_result
+      end,
       "follow seed conversation as #{member_id}"
     )
   end
