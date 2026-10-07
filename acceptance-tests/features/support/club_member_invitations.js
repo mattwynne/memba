@@ -453,7 +453,7 @@ function personByEmail(email) {
     `
 email = Memba.Accounts.normalize_email(Map.fetch!(payload, "email"))
 
-case Memba.Membership.get_person_by_email(email) do
+case Memba.Membership.PersonQueries.get_person_by_email(email) do
   nil -> %{personId: nil}
   person -> %{personId: person.person_id, personName: person.name, email: person.email}
 end

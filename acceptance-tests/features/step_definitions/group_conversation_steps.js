@@ -185,7 +185,7 @@ function activeGroupMemberNames(world, groupName) {
   return serverCommands.runCommand(
     `
 group_id = Map.fetch!(payload, "groupId")
-%{names: Enum.map(Memba.Membership.list_active_members_of_group(group_id), & &1.name)}
+%{names: Enum.map(Memba.Membership.ClubGroupQueries.list_active_members_of_group(group_id), & &1.name)}
 `,
     { groupId }
   ).names;

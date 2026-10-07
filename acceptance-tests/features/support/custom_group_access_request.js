@@ -284,8 +284,8 @@ admin_group_id = Memba.Membership.SystemGroups.admin_group_id(club_id)
 
 messages =
   admin_group_id
-  |> Memba.Messaging.list_conversations_for_group()
-  |> Enum.map(&Memba.Messaging.get_message(&1.message_id))
+  |> Memba.Messaging.ConversationListing.list_for_group()
+  |> Enum.map(&Memba.Messaging.MessageQueries.get_message(&1.message_id))
   |> Enum.filter(&(&1.sender_id == requester_id and &1.subject == subject))
 
 case messages do
