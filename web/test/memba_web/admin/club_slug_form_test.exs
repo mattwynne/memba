@@ -68,6 +68,13 @@ defmodule MembaWeb.Admin.ClubSlugFormTest do
                valid: true,
                message: "This slug is valid and available."
              } = ClubSlugForm.feedback(existing_club.club_id, "kmc")
+
+      another_club = insert_membership_club!(name: "Another Club", slug: "another")
+
+      assert %{status: "taken", valid: false} =
+               ClubSlugForm.feedback(another_club.club_id, "kmc")
+
+      assert %{status: "available", valid: true} = ClubSlugForm.feedback(nil, "unused-slug")
     end
   end
 end

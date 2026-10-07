@@ -56,7 +56,7 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
 
     assert detail_source =~ "ConversationGroupAccessQueries.member_has_conversation_access?("
     assert compose_live_source =~ "MemberMessageComposeQuery.query()"
-    assert compose_query_source =~ "Membership.list_active_groups_for_member("
+    assert compose_query_source =~ "ClubGroupQueries.list_active_groups_for_member("
   end
 
   defp read_source!(relative_path) do

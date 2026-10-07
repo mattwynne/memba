@@ -11,7 +11,8 @@ defmodule MembaWeb.MemberMessageComposeQuery do
 
   alias LiveQuery.Query
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.SystemGroups
 
   @doc """
@@ -93,11 +94,11 @@ defmodule MembaWeb.MemberMessageComposeQuery do
          selected_club when not is_nil(selected_club) <-
            find_selected_club(club_id, normalized_email),
          current_person when not is_nil(current_person) <-
-           Membership.get_person_by_email(normalized_email),
+           PersonQueries.get_person_by_email(normalized_email),
          current_member when not is_nil(current_member) <-
            find_current_member(selected_club.club_id, current_person.person_id) do
       groups =
-        Membership.list_active_groups_for_member(
+        ClubGroupQueries.list_active_groups_for_member(
           selected_club.club_id,
           current_person.person_id
         )
@@ -134,7 +135,7 @@ defmodule MembaWeb.MemberMessageComposeQuery do
 
       audience_group ->
         participants =
-          Membership.list_active_members_of_group(
+          ClubGroupQueries.list_active_members_of_group(
             audience_group.group_id,
             include_without_primary_email: true
           )
@@ -160,7 +161,7 @@ defmodule MembaWeb.MemberMessageComposeQuery do
 
   defp find_current_member(club_id, person_id) do
     club_id
-    |> Membership.list_active_members_of_club()
+    |> ClubGroupQueries.list_active_members_of_club()
     |> Enum.find(&(&1.id == person_id))
   end
 

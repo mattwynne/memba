@@ -7,7 +7,7 @@ defmodule MembaWeb.Admin.ClubSlugForm do
   checks so those workflows do not grow divergent slug rules.
   """
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.Slug
 
   @empty_params %{"name" => "", "slug" => ""}
@@ -103,7 +103,7 @@ defmodule MembaWeb.Admin.ClubSlugForm do
   defp blank?(_value), do: true
 
   defp availability_feedback(current_club_id, slug) do
-    case Membership.get_club_by_slug(slug) do
+    case ClubGroupQueries.get_club_by_slug(slug) do
       nil ->
         available_slug_feedback()
 

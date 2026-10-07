@@ -1,12 +1,12 @@
 defmodule MembaWeb.PublicClubPageLive do
   use MembaWeb, :live_view
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias MembaWeb.ClubSite
 
   @impl Phoenix.LiveView
   def mount(_params, %{"club_id" => club_id}, socket) do
-    case Membership.get_club(club_id) do
+    case ClubGroupQueries.get_club(club_id) do
       nil ->
         {:ok, push_navigate(socket, to: ~p"/")}
 
