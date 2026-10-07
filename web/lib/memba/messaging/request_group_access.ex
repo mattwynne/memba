@@ -5,7 +5,7 @@ defmodule Memba.Messaging.RequestGroupAccess do
   """
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.AuthorizationCheckpoint
   alias Memba.Messaging.Commands.RequestGroupAccess, as: Request
@@ -37,7 +37,7 @@ defmodule Memba.Messaging.RequestGroupAccess do
 
   defp prepare_message(%Request{} = request) do
     with {:ok, target} <-
-           Membership.resolve_custom_group_target_authoritatively(
+           AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
              request.club_id,
              request.requester_person_id,
              request.group_id
@@ -83,7 +83,7 @@ defmodule Memba.Messaging.RequestGroupAccess do
 
   defp recipients(club_id, admin_group_id) do
     club_id
-    |> Membership.list_active_members_of_group_authoritatively(admin_group_id)
+    |> AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(admin_group_id)
     |> Enum.map(fn %{id: person_id, name: name, email: email} ->
       %Recipient{
         delivery_id: ID.generate(:delivery),

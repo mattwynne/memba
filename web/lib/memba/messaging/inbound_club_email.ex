@@ -7,7 +7,7 @@ defmodule Memba.Messaging.InboundClubEmail do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Messaging.App
   alias Memba.Messaging.AuthorizationCheckpoint
   alias Memba.Messaging.CommandDispatch
@@ -712,7 +712,11 @@ defmodule Memba.Messaging.InboundClubEmail do
       grant_levels = ConversationAccess.grant_levels_including(access_level)
 
       granted_access_level in grant_levels and
-        Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id)
+        AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
+          club_id,
+          group_id,
+          person_id
+        )
     else
       _invalid_missing_or_inaccessible -> false
     end
@@ -723,7 +727,7 @@ defmodule Memba.Messaging.InboundClubEmail do
     follower_ids = current_follower_ids(club_id, conversation_id)
 
     club_id
-    |> Membership.list_active_members_of_group_authoritatively(group_id)
+    |> AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(group_id)
     |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
     |> Enum.reject(&(&1.id == except_person_id))
     |> Enum.map(&resolved_recipient/1)

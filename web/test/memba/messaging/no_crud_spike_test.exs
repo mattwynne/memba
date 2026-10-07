@@ -38,7 +38,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert source =~ "do: InboundClubEmail.receive(attrs, dispatch_opts)"
 
     assert inbound_source =~
-             "Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id)"
+             "AuthoritativeMembershipQueries.active_member_of_group_authoritatively?("
 
     assert inbound_source =~ "CommandDispatch.dispatch("
     refute inbound_source =~ ~r/\bMessaging\.[a-z]/
