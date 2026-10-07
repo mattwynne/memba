@@ -13,14 +13,14 @@ club_name = Map.fetch!(payload, "clubName")
 club_slug = Map.fetch!(payload, "clubSlug")
 
 club =
-  case Memba.Membership.get_club_by_slug(club_slug) do
+  case Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug) do
     nil ->
       club_id = Memba.ID.generate(:club)
       :ok = Memba.Membership.create_club(
         %{club_id: club_id, name: club_name, slug: club_slug},
         consistency: :strong
       )
-      Memba.Membership.get_club_by_slug(club_slug)
+      Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug)
 
     club ->
       club
@@ -39,14 +39,14 @@ person_name = Map.fetch!(payload, "personName")
 email = Map.fetch!(payload, "email")
 
 person =
-  case Memba.Membership.get_person_by_email(email) do
+  case Memba.Membership.PersonQueries.get_person_by_email(email) do
     nil ->
       person_id = Memba.ID.generate(:person)
       :ok = Memba.Membership.create_person(
         %{person_id: person_id, name: person_name, email: email},
         consistency: :strong
       )
-      Memba.Membership.get_person_by_email(email)
+      Memba.Membership.PersonQueries.get_person_by_email(email)
 
     person ->
       person
@@ -67,28 +67,28 @@ person_name = Map.fetch!(payload, "personName")
 email = Map.fetch!(payload, "email")
 
 club =
-  case Memba.Membership.get_club_by_slug(club_slug) do
+  case Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug) do
     nil ->
       club_id = Memba.ID.generate(:club)
       :ok = Memba.Membership.create_club(
         %{club_id: club_id, name: club_name, slug: club_slug},
         consistency: :strong
       )
-      Memba.Membership.get_club_by_slug(club_slug)
+      Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug)
 
     club ->
       club
   end
 
 person =
-  case Memba.Membership.get_person_by_email(email) do
+  case Memba.Membership.PersonQueries.get_person_by_email(email) do
     nil ->
       person_id = Memba.ID.generate(:person)
       :ok = Memba.Membership.create_person(
         %{person_id: person_id, name: person_name, email: email},
         consistency: :strong
       )
-      Memba.Membership.get_person_by_email(email)
+      Memba.Membership.PersonQueries.get_person_by_email(email)
 
     person ->
       person
@@ -140,14 +140,14 @@ function ensureMembers(members) {
   return runCommand(
     `
 ensure_club = fn club_name, club_slug ->
-  case Memba.Membership.get_club_by_slug(club_slug) do
+  case Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug) do
     nil ->
       club_id = Memba.ID.generate(:club)
       :ok = Memba.Membership.create_club(
         %{club_id: club_id, name: club_name, slug: club_slug},
         consistency: :strong
       )
-      Memba.Membership.get_club_by_slug(club_slug)
+      Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug)
 
     club ->
       if club.name == club_name do
@@ -157,20 +157,20 @@ ensure_club = fn club_name, club_slug ->
           %{club_id: club.club_id, name: club_name, slug: club_slug},
           consistency: :strong
         )
-        Memba.Membership.get_club_by_slug(club_slug)
+        Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug)
       end
   end
 end
 
 ensure_person = fn person_name, email ->
-  case Memba.Membership.get_person_by_email(email) do
+  case Memba.Membership.PersonQueries.get_person_by_email(email) do
     nil ->
       person_id = Memba.ID.generate(:person)
       :ok = Memba.Membership.create_person(
         %{person_id: person_id, name: person_name, email: email},
         consistency: :strong
       )
-      Memba.Membership.get_person_by_email(email)
+      Memba.Membership.PersonQueries.get_person_by_email(email)
 
     person ->
       person
