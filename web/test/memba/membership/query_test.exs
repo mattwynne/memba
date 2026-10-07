@@ -3,6 +3,7 @@ defmodule Memba.Membership.QueryTest do
 
   alias Memba.Membership
   alias Memba.Membership.App
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -53,6 +54,30 @@ defmodule Memba.Membership.QueryTest do
       assert is_nil(Membership.get_club_by_slug("kmc.club"))
       assert is_nil(Membership.get_club_by_slug("-kmc"))
       assert is_nil(Membership.get_club_by_slug(nil))
+    end
+  end
+
+  describe "list_club_summaries/1" do
+    test "returns plain projected summaries keyed by club ID for both query entry points" do
+      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+      other = create_club("Nelson Cycling Club", slug: "ncc")
+      unknown_id = Memba.ID.generate(:club)
+
+      summaries = %{
+        club.club_id => %{club_id: club.club_id, name: club.name, slug: "kmc"},
+        other.club_id => %{club_id: other.club_id, name: other.name, slug: "ncc"}
+      }
+
+      ids = [club.club_id, "invalid", club.club_id, unknown_id, other.club_id, nil]
+      assert ClubGroupQueries.list_club_summaries(ids) == summaries
+      assert Membership.list_club_summaries(ids) == summaries
+    end
+
+    test "ignores invalid IDs and returns an empty map for empty or non-list input" do
+      for ids <- [[], ["invalid", nil], nil, "invalid"] do
+        assert ClubGroupQueries.list_club_summaries(ids) == %{}
+        assert Membership.list_club_summaries(ids) == %{}
+      end
     end
   end
 

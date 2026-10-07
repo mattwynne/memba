@@ -9,7 +9,7 @@ defmodule Memba.Messaging.MessageQueries do
   import Ecto.Query
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.PersonQueries
   alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -68,7 +68,7 @@ defmodule Memba.Messaging.MessageQueries do
     club_summaries =
       messages
       |> Enum.map(& &1.club_id)
-      |> Membership.list_club_summaries()
+      |> ClubGroupQueries.list_club_summaries()
 
     sender_summaries =
       messages

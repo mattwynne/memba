@@ -74,6 +74,26 @@ defmodule Memba.Membership.ClubGroupQueries do
     end
   end
 
+  def list_club_summaries(club_ids) when is_list(club_ids) do
+    club_ids = cast_club_ids(club_ids)
+
+    if club_ids == [] do
+      %{}
+    else
+      Club
+      |> where([club], club.club_id in ^club_ids)
+      |> select([club], %{
+        club_id: club.club_id,
+        name: club.name,
+        slug: club.slug
+      })
+      |> Repo.all()
+      |> Map.new(&{&1.club_id, &1})
+    end
+  end
+
+  def list_club_summaries(_club_ids), do: %{}
+
   def list_clubs() do
     Club
     |> order_by([club], asc: club.name, asc: club.club_id)
@@ -301,6 +321,18 @@ defmodule Memba.Membership.ClubGroupQueries do
     else
       :error -> []
     end
+  end
+
+  defp cast_club_ids(ids) do
+    ids
+    |> Enum.reduce([], fn id, valid_ids ->
+      case ID.cast(:club, id) do
+        {:ok, id} -> [id | valid_ids]
+        :error -> valid_ids
+      end
+    end)
+    |> Enum.uniq()
+    |> Enum.reverse()
   end
 
   @doc false

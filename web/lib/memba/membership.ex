@@ -3,9 +3,6 @@ defmodule Memba.Membership do
   Public application service and query API for the Membership bounded context.
   """
 
-  import Ecto.Query
-
-  alias Memba.ID
   alias Memba.Membership.AddMember
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
@@ -25,9 +22,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.SystemGroupBackfillQueries
-  alias Memba.Membership.Projections.Club
   alias Memba.ProjectionBarrier
-  alias Memba.Repo
 
   @group_access_projectors [GroupMembershipProjector, MembershipProjector]
 
@@ -486,27 +481,7 @@ defmodule Memba.Membership do
   their read models through Membership's public query API rather than joining
   directly against Membership projection tables.
   """
-  def list_club_summaries(club_ids) do
-    if is_list(club_ids) do
-      club_ids = cast_ids(:club, club_ids)
-
-      if club_ids == [] do
-        %{}
-      else
-        Club
-        |> where([club], club.club_id in ^club_ids)
-        |> select([club], %{
-          club_id: club.club_id,
-          name: club.name,
-          slug: club.slug
-        })
-        |> Repo.all()
-        |> Map.new(&{&1.club_id, &1})
-      end
-    else
-      %{}
-    end
-  end
+  def list_club_summaries(club_ids), do: ClubGroupQueries.list_club_summaries(club_ids)
 
   @doc """
   Return projected person contact summaries keyed by person ID.
@@ -819,17 +794,5 @@ defmodule Memba.Membership do
   """
   def person_has_club_permission?(club_id, person_id, permission) do
     Authorization.has_permission?(club_id, person_id, permission)
-  end
-
-  defp cast_ids(type, ids) do
-    ids
-    |> Enum.reduce([], fn id, valid_ids ->
-      case ID.cast(type, id) do
-        {:ok, id} -> [id | valid_ids]
-        :error -> valid_ids
-      end
-    end)
-    |> Enum.uniq()
-    |> Enum.reverse()
   end
 end
