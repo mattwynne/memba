@@ -10,7 +10,7 @@ defmodule Memba.Messaging.ConversationListing do
   import Ecto.Query
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.PersonQueries
   alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
@@ -188,7 +188,7 @@ defmodule Memba.Messaging.ConversationListing do
       conversation_rows
       |> Enum.map(& &1.latest_replier_id)
       |> Enum.reject(&is_nil/1)
-      |> Membership.list_person_contact_summaries()
+      |> PersonQueries.list_person_contact_summaries()
 
     Enum.map(conversation_rows, fn row ->
       latest_replier_name =

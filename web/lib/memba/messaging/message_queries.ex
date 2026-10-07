@@ -10,6 +10,7 @@ defmodule Memba.Messaging.MessageQueries do
 
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.PersonQueries
   alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Repo
@@ -72,7 +73,7 @@ defmodule Memba.Messaging.MessageQueries do
     sender_summaries =
       messages
       |> Enum.map(& &1.sender_id)
-      |> Membership.list_person_contact_summaries()
+      |> PersonQueries.list_person_contact_summaries()
 
     Enum.map(messages, fn message ->
       club = Map.get(club_summaries, message.club_id, %{})

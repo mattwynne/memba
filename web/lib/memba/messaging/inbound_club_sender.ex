@@ -2,12 +2,12 @@ defmodule Memba.Messaging.InboundClubSender do
   @moduledoc """
   Resolved sender for a provider-neutral inbound club-message email.
 
-  Sender resolution deliberately uses Membership's public verified-email lookup
-  API so Messaging can identify people by verified primary or alternate email
-  address without coupling to Membership projection storage.
+  Sender resolution uses Membership's focused verified-email query so Messaging
+  can identify people by verified primary or alternate email address without
+  coupling to Membership projection storage.
   """
 
-  alias Memba.Membership
+  alias Memba.Membership.PersonQueries
   alias Memba.Messaging.InboundEmail
 
   @enforce_keys [:person_id, :name, :from_address]
@@ -56,7 +56,7 @@ defmodule Memba.Messaging.InboundClubSender do
   defp normalize_address(_address), do: {:error, :invalid_address}
 
   defp resolve_normalized_address(normalized_address) do
-    case Membership.get_verified_person_by_email(normalized_address) do
+    case PersonQueries.get_verified_person_by_email(normalized_address) do
       nil ->
         {:error, :unknown_sender, normalized_address}
 

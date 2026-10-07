@@ -4,12 +4,12 @@ defmodule Memba.Messaging.InboundClubDestination do
 
   Addresses use the shape
   `<group-email-slug>@<club-slug>.<configured inbound domain>`. Resolution
-  deliberately uses Membership's public club and group lookup APIs so Messaging
-  does not couple to Membership projection internals.
+  uses Membership's focused club and group queries to avoid coupling to
+  Membership projection internals.
   """
 
   alias Memba.ClubInboundEmailAddress
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.Slug
   alias Memba.Messaging.InboundEmail
 
@@ -158,7 +158,7 @@ defmodule Memba.Messaging.InboundClubDestination do
          {:destination_candidate, club_slug, group_email_slug, to_address},
          accumulator
        ) do
-    case Membership.get_club_by_slug(club_slug) do
+    case ClubGroupQueries.get_club_by_slug(club_slug) do
       nil -> record_first(accumulator, :unknown_club, to_address)
       club -> resolve_group_candidate(accumulator, club, group_email_slug, to_address)
     end
@@ -177,7 +177,7 @@ defmodule Memba.Messaging.InboundClubDestination do
   end
 
   defp resolve_group_candidate(accumulator, club, group_email_slug, to_address) do
-    case Membership.get_group_by_email_slug(club.club_id, group_email_slug) do
+    case ClubGroupQueries.get_group_by_email_slug(club.club_id, group_email_slug) do
       nil -> record_first(accumulator, :unknown_group, to_address)
       group -> %{accumulator | destination: destination(club, group, to_address)}
     end
