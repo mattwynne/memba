@@ -156,7 +156,11 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
       profile_conn =
         conn
         |> recycle()
-        |> put_session(IdentityAuth.identity_session_key(), "someone-else@example.com")
+        |> init_test_session(%{
+          IdentityAuth.identity_session_key() => "someone-else@example.com",
+          IdentityAuth.club_member_invitation_session_key() =>
+            get_session(conn, IdentityAuth.club_member_invitation_session_key())
+        })
         |> post(~p"/invitations/club-members/profile", profile: %{name: "Robin Example"})
 
       assert redirected_to(profile_conn) == ~p"/auth"
@@ -181,10 +185,13 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
       profile_conn =
         conn
         |> recycle()
-        |> put_session(
-          IdentityAuth.club_member_invitation_session_key(),
-          %{journey | "club_id" => other_club.club_id}
-        )
+        |> init_test_session(%{
+          IdentityAuth.identity_session_key() => "robin@example.com",
+          IdentityAuth.club_member_invitation_session_key() => %{
+            journey
+            | "club_id" => other_club.club_id
+          }
+        })
         |> post(~p"/invitations/club-members/profile", profile: %{name: "Robin Example"})
 
       assert redirected_to(profile_conn) == ~p"/auth"
