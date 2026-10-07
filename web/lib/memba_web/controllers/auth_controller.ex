@@ -4,7 +4,7 @@ defmodule MembaWeb.AuthController do
   require Logger
 
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.PersonEmailVerification
   alias Memba.Membership.PersonQueries
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -54,7 +54,7 @@ defmodule MembaWeb.AuthController do
   defp signed_in?(conn), do: not is_nil(Map.get(conn.assigns, :current_identity))
 
   defp verify_pending_person_email_address_for_sign_in(conn, email) do
-    case Membership.verify_pending_person_email_address_for_sign_in(email, consistency: :strong) do
+    case PersonEmailVerification.verify_for_sign_in(email, consistency: :strong) do
       :ok ->
         conn
 

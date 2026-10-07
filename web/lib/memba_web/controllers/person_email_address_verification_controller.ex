@@ -3,8 +3,7 @@ defmodule MembaWeb.PersonEmailAddressVerificationController do
 
   require Logger
 
-  alias Memba.Membership
-  alias Memba.Membership.{CommandDispatch, PersonEmailAddressCommands}
+  alias Memba.Membership.{CommandDispatch, PersonEmailAddressCommands, PersonEmailVerification}
 
   def callback(conn, %{"token" => token}) when is_binary(token) do
     case verify_email_address_from_token(token) do
@@ -18,7 +17,7 @@ defmodule MembaWeb.PersonEmailAddressVerificationController do
   end
 
   defp verify_email_address_from_token(token) do
-    with {:ok, request} <- Membership.consume_person_email_address_verification_token(token),
+    with {:ok, request} <- PersonEmailVerification.consume(token, []),
          :ok <-
            verify_person_email_address(request) do
       {:ok, request}

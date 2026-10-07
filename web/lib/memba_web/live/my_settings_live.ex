@@ -9,7 +9,7 @@ defmodule MembaWeb.MySettingsLive do
   use MembaWeb, :live_view
 
   alias LiveQuery.Binding
-  alias Memba.Membership
+  alias Memba.Membership.PersonEmailVerification
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonEmailAddressCommands
   alias Memba.Membership.PersonEmailAddressVerificationEmail
@@ -467,7 +467,7 @@ defmodule MembaWeb.MySettingsLive do
     attrs = %{person_id: current_person(socket).person_id, email: email}
 
     with {:ok, %{issuer_result: %{token: token}}} <-
-           Membership.resend_person_email_address_verification(attrs),
+           PersonEmailVerification.resend(attrs, []),
          :ok <-
            PersonEmailAddressVerificationEmail.deliver(%{
              person_id: attrs.person_id,
