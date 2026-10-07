@@ -18,13 +18,19 @@ defmodule Memba.DevSeeds do
   alias Memba.Accounts.AuthEmail
   alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.InvitationQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Roles
   alias Memba.Messaging
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.EmailDeliveryProviders.Local, as: LocalDeliveryProvider
   alias Memba.Messaging.LocalDeliveryFacts
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.MessageSourceQueries
   alias Memba.Onboarding
   alias Memba.Onboarding.NewRequestEmail
   alias Memba.Onboarding.Request
@@ -253,7 +259,7 @@ defmodule Memba.DevSeeds do
 
   defp seed_membership do
     Enum.each(@clubs, fn club ->
-      dispatch_unless_projected(Membership.get_club(club.club_id), fn ->
+      dispatch_unless_projected(ClubGroupQueries.get_club(club.club_id), fn ->
         Membership.create_club(
           %{club_id: club.club_id, name: club.name, slug: club.slug},
           consistency: :strong
@@ -266,7 +272,7 @@ defmodule Memba.DevSeeds do
     @clubs
     |> all_members()
     |> Enum.each(fn member ->
-      dispatch_unless_projected(Membership.get_person(member.person_id), fn ->
+      dispatch_unless_projected(PersonQueries.get_person(member.person_id), fn ->
         Membership.create_person(
           %{
             person_id: member.person_id,
@@ -345,7 +351,7 @@ defmodule Memba.DevSeeds do
   end
 
   defp seed_staff_person do
-    dispatch_unless_projected(Membership.get_person_by_email(@gallery_staff_email), fn ->
+    dispatch_unless_projected(PersonQueries.get_person_by_email(@gallery_staff_email), fn ->
       Membership.create_person(
         %{
           person_id: @gallery_staff_person_id,
@@ -425,7 +431,7 @@ defmodule Memba.DevSeeds do
   defp seed_messages(clubs) do
     Enum.each(clubs, fn club ->
       Enum.each(club.messages, fn message ->
-        if Messaging.get_message(message.message_id) do
+        if MessageQueries.get_message(message.message_id) do
           :ok
         else
           assert_ok!(
@@ -472,7 +478,7 @@ defmodule Memba.DevSeeds do
   end
 
   defp post_seed_reply(reply_message_id, sender_id, body) do
-    if Messaging.get_message(reply_message_id) do
+    if MessageQueries.get_message(reply_message_id) do
       :ok
     else
       assert_ok!(
@@ -491,7 +497,7 @@ defmodule Memba.DevSeeds do
 
     await_read_model!(
       "seed reply #{reply_message_id} to be queryable via Messaging.get_message/1",
-      fn -> Messaging.get_message(reply_message_id) end
+      fn -> MessageQueries.get_message(reply_message_id) end
     )
   end
 
@@ -510,7 +516,7 @@ defmodule Memba.DevSeeds do
       await_read_model!(
         "reply notification deliveries for #{message_id} to reach the local mailbox",
         fn ->
-          expected = message_id |> Messaging.list_recipient_deliveries() |> length()
+          expected = message_id |> DeliveryQueries.list_recipient_deliveries() |> length()
 
           if expected > 0 do
             Memba.Messaging.EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
@@ -528,7 +534,7 @@ defmodule Memba.DevSeeds do
 
   defp report_delivery_statuses!(message) do
     message.message_id
-    |> Messaging.list_recipient_deliveries()
+    |> DeliveryQueries.list_recipient_deliveries()
     |> Enum.zip(message.statuses)
     |> Enum.each(fn {delivery, status} ->
       report_delivery_status!(message.message_id, delivery.delivery_id, status)
@@ -676,7 +682,7 @@ defmodule Memba.DevSeeds do
     club_ids = MapSet.new(Enum.map(@clubs, & &1.club_id))
 
     await_read_model!("seeded clubs to be queryable via Membership.list_clubs/0", fn ->
-      Membership.list_clubs()
+      ClubGroupQueries.list_clubs()
       |> Enum.map(& &1.club_id)
       |> MapSet.new()
       |> then(&MapSet.subset?(club_ids, &1))
@@ -690,8 +696,8 @@ defmodule Memba.DevSeeds do
       @clubs
       |> all_members()
       |> Enum.map(& &1.person_id)
-      |> Enum.all?(&Membership.get_person/1) and
-        Membership.list_people()
+      |> Enum.all?(&PersonQueries.get_person/1) and
+        PersonQueries.list_people()
         |> Enum.map(& &1.person_id)
         |> MapSet.new()
         |> then(&MapSet.subset?(person_ids, &1))
@@ -707,7 +713,7 @@ defmodule Memba.DevSeeds do
         fn ->
           actual_member_ids =
             club.club_id
-            |> Membership.list_active_members_of_club()
+            |> ClubGroupQueries.list_active_members_of_club()
             |> Enum.map(& &1.id)
             |> MapSet.new()
 
@@ -741,7 +747,7 @@ defmodule Memba.DevSeeds do
     await_read_model!(
       "pending invitation for #{club.name} to be queryable via Membership.get_pending_club_member_invitation_by_email/2",
       fn ->
-        Membership.get_pending_club_member_invitation_by_email(
+        InvitationQueries.get_pending_by_email(
           club.club_id,
           "invitee.kac@example.com"
         )
@@ -754,7 +760,7 @@ defmodule Memba.DevSeeds do
       "seeded message #{message.subject} to be queryable via Messaging.list_messages_for_club/1",
       fn ->
         club.club_id
-        |> Messaging.list_messages_for_club()
+        |> MessageQueries.list_messages_for_club()
         |> Enum.any?(&(&1.message_id == message.message_id))
       end
     )
@@ -767,7 +773,7 @@ defmodule Memba.DevSeeds do
       "recipient deliveries for #{message.subject} to be queryable via Messaging.list_recipient_deliveries/1",
       fn ->
         message.message_id
-        |> Messaging.list_recipient_deliveries()
+        |> DeliveryQueries.list_recipient_deliveries()
         |> length() == expected_count
       end
     )
@@ -790,7 +796,7 @@ defmodule Memba.DevSeeds do
       fn ->
         actual_member_status_counts =
           message.message_id
-          |> Messaging.list_member_email_deliverys()
+          |> DeliveryQueries.list_member_email_deliverys()
           |> Enum.map(& &1.status)
           |> Enum.frequencies()
 
@@ -803,7 +809,7 @@ defmodule Memba.DevSeeds do
       fn ->
         actual_operator_status_counts =
           message.message_id
-          |> Messaging.list_operator_email_deliveries()
+          |> DeliveryQueries.list_operator_email_deliveries()
           |> Enum.map(& &1.status)
           |> Enum.frequencies()
 
@@ -821,7 +827,7 @@ defmodule Memba.DevSeeds do
         fn ->
           actual_message_ids =
             club.club_id
-            |> Messaging.list_messages_for_club()
+            |> MessageQueries.list_messages_for_club()
             |> Enum.map(& &1.message_id)
             |> MapSet.new()
 
@@ -835,7 +841,7 @@ defmodule Memba.DevSeeds do
     await_read_model!(
       "inbound email source #{provider}/#{provider_message_id} to be queryable via Messaging.get_inbound_email_source/2",
       fn ->
-        Messaging.get_inbound_email_source(provider, provider_message_id)
+        MessageSourceQueries.get_inbound_email_source(provider, provider_message_id)
       end
     )
   end

@@ -1,7 +1,9 @@
 defmodule Memba.DevSeedsRepliesTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.PersonQueries
   alias Memba.Messaging
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.LocalDeliveryFacts
 
   @reply_one "msg_30000000-0000-0000-0000-000000000101"
@@ -17,5 +19,19 @@ defmodule Memba.DevSeedsRepliesTest do
 
     delivered_message_ids = LocalDeliveryFacts.list() |> Enum.map(& &1.message_id)
     assert @reply_one in delivered_message_ids
+
+    assert %{person_id: "per_5ca11e2f-5ca1-5ca1-5ca1-5ca11e2f5ca1"} =
+             PersonQueries.get_person_by_email("gallery-staff@memba.io")
+
+    first_message = "msg_30000000-0000-0000-0000-000000000001"
+    assert length(DeliveryQueries.list_recipient_deliveries(first_message)) == 4
+
+    assert DeliveryQueries.list_operator_email_deliveries(first_message)
+           |> Enum.frequencies_by(& &1.status) ==
+             %{"delivered" => 1, "bounced" => 1, "sent" => 1, "delayed" => 1}
+
+    assert DeliveryQueries.list_member_email_deliverys(first_message)
+           |> Enum.frequencies_by(& &1.status) ==
+             %{"delivered" => 1, "delivery problem" => 2, "sent" => 1}
   end
 end
