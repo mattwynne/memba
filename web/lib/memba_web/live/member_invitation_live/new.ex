@@ -8,9 +8,9 @@ defmodule MembaWeb.MemberInvitationLive.New do
   use MembaWeb, :live_view
 
   alias LiveQuery.Binding
-  alias Memba.Membership
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.InvitationIssuanceWorkflow
   alias Memba.Membership.InvitationQueries
   alias MembaWeb.ClubSite
   alias MembaWeb.LiveQuery.MembaReadModelSource
@@ -240,7 +240,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
     pending? = pending_invitation?(club_id, normalized_email)
 
     with {:ok, invitation} <-
-           Membership.invite_club_member(
+           InvitationIssuanceWorkflow.invite(
              %{"club_id" => club_id, "email" => normalized_email},
              consistency: :strong
            ),

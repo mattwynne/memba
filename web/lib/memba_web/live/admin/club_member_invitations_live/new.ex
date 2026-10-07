@@ -1,10 +1,10 @@
 defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
   use MembaWeb, :live_view
 
-  alias Memba.Membership
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.InvitationIssuanceWorkflow
   alias Memba.Membership.InvitationQueries
 
   @empty_invitation %{"email" => ""}
@@ -31,7 +31,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
          {:ok, invited_email} <- invitation_email(invitation_params),
          pending? = pending_invitation?(socket.assigns.club_id, invited_email.normalized_email),
          {:ok, invitation} <-
-           Membership.invite_club_member(
+           InvitationIssuanceWorkflow.invite(
              %{"club_id" => socket.assigns.club_id, "email" => invited_email.normalized_email},
              consistency: :strong
            ),
