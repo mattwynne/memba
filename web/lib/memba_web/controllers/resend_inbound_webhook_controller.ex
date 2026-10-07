@@ -1,7 +1,7 @@
 defmodule MembaWeb.ResendInboundWebhookController do
   use MembaWeb, :controller
 
-  alias Memba.Messaging
+  alias Memba.Messaging.InboundClubEmail
   alias MembaWeb.ResendInboundEmailParser
   alias MembaWeb.ResendReceivedEmail
 
@@ -18,7 +18,7 @@ defmodule MembaWeb.ResendInboundWebhookController do
   end
 
   defp accept_resend_inbound_email(conn, attrs) do
-    case Messaging.receive_inbound_club_email(attrs, consistency: :strong) do
+    case InboundClubEmail.receive(attrs, consistency: :strong) do
       {:ok, _result} ->
         conn
         |> put_status(@successful_status)

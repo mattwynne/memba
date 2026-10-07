@@ -4,11 +4,11 @@ defmodule MembaWeb.ConversationFollowController do
   require Logger
 
   alias Memba.Membership
-  alias Memba.Messaging
+  alias Memba.Messaging.EmailConversationStopFollow
   alias MembaWeb.ClubSite
 
   def stop_following(conn, %{"token" => token}) do
-    case Messaging.stop_following_conversation_from_email_token(token, consistency: :strong) do
+    case EmailConversationStopFollow.stop_following(token, consistency: :strong) do
       {:ok, scope} ->
         render_stop_following_success(conn, scope)
 

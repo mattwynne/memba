@@ -1,7 +1,7 @@
 defmodule MembaWeb.PostmarkInboundWebhookController do
   use MembaWeb, :controller
 
-  alias Memba.Messaging
+  alias Memba.Messaging.InboundClubEmail
   alias MembaWeb.PostmarkInboundEmailParser
 
   @successful_status :accepted
@@ -22,7 +22,7 @@ defmodule MembaWeb.PostmarkInboundWebhookController do
 
   defp parse_and_handle_postmark_inbound_event(params) do
     with {:ok, attrs} <- PostmarkInboundEmailParser.parse(params),
-         {:ok, _result} <- Messaging.receive_inbound_club_email(attrs, consistency: :strong) do
+         {:ok, _result} <- InboundClubEmail.receive(attrs, consistency: :strong) do
       :ok
     end
   end

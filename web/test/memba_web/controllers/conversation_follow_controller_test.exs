@@ -75,6 +75,31 @@ defmodule MembaWeb.ConversationFollowControllerTest do
     assert Messaging.following_conversation?(conversation_id, alice.person_id)
   end
 
+  test "a former member can use the signed stop-follow link", %{conn: conn} do
+    club = create_club!()
+    alice = create_person!(name: "Alice Sender", email: "alice@example.com")
+    bob = create_person!(name: "Bob Remaining Member", email: "bob@example.com")
+    add_member!(club.club_id, bob.person_id)
+    membership_id = add_member!(club.club_id, alice.person_id)
+    conversation_id = send_root_message!(club.club_id, alice.person_id)
+    token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveClubMember{
+                 club_id: club.club_id,
+                 membership_id: membership_id,
+                 person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    conn = get(conn, ~p"/messages/conversations/stop-following/#{token}")
+
+    assert html_response(conn, 200) =~ "You’ve stopped following this conversation"
+    refute Messaging.following_conversation?(conversation_id, alice.person_id)
+  end
+
   test "email workflow lets a former member stop following and preserves the result shape" do
     club = create_club!()
     bob = create_person!(name: "Bob Remaining Member", email: "bob@example.com")

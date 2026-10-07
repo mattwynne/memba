@@ -52,6 +52,21 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
   end
 
+  test "dedicated inbound route records a receipt through the shared workflow", %{conn: conn} do
+    payload =
+      valid_payload(%{"id" => "evt_dedicated", "data" => %{"email_id" => "email_dedicated"}})
+
+    conn =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post(~p"/webhooks/resend/inbound", Jason.encode!(payload))
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %{provider_event_id: "evt_dedicated", status: "rejected"} =
+             Messaging.get_inbound_email_source("resend", "email_dedicated")
+  end
+
   test "translates parsed Resend payloads into the provider-neutral inbound email API",
        %{conn: conn} do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")

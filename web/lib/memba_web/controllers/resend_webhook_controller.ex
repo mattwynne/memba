@@ -1,7 +1,7 @@
 defmodule MembaWeb.ResendWebhookController do
   use MembaWeb, :controller
 
-  alias Memba.Messaging
+  alias Memba.Messaging.InboundClubEmail
   alias MembaWeb.EmailDeliveryStatusAdapter
   alias MembaWeb.ResendInboundEmailParser
   alias MembaWeb.ResendReceivedEmail
@@ -54,7 +54,7 @@ defmodule MembaWeb.ResendWebhookController do
   defp handle_resend_inbound_email_event(params) do
     with {:ok, params} <- ResendReceivedEmail.enrich_payload(params),
          {:ok, attrs} <- ResendInboundEmailParser.parse(params),
-         {:ok, _result} <- Messaging.receive_inbound_club_email(attrs, consistency: :strong) do
+         {:ok, _result} <- InboundClubEmail.receive(attrs, consistency: :strong) do
       :ok
     end
   end
