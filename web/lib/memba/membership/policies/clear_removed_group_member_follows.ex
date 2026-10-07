@@ -15,7 +15,9 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
 
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch
+  alias Memba.Messaging.ConversationFollowPreparation
+  alias Memba.Messaging.ConversationListing
   alias Memba.Messaging.Projectors.ConversationFollow
 
   @impl Commanded.Event.Handler
@@ -34,19 +36,25 @@ defmodule Memba.Membership.Policies.ClearRemovedGroupMemberFollows do
 
   defp clear_conversation_follows(event) do
     event.group_id
-    |> Messaging.list_conversations_for_group()
+    |> ConversationListing.list_for_group()
     |> Enum.reduce_while(:ok, fn conversation, :ok ->
-      case Messaging.unfollow_conversation(
-             %{
-               club_id: event.club_id,
-               conversation_id: conversation.conversation_id,
-               member_id: event.person_id
-             },
-             consistency: [ConversationFollow]
-           ) do
+      case unfollow_conversation(event, conversation) do
         :ok -> {:cont, :ok}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
+  end
+
+  defp unfollow_conversation(event, conversation) do
+    with {:ok, command} <-
+           ConversationFollowPreparation.prepare_unfollow(%{
+             club_id: event.club_id,
+             conversation_id: conversation.conversation_id,
+             member_id: event.person_id
+           }),
+         {:ok, dispatch_result} <-
+           CommandDispatch.dispatch(command, consistency: [ConversationFollow]) do
+      dispatch_result
+    end
   end
 end
