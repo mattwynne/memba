@@ -11,7 +11,6 @@ defmodule Memba.Accounts do
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
   alias Memba.AuthEmailProgressChanges
-  alias Memba.Membership
   alias Memba.Membership.MembershipQueries
   alias Memba.Repo
 
@@ -279,7 +278,7 @@ defmodule Memba.Accounts do
         false
 
       normalized_email ->
-        Membership.active_member_of_club_by_email?(club_id, normalized_email)
+        MembershipQueries.active_member_of_club_by_email?(club_id, normalized_email)
     end
   end
 
