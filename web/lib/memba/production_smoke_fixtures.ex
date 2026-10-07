@@ -2,13 +2,14 @@ defmodule Memba.ProductionSmokeFixtures do
   @moduledoc """
   Ensures the production smoke-test membership fixture exists.
 
-  The fixture is intentionally created through the Membership command API so the
-  event store remains the source of truth and projections are repaired by normal
-  projectors. It is idempotent and safe to run during every release migration.
+  The fixture is created through focused Membership command preparers and dispatch
+  so the event store remains the source of truth and projections are repaired by
+  normal projectors. It is idempotent and safe to run during every release migration.
   """
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.{AddMember, ClubCommands, ClubGroupQueries, CommandDispatch}
+  alias Memba.Membership.{PersonCommands, PersonQueries}
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Repo
 
@@ -34,40 +35,46 @@ defmodule Memba.ProductionSmokeFixtures do
   end
 
   defp ensure_club! do
-    case Membership.get_club_by_slug(@club_slug) do
+    case ClubGroupQueries.get_club_by_slug(@club_slug) do
       nil ->
-        :ok =
-          Membership.create_club(
-            %{club_id: ID.generate(:club), name: @club_name, slug: @club_slug},
-            consistency: :strong
-          )
+        {:ok, command} =
+          ClubCommands.prepare_create(%{
+            club_id: ID.generate(:club),
+            name: @club_name,
+            slug: @club_slug
+          })
 
-        Membership.get_club_by_slug(@club_slug)
+        :ok = CommandDispatch.dispatch(command, consistency: :strong)
+        ClubGroupQueries.get_club_by_slug(@club_slug)
 
       %{name: @club_name} = club ->
         club
 
       club ->
-        :ok =
-          Membership.update_club(
-            %{club_id: club.club_id, name: @club_name, slug: @club_slug},
-            consistency: :strong
-          )
+        {:ok, command} =
+          ClubCommands.prepare_update(%{
+            club_id: club.club_id,
+            name: @club_name,
+            slug: @club_slug
+          })
 
-        Membership.get_club_by_slug(@club_slug)
+        :ok = CommandDispatch.dispatch(command, consistency: :strong)
+        ClubGroupQueries.get_club_by_slug(@club_slug)
     end
   end
 
   defp ensure_person! do
-    case Membership.get_person_by_email(@person_email) do
+    case PersonQueries.get_person_by_email(@person_email) do
       nil ->
-        :ok =
-          Membership.create_person(
-            %{person_id: ID.generate(:person), name: @person_name, email: @person_email},
-            consistency: :strong
-          )
+        {:ok, command} =
+          PersonCommands.prepare_create(%{
+            person_id: ID.generate(:person),
+            name: @person_name,
+            email: @person_email
+          })
 
-        Membership.get_person_by_email(@person_email)
+        :ok = CommandDispatch.dispatch(command, consistency: :strong)
+        PersonQueries.get_person_by_email(@person_email)
 
       person ->
         person
@@ -83,11 +90,14 @@ defmodule Memba.ProductionSmokeFixtures do
       nil ->
         membership_id = ID.generate(:membership)
 
-        :ok =
-          Membership.add_member(
-            %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-            consistency: :strong
-          )
+        {:ok, command} =
+          AddMember.prepare(%{
+            membership_id: membership_id,
+            club_id: club_id,
+            person_id: person_id
+          })
+
+        :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
         membership_id
 
