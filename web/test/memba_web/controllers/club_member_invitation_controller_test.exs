@@ -147,6 +147,53 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
   end
 
   describe "POST /invitations/club-members/profile" do
+    test "rejects a profile submission after the signed-in identity changes", %{conn: conn} do
+      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      {invitation, token} = invite_member!(club, "robin@example.com")
+
+      conn = get(conn, ~p"/invitations/club-members/#{token}")
+
+      profile_conn =
+        conn
+        |> recycle()
+        |> put_session(IdentityAuth.identity_session_key(), "someone-else@example.com")
+        |> post(~p"/invitations/club-members/profile", profile: %{name: "Robin Example"})
+
+      assert redirected_to(profile_conn) == ~p"/auth"
+
+      assert flash(profile_conn, :error) ==
+               "Follow your invitation link before completing your profile."
+
+      assert get_session(profile_conn, IdentityAuth.club_member_invitation_session_key()) == nil
+      assert Membership.get_club_member_invitation(invitation.invitation_id).status == "pending"
+      refute Membership.get_person_by_email("robin@example.com")
+    end
+
+    test "rejects a profile journey whose club does not match the verified invitation",
+         %{conn: conn} do
+      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      other_club = insert_membership_club!(name: "Other Club", slug: "other")
+      {invitation, token} = invite_member!(club, "robin@example.com")
+
+      conn = get(conn, ~p"/invitations/club-members/#{token}")
+      journey = get_session(conn, IdentityAuth.club_member_invitation_session_key())
+
+      profile_conn =
+        conn
+        |> recycle()
+        |> put_session(
+          IdentityAuth.club_member_invitation_session_key(),
+          %{journey | "club_id" => other_club.club_id}
+        )
+        |> post(~p"/invitations/club-members/profile", profile: %{name: "Robin Example"})
+
+      assert redirected_to(profile_conn) == ~p"/auth"
+      assert get_session(profile_conn, IdentityAuth.club_member_invitation_session_key()) == nil
+      assert Membership.get_club_member_invitation(invitation.invitation_id).status == "pending"
+      refute Membership.get_person_by_email("robin@example.com")
+      refute Membership.active_member_of_club_by_email?(other_club.club_id, "robin@example.com")
+    end
+
     test "keeps a blank-name invitee on profile completion without accepting the invitation",
          %{conn: conn} do
       club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")

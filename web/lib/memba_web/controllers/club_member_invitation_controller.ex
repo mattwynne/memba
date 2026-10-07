@@ -3,7 +3,10 @@ defmodule MembaWeb.ClubMemberInvitationController do
 
   require Logger
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.InvitationAcceptance
+  alias Memba.Membership.InvitationQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Person
   alias MembaWeb.ClubSite
@@ -44,7 +47,7 @@ defmodule MembaWeb.ClubMemberInvitationController do
   end
 
   def callback(conn, %{"token" => token}) do
-    case Membership.get_club_member_invitation_by_token(token) do
+    case InvitationQueries.get_by_token(token) do
       %ClubInvitation{status: "pending"} = invitation ->
         continue_pending_invitation(conn, invitation)
 
@@ -57,7 +60,7 @@ defmodule MembaWeb.ClubMemberInvitationController do
   end
 
   defp continue_pending_invitation(conn, %ClubInvitation{} = invitation) do
-    case Membership.get_person_by_email(invitation.normalized_email) do
+    case PersonQueries.get_person_by_email(invitation.normalized_email) do
       %Person{} = person ->
         accept_existing_person_invitation(conn, invitation, person)
 
@@ -71,7 +74,7 @@ defmodule MembaWeb.ClubMemberInvitationController do
          %ClubInvitation{} = invitation,
          %Person{} = person
        ) do
-    case Membership.accept_club_member_invitation_for_existing_person(
+    case InvitationAcceptance.accept_existing(
            %{invitation_id: invitation.invitation_id, person_id: person.person_id},
            consistency: :strong
          ) do
@@ -100,7 +103,7 @@ defmodule MembaWeb.ClubMemberInvitationController do
   end
 
   defp complete_pending_profile(conn, journey, profile_params) do
-    case Membership.complete_invited_club_member_profile(
+    case InvitationAcceptance.complete_profile(
            %{
              invitation_id: journey.invitation.invitation_id,
              name: Map.get(profile_params, "name")
@@ -135,7 +138,7 @@ defmodule MembaWeb.ClubMemberInvitationController do
   end
 
   defp redirect_to_invited_club(conn, %ClubInvitation{} = invitation) do
-    case Membership.get_club(invitation.club_id) do
+    case ClubGroupQueries.get_club(invitation.club_id) do
       nil ->
         redirect(conn, to: ~p"/")
 
@@ -148,7 +151,7 @@ defmodule MembaWeb.ClubMemberInvitationController do
   defp redirect_to_club_url(conn, path), do: redirect(conn, to: path)
 
   defp profile_completion_notice(%ClubInvitation{} = invitation) do
-    case Membership.get_club(invitation.club_id) do
+    case ClubGroupQueries.get_club(invitation.club_id) do
       nil -> "Finish your profile to accept this invitation."
       club -> "Finish your profile to join #{club.name}."
     end
@@ -175,14 +178,14 @@ defmodule MembaWeb.ClubMemberInvitationController do
          current_email when is_binary(current_email) <-
            get_session(conn, IdentityAuth.identity_session_key()),
          :ok <- ensure_same_email(current_email, email),
-         %ClubInvitation{} = invitation <- Membership.get_club_member_invitation(invitation_id),
+         %ClubInvitation{} = invitation <- InvitationQueries.get(invitation_id),
          :ok <- ensure_matching_invitation(invitation, club_id, email) do
       case invitation.status do
         "pending" ->
           {:ok,
            %{
              invitation: invitation,
-             club: Membership.get_club(invitation.club_id),
+             club: ClubGroupQueries.get_club(invitation.club_id),
              email: invitation.normalized_email
            }}
 
