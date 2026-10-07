@@ -17,14 +17,17 @@ defmodule Memba.DevSeeds do
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
   alias Memba.ClubInboundEmailAddress
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
   alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.InvitationIssuanceWorkflow
   alias Memba.Membership.InvitationQueries
   alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Roles
   alias Memba.Messaging
@@ -262,10 +265,14 @@ defmodule Memba.DevSeeds do
   defp seed_membership do
     Enum.each(@clubs, fn club ->
       dispatch_unless_projected(ClubGroupQueries.get_club(club.club_id), fn ->
-        Membership.create_club(
-          %{club_id: club.club_id, name: club.name, slug: club.slug},
-          consistency: :strong
-        )
+        with {:ok, command} <-
+               ClubCommands.prepare_create(%{
+                 club_id: club.club_id,
+                 name: club.name,
+                 slug: club.slug
+               }) do
+          CommandDispatch.dispatch(command, consistency: :strong)
+        end
       end)
     end)
 
@@ -275,14 +282,14 @@ defmodule Memba.DevSeeds do
     |> all_members()
     |> Enum.each(fn member ->
       dispatch_unless_projected(PersonQueries.get_person(member.person_id), fn ->
-        Membership.create_person(
-          %{
-            person_id: member.person_id,
-            name: member.name,
-            email_addresses: email_addresses(member)
-          },
-          consistency: :strong
-        )
+        with {:ok, command} <-
+               PersonCommands.prepare_create(%{
+                 person_id: member.person_id,
+                 name: member.name,
+                 email_addresses: email_addresses(member)
+               }) do
+          CommandDispatch.dispatch(command, consistency: :strong)
+        end
       end)
     end)
 
@@ -293,14 +300,14 @@ defmodule Memba.DevSeeds do
       Enum.each(club.members, fn member ->
         unless MembershipQueries.active_member_of_club?(club.club_id, member.person_id) do
           assert_ok!(
-            Membership.add_member(
-              %{
-                membership_id: member.membership_id,
-                club_id: club.club_id,
-                person_id: member.person_id
-              },
-              consistency: :strong
-            ),
+            with {:ok, command} <-
+                   AddMember.prepare(%{
+                     membership_id: member.membership_id,
+                     club_id: club.club_id,
+                     person_id: member.person_id
+                   }) do
+              CommandDispatch.dispatch(command, consistency: :strong)
+            end,
             "add member #{member.name} to #{club.name}"
           )
         end
@@ -354,14 +361,14 @@ defmodule Memba.DevSeeds do
 
   defp seed_staff_person do
     dispatch_unless_projected(PersonQueries.get_person_by_email(@gallery_staff_email), fn ->
-      Membership.create_person(
-        %{
-          person_id: @gallery_staff_person_id,
-          name: "Gallery Staff",
-          email: @gallery_staff_email
-        },
-        consistency: :strong
-      )
+      with {:ok, command} <-
+             PersonCommands.prepare_create(%{
+               person_id: @gallery_staff_person_id,
+               name: "Gallery Staff",
+               email: @gallery_staff_email
+             }) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
     end)
   end
 
@@ -369,7 +376,7 @@ defmodule Memba.DevSeeds do
     club = Enum.find(clubs, &(&1.key == "kac"))
 
     result =
-      Membership.invite_club_member(
+      InvitationIssuanceWorkflow.invite(
         %{
           invitation_id: "inv_50000000-0000-0000-0000-000000000001",
           club_id: club.club_id,
