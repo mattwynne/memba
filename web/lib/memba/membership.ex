@@ -549,14 +549,8 @@ defmodule Memba.Membership do
   then compare stable person IDs. The member row retains the primary email for
   display and delivery. Unknown addresses and missing members fail closed.
   """
-  def find_member_for_email(members, email) when is_list(members) do
-    case get_person_by_email(email) do
-      %{person_id: person_id} -> Enum.find(members, &(&1.id == person_id))
-      _ -> nil
-    end
-  end
-
-  def find_member_for_email(_members, _email), do: nil
+  def find_member_for_email(members, email),
+    do: PersonQueries.find_member_for_email(members, email)
 
   @doc """
   List active members of the given conversation group.

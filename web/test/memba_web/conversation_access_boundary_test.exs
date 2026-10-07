@@ -47,6 +47,8 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
 
     assert source =~ "AuthoritativeMembershipQueries.active_member_of_group_authoritatively?("
     assert source =~ "ConversationListing.list_for_group("
+    assert source =~ "PersonQueries.find_member_for_email("
+    refute source =~ "Membership.find_member_for_email("
   end
 
   test "detail and compose access use public context authorization boundaries" do
@@ -57,6 +59,22 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
     assert detail_source =~ "ConversationGroupAccessQueries.member_has_conversation_access?("
     assert compose_live_source =~ "MemberMessageComposeQuery.query()"
     assert compose_query_source =~ "ClubGroupQueries.list_active_groups_for_member("
+  end
+
+  test "stop-follow URL loads the club through the focused read boundary" do
+    source = read_source!("lib/memba_web/controllers/conversation_follow_controller.ex")
+
+    assert source =~ "ClubGroupQueries.get_club("
+    refute source =~ "Membership.get_club("
+  end
+
+  test "scoped email member resolution lives in PersonQueries behind the facade" do
+    facade = read_source!("lib/memba/membership.ex")
+    query = read_source!("lib/memba/membership/person_queries.ex")
+
+    assert facade =~ "do: PersonQueries.find_member_for_email(members, email)"
+    assert query =~ "case get_person_by_email(email) do"
+    assert query =~ "Enum.find(members, &(&1.id == person_id))"
   end
 
   defp read_source!(relative_path) do

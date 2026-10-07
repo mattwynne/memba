@@ -25,6 +25,20 @@ defmodule Memba.Membership.PersonQueries do
   def get_person_by_email(email), do: find_person_by_email(email, false)
   def get_verified_person_by_email(email), do: find_person_by_email(email, true)
 
+  @doc """
+  Resolve an email to a projected person, then find that person's row only in
+  the supplied scoped member list. The row's primary email remains unchanged.
+  Unknown addresses and members absent from the list return `nil`.
+  """
+  def find_member_for_email(members, email) when is_list(members) do
+    case get_person_by_email(email) do
+      %{person_id: person_id} -> Enum.find(members, &(&1.id == person_id))
+      _ -> nil
+    end
+  end
+
+  def find_member_for_email(_members, _email), do: nil
+
   defp find_person_by_email(email, verified?) do
     case normalize_email(email) do
       nil ->

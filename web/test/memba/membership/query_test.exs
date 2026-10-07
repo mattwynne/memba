@@ -140,6 +140,51 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
+  describe "find_member_for_email/2" do
+    test "resolves primary and alternate addresses to the first matching scoped row" do
+      person =
+        create_person(
+          name: "Robin",
+          email: "robin.primary@example.com",
+          email_addresses: [
+            %{email: "robin.primary@example.com", is_primary: true},
+            %{email: "robin.alternate@example.com", is_primary: false}
+          ]
+        )
+
+      first = %{id: person.person_id, email: "robin.primary@example.com", membership_id: "first"}
+      second = %{first | membership_id: "second"}
+      members = [%{id: Memba.ID.generate(:person)}, first, second]
+
+      assert Membership.find_member_for_email(members, " ROBIN.ALTERNATE@example.com ") == first
+      assert Membership.find_member_for_email(members, "robin.primary@example.com") == first
+    end
+
+    test "does not return a person outside the supplied membership scope" do
+      person =
+        create_person(
+          name: "Robin",
+          email: "robin.primary@example.com",
+          email_addresses: [
+            %{email: "robin.primary@example.com", is_primary: true},
+            %{email: "robin.alternate@example.com", is_primary: false}
+          ]
+        )
+
+      other_member = %{id: Memba.ID.generate(:person), email: "robin.alternate@example.com"}
+
+      assert is_nil(
+               Membership.find_member_for_email([other_member], "robin.alternate@example.com")
+             )
+
+      assert is_nil(Membership.find_member_for_email([], "robin.alternate@example.com"))
+      assert is_nil(Membership.find_member_for_email([other_member], "unknown@example.com"))
+      assert is_nil(Membership.find_member_for_email([other_member], nil))
+      assert is_nil(Membership.find_member_for_email(nil, "robin.alternate@example.com"))
+      refute other_member.id == person.person_id
+    end
+  end
+
   describe "list_active_members_of_club/1" do
     test "returns active members of the given club and excludes members of other clubs" do
       kootenay_club_id = Memba.ID.generate(:club)

@@ -3,7 +3,7 @@ defmodule MembaWeb.ConversationFollowController do
 
   require Logger
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Messaging.EmailConversationStopFollow
   alias MembaWeb.ClubSite
 
@@ -36,7 +36,7 @@ defmodule MembaWeb.ConversationFollowController do
   end
 
   defp conversation_url(%{club_id: club_id, conversation_id: conversation_id}) do
-    case Membership.get_club(club_id) do
+    case ClubGroupQueries.get_club(club_id) do
       nil -> nil
       club -> ClubSite.url(club, "/messages/#{conversation_id}")
     end

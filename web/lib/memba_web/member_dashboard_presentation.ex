@@ -10,7 +10,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubGroupQueries
@@ -319,7 +319,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp fetch_current_member(_members, nil), do: {:error, :forbidden}
 
   defp fetch_current_member(members, identity) do
-    case Membership.find_member_for_email(members, Map.get(identity, :email)) do
+    case PersonQueries.find_member_for_email(members, Map.get(identity, :email)) do
       nil -> {:error, :forbidden}
       current_member -> {:ok, current_member}
     end
