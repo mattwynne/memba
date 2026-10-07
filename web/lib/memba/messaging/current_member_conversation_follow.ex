@@ -9,7 +9,7 @@ defmodule Memba.Messaging.CurrentMemberConversationFollow do
   """
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Messaging.App
   alias Memba.Messaging.AuthorizationCheckpoint
   alias Memba.Messaging.Commands.FollowConversation
@@ -62,7 +62,11 @@ defmodule Memba.Messaging.CurrentMemberConversationFollow do
            App.aggregate_state(Message, conversation_id),
          [{group_id, granted_level}] <- Map.to_list(group_access) do
       granted_level in ConversationAccess.grant_levels_including("read") and
-        Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id)
+        AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
+          club_id,
+          group_id,
+          person_id
+        )
     else
       _missing_or_inaccessible -> false
     end

@@ -7,12 +7,12 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   participation in the destination group. It is deliberately fixed in code
   rather than persisted or configurable.
 
-  Authorization uses Membership's public authoritative API so Messaging can
+  Authorization uses Membership's authoritative query delegate so Messaging can
   enforce the policy without coupling to Membership aggregate or projection
   storage.
   """
 
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
@@ -59,9 +59,12 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   def authorize(_sender, _destination), do: {:error, :invalid_inbound_authorization, nil}
 
   defp authorized_sender?(sender, destination) do
-    Membership.active_member_of_club_authoritatively?(destination.club_id, sender.person_id) and
+    AuthoritativeMembershipQueries.active_member_of_club_authoritatively?(
+      destination.club_id,
+      sender.person_id
+    ) and
       (not SystemGroups.custom_group?(destination) or
-         Membership.active_member_of_group_authoritatively?(
+         AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
            destination.club_id,
            destination.group_id,
            sender.person_id

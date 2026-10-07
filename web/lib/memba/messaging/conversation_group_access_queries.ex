@@ -2,7 +2,7 @@ defmodule Memba.Messaging.ConversationGroupAccessQueries do
   @moduledoc "Read-only conversation audience and group-access queries."
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -35,7 +35,11 @@ defmodule Memba.Messaging.ConversationGroupAccessQueries do
          {:ok, %{club_id: ^club_id, group_id: group_id, access_level: granted_access_level}} <-
            resolve_conversation_audience(conversation_id),
          true <-
-           Membership.active_member_of_group_authoritatively?(club_id, group_id, person_id) do
+           AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
+             club_id,
+             group_id,
+             person_id
+           ) do
       granted_access_level in ConversationAccess.grant_levels_including(access_level)
     else
       _invalid_missing_or_inaccessible -> false
