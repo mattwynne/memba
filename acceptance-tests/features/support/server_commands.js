@@ -344,10 +344,13 @@ ensure_person = fn person ->
     case Memba.Membership.PersonQueries.get_person_by_email(email) do
       nil ->
         person_id = Memba.ID.generate(:person)
-        :ok = Memba.Membership.create_person(
-          %{person_id: person_id, name: person_name, email: email},
-          consistency: :strong
-        )
+        {:ok, command} =
+          Memba.Membership.PersonCommands.prepare_create(%{
+            person_id: person_id,
+            name: person_name,
+            email: email
+          })
+        :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
         Memba.Membership.PersonQueries.get_person_by_email(email)
 
       person ->
@@ -377,18 +380,24 @@ club =
       existing_club
 
     existing_club ->
-      :ok = Memba.Membership.update_club(
-        %{club_id: existing_club.club_id, name: club_name, slug: club_slug},
-        consistency: :strong
-      )
+      {:ok, command} =
+        Memba.Membership.ClubCommands.prepare_update(%{
+          club_id: existing_club.club_id,
+          name: club_name,
+          slug: club_slug
+        })
+      :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
       Memba.Membership.ClubGroupQueries.get_club(existing_club.club_id)
 
     true ->
       club_id = Memba.ID.generate(:club)
-      :ok = Memba.Membership.create_club(
-        %{club_id: club_id, name: club_name, slug: club_slug},
-        consistency: :strong
-      )
+      {:ok, command} =
+        Memba.Membership.ClubCommands.prepare_create(%{
+          club_id: club_id,
+          name: club_name,
+          slug: club_slug
+        })
+      :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
       Memba.Membership.ClubGroupQueries.get_club(club_id)
   end
 
