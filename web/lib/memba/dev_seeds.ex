@@ -30,11 +30,12 @@ defmodule Memba.DevSeeds do
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Roles
-  alias Memba.Messaging
   alias Memba.Messaging.CommandDispatch, as: MessagingCommandDispatch
   alias Memba.Messaging.ConversationFollowPreparation
   alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.EmailDeliveryProviders.Local, as: LocalDeliveryProvider
+  alias Memba.Messaging.EmailDeliveryReport
+  alias Memba.Messaging.InboundClubEmail
   alias Memba.Messaging.LocalDeliveryFacts
   alias Memba.Messaging.MessageQueries
   alias Memba.Messaging.MessageSourceQueries
@@ -570,38 +571,44 @@ defmodule Memba.DevSeeds do
 
   defp report_delivery_status!(message_id, delivery_id, "delivered") do
     assert_ok!(
-      Messaging.report_email_delivery_delivered(
-        %{message_id: message_id, delivery_id: delivery_id},
-        consistency: :strong
-      ),
+      with {:ok, command} <-
+             EmailDeliveryReport.delivered(%{message_id: message_id, delivery_id: delivery_id}),
+           {:ok, dispatch_result} <-
+             MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+        dispatch_result
+      end,
       "report delivered delivery #{delivery_id}"
     )
   end
 
   defp report_delivery_status!(message_id, delivery_id, "delayed") do
     assert_ok!(
-      Messaging.report_email_delivery_delayed(
-        %{
-          message_id: message_id,
-          delivery_id: delivery_id,
-          reason: "Temporary mailbox throttling"
-        },
-        consistency: :strong
-      ),
+      with {:ok, command} <-
+             EmailDeliveryReport.delayed(%{
+               message_id: message_id,
+               delivery_id: delivery_id,
+               reason: "Temporary mailbox throttling"
+             }),
+           {:ok, dispatch_result} <-
+             MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+        dispatch_result
+      end,
       "report delayed delivery #{delivery_id}"
     )
   end
 
   defp report_delivery_status!(message_id, delivery_id, "bounced") do
     assert_ok!(
-      Messaging.report_email_delivery_bounced(
-        %{
-          message_id: message_id,
-          delivery_id: delivery_id,
-          reason: "Mailbox unavailable"
-        },
-        consistency: :strong
-      ),
+      with {:ok, command} <-
+             EmailDeliveryReport.bounced(%{
+               message_id: message_id,
+               delivery_id: delivery_id,
+               reason: "Mailbox unavailable"
+             }),
+           {:ok, dispatch_result} <-
+             MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+        dispatch_result
+      end,
       "report bounced delivery #{delivery_id}"
     )
   end
@@ -650,7 +657,7 @@ defmodule Memba.DevSeeds do
     provider_message_id = "dev-seed-unknown-sender-rps"
 
     assert_ok!(
-      Messaging.receive_inbound_club_email(
+      InboundClubEmail.receive(
         %{
           provider: provider,
           provider_message_id: provider_message_id,
