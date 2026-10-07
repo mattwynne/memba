@@ -19,7 +19,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   import Ecto.Query
   require Logger
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
+  alias Memba.Messaging.ConversationAudience
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailHandoffRecovery
   alias Memba.Messaging.EmailDeliveryRequest
@@ -350,10 +352,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
          {:ok, channel} <- request_channel(delivery.channel),
          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
-      club = Membership.get_club(message.club_id)
+      club = ClubGroupQueries.get_club(message.club_id)
 
       with {:ok, audience_group_id} <- audience_group_id(message) do
-        audience_group = Membership.get_group(audience_group_id)
+        audience_group = ClubGroupQueries.get_group(audience_group_id)
         reply_context = reply_context(message, club, delivery)
 
         {:ok,
@@ -438,9 +440,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   end
 
   defp sender_context(sender_id) do
-    with %{name: sender_name} <- Membership.get_person(sender_id),
+    with %{name: sender_name} <- PersonQueries.get_person(sender_id),
          sender_address when is_binary(sender_address) <-
-           Membership.get_person_primary_email(sender_id) do
+           PersonQueries.get_person_primary_email(sender_id) do
       {:ok, sender_name, sender_address}
     else
       nil -> {:error, {:missing_sender_context, sender_id}}
@@ -457,7 +459,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp audience_group_name(_group), do: nil
 
   defp audience_group_id(%MessageProjection{conversation_id: conversation_id}) do
-    case Memba.Messaging.resolve_conversation_audience(conversation_id) do
+    case ConversationAudience.resolve(conversation_id) do
       {:ok, %{group_id: group_id}} -> {:ok, group_id}
       {:error, _reason} = error -> error
     end
@@ -502,7 +504,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp replied_to_message_context(reply_to_message_id) do
     case Repo.get(MessageProjection, reply_to_message_id) do
       %MessageProjection{} = message ->
-        sender = Membership.get_person(message.sender_id)
+        sender = PersonQueries.get_person(message.sender_id)
 
         %{
           reply_to_sender_name: person_name(sender),
