@@ -225,7 +225,7 @@ person_id = Map.fetch!(payload, "personId")
 group_id = Map.fetch!(payload, "groupId")
 %{
   activeClubMember: Memba.Membership.active_member_of_club?(club_id, person_id),
-  boardListed: group_id in (Memba.Membership.list_discoverable_groups_for_member(club_id, person_id) |> Enum.map(& &1.group_id))
+  boardListed: group_id in (Memba.Membership.ClubGroupQueries.list_discoverable_groups_for_member(club_id, person_id) |> Enum.map(& &1.group_id))
 }
 `,
     {
@@ -266,7 +266,7 @@ function assertNoCarolDeliveries(world, labels) {
     assert.equal(
       serverCommands
         .runCommand(
-          `%{recipientIds: Memba.Messaging.list_recipient_deliveries(Map.fetch!(payload, "messageId")) |> Enum.map(& &1.recipient_id)}`,
+          `%{recipientIds: Memba.Messaging.DeliveryQueries.list_recipient_deliveries(Map.fetch!(payload, "messageId")) |> Enum.map(& &1.recipient_id)}`,
           { messageId }
         )
         .recipientIds.includes(carolId),
@@ -342,7 +342,7 @@ function emptyBoard(world) {
 
 function assertBoardMembers(world, expectedNames) {
   const names = serverCommands.runCommand(
-    `%{names: Memba.Membership.list_active_members_of_group(Map.fetch!(payload, "groupId")) |> Enum.map(& &1.name) |> Enum.sort()}`,
+    `%{names: Memba.Membership.ClubGroupQueries.list_active_members_of_group(Map.fetch!(payload, "groupId")) |> Enum.map(& &1.name) |> Enum.sort()}`,
     { groupId: groupId(world, boardName) }
   ).names;
   assert.deepEqual(names, [...expectedNames].sort());
@@ -351,13 +351,13 @@ function assertBoardMembers(world, expectedNames) {
 function assertBoardUnchangedAndListed(world) {
   const state = serverCommands.runCommand(
     `
-group = Memba.Membership.get_group(Map.fetch!(payload, "groupId"))
+group = Memba.Membership.ClubGroupQueries.get_group(Map.fetch!(payload, "groupId"))
 club_id = Map.fetch!(payload, "clubId")
 %{
-  discoverable: Map.fetch!(payload, "groupId") in (Memba.Membership.list_discoverable_groups_for_member(club_id, Map.fetch!(payload, "personId")) |> Enum.map(& &1.group_id)),
+  discoverable: Map.fetch!(payload, "groupId") in (Memba.Membership.ClubGroupQueries.list_discoverable_groups_for_member(club_id, Map.fetch!(payload, "personId")) |> Enum.map(& &1.group_id)),
   name: group.name,
   emailSlug: group.email_slug,
-  conversationSubjects: Memba.Messaging.list_conversations_for_group(group.group_id) |> Enum.map(& &1.subject)
+  conversationSubjects: Memba.Messaging.ConversationListing.list_for_group(group.group_id) |> Enum.map(& &1.subject)
 }
 `,
     {
@@ -374,14 +374,14 @@ club_id = Map.fetch!(payload, "clubId")
 
 function assertBoardNotArchived(world) {
   assert.ok(serverCommands.runCommand(
-    `%{exists: not is_nil(Memba.Membership.get_group(Map.fetch!(payload, "groupId")))}`,
+    `%{exists: not is_nil(Memba.Membership.ClubGroupQueries.get_group(Map.fetch!(payload, "groupId")))}`,
     { groupId: groupId(world, boardName) }
   ).exists);
 }
 
 function assertNoBoardConversation(world, subject) {
   const subjects = serverCommands.runCommand(
-    `%{subjects: Memba.Messaging.list_conversations_for_group(Map.fetch!(payload, "groupId")) |> Enum.map(& &1.subject)}`,
+    `%{subjects: Memba.Messaging.ConversationListing.list_for_group(Map.fetch!(payload, "groupId")) |> Enum.map(& &1.subject)}`,
     { groupId: groupId(world, boardName) }
   ).subjects;
   assert.equal(subjects.includes(subject), false);
@@ -428,7 +428,7 @@ club_id = Map.fetch!(payload, "clubId")
 function recipientDeliveryState(messageId, recipientId) {
   return serverCommands.runCommand(
     `
-delivery = Memba.Messaging.list_recipient_deliveries(Map.fetch!(payload, "messageId")) |> Enum.find(&(&1.recipient_id == Map.fetch!(payload, "recipientId")))
+delivery = Memba.Messaging.DeliveryQueries.list_recipient_deliveries(Map.fetch!(payload, "messageId")) |> Enum.find(&(&1.recipient_id == Map.fetch!(payload, "recipientId")))
 %{exists: not is_nil(delivery), status: if(delivery, do: to_string(delivery.status), else: nil)}
 `,
     { messageId, recipientId }
@@ -449,7 +449,7 @@ function lifecycleMessageId(world, label) {
 
 function conversationEntryCount(world, subject) {
   return serverCommands.runCommand(
-    `%{count: Memba.Messaging.list_conversation_messages(Map.fetch!(payload, "messageId")) |> Enum.count()}`,
+    `%{count: Memba.Messaging.MessageQueries.list_conversation_messages(Map.fetch!(payload, "messageId")) |> Enum.count()}`,
     { messageId: world.messages[subject].messageId }
   ).count;
 }
@@ -530,7 +530,7 @@ recipient_id = Map.fetch!(payload, "recipientId")
 recipient_message_ids =
   Enum.flat_map(message_ids, fn message_id ->
     message_id
-    |> Memba.Messaging.list_recipient_deliveries()
+    |> Memba.Messaging.DeliveryQueries.list_recipient_deliveries()
     |> Enum.filter(&(&1.recipient_id == recipient_id))
     |> Enum.map(& &1.message_id)
   end)
@@ -693,7 +693,7 @@ everyone_group_id = Memba.Membership.SystemGroups.everyone_group_id(club_id)
 
 discoverable_group_ids =
   club_id
-  |> Memba.Membership.list_discoverable_groups_for_member(person_id)
+  |> Memba.Membership.ClubGroupQueries.list_discoverable_groups_for_member(person_id)
   |> Enum.map(& &1.group_id)
 
 group_state = fn group_id ->
