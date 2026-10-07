@@ -18,11 +18,13 @@ defmodule Memba.DevSeeds do
   alias Memba.Accounts.AuthEmail
   alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
+  alias Memba.Membership.Authorization
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.InvitationQueries
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Roles
   alias Memba.Messaging
@@ -289,7 +291,7 @@ defmodule Memba.DevSeeds do
     @clubs
     |> Enum.each(fn club ->
       Enum.each(club.members, fn member ->
-        unless Membership.active_member_of_club?(club.club_id, member.person_id) do
+        unless MembershipQueries.active_member_of_club?(club.club_id, member.person_id) do
           assert_ok!(
             Membership.add_member(
               %{
@@ -732,7 +734,7 @@ defmodule Memba.DevSeeds do
         await_read_model!(
           "seeded manager permission for #{member.name} in #{club.name} to be queryable via Membership.person_has_club_permission?/3",
           fn ->
-            Membership.person_has_club_permission?(
+            Authorization.has_permission?(
               club.club_id,
               member.person_id,
               "club.manage_members"
