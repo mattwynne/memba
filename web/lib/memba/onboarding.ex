@@ -7,6 +7,8 @@ defmodule Memba.Onboarding do
 
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Onboarding.Request
   alias Memba.Onboarding.WelcomeEmail
   alias Memba.Repo
@@ -217,7 +219,7 @@ defmodule Memba.Onboarding do
   end
 
   defp conversion_person(%Request{} = request) do
-    case Membership.get_person_by_email(request.requester_email) do
+    case PersonQueries.get_person_by_email(request.requester_email) do
       nil ->
         person_id = ID.generate(:person)
 
@@ -275,8 +277,8 @@ defmodule Memba.Onboarding do
   defp load_conversion_read_models({:ok, conversion}) do
     {:ok,
      conversion
-     |> Map.put(:club, Membership.get_club(conversion.club_id))
-     |> Map.put(:person, Membership.get_person(conversion.person_id))
+     |> Map.put(:club, ClubGroupQueries.get_club(conversion.club_id))
+     |> Map.put(:person, PersonQueries.get_person(conversion.person_id))
      |> Map.delete(:request_conversion_attrs)}
   end
 

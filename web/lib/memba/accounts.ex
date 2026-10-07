@@ -3,7 +3,7 @@ defmodule Memba.Accounts do
   Authentication context for shared sign-in-link sign-in.
 
   This context owns token generation/consumption and role helpers. Membership
-  authorization is derived through the public `Memba.Membership` query API.
+  authorization is derived from Membership read queries.
   """
 
   import Ecto.Query
@@ -12,6 +12,7 @@ defmodule Memba.Accounts do
   alias Memba.Accounts.SignInToken
   alias Memba.AuthEmailProgressChanges
   alias Memba.Membership
+  alias Memba.Membership.MembershipQueries
   alias Memba.Repo
 
   @sign_in_token_ttl_seconds 15 * 60
@@ -265,7 +266,7 @@ defmodule Memba.Accounts do
         []
 
       normalized_email ->
-        Membership.list_active_clubs_for_member_email(normalized_email)
+        MembershipQueries.list_active_clubs_for_member_email(normalized_email)
     end
   end
 
