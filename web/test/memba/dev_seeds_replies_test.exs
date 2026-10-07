@@ -1,6 +1,8 @@
 defmodule Memba.DevSeedsRepliesTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.Authorization
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.PersonQueries
   alias Memba.Messaging
   alias Memba.Messaging.DeliveryQueries
@@ -33,5 +35,16 @@ defmodule Memba.DevSeedsRepliesTest do
     assert DeliveryQueries.list_member_email_deliverys(first_message)
            |> Enum.frequencies_by(& &1.status) ==
              %{"delivered" => 1, "delivery problem" => 2, "sent" => 1}
+
+    assert MembershipQueries.active_member_of_club?(
+             club_id,
+             "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+           )
+
+    assert Authorization.has_permission?(
+             club_id,
+             "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+             "club.manage_members"
+           )
   end
 end
