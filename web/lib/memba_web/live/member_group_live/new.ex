@@ -12,9 +12,9 @@ defmodule MembaWeb.MemberGroupLive.New do
   import Ecto.Changeset
 
   alias LiveQuery.Binding
-  alias Memba.Membership
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.CustomGroup.Create
+  alias Memba.Membership.CustomGroup.Preview
   alias MembaWeb.ClubSite
   alias MembaWeb.LiveQuery.MembaReadModelSource
   alias MembaWeb.MemberGroupCreationQuery
@@ -302,7 +302,7 @@ defmodule MembaWeb.MemberGroupLive.New do
   end
 
   defp preview_group(socket, group_params) do
-    Membership.preview_custom_group(%{
+    Preview.call(%{
       club_id: selected_club(socket).club_id,
       actor_person_id: current_member(socket).id,
       name: Map.get(group_params, "name")

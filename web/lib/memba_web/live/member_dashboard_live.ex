@@ -11,13 +11,14 @@ defmodule MembaWeb.MemberDashboardLive do
 
   alias LiveQuery.Binding
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.CustomGroup.Admit
   alias Memba.Membership.CustomGroup.Remove
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.GroupWelcomeEmail
+  alias Memba.Membership.PersonQueries
   alias Memba.Messaging.CommandDispatch, as: MessagingCommandDispatch
   alias Memba.Messaging.MemberSubmission
   alias Memba.Messaging.RequestGroupAccess
@@ -217,7 +218,7 @@ defmodule MembaWeb.MemberDashboardLive do
         } = socket
       ) do
     with {:ok, target} <-
-           Membership.resolve_custom_group_target_authoritatively(
+           AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
              club_id,
              person_id,
              group_id
@@ -470,8 +471,8 @@ defmodule MembaWeb.MemberDashboardLive do
          %CustomGroupAdmission{transition: :member_added} = admission,
          socket
        ) do
-    recipient = Membership.get_person(admission.person_id)
-    added_by = Membership.get_person(admission.actor_person_id)
+    recipient = PersonQueries.get_person(admission.person_id)
+    added_by = PersonQueries.get_person(admission.actor_person_id)
 
     GroupWelcomeEmail.deliver(%{
       club: socket.assigns.dashboard.selected_club,
@@ -479,7 +480,7 @@ defmodule MembaWeb.MemberDashboardLive do
       recipient: %{
         person_id: admission.person_id,
         name: person_name(recipient),
-        email: Membership.get_person_primary_email(admission.person_id)
+        email: PersonQueries.get_person_primary_email(admission.person_id)
       },
       added_by: %{
         person_id: admission.actor_person_id,
@@ -503,7 +504,7 @@ defmodule MembaWeb.MemberDashboardLive do
          %CustomGroupAdmission{transition: :member_added} = admission,
          target
        ) do
-    added_by = Membership.get_person(admission.actor_person_id)
+    added_by = PersonQueries.get_person(admission.actor_person_id)
 
     GroupWelcomeEmail.deliver(%{
       club: target.club,
@@ -511,7 +512,7 @@ defmodule MembaWeb.MemberDashboardLive do
       recipient: %{
         person_id: target.person.person_id,
         name: target.person.name,
-        email: Membership.get_person_primary_email(target.person.person_id)
+        email: PersonQueries.get_person_primary_email(target.person.person_id)
       },
       added_by: %{
         person_id: admission.actor_person_id,
@@ -638,7 +639,11 @@ defmodule MembaWeb.MemberDashboardLive do
            }
          } = socket
        ) do
-    case Membership.resolve_custom_group_target_authoritatively(club_id, person_id, group_id) do
+    case AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
+           club_id,
+           person_id,
+           group_id
+         ) do
       {:ok, target} ->
         assign(socket, :targeted_group_member, present_targeted_group_member(target))
 
