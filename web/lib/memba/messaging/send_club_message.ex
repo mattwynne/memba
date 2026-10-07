@@ -5,7 +5,8 @@ defmodule Memba.Messaging.SendClubMessage do
   """
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.AuthorizationCheckpoint
   alias Memba.Messaging.Commands.SendMessage
@@ -43,7 +44,7 @@ defmodule Memba.Messaging.SendClubMessage do
   end
 
   defp authorize_sender(%SendMessage{} = command) do
-    if Membership.active_member_of_group_authoritatively?(
+    if AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
          command.club_id,
          command.audience_group_id,
          command.sender_id
@@ -65,7 +66,7 @@ defmodule Memba.Messaging.SendClubMessage do
       end
 
     with {:ok, group_id} <- ID.cast(:group, group_id) do
-      case Membership.get_group(group_id) do
+      case ClubGroupQueries.get_group(group_id) do
         %{club_id: ^club_id} = group -> {:ok, group}
         _missing_or_foreign_group -> {:error, :audience_group_not_found}
       end
@@ -76,7 +77,7 @@ defmodule Memba.Messaging.SendClubMessage do
 
   defp recipients(club_id, group_id) do
     club_id
-    |> Membership.list_active_members_of_group_authoritatively(group_id)
+    |> AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(group_id)
     |> Enum.map(fn %{id: person_id, name: name, email: email} ->
       %Recipient{
         delivery_id: ID.generate(:delivery),

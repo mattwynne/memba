@@ -6,11 +6,11 @@ defmodule Memba.Messaging.PostMemberMessageReply do
   """
 
   alias Memba.ID
-  alias Memba.Membership
-  alias Memba.Messaging
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Messaging.App
   alias Memba.Messaging.AuthorizationCheckpoint
   alias Memba.Messaging.Commands.PostMessageReply
+  alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.Message
   alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
   alias Memba.Messaging.Recipient
@@ -42,7 +42,12 @@ defmodule Memba.Messaging.PostMemberMessageReply do
          %Message{message_id: ^conversation_id, club_id: ^club_id, group_access: access} <-
            App.aggregate_state(Message, conversation_id),
          {:ok, group_id, "write"} <- canonical_group(access),
-         true <- Membership.active_member_of_group_authoritatively?(club_id, group_id, sender_id) do
+         true <-
+           AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
+             club_id,
+             group_id,
+             sender_id
+           ) do
       :ok
     else
       _ -> {:error, :not_current_member}
@@ -52,13 +57,13 @@ defmodule Memba.Messaging.PostMemberMessageReply do
   defp recipients(club_id, conversation_id, group_id, sender_id) do
     followers =
       conversation_id
-      |> Messaging.list_conversation_followers()
+      |> ConversationFollowQueries.list_conversation_followers()
       |> Enum.filter(&(&1.club_id == club_id))
       |> Enum.map(& &1.member_id)
       |> MapSet.new()
 
     club_id
-    |> Membership.list_active_members_of_group_authoritatively(group_id)
+    |> AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(group_id)
     |> Enum.filter(&MapSet.member?(followers, &1.id))
     |> Enum.reject(&(&1.id == sender_id))
     |> Enum.map(fn %{id: person_id, name: name, email: email} ->
