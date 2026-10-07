@@ -6,7 +6,7 @@ defmodule Memba.Onboarding do
   import Ecto.Query
 
   alias Memba.ID
-  alias Memba.Membership
+  alias Memba.Membership.{AddMember, ClubCommands, CommandDispatch, PersonCommands}
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.PersonQueries
   alias Memba.Onboarding.Request
@@ -213,9 +213,11 @@ defmodule Memba.Onboarding do
       |> Map.take([:name, :slug, "name", "slug"])
       |> Map.put(:club_id, club_id)
 
-    attrs
-    |> Membership.create_club(consistency: :strong)
-    |> normalize_command_result()
+    with {:ok, command} <- ClubCommands.prepare_create(attrs) do
+      command
+      |> CommandDispatch.dispatch(consistency: :strong)
+      |> normalize_command_result()
+    end
   end
 
   defp conversion_person(%Request{} = request) do
@@ -241,19 +243,25 @@ defmodule Memba.Onboarding do
   defp create_conversion_person(%{reused?: true}), do: :ok
 
   defp create_conversion_person(%{attrs: attrs}) do
-    attrs
-    |> Membership.create_person(consistency: :strong)
-    |> normalize_command_result()
+    with {:ok, command} <- PersonCommands.prepare_create(attrs) do
+      command
+      |> CommandDispatch.dispatch(consistency: :strong)
+      |> normalize_command_result()
+    end
   end
 
   defp create_conversion_membership(membership_id, club_id, person_id) do
-    %{
+    attrs = %{
       membership_id: membership_id,
       club_id: club_id,
       person_id: person_id
     }
-    |> Membership.add_member(consistency: :strong)
-    |> normalize_command_result()
+
+    with {:ok, command} <- AddMember.prepare(attrs) do
+      command
+      |> CommandDispatch.dispatch(consistency: :strong)
+      |> normalize_command_result()
+    end
   end
 
   defp normalize_command_result(:ok), do: :ok
