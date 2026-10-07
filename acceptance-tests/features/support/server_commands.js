@@ -314,14 +314,14 @@ ensure_person = fn person ->
   email = Map.fetch!(person, "email")
 
   person =
-    case Memba.Membership.get_person_by_email(email) do
+    case Memba.Membership.PersonQueries.get_person_by_email(email) do
       nil ->
         person_id = Memba.ID.generate(:person)
         :ok = Memba.Membership.create_person(
           %{person_id: person_id, name: person_name, email: email},
           consistency: :strong
         )
-        Memba.Membership.get_person_by_email(email)
+        Memba.Membership.PersonQueries.get_person_by_email(email)
 
       person ->
         person
@@ -342,7 +342,7 @@ function ensureClubSlug({ clubId, clubName, clubSlug }) {
 club_name = Map.fetch!(payload, "clubName")
 club_slug = Map.fetch!(payload, "clubSlug")
 club_id = Map.get(payload, "clubId")
-existing_club = if club_id, do: Memba.Membership.get_club(club_id), else: Memba.Membership.get_club_by_slug(club_slug)
+existing_club = if club_id, do: Memba.Membership.ClubGroupQueries.get_club(club_id), else: Memba.Membership.ClubGroupQueries.get_club_by_slug(club_slug)
 
 club =
   cond do
@@ -354,7 +354,7 @@ club =
         %{club_id: existing_club.club_id, name: club_name, slug: club_slug},
         consistency: :strong
       )
-      Memba.Membership.get_club(existing_club.club_id)
+      Memba.Membership.ClubGroupQueries.get_club(existing_club.club_id)
 
     true ->
       club_id = Memba.ID.generate(:club)
@@ -362,7 +362,7 @@ club =
         %{club_id: club_id, name: club_name, slug: club_slug},
         consistency: :strong
       )
-      Memba.Membership.get_club(club_id)
+      Memba.Membership.ClubGroupQueries.get_club(club_id)
   end
 
 %{clubId: club.club_id, clubName: club.name, clubSlug: club.slug}
@@ -387,14 +387,14 @@ email_addresses =
 
 primary_email_address = Enum.find(email_addresses, &Map.fetch!(&1, "is_primary"))
 primary_email = Map.fetch!(primary_email_address, "email")
-existing_person = if person_id, do: Memba.Membership.get_person(person_id), else: Memba.Membership.get_person_by_email(primary_email)
+existing_person = if person_id, do: Memba.Membership.PersonQueries.get_person(person_id), else: Memba.Membership.PersonQueries.get_person_by_email(primary_email)
 
 same_email? = fn left, right ->
   String.downcase(String.trim(left)) == String.downcase(String.trim(right))
 end
 
 ensure_desired_addresses_are_verified = fn person_id ->
-  current_email_addresses = Memba.Membership.list_person_email_addresses(person_id)
+  current_email_addresses = Memba.Membership.PersonQueries.list_person_email_addresses(person_id)
 
   Enum.each(email_addresses, fn %{"email" => email} ->
     unless Enum.any?(current_email_addresses, &same_email?.(&1.email, email)) do
@@ -419,7 +419,7 @@ person =
         %{person_id: person_id, name: person_name, email_addresses: email_addresses},
         consistency: :strong
       )
-      Memba.Membership.get_person(person_id)
+      Memba.Membership.PersonQueries.get_person(person_id)
 
     person ->
       ensure_desired_addresses_are_verified.(person.person_id)
@@ -428,14 +428,14 @@ person =
         %{person_id: person.person_id, email_addresses: email_addresses},
         consistency: :strong
       )
-      Memba.Membership.get_person(person.person_id)
+      Memba.Membership.PersonQueries.get_person(person.person_id)
   end
 
 %{
   personId: person.person_id,
   personName: person.name,
   email: primary_email,
-  emailAddresses: Memba.Membership.list_person_email_addresses(person.person_id)
+  emailAddresses: Memba.Membership.PersonQueries.list_person_email_addresses(person.person_id)
 }
 `,
     { personId, personName, emailAddresses }
