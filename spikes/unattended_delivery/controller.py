@@ -47,6 +47,8 @@ def digest(path: Path) -> str:
 
 def git(repo: Path, *args: str) -> str:
     env = {"PATH": os.defpath, "LANG": "C.UTF-8", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+    if "DELIVERY_JOB_TOKEN" in os.environ:
+        env["DELIVERY_JOB_TOKEN"] = os.environ["DELIVERY_JOB_TOKEN"]
     result = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-C", str(repo), *args],
                             text=True, env=env, capture_output=True, check=True, timeout=15)
     return result.stdout.strip()
@@ -331,6 +333,16 @@ def preserve_orphaned_candidate_locks(root: Path, state: dict) -> None:
             save(root / "state.json", state)
 
 
+def fence_for_recovery(root: Path) -> None:
+    # Journal outside controller-owned state BEFORE fencing. The old controller may
+    # still write state until it is dead; after fencing, this journal survives a
+    # second supervisor crash even though runtime.json has been removed.
+    runtime, recovery = root / "runtime.json", root / "recovery.json"
+    if runtime.exists() and not recovery.exists():
+        save(recovery, load(runtime))
+    fence(root)
+
+
 def supervise(root: Path) -> int:
     with (root / "supervisor.lock").open("a") as lock:
         try:
@@ -338,18 +350,25 @@ def supervise(root: Path) -> int:
         except BlockingIOError:
             return 3
         try:
-            interrupted = fence(root)
+            fence_for_recovery(root)
+            recovery = root / "recovery.json"
             while True:
                 state = load(root / "state.json")
                 if state["status"] != "running":
+                    recovery.unlink(missing_ok=True)
                     return 0 if state["status"] == "delivered" else 2
                 contract = verified_contract(root, state)
-                if interrupted:
-                    preserve_orphaned_candidate_locks(root, state)
-                    state["restarts"] += 1
-                    save(root / "state.json", state)
+                if recovery.exists():
+                    token = load(recovery)["token"]
+                    accounted = state.setdefault("recovered_owners", [])
+                    if token not in accounted:
+                        state["restarts"] += 1
+                        accounted.append(token)
+                        save(root / "state.json", state)
                     if state["restarts"] > contract["max_restarts"]:
                         raise SafetyError("cumulative restart budget exhausted")
+                    preserve_orphaned_candidate_locks(root, state)
+                    recovery.unlink()
                     time.sleep(min(0.05 * 2 ** (state["restarts"] - 1), 0.5))
                 token = uuid.uuid4().hex
                 env = {"PATH": os.defpath, "LANG": "C.UTF-8", "DELIVERY_JOB_TOKEN": token}
@@ -360,15 +379,13 @@ def supervise(root: Path) -> int:
                 (root / "controller.pid").write_text(str(proc.pid))
                 try:
                     try:
-                        code = proc.wait(timeout=max(0.01, contract["deadline"] - time.time()))
+                        proc.wait(timeout=max(0.01, contract["deadline"] - time.time()))
                     except subprocess.TimeoutExpired as error:
                         raise SafetyError("delivery deadline exhausted waiting for controller") from error
                 finally:
-                    fence(root)
+                    fence_for_recovery(root)
                     proc.wait(timeout=5)
-                if code in (0, 2):
-                    return code
-                interrupted = True
+                # Reconcile durable status; a process exit code alone is not delivery.
         except (SafetyError, OSError, subprocess.SubprocessError) as error:
             state = load(root / "state.json")
             state["status"], state["reason"] = "blocked", str(error)

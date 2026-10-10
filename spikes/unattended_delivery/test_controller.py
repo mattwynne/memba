@@ -150,6 +150,52 @@ class DeliveryTests(unittest.TestCase):
                     proc.wait(timeout=5)
                 controller.fence(self.root)
 
+    def test_git_child_is_owned_and_fenced_after_controller_death(self):
+        self.mode("work", "git-child-once")
+        with (self.root / "supervisor.log").open("w") as log:
+            proc = subprocess.Popen([sys.executable, str(HERE / "controller.py"), "run", str(self.root)], stdout=log, stderr=log)
+            try:
+                until = time.monotonic() + 10
+                while not (self.root / "git-child-started").exists():
+                    self.assertLess(time.monotonic(), until)
+                    self.assertIsNone(proc.poll())
+                    time.sleep(0.01)
+                os.kill(int((self.root / "controller.pid").read_text()), signal.SIGKILL)
+                self.assertEqual(proc.wait(timeout=15), 0)
+                self.assert_delivered()
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                # The pre-fix regression leaves tokenless Git children. This is a
+                # test-owned disposable session, so clean it even when assertion fails.
+                if (self.root / "runtime.json").exists():
+                    owner = controller.load(self.root / "runtime.json")
+                    try:
+                        os.killpg(owner["pid"], signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+    def test_supervisor_crash_after_fencing_does_not_lose_recovery_or_budget(self):
+        self.mode("work", "die-with-git-lock-once")
+        script = (
+            f"import os,sys; sys.path.insert(0,{str(HERE)!r}); import controller\n"
+            "old=controller.fence\n"
+            "def crash(root):\n"
+            "    result=old(root)\n"
+            "    if result and (root/'candidate'/'.git'/'index.lock').exists(): os._exit(99)\n"
+            "    return result\n"
+            "controller.fence=crash\n"
+            f"raise SystemExit(controller.supervise(controller.Path({str(self.root)!r})))\n"
+        )
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 99, result.stderr)
+        self.assertFalse((self.root / "runtime.json").exists())
+        self.assertTrue((self.root / "candidate" / ".git" / "index.lock").exists())
+        self.assertEqual(self.run_job().returncode, 0)
+        state = self.assert_delivered()
+        self.assertEqual(state["restarts"], 1)
+
     def test_reviewer_repair_returns_to_builder_without_human_gate(self):
         self.mode("review", "repair-once")
         self.assertEqual(self.run_job().returncode, 0)

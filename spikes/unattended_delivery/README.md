@@ -55,14 +55,16 @@ its durable ownership record before starting work. Before replacement, the super
 fences the old session, verifies process ownership and uses pidfds to avoid signaling
 reused PIDs. An empty `/proc` scan alone is **not** proof of termination: the kernel
 must report the process group absent. Git locks left in the exclusively owned candidate
-are archived after fencing, never removed from a shared remote.
+are archived after fencing, never removed from a shared remote. A supervisor-only recovery
+journal is saved before fencing and cleared after recovery; stable ownership identities
+ensure that another supervisor crash cannot skip recovery or reset the spent budget.
 
 A stopped controller cannot outrun the supervisor's deadline. A completed observation
 that arrives after the deadline is retained but is not counted as delivery.
 
 ## Tests and lessons
 
-The suite currently has **27 test methods**, including seven actual controller-kill
+The suite currently has **29 test methods**, including seven actual controller-kill
 subcases—one after each phase's external effect, before acknowledgment. It also covers:
 
 - Worker death with useful edits and a stale Git index lock.
@@ -79,8 +81,9 @@ Development used observed failing tests: the initial behavioural failure was a j
 remaining `running`; recovery initially returned exit 75 after worker death. Artifact
 identity and no-final-message tests then exposed three further failures. An independent
 read-only Codex review found four more gaps: fencing enumeration, crash-left Git locks,
-lost Git responses, and deadline enforcement. Each has a failing regression reproduction
-and a fix. The reviewer could not run filesystem tests in its read-only sandbox; its
+lost Git responses, and deadline enforcement. Follow-up review found two adjacent gaps:
+Git children losing their ownership token and supervisor recovery/accounting being lost
+after fencing. Each has a failing regression reproduction and a fix. The reviewer could not run filesystem tests in its read-only sandbox; its
 findings came from code inspection and controlled probes. Full filesystem/process tests
 were run by the parent outside that sandbox.
 

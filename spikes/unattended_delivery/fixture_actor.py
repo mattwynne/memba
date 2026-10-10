@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import shlex
 import subprocess
 import sys
 import time
@@ -40,6 +41,17 @@ if phase == "work":
             "(p/'child-started').touch(); time.sleep(2); (p/'orphan-survived').touch(); time.sleep(30)",
             str(root)])
         child.wait()
+    if mode == "git-child-once" and first:
+        helper = root / "git_filter.py"
+        helper.write_text(
+            "import pathlib,sys,time\n"
+            f"marker=pathlib.Path({str(root / 'git-child-started')!r})\n"
+            "if not marker.exists():\n    marker.touch()\n    time.sleep(30)\n"
+            "sys.stdout.write(sys.stdin.read())\n"
+        )
+        (repo / ".gitattributes").write_text("value.txt filter=pause\n")
+        subprocess.run(["git", "-C", str(repo), "config", "filter.pause.clean",
+                        shlex.join([sys.executable, str(helper)])], check=True)
     (repo / "value.txt").write_text("new\n")
     state = json.loads((root / "state.json").read_text())
     if any(event["event"] == "repair" for event in state["events"]):
