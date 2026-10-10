@@ -158,6 +158,9 @@ class Job:
         return {'receipt': receipt, 'output': output[-18000:], 'development_guidance': guidance}
 
     def edit(self, name, old, new, refactor=False):
+        if self.c.get('review_before_edits', False) and not self.s.get('repair_authorized', False):
+            raise Blocked('Audit-first contract: observe the baseline and finish this builder visit. '
+                          'Edits require a concrete independent review repair finding.')
         if not isinstance(old, str) or not isinstance(refactor, bool):
             raise Blocked('Invalid edit argument types')
         validate_files(self.source, {name: new}, self.c['editable'])
@@ -363,6 +366,7 @@ class Job:
                 self.s['status'] = 'candidate-accepted-non-production'
                 self.s['review'] = review
             elif review.get('verdict') == 'repair' and review.get('findings'):
+                self.s['repair_authorized'] = True
                 feedback = review['findings']
                 self.s['phase'] = 'builder'
             else:
@@ -414,6 +418,8 @@ def create(path, source, contract, approved):
         raise Blocked('Contract approval mismatch')
     if not c['examples'] or not c['obligations']:
         raise Blocked('Examples and technical obligations required')
+    if not isinstance(c.get('review_before_edits', False), bool):
+        raise Blocked('review_before_edits must be boolean')
     for name in c['context_files'] + c['editable']:
         parts = Path(name).parts
         if '.git' in parts or (len(parts) == 1 and parts[0].startswith('__init__.')):

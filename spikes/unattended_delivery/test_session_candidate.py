@@ -23,6 +23,44 @@ class SessionCandidateTest(unittest.TestCase):
         self.job.s['active_attempt'] = 'current'
         self.job.persist()
 
+    def test_audit_first_edits_require_independent_repair_and_keep_tdd_guard(self):
+        c = dict(self.job.c, review_before_edits=True)
+        contract = self.root / 'audit-contract.json'
+        contract.write_text(json.dumps(c))
+        create(self.root / 'audit-job', self.root / 'source', contract, digest(c))
+        job = Job(self.root / 'audit-job')
+        identity = job.s['builder_session']
+        for refactor in (False, True):
+            with self.assertRaisesRegex(Blocked, 'independent review'):
+                job.edit('test_unit.py', 'import unittest', 'import unittest\n# proof', refactor)
+        self.assertEqual(job.s['operations'], 0)
+        job.s['phase'] = 'reviewer'
+        job.persist()
+        roles = []
+        def model(role, feedback):
+            roles.append(role)
+            if role == 'reviewer':
+                return json.dumps({'verdict': 'repair', 'findings': ['Missing ownership regression'],
+                                   'candidate': job.s['candidate'], 'contract': job.s['contract']})
+            restored = Job(job.path)
+            self.assertTrue(restored.s['repair_authorized'])
+            self.assertEqual(restored.s['builder_session'], identity)
+            restored.edit('test_unit.py', 'import unittest', 'import unittest\n# proof')
+            with self.assertRaisesRegex(Blocked, 'ACTUAL'):
+                restored.edit('stock.py', 'return False', 'return True')
+            raise Blocked('routing test finished')
+        job.model = model
+        with self.assertRaisesRegex(Blocked, 'routing test finished'):
+            job.run()
+        self.assertEqual(roles, ['reviewer', 'builder'])
+
+    def test_audit_first_capability_must_be_boolean(self):
+        c = dict(self.job.c, review_before_edits='false')
+        contract = self.root / 'invalid-contract.json'
+        contract.write_text(json.dumps(c))
+        with self.assertRaisesRegex(Blocked, 'boolean'):
+            create(self.root / 'invalid-job', self.root / 'source', contract, digest(c))
+
     def test_zero_execution_is_terminal_not_an_agent_retry_loop(self):
         # The /usr/bin/true sandbox double produces no framework execution.
         with patch('session_candidate.subprocess.run', wraps=subprocess.run) as invoked:

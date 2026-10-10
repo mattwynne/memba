@@ -30,6 +30,13 @@ read-only reviewer session. Repair goes back to the same builder session UUID
 review, not implementation. `candidate-accepted-non-production` requires a
 source/contract-bound structured reviewer acceptance with no unresolved findings.
 
+For an explicitly approved audit-first baseline, `review_before_edits: true`
+closes all builder edit capabilities (including refactors) until an independent,
+exact-candidate reviewer returns concrete repair findings. The controller then
+persists repair authorization and resumes the same builder; ordinary unit-red
+and approved-path guards still apply. This is opt-in, not the default development
+loop, and does not prescribe a reviewer verdict.
+
 MCP is a narrow tool boundary, not another agent. Native Claude tools are disabled
 with `--tools ''`; only the explicit MCP server is enabled, with restricted mode,
 no other MCP configs, no hooks/skills and no project/user settings. There is no
