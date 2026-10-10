@@ -130,10 +130,13 @@ adopts the latest value and discards the draft without writing. Show this after 
 no proactive warning is required. This supersedes the earlier Cancel/re-edit-only proposal and the
 rejected discard-with-toast alternative.
 
-Design coverage blocker: the checked-in template covers validation errors but not these new
-conflict actions. See [conflict-design-handoff.md](conflict-design-handoff.md) for the approved
-text mock-up and the required Claude Code/DesignSync handoff. Do not publish this plan as ready or
-invent the missing visual treatment during application implementation.
+Matt explicitly directed design to continue here in BB with HTML mock-ups and the base design
+language/components, superseding the proposed Claude Code/DesignSync handoff. Local proposal:
+[name-conflict-mockup.html](name-conflict-mockup.html), with wide/narrow conflict layouts and action
+outcomes, based on the checked-in Account settings design and root `styles.css` tokens. This is a
+static design artifact, not application UI. Visual approval/review remains pending; no live
+DesignSync publication or browser render verification is claimed. See
+[conflict-design-handoff.md](conflict-design-handoff.md) for decision history.
 
 After a successful matching refresh, the LiveView reconciles only its name form: untouched input
 and its baseline follow the current name; dirty input and baseline stay intact. Other forms,
@@ -232,7 +235,8 @@ with the model review and Matt. Do not accept a new consequential choice autonom
 
 - Matt approved explicit conflict confirmation/recovery. Approval of the proposed expected-name
   comparison, identical-target no-op and Unicode grapheme length remains part of model review.
-- New conflict controls require the design handoff before ready publication.
+- New conflict controls require review of the local BB HTML design before ready publication;
+  Matt has superseded the earlier external design handoff.
 - The required domain-model review and final formulation review have not completed. No independent
   collaborators have participated in this thread; do not describe facilitator inspection as an
   ensemble or Three Amigos consensus.

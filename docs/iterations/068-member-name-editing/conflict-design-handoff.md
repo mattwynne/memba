@@ -1,6 +1,8 @@
 # 068 conflict interaction: approved behaviour and design handoff
 
-Status: behaviour/text mock-up approved by Matt; visual design coverage pending.
+Status: external handoff superseded by Matt's explicit direction to design here in BB using HTML
+mock-ups and the base design language/components. Behaviour/text mock-up approved; local visual
+proposal awaiting review: [name-conflict-mockup.html](name-conflict-mockup.html).
 
 ## Approved interaction
 
@@ -25,7 +27,13 @@ Saving your edit will replace that value.
   all forms or introduce a general collaborative-editing framework.
 - Earlier Cancel/re-edit-only and discard-with-toast proposals are superseded.
 
-## Blocking design handoff
+## Historical handoff — no longer a required external step
+
+The following records the earlier proposal, not the current required workflow. Matt subsequently
+chose local HTML design in this thread. Review that local proposal before ready publication; do not
+require a Claude Code transfer or claim a DesignSync push occurred.
+
+### Earlier handoff proposal
 
 Pi cannot inspect or publish the live design system through DesignSync. The checked-in
 `design-system/templates/account-settings.html` has display/edit/validation-error cards but lacks

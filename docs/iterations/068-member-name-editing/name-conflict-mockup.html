@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Name editing conflict · Memba design proposal</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Local design-only preview. Tokens from /styles.css; settings structure from
+   design-system/templates/account-settings.html. Primitives reproduce the
+   existing themed input / btn / btn-primary / btn-ghost treatment without a build. */
+:root {
+  color-scheme:light;
+  --color-sage-50:#eef1e6; --color-sage-100:#dde3cf; --color-sage-300:#98ab80;
+  --color-sage-500:#5a7050; --color-sage-600:#475a40; --color-sage-700:#36462f;
+  --color-paper:#fffef9; --color-cream:#f6f5ea; --color-ink:#25291d;
+  --color-ink-2:#555a47; --color-line:#e8e6d4; --color-line-strong:#d9d6bf;
+  --color-error:#a8503a; --radius-field:.375rem;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--color-cream); color:var(--color-ink); font:15px/1.5 Figtree,ui-sans-serif,system-ui,sans-serif; }
+main { max-width:1160px; padding:32px 24px; margin:auto; }
+h1,h2,h3,p { margin:0; }
+h1 { font-size:28px; letter-spacing:-.03em; line-height:1.2; margin:6px 0 10px; }
+h2 { font-size:20px; letter-spacing:-.02em; }
+h3 { font-size:16px; }
+.eyebrow { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--color-ink-2); }
+.intro { color:var(--color-ink-2); max-width:70ch; }
+.previews { display:grid; grid-template-columns:minmax(0,1fr) 340px; align-items:start; gap:24px; margin-top:28px; }
+.caption { font-size:12px; color:var(--color-ink-2); margin-bottom:8px; }
+.app-card { background:var(--color-paper); border:1px solid var(--color-line-strong); border-radius:12px; overflow:hidden; }
+.app-bar { padding:14px 20px; border-bottom:1px solid var(--color-line); display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:13px; }
+.wordmark { color:var(--color-sage-700); font-weight:700; font-size:17px; }
+.settings-main { padding:24px; }
+.settings-tabs { display:flex; gap:6px; border-bottom:1px solid var(--color-line); margin:16px 0 24px; padding-bottom:12px; }
+.settings-tab { font-size:14px; padding:6px 10px; color:var(--color-ink-2); border-radius:6px; }
+.settings-tab.is-active { background:var(--color-sage-50); color:var(--color-sage-700); font-weight:600; }
+.settings-card { border:1px solid var(--color-line); border-radius:20px; box-shadow:0 1px 2px rgb(37 41 29 / .05); overflow:hidden; }
+.settings-card__head { padding:16px 18px; border-bottom:1px solid var(--color-line); }
+.settings-card__meta { color:var(--color-ink-2); font-size:13px; margin-top:4px; }
+.settings-card__body { padding:18px; }
+.field-label { display:block; font-size:14px; font-weight:600; margin-bottom:6px; }
+.input { width:100%; min-width:0; height:40px; padding:8px 12px; font:inherit; color:var(--color-ink); background:var(--color-paper); border:1px solid var(--color-line-strong); border-radius:var(--radius-field); }
+.input-conflict { border-color:var(--color-error); }
+.input:focus-visible,.btn:focus-visible { outline:2px solid var(--color-sage-500); outline-offset:3px; }
+.field-conflict { margin-top:10px; font-size:13px; line-height:1.5; }
+.field-conflict__message { color:var(--color-error); overflow-wrap:anywhere; }
+.field-conflict__help { color:var(--color-ink-2); margin-top:4px; }
+.actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.btn { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:8px 13px; font:600 14px/1.3 Figtree,ui-sans-serif,system-ui,sans-serif; border:1px solid transparent; border-radius:var(--radius-field); cursor:default; }
+.btn-primary { background:var(--color-sage-500); color:var(--color-cream); }
+.btn-ghost { background:transparent; color:var(--color-ink); }
+.btn-primary:hover { background:var(--color-sage-600); }
+.btn-ghost:hover { background:var(--color-cream); }
+.phone .settings-main { padding:20px 14px; }
+.phone .app-bar { padding:14px; }
+.notes { margin-top:28px; padding-top:22px; border-top:1px solid var(--color-line-strong); display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+.notes p { font-size:14px; color:var(--color-ink-2); margin-top:6px; }
+.footnote { margin-top:22px; font-size:12px; color:var(--color-ink-2); }
+@media (max-width:860px) { .previews { grid-template-columns:minmax(0,1fr); } .phone { width:340px; max-width:100%; } }
+@media (max-width:440px) { main { padding:22px 12px; } .settings-main { padding:20px 14px; } .notes { grid-template-columns:1fr; gap:18px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">068 · Local design proposal</p>
+    <h1>A newer value, without losing your edit</h1>
+    <p class="intro">You typed <strong>Alice Brown</strong>. Another tab saved <strong>Alice Jones</strong> first. After you press Save, your draft stays in place and you choose what happens next.</p>
+  </header>
+  <div class="previews">
+    <section aria-label="Wide layout preview">
+      <p class="caption">After a conflicting Save</p>
+      <div class="app-card">
+        <div class="app-bar"><span class="wordmark">memba</span><span>Alice Jones</span></div>
+        <div class="settings-main">
+          <h2>Account settings</h2>
+          <div class="settings-tabs" aria-label="Page context (static)"><span class="settings-tab is-active">Profile</span><span class="settings-tab">Clubs</span><span class="settings-tab">Emails</span></div>
+          <div class="settings-card">
+            <div class="settings-card__head"><h3>Profile</h3><p class="settings-card__meta">One name across all your clubs.</p></div>
+            <div class="settings-card__body">
+              <label class="field-label" for="wide-name">Your name</label>
+              <input class="input input-conflict" id="wide-name" value="Alice Brown" readonly aria-invalid="true" aria-describedby="wide-conflict wide-help">
+              <div class="field-conflict">
+                <p class="field-conflict__message" id="wide-conflict">Changed elsewhere to <strong>“Alice Jones”</strong>.</p>
+                <p class="field-conflict__help" id="wide-help">Saving your edit will replace that value.</p>
+              </div>
+              <div class="actions"><button class="btn btn-primary" type="button">Save my value</button><button class="btn btn-ghost" type="button">Use latest</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="phone" aria-label="Narrow layout preview">
+      <p class="caption">Narrow layout · same interaction</p>
+      <div class="app-card">
+        <div class="app-bar"><span class="wordmark">memba</span><span>Alice Jones</span></div>
+        <div class="settings-main">
+          <h2>Account settings</h2>
+          <div class="settings-tabs" aria-label="Page context (static)"><span class="settings-tab is-active">Profile</span><span class="settings-tab">Clubs</span><span class="settings-tab">Emails</span></div>
+          <div class="settings-card">
+            <div class="settings-card__head"><h3>Profile</h3><p class="settings-card__meta">One name across all your clubs.</p></div>
+            <div class="settings-card__body">
+              <label class="field-label" for="narrow-name">Your name</label>
+              <input class="input input-conflict" id="narrow-name" value="Alice Brown" readonly aria-invalid="true" aria-describedby="narrow-conflict narrow-help">
+              <div class="field-conflict">
+                <p class="field-conflict__message" id="narrow-conflict">Changed elsewhere to <strong>“Alice Jones”</strong>.</p>
+                <p class="field-conflict__help" id="narrow-help">Saving your edit will replace that value.</p>
+              </div>
+              <div class="actions"><button class="btn btn-primary" type="button">Save my value</button><button class="btn btn-ghost" type="button">Use latest</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <section class="notes" aria-label="Action outcomes">
+    <div><h3>Save my value</h3><p>Saves <strong>Alice Brown</strong>, replacing the shown <strong>Alice Jones</strong>. If the saved value changed again, keep the draft and ask again with the newer value.</p></div>
+    <div><h3>Use latest</h3><p>Adopts the latest saved value and discards this draft. Nothing is written. An untouched form updates automatically without this warning.</p></div>
+  </section>
+  <p class="footnote">Static mock-up: controls do not submit. Existing Memba palette, settings cards, inputs and button hierarchy; new generic inline conflict message. No photos, toast, modal or merge screen.</p>
+</main>
+</body>
+</html>
