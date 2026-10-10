@@ -1,276 +1,259 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: draft — replanning after live-query foundation inserted at 067
+Status: draft — scope agreed; formulated examples and proposed model await Matt's review
 
 ## Goal
 
-**Replanning note:** this old validated draft is not ready for delivery after the 067 live-query
-insertion. The agreed replan must cover current names on historical contributions, relevant open
-member and staff pages, stale concurrent saves, and a smaller acceptance example set before this
-plan can be marked ready.
-
-A signed-in member can change the name their clubs see, from the Profile tab of `/my/settings`.
-
-After this iteration, a member who was added or invited under a wrong, partial, or outdated name
-can fix it themselves, without asking a Membership Admin or Memba staff.
+A signed-in club member can correct their own Person name in Account settings → Profile.
+One name follows that Person across clubs, including names displayed on past contributions.
 
 ## Background / Context
 
-Iteration 053 added `/my/settings` with three tabs — Profile, Clubs, Emails. Emails is fully
-self-service; **Profile is display-only**. A Person's name is written once at creation
-(`Membership.create_person/2`) or at invitation profile completion
-(`Membership.complete_invited_club_member_profile/2`), and there is no command, event, or UI for
-changing it afterwards. The name is what every club-facing surface shows: member rows, conversation
-originators, reply authors, the avatar menu, and the initials drawn everywhere an avatar appears.
+067 is merged and in production. Its reusable live projection queries cover member-facing
+ordinary-assign LiveViews, not staff views or streams. Reuse that foundation rather than creating
+another refresh mechanism. The former validation of this plan predates 067 and does not establish
+readiness.
 
-A member whose name is wrong today has no route to fix it. That is the whole of this slice.
+Current repository evidence:
 
-Naming stays in existing domain language: this is a **Person** being renamed, not an "account
-profile update". `Membership` already owns Person identity.
+- `web/lib/memba/membership/person.ex` owns Person name and email-address state. It has no rename command.
+- `web/lib/memba/membership/person_commands.ex` prepares commands; dispatch is separate. Do not
+  resurrect the old plan's generic `Membership.rename_person/2` service shape by default.
+- `web/lib/memba_web/member_settings_query.ex` returns fresh-authorized Person data and registers
+  the exact Person interest; `MySettingsLive` already uses the live-query binding.
+- `web/lib/memba_web/live_query/memba_read_model_source.ex` explicitly recognizes Person events.
+  A new rename event must be added to that adapter, not just the projector.
+- `MemberMessageDetail` and `Messaging.MessageQueries` resolve senders through current Person
+  queries. Historical message events need not be rewritten to display the current name.
+- `MemberDashboardPresentation` derives originator/participant names and initials from its name
+  map. Delivery must verify coverage of historical authors who are no longer active members;
+  an active-members-only name map is not sufficient proof of current historical names.
+- The old draft incorrectly said the staff edit page already renames people. Its current save path
+  replaces email addresses only. Do not introduce staff renaming in this iteration.
 
 ## Related Problems
 
-- [`docs/problems/2026-06-08-club-onboarding-details-not-collected.md`](../../problems/2026-06-08-club-onboarding-details-not-collected.md):
-  **depends on / partially adjacent, deliberately left unresolved.** That problem is about
-  *collecting* required details (date of birth, emergency contact, club-specific fields) at
-  onboarding. This iteration does not add any new profile field — it only makes the one field that
-  already exists editable by its owner. The reusable required-details mechanism remains future work.
-- [`docs/problems/2026-06-06-staff-merge-people.md`](../../problems/2026-06-06-staff-merge-people.md):
-  **left unresolved.** Renaming is not merging. A member who exists twice still needs the staff merge
-  workflow; this iteration must not become a workaround for it.
-
-No captured problem note describes "members cannot change their own name" — it surfaced while
-planning self-service profile editing, alongside iteration 069.
+- [Required onboarding details](../../problems/2026-06-08-club-onboarding-details-not-collected.md):
+  adjacent but deliberately unresolved; no additional profile fields or onboarding policy.
+- [Merge people](../../problems/2026-06-06-staff-merge-people.md): deliberately unresolved;
+  changing a name does not merge identities, memberships, or history.
 
 ## Scope
 
-### In scope
+### In scope — agreed by Matt
 
-- A `Name` field on the Profile tab of `/my/settings` with a display row and an inline edit form
-  (Edit → input + Save/Cancel), per the design.
-- A Membership command/event pair for renaming a Person.
-- Rejecting a blank or whitespace-only name with `Enter the name your clubs should see.`
-- Trimming surrounding whitespace and collapsing the name to a single line before saving.
-- A maximum name length of 100 characters, rejected with `That name is too long.`
-- The new name showing everywhere the old one appeared: member rows, conversation originator and
-  reply authors, the avatar menu, and derived initials.
-- Live refresh of name-bearing open member pages through the live-query pattern established in
-  [iteration 067](../067-live-projection-queries/plan.md). Staff name-bearing views need an
-  explicit scope decision during this replan; staff streams are deferred from 067.
+- Self-service editing of the signed-in Person's name from Account settings → Profile.
+- One name across all clubs; current names on historical conversation roots and replies.
+- Current names and derived initials on relevant open member pages and menus.
+- Trim surrounding whitespace and collapse internal whitespace runs to single spaces.
+- Reject blank/whitespace-only names and names longer than 100 characters after normalization.
+  No restrictions on punctuation, scripts, accents, or single-word names.
+- Update an untouched second name form when the latest name arrives.
+- Preserve a conflicting unsaved edit; report an error on Save rather than silently overwriting
+  the newer name. An early warning is optional if straightforward. No collaborative editor.
+- Smaller acceptance coverage: cross-club/history names, invalid-name rejection, untouched-form
+  refresh, conflicting-save protection, plus one focused Profile editing browser journey.
 
 ### Out of scope
 
-- The profile **photo** — that is iteration 069. The Profile tab's photo field is designed and
-  will be built there; this iteration leaves the existing initials avatar untouched.
-- Per-club display names. One Person has one name across every club they belong to.
-- Any other profile field (pronouns, phone, date of birth, emergency contact, club-specific fields).
-- Staff or Membership Admin renaming another Person from the admin area — the existing staff edit
-  path is not changed.
-- Renaming a **club**. Unrelated aggregate.
-- Notifying clubs, admins, or fellow members that someone changed their name.
-- Rewriting names captured inside already-sent email bodies.
-- Name-change history, audit display, or rate limiting.
+- Automatic refresh of already-open Memba staff views, including streams: Matt explicitly declined it.
+  No staff migration or stream adapter is required.
+- Photos (069); per-club names; other profile fields; renaming other people; club renaming.
+- Notifications about name changes; audit/history UI; rate limits; merging people.
+- Rewriting already-sent email bodies or historical message events.
+- Workflow kaizen changes, healer experiments, and `experiment/unattended-delivery-skeleton`.
 
 ## Iteration Type
 
-Behaviour-facing.
-
-The changed user-observable rule: **a member owns the name their clubs see, and can change it.**
-Previously only Memba staff (via the admin people edit page) or the one-time invitation
-profile-completion form could set it.
+Behaviour-facing: club members can change their own name without administrative assistance.
 
 ## Acceptance Scenarios / Feature Files
 
-BDD decision: **Required.**
+BDD: **Required**. Matt approved the example subjects, not yet the exact proposed wording in
+[acceptance-proposal.md](acceptance-proposal.md).
 
-This changes who can do what (a member may now rename themselves), it is visible to members and to
-everyone in their clubs, and it carries a validation rule and a cross-club consequence worth an
-explicit example. Three "default to Gherkin" signals apply.
+- `acceptance-tests/features/member_profile.feature`: consolidate the existing three rename success
+  examples into one cross-club/history example; retain one invalid-name example; add one stale-save
+  domain example. Preserve all 069 photo scenarios byte-for-byte.
+- `acceptance-tests/features/journeys/member_profile.feature` (new): one Profile editing journey
+  covers Save, menu/initials, and the untouched second connected form. The untouched-form example
+  is UI behaviour, so prove it here and with LiveView tests, not by inventing a domain form model.
+- There is no existing Profile editing journey. The iteration-053 “Alice opens Account settings
+  from the member menu” example in `person_email_addresses.feature` is not a browser journey;
+  preserve it unchanged.
+- All new/changed scenarios retain `@iteration-068`. Future scenarios carry `@todo` until their
+  intended runner supports them. Only the selected browser journey carries `@journey`.
+- Individual page refreshes, Unicode/boundary validation and race permutations belong in focused
+  tests, not duplicated browser scenarios.
 
-New feature file
-[`acceptance-tests/features/member_profile.feature`](../../../acceptance-tests/features/member_profile.feature),
-shared with iteration 069. This iteration's scenarios are currently tagged `@iteration-068 @todo`; the scenario set is under review:
-
-Rule: A member can change their own name
-
-- Alice corrects the name her clubs see.
-- Alice's new name replaces her old one everywhere her club sees her (member list + a conversation
-  she started).
-- Alice's new name follows her to every club she belongs to.
-
-Rule: A member must have a name
-
-- Alice cannot leave her name blank.
-
-Both project Cucumber runners exclude `@todo` scenarios. The browser selects
-`@journey and not @todo` (`acceptance-tests/cucumber.js`); the domain selects
-`not @journey and not @todo` (`web/config/test.exs`). Planning scenarios do not turn
-the build red before implementation.
+Feature files have **not** yet been edited. This draft's acceptance proposal must be approved and
+formulated into those exact files before publication as ready.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/member_profile.feature`: implementation may remove the
-  temporary `@todo` tag on the `@iteration-068` scenarios as domain step support is
-  delivered. Any needed browser proof belongs in a dedicated `@journey` feature, not a
-  duplicate of each rule example. These scenarios are the acceptance criteria for this slice;
-  preserve the `@iteration-068` tags and the behaviour. The `@iteration-069` scenarios
-  in the same file belong to the next iteration and must be left alone.
+Implementation may remove `@todo` only from delivered 068 examples in the two files above and add
+step support in their intended layers. Preserve iteration provenance and agreed outcomes. Do not
+edit 069 scenarios or weaken existing settings coverage to make checks pass. Material changes to
+rules/examples return to Matt, rather than being invented during delivery.
 
 ## Designs
 
-The Profile tab's name field is designed and pushed:
-[`design-system/templates/account-settings.html`](../../../design-system/templates/account-settings.html)
-→ cloud `templates/account-settings/account-settings.html`. Render-verified headlessly at 1320px
-(no console/network errors, no horizontal overflow) before pushing.
+Checked-in source: [Account settings](../../../design-system/templates/account-settings.html),
+“Profile tab · name”: display, inline Edit/Save/Cancel, and field-error cards. Live DesignSync was
+unavailable in this Pi session; no claim of live design sync or new render verification is made.
 
-The template covers the **final** state of the Profile tab across iterations 068 and 069.
-This iteration builds only the name half; the photo field ships in 069.
+Retain the existing final name/photo design, implementing only the name half. Do not move the
+existing avatar menu or build photo controls. Use a labelled input, associated inline error,
+`aria-invalid`/`aria-describedby`, keyboard-operable controls, and narrow-screen wrapping without
+requiring desktop controls to stack. Editing state is transient LiveView state, not a URL.
 
-Prototype review clarification:
+Existing error copy:
 
-- The avatar menu and its Account settings entry already exist. The prototype's explanation of
-  moving the menu to the global bar is historical context, not work for this iteration. Only the
-  displayed name and derived initials need to reflect a rename.
-- The side-by-side preview cards are narrower than the real settings panel, so Save/Cancel wrap
-  below the name input. That wrap is not a desktop layout requirement: keep the input and actions
-  on one line when space allows, and stack them on narrow screens.
-- The over-length-name error uses the same inline field-error treatment as the blank-name error,
-  with `That name is too long.`; it does not need a separate interaction pattern.
+- Blank: “Enter the name your clubs should see.”
+- Too long: “That name is too long.”
 
-Relevant surfaces, from the template's "Profile tab · name" row:
+**Proposed minimal conflict UX, awaiting Matt:** reuse the existing inline field-error treatment;
+keep typed text, with “Your name changed elsewhere. Cancel to load the latest name, then edit again.”
+Cancel shows the latest saved name; Edit starts a fresh attempt. Do not automatically rebase a dirty
+form's baseline, and do not add a merge dialog or overwrite button. An optional early warning uses
+this same treatment. The existing error card supplies the visual pattern; no new component is
+proposed. If this pattern proves insufficient, stop for the UX skill's design handoff rather than
+inventing a new design during implementation.
 
-- **Name — display:** a `Name` field label above a row containing the current name and an `Edit`
-  button (`.profile-field[data-field="name"][data-state="display"]`).
-- **Name — editing:** the row is replaced in place by an inline form — a labelled `Your name` text
-  input plus `Save` and `Primary`/ghost `Cancel` buttons grouped in `.profile-name-form__actions`.
-  There is no modal.
-- **Name — empty-name error:** the input takes `.input-error`, `aria-invalid="true"` and
-  `aria-describedby`, with the message `Enter the name your clubs should see.` rendered as a
-  `.field-error` beneath the form. Note this is an **inline field error**, not the `.alert` treatment
-  the Emails tab uses for its address-level errors.
-
-New page-local classes the template introduces for this field: `.profile-fields`, `.profile-field`,
-`.profile-field__label`, `.profile-name-row`, `.profile-name-form`, `.profile-name-form__actions`,
-`.input-error`, `.field-error`. These are page-local to the settings screen, not shell vocabulary —
-they belong in the settings LiveView's styles, not in `styles.css`, unless a second screen needs them.
-
-**Implementation-architecture note (not a design decision):** per
-[ADR 0015](../../adr/0015-use-liveview-for-member-application-pages.md) the field's display/editing
-swap is LiveView state, not client-side JS. Unlike the Profile/Clubs/Emails tab selection, "am I
-editing my name right now" is transient interaction state, **not** URL-addressable state under
-[ADR 0023](../../adr/0023-use-url-addressable-liveview-state.md) — it needs no route of its own.
+After a successful matching refresh, the LiveView reconciles only its name form: untouched input
+and its baseline follow the current name; dirty input and baseline stay intact. Other forms,
+selected tab, reply drafts and navigation are preserved. Define untouched relative to the edit
+baseline, so reverting input to that value permits automatic refresh again.
 
 ## Acceptance Criteria
 
-- The Profile tab of `/my/settings` shows the member's current name with an `Edit` action.
-- Choosing `Edit` replaces the display row with an inline form pre-filled with the current name.
-- `Cancel` restores the display row with the name unchanged.
-- `Save` with a changed, valid name updates the name and returns to the display row.
-- Saving a blank or whitespace-only name is rejected with `Enter the name your clubs should see.`,
-  the form stays open, and the stored name is unchanged.
-- Saving a name longer than 100 characters is rejected with `That name is too long.`
-- Surrounding whitespace is trimmed and internal runs of whitespace collapse to single spaces before
-  the name is stored.
-- After a rename, the member's club member rows show the new name.
-- After a rename, conversations the member started and replies they sent show the new name as author.
-- After a rename, the avatar menu and every derived initials avatar reflect the new name.
-- A member belonging to more than one club sees the new name in all of them.
-- Renaming does not alter any other Person state: email addresses, verification state, primary
-  address, memberships, and roles are untouched.
-- An open `/my/settings` in another browser updates when the name changes.
-- Existing person, membership, and messaging behaviours continue to pass.
+- Edit pre-fills the current name; Cancel leaves persisted data unchanged and returns to display.
+- Valid Save normalizes and persists the name, then shows current projected data.
+- Invalid Save keeps input/error visible and does not change the saved name.
+- A rename changes neither identity nor email addresses, verification, memberships, or roles.
+- Member rows, root/reply authors, participant avatars, menu names and initials use current names,
+  including on relevant already-open member pages and across clubs.
+- Untouched second forms update; conflicting dirty forms do not overwrite a newer value, even when
+  Save arrives before the other tab's live notification.
+- Relevant open member refreshes retain fresh authorization and preserve unrelated transient state.
+- No changes to staff-live freshness, sent email artifacts, or photos.
 
 ## Open Business Decisions
 
-None known.
+Core scope, validation, staff exclusion, concurrent-edit outcomes and example subjects are agreed.
+Exact proposed Gherkin and minimal conflict copy/recovery still await Matt's review.
 
-Decided during planning:
+## Domain Vocabulary
 
-- **One name per Person, not per club.** A member is one person across Memba; a per-club display name
-  would need a new per-membership concept and is explicitly out of scope.
-- **No notification.** Renaming yourself is not an event other members are told about.
-- **Already-sent emails keep the old name.** A delivered email is a sent artefact and is not rewritten.
+Reuse Person, Club, Club member, Message, Sender, and Memba staff from the canonical lexicon.
+“Name” and “change their name” retain their ordinary meaning. No lexicon additions are proposed.
+Command/event names, projections, edit baselines and live-query interests are solution-domain terms,
+not new business concepts.
 
-## Implementation Plan
+## Domain Model — proposed, not yet Matt-approved
 
-1. Inspect the current Person aggregate, `create_person` / `complete_invited_club_member_profile`
-   flows, the Person projection, and `MembaWeb.MySettingsLive` before changing anything.
-2. Add a `RenamePerson` command and `PersonRenamed` event in `Memba.Membership`, following the
-   existing command/event conventions (see `add_person_email_address.ex` /
-   `person_email_address_added.ex` for the current shape).
-3. Enforce the name rules in the Person aggregate: non-blank after trimming, at most 100 characters,
-   whitespace normalised. Renaming to the identical name is a no-op that emits no event.
-4. Add `Membership.rename_person/2` as the application-service entry point, returning a tagged error
-   the LiveView can render rather than raising.
-5. Handle `PersonRenamed` in the Person projector so the read model carries the new name, and publish
-   the change on the existing `Memba.ReadModelChanges` topic per
-   [ADR 0021](../../adr/0021-publish-committed-read-model-changes.md).
-6. Confirm the club-facing read models that display names (member rows, conversation originators,
-   reply authors) resolve through the Person read model rather than denormalised copies. If any hold
-   a copied name, update that projector too — this is the main unknown and step 1 should settle it.
-7. Add the name display/edit states to the Profile tab of `MySettingsLive`, following
-   `design-system/templates/account-settings.html`, with stable IDs for LiveView tests.
-8. Subscribe/extend the existing settings LiveView read-model subscription so a rename refreshes an
-   open page.
-9. Add domain tests for the aggregate rules and the projector.
-10. Add LiveView tests for display → edit → save, cancel, blank rejection, over-length rejection, and
-    live refresh.
-11. Implement the `@iteration-068` acceptance scenarios and remove their `@todo` tags.
-12. Run `dev check` and fix all issues.
+- **Owner:** the existing Membership Person aggregate. No Profile aggregate or per-club identity.
+- **Intent:** `RenamePerson`, containing Person identity, requested name, and the name that the
+  edit started from (`expected_name`). The web boundary derives the target from the authenticated
+  identity, never a submitted Person ID. Fresh settings authorization is checked before dispatch.
+- **Invariant:** normalize and validate at the aggregate, not just in the browser. Proposed length
+  measure is Elixir `String.length/1` (Unicode graphemes), not byte length.
+- **Concurrency:** compare the submitted edit baseline with the aggregate's authoritative current
+  name, not a projection. A different requested value with a stale baseline is rejected. This protects
+  Save-before-notification and two simultaneous commands without requiring a name-version column.
+- **No-op:** if the normalized requested name already equals the aggregate's current name, succeed
+  without an event, including two tabs submitting the same target. Name changes away and back to
+  the baseline are not conflicts under value comparison; no newer differing name is overwritten.
+  These small temporal clarifications require Matt's model agreement.
+- **Fact:** `PersonRenamed` carries Person identity and normalized new name. Applying it changes
+  only the aggregate's name; the Person projector changes only the corresponding read-model name.
+- **Reads:** current Person names remain authoritative for displayed authors, not historical copies
+  embedded in immutable sent artifacts. No historical event rewrite or messaging backfill is planned.
+- **UI responsibility:** keep baseline and dirty text outside the live-query result. Cancel/re-edit
+  explicitly adopts the latest name. A query refresh must not silently make a stale draft saveable.
+- **Preparation/dispatch:** extend focused Person command preparation and existing CommandDispatch;
+  keep orchestration at the web boundary, consistent with current repository structure.
+- **Deferrals:** no general optimistic-locking framework, name history UI, collaborative editing,
+  staff editing, notifications, or changes to unrelated Person creation/invitation rules.
+
+## Architecture Decisions
+
+Existing accepted ADRs remain authoritative:
+
+- [0015: member LiveView](../../adr/0015-use-liveview-for-member-application-pages.md).
+- [0021: committed read-model changes](../../adr/0021-publish-committed-read-model-changes.md).
+- [0022: projection barriers](../../adr/0022-use-projection-barriers-for-read-your-writes.md).
+- [0023: URL state](../../adr/0023-use-url-addressable-liveview-state.md).
+- [0026: separate browser journeys](../../adr/0026-keep-browser-journeys-distinct-from-domain-examples.md).
+- [0027: live queries](../../adr/0027-use-live-projection-queries-for-liveview-reads.md).
+
+No new ADR is currently proposed: a Person-local expected-value check extends the existing aggregate
+boundary; it does not establish a cross-application concurrency framework. Confirm this assessment
+with the model review and Matt. Do not accept a new consequential choice autonomously.
+
+## Implementation Plan — conditional on planning approval
+
+1. Add focused Person rename preparation, command routing, aggregate validation/concurrency handling,
+   event application and domain tests, preserving existing creation and email behaviour.
+2. Project the new event; publish through existing post-commit ReadModelChanges. Extend the explicit
+   Memba event adapter with exact Person invalidation; do not broaden to global refresh.
+3. Verify current-name reads and represented-Person interests across member surfaces, including
+   historical authors absent from the current active-member list. Correct any gaps without rewriting
+   message history. See proof matrix below.
+4. Add Profile inline states with server-owned actor/baseline, untouched-form reconciliation, dirty
+   preservation, and the approved conflict treatment. Preserve existing email forms and tab state.
+5. Add real-command/projector/PubSub LiveView integration proofs and the selected browser journey;
+   implement domain examples and remove their temporary tags only when supported.
+6. Run `dev check` on the exact staged/committed delivery state, inspect responsive presentation,
+   and retain evidence. No delivery command is authorized by this planning document.
 
 ## Open Technical Decisions
 
-- **Whether any read model stores a denormalised copy of a Person's name.** Step 6 exists to settle
-  this. If conversation/message projections copied the author name at write time, this iteration must
-  decide between backfilling those projections on rename or resolving names at read time. Resolving
-  at read time is preferred — it keeps one source of truth for a name — but the choice depends on what
-  step 1 finds, and it may change the size of the slice. Flag it during implementation rather than
-  guessing now.
+- Matt's approval of expected-name comparison, identical-target no-op, Unicode grapheme length,
+  and minimal conflict recovery is pending.
+- The required domain-model review and final formulation review have not completed. No independent
+  collaborators have participated in this thread; do not describe facilitator inspection as an
+  ensemble or Three Amigos consensus.
 
 ## New Capability
 
-Members own their own identity in Memba: the name their clubs see is theirs to correct, without
-staff or admin involvement. The domain gains an explicit `PersonRenamed` fact, which later work
-(merging duplicate people, audit trails, name-change history) can build on.
+A club member can correct the name everyone sees without administrative help, while a second tab
+cannot silently undo a conflicting newer change.
 
-## Validation Plan
+## Validation Plan / Proof Boundaries
 
-- Run `dev check` after implementation.
-- Domain/context tests:
-  - renaming a Person emits `PersonRenamed` and updates the read model;
-  - a blank or whitespace-only name is rejected;
-  - a name over 100 characters is rejected;
-  - whitespace is trimmed and normalised;
-  - renaming to the same name emits no event;
-  - email addresses, memberships, and roles are unaffected by a rename.
-- LiveView tests:
-  - the Profile tab renders the current name and an Edit action;
-  - Edit opens a pre-filled inline form;
-  - Cancel leaves the name unchanged;
-  - Save updates the name and closes the form;
-  - blank input renders `Enter the name your clubs should see.` and keeps the form open;
-  - an open settings page refreshes after a rename elsewhere.
-- Acceptance tests:
-  - the `@iteration-068` scenarios in `member_profile.feature`, with the temporary
-    `@todo` tags removed.
-- Manual demo:
-  1. Sign in as an existing club member with a wrong name.
-  2. Open the avatar menu → Account settings → Profile.
-  3. Edit the name, save, confirm the display row and the avatar-menu initials update.
-  4. Open the club member list and confirm the new name on the member row.
-  5. Open a conversation that member started and confirm the author name.
-  6. Try to save a blank name and confirm the inline error.
+| Layer | Required proof | Does not prove |
+| --- | --- | --- |
+| Aggregate/preparation | normalization; empty/whitespace; 100/101 graphemes; non-Latin/punctuation/single-word names; stale and simultaneous writes; identical target; unrelated Person state unchanged; spoofed target rejected at web boundary | connected UI freshness |
+| Projector/replay/adapter | old PersonCreated history plus rename replays; name-only projection; post-commit publication; exact Person event translation; unrelated identities ignored | every page displays the result |
+| Member LiveView integration | real rename command → projector commit → PubSub → already-open settings/dashboard/conversation; current root/reply/participant names and initials, including inactive historical authors; unrelated query isolation | durable notification delivery |
+| Other member surfaces | inspect/test group creation, compose, delivery detail and invitation query/shell name dependencies; preserve typed drafts and authorization on refresh | staff freshness |
+| Form LiveView tests | untouched update; dirty preservation; stale Save before notification; conflict recovery; Cancel/no-op; no baseline rebasing; validation; actor targeting | real browser DOM/focus behaviour |
+| One browser journey | connected Profile editing, menu/initials and untouched second form; accessible controls; responsive checks per suite conventions | all validation/race permutations |
+| Full regression | `dev check` on exact staged/committed state | product approval or launch permission |
+
+Synthetic notifications alone are not end-to-end refresh evidence. Use the real command/projector
+path for representative open-page proofs and barriers for negative assertions. Reuse 067's
+subscribe-before-read, reconnect reconciliation and fresh-authorization guarantees. PubSub remains
+non-durable: this iteration does not promise recovery of a lost broadcast to an uninterrupted page.
 
 ## Risks / Follow-ups
 
-- If any messaging projection copied the author's name at write time, renaming will look inconsistent
-  until that projection is addressed — see Open Technical Decisions. This is the most likely source
-  of surprise in this slice.
-- Members can now rename themselves to anything, including another member's name. Impersonation
-  within a club is a trust question this iteration does not address; capture a problem note if it
-  turns out to matter.
-- Renaming is not merging duplicate people
-  ([`2026-06-06-staff-merge-people.md`](../../problems/2026-06-06-staff-merge-people.md)) and should
-  not be treated as a substitute for it.
-- The Profile tab remains half-editable until iteration 069 adds the photo field.
+- Historical author name maps may be limited to active members; prove the intended display rather
+  than assuming 067 already handles the new event or every author dependency.
+- Preserve pending 069 scenarios and the final combined name/photo design.
+- Do not impose new validation retrospectively on existing Person creation/history.
+- A name can match another Person's name; this is not an identity merge or a new impersonation policy.
+
+## Planning Completion and Launch Constraints
+
+This remains **draft** until the proposed examples/UX/model are approved, required review is resolved,
+features are updated and checked, the index is ready, and the exact planning commit is published.
+Docs-only intermediate preservation requires `git diff --check`, not `dev check`. Acceptance edits
+require `dev check`; no application/test plumbing may be changed during planning to make them pass.
+
+The intended consumer is the new experimental workflow. Do not invoke old iteration-delivery,
+`fabro deliver`, or validation/launch automatically. Parent @thread:thr_ra2ff7hjn2 owns eventual
+integration and archival. Preserve this planning branch and leave the thread available while any
+review or Matt decision remains outstanding.
