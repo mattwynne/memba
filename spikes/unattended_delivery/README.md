@@ -1,6 +1,10 @@
 # Unattended delivery: non-production walking skeleton
 
-**Status:** experimental Milestone A spike, not an iteration runner or production workflow.
+**Status:** experimental non-production workflow; no publication/deployment authority.
+
+**Current implementation:** [one stateful builder and a validated Memba runtime](SESSION_CANDIDATE.md),
+with [all continuation trials and completing rehearsals](SESSION_REHEARSAL.md).
+The scripted controller described below is preserved unchanged as Milestone A.
 
 A separate [real-agent candidate adapter](REAL_CANDIDATE.md) now exercises a bounded
 Python-domain canary with tool-disabled real builder/reviewer sessions and

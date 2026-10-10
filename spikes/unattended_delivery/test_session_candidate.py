@@ -1,0 +1,162 @@
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from candidate import Blocked, command, digest
+from session_candidate import Job, create, selected_count
+
+
+class SessionCandidateTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / 'trial'
+        subprocess.run([sys.executable, str(Path(__file__).with_name('prepare_session_canary.py')),
+                        str(self.root), '/usr/bin/true'], check=True, stdout=subprocess.DEVNULL)
+        c = json.loads((self.root / 'contract.json').read_text())
+        create(self.root / 'job', self.root / 'source', self.root / 'contract.json', digest(c))
+        self.job = Job(self.root / 'job')
+        self.job.s['active_attempt'] = 'current'
+        self.job.persist()
+
+    def test_zero_execution_is_terminal_not_an_agent_retry_loop(self):
+        # The /usr/bin/true sandbox double produces no framework execution.
+        with patch('session_candidate.subprocess.run', wraps=subprocess.run) as invoked:
+            with self.assertRaisesRegex(Blocked, 'Infrastructure/selection'):
+                self.job.observe('example', self.job.c['examples'][0]['id'], 'no selected tests')
+            self.assertEqual(invoked.call_args.kwargs['stdin'], subprocess.DEVNULL)
+        restored = Job(self.job.path)
+        self.assertEqual(restored.s['status'], 'blocked')
+        self.assertEqual(restored.s['operations'], 1)
+        with self.assertRaisesRegex(Blocked, 'Stale'):
+            restored.tool('inspect', {}, 'current')
+
+    def test_admission_rejects_host_import_shadowing_and_git_metadata(self):
+        source = self.root / 'source'
+        (source / '__init__.py').write_text('raise RuntimeError("untrusted package initializer")\n')
+        command(['git', 'add', '__init__.py'], source)
+        command(['git', '-c', 'user.name=Test', '-c', 'user.email=test@invalid', 'commit', '-qm', 'Package fixture'], source)
+        for index, name in enumerate(['__init__.py', '.git/config']):
+            with self.subTest(name=name):
+                c = dict(self.job.c)
+                c['source_sha'] = command(['git', 'rev-parse', 'HEAD'], source)
+                c['editable'] = c['editable'] + [name]
+                contract = self.root / 'unsafe-contract.json'
+                contract.write_text(json.dumps(c))
+                with self.assertRaisesRegex(Blocked, 'Reserved control-plane'):
+                    create(self.root / f'unsafe-job-{index}', source, contract, digest(c))
+        # Full-source admission must check the archive too, even if the root
+        # initializer was not listed among editable/context files.
+        c = dict(self.job.c)
+        c['source_sha'] = command(['git', 'rev-parse', 'HEAD'], source)
+        runtime = self.root / 'runtime'
+        runtime.mkdir()
+        (runtime / 'runtime.json').write_text(json.dumps({'source_sha': c['source_sha']}))
+        c['runtime_root'] = str(runtime)
+        contract.write_text(json.dumps(c))
+        with self.assertRaisesRegex(Blocked, 'Reserved control-plane'):
+            create(self.root / 'unsafe-archive', source, contract, digest(c))
+
+    def test_checkpoint_preserves_new_files_even_when_gitignored(self):
+        (self.job.source / '.gitignore').write_text('new.py\n')
+        (self.job.source / 'new.py').write_text('preserved\n')
+        self.job.checkpoint()
+        content = subprocess.check_output(['git', 'show', self.job.s['candidate'] + ':new.py'],
+                                          cwd=self.job.path / 'checkpoints', text=True)
+        self.assertEqual(content, 'preserved\n')
+
+    def test_model_visits_remain_spent_after_reload(self):
+        self.job.s['visits'] = self.job.c['max_visits']
+        self.job.persist()
+        with self.assertRaisesRegex(Blocked, 'visit budget'):
+            Job(self.job.path).model('builder', 'do not run')
+
+    def test_selection_counts_reject_zero_and_excluded_tests(self):
+        self.assertEqual(selected_count('128 tests, 0 failures, 127 excluded', 'domain'), 1)
+        self.assertEqual(selected_count('128 tests, 0 failures, 128 excluded', 'domain'), 0)
+        self.assertEqual(selected_count('1 scenario (1 passed)', 'browser'), 1)
+        self.assertEqual(selected_count('Ran 0 tests in 0.01s', 'unittest'), 0)
+
+    def test_server_enforces_capabilities_not_just_advisory_mcp_schema(self):
+        with self.assertRaisesRegex(Blocked, 'Unknown observation'):
+            self.job.observe('../../state', self.job.c['obligations'][0]['id'], 'malicious')
+        with self.assertRaisesRegex(Blocked, 'argument types'):
+            self.job.edit('stock.py', 'return False', 'return True', refactor='false')
+        self.assertEqual(self.job.s['operations'], 0)
+
+    def test_reviewer_is_read_only_even_if_it_calls_edit(self):
+        self.job.s['phase'] = 'reviewer'
+        self.job.persist()
+        with self.assertRaisesRegex(Blocked, 'read-only'):
+            self.job.tool('edit', {'path': 'stock.py', 'old': 'return False', 'new': 'return True'}, 'current')
+
+    def test_stale_broker_is_fenced(self):
+        with self.assertRaisesRegex(Blocked, 'Stale'):
+            self.job.tool('inspect', {}, 'old-attempt')
+
+    def test_approved_proof_cannot_be_edited(self):
+        with self.assertRaisesRegex(Blocked, 'outside approved'):
+            self.job.edit('test_acceptance.py', 'assertIs', 'assertIsNot')
+
+    def test_tool_edit_saves_real_checkpoint(self):
+        before = self.job.s['candidate']
+        self.job.s['observed']['unit'] = {'candidate': before, 'exit': 1, 'assertion_failure': True}
+        self.job.persist()
+        self.job.tool('edit', {'path': 'stock.py', 'old': 'def reserve(self, item, quantity):\n        return False',
+                              'new': 'def reserve(self, item, quantity):\n        return True'}, 'current')
+        self.assertNotEqual(before, self.job.s['candidate'])
+        self.assertEqual(self.job.s['operations'], 1)
+        self.assertIsNone(self.job.s['pending'])
+
+    def test_implementation_without_actual_unit_red_is_refused(self):
+        with self.assertRaisesRegex(Blocked, 'ACTUAL'):
+            self.job.edit('stock.py', 'return False', 'return True')
+        self.assertEqual(self.job.s['operations'], 0)
+
+    def test_unit_green_requires_same_acceptance_before_more_edits(self):
+        self.job.s['needs_outer_observation'] = True
+        with self.assertRaisesRegex(Blocked, 'rerun the SAME'):
+            self.job.edit('test_unit.py', 'self.assertEqual', 'self.assertEqual')
+
+    def test_pending_patch_replays_without_refunding_work(self):
+        self.job.s['operations'] = 7
+        self.job.s['pending'] = {'path': 'stock.py', 'text': 'complete\n', 'implementation': True}
+        self.job.persist()
+        (self.job.source / 'stock.py').write_text('partial')
+        restored = Job(self.job.path)
+        restored.apply_pending()
+        self.assertEqual((restored.source / 'stock.py').read_text(), 'complete\n')
+        self.assertEqual(restored.s['operations'], 7)
+        self.assertTrue(restored.s['implementation_pending'])
+        self.assertIsNone(restored.s['pending'])
+
+    def test_interrupted_review_does_not_reinvoke_builder(self):
+        self.job.s['phase'] = 'reviewer'
+        self.job.persist()
+        roles = []
+        def review(role, feedback):
+            roles.append(role)
+            return json.dumps({'verdict': 'accept', 'candidate': self.job.s['candidate'],
+                               'contract': self.job.s['contract'], 'findings': []})
+        self.job.model = review
+        self.job.run()
+        self.assertEqual(roles, ['reviewer'])
+        self.assertEqual(self.job.s['status'], 'candidate-accepted-non-production')
+
+    def test_second_red_example_cannot_steal_active_selection(self):
+        self.job.s['active_example'] = self.job.c['examples'][0]['id']
+        with self.assertRaisesRegex(Blocked, 'active red'):
+            self.job.observe('example', self.job.c['examples'][1]['id'], 'expected red')
+
+    def test_unit_and_acceptance_operations_do_not_spawn_model_sessions(self):
+        # Tools consume operations, never additional provider handoffs.
+        self.job.edit('test_unit.py', "self.assertEqual", "self.assertEqual")
+        self.assertEqual(self.job.s['visits'], 0)
+
+
+if __name__ == '__main__':
+    unittest.main()

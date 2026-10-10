@@ -1,5 +1,9 @@
 # Real-agent candidate path (non-production only)
 
+**Historical first adapter.** Its per-red model handoffs are superseded by the
+[stateful-builder/runtime path](SESSION_CANDIDATE.md). Its code and failed trials
+remain preserved, not relabelled as successful.
+
 This is a **separate adapter**, not a replacement of `fixture_actor.py` with an
 unrestricted agent. `candidate.py` can develop one small, approved Python-domain
 example with real model judgment. It cannot yet admit Memba iteration 068.
