@@ -253,6 +253,42 @@ No new ADR has yet been drafted, reviewed or accepted.
 6. Run `dev check` on the exact staged/committed delivery state, inspect responsive presentation,
    and retain evidence. No delivery command is authorized by this planning document.
 
+## Feasibility Spike
+
+Matt explicitly authorized a small implementation spike in a separate thread/worktree:
+@thread:thr_dagdffebpk. This is a planning exception for isolated experimental code, not approval
+for production implementation or delivery. Test a minimal reusable conflict coordinator/presentation
+with name-only and hypothetical two-field examples, explicit confirmation and repeat conflicts,
+Cancel my changes, and preservation of untouched fields. Do not add phone support or migrate forms.
+
+Spike completed and inspected; evidence is preserved on pushed branch
+`bb/068-reusable-form-conflict-feasibility-spike-thr_dagdffebpk`, commit
+`7b83d5b9f2189d6da6b1875967b21ba3f33df194`.
+
+- [Report/API/limitations at the immutable spike commit](https://github.com/mattwynne/memba/blob/7b83d5b9f2189d6da6b1875967b21ba3f33df194/spikes/068-form-conflict/README.md).
+- Paths on that commit: `spikes/068-form-conflict/draft.ex`, `warning.ex`, `draft_test.exs`,
+  `warning_test.exs`, `fake_record.ex`, `form_harness.ex`, and `run.sh`.
+- Finding: 62-line pure state coordinator plus 40-line stateless warning component; flat scalar
+  forms do not require a LiveComponent, process, dependency, or persistence framework.
+- Reusable operations: new/edit/observe/changes/attempt/rejected/cancel. Attempts describe changed
+  fields plus expected values, never a whole-record replacement. Confirmation uses a frozen
+  server-held warning snapshot; observing a newer projection does not silently change consent.
+- Reuse the small API/component pattern and behavioural tests as evidence. Discard fake persistence
+  and the render harness. Do not automatically cherry-pick the spike into delivery.
+- Child reports 11 spike tests passing and `dev check` exit 0 on the exact pushed commit: 19 package
+  tests, 1,811 app tests, 16 detector tests, six browser scenarios. Responsive screenshots were
+  skipped by the detector. The full gate alone does not run spike tests; those were run separately.
+- Proof boundary: no connected LiveView, real domain compare-and-write, real rename/projector/PubSub,
+  browser conflict interaction or visual rendering is proved. Atomic comparison, authorization,
+  validation and persistence remain mandatory domain responsibilities.
+- Limits: comparable flat values only; casting/normalization, identical-target no-op and
+  change-away/back semantics require model decisions. Nested/coupled fields and multi-aggregate
+  edits are not solved. Server-owned state and fresh authorization remain essential.
+
+Facilitator inspection confirms the prototype's small size and conditional-patch boundary, not
+production correctness or model/ADR approval. The evidence supports Matt's simplicity condition for
+flat scalar edit forms without extending 068 to app-wide form migration.
+
 ## Open Technical Decisions
 
 - Matt approved explicit conflict confirmation/recovery. Approval of the proposed expected-name
