@@ -1,7 +1,7 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: draft — scope agreed; formulated examples and proposed model await Matt's review
+Status: draft — agreed scope/model direction; ADR record and formulated language final checkpoint pending
 
 ## Goal
 
@@ -83,8 +83,9 @@ Behaviour-facing: club members can change their own name without administrative 
 
 ## Acceptance Scenarios / Feature Files
 
-BDD: **Required**. Matt approved the example subjects, not yet the exact proposed wording in
-[acceptance-proposal.md](acceptance-proposal.md).
+BDD: **Required**. Matt approved the four example subjects and reuse-before-adding-journeys rule.
+The actual feature files below are authoritative; [acceptance-proposal.md](acceptance-proposal.md)
+records formulation history, not a competing specification.
 
 - `acceptance-tests/features/member_profile.feature`: consolidate the existing three rename success
   examples into one cross-club/history example; retain one invalid-name example; add one stale-save
@@ -100,8 +101,10 @@ BDD: **Required**. Matt approved the example subjects, not yet the exact propose
 - Individual page refreshes, Unicode/boundary validation and race permutations belong in focused
   tests, not duplicated browser scenarios.
 
-Feature files have **not** yet been edited. This draft's acceptance proposal must be approved and
-formulated into those exact files before publication as ready.
+Feature files are now formulated in those exact paths, with future scenarios tagged `@todo` in
+ their intended runners. Three domain examples and one browser journey express the four agreed
+subjects; the stale example includes explicit confirmation. Exact language review remains part of
+planning completion. All 069 photo examples remain unchanged.
 
 ## Allowed acceptance feature changes
 
@@ -172,10 +175,12 @@ baseline, so reverting input to that value permits automatic refresh again.
 
 ## Open Business Decisions
 
-Core scope, validation, staff exclusion, concurrent-edit outcomes and example subjects are agreed.
-Matt has approved generic conflict copy and explicit Save anyway / Cancel my changes recovery.
-Matt approved the local visual treatment conditional on implementation simplicity. Exact formulated
-Gherkin and the proposed domain model still await review.
+None known in behavioural scope. Matt approved generic conflict copy/actions, local visual
+ treatment, reusable default and bounded simplicity. In the parent conversation he explicitly chose
+current normalized value comparison rather than revisions: Jones → Green → Jones does not itself
+cause a conflict. A target equal to the current normalized name succeeds without PersonRenamed.
+Do not re-open this edge case or add revision tracking. Final formulated-language/model/ADR
+record checkpoints remain publication gates, not unmade policy decisions.
 
 ## Domain Vocabulary
 
@@ -184,23 +189,27 @@ Reuse Person, Club, Club member, Message, Sender, and Memba staff from the canon
 Command/event names, projections, edit baselines and live-query interests are solution-domain terms,
 not new business concepts.
 
-## Domain Model — proposed, not yet Matt-approved
+## Domain Model
 
 - **Owner:** the existing Membership Person aggregate. No Profile aggregate or per-club identity.
 - **Intent:** `RenamePerson`, containing Person identity, requested name, and the name that the
   edit started from (`expected_name`). The web boundary derives the target from the authenticated
   identity, never a submitted Person ID. Fresh settings authorization is checked before dispatch.
-- **Invariant:** normalize and validate at the aggregate, not just in the browser. Proposed length
-  measure is Elixir `String.length/1` (Unicode graphemes), not byte length.
-- **Concurrency:** compare the submitted edit baseline with the aggregate's authoritative current
-  name, not a projection. A different requested value with a stale baseline is rejected. This protects
-  Save-before-notification and two simultaneous commands without requiring a name-version column.
-  Explicit Save anyway submits a new attempt whose expected name is the newer value shown in
-  the warning. A second intervening change rejects that attempt too; never bypass concurrency checks.
+- **Invariant:** normalize and validate at the aggregate, not just in the browser. Use Elixir
+  `String.length/1` (Unicode graphemes), not bytes or browser UTF-16 maxlength, after normalization.
+  Keep raw input for the form while comparing normalized requested/current values; do not mutate
+  existing historical names or retroactively apply new validation to creation/history.
+- **Concurrency — Matt-approved:** compare normalized expected/current name values at the Person
+  aggregate, not a projection. A different requested value with a currently differing baseline is
+  rejected. This protects Save-before-notification and simultaneous commands without a revision.
+  Explicit Save anyway is a new conditional attempt against the normalized value shown in the
+  server-held warning. Reject again if current value differs at execution. A change away and back
+  to that same value is not a conflict; do not claim detection of every intervening rename.
 - **No-op:** if the normalized requested name already equals the aggregate's current name, succeed
   without an event, including two tabs submitting the same target. Name changes away and back to
   the baseline are not conflicts under value comparison; no newer differing name is overwritten.
-  These small temporal clarifications require Matt's model agreement.
+  Matt explicitly approved these semantics in the parent conversation. Authorization runs before
+  no-op success too; the spike fake writer is not the production policy.
 - **Fact:** `PersonRenamed` carries Person identity and normalized new name. Applying it changes
   only the aggregate's name; the Person projector changes only the corresponding read-model name.
 - **Reads:** current Person names remain authoritative for displayed authors, not historical copies
@@ -235,7 +244,9 @@ existing-record edit forms across the app. Record this durable default and the s
 responsibility boundary after modelling/review; field-specific concurrency enforcement remains in
 its owning domain. No app-wide form migration or general persistence framework is implied.
 The Person-local expected-value check separately extends the existing aggregate boundary.
-No new ADR has yet been drafted, reviewed or accepted.
+Draft record: [form-conflict-adr-proposal.md](form-conflict-adr-proposal.md). It records Matt's
+approved durable default and stays proposed until record review and explicit acceptance; no
+accepted ADR or ADR index entry is fabricated by the facilitator.
 
 ## Implementation Plan — conditional on planning approval
 
@@ -291,17 +302,20 @@ flat scalar edit forms without extending 068 to app-wide form migration.
 
 ## Open Technical Decisions
 
-- Matt approved explicit conflict confirmation/recovery. Approval of the proposed expected-name
-  comparison, identical-target no-op and Unicode grapheme length remains part of model review.
+- No open concurrency-mechanism choice: Matt approved normalized current-value comparison,
+  identical-target no-op and no revision tracking. Shared UI stays small per the reviewed spike.
 - Matt approved the local BB HTML design and directed that the generic form-conflict pattern be
   the default for future editable forms, conditional on simple implementation. Required specialist
   review and render verification remain outstanding; the earlier external handoff is superseded.
 - This durable default introduces an ADR candidate: shared editable-form conflict handling. Resolve
   the small abstraction's responsibility boundary through modelling and record Matt's decision in
   a reviewed ADR before ready publication. No ADR is accepted merely by this draft.
-- The required domain-model review and final formulation review have not completed. No independent
-  collaborators have participated in this thread; do not describe facilitator inspection as an
-  ensemble or Three Amigos consensus.
+- A bounded read-only domain/UX/formulation review was completed by @thread:thr_en8aqpbjbq
+  (one inherited model, not a three-family ensemble or live Three Amigos). Findings are recorded in
+  [review-notes.md](review-notes.md). Model temporal semantics and ADR acceptance remain outstanding.
+  Parent owns the final whole-plan ensemble; this bounded review is not a duplicate of it.
+- Draft ADR record review/acceptance and final formulated-language checkpoint remain before ready.
+  Deliver the exact record/features to parent for those approvals; do not ask settled scope again.
 
 ## New Capability
 
@@ -317,7 +331,7 @@ cannot silently undo a conflicting newer change.
 | Member LiveView integration | real rename command → projector commit → PubSub → already-open settings/dashboard/conversation; current root/reply/participant names and initials, including inactive historical authors; unrelated query isolation | durable notification delivery |
 | Other member surfaces | inspect/test group creation, compose, delivery detail and invitation query/shell name dependencies; preserve typed drafts and authorization on refresh | staff freshness |
 | Form LiveView tests | untouched update; dirty preservation; stale Save before notification; explicit confirmed replacement; repeat conflict; Cancel my changes without write; Cancel/no-op; no silent baseline rebasing; validation; actor targeting | real browser DOM/focus behaviour |
-| One browser journey | connected Profile editing, menu/initials and untouched second form; accessible controls; responsive checks per suite conventions | all validation/race permutations |
+| One browser journey plus focused browser interaction test | journey: connected Profile editing, menu/initials and untouched second form; focused interaction test: retained dirty input, warning announcement, explicit confirmation/cancellation and repeated warning focus; responsive checks per suite conventions | all validation/race permutations |
 | Full regression | `dev check` on exact staged/committed state | product approval or launch permission |
 
 Synthetic notifications alone are not end-to-end refresh evidence. Use the real command/projector
