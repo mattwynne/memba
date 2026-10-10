@@ -27,8 +27,14 @@ Saving your edit will replace that value.
 - Cancel my changes discards the draft, closes the editor and displays the latest saved value
   without writing.
 - No proactive-warning machinery, merge interface, silent last-write-wins, or automatic discard.
-- The interaction should be simple and reusable across fields/forms. This iteration does not migrate
-  all forms or introduce a general collaborative-editing framework.
+- Matt subsequently clarified that the interaction must be generic and the default wherever an
+  existing saved record is edited. Use shared presentation and small reusable draft/baseline/latest
+  coordination, not a Profile-only implementation. Field-specific validation, authorization and
+  concurrency enforcement remain with their owning domains. Creation-only forms have no existing
+  saved value to conflict with. This iteration does not migrate all existing forms or introduce a
+  general collaborative-editing/persistence framework.
+- Record this durable default through the modelling/ADR process before ready publication; the
+  approval of the direction does not constitute acceptance of an unwritten ADR.
 - Earlier Cancel/re-edit-only and discard-with-toast proposals are superseded.
 
 ## Historical handoff — no longer a required external step

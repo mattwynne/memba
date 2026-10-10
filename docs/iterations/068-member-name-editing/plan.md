@@ -53,11 +53,17 @@ Current repository evidence:
 - Preserve a conflicting unsaved edit. On conflicting Save, show the newer value and offer
   **Save anyway** or **Cancel my changes**. Explicit confirmation may replace only the newer value
   shown; if it changes again before confirmation, warn again. Never silently overwrite.
-- Use generic conflict wording and a simple reusable interaction, not a collaborative editor or
-  app-wide form migration. Proactive warnings are not required.
+- Establish the generic conflict interaction as the default for forms editing existing saved data:
+  shared warning-card presentation, wording and Save anyway / Cancel my changes actions, with
+  reusable coordination for baseline/draft/latest values. Future editable forms should use this
+  default rather than reimplement it. Field-specific validation, persistence and authorization stay
+  with each form/domain. Creation-only forms have no existing saved value to conflict with.
+- Do not migrate all existing forms in 068 or build a collaborative editor. Proactive warnings are
+  not required.
 - Matt approved the amber warning-card design with icon and **Save anyway / Cancel my changes**,
-  conditional on keeping implementation simple. If implementing this requires substantial generic
-  form infrastructure or disproportionate complexity, stop and bring the trade-off back to Matt;
+  conditional on keeping implementation simple. A small shared form-conflict abstraction is required,
+  not a Profile-only implementation. If this requires substantial infrastructure or disproportionate
+  complexity, stop and bring the trade-off back to Matt;
   do not silently substitute discard-on-conflict or last-write-wins.
 - Smaller acceptance coverage: cross-club/history names, invalid-name rejection, untouched-form
   refresh, conflicting-save protection, plus one focused Profile editing browser journey.
@@ -205,8 +211,13 @@ not new business concepts.
   draft saveable.
 - **Preparation/dispatch:** extend focused Person command preparation and existing CommandDispatch;
   keep orchestration at the web boundary, consistent with current repository structure.
-- **Deferrals:** no general optimistic-locking framework, name history UI, collaborative editing,
-  staff editing, notifications, or changes to unrelated Person creation/invitation rules.
+- **Shared form responsibility:** propose a small reusable conflict-state coordinator and warning
+  component used by Profile now and defaulted for future existing-record edit forms. Keep app/UI
+  conflict state distinct from field-specific aggregate concurrency enforcement. Generic UI reuse
+  must not imply a universal last-write-wins/force-save command or trust client-supplied baselines.
+- **Deferrals:** no general persistence/optimistic-locking framework, app-wide form migration, name
+  history UI, collaborative editing, staff editing, notifications, or changes to unrelated Person
+  creation/invitation rules.
 
 ## Architecture Decisions
 
@@ -219,9 +230,12 @@ Existing accepted ADRs remain authoritative:
 - [0026: separate browser journeys](../../adr/0026-keep-browser-journeys-distinct-from-domain-examples.md).
 - [0027: live queries](../../adr/0027-use-live-projection-queries-for-liveview-reads.md).
 
-No new ADR is currently proposed: a Person-local expected-value check extends the existing aggregate
-boundary; it does not establish a cross-application concurrency framework. Confirm this assessment
-with the model review and Matt. Do not accept a new consequential choice autonomously.
+ADR candidate: Matt has explicitly chosen the generic conflict interaction as the default for
+existing-record edit forms across the app. Record this durable default and the shared UI/state
+responsibility boundary after modelling/review; field-specific concurrency enforcement remains in
+its owning domain. No app-wide form migration or general persistence framework is implied.
+The Person-local expected-value check separately extends the existing aggregate boundary.
+No new ADR has yet been drafted, reviewed or accepted.
 
 ## Implementation Plan — conditional on planning approval
 
@@ -243,8 +257,12 @@ with the model review and Matt. Do not accept a new consequential choice autonom
 
 - Matt approved explicit conflict confirmation/recovery. Approval of the proposed expected-name
   comparison, identical-target no-op and Unicode grapheme length remains part of model review.
-- Matt approved the local BB HTML design, conditional on simple implementation. Required specialist
+- Matt approved the local BB HTML design and directed that the generic form-conflict pattern be
+  the default for future editable forms, conditional on simple implementation. Required specialist
   review and render verification remain outstanding; the earlier external handoff is superseded.
+- This durable default introduces an ADR candidate: shared editable-form conflict handling. Resolve
+  the small abstraction's responsibility boundary through modelling and record Matt's decision in
+  a reviewed ADR before ready publication. No ADR is accepted merely by this draft.
 - The required domain-model review and final formulation review have not completed. No independent
   collaborators have participated in this thread; do not describe facilitator inspection as an
   ensemble or Three Amigos consensus.
