@@ -2,6 +2,13 @@
 
 **Status:** experimental Milestone A spike, not an iteration runner or production workflow.
 
+A separate [real-agent candidate adapter](REAL_CANDIDATE.md) now exercises a bounded
+Python-domain canary with tool-disabled real builder/reviewer sessions and
+systemd/Bubblewrap isolation. It does not upgrade the scripted controller below
+into a Memba/068 runner; its admission limits and exact dispatch interface are
+explicit. [Rehearsal evidence](REHEARSAL.md) records all three real-agent jobs,
+including their non-completion and outstanding 068 blockers.
+
 Matt authorized building/testing the skeleton and then trying a real iteration on October 10.
 This implements the dangerous-end experiment in the
 [replacement proposal](../../docs/notes/2026-10-09-unattended-delivery-workflow.md).
@@ -64,7 +71,7 @@ that arrives after the deadline is retained but is not counted as delivery.
 
 ## Tests and lessons
 
-The suite currently has **29 test methods**, including seven actual controller-kill
+The original fixture-controller suite has **29 test methods**, including seven actual controller-kill
 subcases—one after each phase's external effect, before acknowledgment. It also covers:
 
 - Worker death with useful edits and a stale Git index lock.
@@ -92,7 +99,7 @@ It is not proof that every possible crash point is covered.
 
 ## Explicit limits before live use
 
-- No real model adapter, acceptance-example selection, outer BDD loop, unit-TDD worker,
+- In this **fixture controller**, no real model adapter, acceptance-example selection, outer BDD loop, unit-TDD worker,
   meaningful independent code acceptance, or multi-obligation iteration completion yet.
   Those are Milestone B—not properties of the scripted fixtures.
 - Trusted doubles must retain their session and ownership environment. This is crash
