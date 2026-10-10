@@ -48,6 +48,15 @@ not connected interaction, announcements/focus, or production component implemen
 ## Gates
 
 The first gate completed with six browser scenarios passing, but docs were edited while it ran;
-it is not claimed as the exact published-state gate. Rerun `dev check` after committing the final
-planning diff. Parent whole-plan review remains pending. Behaviour/model direction and local design
-are approved; final formulated-language and ADR-record acceptance remain publication checkpoints.
+it is not claimed as the exact published-state gate. The next exact-state run failed after Ecto
+sandbox/projector shutdown caused cascading missing-Repo failures; no application fixes were made.
+A retry on clean committed state `12d98f759b24ed6334e14cb71027b9303a8e6730` passed `dev check`
+(exit 0, six browser scenarios/106 steps). Local logs: `.local/068-planning/final-dev-check.log`
+(failed run), `.local/068-planning/retry-dev-check.log` (passing retry).
+
+Parent final whole-plan review subsequently completed with two independent families. Its synthesis
+is preserved verbatim in [final-ensemble-review.md](final-ensemble-review.md). Trusted actor/self-only
+entry-point authorization and synchronized readback/delayed-projector proofs were clarified in the
+plan and ADR record. These are docs-only corrections: `git diff --check` applies, with no new
+`dev check` required and no attribution of the earlier gate to a later untested commit. Only explicit
+written ADR acceptance remains; no second ensemble or scope interview is needed.

@@ -27,8 +27,22 @@ no pre-existing value to conflict with. Do not migrate all existing forms in thi
 - An untouched form follows latest data. A dirty form retains its draft and edit baseline.
 - Ordinary Save submits changed fields and their expected values. Never replace a whole record
   merely because the browser posted a whole form.
-- The owning domain authorizes, validates and atomically checks expectations against authoritative
-  state before writing. A projection/UI comparison alone cannot enforce this rule.
+- The owning domain/application boundary authorizes, validates and atomically checks expectations
+  against authoritative state before writing. For Person rename, the Membership preparation entry
+  point receives trusted server-established actor context separately from editable attrs, resolves
+  the actor's Person, and rejects another target before preparing/dispatching a command. Posted
+  actor/Person IDs are not trusted. Raw CommandDispatch is an internal trusted boundary, not an
+  alternative public self-service API; aggregate ID matching alone is not actor authorization.
+  Authorization runs for ordinary Save, confirmation and identical-target no-op. Retain fresh
+  settings authorization; do not introduce a general authorization framework.
+- A projection/UI comparison alone cannot enforce conditional write safety. Conflict warning values
+  come from an authorized authoritative comparison result or synchronized authorized read. Successful
+  readback, including eventless identical-target success, and cancellation after conflict must use
+  existing ADR 0022 checkpoint/barrier conventions to obtain current authorized projection data.
+  The no-op may depend on an earlier rename whose projector/notification has not caught up. A bounded
+  readback failure retains the dirty draft and uses existing feedback handling rather than discarding
+  work or confirming stale data. No new synchronization framework or guarantee about writes after
+  the checkpoint is introduced.
 - A rejected conflict shows authoritative latest values in an amber warning card with an icon,
   preserves the draft, and offers Save anyway / Cancel my changes.
 - Save anyway confirms replacement of the values shown, not an unconditional force-save. If the
@@ -64,7 +78,9 @@ patches avoid overwriting fields the actor did not edit.
 Harder: every adopting domain must supply safe conditional writes and authorized current values;
 shared UI cannot manufacture that safety. Normalization/comparison semantics need domain tests.
 Connected input preservation, event ordering, repeated conflicts and accessibility require integration
-proof. Existing forms do not acquire the behaviour merely by accepting this record. Initial reuse is
+proof. Deterministic delayed-projector tests must cover authoritative conflict values, eventless
+identical-target success, cancellation readback and draft preservation on bounded readback failure.
+Direct unauthorized application-entry attempts must fail, including eventless and confirmation paths. Existing forms do not acquire the behaviour merely by accepting this record. Initial reuse is
 bounded to comparable flat scalar fields, not arbitrary document/collection merging.
 
 No accepted ADR is superseded. ADR 0027 still governs member query refresh and transient-state

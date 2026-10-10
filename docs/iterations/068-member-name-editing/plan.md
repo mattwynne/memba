@@ -195,6 +195,14 @@ not new business concepts.
 - **Intent:** `RenamePerson`, containing Person identity, requested name, and the name that the
   edit started from (`expected_name`). The web boundary derives the target from the authenticated
   identity, never a submitted Person ID. Fresh settings authorization is checked before dispatch.
+- **Trusted actor/self-only contract:** the Membership rename application/preparation entry point
+  receives a server-established actor context separately from editable attrs, resolves the actor's
+  Person identity, and rejects a target other than that Person before preparing/dispatching any
+  command. The web adapter passes authenticated context, not posted actor/Person IDs. Raw command
+  dispatch is an internal trusted boundary, not an alternative public self-service entry point.
+  Aggregate target-ID matching is consistency validation, not actor authorization. Self-only
+  authorization must run for Save, Save anyway and identical-target no-op; use current preparation
+  and CommandDispatch conventions, not a new general authorization framework.
 - **Invariant:** normalize and validate at the aggregate, not just in the browser. Use Elixir
   `String.length/1` (Unicode graphemes), not bytes or browser UTF-16 maxlength, after normalization.
   Keep raw input for the form while comparing normalized requested/current values; do not mutate
@@ -214,6 +222,17 @@ not new business concepts.
   only the aggregate's name; the Person projector changes only the corresponding read-model name.
 - **Reads:** current Person names remain authoritative for displayed authors, not historical copies
   embedded in immutable sent artifacts. No historical event rewrite or messaging backfill is planned.
+- **Readback/lag:** conflict results must supply authorized authoritative current values from the
+  comparison outcome, or use an authorized read synchronized to that committed state. Do not put a
+  stale ordinary projection value in the warning. After success, including eventless identical-target
+  success, synchronize readback using existing ADR 0022 checkpoint/projector barriers and reread
+  authorized Person/settings data before presenting a confirmed current display. A no-op emits no
+  new notification, but the earlier winning rename may still be pending in the Person projector.
+  Cancellation after conflict also obtains current authorized data with the existing synchronization
+  convention before discarding the draft/closing the editor. Bounded readback failure retains the
+  draft and existing feedback handling; never claim stale data is confirmed current or discard work
+  while unable to obtain the latest value. This is bounded read-your-writes coordination, not a new
+  synchronization framework or guaranteed observation of writes committed after the checkpoint.
 - **UI responsibility:** keep baseline, conflicting displayed value and dirty text outside the
   live-query result. Only explicit Save anyway confirms replacement of the displayed value;
   Cancel my changes adopts current data without writing. A query refresh must not silently make a stale
@@ -304,18 +323,18 @@ flat scalar edit forms without extending 068 to app-wide form migration.
 
 - No open concurrency-mechanism choice: Matt approved normalized current-value comparison,
   identical-target no-op and no revision tracking. Shared UI stays small per the reviewed spike.
-- Matt approved the local BB HTML design and directed that the generic form-conflict pattern be
-  the default for future editable forms, conditional on simple implementation. Required specialist
-  review and render verification remain outstanding; the earlier external handoff is superseded.
-- This durable default introduces an ADR candidate: shared editable-form conflict handling. Resolve
-  the small abstraction's responsibility boundary through modelling and record Matt's decision in
-  a reviewed ADR before ready publication. No ADR is accepted merely by this draft.
-- A bounded read-only domain/UX/formulation review was completed by @thread:thr_en8aqpbjbq
-  (one inherited model, not a three-family ensemble or live Three Amigos). Findings are recorded in
-  [review-notes.md](review-notes.md). Model temporal semantics and ADR acceptance remain outstanding.
-  Parent owns the final whole-plan ensemble; this bounded review is not a duplicate of it.
-- Draft ADR record review/acceptance and final formulated-language checkpoint remain before ready.
-  Deliver the exact record/features to parent for those approvals; do not ask settled scope again.
+- Matt approved the local BB HTML design and generic form-conflict default, conditional on simple
+  implementation. Static render verification and bounded specialist review are complete; the
+  external handoff is superseded.
+- Bounded specialist findings are retained in [review-notes.md](review-notes.md). Parent's final
+  whole-plan review is complete with two independent completed families (GPT-6 Astra and Gemini
+  3.1 Pro Preview); Claude did not finish and no verdict was counted. Preserve actual panel,
+  disagreement and limits in [final-ensemble-review.md](final-ensemble-review.md).
+- Both scope-preserving final findings are incorporated above and in the ADR/proof matrix:
+  explicit trusted actor/self-only preparation responsibility and synchronized readback, including
+  delayed-projector conflict/no-op/cancel cases. No second ensemble round or new framework.
+- Only explicit acceptance of the reviewed written ADR record remains before ready publication.
+  [form-conflict-adr-proposal.md](form-conflict-adr-proposal.md) is still proposed, not accepted.
 
 ## New Capability
 
@@ -326,8 +345,9 @@ cannot silently undo a conflicting newer change.
 
 | Layer | Required proof | Does not prove |
 | --- | --- | --- |
-| Aggregate/preparation | normalization; empty/whitespace; 100/101 graphemes; non-Latin/punctuation/single-word names; stale and simultaneous writes; identical target; unrelated Person state unchanged; spoofed target rejected at web boundary | connected UI freshness |
+| Aggregate/preparation | normalization; empty/whitespace; 100/101 graphemes; non-Latin/punctuation/single-word names; stale and simultaneous writes; identical target; unrelated Person state unchanged; spoofed actor/target rejected at web boundary; direct unauthorized rename entry-point attempt rejected before preparation/dispatch, including no-op and confirmation | connected UI freshness |
 | Projector/replay/adapter | old PersonCreated history plus rename replays; name-only projection; post-commit publication; exact Person event translation; unrelated identities ignored | every page displays the result |
+| Readback with deterministic delayed Person projector | conflict displays authoritative winning value while projection lags; eventless identical-target success synchronizes with earlier winning commit; Cancel after conflict obtains current authorized data before dropping draft; bounded readback timeout preserves draft and never confirms stale data | observing writes committed after the synchronization checkpoint |
 | Member LiveView integration | real rename command → projector commit → PubSub → already-open settings/dashboard/conversation; current root/reply/participant names and initials, including inactive historical authors; unrelated query isolation | durable notification delivery |
 | Other member surfaces | inspect/test group creation, compose, delivery detail and invitation query/shell name dependencies; preserve typed drafts and authorization on refresh | staff freshness |
 | Form LiveView tests | untouched update; dirty preservation; stale Save before notification; explicit confirmed replacement; repeat conflict; Cancel my changes without write; Cancel/no-op; no silent baseline rebasing; validation; actor targeting | real browser DOM/focus behaviour |
