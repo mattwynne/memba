@@ -50,8 +50,11 @@ Current repository evidence:
 - Reject blank/whitespace-only names and names longer than 100 characters after normalization.
   No restrictions on punctuation, scripts, accents, or single-word names.
 - Update an untouched second name form when the latest name arrives.
-- Preserve a conflicting unsaved edit; report an error on Save rather than silently overwriting
-  the newer name. An early warning is optional if straightforward. No collaborative editor.
+- Preserve a conflicting unsaved edit. On conflicting Save, show the newer value and offer
+  **Save my value** or **Use latest**. Explicit confirmation may replace only the newer value
+  shown; if it changes again before confirmation, warn again. Never silently overwrite.
+- Use generic conflict wording and a simple reusable interaction, not a collaborative editor or
+  app-wide form migration. Proactive warnings are not required.
 - Smaller acceptance coverage: cross-club/history names, invalid-name rejection, untouched-form
   refresh, conflicting-save protection, plus one focused Profile editing browser journey.
 
@@ -113,13 +116,24 @@ Existing error copy:
 - Blank: “Enter the name your clubs should see.”
 - Too long: “That name is too long.”
 
-**Proposed minimal conflict UX, awaiting Matt:** reuse the existing inline field-error treatment;
-keep typed text, with “Your name changed elsewhere. Cancel to load the latest name, then edit again.”
-Cancel shows the latest saved name; Edit starts a fresh attempt. Do not automatically rebase a dirty
-form's baseline, and do not add a merge dialog or overwrite button. An optional early warning uses
-this same treatment. The existing error card supplies the visual pattern; no new component is
-proposed. If this pattern proves insufficient, stop for the UX skill's design handoff rather than
-inventing a new design during implementation.
+**Matt-approved conflict interaction:** retain the typed value and show:
+
+> Changed elsewhere to “Alice Jones”.
+> Saving your edit will replace that value.
+>
+> **Save my value** · **Use latest**
+
+The field label remains “Your name”; the warning/actions are generic. **Save my value** explicitly
+confirms replacing the displayed newer value, not an unconditional force-write. If another change
+wins before confirmation, show the new conflict and require confirmation again. **Use latest**
+adopts the latest value and discards the draft without writing. Show this after a conflicting Save;
+no proactive warning is required. This supersedes the earlier Cancel/re-edit-only proposal and the
+rejected discard-with-toast alternative.
+
+Design coverage blocker: the checked-in template covers validation errors but not these new
+conflict actions. See [conflict-design-handoff.md](conflict-design-handoff.md) for the approved
+text mock-up and the required Claude Code/DesignSync handoff. Do not publish this plan as ready or
+invent the missing visual treatment during application implementation.
 
 After a successful matching refresh, the LiveView reconciles only its name form: untouched input
 and its baseline follow the current name; dirty input and baseline stay intact. Other forms,
@@ -134,15 +148,17 @@ baseline, so reverting input to that value permits automatic refresh again.
 - A rename changes neither identity nor email addresses, verification, memberships, or roles.
 - Member rows, root/reply authors, participant avatars, menu names and initials use current names,
   including on relevant already-open member pages and across clubs.
-- Untouched second forms update; conflicting dirty forms do not overwrite a newer value, even when
-  Save arrives before the other tab's live notification.
+- Untouched second forms update; conflicting dirty forms do not silently overwrite a newer value,
+  even when Save arrives before the other tab's live notification. Preserve the draft, show the
+  newer value, and offer Save my value / Use latest. A repeated conflict requires renewed confirmation.
 - Relevant open member refreshes retain fresh authorization and preserve unrelated transient state.
 - No changes to staff-live freshness, sent email artifacts, or photos.
 
 ## Open Business Decisions
 
 Core scope, validation, staff exclusion, concurrent-edit outcomes and example subjects are agreed.
-Exact proposed Gherkin and minimal conflict copy/recovery still await Matt's review.
+Matt has approved generic conflict copy and explicit Save my value / Use latest recovery.
+Exact formulated Gherkin still awaits review; visual design coverage is blocked as recorded above.
 
 ## Domain Vocabulary
 
@@ -162,6 +178,8 @@ not new business concepts.
 - **Concurrency:** compare the submitted edit baseline with the aggregate's authoritative current
   name, not a projection. A different requested value with a stale baseline is rejected. This protects
   Save-before-notification and two simultaneous commands without requiring a name-version column.
+  Explicit Save my value submits a new attempt whose expected name is the newer value shown in
+  the warning. A second intervening change rejects that attempt too; never bypass concurrency checks.
 - **No-op:** if the normalized requested name already equals the aggregate's current name, succeed
   without an event, including two tabs submitting the same target. Name changes away and back to
   the baseline are not conflicts under value comparison; no newer differing name is overwritten.
@@ -170,8 +188,10 @@ not new business concepts.
   only the aggregate's name; the Person projector changes only the corresponding read-model name.
 - **Reads:** current Person names remain authoritative for displayed authors, not historical copies
   embedded in immutable sent artifacts. No historical event rewrite or messaging backfill is planned.
-- **UI responsibility:** keep baseline and dirty text outside the live-query result. Cancel/re-edit
-  explicitly adopts the latest name. A query refresh must not silently make a stale draft saveable.
+- **UI responsibility:** keep baseline, conflicting displayed value and dirty text outside the
+  live-query result. Only explicit Save my value confirms replacement of the displayed value;
+  Use latest adopts current data without writing. A query refresh must not silently make a stale
+  draft saveable.
 - **Preparation/dispatch:** extend focused Person command preparation and existing CommandDispatch;
   keep orchestration at the web boundary, consistent with current repository structure.
 - **Deferrals:** no general optimistic-locking framework, name history UI, collaborative editing,
@@ -210,8 +230,9 @@ with the model review and Matt. Do not accept a new consequential choice autonom
 
 ## Open Technical Decisions
 
-- Matt's approval of expected-name comparison, identical-target no-op, Unicode grapheme length,
-  and minimal conflict recovery is pending.
+- Matt approved explicit conflict confirmation/recovery. Approval of the proposed expected-name
+  comparison, identical-target no-op and Unicode grapheme length remains part of model review.
+- New conflict controls require the design handoff before ready publication.
 - The required domain-model review and final formulation review have not completed. No independent
   collaborators have participated in this thread; do not describe facilitator inspection as an
   ensemble or Three Amigos consensus.
@@ -229,7 +250,7 @@ cannot silently undo a conflicting newer change.
 | Projector/replay/adapter | old PersonCreated history plus rename replays; name-only projection; post-commit publication; exact Person event translation; unrelated identities ignored | every page displays the result |
 | Member LiveView integration | real rename command → projector commit → PubSub → already-open settings/dashboard/conversation; current root/reply/participant names and initials, including inactive historical authors; unrelated query isolation | durable notification delivery |
 | Other member surfaces | inspect/test group creation, compose, delivery detail and invitation query/shell name dependencies; preserve typed drafts and authorization on refresh | staff freshness |
-| Form LiveView tests | untouched update; dirty preservation; stale Save before notification; conflict recovery; Cancel/no-op; no baseline rebasing; validation; actor targeting | real browser DOM/focus behaviour |
+| Form LiveView tests | untouched update; dirty preservation; stale Save before notification; explicit confirmed replacement; repeat conflict; Use latest without write; Cancel/no-op; no silent baseline rebasing; validation; actor targeting | real browser DOM/focus behaviour |
 | One browser journey | connected Profile editing, menu/initials and untouched second form; accessible controls; responsive checks per suite conventions | all validation/race permutations |
 | Full regression | `dev check` on exact staged/committed state | product approval or launch permission |
 
