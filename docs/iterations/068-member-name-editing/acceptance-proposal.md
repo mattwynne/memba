@@ -75,8 +75,8 @@ Person identity after renaming. No extra journey is needed for every error case 
 - Empty and whitespace-only; normalization; 100/101 Unicode graphemes; punctuation/non-Latin and
   single-word names; invalid input leaves stored state unchanged.
 - Dirty second form retains input and rejects stale Save even before notification. The approved
-  warning shows the newer value with Save my value / Use latest. Explicit confirmation replaces
-  only the shown value; a further intervening change requires renewed confirmation. Use latest
+  warning shows the newer value with Save anyway / Cancel my changes. Explicit confirmation replaces
+  only the shown value; a further intervening change requires renewed confirmation. Cancel my changes
   adopts current data without writing. Identical-target no-op and change-away-and-back semantics
   depend on approval of the proposed model.
 - Current names on open dashboard/detail/delivery/shell surfaces, including historical authors

@@ -1,8 +1,11 @@
 # 068 conflict interaction: approved behaviour and design handoff
 
 Status: external handoff superseded by Matt's explicit direction to design here in BB using HTML
-mock-ups and the base design language/components. Behaviour/text mock-up approved; local visual
-proposal awaiting review: [name-conflict-mockup.html](name-conflict-mockup.html).
+mock-ups and the base design language/components. Matt approved the amber card/icon and
+Save anyway / Cancel my changes design, conditional on simple implementation:
+[name-conflict-mockup.html](name-conflict-mockup.html). Required specialist review and render
+verification remain outstanding. If substantial generic form infrastructure is needed, return the
+trade-off to Matt instead of silently changing the approved conflict policy.
 
 ## Approved interaction
 
@@ -16,12 +19,13 @@ Your name
 Changed elsewhere to “Alice Jones”.
 Saving your edit will replace that value.
 
-[ Save my value ]  [ Use latest ]
+[ Save anyway ]  [ Cancel my changes ]
 ```
 
-- Save my value explicitly confirms replacing the shown value. If that value changes again before
+- Save anyway explicitly confirms replacing the shown value. If that value changes again before
   confirmation, show the updated conflict and require confirmation again. No unconditional overwrite.
-- Use latest adopts the latest saved value and discards the draft without writing.
+- Cancel my changes discards the draft, closes the editor and displays the latest saved value
+  without writing.
 - No proactive-warning machinery, merge interface, silent last-write-wins, or automatic discard.
 - The interaction should be simple and reusable across fields/forms. This iteration does not migrate
   all forms or introduce a general collaborative-editing framework.
