@@ -31,8 +31,11 @@ no pre-existing value to conflict with. Do not migrate all existing forms in thi
   state before writing. A projection/UI comparison alone cannot enforce this rule.
 - A rejected conflict shows authoritative latest values in an amber warning card with an icon,
   preserves the draft, and offers Save anyway / Cancel my changes.
-- Save anyway confirms replacement of the values shown, not an unconditional force-save. A further
-  intervening change requires a new warning/confirmation. New draft edits invalidate confirmation.
+- Save anyway confirms replacement of the values shown, not an unconditional force-save. If the
+  authoritative current value conflicts with that expectation under the domain comparison policy,
+  require a new warning/confirmation. Person uses normalized value equality, not revisions:
+  Jones → Green → Jones does not itself invalidate confirmation, and an identical normalized target
+  succeeds without an event. New draft edits invalidate confirmation.
 - Cancel my changes discards the draft, closes the editor and shows current authorized saved data
   without writing. Confirmation never bypasses validation or authorization.
 - Shared coordination/presentation stays in the web layer. Casting, normalization, field-specific
