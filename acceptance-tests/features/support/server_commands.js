@@ -434,12 +434,11 @@ ensure_desired_addresses_are_verified = fn person_id ->
 
   Enum.each(email_addresses, fn %{"email" => email} ->
     unless Enum.any?(current_email_addresses, &same_email?.(&1.email, email)) do
-      :ok = Memba.Membership.add_person_email_address(
-        %{person_id: person_id, email: email},
-        consistency: :strong
-      )
+      {:ok, command} =
+        Memba.Membership.PersonEmailAddressCommands.prepare_add(%{person_id: person_id, email: email})
+      :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
 
-      :ok = Memba.Membership.verify_person_email_address(
+      :ok = Memba.Membership.PersonEmailVerification.verify(
         %{person_id: person_id, email: email},
         consistency: :strong
       )
@@ -451,16 +450,19 @@ person =
   case existing_person do
     nil ->
       person_id = Memba.ID.generate(:person)
-      :ok = Memba.Membership.create_person(
-        %{person_id: person_id, name: person_name, email_addresses: email_addresses},
-        consistency: :strong
-      )
+      {:ok, command} =
+        Memba.Membership.PersonCommands.prepare_create(%{
+          person_id: person_id,
+          name: person_name,
+          email_addresses: email_addresses
+        })
+      :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
       Memba.Membership.PersonQueries.get_person(person_id)
 
     person ->
       ensure_desired_addresses_are_verified.(person.person_id)
 
-      :ok = Memba.Membership.replace_person_email_addresses(
+      :ok = Memba.Membership.PersonEmailVerification.replace(
         %{person_id: person.person_id, email_addresses: email_addresses},
         consistency: :strong
       )
