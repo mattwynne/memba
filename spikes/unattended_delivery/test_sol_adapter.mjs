@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {assertModel, Broker, checkRequestBudget, digest, openSession, resourceLoader, validateRequest} from './sol_adapter.mjs';
+import {assertModel, Broker, checkRequestBudget, checkpointSession, classifyProviderFailure, digest, openSession, resourceLoader, validateRequest} from './sol_adapter.mjs';
 const sdkPath = process.env.WORKFLOW_PI_SDK_ROOT ?? '/home/matt/.local/lib/node_modules/@earendil-works/pi-coding-agent';
 const sdk = await import(path.join(sdkPath, 'dist/index.js'));
 const runtime = await sdk.ModelRuntime.create({allowModelNetwork: false});
@@ -99,4 +99,50 @@ test('actual SDK has no builtins/resources, strict custom inspector not host rea
       execute: async () => ({content: [{type: 'text', text: 'fixture-only'}], details: {}})}]});
   try {assert.deepEqual(session.agent.state.tools.map(t => t.name), ['inspect']);}
   finally {session.dispose();}
+});
+
+test('first-request crash retains the actual SDK identity/user history without invented assistant', () => withRoot(root => {
+  const contract = {model: model.id};
+  const {manager, identityPath} = openSession(sdk, root, 'builder', 'new', config, contract);
+  manager.appendModelChange(model.provider, model.id);
+  manager.appendMessage({role: 'user', content: 'real opening request awaiting response', timestamp: Date.now()});
+  checkpointSession(manager);
+  fs.writeFileSync(identityPath, JSON.stringify({id: manager.getSessionId(), file: manager.getSessionFile(),
+    contract: digest(contract), provider: model.provider, model: model.id}));
+  const resumed = openSession(sdk, root, 'builder', 'resume', config, contract).manager;
+  assert.equal(resumed.getSessionId(), manager.getSessionId());
+  assert.equal(resumed.buildSessionContext().messages[0].content, 'real opening request awaiting response');
+  assert.equal(resumed.buildSessionContext().messages.some(m => m.role === 'assistant'), false);
+}));
+
+test('provider continuation uses typed transport failures, not product diagnostic text', () => {
+  for (const status of [429, 500, 503]) assert.equal(classifyProviderFailure(status), true);
+  for (const status of [200, 400, 401, 403]) assert.equal(classifyProviderFailure(status), false);
+  assert.equal(classifyProviderFailure(200, {type: 'response.failed', response: {error: {code: 'server_error'}}}), true);
+  assert.equal(classifyProviderFailure(200, {error: {code: 'invalid_context_length', message: 'server_error'}}), false);
+});
+
+test('interrupted reviewer resumes only its own exact candidate, never builder history', () => withRoot(root => {
+  const contract = {model: model.id, automatic_continuation: true};
+  fs.writeFileSync(path.join(root, 'state.json'), JSON.stringify({candidate: 'a'.repeat(40)}));
+  const {manager, identityPath} = openSession(sdk, root, 'reviewer', 'new', config, contract);
+  manager.appendModelChange(model.provider, model.id);
+  manager.appendMessage({role: 'user', content: 'unique read-only review history', timestamp: Date.now()});
+  manager.appendMessage({role: 'assistant', content: [{type: 'text', text: 'offline interrupted review'}],
+    provider: model.provider, model: model.id, api: model.api, stopReason: 'stop', timestamp: Date.now(),
+    usage: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {total: 0}}});
+  fs.writeFileSync(identityPath, JSON.stringify({id: manager.getSessionId(), file: manager.getSessionFile(),
+    contract: digest(contract), provider: model.provider, model: model.id, candidate: 'a'.repeat(40)}));
+  const resumed = openSession(sdk, root, 'reviewer', 'resume', config, contract).manager;
+  assert.equal(resumed.getSessionId(), manager.getSessionId());
+  assert.equal(resumed.buildSessionContext().messages[0].content, 'unique read-only review history');
+  fs.writeFileSync(path.join(root, 'state.json'), JSON.stringify({candidate: 'b'.repeat(40)}));
+  assert.throws(() => openSession(sdk, root, 'reviewer', 'resume', config, contract), /Stale Sol reviewer/);
+}));
+
+test('formatter is an explicit builder capability, still forbidden to reviewer', () => {
+  const names = ['inspect', 'edit', 'observe', 'format'];
+  const payload = {model: model.id, parallel_tool_calls: true, tools: names.map(name => ({type: 'function', name}))};
+  validateRequest(payload, names);
+  assert.throws(() => validateRequest(payload, ['inspect']));
 });

@@ -1,0 +1,20 @@
+digraph BddImplementation {
+    graph [goal="Implement {{ inputs.plan_path }} from original source through full checks and independent Sol review; retain locally, never publish", default_max_retries=0, max_node_visits=256]
+    start [shape=Mdiamond]
+    prepare [shape=parallelogram, label="Admit original plan once", script="python3 -B .fabro/workflows/bdd-implementation/runner/fabro_bdd.py prepare '{{ inputs.plan_path }}' '{{ inputs.source_sha }}' '{{ inputs.run_key }}'", timeout="1200s", max_retries=2]
+    work [shape=parallelogram, label="Persistent builder, checks and independent review", script="python3 -B .fabro/workflows/bdd-implementation/runner/fabro_bdd.py drive '{{ inputs.run_key }}'", timeout="300s", output_schema="routing", max_retries=2]
+    wait [shape=parallelogram, label="Wait for the same bounded job", script="sleep 10", timeout="20s"]
+    evidence [shape=parallelogram, label="Verify exact acceptance and full dev check", script="python3 -B .fabro/workflows/bdd-implementation/runner/fabro_bdd.py report '{{ inputs.run_key }}'", timeout="120s", goal_gate=true, max_retries=2]
+    failed [shape=parallelogram, label="Fail honestly; retain all evidence", script="printf 'Implementation did not meet its exact proof contract; inspect retained job and Fabro evidence. No publication.\\n' >&2; exit 1", max_retries=0]
+    done [shape=Msquare, label="Checked and independently accepted, not published"]
+    start -> prepare
+    prepare -> work [condition="outcome=succeeded"]
+    prepare -> failed
+    work -> evidence [condition="outcome=succeeded && preferred_label=accepted"]
+    work -> wait [condition="outcome=succeeded && preferred_label=waiting"]
+    work -> failed
+    wait -> work [condition="outcome=succeeded"]
+    wait -> failed
+    evidence -> done [condition="outcome=succeeded"]
+    evidence -> failed
+}

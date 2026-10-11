@@ -1,0 +1,34 @@
+_version = 1
+[workflow]
+graph = "workflow.fabro"
+[run.environment]
+id = "trusted-command-host"
+[environments.trusted-command-host]
+provider = "local"
+[run.model]
+provider = "stateful-sol"
+name = "gpt-6.1-sol"
+[run.run_branch]
+push = false
+[run.meta_branch]
+push = false
+[run.checkpoint]
+exclude_globs = [".fabro/tmp", ".fabro/tmp/**"]
+[run.artifacts]
+include = [".fabro/tmp/bdd/**/report.json"]
+
+[[run.hooks]]
+id = "bounded-worker-owner"
+event = "run_start"
+script = "python3 -B .fabro/workflows/bdd-implementation/runner/fabro_bdd.py begin"
+blocking = true
+sandbox = true
+timeout = "30s"
+
+[[run.hooks]]
+id = "bounded-worker-cleanup"
+event = "sandbox_cleanup"
+script = "python3 -B .fabro/workflows/bdd-implementation/runner/fabro_bdd.py cleanup"
+blocking = true
+sandbox = true
+timeout = "30s"
