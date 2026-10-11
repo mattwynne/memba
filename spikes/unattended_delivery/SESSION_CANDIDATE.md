@@ -316,6 +316,75 @@ scripts. The supplied Memba helper deliberately grants no implementation rights.
 Custom contracts require parent review, actual proving boundaries and explicit
 budgets; the helper is not a substitute for adoption of the final 068 contract.
 
+## Bounded read-only inspection
+
+The fifth Sol visit hit its accepted **cumulative response-accounted** 2M-token
+threshold after 17 requests, not a provider refusal or context-window overflow.
+Repeated cached history was 90.35% of that aggregate. Empty inspection duplicated
+the full contract and listed 2,561 repository paths; whole-file reads silently
+cut off at 80,000 characters. This correction changes only read presentation,
+not scopes, inference policy, old evidence, development gates or proof authority.
+
+`inspect` remains the same read-only capability for builder and reviewer:
+
+- Empty `path`: paged **declared editable/context/unit** path inventory (including
+  approved files not yet created), concise status and stable proof/unit IDs.
+  IDs/status are **not proof**; they do not assert that old observations certify
+  the current candidate. The immutable full contract is not duplicated here.
+- `path="@files"`: explicit paged inventory of **all** candidate paths. Existing
+  source read permission remains unchanged: any file within the candidate root,
+  never host paths or escaping symlinks. Edit permission is still separate.
+- `path="@contract"`: exact canonical full approved JSON, SHA256 equal to the
+  contract digest, available losslessly through pages. All obligations, scripts,
+  scopes and outcome criteria remain available; no summary replaces them.
+- `path="@evidence"`: paged index of the job's evidence files, not a multi-log dump.
+  `path="@evidence/NAME"`: exact UTF-8 receipt/log content through pages, including
+  source/contract IDs and raw results. Evidence traversal/escaping symlinks are
+  rejected; no control-plane/host filesystem access is granted.
+- An ordinary source/evidence/contract text path accepts zero-based `offset`
+  **Unicode characters**, `limit` default 4,000 / maximum 8,000 characters. Index
+  offsets count **items**, default 40 / maximum 100. These are character/item
+  bounds, not claims of identical encoded-byte or token sizes.
+- Optional `query` is a literal string (1–256 characters), not regex or shell.
+  It finds the first occurrence at/after `offset`, returns `match_offset` and
+  `match_line`, then a bounded range from that occurrence. No match is explicit.
+  Omit `query` when continuing that range via `next_offset`.
+
+Every page explicitly reports offset units, totals, truncation and continuation.
+`current_candidate` identifies the job's current snapshot, **not** the candidate
+that produced a historical evidence file; the exact receipt's own candidate and
+contract fields determine its proof identity. Metadata never upgrades old greens.
+Text pages additionally report full-content SHA256, character/UTF-8 byte totals
+and actual returned character/UTF-8 byte counts. Single long lines and Unicode
+are not silently dropped. Follow `next_offset` until null, preserving/checking
+SHA256 across pages; changed hashes expose concurrent/different content rather
+than certifying an assembled stale file. Non-UTF-8 content remains unsupported
+by this text-only capability. Inspect does not execute commands, consume an edit
+or check operation, change state, or authorize missing proof. Stale/terminal
+attempt, reviewer write, source/contract and all existing repair guards remain.
+
+### Token accounting is not a spend receipt
+
+The unchanged adapter keeps `input`, `cacheRead`, `cacheWrite`, `output` and
+`totalTokens` separately. For the fifth, SDK response records sum to 190,641
+uncached input + 1,809,408 cached input + 2,561 output = 2,002,610. The **sum over
+requests** repeatedly counts cached conversation; it is neither unique context
+size nor unique generated tokens. Last request input was about 188k tokens,
+below the context window. CacheRead is provider-reported reuse, not "free" input.
+Rate-derived estimates price these channels differently, but are **not charges**;
+subscription/quota/billing implications cannot be inferred from token sums.
+
+No old token limit is lifted/reset, and no policy is silently changed here.
+For a separately authorized future attempt, recommend first retaining the same
+2M aggregate next-request guard and <=160 requests together with finite visits,
+operations, time and resources, **with these smaller on-demand read payloads**.
+Treat aggregate tokens as a context/work-amplification guard, not a hard dollar
+budget; separately examine uncached/cache/output, maximum request context and
+catalog estimates. Offline byte replay cannot guarantee future token savings,
+model behavior or completion. Any different channel caps or spend policy require
+fresh explicit review, not removal of cacheRead or replacing charges with an
+estimate. No further 068 admission or inference is authorized by this correction.
+
 ## Inspect, recover, test
 
 The dispatch command prints a stable systemd service name. Job status is in

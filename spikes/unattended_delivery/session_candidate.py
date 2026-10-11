@@ -425,23 +425,80 @@ class Job:
         self.s['pending'] = None
         self.persist()
 
+    def inspect(self, path='', offset=0, limit=None, query=None):
+        """Read-only pages; no writes, proof substitution or new path authority."""
+        if not isinstance(path, str) or type(offset) is not int or offset < 0:
+            raise Blocked('Invalid inspect path/offset')
+        index = path in ('', '@files', '@evidence')
+        maximum, default = (100, 40) if index else (8000, 4000)
+        limit = default if limit is None else limit
+        if type(limit) is not int or not 0 < limit <= maximum:
+            raise Blocked('Invalid inspect limit')
+        if query is not None and (index or not isinstance(query, str) or not 0 < len(query) <= 256):
+            raise Blocked('Inspect query must be a bounded literal in a text path')
+        identity = {'current_candidate': self.s['candidate'], 'contract_digest': self.s['contract']}
+        if index:
+            if not path:
+                files = sorted(set(self.c['editable'] + self.c['context_files'] + self.c['unit_files']))
+                identity.update(inventory='declared approved paths, including not-yet-created files',
+                    status={k: self.s.get(k) for k in ('status', 'phase', 'active_example',
+                        'needs_unit_observation', 'needs_outer_observation', 'support_observation_pending',
+                        'operations', 'visits')},
+                    proof_ids={kind: [p['id'] for p in self.c[key]] for kind, key in
+                               [('example', 'examples'), ('obligation', 'obligations')]},
+                    unit_ids=['unit'] + [p['id'] for p in self.c.get('focused_units', [])],
+                    receipts_count=len(self.s['receipts']), observed_ids=sorted(self.s['observed']),
+                    retrieval='@contract: exact full JSON; @evidence: file index; @evidence/NAME: exact evidence; '
+                              '@files: all candidate paths. All are paged; IDs/status are NOT proof.')
+            elif path == '@files':
+                files = sorted(str(p.relative_to(self.source)) for p in self.source.rglob('*')
+                               if p.is_file() or p.is_symlink())
+            else:
+                files = sorted(p.name for p in (self.path / 'evidence').iterdir() if p.is_file())
+            if offset > len(files):
+                raise Blocked('Inspect offset exceeds inventory length')
+            end = min(offset + limit, len(files))
+            return {**identity, 'files': files[offset:end], 'total_items': len(files), 'offset': offset,
+                    'offset_unit': 'items', 'truncated': end < len(files),
+                    'next_offset': end if end < len(files) else None}
+        if path == '@contract':
+            raw = json.dumps(self.c, sort_keys=True, separators=(',', ':')).encode()
+        else:
+            evidence = path.startswith('@evidence/')
+            root = self.path / 'evidence' if evidence else self.source
+            name = path.removeprefix('@evidence/') if evidence else path
+            target = (root / name).resolve()
+            if not target.is_relative_to(root) or not target.is_file():
+                raise Blocked('Read outside ' + ('evidence' if evidence else 'source'))
+            raw = target.read_bytes()
+        text = raw.decode('utf-8')
+        if offset > len(text):
+            raise Blocked('Inspect offset exceeds text length')
+        metadata = {**identity, 'path': path, 'sha256': hashlib.sha256(raw).hexdigest(),
+                    'total_chars': len(text), 'total_utf8_bytes': len(raw), 'offset_unit': 'characters'}
+        if query is not None:
+            found = text.find(query, offset)
+            metadata.update(query=query, match_offset=found if found >= 0 else None,
+                            match_line=text.count('\n', 0, found) + 1 if found >= 0 else None)
+            if found < 0:
+                return {**metadata, 'offset': offset, 'content': '', 'returned_chars': 0,
+                        'returned_utf8_bytes': 0, 'truncated': False, 'next_offset': None}
+            offset = found
+        end = min(offset + limit, len(text))
+        content = text[offset:end]
+        return {**metadata, 'offset': offset, 'content': content, 'returned_chars': len(content),
+                'returned_utf8_bytes': len(content.encode()), 'truncated': end < len(text),
+                'next_offset': end if end < len(text) else None}
+
     def tool(self, name, args, attempt):
         self.reload()
         self.budget()
         if self.s['active_attempt'] != attempt or self.s['phase'] not in ('builder', 'reviewer'):
             raise Blocked('Stale model attempt')
         if name == 'inspect':
-            path = args.get('path')
-            if path == '@evidence':
-                return {'logs': {p.name: p.read_text()[-16000:] for p in
-                                 sorted((self.path / 'evidence').glob('[0-9]*.stdout'))}}
-            if not path:
-                return {'files': sorted(manifest(self.source)), 'contract': self.c,
-                        'observations': self.s['observed'], 'candidate': self.s['candidate']}
-            target = (self.source / path).resolve()
-            if not target.is_relative_to(self.source) or not target.is_file():
-                raise Blocked('Read outside source')
-            return {'content': target.read_text()[:80000]}
+            if set(args) - {'path', 'offset', 'limit', 'query'}:
+                raise Blocked('Unknown inspect arguments')
+            return self.inspect(**args)
         if self.s['phase'] != 'builder':
             raise Blocked('Reviewer is read-only')
         if name == 'edit':
@@ -676,7 +733,13 @@ class Job:
 def broker(path, attempt):
     job = Job(path)
     schemas = {
-        'inspect': {'path': {'type': 'string'}},
+        'inspect': {'path': {'type': 'string'},
+                    'offset': {'type': 'integer', 'minimum': 0, 'description': 'Zero-based characters for text, items for indexes.'},
+                    'limit': {'type': 'integer', 'minimum': 1, 'maximum': 8000,
+                              'description': 'Text default4000/max8000 characters; indexes default40/max100 items.'},
+                    'query': {'type': 'string', 'minLength': 1, 'maxLength': 256,
+                              'description': 'Literal text search from offset; omit query to continue a matched page.'}},
+
         'edit': {'path': {'type': 'string'}, 'old': {'type': 'string'}, 'new': {'type': 'string'},
                  'refactor': {'type': 'boolean'}},
         'observe': {'kind': {'enum': ['unit', 'example', 'obligation']},
@@ -694,7 +757,10 @@ def broker(path, attempt):
                           'serverInfo': {'name': 'confined-candidate', 'version': '1'}}
             elif method == 'tools/list':
                 result = {'tools': [{'name': name, 'description': {
-                    'inspect': 'Read candidate source/contract/status; empty path lists files.',
+                    'inspect': 'Read-only, bounded pages. Empty path: approved path inventory, stable proof IDs/status (not proof). '
+                               '@files: all candidate paths; @contract: full exact contract; @evidence: evidence index; '
+                               '@evidence/NAME: full exact receipt/log. Source path: text; optional literal query finds a range. '
+                               'Follow next_offset until complete and check sha256; no content is silently dropped.',
                     'edit': 'Exact targeted text edit to an approved path; checkpoints automatically.',
                     'observe': 'Controller runs an approved focused unit ID (or unit for broad fallback), exact example or obligation; never caller commands. Driver edits return directly to the same acceptance.'}[name],
                     'inputSchema': {'type': 'object', 'properties': schema,
