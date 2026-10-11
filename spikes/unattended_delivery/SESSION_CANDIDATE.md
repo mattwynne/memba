@@ -17,8 +17,11 @@ call Claude/Gemini. Ensemble review is a separate explicitly authorized activity
 
 The `sol_provider` declaration binds SDK package/dependency tree digest, absolute
 Node binary/hash, exact model metadata digest, provider/API/backend URL, thinking
-level, finite `max_turns` (<=160 requests/visit) and `visit_token_limit` (<=2M
-response-accounted aggregate tokens/visit). SDK/Node identities are verified
+level and finite `max_turns` (<=160 requests/visit). Newly reviewed contracts use
+`token_policy: "accounting-only"`, with no cumulative token execution stop. Legacy
+contracts retain their explicit `visit_token_limit` (<=2M aggregate tokens/visit);
+missing, mixed or unknown policy declarations are rejected, never migrated.
+SDK/Node identities are verified
 before admission and each visit; catalog identity is checked before requests.
 The native SSE `response.model` is captured and checked, not inferred from the
 model catalog or harness's requested-model field. Changed/missing identity
@@ -47,8 +50,8 @@ pending and future calls rather than leaving a request waiting.
 
 **No supported hard CLI dollar flag exists on this integration.** `visit_usd`
 must be **null**, not a claimed $10 enforcement. Visits/operations/time/resources
-and request/token-observation bounds are enforced instead; a token threshold
-stops the *next* request and is not a hard cap on an in-flight response. Dollar
+and request bounds remain enforced. Tokens remain fully reported, including cache;
+only legacy contracts stop the next request at their token threshold. Dollar
 charges remain null unless actually provider-reported. Pi's rate-derived costs
 are separately labelled estimates; subscription usage is not inferred to be
 free or equal to those estimates. Partial/error usage stays incomplete. The
@@ -144,24 +147,23 @@ builder's trusted unit invocation, compiler/missing-interface errors and ordinar
 runtime failures (including FunctionClauseError) are actionable feedback. A
 compile failure records zero executed tests, never a pass or behavioral acceptance
 red. The receipt separately records raw exit, execution count, assertion evidence
-and `unit_development` with diagnostic paths and relevant `repair_paths`.
+and `unit_development` classification/executed count. No path/module/import/alias
+matching derives per-file repair permission.
 
-One evidence rule governs implementation: a genuine failed unit invocation must
-be bound to the current candidate/contract and diagnostics linked to approved
-test/product paths. Product paths are derived from diagnostic paths/modules, or
-from the failing assertion test's source references where no product frame is
-present. The existing explicit editable scope remains the outer ceiling; unknown
-or unrelated diagnostics do not grant product edits. Existing unit/support edit
-rights remain available to correct test setup. The ordinary edit tool is used;
-there is no syntax-template taxonomy, scaffold flag or required nil placeholder.
+A genuine failed approved unit invocation must be bound to the current candidate
+and contract. The approved editable allowlist is the file boundary. Repair only
+the current observed responsibility; transitive approved Router/encoder/projector
+files need no artificial test aliases. Semantic relevance/minimality remain a
+builder discipline and independent-review requirement, not a textual classifier.
+Unit/support edit rights still correct test setup. There is no syntax-template
+taxonomy, scaffold flag or required nil placeholder.
 A missing aggregate clause can be implemented directly after the relevant unit
 runtime failure, without manufacturing an assertion mismatch first.
 
 After each implementation repair, rerun unit before another edit or outer check.
 Any edit invalidates older diagnostic authority. After unit green, rerun the SAME
 outer example. The builder prompt and independent reviewer enforce smallest
-change/current obstacle and reject speculative bulk implementation; textual path
-linkage is not a claim that static syntax can prove semantic relevance. No extra
+change/current obstacle and reject speculative bulk implementation. No extra
 model session is required for development tool loops.
 
 Actual runner/connection/setup-callback/access-denial/timeout diagnostics do not
@@ -215,9 +217,9 @@ broad fallback and unit/support roles; no stopped contract is migrated.
   Unknown IDs and caller-supplied commands/paths are rejected, not interpolated.
 - Focused checks are builder-only. Receipts include `unit_selector`/`unit_paths`,
   remain candidate/contract-bound, and never occupy an example/obligation ID.
-  Executed failures must identify a selected test; product compilation failures
-  can precede test loading but remain zero-execution development feedback. Existing
-  diagnostic recognition remains conservative; unsupported output grants no repair.
+  The fixed selected command supplies actual failure feedback; stack-frame/import
+  matching does not authorize files. Compilation before test loading remains
+  zero-execution development feedback; unsupported framework output grants no repair.
 - A product repair durably remembers the authorizing unit selector. It must rerun
   **that same selector**, not a cheaper unrelated check. After focused green,
   return to the same active acceptance before further implementation/tests.
@@ -365,7 +367,7 @@ attempt, reviewer write, source/contract and all existing repair guards remain.
 
 ### Token accounting is not a spend receipt
 
-The unchanged adapter keeps `input`, `cacheRead`, `cacheWrite`, `output` and
+The adapter keeps `input`, `cacheRead`, `cacheWrite`, `output` and
 `totalTokens` separately. For the fifth, SDK response records sum to 190,641
 uncached input + 1,809,408 cached input + 2,561 output = 2,002,610. The **sum over
 requests** repeatedly counts cached conversation; it is neither unique context
@@ -374,16 +376,19 @@ below the context window. CacheRead is provider-reported reuse, not "free" input
 Rate-derived estimates price these channels differently, but are **not charges**;
 subscription/quota/billing implications cannot be inferred from token sums.
 
-No old token limit is lifted/reset, and no policy is silently changed here.
-For a separately authorized future attempt, recommend first retaining the same
-2M aggregate next-request guard and <=160 requests together with finite visits,
-operations, time and resources, **with these smaller on-demand read payloads**.
-Treat aggregate tokens as a context/work-amplification guard, not a hard dollar
-budget; separately examine uncached/cache/output, maximum request context and
-catalog estimates. Offline byte replay cannot guarantee future token savings,
-model behavior or completion. Any different channel caps or spend policy require
-fresh explicit review, not removal of cacheRead or replacing charges with an
-estimate. No further 068 admission or inference is authorized by this correction.
+Newly reviewed `accounting-only` contracts report every channel/aggregate without
+a cumulative token stop; legacy limits, frozen jobs and their overshoots remain
+unchanged. Finite request/visit/operation/wall/resource bounds and zero automatic
+retry/fallback remain. Large cached contexts can still incur latency, provider
+quota/context failures and unknown charges. This is not a spend cap or completion
+promise. No further 068 admission, real resume or inference is authorized here.
+
+Start/resume/reviewer prompts contain only brief protocol/safety, exact identities,
+limits and retrieval pointers. The same `inspect` pages expose the full contract,
+plan, status and exact evidence; per-visit `.context.json` stores controller feedback
+instead of embedding it. No receipt/history/inventory dump or new retrieval layer
+is added. Persistent native session history remains intact. Independent review must
+read the complete truth, not certify from these pointers or concise status.
 
 ## Inspect, recover, test
 

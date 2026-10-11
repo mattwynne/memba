@@ -56,7 +56,7 @@ class FocusedUnitsTest(unittest.TestCase):
         self.assertEqual(result['receipt']['unit_selector'], 'stock')
         self.assertEqual(result['receipt']['unit_paths'], ['test_unit.py'])
         self.assertEqual(self.job.s['observed']['unit'], result['receipt'])
-        self.assertIn('stock.py', result['receipt']['unit_development']['repair_paths'])
+        self.assertEqual(result['receipt']['unit_development']['classification'], 'unit-development-failure')
 
     def test_unknown_selection_and_caller_commands_have_no_capability(self):
         for identity in ['unknown', 'stock; touch /tmp/escape']:
@@ -86,14 +86,14 @@ class FocusedUnitsTest(unittest.TestCase):
         self.observe(self.outer, kind='example', code=0, output='Ran 1 test in 0.01s\nOK\n')
         self.assertFalse(self.job.s['needs_outer_observation'])
 
-    def test_stale_unrelated_and_focused_green_cannot_authorize_product(self):
+    def test_stale_out_of_scope_and_focused_green_cannot_authorize_product(self):
         self.observe()
         self.job.edit('test_unit.py', 'import unittest', 'import unittest\n# changed')
         with self.assertRaisesRegex(Blocked, 'current-snapshot'):
             self.repair_stock()
-        self.observe(output=self.red.replace('test_unit.py', 'test_other.py'))
-        with self.assertRaisesRegex(Blocked, 'ACTUAL'):
-            self.repair_stock()
+        self.observe()
+        with self.assertRaises(Blocked):
+            self.job.edit('outside.py', '', 'unapproved')
         self.observe(code=0, output='1 test, 0 failures\n')
         with self.assertRaises(Blocked):
             self.repair_stock(refactor=True)
@@ -156,7 +156,7 @@ class FocusedUnitsTest(unittest.TestCase):
                                 '     stock.py:3: (function)\n     test_unit.py:10: (test)\n'
                                 '1 test, 1 failure\n')
         self.assertFalse(result['receipt']['behavioral_red'])
-        self.assertIn('stock.py', result['receipt']['unit_development']['repair_paths'])
+        self.assertEqual(result['receipt']['unit_development']['classification'], 'unit-development-failure')
         self.repair_stock()
         self.assertEqual(self.job.s['required_unit_selector'], 'stock')
 

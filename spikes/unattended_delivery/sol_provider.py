@@ -23,15 +23,17 @@ def validate_provider(c, verify=False):
         return  # Historical CLI/process-double contracts; never silently migrate them.
     p = c.get('sol_provider', {})
     required = {'sdk_root', 'sdk_digest', 'node', 'node_sha256', 'model_digest',
-                'provider', 'api', 'base_url', 'max_turns', 'visit_token_limit', 'thinking'}
-    if set(p) != required or c.get('claude') or c.get('model') != 'gpt-6.1-sol':
+                'provider', 'api', 'base_url', 'max_turns', 'thinking'}
+    legacy = set(p) == required | {'visit_token_limit'}
+    accounting_only = set(p) == required | {'token_policy'} and p.get('token_policy') == 'accounting-only'
+    if not (legacy or accounting_only) or c.get('claude') or c.get('model') != 'gpt-6.1-sol':
         raise Blocked('Explicit Sol provider contract required; no alternate CLI/model')
     if (p['provider'], p['api'], p['base_url']) != (
             'openai-codex', 'openai-codex-responses', 'https://chatgpt.com/backend-api'):
         raise Blocked('Unsupported Sol provider identity')
     if p['thinking'] not in ('low', 'medium', 'high', 'xhigh', 'max'):
         raise Blocked('Invalid Sol thinking level')
-    for key, maximum in [('max_turns', 160), ('visit_token_limit', 2000000)]:
+    for key, maximum in [('max_turns', 160)] + ([('visit_token_limit', 2000000)] if legacy else []):
         if type(p[key]) is not int or not 0 < p[key] <= maximum:
             raise Blocked('Invalid finite Sol budget: ' + key)
     if c.get('visit_usd') is not None:

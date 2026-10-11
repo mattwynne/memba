@@ -42,6 +42,21 @@ class SolProviderTest(unittest.TestCase):
                 c = copy.deepcopy(self.c); c['sol_provider'][key] = value
                 with self.assertRaises(Blocked): validate_provider(c)
 
+    def test_new_explicit_accounting_only_contract_and_legacy_no_migration(self):
+        before = copy.deepcopy(self.c)
+        validate_provider(self.c)
+        self.assertEqual(self.c, before)
+        c = copy.deepcopy(self.c)
+        del c['sol_provider']['visit_token_limit']
+        c['sol_provider'].update(token_policy='accounting-only', max_turns=160)
+        validate_provider(c, verify=True)
+        for changes in [{'visit_token_limit': 2000000}, {'token_policy': 'unlimited'},
+                        {'max_turns': 161}, {'max_turns': 0}, {'max_turns': True}]:
+            bad = copy.deepcopy(c); bad['sol_provider'].update(changes)
+            with self.subTest(changes=changes), self.assertRaises(Blocked): validate_provider(bad)
+        del c['sol_provider']['token_policy']
+        with self.assertRaises(Blocked): validate_provider(c)
+
     def test_full_runtime_and_node_fingerprint_fail_closed(self):
         (self.sdk / 'index.js').write_text('// mutation')
         with self.assertRaisesRegex(Blocked, 'SDK runtime changed'): validate_provider(self.c, True)
@@ -69,7 +84,7 @@ class SolProviderTest(unittest.TestCase):
 import json, pathlib, sys
 sys.stdin.read()
 p=pathlib.Path(sys.argv[1])
-p.with_suffix('.usage.json').write_text(json.dumps({'session_id':'sol-builder','usage':{'input':19,'output':7},'usage_complete':False,'reported_cost_usd':None,'estimated_cost_usd':0.0001}))
+p.with_suffix('.usage.json').write_text(json.dumps({'session_id':'sol-builder','usage':{'input':19,'cacheRead':3000000,'cacheWrite':0,'output':7,'totalTokens':3000026},'usage_complete':False,'reported_cost_usd':None,'estimated_cost_usd':0.0001}))
 print(json.dumps({'provider':'openai-codex','model':'gpt-6.1-sol','is_error':True,'subtype':'error','result':'provider refusal','total_cost_usd':None}))
 sys.exit(1)
 '''); fake.chmod(0o755)
@@ -78,7 +93,12 @@ sys.exit(1)
         self.assertEqual(job.s['visits'], 1)
         self.assertIsNone(job.s['reported_cost_usd']); self.assertFalse(job.s['reported_cost_complete'])
         self.assertEqual(job.s['known_reported_cost_usd'], 0)
-        self.assertEqual(job.s['provider_usage'][0]['usage']['input'], 19)
+        self.assertEqual(job.s['provider_usage'][0]['usage'], {'input':19,'cacheRead':3000000,'cacheWrite':0,'output':7,'totalTokens':3000026})
+        context = job.inspect('@evidence/model-01-builder.context.json')['content']
+        self.assertEqual(json.loads(context), {'feedback': 'observe'})
+        prompt = (job.path / 'evidence/model-01-builder.prompt').read_text()
+        self.assertIn('@evidence/model-01-builder.context.json', prompt)
+        self.assertNotIn('"feedback": "observe"', prompt)
         self.assertEqual(job.s['sol_builder_session'], 'sol-builder')
         self.assertTrue(json.loads((job.path / 'evidence/model-01-builder.visit.json').read_text())['reaped'])
 

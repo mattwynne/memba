@@ -123,29 +123,31 @@ class SessionCandidateTest(unittest.TestCase):
                                           cwd=self.job.path / 'checkpoints', text=True)
         self.assertEqual(content, 'preserved\n')
 
-    def test_real_exunit_exit_and_setup_failures_gate_edits(self):
+    def test_exunit_runtime_feedback_and_actual_setup_failure_are_distinct(self):
         runtime = self.root / 'runtime-probe'
         runtime.mkdir()
         (runtime / 'runtime.json').write_text('{}')
         self.job.c.update(runtime_root=str(runtime), runtime_digest=digest({}),
                           unit_kind='domain', unit_script='approved mix test')
         assertion = '  1) test behavior (Probe)\n     test_unit.py:10: (test)\n     Assertion with == failed\n1 test, 1 failure\n'
-        setup = '  1) test behavior (Probe)\n     ** (UndefinedFunctionError) missing\n1 test, 1 failure\n'
-        mixed = assertion.replace('1 test, 1 failure', '') + setup.replace('1)', '2)').replace('1 test, 1 failure', '2 tests, 2 failures')
-        for code, output, expected in [(2, assertion, True), (2, setup, False),
-                                       (1, setup, False), (2, mixed, False),
-                                       (2, assertion + '__ex_unit_setup_0/1', False)]:
+        runtime_error = '  1) test behavior (Probe)\n     ** (UndefinedFunctionError) missing\n1 test, 1 failure\n'
+        mixed = assertion.replace('1 test, 1 failure', '') + runtime_error.replace('1)', '2)').replace('1 test, 1 failure', '2 tests, 2 failures')
+        for code, output, expected, development in [(2, assertion, True, True), (2, runtime_error, False, True),
+                                       (1, runtime_error, False, True), (2, mixed, False, True),
+                                       (2, assertion + '__ex_unit_setup_0/1', False, False)]:
             with self.subTest(code=code, output=output):
                 with patch('memba_runtime.run', return_value=(code, output)):
                     receipt = self.job.observe('unit', None, 'classification probe')['receipt']
                 self.assertEqual(receipt['exit'], code)
                 self.assertEqual(receipt['behavioral_red'], expected)
-                if expected:
+                self.assertEqual(receipt['unit_development'] is not None, development)
+                if development:
                     self.job.edit('stock.py', 'def reserve(self, item, quantity):',
                                   'def reserve(self, item, quantity):')
                 else:
                     with self.assertRaisesRegex(Blocked, 'ACTUAL'):
-                        self.job.edit('stock.py', 'return False', 'return False')
+                        self.job.edit('stock.py', 'def reserve(self, item, quantity):',
+                                      'def reserve(self, item, quantity):')
 
     def test_python_error_is_not_behavioral_red(self):
         result = subprocess.CompletedProcess([], 1)
@@ -219,7 +221,7 @@ class SessionCandidateTest(unittest.TestCase):
         before = self.job.s['candidate']
         self.job.s['observed']['unit'] = {'candidate': before, 'contract': self.job.s['contract'],
                                         'kind': 'unit', 'exit': 1, 'assertion_failure': True,
-                                        'unit_development': {'repair_paths': ['stock.py']}}
+                                        'unit_development': {'classification': 'unit-development-failure', 'executed_tests': 1}}
         self.job.persist()
         self.job.tool('edit', {'path': 'stock.py', 'old': 'def reserve(self, item, quantity):\n        return False',
                               'new': 'def reserve(self, item, quantity):\n        return True'}, 'current')

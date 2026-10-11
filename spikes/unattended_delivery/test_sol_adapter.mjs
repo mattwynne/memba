@@ -48,6 +48,13 @@ test('finite response-observed token/turn budget rejects the next request', () =
   assert.throws(() => checkRequestBudget(0, 50000, config), /budget exhausted/);
 });
 
+test('explicit accounting-only policy counts all usage without a token execution stop; request 161 denied', () => {
+  const config = {max_turns: 160, token_policy: 'accounting-only'};
+  for (let requests = 0; requests < 160; requests++)
+    checkRequestBudget(requests, Number.MAX_SAFE_INTEGER, config);
+  assert.throws(() => checkRequestBudget(160, 0, config), /request budget exhausted/);
+});
+
 test('outgoing native tools/shell/web forbidden and reviewer only inspect', () => {
   const payload = {model: model.id, parallel_tool_calls: true, tools: [{type: 'function', name: 'inspect'}]};
   validateRequest(payload, ['inspect']);

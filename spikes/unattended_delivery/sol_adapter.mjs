@@ -82,8 +82,10 @@ export function validateRequest(payload, expectedNames) {
 }
 
 export function checkRequestBudget(requests, tokens, config) {
-  if (requests >= config.max_turns || tokens >= config.visit_token_limit)
-    throw new Error('Finite Sol turn/token budget exhausted');
+  if (requests >= config.max_turns) throw new Error('Finite Sol request budget exhausted');
+  // Compatibility only: explicit new accounting-only contracts have no token stop.
+  if (config.token_policy !== 'accounting-only' && tokens >= config.visit_token_limit)
+    throw new Error('Legacy Sol token budget exhausted');
 }
 
 export function openSession(sdk, job, role, mode, config, contract) {
@@ -120,6 +122,7 @@ export async function run(job, attempt, role, prefix, mode, systemPrompt, prompt
     provider: config.provider, requested_model: contract.model, native_response_models: [...nativeModels],
     session_id: session?.sessionId, session_file: session?.sessionFile, requests, completed_responses: completed,
     usage, usage_complete: complete, reported_cost_usd: null,
+    token_policy: config.token_policy ?? 'legacy-response-token-limit',
     estimated_cost_usd: estimatedCost, estimate_basis: 'Pi catalog rates applied to response token usage; NOT provider-reported charge',
     hard_spend_cap_supported: false, stopped,
   }, null, 2) + '\n', {mode: 0o600});

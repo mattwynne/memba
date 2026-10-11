@@ -46,10 +46,8 @@ class UnitDevelopmentTest(unittest.TestCase):
         self.assertEqual(result['receipt']['count'], 0)
         self.assertEqual(result['receipt']['exit'], 1)
         self.assertFalse(result['receipt']['behavioral_red'])
-        self.assertEqual(result['receipt']['unit_development']['repair_paths'], [self.product])
+        self.assertEqual(result['receipt']['unit_development'], {'classification': 'unit-development-failure', 'executed_tests': 0})
         self.assertIn('cannot expand struct', result['output'])
-        with self.assertRaisesRegex(Blocked, 'ACTUAL'):
-            self.job.edit('stock.py', 'return False', 'return True')
         self.job.edit(self.product, '', self.scaffold)
         with self.assertRaisesRegex(Blocked, 'Rerun.*unit'):
             self.job.edit('test_unit.py', 'import unittest', 'import unittest\n# later')
@@ -72,14 +70,13 @@ class UnitDevelopmentTest(unittest.TestCase):
         self.assertFalse(self.job.s['needs_outer_observation'])
         self.assertEqual(self.job.s['visits'], 0)
 
-    def test_unrelated_missing_interface_does_not_grant_product_edits(self):
+    def test_diagnostic_symbols_do_not_replace_the_approved_editable_allowlist(self):
         output = self.compile_error.replace(self.module, 'Outside.Scope.Unknown')
         result = self.observe(1, output)
-        self.assertEqual(result['receipt']['unit_development']['repair_paths'], [])
-        with self.assertRaisesRegex(Blocked, 'ACTUAL'):
-            self.job.edit(self.product, '', self.scaffold)
-        with self.assertRaisesRegex(Blocked, 'ACTUAL'):
-            self.job.edit('stock.py', 'return False', 'return True')
+        self.assertNotIn('repair_paths', result['receipt']['unit_development'])
+        with self.assertRaises(Blocked):
+            self.job.edit('outside/scope/unknown.ex', '', 'unapproved')
+        self.job.edit(self.product, '', self.scaffold)
 
     def test_diagnostics_are_snapshot_and_contract_bound(self):
         self.observe(1, self.compile_error)
@@ -106,7 +103,7 @@ class UnitDevelopmentTest(unittest.TestCase):
                   '     ' + self.unit.removeprefix('web/') + ':22: (test)\n1 test, 1 failure\n')
         result = self.observe(2, output)
         self.assertFalse(result['receipt']['behavioral_red'])
-        self.assertIn(self.product, result['receipt']['unit_development']['repair_paths'])
+        self.assertEqual(result['receipt']['unit_development']['classification'], 'unit-development-failure')
         self.job.edit(self.product, '', 'defmodule ' + self.module + ' do\n  def build(value), do: value\nend\n')
         self.assertTrue(self.job.s['needs_unit_observation'])
 
@@ -117,7 +114,7 @@ class UnitDevelopmentTest(unittest.TestCase):
         self.job.checkpoint()
         output = self.compile_error.replace(self.module, 'Warehouse.Requests.PlaceOrder')
         result = self.observe(1, output)
-        self.assertEqual(result['receipt']['unit_development']['repair_paths'], [target])
+        self.assertEqual(result['receipt']['unit_development']['classification'], 'unit-development-failure')
         self.job.edit(target, '', 'defmodule Warehouse.Requests.PlaceOrder do\n  defstruct [:sku, :quantity]\nend\n')
 
     def test_real_zero_selection_infrastructure_and_final_checks_stay_terminal(self):
@@ -166,7 +163,7 @@ class UnitDevelopmentTest(unittest.TestCase):
                           '     left: :ok\n     right: ' + expected + '\n1 test, 1 failure\n')
                 result = self.observe(2, output)
                 self.assertTrue(result['receipt']['behavioral_red'])
-                self.assertEqual(result['receipt']['unit_development']['repair_paths'], [self.product])
+                self.assertEqual(result['receipt']['unit_development']['classification'], 'unit-development-failure')
 
     def test_application_query_and_constraint_errors_are_development_feedback(self):
         for error, message in [('Ecto.QueryError', 'invalid query'),
@@ -178,7 +175,7 @@ class UnitDevelopmentTest(unittest.TestCase):
                           '1 test, 1 failure\n')
                 result = self.observe(2, output)
                 self.assertFalse(result['receipt']['behavioral_red'])
-                self.assertIn(self.product, result['receipt']['unit_development']['repair_paths'])
+                self.assertEqual(result['receipt']['unit_development']['classification'], 'unit-development-failure')
 
     def real_fixture(self, missing_clause=False, focused=False):
         # Synthetic application fixture, REAL framework/runtime, NO provider.
@@ -232,7 +229,7 @@ class UnitDevelopmentTest(unittest.TestCase):
             self.job.edit(request, '', 'defmodule Workflow.Request do\n  defstruct [:value]\nend\n')
             red = observe('unit')
             self.assertTrue(red['behavioral_red'])
-        self.assertIn(impl, red['unit_development']['repair_paths'])
+        self.assertEqual(red['unit_development']['classification'], 'unit-development-failure')
         repair = implementation + '\n  def double(%{value: value}), do: value * 2' if missing_clause else 'def double(request), do: request.value * 2'
         self.job.edit(impl, implementation, repair)
         self.assertEqual(observe('unit')['exit'], 0)
