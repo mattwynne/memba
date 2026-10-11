@@ -123,7 +123,6 @@ class UnitDevelopmentTest(unittest.TestCase):
             (1, '** (DBConnection.ConnectionError) connection refused\n', 'builder', 'unit'),
             (1, 'bwrap: Creating namespace failed: Permission denied\n' + self.compile_error, 'builder', 'unit'),
             (1, '** (Postgrex.Error) ERROR 28P01 (invalid_password) password authentication failed\n' + self.compile_error, 'builder', 'unit'),
-            (1, self.compile_error, 'checking', 'unit'),
             (1, self.compile_error, 'builder', 'example'),
             (1, '** (Cucumber.StepError) No matching step definition\n', 'builder', 'unit')]:
             with self.subTest(code=code, phase=phase, kind=kind):

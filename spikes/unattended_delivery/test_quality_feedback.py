@@ -1,5 +1,7 @@
 """Failed quality gates are feedback, never zero-execution proof or edit authority."""
 import unittest
+import subprocess
+import tempfile
 from unittest.mock import patch
 from candidate import Blocked
 import test_focused_units as focused
@@ -29,6 +31,37 @@ class QualityFeedbackTest(unittest.TestCase):
             self.job.edit('stock.py', 'False', 'True')
         with self.assertRaisesRegex(Blocked, 'ACTUAL'):
             self.job.edit('stock.py', 'False', 'True', refactor=True)
+
+    def test_missing_declared_node_test_is_scaffolding_feedback_never_product_authority(self):
+        name = 'test_interaction.js'
+        self.job.c['editable'].append(name); self.job.c['unit_files'].append(name)
+        self.job.c['focused_units'].append({'id': 'interaction', 'paths': [name], 'kind': 'node',
+                                          'script': 'node --test ' + name})
+        from candidate import digest
+        import json
+        self.job.s['contract'] = digest(self.job.c)
+        (self.job.path / 'contract.json').write_text(json.dumps(self.job.c)); self.job.persist()
+        with tempfile.TemporaryDirectory() as root:
+            actual = subprocess.run(['node', '--test', name], cwd=root, capture_output=True, text=True)
+        self.assertNotEqual(actual.returncode, 0)
+        with patch('memba_runtime.run', return_value=(actual.returncode, actual.stdout + actual.stderr)):
+            result = self.job.observe('unit', 'interaction', 'missing approved test needs scaffold')
+        self.assertEqual((result['receipt']['exit'], result['receipt']['count']), (1, 0))
+        self.assertIsNone(result['receipt']['unit_development'])
+        with self.assertRaisesRegex(Blocked, 'ACTUAL'):
+            self.job.edit('stock.py', 'False', 'True')
+        self.job.edit(name, '', "const test = require('node:test'); test('scaffold', () => {});\n")
+        self.assertTrue((self.job.source / name).is_file())
+        self.assertEqual(self.job.s['status'], 'running')
+
+    def test_failed_zero_execution_final_unit_is_not_proof_or_builder_repair_authority(self):
+        self.job.s['phase'] = 'checking'; self.job.persist()
+        with patch('memba_runtime.run', return_value=(1, '** (CompileError) test_unit.py:12: cannot compile\n')):
+            result = self.job.observe('unit', None, 'final compile failure is failed check only')
+        self.assertEqual((result['receipt']['exit'], result['receipt']['count']), (1, 0))
+        self.assertIsNone(result['receipt']['unit_development'])
+        with self.assertRaisesRegex(Blocked, 'ACTUAL'):
+            self.job.edit('stock.py', 'False', 'True')
 
     def test_zero_success_and_real_infrastructure_still_block(self):
         for code, output in [(0, '0 tests, 0 failures\n'),

@@ -272,8 +272,8 @@ class Job:
         count = selected_count(output, spec.get('kind', 'unittest'))
         development = (unit_development(output, code, count, spec.get('kind', 'unittest'))
                        if kind == 'unit' and self.s['phase'] == 'builder' else None)
-        failed_obligation = kind == 'obligation' and code != 0 and not unit_infrastructure_failure(output)
-        if (kind == 'example' and count != 1) or (count < 1 and not development and not failed_obligation):
+        failed_check = kind != 'example' and code != 0 and not unit_infrastructure_failure(output)
+        if (kind == 'example' and count != 1) or (count < 1 and not failed_check):
             self.s.update(status='blocked', active_attempt=None,
                           blocker=f'Infrastructure/selection failure: exit={code}, selected={count}; see {op.name}.stdout')
             self.persist()
@@ -305,8 +305,8 @@ class Job:
                     'Use a narrow replacement of that method, not a whole-file implementation of other methods. '
                     'Known later behavior is NOT authorized by this red. After unit green you MUST rerun '
                     'the SAME active acceptance example before adding tests or implementing the next obstacle.')
-        if failed_obligation:
-            guidance = ('Failed technical gate: actual diagnostic feedback, not proof or unit repair authority. '
+        if failed_check:
+            guidance = ('Failed check: actual diagnostic feedback, not proof or inferred unit repair authority. '
                         'Use the existing unit/refactor/support discipline for relevant approved corrections; '
                         'the SAME exact technical gate must pass at the final candidate before review.')
         if development:

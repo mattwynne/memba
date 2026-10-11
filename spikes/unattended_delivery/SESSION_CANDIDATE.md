@@ -173,12 +173,14 @@ values such as `:unauthorized` or `:timeout`. Ecto/Postgrex application query an
 constraint exceptions remain development feedback; connection/authentication
 exceptions remain environment failures. Successful zero selection, missing acceptance steps, final
 proof zero execution, source/contract changes remain fail-closed. Final checks
-and review have no development exception. A nonzero failed technical gate may
-stop before tests (for example formatter/compiler quality checks): return its
-actual failed/count-zero receipt, not a selection-infrastructure cancellation.
-It grants no unit repair authority or proof; genuine infrastructure and zero-test
-success still fail closed. Existing unit/refactor/support discipline governs
-corrections, and the SAME final gate must pass. Unit failure is not acceptance:
+and review have no development exception. Nonzero failed non-example checks may
+stop before tests (formatter/compiler checks or a missing declared test scaffold):
+return actual failed/count-zero feedback, not blanket selection cancellation.
+It is never proof or inferred unit repair authority; only actual builder unit
+compiler/runtime/assertion classification grants relevant implementation rights.
+Approved unit-file scaffolding rights remain available. Genuine infrastructure,
+zero-test success and invalid acceptance selection still fail closed. Existing
+unit/refactor/support discipline and SAME final gates remain binding. Unit failure is not acceptance:
 all exact-candidate examples/obligations still must execute and pass before review.
 Mixed assertion/setup failures are not assertion red. As elsewhere in this
 experimental executor, framework-output recognition is not proof against a
