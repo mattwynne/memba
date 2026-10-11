@@ -206,9 +206,10 @@ class RuntimeCapabilitiesTest(unittest.TestCase):
             config = json.loads((approved / 'runtime.json').read_text()); (root / 'runtime.json').write_text(json.dumps(config))
             home.mkdir(); (work / 'acceptance-tests/node_modules/installed').mkdir(parents=True)
             (work / 'acceptance-tests/node_modules/installed/file').write_text('immutable\n')
-            script = 'mkdir /work/acceptance-tests/node_modules/probe; test ! -w /work/acceptance-tests/node_modules/installed/file'
+            script = 'mkdir /work/acceptance-tests/node_modules/probe; printf screenshot > /work/tmp/report; test ! -w /work/acceptance-tests/node_modules/installed/file'
             args = memba_runtime.argv(root, work, home, script, node_fixtures=True)
             self.assertNotIn('MEMBA_NODE_CHECK', args[-1])
             args[-1] = script
             self.assertEqual(subprocess.run(args, capture_output=True).returncode, 0)
             self.assertFalse((work / 'acceptance-tests/node_modules/probe').exists())
+            self.assertEqual((work / 'tmp/report').read_text(), 'screenshot')

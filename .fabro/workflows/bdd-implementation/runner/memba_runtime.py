@@ -115,7 +115,8 @@ def argv(root, work, home, script, node_checks=False, node_fixtures=False, forma
             '--ro-bind', str(work), '/work', '--chdir', '/work', '--clearenv']
     # Source/proof is mounted RO, not merely checked after execution. Only build
     # outputs are writable; dependencies, test drivers and feature files are RO.
-    for name in ['web/_build', 'packages/live_query/_build', 'web/priv/static']:
+    for name in ['web/_build', 'packages/live_query/_build', 'web/priv/static', 'tmp',
+                 'acceptance-tests/test-results', 'acceptance-tests/playwright-report']:
         (work / name).mkdir(parents=True, exist_ok=True)
         args += ['--bind', str(work / name), '/work/' + name]
     # Mix's warm build priv link points back into RO source. Build artifacts
@@ -197,6 +198,10 @@ def run(root, label, script, seconds=300, candidate=None, capture=False, node_ch
         print(op)
     if receipt['unpermitted_source_changed']:
         raise Blocked('Runtime changed tracked source; no exact-state evidence')
+    # Retain real browser diagnostics, not duplicate dependencies/build caches.
+    for name in ['tmp', 'acceptance-tests/test-results', 'acceptance-tests/playwright-report']:
+        if (work / name).is_dir():
+            shutil.copytree(work / name, op / 'artifacts' / name, symlinks=True, dirs_exist_ok=True)
     # Opt-in for longer admitted jobs: checkpoints own candidate retention.
     # Keep observations/receipts, not hundreds of duplicate disposable caches.
     if config.get('retain_execution_copies', True) is False:
