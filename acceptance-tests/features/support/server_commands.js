@@ -519,10 +519,8 @@ attrs =
       else: attrs
   end)
 
-:ok = Memba.Messaging.send_club_message(
-  attrs,
-  consistency: :strong
-)
+{:ok, command} = Memba.Messaging.SendClubMessage.prepare(attrs)
+{:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
 Memba.ProjectionBarrier.await!(
   [
