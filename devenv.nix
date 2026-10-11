@@ -94,6 +94,7 @@ in
   packages = with pkgs; [
     adrgen
     argc
+    bubblewrap
     devenv
     git
     gum
