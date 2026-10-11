@@ -26,6 +26,13 @@ test('dead owned broker rejects new requests instead of hanging', async () => {
   } finally {await broker.close(); fs.rmSync(root, {recursive: true});}
 });
 
+test('already-signalled owned broker closes without waiting for a past exit event', async () => {
+  const broker = Object.create(Broker.prototype);
+  broker.process = {stdin: {end() {}}, exitCode: null, signalCode: 'SIGTERM',
+    once() {throw new Error('must not wait for already emitted exit');}};
+  await broker.close();
+});
+
 test('exact model/runtime metadata: no fallback to another catalog model', () => {
   assertModel(model, config);
   assert.throws(() => assertModel({...model, id: 'gpt-6-astra'}, config));

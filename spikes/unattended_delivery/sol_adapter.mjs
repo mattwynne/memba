@@ -63,7 +63,7 @@ export class Broker {
   }
   async close() {
     this.process.stdin.end();
-    if (this.process.exitCode === null) {
+    if (this.process.exitCode === null && this.process.signalCode === null) {
       await new Promise(resolve => {
         this.process.once('exit', resolve);
         const timer = setTimeout(() => this.process.kill('SIGKILL'), 1000);
