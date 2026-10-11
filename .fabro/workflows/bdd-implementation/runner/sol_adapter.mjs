@@ -99,6 +99,12 @@ export function checkpointSession(manager) {
   try {fs.writeFileSync(fd, [header, ...manager.getEntries()].map(e => JSON.stringify(e)).join('\n') + '\n'); fs.fsyncSync(fd);}
   finally {fs.closeSync(fd);}
   fs.renameSync(temp, file);
+  // Public SDK reload acknowledges persistence on THIS live manager. Without
+  // it, the SDK's deferred first assistant write uses exclusive creation and
+  // fails EEXIST against our durable pre-request journal.
+  const leaf = manager.getLeafId();
+  manager.setSessionFile(file);
+  if (leaf) manager.branch(leaf);
 }
 
 export function classifyProviderFailure(status, event) {

@@ -115,6 +115,22 @@ test('first-request crash retains the actual SDK identity/user history without i
   assert.equal(resumed.buildSessionContext().messages.some(m => m.role === 'assistant'), false);
 }));
 
+test('the same live SDK manager can append its first assistant after pre-request journaling', () => withRoot(root => {
+  const manager = sdk.SessionManager.create(root, root);
+  manager.appendModelChange(model.provider, model.id);
+  manager.appendMessage({role: 'user', content: 'offline first response fixture', timestamp: Date.now()});
+  const id = manager.getSessionId();
+  checkpointSession(manager);
+  assert.equal(manager.buildSessionContext().messages.some(m => m.role === 'assistant'), false);
+  assert.doesNotThrow(() => manager.appendMessage({role: 'assistant',
+    content: [{type: 'text', text: 'offline SDK persistence fixture; no provider call'}],
+    provider: model.provider, model: model.id, api: model.api, stopReason: 'stop', timestamp: Date.now(),
+    usage: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {total: 0}}}));
+  const reopened = sdk.SessionManager.open(manager.getSessionFile(), root);
+  assert.equal(reopened.getSessionId(), id);
+  assert.equal(reopened.buildSessionContext().messages.length, 2);
+}));
+
 test('provider continuation uses typed transport failures, not product diagnostic text', () => {
   for (const status of [429, 500, 503]) assert.equal(classifyProviderFailure(status), true);
   for (const status of [200, 400, 401, 403]) assert.equal(classifyProviderFailure(status), false);
