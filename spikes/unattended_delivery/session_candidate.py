@@ -70,17 +70,38 @@ def behavioral_assertion(code, output, kind):
     return True
 
 
+def unit_infrastructure_failure(output):
+    """Inspect diagnostic records, never test names/asserted business values."""
+    if re.search(r'^\s*(?:bwrap|initdb|pg_ctl|systemd-run):.*(?:error|failed|denied|not permitted)',
+                 output, re.M | re.I):
+        return True
+    if re.search(r'^\s*(?:\S+:\d+:\s*)?[\w.]*__ex_unit_setup(?:_all)?_\d+/\d+\b|'
+                 r'^\s*setup(?:_all)? callback (?:failed|raised)', output, re.M):
+        return True
+    exceptions = re.findall(r'^\s*\*\* \(([\w.]+)\) ([^\n]*)', output, re.M)
+    exceptions += re.findall(r'^([\w.]+(?:Error|TimeoutExpired)): ([^\n]*)', output, re.M)
+    environment_errors = {'DBConnection.ConnectionError', 'DBConnection.OwnershipError',
+                          'ExUnit.TimeoutError', 'TimeoutError', 'subprocess.TimeoutExpired',
+                          'PermissionError', 'builtins.PermissionError'}
+    for kind, message in exceptions:
+        if kind in environment_errors or kind.startswith('Cucumber.'):
+            return True
+        if kind == 'File.Error' and re.search(r'permission denied|operation not permitted', message, re.I):
+            return True
+        # PostgreSQL SQLSTATE classes 08/28 are connection/authentication failures;
+        # ordinary query/constraint errors (e.g. 23505) remain application feedback.
+        if kind == 'Postgrex.Error' and re.search(r'\bERROR (?:08|28)[A-Z0-9]{3}\b', message):
+            return True
+    return False
+
+
 def unit_development(output, code, count, framework, source, contract):
     """A trusted failed unit invocation plus scoped diagnostics, not acceptance red.
 
     Relevance comes from diagnostic paths/modules (or the failing assertion's
     test imports), NOT a taxonomy of allowed implementation syntax/errors.
     """
-    if code not in (1, 2) or re.search(
-            r'permission denied|connection refused|unauthorized|forbidden|timed? out|timeout|'
-            r"couldn't be created|__ex_unit_setup|setup_all|setup (?:failed|failure|error)|_FailedTest|"
-            r'DBConnection\.|Postgrex\.|Ecto\.|Ecto repo|File\.Error|bwrap:|'
-            r'Cucumber\.|No matching step definition|Undefined step', output, re.I):
+    if code not in (1, 2) or unit_infrastructure_failure(output):
         return None
     compiling = bool(re.search(r'Compilation error in file|\*\* \((?:CompileError|SyntaxError|TokenMissingError)\)', output))
     failed = (bool(re.search(r'^\d+ tests?, [1-9]\d* failures?', output, re.M)) if framework == 'domain'

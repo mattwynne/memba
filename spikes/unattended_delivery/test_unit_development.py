@@ -124,8 +124,8 @@ class UnitDevelopmentTest(unittest.TestCase):
         for code, output, phase, kind in [
             (0, '0 tests, 0 failures\n', 'builder', 'unit'),
             (1, '** (DBConnection.ConnectionError) connection refused\n', 'builder', 'unit'),
-            (1, 'permission denied\n' + self.compile_error, 'builder', 'unit'),
-            (1, 'unauthorized\n' + self.compile_error, 'builder', 'unit'),
+            (1, 'bwrap: Creating namespace failed: Permission denied\n' + self.compile_error, 'builder', 'unit'),
+            (1, '** (Postgrex.Error) ERROR 28P01 (invalid_password) password authentication failed\n' + self.compile_error, 'builder', 'unit'),
             (1, self.compile_error, 'checking', 'unit'),
             (1, self.compile_error, 'builder', 'example'),
             (1, '** (Cucumber.StepError) No matching step definition\n', 'builder', 'unit')]:
@@ -138,15 +138,47 @@ class UnitDevelopmentTest(unittest.TestCase):
                 self.assertEqual(self.job.s['status'], 'blocked')
 
     def test_executed_infrastructure_and_setup_errors_grant_no_implementation(self):
-        for error in ['DBConnection.ConnectionError', 'Postgrex.Error', 'RuntimeError', 'Cucumber.StepError']:
+        for error, message in [('DBConnection.ConnectionError', 'connection refused'),
+                               ('Postgrex.Error', 'ERROR 08006 (connection_failure) connection lost'),
+                               ('RuntimeError', 'setup callback failed'),
+                               ('Cucumber.StepError', 'No matching step definition'),
+                               ('ExUnit.TimeoutError', 'test timed out'),
+                               ('File.Error', 'could not write to file: permission denied')]:
             extra = '__ex_unit_setup_0/1' if error == 'RuntimeError' else ''
-            output = ('  1) test behavior (Unit)\n** (' + error + ') failure\n'
+            output = ('  1) test behavior (Unit)\n** (' + error + ') ' + message + '\n'
                       + self.unit + ':22: (test)\n' + self.product + ':1: (function)\n'
                       + extra + '\n1 test, 1 failure\n')
             result = self.observe(2, output)
             self.assertIsNone(result['receipt']['unit_development'])
             with self.assertRaisesRegex(Blocked, 'ACTUAL'):
                 self.job.edit(self.product, '', self.scaffold)
+
+    def test_business_values_and_test_names_are_not_infrastructure_diagnostics(self):
+        for title, expected in [('self-only authorization', '{:error, :unauthorized}'),
+                                ('timeout preserves draft', '{:error, :timeout}'),
+                                ('forbidden expected business value', '{:error, :forbidden}'),
+                                ('Ecto.QueryError is data here', '%Ecto.QueryError{}')]:
+            with self.subTest(title=title):
+                output = ('  1) test ' + title + ' (PersonRenameTest)\n'
+                          '     ' + self.unit.removeprefix('web/') + ':12\n'
+                          '     Assertion with == failed\n'
+                          '     code: assert result == ' + expected + '\n'
+                          '     left: :ok\n     right: ' + expected + '\n1 test, 1 failure\n')
+                result = self.observe(2, output)
+                self.assertTrue(result['receipt']['behavioral_red'])
+                self.assertEqual(result['receipt']['unit_development']['repair_paths'], [self.product])
+
+    def test_application_query_and_constraint_errors_are_development_feedback(self):
+        for error, message in [('Ecto.QueryError', 'invalid query'),
+                               ('Ecto.ConstraintError', 'constraint error when attempting to insert'),
+                               ('Postgrex.Error', 'ERROR 23505 (unique_violation) duplicate key value')]:
+            with self.subTest(error=error):
+                output = ('  1) test application query (Unit)\n** (' + error + ') ' + message + '\n'
+                          + self.unit + ':22: (test)\n' + self.product + ':1: (function)\n'
+                          '1 test, 1 failure\n')
+                result = self.observe(2, output)
+                self.assertFalse(result['receipt']['behavioral_red'])
+                self.assertIn(self.product, result['receipt']['unit_development']['repair_paths'])
 
     def real_fixture(self, missing_clause=False):
         # Synthetic application fixture, REAL framework/runtime, NO provider.

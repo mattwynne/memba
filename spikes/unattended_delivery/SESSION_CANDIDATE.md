@@ -109,8 +109,12 @@ change/current obstacle and reject speculative bulk implementation; textual path
 linkage is not a claim that static syntax can prove semantic relevance. No extra
 model session is required for development tool loops.
 
-DB/service/environment/setup-callback/authorization/timeout diagnostics do not
-grant implementation. Successful zero selection, missing acceptance steps, final
+Actual runner/connection/setup-callback/access-denial/timeout diagnostics do not
+grant implementation. These checks inspect runner error records, exception headers
+and setup stack frames—not bare words in test names, code or expected business
+values such as `:unauthorized` or `:timeout`. Ecto/Postgrex application query and
+constraint exceptions remain development feedback; connection/authentication
+exceptions remain environment failures. Successful zero selection, missing acceptance steps, final
 proof zero execution, source/contract changes remain fail-closed. Final checks
 and review have no development exception. Unit failure is not an acceptance pass:
 all exact-candidate examples/obligations still must execute and pass before review.
