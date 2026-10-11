@@ -1634,51 +1634,6 @@ async function assertNoMemberMessageCreated(
   return world;
 }
 
-async function assertNoAdminMessageCreated(world, clubName, subject) {
-  ensureState(world);
-
-  const inboundEmail = world.inboundEmails[subject];
-  assert.ok(inboundEmail, `Expected inbound email state for ${JSON.stringify(subject)}`);
-
-  const result = await waitForInboundEmailResult(world, inboundEmail.providerMessageId);
-
-  assert.equal(
-    result.source.status,
-    "rejected",
-    `Expected inbound Admin email for ${JSON.stringify(subject)} to be rejected`
-  );
-  assert.equal(result.source.messageId, null);
-  assert.equal(result.message, null);
-
-  const club = world.clubs[clubName];
-  assert.ok(club, `Expected ${clubName} to have been created`);
-
-  const matchingConversations = serverCommands.runCommand(
-    `
-club_id = Map.fetch!(payload, "clubId")
-subject = Map.fetch!(payload, "subject")
-
-case Memba.Membership.get_group_by_email_slug(club_id, "admin") do
-  nil -> []
-  group ->
-    group.group_id
-    |> Memba.Messaging.list_conversations_for_group()
-    |> Enum.filter(&(&1.subject == subject))
-    |> Enum.map(&%{messageId: &1.message_id, subject: &1.subject})
-end
-`,
-    { clubId: club.clubId, subject }
-  );
-
-  assert.deepEqual(
-    matchingConversations,
-    [],
-    `Expected no Admin conversation named ${JSON.stringify(subject)}`
-  );
-
-  return world;
-}
-
 async function assertAdminMessageDeliveredToMembers(
   world,
   subject,
@@ -4189,7 +4144,6 @@ module.exports = {
   assertMemberWasToldToContactSupport,
   assertMessageDetailBackLink,
   assertNoAddressedMemberReceivedEmail,
-  assertNoAdminMessageCreated,
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
