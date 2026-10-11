@@ -36,7 +36,8 @@ def activate_examples(root, examples, tag):
     """Remove only selected scenario-level todo tags, preserving every line.
 
     Real Gherkin discovery/selection is independently checked before admission.
-    Refuse ambiguous names or inherited-only activation instead of touching siblings.
+    Inherited iteration tags come from real Gherkin discovery. Never remove
+    inherited todo tags (that would activate unselected siblings).
     """
     changes = {}
     for spec in examples:
@@ -54,8 +55,10 @@ def activate_examples(root, examples, tag):
         tags = []
         while i >= 0 and lines[i].lstrip().startswith('@'):
             tags.append(i); i -= 1
-        if not any('@' + tag in lines[i].split() for i in tags):
+        if not any('@' + tag in lines[i].split() for i in tags) and '@' + tag not in spec.get('tags', []):
             raise Blocked('Selected scenario lacks its exact iteration tag')
+        if '@todo' in spec.get('tags', []) and not any('@todo' in lines[i].split() for i in tags):
+            raise Blocked('Refuse inherited todo activation of unselected siblings')
         for i in tags:
             lines[i] = re.sub(r'(?<!\S)@todo(?!\S)', '', lines[i])
         changes[p] = ''.join(lines)

@@ -51,6 +51,27 @@ class ActivationTest(unittest.TestCase):
                                          {'uri': 'features/member.feature', 'name': 'Missing'}], 'iteration-068')
             self.assertEqual(p.read_text(), original)
 
+    def test_inherited_iteration_tag_keeps_unselected_future_sibling(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); p = root / 'acceptance-tests/features/journey.feature'
+            p.parent.mkdir(parents=True)
+            original = '@journey @iteration-068\nFeature: Profile\n @todo\n Scenario: Name\n Given Alice\n @todo\n Scenario: Another\n Given Bob\n'
+            p.write_text(original)
+            activate_examples(root, [{'uri': 'features/journey.feature', 'name': 'Name',
+                                      'tags': ['@journey', '@iteration-068', '@todo']}], 'iteration-068')
+            self.assertEqual(p.read_text(), original.replace(' @todo\n Scenario: Name', ' \n Scenario: Name'))
+
+    def test_shared_inherited_todo_is_never_removed(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); p = root / 'acceptance-tests/features/journey.feature'
+            p.parent.mkdir(parents=True)
+            original = '@journey @iteration-068 @todo\nFeature: Profile\n Scenario: Name\n Given Alice\n'
+            p.write_text(original)
+            with self.assertRaises(Blocked):
+                activate_examples(root, [{'uri': 'features/journey.feature', 'name': 'Name',
+                                          'tags': ['@journey', '@iteration-068', '@todo']}], 'iteration-068')
+            self.assertEqual(p.read_text(), original)
+
     def test_run_key_is_not_a_path_or_shell_program(self):
         for key in ['', '../old', '/tmp/job', "x'; touch /tmp/escape", 'a' * 100]:
             with self.subTest(key=key), self.assertRaises(Blocked):
