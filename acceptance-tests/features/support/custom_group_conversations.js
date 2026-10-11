@@ -54,8 +54,8 @@ function ensureBoardMembers(world) {
 function assertBoardAddress(world, expectedAddress) {
   const result = serverCommands.runCommand(
     `
-group = Memba.Membership.get_group(Map.fetch!(payload, "groupId"))
-club = Memba.Membership.get_club(Map.fetch!(payload, "clubId"))
+group = Memba.Membership.ClubGroupQueries.get_group(Map.fetch!(payload, "groupId"))
+club = Memba.Membership.ClubGroupQueries.get_club(Map.fetch!(payload, "clubId"))
 
 %{
   address: Memba.ClubInboundEmailAddress.address(club, group.email_slug),
@@ -457,7 +457,7 @@ subject = Map.fetch!(payload, "subject")
 
 message =
   group_id
-  |> Memba.Messaging.list_conversations_for_group()
+  |> Memba.Messaging.ConversationListing.list_for_group()
   |> Enum.find(&(&1.subject == subject))
 
 if message do
@@ -528,7 +528,7 @@ function messageRecipientIds(world, subject) {
 %{
   recipientIds:
     Map.fetch!(payload, "messageId")
-    |> Memba.Messaging.list_recipient_deliveries()
+    |> Memba.Messaging.DeliveryQueries.list_recipient_deliveries()
     |> Enum.map(& &1.recipient_id)
 }
 `,
@@ -543,7 +543,7 @@ function memberHasAccess(world, personName, subject, accessLevel) {
     `
 %{
   allowed:
-    Memba.Messaging.member_has_conversation_access?(
+    Memba.Messaging.ConversationGroupAccessQueries.member_has_conversation_access?(
       Map.fetch!(payload, "messageId"),
       Map.fetch!(payload, "clubId"),
       Map.fetch!(payload, "personId"),
