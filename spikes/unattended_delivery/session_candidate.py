@@ -251,7 +251,7 @@ class Job:
                 raise Blocked('Runtime admission fingerprint changed')
             from memba_runtime import run
             code, output = run(self.c['runtime_root'], kind, spec['script'], int(cap),
-                               candidate=self.source, capture=True)
+                               candidate=self.source, capture=True, node_checks=spec.get('kind') == 'node')
             op.with_suffix('.stdout').write_text(output)
         else:
             with op.with_suffix('.stdout').open('w') as out:

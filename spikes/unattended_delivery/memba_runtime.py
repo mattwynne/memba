@@ -74,7 +74,35 @@ def prepare(root, repository, sha, discovery, bwrap):
                                'dependency_policy': 'warm private copies, no network; no host secrets or services'})
 
 
-def argv(root, work, home, script):
+def node_lifecycle_script(script):
+    # Reuse the application's existing LOCAL lifecycle, never mock RPC success.
+    # The parent owns startup/teardown; embedded Node test lifecycles use that
+    # actual private server without dropping its database or starting a second.
+    return '''export MEMBA_ACCEPTANCE_LOCAL_EMAIL=true
+node - <<'MEMBA_NODE_CHECK'
+const {spawn} = require('node:child_process');
+const {createBrowserAcceptanceLifecycle} = require('/work/acceptance-tests/features/support/lifecycle');
+const lifecycle = createBrowserAcceptanceLifecycle();
+(async () => {
+  let code = 1;
+  try {
+    await lifecycle.start();
+    code = await new Promise((resolve, reject) => {
+      const child = spawn('/bin/bash', ['-c', SCRIPT], {
+        stdio: 'inherit',
+        env: {...process.env, ACCEPTANCE_SKIP_APP_START: 'true', BASE_URL: lifecycle.baseUrl}
+      });
+      child.on('error', reject);
+      child.on('exit', (status, signal) => resolve(signal ? 128 : status));
+    });
+  } finally { await lifecycle.stop(); }
+  process.exitCode = code;
+})().catch(error => { console.error(error); process.exitCode = 1; });
+MEMBA_NODE_CHECK
+'''.replace('SCRIPT', json.dumps(script))
+
+
+def argv(root, work, home, script, node_checks=False):
     config = json.loads((root / 'runtime.json').read_text())
     args = [config['bwrap'], '--die-with-parent', '--unshare-all', '--new-session',
             '--hostname', 'candidate', '--ro-bind', '/usr', '/usr',
@@ -88,6 +116,18 @@ def argv(root, work, home, script):
     for name in ['web/_build', 'packages/live_query/_build', 'web/priv/static']:
         (work / name).mkdir(parents=True, exist_ok=True)
         args += ['--bind', str(work / name), '/work/' + name]
+    if node_checks:
+        # Only the private EMPTY fixture root is writable. Every installed
+        # dependency child remains RO; no host/cache dependency write authority.
+        modules = work / 'acceptance-tests/node_modules'
+        args += ['--tmpfs', '/work/acceptance-tests/node_modules']
+        for child in sorted(modules.iterdir()):
+            destination = '/work/acceptance-tests/node_modules/' + child.name
+            if child.is_symlink():
+                args += ['--symlink', str(child.readlink()), destination]
+            else:
+                args += ['--ro-bind', str(child), destination]
+        script = node_lifecycle_script(script)
     for key, value in config['env'].items():
         args += ['--setenv', key, value]
     setup = '''set -euo pipefail
@@ -99,7 +139,7 @@ trap 'pg_ctl -D /tmp/pg/data -m immediate -w stop >/dev/null' EXIT
     return args + ['--', '/bin/bash', '-c', setup + script]
 
 
-def run(root, label, script, seconds=300, candidate=None, capture=False):
+def run(root, label, script, seconds=300, candidate=None, capture=False, node_checks=False):
     root = Path(root).resolve()
     config = json.loads((root / 'runtime.json').read_text())
     etc = root / 'etc'
@@ -123,13 +163,13 @@ def run(root, label, script, seconds=300, candidate=None, capture=False):
     started = time.time()
     with (op / 'stdout').open('w') as out, (op / 'stderr').open('w') as err:
         try:
-            code = subprocess.run(argv(root, work, op / 'home', script), stdin=subprocess.DEVNULL,
+            code = subprocess.run(argv(root, work, op / 'home', script, node_checks=node_checks), stdin=subprocess.DEVNULL,
                                   stdout=out, stderr=err, timeout=seconds).returncode
         except subprocess.TimeoutExpired:
             code = 124
     after = tracked_hashes(work, expected)
     receipt = {'source_sha': config['source_sha'], 'source_digest': digest(expected),
-               'script': script, 'seconds_cap': seconds, 'exit': code,
+               'script': script, 'node_checks': node_checks, 'seconds_cap': seconds, 'exit': code,
                'source_unchanged': after == expected, 'started': started, 'finished': time.time(),
                'adapter_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                'runtime_digest': digest(config)}

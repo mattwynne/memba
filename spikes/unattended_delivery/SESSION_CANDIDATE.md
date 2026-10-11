@@ -127,14 +127,20 @@ network inside candidate execution. Every observation gets:
 - fresh PID/network namespaces and a private `/tmp`;
 - a fresh PostgreSQL UTF-8 cluster owned by that invocation;
 - read-only source, test drivers, features and dependencies;
-- writable private `_build` and generated-static directories only;
+- writable private `_build` and generated-static directories; Node checks additionally
+  get an empty private `node_modules` fixture root with installed dependency children RO;
 - synthetic `/etc` identity/hosts data and a private Mix cache/home;
 - no host `/home`, `/run`, daemon sockets, secrets or network access.
 
 `MEMBA_POSTGRES_OWNER=dev` tells existing nested helpers that the adapter owns
 Postgres. The adapter starts/stops its own cluster; nested browser helpers do not
 reset a shared host database. Existing Phoenix/Playwright lifecycle code runs
-unchanged. Source hashes are also compared after execution. A newly admitted runtime may set
+unchanged. Declared Node checks reuse that existing lifecycle for actual private
+Phoenix/RPC/Jason dependencies; only their child receives the real `BASE_URL` and
+`ACCEPTANCE_SKIP_APP_START=true`, preventing embedded lifecycles from dropping the
+in-use private DB. Full frozen Node selection/exit and owned teardown are retained,
+not mocked success. Non-Node checks keep their prior mounts/execution.
+Source hashes are also compared after execution. A newly admitted runtime may set
 `retain_execution_copies: false` before its fingerprint is approved. After an
 observation has finished and its source-integrity receipt is saved, only that
 observation's disposable work/home copies are removed; stdout, stderr, receipts,
