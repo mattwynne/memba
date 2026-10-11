@@ -211,7 +211,9 @@ def prepare(repo, plan_path, source_sha, key):
                 load_job(repo, key)
                 return record
         else:
-            record = {**identity, 'root': str(root), 'deadline': time.time() + 21600,
+            limits = profile.get('remaining_allowance', {})
+            deadline = min(time.time() + 21600, limits.get('absolute_deadline_epoch', float('inf')))
+            record = {**identity, 'root': str(root), 'deadline': deadline,
                       'authority': 'non-production-candidate-only', 'stage': 'preparing'}
             save(admitted, record)
         if time.time() >= record['deadline']:
@@ -281,6 +283,14 @@ def prepare(repo, plan_path, source_sha, key):
                  'check_seconds': 600, 'deadline_seconds': 21600, 'absolute_deadline_epoch': record['deadline'],
                  'memory_mb': 6144, 'tasks_max': 512, 'file_size_mb': 128,
                  'source_integrity': {'activation': activation_proof}}
+            # An explicitly carried task allowance can only reduce admission.
+            # Earlier raw attempts and accounting remain immutable references.
+            for name in ['max_visits', 'max_operations', 'max_restarts', 'max_provider_recoveries']:
+                if name in profile.get('remaining_allowance', {}):
+                    value = profile['remaining_allowance'][name]
+                    if type(value) is not int or value < 0:
+                        raise Blocked('Invalid remaining task allowance')
+                    c[name] = min(c[name], value)
             c['context_files'] = sorted(set(c['context_files'] + [str(profile_path.relative_to(repo))]))
             c['source_integrity']['immutable_context_sha256'] = memba_runtime.tracked_hashes(activation, c['context_files'])
             save(contract_path, c)
@@ -331,7 +341,8 @@ def verified_result(path):
             'published': False, 'deployed': False, 'visits': s['visits'], 'operations': s['operations'],
             'restarts': s['starts'] - 1, 'deadline': s['deadline'], 'proof_counts': {p['id']: s['observed'][p['id']]['count'] for p in c['examples'] + c['obligations']},
             'review': review, 'product_gate': gate, 'reported_cost_usd': s['reported_cost_usd'],
-            'provider_usage': s.get('provider_usage', []), 'job': str(job.path)}
+            'provider_usage': s.get('provider_usage', []), 'job': str(job.path),
+            'carried_task_accounting': c.get('remaining_allowance', {}).get('carry_in')}
 
 
 def drive(repo, key, seconds=240):
