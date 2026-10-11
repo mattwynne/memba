@@ -2,7 +2,6 @@ const assert = require("node:assert/strict");
 const { expect } = require("@playwright/test");
 const {
   clubSiteUrl,
-  emailFor,
   ensureState,
   kootenayClubName,
   testLocalDeliveryFacts,
@@ -141,21 +140,6 @@ async function assertMembersCannotReadOrReceiveLastConversation(world, personNam
   }
 }
 
-function ensurePersonWithoutMembership(world, personName) {
-  ensureState(world);
-  const created = serverCommands.ensurePerson({
-    personName,
-    email: emailFor(personName)
-  });
-
-  world.people[personName] = {
-    email: emailFor(personName),
-    emailAddresses: [emailFor(personName)],
-    name: personName,
-    personId: created.personId
-  };
-}
-
 async function ensureMessage(world, subject) {
   if (!world.messages[subject]) {
     await recordAcceptedInboundRootMessage(world, subject);
@@ -277,6 +261,5 @@ module.exports = {
   assertMembersCannotReadOrReceiveLastConversation,
   ensureBoardMembers,
   ensureConversationBackground,
-  ensurePersonWithoutMembership,
   sendBoardConversationOnWebsite
 };
