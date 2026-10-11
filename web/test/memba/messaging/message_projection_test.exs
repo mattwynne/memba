@@ -4,6 +4,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
   alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.ConversationListing
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.MessageSourceQueries
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
 
   alias Memba.Messaging.Projections.ConversationGroupAccess,
@@ -21,8 +25,8 @@ defmodule Memba.Messaging.MessageProjectionTest do
     alice_delivery_id = Memba.ID.generate(:delivery)
     bob_delivery_id = Memba.ID.generate(:delivery)
 
-    assert is_nil(Messaging.get_message(message_id))
-    assert Messaging.list_recipient_deliveries(message_id) == []
+    assert is_nil(MessageQueries.get_message(message_id))
+    assert DeliveryQueries.list_recipient_deliveries(message_id) == []
 
     assert :ok =
              App.dispatch(
@@ -58,7 +62,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
              reply_to_message_id: nil,
              subject: "Trip planning night",
              body: "Bring route ideas."
-           } = Messaging.get_message(message_id)
+           } = MessageQueries.get_message(message_id)
 
     assert [
              %EmailDeliveryProjection{
@@ -93,7 +97,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
                sent_at: nil,
                failed_at: nil
              }
-           ] = Messaging.list_recipient_deliveries(message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert alice_outbound_message_id ==
              OutboundMessageID.for_delivery(alice_delivery_id, message_id)
@@ -106,7 +110,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
              message_id: ^message_id,
              conversation_id: ^message_id,
              club_id: ^club_id
-           } = Messaging.get_outbound_message_reference(alice_outbound_message_id)
+           } = MessageSourceQueries.get_outbound_message_reference(alice_outbound_message_id)
 
     assert %{
              outbound_message_id: ^bob_outbound_message_id,
@@ -115,15 +119,17 @@ defmodule Memba.Messaging.MessageProjectionTest do
              conversation_id: ^message_id,
              club_id: ^club_id
            } =
-             Messaging.get_outbound_message_reference(String.trim(bob_outbound_message_id, "<>"))
+             MessageSourceQueries.get_outbound_message_reference(
+               String.trim(bob_outbound_message_id, "<>")
+             )
 
-    assert is_nil(Messaging.get_outbound_message_reference("<unknown@example.test>"))
+    assert is_nil(MessageSourceQueries.get_outbound_message_reference("<unknown@example.test>"))
 
     assert %EmailDeliveryProjection{
              delivery_id: ^bob_delivery_id,
              message_id: ^message_id,
              recipient_id: ^bob_id
-           } = Messaging.get_email_delivery(bob_delivery_id)
+           } = DeliveryQueries.get_email_delivery(bob_delivery_id)
   end
 
   test "outbound reference lookup ignores invalid IDs and orphaned delivery projections" do
@@ -142,48 +148,50 @@ defmodule Memba.Messaging.MessageProjectionTest do
       status: "pending"
     })
 
-    assert is_nil(Messaging.get_outbound_message_reference(outbound_message_id))
-    assert is_nil(Messaging.get_outbound_message_reference(nil))
-    assert is_nil(Messaging.get_outbound_message_reference(123))
-    assert is_nil(Messaging.get_outbound_message_reference("  "))
+    assert is_nil(MessageSourceQueries.get_outbound_message_reference(outbound_message_id))
+    assert is_nil(MessageSourceQueries.get_outbound_message_reference(nil))
+    assert is_nil(MessageSourceQueries.get_outbound_message_reference(123))
+    assert is_nil(MessageSourceQueries.get_outbound_message_reference("  "))
   end
 
   test "message and delivery queries return empty results for missing or invalid IDs" do
-    assert is_nil(Messaging.get_message(Memba.ID.generate(:message)))
-    assert is_nil(Messaging.get_message(nil))
-    assert is_nil(Messaging.get_message("not-a-uuid"))
+    assert is_nil(MessageQueries.get_message(Memba.ID.generate(:message)))
+    assert is_nil(MessageQueries.get_message(nil))
+    assert is_nil(MessageQueries.get_message("not-a-uuid"))
 
-    assert Messaging.list_messages_for_club(Memba.ID.generate(:club)) == []
-    assert Messaging.list_messages_for_club(nil) == []
-    assert Messaging.list_messages_for_club("not-a-uuid") == []
+    assert MessageQueries.list_messages_for_club(Memba.ID.generate(:club)) == []
+    assert MessageQueries.list_messages_for_club(nil) == []
+    assert MessageQueries.list_messages_for_club("not-a-uuid") == []
 
-    assert Messaging.list_conversation_messages(Memba.ID.generate(:message)) == []
-    assert Messaging.list_conversation_messages(nil) == []
-    assert Messaging.list_conversation_messages("not-a-uuid") == []
+    assert MessageQueries.list_conversation_messages(Memba.ID.generate(:message)) == []
+    assert MessageQueries.list_conversation_messages(nil) == []
+    assert MessageQueries.list_conversation_messages("not-a-uuid") == []
 
-    assert Messaging.list_conversations_for_club(Memba.ID.generate(:club)) == []
-    assert Messaging.list_conversations_for_club(nil) == []
-    assert Messaging.list_conversations_for_club("not-a-uuid") == []
+    assert ConversationListing.list_for_club(Memba.ID.generate(:club)) == []
+    assert ConversationListing.list_for_club(nil) == []
+    assert ConversationListing.list_for_club("not-a-uuid") == []
 
-    assert Messaging.list_conversations_for_group(Memba.ID.generate(:group)) == []
-    assert Messaging.list_conversations_for_group(nil) == []
-    assert Messaging.list_conversations_for_group("not-a-uuid") == []
+    assert ConversationListing.list_for_group(Memba.ID.generate(:group)) == []
+    assert ConversationListing.list_for_group(nil) == []
+    assert ConversationListing.list_for_group("not-a-uuid") == []
 
-    assert Messaging.list_conversation_messages_for_group(
+    assert MessageQueries.list_conversation_messages_for_group(
              Memba.ID.generate(:message),
              Memba.ID.generate(:group)
            ) == []
 
-    assert Messaging.list_conversation_messages_for_group(nil, Memba.ID.generate(:group)) == []
-    assert Messaging.list_conversation_messages_for_group("not-a-uuid", "not-a-uuid") == []
+    assert MessageQueries.list_conversation_messages_for_group(nil, Memba.ID.generate(:group)) ==
+             []
 
-    assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
-    assert is_nil(Messaging.get_email_delivery(nil))
-    assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
+    assert MessageQueries.list_conversation_messages_for_group("not-a-uuid", "not-a-uuid") == []
 
-    assert Messaging.list_recipient_deliveries(Memba.ID.generate(:message)) == []
-    assert Messaging.list_recipient_deliveries(nil) == []
-    assert Messaging.list_recipient_deliveries("not-a-uuid") == []
+    assert is_nil(DeliveryQueries.get_email_delivery(Memba.ID.generate(:delivery)))
+    assert is_nil(DeliveryQueries.get_email_delivery(nil))
+    assert is_nil(DeliveryQueries.get_email_delivery("not-a-uuid"))
+
+    assert DeliveryQueries.list_recipient_deliveries(Memba.ID.generate(:message)) == []
+    assert DeliveryQueries.list_recipient_deliveries(nil) == []
+    assert DeliveryQueries.list_recipient_deliveries("not-a-uuid") == []
   end
 
   describe "list_conversations_for_club/1" do
