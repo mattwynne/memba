@@ -91,6 +91,14 @@ class Job:
 
     def checkpoint(self):
         repo = self.path / 'checkpoints'
+        # copytree(dirs_exist_ok=True, symlinks=True) still calls symlink() on
+        # existing links. Full Memba archives contain tracked skills symlinks.
+        # Remove only their mirrored links, never their targets or Git metadata.
+        for source_link in self.source.rglob('*'):
+            if source_link.is_symlink():
+                target = repo / source_link.relative_to(self.source)
+                if target.is_symlink():
+                    target.unlink()
         shutil.copytree(self.source, repo, dirs_exist_ok=True, symlinks=True)
         command(['git', 'add', '--all', '--force'], repo)
         command(['git', '-c', 'user.name=Candidate controller', '-c',

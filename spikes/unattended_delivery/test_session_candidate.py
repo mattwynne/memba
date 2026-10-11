@@ -101,6 +101,20 @@ class SessionCandidateTest(unittest.TestCase):
         with self.assertRaisesRegex(Blocked, 'Reserved control-plane'):
             create(self.root / 'unsafe-archive', source, contract, digest(c))
 
+    def test_repeated_checkpoint_preserves_existing_source_symlinks(self):
+        link = self.job.source / 'alias.py'
+        link.symlink_to('stock.py')
+        self.job.checkpoint()
+        before = self.job.s['candidate']
+        self.job.edit('test_unit.py', 'import unittest', 'import unittest\n# next checkpoint')
+        copied = self.job.path / 'checkpoints/alias.py'
+        self.assertTrue(copied.is_symlink())
+        self.assertEqual(os.readlink(copied), 'stock.py')
+        self.assertNotEqual(self.job.s['candidate'], before)
+        self.assertIsNone(self.job.s['pending'])
+        self.assertEqual(command(['git', 'show', self.job.s['candidate'] + ':alias.py'],
+                                 self.job.path / 'checkpoints'), 'stock.py')
+
     def test_checkpoint_preserves_new_files_even_when_gitignored(self):
         (self.job.source / '.gitignore').write_text('new.py\n')
         (self.job.source / 'new.py').write_text('preserved\n')
