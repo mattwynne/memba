@@ -60,7 +60,10 @@ def activate_examples(root, examples, tag):
         if '@todo' in spec.get('tags', []) and not any('@todo' in lines[i].split() for i in tags):
             raise Blocked('Refuse inherited todo activation of unselected siblings')
         for i in tags:
-            lines[i] = re.sub(r'(?<!\S)@todo(?!\S)', '', lines[i])
+            newline = '\n' if lines[i].endswith('\n') else ''
+            # Elixir Cucumber rejects trailing whitespace on a tag line.
+            # Preserve line numbers without emitting an invalid empty tag.
+            lines[i] = re.sub(r'(?<!\S)@todo(?!\S)', '', lines[i]).rstrip(' \t\r\n') + newline
         changes[p] = ''.join(lines)
     proof = []
     for p, text in changes.items():
@@ -227,7 +230,8 @@ def prepare(repo, plan_path, source_sha, key):
         discovery = root / 'discovery.json'
         if not discovery.exists():
             code = ('import os,json; keys=["PATH","FONTCONFIG_FILE","FONTCONFIG_PATH",'
-                    '"PLAYWRIGHT_BROWSERS_PATH","LD_LIBRARY_PATH","PKG_CONFIG_PATH"];'
+                    '"PLAYWRIGHT_BROWSERS_PATH","LD_LIBRARY_PATH","PKG_CONFIG_PATH",'
+                    '"MIX_ESBUILD_PATH","MIX_TAILWIND_PATH"];'
                     'd={k:os.environ.get(k,"") for k in keys};'
                     'candidates=[os.environ.get("MIX_HOME",""),os.path.join(os.environ["HOME"],".mix"),"/tmp/home/.mix"];'
                     'd["_MIX_CACHE_SOURCE"]=next(p for p in candidates if p and os.path.isdir(p));'

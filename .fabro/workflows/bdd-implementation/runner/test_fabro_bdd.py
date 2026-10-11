@@ -24,7 +24,7 @@ class ActivationTest(unittest.TestCase):
             p.write_text(original)
             examples = [{'uri': 'features/member.feature', 'name': 'Correct name'}]
             proof = activate_examples(root, examples, 'iteration-068')
-            self.assertEqual(p.read_text(), original.replace('@iteration-068 @todo', '@iteration-068 '))
+            self.assertEqual(p.read_text(), original.replace('@iteration-068 @todo', '@iteration-068'))
             self.assertEqual(len(p.read_text().splitlines()), len(original.splitlines()))
             self.assertEqual(proof[0]['original_sha256'], __import__('hashlib').sha256(original.encode()).hexdigest())
             self.assertNotEqual(proof[0]['activated_sha256'], proof[0]['original_sha256'])
@@ -59,7 +59,7 @@ class ActivationTest(unittest.TestCase):
             p.write_text(original)
             activate_examples(root, [{'uri': 'features/journey.feature', 'name': 'Name',
                                       'tags': ['@journey', '@iteration-068', '@todo']}], 'iteration-068')
-            self.assertEqual(p.read_text(), original.replace(' @todo\n Scenario: Name', ' \n Scenario: Name'))
+            self.assertEqual(p.read_text(), original.replace(' @todo\n Scenario: Name', '\n Scenario: Name'))
 
     def test_shared_inherited_todo_is_never_removed(self):
         with tempfile.TemporaryDirectory() as d:
