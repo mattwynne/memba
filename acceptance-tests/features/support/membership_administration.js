@@ -92,7 +92,7 @@ Memba.Membership.Projections.RoleAssignment
 |> where([assignment], assignment.active == true)
 |> Memba.Repo.all()
 |> Enum.each(fn assignment ->
-  person = Memba.Membership.get_person(assignment.person_id)
+  person = Memba.Membership.PersonQueries.get_person(assignment.person_id)
 
   unless MapSet.member?(admin_names, person.name) do
     :ok =
@@ -345,7 +345,7 @@ club =
   |> limit(1)
   |> Memba.Repo.one()
 
-person = Memba.Membership.get_person_by_email(email)
+person = Memba.Membership.PersonQueries.get_person_by_email(email)
 
 membership =
   if club && person do
@@ -381,7 +381,7 @@ role_assignment? =
 
 permission? =
   if club && person do
-    Memba.Membership.person_has_club_permission?(
+    Memba.Membership.Authorization.has_permission?(
       club.club_id,
       person.person_id,
       Memba.Membership.Permissions.club_manage_members()

@@ -585,7 +585,7 @@ club =
   |> limit(1)
   |> Memba.Repo.one()
 
-person = Memba.Membership.get_person_by_email(email)
+person = Memba.Membership.PersonQueries.get_person_by_email(email)
 
 membership =
   if club && person do
