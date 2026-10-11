@@ -107,6 +107,39 @@ class SessionCandidateTest(unittest.TestCase):
                                           cwd=self.job.path / 'checkpoints', text=True)
         self.assertEqual(content, 'preserved\n')
 
+    def test_real_exunit_exit_and_setup_failures_gate_edits(self):
+        runtime = self.root / 'runtime-probe'
+        runtime.mkdir()
+        (runtime / 'runtime.json').write_text('{}')
+        self.job.c.update(runtime_root=str(runtime), runtime_digest=digest({}),
+                          unit_kind='domain', unit_script='approved mix test')
+        assertion = '  1) test behavior (Probe)\n     Assertion with == failed\n1 test, 1 failure\n'
+        setup = '  1) test behavior (Probe)\n     ** (UndefinedFunctionError) missing\n1 test, 1 failure\n'
+        mixed = assertion.replace('1 test, 1 failure', '') + setup.replace('1)', '2)').replace('1 test, 1 failure', '2 tests, 2 failures')
+        for code, output, expected in [(2, assertion, True), (2, setup, False),
+                                       (1, setup, False), (2, mixed, False),
+                                       (2, assertion + '__ex_unit_setup_0/1', False)]:
+            with self.subTest(code=code, output=output):
+                with patch('memba_runtime.run', return_value=(code, output)):
+                    receipt = self.job.observe('unit', None, 'classification probe')['receipt']
+                self.assertEqual(receipt['exit'], code)
+                self.assertEqual(receipt['behavioral_red'], expected)
+                if expected:
+                    self.job.edit('stock.py', 'def reserve(self, item, quantity):',
+                                  'def reserve(self, item, quantity):')
+                else:
+                    with self.assertRaisesRegex(Blocked, 'ACTUAL'):
+                        self.job.edit('stock.py', 'return False', 'return False')
+
+    def test_python_error_is_not_behavioral_red(self):
+        result = subprocess.CompletedProcess([], 1)
+        def execute(*args, **kwargs):
+            kwargs['stdout'].write('ERROR: test_setup\nRan 1 test in 0.01s\nFAILED (errors=1)\n')
+            return result
+        with patch('session_candidate.subprocess.run', side_effect=execute):
+            receipt = self.job.observe('unit', None, 'setup must not authorize implementation')['receipt']
+        self.assertFalse(receipt['behavioral_red'])
+
     def test_model_visits_remain_spent_after_reload(self):
         self.job.s['visits'] = self.job.c['max_visits']
         self.job.persist()

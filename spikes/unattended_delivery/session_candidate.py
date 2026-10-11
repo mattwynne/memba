@@ -41,6 +41,29 @@ def selected_count(output, kind):
     raise Blocked('Unsupported selection counter')
 
 
+def behavioral_assertion(code, output, kind):
+    """Fail closed: raw framework exit status is not an assertion receipt."""
+    if kind == 'unittest':
+        return code == 1 and 'FAIL:' in output and 'ERROR:' not in output
+    if kind != 'domain' or code != 2:
+        return False
+    if any(token in output for token in ('__ex_unit_setup', 'setup_all callback',
+                                         'Compilation error', 'couldn\'t be created')):
+        return False
+    failures = re.findall(r'^\d+ tests?, (\d+) failures?', output, re.M)
+    blocks = re.split(r'^\s+\d+\) ', output, flags=re.M)[1:]
+    if len(failures) != 1 or not blocks or len(blocks) != int(failures[0]):
+        return False
+    for block in blocks:
+        exceptions = re.findall(r'\*\* \(([^)]+)\)', block)
+        if any(name != 'ExUnit.AssertionError' for name in exceptions):
+            return False
+        if not re.search(r'Assertion with .+ failed|Expected (?:truthy|false or nil)|'
+                         r'match \(=\) failed|\(ExUnit.AssertionError\)', block):
+            return False
+    return True
+
+
 class Job:
     def __init__(self, path):
         self.path = Path(path).resolve()
@@ -140,9 +163,7 @@ class Job:
                                         '(ExUnit.AssertionError)' in output),
                    'failure_signatures': [' | '.join(parts) for parts in re.findall(
                        r'  File "([^"]+)", line (\d+), in [^\n]+\n\s+([^\n]+)\nAssertionError: ([^\n]+)', output)],
-                   'behavioral_red': code == 1 and count > 0 and not any(
-                       token in output for token in ('_FailedTest', 'ModuleNotFoundError', 'ImportError:',
-                                                     'SyntaxError:', 'Compilation error', 'couldn\'t be created'))}
+                   'behavioral_red': behavioral_assertion(code, output, spec.get('kind', 'unittest'))}
         save(op.with_suffix('.json'), receipt)
         self.s['receipts'].append(str(op.with_suffix('.json').relative_to(self.path)))
         self.s['observed'][spec['id']] = receipt
@@ -168,8 +189,8 @@ class Job:
             raise Blocked('Unit green: rerun the SAME whole acceptance example before further implementation/tests')
         if name not in self.c['unit_files']:
             unit = self.s['observed'].get('unit', {})
-            required = 0 if refactor else 1
-            if (unit.get('candidate') != self.s['candidate'] or unit.get('exit') != required or
+            valid_exit = unit.get('exit') == 0 if refactor else unit.get('exit') in (1, 2)
+            if (unit.get('candidate') != self.s['candidate'] or not valid_exit or
                     (not refactor and not unit.get('behavioral_red', unit.get('assertion_failure')))):
                 raise Blocked('Before implementation observe an ACTUAL focused unit assertion failure on this snapshot. '
                               'For behavior-preserving refactor only, set refactor=true after observing unit green. '
