@@ -84,11 +84,49 @@ source templates and controller checkpoints remain. Existing runtimes default to
 retention and are not changed. This bounds duplicate-cache accumulation during
 long implementation loops.
 
-Unit-red authorization recognizes actual ExUnit assertion failures (raw exit 2),
-not merely a nonzero exit. Missing functions, mixed assertion/setup failures and
-setup callbacks do not authorize product edits. Unknown failure formats fail
-closed. Python unittest requires a FAIL receipt with no ERROR. Raw framework exit
-codes remain in evidence; neither setup work nor a green rehearsal is product red.
+**Unit development failure is not limited to assertion mismatches.** During a
+builder's trusted unit invocation, compiler/missing-interface errors and ordinary
+runtime failures (including FunctionClauseError) are actionable feedback. A
+compile failure records zero executed tests, never a pass or behavioral acceptance
+red. The receipt separately records raw exit, execution count, assertion evidence
+and `unit_development` with diagnostic paths and relevant `repair_paths`.
+
+One evidence rule governs implementation: a genuine failed unit invocation must
+be bound to the current candidate/contract and diagnostics linked to approved
+test/product paths. Product paths are derived from diagnostic paths/modules, or
+from the failing assertion test's source references where no product frame is
+present. The existing explicit editable scope remains the outer ceiling; unknown
+or unrelated diagnostics do not grant product edits. Existing unit/support edit
+rights remain available to correct test setup. The ordinary edit tool is used;
+there is no syntax-template taxonomy, scaffold flag or required nil placeholder.
+A missing aggregate clause can be implemented directly after the relevant unit
+runtime failure, without manufacturing an assertion mismatch first.
+
+After each implementation repair, rerun unit before another edit or outer check.
+Any edit invalidates older diagnostic authority. After unit green, rerun the SAME
+outer example. The builder prompt and independent reviewer enforce smallest
+change/current obstacle and reject speculative bulk implementation; textual path
+linkage is not a claim that static syntax can prove semantic relevance. No extra
+model session is required for development tool loops.
+
+DB/service/environment/setup-callback/authorization/timeout diagnostics do not
+grant implementation. Successful zero selection, missing acceptance steps, final
+proof zero execution, source/contract changes remain fail-closed. Final checks
+and review have no development exception. Unit failure is not an acceptance pass:
+all exact-candidate examples/obligations still must execute and pass before review.
+Mixed assertion/setup failures are not assertion red. As elsewhere in this
+experimental executor, framework-output recognition is not proof against a
+malicious test runner; frozen commands/scopes and independent review remain
+necessary boundaries.
+
+The controller polls durable job status during a model visit. If the broker makes
+the job terminal, it promptly terminates/reaps only that visit's process group;
+systemd remains the outer containment. It does not pay for a fenced tool loop
+until the visit timeout, restart the job or refund the visit. Partial stdout and
+stderr plus a `.visit.json` receipt are preserved. Error-envelope cost is recorded
+when available; without an envelope, `reported_cost_usd` is null (not zero),
+`reported_cost_complete` is false, and `known_reported_cost_usd` remains the known
+subtotal. Interrupted/unknown visit IDs remain in `unreported_cost_visits`.
 
 The Gherkin selector uses the **real Cucumber pickle compiler**, not regex name
 parsing. It accounts for inherited tags and outline rows and records URI, line,

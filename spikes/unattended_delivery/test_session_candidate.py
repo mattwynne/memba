@@ -129,7 +129,7 @@ class SessionCandidateTest(unittest.TestCase):
         (runtime / 'runtime.json').write_text('{}')
         self.job.c.update(runtime_root=str(runtime), runtime_digest=digest({}),
                           unit_kind='domain', unit_script='approved mix test')
-        assertion = '  1) test behavior (Probe)\n     Assertion with == failed\n1 test, 1 failure\n'
+        assertion = '  1) test behavior (Probe)\n     test_unit.py:10: (test)\n     Assertion with == failed\n1 test, 1 failure\n'
         setup = '  1) test behavior (Probe)\n     ** (UndefinedFunctionError) missing\n1 test, 1 failure\n'
         mixed = assertion.replace('1 test, 1 failure', '') + setup.replace('1)', '2)').replace('1 test, 1 failure', '2 tests, 2 failures')
         for code, output, expected in [(2, assertion, True), (2, setup, False),
@@ -217,7 +217,9 @@ class SessionCandidateTest(unittest.TestCase):
 
     def test_tool_edit_saves_real_checkpoint(self):
         before = self.job.s['candidate']
-        self.job.s['observed']['unit'] = {'candidate': before, 'exit': 1, 'assertion_failure': True}
+        self.job.s['observed']['unit'] = {'candidate': before, 'contract': self.job.s['contract'],
+                                        'kind': 'unit', 'exit': 1, 'assertion_failure': True,
+                                        'unit_development': {'repair_paths': ['stock.py']}}
         self.job.persist()
         self.job.tool('edit', {'path': 'stock.py', 'old': 'def reserve(self, item, quantity):\n        return False',
                               'new': 'def reserve(self, item, quantity):\n        return True'}, 'current')
