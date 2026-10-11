@@ -226,11 +226,15 @@ def prepare(repo, plan_path, source_sha, key):
                     'd={k:os.environ.get(k,"") for k in keys};'
                     'candidates=[os.environ.get("MIX_HOME",""),os.path.join(os.environ["HOME"],".mix"),"/tmp/home/.mix"];'
                     'd["_MIX_CACHE_SOURCE"]=next(p for p in candidates if p and os.path.isdir(p));'
-                    'print(json.dumps(d))')
-            with (root / 'discovery.stderr').open('a') as err:
-                data = subprocess.check_output(['devenv', 'shell', '--', '/usr/bin/python3', '-c', code],
-                    cwd=repo, stderr=err, text=True, timeout=300)
-            save(discovery, json.loads(data))
+                    'import sys; from pathlib import Path;'
+                    'p=Path(sys.argv[1]); t=p.with_suffix(".pending");'
+                    't.write_text(json.dumps(d)); os.replace(t,p)')
+            # Devenv's enter-shell banner is stdout, not JSON. The trusted
+            # exporter writes an atomic file; preserve both streams as logs.
+            with (root / 'discovery.stderr').open('a') as err, (root / 'discovery.stdout').open('a') as out:
+                subprocess.run(['devenv', 'shell', '--', '/usr/bin/python3', '-c', code, str(discovery)],
+                    cwd=repo, stdout=out, stderr=err, check=True, timeout=300)
+            json.loads(discovery.read_text())
         env = json.loads(discovery.read_text())
         bwrap = shutil.which('bwrap', path=env['PATH'])
         if not bwrap or not bwrap.startswith('/nix/store/'):
