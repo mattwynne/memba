@@ -1,13 +1,13 @@
 defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.Events.EmailDeliveryOpened
   alias Memba.Messaging.Projectors.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjector
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
@@ -44,21 +44,21 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
                status: "sent",
                reason: nil
              }
-           ] = Messaging.list_operator_email_deliveries(message_id)
+           ] = DeliveryQueries.list_operator_email_deliveries(message_id)
 
     assert %MembaStaffEmailDeliveryProjection{
              delivery_id: ^bob_delivery_id,
              recipient_id: ^bob_person_id,
              status: "sent",
              reason: nil
-           } = Messaging.get_memba_staff_email_delivery(bob_delivery_id)
+           } = DeliveryQueries.get_memba_staff_email_delivery(bob_delivery_id)
 
     assert %MembaStaffEmailDeliveryProjection{
              delivery_id: ^bob_delivery_id,
              recipient_id: ^bob_person_id,
              status: "sent",
              reason: nil
-           } = Messaging.get_memba_staff_email_delivery(message_id, bob_person_id)
+           } = DeliveryQueries.get_memba_staff_email_delivery(message_id, bob_person_id)
   end
 
   test "Memba staff email delivery projection keeps detailed statuses and reason text" do
@@ -108,7 +108,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
 
     email_deliveries_by_recipient =
       message_id
-      |> Messaging.list_operator_email_deliveries()
+      |> DeliveryQueries.list_operator_email_deliveries()
       |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
 
     assert email_deliveries_by_recipient == %{
@@ -139,7 +139,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
              )
 
     assert %MembaStaffEmailDeliveryProjection{status: "sent", reason: nil} =
-             Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
+             DeliveryQueries.get_memba_staff_email_delivery(message_id, bob.person_id)
 
     assert %MembaStaffEmailDeliveryProjector.ProjectionVersion{last_seen_event_number: 10_000} =
              Repo.get_by(MembaStaffEmailDeliveryProjector.ProjectionVersion,
@@ -173,7 +173,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
     assert %MembaStaffEmailDeliveryProjection{
              status: "delivered",
              reason: nil
-           } = Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
+           } = DeliveryQueries.get_memba_staff_email_delivery(message_id, bob.person_id)
   end
 
   test "Memba staff email delivery overview query lists deliveries across messages newest event first" do
@@ -232,7 +232,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
                reason: "recipient server is temporarily unavailable",
                event_at: ^older_event_at
              }
-           ] = Messaging.list_operator_deliveries()
+           ] = DeliveryQueries.list_operator_deliveries()
 
     assert bob_delivery_id == bob.delivery_id
     assert alice_delivery_id == alice.delivery_id
@@ -243,35 +243,38 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
                message_subject: "Spring snowpack update",
                event_at: ^older_event_at
              }
-           ] = Messaging.list_operator_deliveries(message_id: first_message_id)
+           ] = DeliveryQueries.list_operator_deliveries(message_id: first_message_id)
   end
 
   test "Memba staff email delivery queries return empty results for missing or invalid IDs" do
-    assert is_nil(Messaging.get_memba_staff_email_delivery(Memba.ID.generate(:delivery)))
-    assert is_nil(Messaging.get_memba_staff_email_delivery(nil))
-    assert is_nil(Messaging.get_memba_staff_email_delivery("not-a-uuid"))
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery(Memba.ID.generate(:delivery)))
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery(nil))
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery("not-a-uuid"))
 
     assert is_nil(
-             Messaging.get_memba_staff_email_delivery(
+             DeliveryQueries.get_memba_staff_email_delivery(
                Memba.ID.generate(:message),
                Memba.ID.generate(:person)
              )
            )
 
-    assert is_nil(Messaging.get_memba_staff_email_delivery(nil, Memba.ID.generate(:person)))
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery(nil, Memba.ID.generate(:person)))
 
     assert is_nil(
-             Messaging.get_memba_staff_email_delivery(Memba.ID.generate(:message), "not-a-uuid")
+             DeliveryQueries.get_memba_staff_email_delivery(
+               Memba.ID.generate(:message),
+               "not-a-uuid"
+             )
            )
 
-    assert Messaging.list_operator_email_deliveries(Memba.ID.generate(:message)) == []
-    assert Messaging.list_operator_email_deliveries(nil) == []
-    assert Messaging.list_operator_email_deliveries("not-a-uuid") == []
+    assert DeliveryQueries.list_operator_email_deliveries(Memba.ID.generate(:message)) == []
+    assert DeliveryQueries.list_operator_email_deliveries(nil) == []
+    assert DeliveryQueries.list_operator_email_deliveries("not-a-uuid") == []
 
-    assert Messaging.list_operator_deliveries(message_id: Memba.ID.generate(:message)) == []
-    assert Messaging.list_operator_deliveries(message_id: nil) == []
-    assert Messaging.list_operator_deliveries(message_id: "not-a-uuid") == []
-    assert Messaging.list_operator_deliveries(nil) == []
+    assert DeliveryQueries.list_operator_deliveries(message_id: Memba.ID.generate(:message)) == []
+    assert DeliveryQueries.list_operator_deliveries(message_id: nil) == []
+    assert DeliveryQueries.list_operator_deliveries(message_id: "not-a-uuid") == []
+    assert DeliveryQueries.list_operator_deliveries(nil) == []
   end
 
   defp send_message_with_recipients(names, opts \\ []) do
