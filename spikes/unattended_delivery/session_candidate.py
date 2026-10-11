@@ -38,6 +38,10 @@ def selected_count(output, kind):
     if kind == 'browser':
         found = re.findall(r'^(\d+) scenarios? \(', output, re.M)
         return int(found[-1]) if len(found) == 1 else 0
+    if kind == 'node':
+        totals = re.findall(r'^# tests (\d+)$', output, re.M)
+        skipped = re.findall(r'^# (?:skipped|todo) (\d+)$', output, re.M)
+        return max(0, int(totals[0]) - sum(map(int, skipped))) if len(totals) == 1 else 0
     raise Blocked('Unsupported selection counter')
 
 

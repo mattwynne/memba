@@ -151,6 +151,9 @@ class SessionCandidateTest(unittest.TestCase):
         self.assertEqual(selected_count('128 tests, 0 failures, 128 excluded', 'domain'), 0)
         self.assertEqual(selected_count('1 scenario (1 passed)', 'browser'), 1)
         self.assertEqual(selected_count('Ran 0 tests in 0.01s', 'unittest'), 0)
+        self.assertEqual(selected_count('# tests 4\n# skipped 1\n# todo 1\n', 'node'), 2)
+        self.assertEqual(selected_count('# tests 1\n# skipped 1\n# todo 0\n', 'node'), 0)
+        self.assertEqual(selected_count('# tests 1\n# tests 2\n', 'node'), 0)
 
     def test_server_enforces_capabilities_not_just_advisory_mcp_schema(self):
         with self.assertRaisesRegex(Blocked, 'Unknown observation'):
