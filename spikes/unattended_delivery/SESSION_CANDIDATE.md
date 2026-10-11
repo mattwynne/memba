@@ -76,7 +76,19 @@ network inside candidate execution. Every observation gets:
 `MEMBA_POSTGRES_OWNER=dev` tells existing nested helpers that the adapter owns
 Postgres. The adapter starts/stops its own cluster; nested browser helpers do not
 reset a shared host database. Existing Phoenix/Playwright lifecycle code runs
-unchanged. Source hashes are also compared after execution.
+unchanged. Source hashes are also compared after execution. A newly admitted runtime may set
+`retain_execution_copies: false` before its fingerprint is approved. After an
+observation has finished and its source-integrity receipt is saved, only that
+observation's disposable work/home copies are removed; stdout, stderr, receipts,
+source templates and controller checkpoints remain. Existing runtimes default to
+retention and are not changed. This bounds duplicate-cache accumulation during
+long implementation loops.
+
+Unit-red authorization recognizes actual ExUnit assertion failures (raw exit 2),
+not merely a nonzero exit. Missing functions, mixed assertion/setup failures and
+setup callbacks do not authorize product edits. Unknown failure formats fail
+closed. Python unittest requires a FAIL receipt with no ERROR. Raw framework exit
+codes remain in evidence; neither setup work nor a green rehearsal is product red.
 
 The Gherkin selector uses the **real Cucumber pickle compiler**, not regex name
 parsing. It accounts for inherited tags and outline rows and records URI, line,

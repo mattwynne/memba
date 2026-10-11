@@ -138,6 +138,11 @@ def run(root, label, script, seconds=300, candidate=None, capture=False):
         print(op)
     if not receipt['source_unchanged']:
         raise Blocked('Runtime changed tracked source; no exact-state evidence')
+    # Opt-in for longer admitted jobs: checkpoints own candidate retention.
+    # Keep observations/receipts, not hundreds of duplicate disposable caches.
+    if config.get('retain_execution_copies', True) is False:
+        shutil.rmtree(work)
+        shutil.rmtree(op / 'home')
     if capture:
         return code, (op / 'stdout').read_text() + (op / 'stderr').read_text()
     return code

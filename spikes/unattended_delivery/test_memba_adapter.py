@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from candidate import Blocked, digest
 from memba_runtime import CACHES, argv, run, tracked_hashes
@@ -71,6 +72,28 @@ class MembaSelectionTest(unittest.TestCase):
         dependency.write_text('changed after approval')
         with self.assertRaisesRegex(Blocked, 'dependency caches changed'):
             run(self.root, 'must-not-execute', 'exit 99')
+
+    def test_opt_in_discards_execution_copies_but_preserves_receipts_and_logs(self):
+        source = self.root / 'source'
+        source.mkdir()
+        (source / 'proof.txt').write_text('immutable')
+        (self.root / 'home').mkdir()
+        (self.root / 'runtime.json').write_text(json.dumps({
+            'source_sha': 'a' * 40, 'bwrap': '/bwrap', 'env': {},
+            'files': tracked_hashes(source, ['proof.txt']),
+            'retain_execution_copies': False}))
+        def execute(*args, **kwargs):
+            kwargs['stdout'].write('actual observation output')
+            return subprocess.CompletedProcess([], 0)
+        with patch('memba_runtime.subprocess.run', side_effect=execute):
+            code, output = run(self.root, 'probe', 'approved command', capture=True)
+        self.assertEqual((code, output), (0, 'actual observation output'))
+        op, = self.root.glob('*-probe')
+        self.assertTrue((op / 'receipt.json').is_file())
+        self.assertTrue((op / 'stdout').is_file())
+        self.assertFalse((op / 'work').exists())
+        self.assertFalse((op / 'home').exists())
+        self.assertEqual((source / 'proof.txt').read_text(), 'immutable')
 
     def test_namespace_does_not_mount_host_secrets_or_network(self):
         root = self.root
