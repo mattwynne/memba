@@ -180,7 +180,7 @@ class UnitDevelopmentTest(unittest.TestCase):
                 self.assertFalse(result['receipt']['behavioral_red'])
                 self.assertIn(self.product, result['receipt']['unit_development']['repair_paths'])
 
-    def real_fixture(self, missing_clause=False):
+    def real_fixture(self, missing_clause=False, focused=False):
         # Synthetic application fixture, REAL framework/runtime, NO provider.
         from memba_runtime import CACHES
         approved = Path(os.environ['WORKFLOW_ELIXIR_RUNTIME'])
@@ -210,9 +210,17 @@ class UnitDevelopmentTest(unittest.TestCase):
         (self.job.source / 'outer.exs').write_text('ExUnit.start()\ndefmodule Outer do\n  use ExUnit.Case\n  test "amount journey" do\n' + outer_body + '  end\nend\n')
         spec = self.job.c['examples'][0]
         spec.update(kind='domain', script='elixir -r "lib/workflow/*.ex" outer.exs')
+        if focused:
+            self.job.c['focused_units'] = [{'id': 'fixture-unit', 'paths': [unit], 'kind': 'domain',
+                                           'script': self.job.c['unit_script']}]
+            self.job.c['unit_script'] = 'exit 99'  # Wrong dispatch cannot accidentally pass.
         self.job.checkpoint()
         def observe(kind):
-            return self.job.observe(kind, spec['id'] if kind == 'example' else None, 'real isolated fixture observation')['receipt']
+            identity = spec['id'] if kind == 'example' else ('fixture-unit' if focused else None)
+            receipt = self.job.observe(kind, identity, 'real isolated fixture observation')['receipt']
+            if kind == 'unit' and focused:
+                self.assertEqual(receipt['unit_selector'], 'fixture-unit')
+            return receipt
         self.assertNotEqual(observe('example')['exit'], 0)
         red = observe('unit')
         if missing_clause:
@@ -232,7 +240,7 @@ class UnitDevelopmentTest(unittest.TestCase):
         self.assertEqual(observe('example')['exit'], 0)
         self.assertFalse(self.job.s['needs_outer_observation'])
         if os.environ.get('WORKFLOW_TEST_EVIDENCE'):
-            dest = Path(os.environ['WORKFLOW_TEST_EVIDENCE']) / ('real-exunit-' + ('clause-' if missing_clause else 'compile-') + str(time.time_ns()))
+            dest = Path(os.environ['WORKFLOW_TEST_EVIDENCE']) / ('real-exunit-' + ('focused-' if focused else '') + ('clause-' if missing_clause else 'compile-') + str(time.time_ns()))
             shutil.copytree(self.job.path / 'evidence', dest)
             print('Real ExUnit fixture evidence (no provider):', dest)
 
@@ -243,3 +251,7 @@ class UnitDevelopmentTest(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('WORKFLOW_ELIXIR_RUNTIME'), 'Set WORKFLOW_ELIXIR_RUNTIME for real isolated ExUnit fixture')
     def test_real_missing_clause_unit_failure_repair_green_same_outer(self):
         self.real_fixture(missing_clause=True)
+
+    @unittest.skipUnless(os.environ.get('WORKFLOW_ELIXIR_RUNTIME'), 'Set WORKFLOW_ELIXIR_RUNTIME for real isolated ExUnit fixture')
+    def test_real_focused_missing_clause_cycle_uses_selected_command(self):
+        self.real_fixture(missing_clause=True, focused=True)

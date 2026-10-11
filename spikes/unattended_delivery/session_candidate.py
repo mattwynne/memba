@@ -95,7 +95,37 @@ def unit_infrastructure_failure(output):
     return False
 
 
-def unit_development(output, code, count, framework, source, contract):
+def validate_unit_selections(contract):
+    """Admission-only declarations; callers select IDs, never supply commands."""
+    support = contract.get('acceptance_support_files', [])
+    if (not isinstance(support, list) or not all(isinstance(p, str) for p in support) or
+            not set(support) <= set(contract['unit_files'])):
+        raise Blocked('Acceptance support must be approved unit/support paths')
+    selections = contract.get('focused_units', [])
+    if not isinstance(selections, list):
+        raise Blocked('Focused unit selections must be a list')
+    identities = {'unit'} | {s['id'] for s in contract['examples'] + contract['obligations']}
+    command_key = 'script' if contract.get('runtime_root') else 'command'
+    for spec in selections:
+        if (not isinstance(spec, dict) or set(spec) != {'id', 'paths', 'kind', command_key} or
+                not isinstance(spec['id'], str) or not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', spec['id']) or
+                spec['id'] in identities or spec['kind'] not in ('domain', 'node', 'unittest')):
+            raise Blocked('Invalid or colliding focused unit selection')
+        paths = spec['paths']
+        if (not isinstance(paths, list) or not paths or not all(isinstance(p, str) for p in paths) or
+                len(paths) != len(set(paths)) or not set(paths) <= set(contract['unit_files']) - set(support) or
+                any(p.startswith('/') or '..' in Path(p).parts for p in paths)):
+            raise Blocked('Focused unit paths must be declared non-driver unit paths')
+        command = spec[command_key]
+        valid_command = (isinstance(command, str) and bool(command.strip()) if command_key == 'script' else
+                         isinstance(command, list) and bool(command) and
+                         all(isinstance(arg, str) and bool(arg) for arg in command))
+        if not valid_command:
+            raise Blocked('Invalid approved focused unit command')
+        identities.add(spec['id'])
+
+
+def unit_development(output, code, count, framework, source, contract, unit_paths=None):
     """A trusted failed unit invocation plus scoped diagnostics, not acceptance red.
 
     Relevance comes from diagnostic paths/modules (or the failing assertion's
@@ -119,6 +149,13 @@ def unit_development(output, code, count, framework, source, contract):
     if not linked:
         return None
     units = linked & set(contract['unit_files'])
+    if unit_paths is not None:
+        selected_units = units & set(unit_paths)
+        # Executed failures must identify a selected test. A product compilation
+        # failure may precede loading any test; it still proves zero execution.
+        if (units and not selected_units) or (count > 0 and not selected_units):
+            return None
+        units = selected_units
     repair_paths = linked - set(contract['unit_files'])
     owners = set(re.findall(r'\b([A-Z]\w*(?:\.[A-Z]\w*)*)\.[a-z_]\w*[!?]?/\d+', output))
     python_modules = set(re.findall(r"No module named ['\"]([\w.]+)['\"]", output))
@@ -214,9 +251,29 @@ class Job:
             raise Blocked('Unknown observation capability')
         if self.s.get('needs_unit_observation') and kind != 'unit':
             raise Blocked('Rerun the unit command after the repair before other work')
+        if self.s.get('support_observation_pending') and self.s['phase'] == 'builder':
+            if kind != 'example':
+                raise Blocked('Driver/support changed: observe the selected acceptance directly, not a unit gate')
+            if self.s.get('active_example') and identity != self.s['active_example']:
+                raise Blocked('Driver/support changed: rerun the SAME selected acceptance')
+        selector, unit_paths = None, None
         if kind == 'unit':
-            spec = {'id': 'unit', 'command': self.c.get('unit_command'),
-                    'script': self.c.get('unit_script'), 'kind': self.c.get('unit_kind', 'unittest')}
+            selector = 'unit' if identity is None else identity
+            if selector == 'unit':
+                spec = {'id': 'unit', 'command': self.c.get('unit_command'),
+                        'script': self.c.get('unit_script'), 'kind': self.c.get('unit_kind', 'unittest')}
+            else:
+                if self.s['phase'] != 'builder':
+                    raise Blocked('Focused unit selections are builder development checks only')
+                spec = next((s for s in self.c.get('focused_units', []) if s['id'] == selector), None)
+                if not spec:
+                    raise Blocked('Unknown approved unit selection')
+                unit_paths = spec['paths']
+                validate_files(self.source, {p: '' for p in unit_paths}, self.c['unit_files'])
+                spec = dict(spec, id='unit')  # Never overwrite an example/obligation receipt.
+            if (self.s.get('needs_unit_observation') and
+                    selector != self.s.get('required_unit_selector', 'unit')):
+                raise Blocked('Rerun the SAME unit selection that authorized this repair')
         else:
             collection = self.c['examples' if kind == 'example' else 'obligations']
             spec = next((s for s in collection if s['id'] == identity), None)
@@ -256,7 +313,8 @@ class Job:
         if digest(manifest(self.source)) != self.s['tree']:
             raise Blocked('Check changed source')
         count = selected_count(output, spec.get('kind', 'unittest'))
-        development = (unit_development(output, code, count, spec.get('kind', 'unittest'), self.source, self.c)
+        development = (unit_development(output, code, count, spec.get('kind', 'unittest'),
+                                        self.source, self.c, unit_paths)
                        if kind == 'unit' and self.s['phase'] == 'builder' else None)
         if (kind == 'example' and count != 1) or (count < 1 and not development):
             self.s.update(status='blocked', active_attempt=None,
@@ -272,15 +330,19 @@ class Job:
                    'failure_signatures': [' | '.join(parts) for parts in re.findall(
                        r'  File "([^"]+)", line (\d+), in [^\n]+\n\s+([^\n]+)\nAssertionError: ([^\n]+)', output)],
                    'behavioral_red': behavioral_assertion(code, output, spec.get('kind', 'unittest')),
-                   'unit_development': development}
+                   'unit_development': development, 'unit_selector': selector, 'unit_paths': unit_paths}
         save(op.with_suffix('.json'), receipt)
         self.s['receipts'].append(str(op.with_suffix('.json').relative_to(self.path)))
         self.s['observed'][spec['id']] = receipt
         if kind == 'unit':
             self.s['needs_unit_observation'] = False
-            self.s['needs_outer_observation'] = code == 0 and self.s.get('implementation_pending', False)
+            self.s.pop('required_unit_selector', None)
+            self.s['needs_outer_observation'] = code == 0 and (
+                self.s.get('implementation_pending', False) or
+                selector != 'unit' and bool(self.s.get('active_example')))
         elif kind == 'example' and identity == self.s.get('active_example'):
-            self.s.update(needs_outer_observation=False, implementation_pending=False)
+            self.s.update(needs_outer_observation=False, implementation_pending=False,
+                          support_observation_pending=False)
         self.persist()
         guidance = ('If unit red: change ONLY the current broken responsibility exposed by this test. '
                     'Use a narrow replacement of that method, not a whole-file implementation of other methods. '
@@ -306,17 +368,21 @@ class Job:
             raise Blocked('Rerun the unit command after the repair before another edit')
         if self.s.get('needs_outer_observation') and not refactor:
             raise Blocked('Unit green: rerun the SAME whole acceptance example before further implementation/tests')
+        support = name in self.c.get('acceptance_support_files', [])
+        if self.s.get('support_observation_pending') and not support:
+            raise Blocked('After driver/support edits observe the selected acceptance before other changes')
         if name not in self.c['unit_files']:
             unit = self.s['observed'].get('unit', {})
             development = unit.get('unit_development') or {}
-            authorized = (unit.get('exit') == 0 if refactor else
+            authorized = (unit.get('exit') == 0 and unit.get('unit_selector', 'unit') == 'unit' if refactor else
                           unit.get('exit') in (1, 2) and name in development.get('repair_paths', []))
             if (unit.get('kind') != 'unit' or unit.get('candidate') != self.s['candidate'] or
                     unit.get('contract') != self.s['contract'] or not authorized):
                 raise Blocked('Before implementation observe an ACTUAL current-snapshot unit development failure '
                               'linked to this approved path. Compiler/runtime failures are development feedback, '
                               'not acceptance red. For behavior-preserving refactor only, set refactor=true '
-                              'after observing unit green. Stay in the same builder session.')
+                              'after observing BROAD unit green; focused green grants no unrelated refactor authority. '
+                              'Stay in the same builder session.')
         path = self.source / name
         contents = path.read_text() if path.exists() else ''
         if (old and contents.count(old) != 1) or (not old and contents):
@@ -324,13 +390,21 @@ class Job:
         updated = contents.replace(old, new, 1) if old else new
         op = self.reserve('edit')
         self.s['pending'] = {'path': name, 'text': updated, 'implementation': name not in self.c['unit_files'],
-                            'requires_unit': name not in self.c['unit_files'] and not refactor}
+                            'requires_unit': name not in self.c['unit_files'] and not refactor,
+                            'unit_selector': self.s['observed'].get('unit', {}).get('unit_selector', 'unit'),
+                            'support': support}
         self.persist()
         self.apply_pending()
         save(op.with_suffix('.json'), {'path': name, 'candidate': self.s['candidate'],
                                       'contract': self.s['contract'], 'refactor': refactor,
                                       'unit_evidence': self.s['observed'].get('unit')})
-        return {'candidate': self.s['candidate']}
+        return {'candidate': self.s['candidate'], 'development_guidance': (
+            'Driver/support changed: finish only the coherent driver correction, then observe the SAME '
+            'selected acceptance directly. Unit green does not validate a driver outside that unit command. '
+            'Do not run the broad unit gate as a substitute.' if support else
+            'Use a declared focused unit selection if available, otherwise the broad unit fallback. After product repair rerun '
+            'the SAME unit selection; after green return to the SAME active acceptance. '
+            'Broad regression obligations and independent final proof remain mandatory.')}
 
     def apply_pending(self):
         p = self.s['pending']
@@ -344,6 +418,9 @@ class Job:
             self.s['implementation_pending'] = True
         if p.get('requires_unit'):
             self.s['needs_unit_observation'] = True
+            self.s['required_unit_selector'] = p.get('unit_selector', 'unit')
+        if p.get('support'):
+            self.s['support_observation_pending'] = True
         self.checkpoint()
         self.s['pending'] = None
         self.persist()
@@ -370,6 +447,8 @@ class Job:
         if name == 'edit':
             return self.edit(args['path'], args['old'], args['new'], args.get('refactor', False))
         if name == 'observe':
+            if set(args) - {'kind', 'id', 'prediction'}:
+                raise Blocked('Unknown observation arguments; select a declared ID, never supply commands or paths')
             if not args.get('prediction'):
                 raise Blocked('Record prediction/diagnosis before observation')
             return self.observe(args['kind'], args.get('id'), args['prediction'])
@@ -392,20 +471,28 @@ class Job:
         save(self.path / 'mcp.json', config)
         builder = ('Work through ALL approved examples and technical obligations in this ONE session. '
                    'Use inspect/edit/observe tools. Keep one acceptance example active. Predict and run it FIRST; '
-                   'after EACH actual obstacle use unit red/green and refactor as useful, then rerun the SAME '
+                   'after EACH product obstacle use focused unit red/green and refactor as useful, then rerun the SAME '
                    'whole example. Do not implement later obstacles speculatively. Do not ask a planner or '
                    'finish after each red; continue until coherent green. Address all review findings in the '
                    'same session, including characterization of already-working behavior. No manufactured red. '
                    'Compiler/missing-interface/runtime unit failures are development feedback, not acceptance red. '
                    'Repair only the current observed obstacle in the receipt-linked approved paths, then rerun '
                    'unit immediately. Missing clauses may need real implementation, not artificial nil stubs. '
+                   'When focused_units are declared, choose the relevant ID with observe(kind="unit", id=...). '
+                   'The default id="unit" is the broad fallback, not a required prelude to every check. '
+                   'For acceptance_support_files edits, finish the coherent driver correction and rerun the '
+                   'SAME selected acceptance directly; an unrelated unit suite does not load that driver. '
+                   'Broad regression obligations still run at coherent completion before independent review. '
                    'Only approved editable paths can change. Final reply is a brief factual summary, NOT acceptance.')
         reviewer = ('Independently review the whole candidate against the complete approved contract and '
                     'actual evidence. Inspect relevant source/tests and @evidence with the read-only inspect tool. '
                     'Verify snapshot-bound trusted unit development failure before implementation; compiler or '
                     'runtime failures need not be assertion mismatches and do not prove acceptance red. '
                     'Check each edit is the smallest relevant repair for the current observed obstacle, '
-                    'not speculative bulk implementation. Verify unit green and the same acceptance rerun '
+                    'not speculative bulk implementation. Verify the same relevant unit selector was rerun '
+                    'after each product repair; driver-only corrections should return directly to their '
+                    'selected acceptance. Focused greens never replace whole-contract regression obligations. '
+                    'Verify unit green and the same acceptance rerun '
                     'after each actual obstacle; reject speculative bulk implementation. '
                     'Find concrete behavioral defects and missing proof, not taste changes. Return ONLY JSON '
                     '{"verdict":"accept"|"repair"|"decision", "candidate": "exact input SHA", '
@@ -430,6 +517,9 @@ class Job:
                '(compiler, missing-interface, runtime or assertion), implement the relevant in-scope repair minimally, '
                'observe unit green, then rerun that SAME whole acceptance example BEFORE implementing '
                'or writing tests for any later obstacle. Do not bulk-test or bulk-implement the contract. '
+               'Choose declared focused unit IDs for product obstacles; no caller-supplied command/path. '
+               'Acceptance-driver/support corrections return directly to the SAME selected acceptance, '
+               'not to a broad unit gate that does not load the driver. '
                'For already-green baselines/characterization, never break working code to invent red.', '-p']
         if role == 'reviewer':
             schema = {'type': 'object', 'properties': {
@@ -571,7 +661,8 @@ def broker(path, attempt):
         'edit': {'path': {'type': 'string'}, 'old': {'type': 'string'}, 'new': {'type': 'string'},
                  'refactor': {'type': 'boolean'}},
         'observe': {'kind': {'enum': ['unit', 'example', 'obligation']},
-                    'id': {'type': 'string'}, 'prediction': {'type': 'string'}}}
+                    'id': {'type': 'string', 'description': 'For unit: declared focused_units ID, or unit for broad fallback. Otherwise exact approved example/obligation ID.'},
+                    'prediction': {'type': 'string'}}}
     with (job.path / 'broker.lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         for line in sys.stdin:
@@ -586,7 +677,7 @@ def broker(path, attempt):
                 result = {'tools': [{'name': name, 'description': {
                     'inspect': 'Read candidate source/contract/status; empty path lists files.',
                     'edit': 'Exact targeted text edit to an approved path; checkpoints automatically.',
-                    'observe': 'Controller runs approved unit/example/obligation in sandbox and returns actual output.'}[name],
+                    'observe': 'Controller runs an approved focused unit ID (or unit for broad fallback), exact example or obligation; never caller commands. Driver edits return directly to the same acceptance.'}[name],
                     'inputSchema': {'type': 'object', 'properties': schema,
                                     'required': [] if name == 'inspect' else [k for k in schema if k != 'refactor']}}
                                     for name, schema in schemas.items()]}
@@ -617,6 +708,7 @@ def create(path, source, contract, approved):
         raise Blocked('Immutable proof cannot be editable')
     if not set(c['unit_files']) <= set(c['editable']):
         raise Blocked('Unit edit capability not approved')
+    validate_unit_selections(c)
     if not re.fullmatch(r'[0-9a-f]{40}', c['source_sha']):
         raise Blocked('Full source SHA required')
     if len({s['id'] for s in c['examples'] + c['obligations']}) != len(c['examples'] + c['obligations']):

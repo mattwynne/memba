@@ -123,6 +123,62 @@ experimental executor, framework-output recognition is not proof against a
 malicious test runner; frozen commands/scopes and independent review remain
 necessary boundaries.
 
+### Focused inner checks and acceptance-driver routing
+
+The third 068 attempt's broad unit command did **not load its acceptance driver**.
+Seven driver-only edit/check cycles spent 627.63 seconds running 8,253 unrelated
+unit-test executions. The old edit guard did not force these checks: the model
+chose them, generic guidance failed to distinguish drivers, and unit observation
+ignored its `id` argument so no focused command was available.
+
+New contracts can declare optional fixed selections and explicit support roles:
+
+```json
+{
+  "focused_units": [{
+    "id": "person-dispatch",
+    "paths": ["web/test/memba/membership/person_rename_dispatch_test.exs"],
+    "kind": "domain",
+    "script": "cd web; mix test test/memba/membership/person_rename_dispatch_test.exs"
+  }],
+  "acceptance_support_files": [
+    "web/test/features/step_definitions/member_profile_steps.exs"
+  ]
+}
+```
+
+The operator approves the **exact command and its correspondence to the declared
+paths** before admission. For the small non-runtime canary, use a fixed `command`
+argv instead of `script`. Paths must already be `unit_files`; support paths are a
+separate subset, not new edit authority. Selection IDs must be unique and cannot
+collide with proof IDs or reserved `unit`. Malformed/ambiguous declarations fail
+admission. Absent these optional declarations, existing contracts retain their
+broad fallback and unit/support roles; no stopped contract is migrated.
+
+- `observe(kind="unit", id="person-dispatch", prediction=...)` chooses only that
+  declared command. `id="unit"` chooses the existing broad gate.
+  Unknown IDs and caller-supplied commands/paths are rejected, not interpolated.
+- Focused checks are builder-only. Receipts include `unit_selector`/`unit_paths`,
+  remain candidate/contract-bound, and never occupy an example/obligation ID.
+  Executed failures must identify a selected test; product compilation failures
+  can precede test loading but remain zero-execution development feedback. Existing
+  diagnostic recognition remains conservative; unsupported output grants no repair.
+- A product repair durably remembers the authorizing unit selector. It must rerun
+  **that same selector**, not a cheaper unrelated check. After focused green,
+  return to the same active acceptance before further implementation/tests.
+  Focused green does not authorize unrelated behavior-preserving refactors; the
+  existing broad-green refactor path remains available.
+- Declared acceptance-driver/support edits return directly to the same selected
+  acceptance. Multiple coherent edits to those support paths are allowed first;
+  other edits or unrelated unit/obligation observations must wait for that outer
+  observation. This cannot bypass an already-pending product unit check. If no
+  outer is active yet, select and observe an approved example first.
+- **Every original example and broad regression obligation is still rerun on the
+  final candidate at coherent completion, before independent review.** Focused
+  green never substitutes for, caches away or weakens these gates. The final
+  checking/review loop and the parent-owned exact-state full product gate remain
+  unchanged.
+
 The controller polls durable job status during a model visit. If the broker makes
 the job terminal, it promptly terminates/reaps only that visit's process group;
 systemd remains the outer containment. It does not pay for a fenced tool loop
