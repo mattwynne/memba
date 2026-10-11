@@ -2224,87 +2224,6 @@ async function assertConversationShowsReply(
   return world;
 }
 
-async function assertAdminConversationShowsReply(world, subject, senderName, body) {
-  const rootMessage = world.messages[subject] || await recordAcceptedInboundRootMessage(world, subject);
-  const sender = world.people[senderName];
-  assert.ok(sender, `Expected ${senderName} to have been created`);
-
-  const result = serverCommands.runCommand(
-    `
-message_id = Map.fetch!(payload, "messageId")
-club_id = Map.fetch!(payload, "clubId")
-
-messages =
-case Memba.Membership.get_group_by_email_slug(club_id, "admin") do
-  nil -> []
-  group -> Memba.Messaging.list_conversation_messages_for_group(message_id, group.group_id)
-end
-
-Enum.map(messages, &%{
-  body: &1.body,
-  messageId: &1.message_id,
-  replyToMessageId: &1.reply_to_message_id,
-  senderId: &1.sender_id
-})
-`,
-    { clubId: rootMessage.clubId, messageId: rootMessage.messageId }
-  );
-
-  assertFinalBrowserState(`Admin conversation reply from ${senderName}`, () =>
-    assert.ok(
-      result.find(
-        (message) =>
-          message.senderId === sender.personId &&
-          message.replyToMessageId &&
-          message.body === body
-      ),
-      `Expected Admin conversation ${JSON.stringify(subject)} to include ${senderName}'s ` +
-        `reply ${JSON.stringify(body)}; saw ${JSON.stringify(result)}`
-    )
-  );
-
-  return world;
-}
-
-async function assertConversationDoesNotShowReply(world, subject, senderName, body) {
-  ensureState(world);
-
-  const message = world.messages[subject];
-  assert.ok(message, `Expected message ${JSON.stringify(subject)} before checking its conversation`);
-
-  const sender = world.people[senderName];
-  assert.ok(sender, `Expected ${senderName} to have been created`);
-
-  const result = serverCommands.runCommand(
-    `
-conversation_id = Map.fetch!(payload, "conversationId")
-sender_id = Map.fetch!(payload, "senderId")
-body = Map.fetch!(payload, "body")
-
-found? =
-  conversation_id
-  |> Memba.Messaging.list_conversation_messages()
-  |> Enum.any?(fn message ->
-    message.sender_id == sender_id and message.body == body and message.reply_to_message_id != nil
-  end)
-
-%{found: found?}
-`,
-    {
-      body,
-      conversationId: message.messageId,
-      senderId: sender.personId
-    }
-  );
-
-  assertFinalBrowserState(
-    `${senderName}'s reply ${JSON.stringify(body)} should not appear in ${JSON.stringify(subject)}`,
-    () => assert.equal(result.found, false)
-  );
-
-  return world;
-}
-
 async function assertConversationReplyOrder(
   world,
   subject,
@@ -4100,7 +4019,6 @@ module.exports = {
   appUrl,
   clubSiteUrl,
   clubSlugFor,
-  assertAdminConversationShowsReply,
   assertAdminMessageDeliveredToMembers,
   assertAdminMessageNotDeliveredToMember,
   assertEveryAddressedMemberEmailDeliveryStatus,
@@ -4121,7 +4039,6 @@ module.exports = {
   assertConversationEntriesWithSenderTimestampAndBody,
   assertConversationDuplicateFromLineAbsent,
   assertConversationEntryKindBadgesAbsent,
-  assertConversationDoesNotShowReply,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailFrom,
   assertInboundRejectionEmailSupportGuidance,
