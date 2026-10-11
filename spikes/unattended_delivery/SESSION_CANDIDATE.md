@@ -127,7 +127,9 @@ network inside candidate execution. Every observation gets:
 - fresh PID/network namespaces and a private `/tmp`;
 - a fresh PostgreSQL UTF-8 cluster owned by that invocation;
 - read-only source, test drivers, features and dependencies;
-- writable private `_build` and generated-static directories; Node checks additionally
+- writable private `_build` and generated-static directories; warm app build `priv`
+  links are materialized into a private build copy (source `priv` remains RO), so
+  build metadata tests never write through into source; Node checks additionally
   get an empty private `node_modules` fixture root with installed dependency children RO;
 - synthetic `/etc` identity/hosts data and a private Mix cache/home;
 - no host `/home`, `/run`, daemon sockets, secrets or network access.

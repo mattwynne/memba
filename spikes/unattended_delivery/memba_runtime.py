@@ -116,6 +116,12 @@ def argv(root, work, home, script, node_checks=False):
     for name in ['web/_build', 'packages/live_query/_build', 'web/priv/static']:
         (work / name).mkdir(parents=True, exist_ok=True)
         args += ['--bind', str(work / name), '/work/' + name]
+    # Mix's warm build priv link points back into RO source. Build artifacts
+    # (e.g. git_sha) must write the disposable build copy, never source priv.
+    build_priv = work / 'web/_build/test/lib/memba/priv'
+    if build_priv.is_symlink():
+        build_priv.unlink()
+        shutil.copytree(work / 'web/priv', build_priv, symlinks=True)
     if node_checks:
         # Only the private EMPTY fixture root is writable. Every installed
         # dependency child remains RO; no host/cache dependency write authority.
