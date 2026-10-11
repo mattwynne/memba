@@ -474,6 +474,18 @@ if ! command -v argc >/dev/null 2>&1; then
 fi
 
 start_postgres() {
+  # The contained Fabro runtime already owns a real namespace-local cluster.
+  # Verify that exact cluster; never invoke host/devenv service orchestration.
+  if [ "${MEMBA_PRIVATE_RUNTIME:-0}" = "1" ]; then
+    if [ "${DEVENV_ROOT:-}" != "/work" ] || [ "${PGHOST:-}" != "/tmp/pg" ] \
+      || [ "${PGDATA:-}" != "/tmp/pg/data" ] || [ "${PGPORT:-}" != "5432" ] \
+      || [ "${PGUSER:-}" != "runner" ] || [ ! -f /tmp/pg/data/postmaster.pid ]; then
+      echo "Invalid private Postgres ownership contract." >&2
+      return 1
+    fi
+    pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER"
+    return $?
+  fi
   local phase
   phase="$(process_phase postgres)"
 

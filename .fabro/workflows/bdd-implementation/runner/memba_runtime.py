@@ -59,6 +59,7 @@ def prepare(root, repository, sha, discovery, bwrap):
                HEX_HOME='/home/runner/.hex', MIX_ENV='test', LANG='C.UTF-8', LC_ALL='C.UTF-8',
                ELIXIR_ERL_OPTIONS='+S 4:4 +fnu', PGHOST='/tmp/pg', PGPORT='5432', PGUSER='runner',
                MEMBA_POSTGRES_PORT='5432', MEMBA_POSTGRES_OWNER='dev', MEMBA_DEVENV_SHELL='1',
+               DEVENV_ROOT='/work', PGDATA='/tmp/pg/data', MEMBA_PRIVATE_RUNTIME='1', MEMBA_DEV_SETUP_DONE='1',
                PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD='1', ACCEPTANCE_LOG_PROGRESS='true')
     etc = root / 'etc'
     etc.mkdir()
