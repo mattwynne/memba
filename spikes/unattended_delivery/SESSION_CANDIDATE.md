@@ -5,9 +5,63 @@ per-red fresh-model protocol in [REAL_CANDIDATE.md](REAL_CANDIDATE.md), without
 removing its code, commits or failed jobs. [SESSION_REHEARSAL.md](SESSION_REHEARSAL.md)
 records every new trial, including failures and the two completing rehearsals.
 
+## OpenAI Sol integration (explicit new-contract choice)
+
+`model_backend: "pi-sol"` selects the trusted `sol_adapter.mjs` Pi SDK integration.
+Both the builder and ordinary independent reviewer use **exactly**
+`openai-codex/gpt-6.1-sol`, via `openai-codex-responses` at the existing OAuth
+backend. No catalog, default-model or CLI fallback is permitted. Historical
+contracts/jobs are not migrated or reopened; the legacy CLI code below remains
+for preserved evidence and process-double regression tests, not authorization to
+call Claude/Gemini. Ensemble review is a separate explicitly authorized activity.
+
+The `sol_provider` declaration binds SDK package/dependency tree digest, absolute
+Node binary/hash, exact model metadata digest, provider/API/backend URL, thinking
+level, finite `max_turns` (<=160 requests/visit) and `visit_token_limit` (<=2M
+response-accounted aggregate tokens/visit). SDK/Node identities are verified
+before admission and each visit; catalog identity is checked before requests.
+The native SSE `response.model` is captured and checked, not inferred from the
+model catalog or harness's requested-model field. Changed/missing identity
+fails closed and raw evidence is retained. Existing source/contract/runtime,
+path, same-selector/same-example, final proof and independent review gates remain.
+
+Pi is created with an explicit resource loader with **no** extension, skill,
+settings, context-file, theme or prompt discovery, and no built-in tools. Only
+custom `inspect/edit/observe` definitions bridge to the frozen Python broker;
+reviewers receive only `inspect`, and the broker independently rejects writes or
+observations in review phase. Outgoing requests reject native shell/filesystem,
+web/search or extra tool definitions. Tools execute sequentially so checkpoint
+and observation transitions cannot race. This is capability containment, not a
+claim that the trusted authenticated SDK process itself is an OS sandbox: it
+needs provider network/auth access. Candidate checks still use the unchanged
+network-isolated read-only runtime, and the owned Node/broker descendants remain
+under the existing process group/systemd cgroup limits.
+
+The builder's persisted Pi session ID/file is retained through resumes and
+bound to the contract/provider/model; review starts with an empty fresh session.
+No replacement builder, implicit context migration, auto-compaction or model
+switch is allowed. Provider and agent retries are disabled, transport is SSE
+(no websocket retry/fallback), and timeout/cancellation preserves events,
+sessions, token usage and owned-process reaping. A dead broker rejects both
+pending and future calls rather than leaving a request waiting.
+
+**No supported hard CLI dollar flag exists on this integration.** `visit_usd`
+must be **null**, not a claimed $10 enforcement. Visits/operations/time/resources
+and request/token-observation bounds are enforced instead; a token threshold
+stops the *next* request and is not a hard cap on an in-flight response. Dollar
+charges remain null unless actually provider-reported. Pi's rate-derived costs
+are separately labelled estimates; subscription usage is not inferred to be
+free or equal to those estimates. Partial/error usage stays incomplete. The
+`.events.jsonl`, `.usage.json`, `.visit.json` and Pi session files retain native
+identity, request/tools, tokens, estimates and final result separately. `provider_usage`
+is added to state without converting estimates into the reported-dollar ledger.
+
+An OpenAI contract and new admission must be reviewed/approved explicitly; an
+old source draft's cancelled release is not authority to launch this path.
+
 ## The simplification
 
-One Claude builder session owns its development thinking. It directly uses three
+One continuous builder session owns its development thinking. It directly uses three
 capabilities through a small trusted MCP broker:
 
 - `inspect`: read candidate files, contract, observations and `@evidence`.
@@ -26,7 +80,7 @@ characterization proof must not manufacture a red.
 After coherent green, the controller independently reruns **every** contract
 example and technical obligation on the same candidate, then starts one separate
 read-only reviewer session. Repair goes back to the same builder session UUID
-(`--resume`), not a new planner or task packet. An interrupted review resumes
+(persisted Pi session, or historical CLI `--resume`), not a new planner or task packet. An interrupted review resumes
 review, not implementation. `candidate-accepted-non-production` requires a
 source/contract-bound structured reviewer acceptance with no unresolved findings.
 
@@ -37,7 +91,8 @@ persists repair authorization and resumes the same builder; ordinary unit-red
 and approved-path guards still apply. This is opt-in, not the default development
 loop, and does not prescribe a reviewer verdict.
 
-MCP is a narrow tool boundary, not another agent. Native Claude tools are disabled
+The trusted broker is a narrow tool boundary, not another agent. Historically,
+native Claude tools were disabled
 with `--tools ''`; only the explicit MCP server is enabled, with restricted mode,
 no other MCP configs, no hooks/skills and no project/user settings. There is no
 host shell or credential-reading tool. Reviewer calls to edit/observe are denied
