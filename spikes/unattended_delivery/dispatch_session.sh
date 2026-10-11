@@ -15,7 +15,7 @@ import json,sys
 from pathlib import Path
 c=json.loads((Path(sys.argv[1])/'contract.json').read_text())
 m,t=c.get('memory_mb',1024),c.get('tasks_max',128)
-assert isinstance(m,int) and 128 <= m <= 4096
+assert isinstance(m,int) and 128 <= m <= 6144
 assert isinstance(t,int) and 32 <= t <= 512
 f=c.get('file_size_mb',16)
 assert isinstance(f,int) and 16 <= f <= 128

@@ -1,4 +1,6 @@
 import json
+import os
+import time
 from pathlib import Path
 import subprocess
 import sys
@@ -139,6 +141,29 @@ class SessionCandidateTest(unittest.TestCase):
         with patch('session_candidate.subprocess.run', side_effect=execute):
             receipt = self.job.observe('unit', None, 'setup must not authorize implementation')['receipt']
         self.assertFalse(receipt['behavioral_red'])
+
+    def test_dispatch_accepts_authorized_six_gib_limit(self):
+        stub = self.root / 'bin'
+        stub.mkdir()
+        sudo = stub / 'sudo'
+        sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        sudo.chmod(0o755)
+        self.job.c['memory_mb'] = 6144
+        (self.job.path / 'contract.json').write_text(json.dumps(self.job.c))
+        self.job.s['deadline'] = time.time() + 60
+        self.job.persist()
+        result = subprocess.run(['bash', str(Path(__file__).with_name('dispatch_session.sh')),
+                                 str(self.job.path)], capture_output=True, text=True,
+                                env={**os.environ, 'PATH': str(stub) + ':' + os.environ['PATH']})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('MemoryMax=6144M', result.stdout)
+        self.job.c['memory_mb'] = 6145
+        (self.job.path / 'contract.json').write_text(json.dumps(self.job.c))
+        result = subprocess.run(['bash', str(Path(__file__).with_name('dispatch_session.sh')),
+                                 str(self.job.path)], capture_output=True, text=True,
+                                env={**os.environ, 'PATH': str(stub) + ':' + os.environ['PATH']})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('systemd-run', result.stdout)
 
     def test_model_visits_remain_spent_after_reload(self):
         self.job.s['visits'] = self.job.c['max_visits']
