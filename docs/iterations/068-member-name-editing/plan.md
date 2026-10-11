@@ -1,7 +1,7 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: draft — agreed scope/model direction; ADR record and formulated language final checkpoint pending
+Status: ready
 
 ## Goal
 
@@ -150,8 +150,10 @@ outcomes, based on the checked-in Account settings design and root `styles.css` 
 static design artifact, not application UI. Matt approved the amber card/icon treatment and
 Save anyway / Cancel my changes wording, conditional on simple implementation. The
 [multi-field exploration](multi-field-conflict-mockup.html) illustrates reuse only; phone numbers
-and app-wide form changes remain out of scope. Required design review remains pending; no live
-DesignSync publication or browser render verification is claimed. See
+and app-wide form changes remain out of scope. Bounded specialist and final two-family reviews
+are complete. Both mock-ups were render-verified in Chromium at 1320px and 390px with no horizontal
+overflow; this is static-layout evidence, not production interaction proof. No live DesignSync
+publication is claimed. See
 [conflict-design-handoff.md](conflict-design-handoff.md) for decision history.
 
 After a successful matching refresh, the LiveView reconciles only its name form: untouched input
@@ -179,8 +181,9 @@ None known in behavioural scope. Matt approved generic conflict copy/actions, lo
  treatment, reusable default and bounded simplicity. In the parent conversation he explicitly chose
 current normalized value comparison rather than revisions: Jones → Green → Jones does not itself
 cause a conflict. A target equal to the current normalized name succeeds without PersonRenamed.
-Do not re-open this edge case or add revision tracking. Final formulated-language/model/ADR
-record checkpoints remain publication gates, not unmade policy decisions.
+Do not re-open this edge case or add revision tracking. Final whole-plan review is complete and
+its scope-preserving corrections are incorporated. Matt explicitly judged a new ADR unnecessary;
+no ADR acceptance checkpoint remains.
 
 ## Domain Vocabulary
 
@@ -239,7 +242,7 @@ not new business concepts.
   draft saveable.
 - **Preparation/dispatch:** extend focused Person command preparation and existing CommandDispatch;
   keep orchestration at the web boundary, consistent with current repository structure.
-- **Shared form responsibility:** propose a small reusable conflict-state coordinator and warning
+- **Shared form responsibility:** use a small reusable conflict-state coordinator and warning
   component used by Profile now and defaulted for future existing-record edit forms. Keep app/UI
   conflict state distinct from field-specific aggregate concurrency enforcement. Generic UI reuse
   must not imply a universal last-write-wins/force-save command or trust client-supplied baselines.
@@ -258,16 +261,13 @@ Existing accepted ADRs remain authoritative:
 - [0026: separate browser journeys](../../adr/0026-keep-browser-journeys-distinct-from-domain-examples.md).
 - [0027: live queries](../../adr/0027-use-live-projection-queries-for-liveview-reads.md).
 
-ADR candidate: Matt has explicitly chosen the generic conflict interaction as the default for
-existing-record edit forms across the app. Record this durable default and the shared UI/state
-responsibility boundary after modelling/review; field-specific concurrency enforcement remains in
-its owning domain. No app-wide form migration or general persistence framework is implied.
-The Person-local expected-value check separately extends the existing aggregate boundary.
-Draft record: [form-conflict-adr-proposal.md](form-conflict-adr-proposal.md). It records Matt's
-approved durable default and stays proposed until record review and explicit acceptance; no
-accepted ADR or ADR index entry is fabricated by the facilitator.
+**No new ADR required.** Matt explicitly decided “No that does not merit an ADR.” This removes the
+record/acceptance requirement, not the agreed behaviour or review corrections. The shared simple
+form-conflict default, web/domain responsibility boundaries, trusted actor/self-only preparation,
+conditional saves and synchronized readback are implementation guidance in this plan and
+[design notes](conflict-design-handoff.md). No numbered ADR or ADR-index change is created.
 
-## Implementation Plan — conditional on planning approval
+## Implementation Plan
 
 1. Add focused Person rename preparation, command routing, aggregate validation/concurrency handling,
    event application and domain tests, preserving existing creation and email behaviour.
@@ -330,11 +330,10 @@ flat scalar edit forms without extending 068 to app-wide form migration.
   whole-plan review is complete with two independent completed families (GPT-6 Astra and Gemini
   3.1 Pro Preview); Claude did not finish and no verdict was counted. Preserve actual panel,
   disagreement and limits in [final-ensemble-review.md](final-ensemble-review.md).
-- Both scope-preserving final findings are incorporated above and in the ADR/proof matrix:
+- Both scope-preserving final findings are incorporated in the model and proof matrix:
   explicit trusted actor/self-only preparation responsibility and synchronized readback, including
   delayed-projector conflict/no-op/cancel cases. No second ensemble round or new framework.
-- Only explicit acceptance of the reviewed written ADR record remains before ready publication.
-  [form-conflict-adr-proposal.md](form-conflict-adr-proposal.md) is still proposed, not accepted.
+- None known. Matt explicitly judged an ADR unnecessary; no record acceptance remains.
 
 ## New Capability
 
@@ -369,10 +368,13 @@ non-durable: this iteration does not promise recovery of a lost broadcast to an 
 
 ## Planning Completion and Launch Constraints
 
-This remains **draft** until the proposed examples/UX/model are approved, required review is resolved,
-features are updated and checked, the index is ready, and the exact planning commit is published.
-Docs-only intermediate preservation requires `git diff --check`, not `dev check`. Acceptance edits
-require `dev check`; no application/test plumbing may be changed during planning to make them pass.
+Scope, examples, local designs and current-value/no-op direction are agreed. Required bounded
+review and parent final two-family review are complete; corrections are incorporated. Matt judged
+an ADR unnecessary. The ready plan, index, features and design/review evidence are published together.
+`dev check` passed on exact clean committed state `12d98f759b24ed6334e14cb71027b9303a8e6730`;
+subsequent changes only clarify planning prose/status, so `git diff --check` applies and no new full
+gate is required. Do not attribute that earlier full gate to a later untested commit. Implementation
+must run its own exact-state `dev check`; pending `@todo` features are not proof of delivered behaviour.
 
 The intended consumer is the new experimental workflow. Do not invoke old iteration-delivery,
 `fabro deliver`, or validation/launch automatically. Parent @thread:thr_ra2ff7hjn2 owns eventual

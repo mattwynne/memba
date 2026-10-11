@@ -1,90 +1,37 @@
-# 068 acceptance formulation for Matt's review
+# 068 acceptance formulation record
 
-Status: proposed wording for the approved example subjects; not yet executable feature changes.
+Status: complete. Actual feature files are authoritative; this note records coverage allocation.
 
-Existing `member_profile.feature` photo scenarios remain unchanged. These three domain examples
-replace the four old name examples. The fourth approved subject (untouched-form refresh) is covered
-by the one browser journey below and focused LiveView tests: a domain adapter must not simulate tabs.
+Matt approved four example subjects and one Profile editing journey, extending an existing journey
+if present. Inspection found no existing Profile editing journey. Preserve the iteration-053
+Account settings entry example and all iteration-069 photo scenarios unchanged.
 
-## Proposed domain examples — member_profile.feature
+## Actual files
 
-```gherkin
-Rule: A Person's current name follows them across clubs and past contributions
+- [`member_profile.feature`](../../../acceptance-tests/features/member_profile.feature): three
+  `@iteration-068 @todo` domain examples: cross-club/current historical names; whitespace-name
+  rejection; stale edit rejection followed by explicit confirmation of the newer value.
+- [`journeys/member_profile.feature`](../../../acceptance-tests/features/journeys/member_profile.feature):
+  one `@journey @iteration-068 @todo` browser journey: Profile Save, current menu/name/initials and
+  untouched second-form refresh. This UI subject is not simulated as a domain form entity.
 
-    @iteration-068 @todo
-    Scenario: Alice's corrected name appears across clubs and on earlier contributions
-      Given Alice is a member of Kootenay Mountaineering Club
-      And Alice is a member of Rockies Cycling Co-op
-      And Alice is known as "Alice Smith"
-      And Alice started the conversation "Trip planning night" in Kootenay Mountaineering Club
-      And Alice replied to the conversation "Summer rides" in Rockies Cycling Co-op
-      When Alice changes their name to "Alice Jones"
-      Then Alice should be known as "Alice Jones" in Kootenay Mountaineering Club
-      And Alice should be known as "Alice Jones" in Rockies Cycling Co-op
-      And Alice's earlier conversation "Trip planning night" should show "Alice Jones" as its author
-      And Alice's earlier reply to "Summer rides" should show "Alice Jones" as its author
+The first domain example uses club-qualified conversation setup to avoid ambiguous fixture state.
+The journey changes Alice Smith to Robin Jones so changed initials are observable while fixture
+Person identity remains stable. No browser duplication of every validation/page/race permutation.
 
-Rule: A Person must have a valid name
+## Focused proof, not more stakeholder scenarios
 
-    @iteration-068 @todo
-    Scenario: Alice cannot replace their name with whitespace
-      Given Alice is known as "Alice Smith"
-      When Alice tries to change their name to "   "
-      Then Alice should be told "Enter the name your clubs should see."
-      And Alice should be known as "Alice Smith"
+Validation/Unicode boundaries, normalization, authorization, identical-target eventless success,
+value-comparison semantics, dirty input preservation, explicit Save anyway, repeat conflicts and
+Cancel my changes require focused tests. A focused browser interaction test covers actual DOM event
+ordering, confirmation/cancel, announcements and focus beyond the selected journey. Delayed-projector
+proof covers authoritative conflict values and synchronized no-op/cancel readback.
 
-Rule: A conflicting stale change must not replace a newer name
+See [plan proof matrix](plan.md) for the authoritative obligations and exclusions. Pending `@todo`
+examples are intentionally excluded from their runners until implementation, not delivery evidence.
+The acceptance edit gate passed on exact state `12d98f759b24ed6334e14cb71027b9303a8e6730`.
+Subsequent changes are planning prose only, not a new full-gate claim.
 
-    @iteration-068 @todo
-    Scenario: Alice's older edit cannot undo a newer correction
-      Given Alice began changing their name when it was "Alice Smith"
-      And Alice has since changed their name to "Alice Jones"
-      When Alice submits the older change to "Alice Brown"
-      Then the change should be rejected because their name changed elsewhere
-      And Alice should be known as "Alice Jones"
-```
-
-The club-qualified setup must not depend on ambiguous last-selected-club state. Step support is
-implementation work; it is not changed during planning.
-
-## Proposed browser journey — journeys/member_profile.feature
-
-```gherkin
-@journey @iteration-068
-Feature: Correcting a name from Account settings
-
-  Rule: A member can correct their name without leaving untouched forms behind
-
-    @todo
-    Scenario: Alice corrects their name while another Profile form is open
-      Given Alice is signed in as a member of Kootenay Mountaineering Club
-      And Alice is known as "Alice Smith"
-      And Alice has an untouched name edit open in another Account settings tab
-      When Alice opens Account settings from their member menu
-      And Alice edits their Profile name to "Robin Jones" and saves it
-      Then Alice should see "Robin Jones" in their Profile and member menu
-      And Alice's member menu avatar should show the initials "RJ"
-      And the untouched name form in the other tab should show "Robin Jones" without reloading
-```
-
-A different first name intentionally makes initials change observable. Alice remains the fixture's
-Person identity after renaming. No extra journey is needed for every error case or member page.
-
-## Focused tests rather than extra acceptance scenarios
-
-- Empty and whitespace-only; normalization; 100/101 Unicode graphemes; punctuation/non-Latin and
-  single-word names; invalid input leaves stored state unchanged.
-- Dirty second form retains input and rejects stale Save even before notification. The approved
-  warning shows the newer value with Save anyway / Cancel my changes. Explicit confirmation replaces
-  only the shown value; a further intervening change requires renewed confirmation. Cancel my changes
-  adopts current data without writing. Identical-target no-op and change-away-and-back semantics
-  depend on approval of the proposed model.
-- Current names on open dashboard/detail/delivery/shell surfaces, including historical authors
-  no longer in an active-member list; no loss of unrelated form state; actor targeting and access.
-
-## Review status
-
-Matt approved the subjects and reuse-before-adding-journeys constraint. Repository inspection found
-no existing Profile editing journey. Exact language, runner allocation and proposed model/UX are
-awaiting review. No independent collaboration or ensemble review has been completed; this artifact
-must not be represented as independently reviewed or ready for implementation.
+Bounded specialist and parent final two-family reviews are complete; policy/model decisions are
+settled. [Final review synthesis](final-ensemble-review.md) retains panel, disagreement and limits.
+Matt explicitly judged a new ADR unnecessary. No acceptance or ADR decision remains open.

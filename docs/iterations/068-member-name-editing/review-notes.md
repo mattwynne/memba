@@ -58,5 +58,7 @@ Parent final whole-plan review subsequently completed with two independent famil
 is preserved verbatim in [final-ensemble-review.md](final-ensemble-review.md). Trusted actor/self-only
 entry-point authorization and synchronized readback/delayed-projector proofs were clarified in the
 plan and ADR record. These are docs-only corrections: `git diff --check` applies, with no new
-`dev check` required and no attribution of the earlier gate to a later untested commit. Only explicit
-written ADR acceptance remains; no second ensemble or scope interview is needed.
+`dev check` required and no attribution of the earlier gate to a later untested commit. Matt then
+explicitly decided “No that does not merit an ADR.” The record requirement is removed, not the
+agreed behaviour or corrections. Useful guidance is folded into the plan/design notes; the redundant
+proposal is removed and no numbered ADR is created. No approval blocker or second ensemble remains.

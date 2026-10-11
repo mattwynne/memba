@@ -1,66 +1,59 @@
-# 068 conflict interaction: approved behaviour and design handoff
+# 068 approved conflict design and implementation guidance
 
-Status: external handoff superseded by Matt's explicit direction to design here in BB using HTML
-mock-ups and the base design language/components. Matt approved the amber card/icon and
-Save anyway / Cancel my changes design, conditional on simple implementation:
-[name-conflict-mockup.html](name-conflict-mockup.html). Required specialist review and render
-verification remain outstanding. If substantial generic form infrastructure is needed, return the
-trade-off to Matt instead of silently changing the approved conflict policy.
+Status: approved by Matt, conditional on simple reusable implementation. The earlier external
+DesignSync handoff and ADR proposal were superseded; Matt chose local HTML design in BB and
+explicitly judged a new ADR unnecessary. No ADR acceptance or external handoff remains.
 
-## Approved interaction
+## Design paths
 
-An untouched name form follows current saved data automatically. A dirty form retains its draft.
-After a conflicting Save, preserve the draft and display the newer value with generic wording:
+- [Name form](name-conflict-mockup.html): approved amber warning card/icon, neutral input, current
+  conflicting value, Save anyway / Cancel my changes. Includes existing red validation comparison.
+- [Multi-field exploration](multi-field-conflict-mockup.html): demonstrates the generic language and
+  conflict list. Phone numbers are hypothetical, not added to 068.
+- Base: `design-system/templates/account-settings.html` and root `styles.css` tokens/components.
 
-```text
-Your name
-[ Alice Brown                         ]
+Both local mock-ups render-verified in Chromium at 1320px/390px, no horizontal document overflow.
+Static mock-ups do not prove connected behaviour, accessibility announcements or safe persistence.
+No live DesignSync publication is claimed. Review evidence: [review-notes.md](review-notes.md) and
+[final-ensemble-review.md](final-ensemble-review.md).
 
-Changed elsewhere to “Alice Jones”.
-Saving your edit will replace that value.
+## Approved interaction and reusable default
 
-[ Save anyway ]  [ Cancel my changes ]
-```
+Untouched forms follow current data. Dirty drafts stay visible. On a conflicting Save, an amber card
+with a warning icon shows the newer value and explains that saving will replace it. Save anyway
+explicitly confirms replacing that displayed value; Cancel my changes discards the draft, closes the
+editor and displays latest authorized data without writing. No silent overwrite, automatic discard,
+merge interface or proactive-warning machinery is required.
 
-- Save anyway explicitly confirms replacing the shown value. If that value changes again before
-  confirmation, show the updated conflict and require confirmation again. No unconditional overwrite.
-- Cancel my changes discards the draft, closes the editor and displays the latest saved value
-  without writing.
-- No proactive-warning machinery, merge interface, silent last-write-wins, or automatic discard.
-- Matt subsequently clarified that the interaction must be generic and the default wherever an
-  existing saved record is edited. Use shared presentation and small reusable draft/baseline/latest
-  coordination, not a Profile-only implementation. Field-specific validation, authorization and
-  concurrency enforcement remain with their owning domains. Creation-only forms have no existing
-  saved value to conflict with. This iteration does not migrate all existing forms or introduce a
-  general collaborative-editing/persistence framework.
-- Record this durable default through the modelling/ADR process before ready publication; the
-  approval of the direction does not constitute acceptance of an unwritten ADR.
-- Earlier Cancel/re-edit-only and discard-with-toast proposals are superseded.
+Use shared presentation and a small server-owned baseline/draft/latest/confirmation coordinator as
+the default for forms editing existing saved data. Creation forms have no pre-existing value to
+conflict with. 068 implements name editing only, not an app-wide migration. Preserve untouched
+fields with changed-field patches, rather than submitting a stale whole-record replacement.
 
-## Historical handoff — no longer a required external step
+Draft edits invalidate confirmation. Query observations must not silently change the warning value
+that the actor is confirming. Enter must not accidentally confer overwrite confirmation. Announce
+new/repeated warnings, preserve input/error descriptions, manage focus when actions change, and
+return focus to Edit on cancellation. Prove connected/browser transitions during implementation.
 
-The following records the earlier proposal, not the current required workflow. Matt subsequently
-chose local HTML design in this thread. Review that local proposal before ready publication; do not
-require a Claude Code transfer or claim a DesignSync push occurred.
+## Domain and application boundaries
 
-### Earlier handoff proposal
+- Field casting, normalization, comparison, coupled invariants, validation, authorization and atomic
+  writes remain with the owning form/domain. No generic persistence registry or force-write API.
+- Person rename preparation receives trusted server-established actor context separately from
+  editable attrs, resolves the actor's Person and rejects another target before dispatch. Posted
+  identities are not authority. Aggregate ID matching alone is not actor authorization. No-op and
+  confirmation cannot bypass self-only authorization.
+- Person compares normalized authoritative current values, not revisions. Jones → Green → Jones
+  does not itself cause a conflict. An identical normalized target succeeds without an event.
+  Confirmation warns again only if the current value conflicts with the displayed expectation.
+- Conflict values must come from the authorized authoritative comparison result or synchronized
+  authorized read. Success (including eventless no-op) and cancellation after conflict synchronize
+  current readback using existing ADR 0022 checkpoint/barrier conventions. Do not discard a dirty
+  draft or present stale data as confirmed current on bounded readback failure.
+- Reuse the [spike](https://github.com/mattwynne/memba/blob/7b83d5b9f2189d6da6b1875967b21ba3f33df194/spikes/068-form-conflict/README.md)
+  API/component pattern, not its fake writer or automatic cherry-pick. Flat comparable scalar values
+  are the initial boundary; nested/multi-aggregate editing needs explicit modelling, not switches.
 
-Pi cannot inspect or publish the live design system through DesignSync. The checked-in
-`design-system/templates/account-settings.html` has display/edit/validation-error cards but lacks
-this two-action conflict state. The UX skill requires a Claude Code handoff rather than pretending
-that the existing error card fully covers changed actions.
-
-Restart prompt for a Claude Code design session:
-
-> Finish design coverage only for iteration 068's approved conflict interaction. Inspect the live
-> Account settings design with DesignSync and the checked-in account-settings template. Add the
-> approved state above using the existing name form and inline feedback styling. Keep generic
-> wording, preserve draft text, show the current value, and distinguish explicit replacement from
-> adopting latest. Cover long values, narrow screens, keyboard/focus handling and accessible
-> conflict announcements. Do not add photos, staff refresh, proactive warnings, merge UI or an
-> app-wide form migration. Render-verify and sync the design; return exact design paths and review
-> evidence. Material design choices remain Matt's. No application implementation or delivery launch.
-
-Parent owns the final whole-plan ensemble, not this design task. Required material-design review
-remains separate. Once design coverage returns, resume formulation/model review and planning checks;
-do not label this handoff or the plan ready before those gates are satisfied.
+If implementation requires disproportionate infrastructure, return the trade-off to Matt rather
+than silently weakening the approved policy. Keep staff refresh, photos and general form migration
+out of scope. No workflow launch is authorized by this design artifact.
