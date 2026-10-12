@@ -3,6 +3,9 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.AuthoritativeMembershipQueries
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -18,6 +21,9 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.ConversationFollowPreparation
+  alias Memba.Messaging.CurrentMemberConversationFollow
+  alias Memba.Messaging.PostMemberMessageReply
   alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.ConversationGroupAccessQueries
   alias Memba.Messaging.ConversationListing
@@ -367,17 +373,19 @@ defmodule Memba.Messaging.SendClubMessageTest do
     private_message_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: private_message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Private Board topic",
-                 body: "Only current Board members should receive this."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: private_message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Private Board topic",
+                       body: "Only current Board members should receive this."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert [
              %EmailDeliveryProjection{recipient_id: alice_id},
@@ -391,49 +399,55 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
 
     assert :ok =
-             Messaging.follow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: private_message_id,
-                 member_id: carol.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: private_message_id,
+                       member_id: carol.person_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert ConversationFollowQueries.following_conversation?(private_message_id, carol.person_id)
 
     assert :ok =
-             Memba.Membership.remove_member(
-               %{membership_id: carol_membership_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubMember.Remove.prepare(%{
+                       membership_id: carol_membership_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club_id,
-                 person_id: carol.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: Memba.ID.generate(:membership),
+                       club_id: club_id,
+                       person_id: carol.person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
-    assert Memba.Membership.active_member_of_club?(club_id, carol.person_id)
-    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    assert MembershipQueries.active_member_of_club?(club_id, carol.person_id)
+    refute MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
     refute ConversationFollowQueries.following_conversation?(private_message_id, carol.person_id)
 
     departed_reply_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: departed_reply_id,
-                 conversation_id: private_message_id,
-                 sender_id: carol.person_id,
-                 body: "Rejoining the club must not restore this private action."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PostMemberMessageReply.prepare(%{
+                       message_id: departed_reply_id,
+                       conversation_id: private_message_id,
+                       sender_id: carol.person_id,
+                       body: "Rejoining the club must not restore this private action."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, departed_reply_id)
 
@@ -454,18 +468,22 @@ defmodule Memba.Messaging.SendClubMessageTest do
     later_message_id = Memba.ID.generate(:message)
 
     assert {:ok, %ExecutionResult{events: later_events}} =
-             Messaging.send_club_message(
-               %{
-                 message_id: later_message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Later Board topic",
-                 body: "Carol should not be resolved as a recipient."
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: later_message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Later Board topic",
+                       body: "Carol should not be resolved as a recipient."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^alice_id}, &1))
     refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
@@ -491,17 +509,19 @@ defmodule Memba.Messaging.SendClubMessageTest do
     message_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Private Board topic",
-                 body: "Do not hand this off using stale access."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Private Board topic",
+                       body: "Do not hand this off using stale access."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     carol_delivery =
       message_id
@@ -522,49 +542,55 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
-    assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    assert MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
 
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: message_id,
-                 sender_id: carol.person_id,
-                 body: "A stale membership projection must not authorize this reply."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: message_id,
+                       sender_id: carol.person_id,
+                       body: "A stale membership projection must not authorize this reply."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, reply_message_id)
 
     assert {:error, :not_current_member} =
-             Messaging.follow_conversation_as_current_member(
-               %{
-                 club_id: club_id,
-                 conversation_id: message_id,
-                 member_id: carol.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CurrentMemberConversationFollow.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: message_id,
+                       member_id: carol.person_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute ConversationFollowQueries.following_conversation?(message_id, carol.person_id)
 
     new_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.send_club_message_as_current_member(
-               %{
-                 message_id: new_message_id,
-                 club_id: club_id,
-                 sender_id: carol.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Stale compose",
-                 body: "A stale compose view must not authorize this message."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare_current_member(%{
+                       message_id: new_message_id,
+                       club_id: club_id,
+                       sender_id: carol.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Stale compose",
+                       body: "A stale compose view must not authorize this message."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, new_message_id)
 
@@ -612,23 +638,27 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
-    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    refute MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
 
     message_id = Memba.ID.generate(:message)
 
     assert {:ok, %ExecutionResult{events: events}} =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Board update",
-                 body: "Carol joined before this was posted."
-               },
-               returning: :execution_result,
-               consistency: [MessageProjector]
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Board update",
+                       body: "Carol joined before this was posted."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: [MessageProjector]
+                     ) do
+                dispatch_result
+              end)
 
     carol_id = carol.person_id
     assert Enum.any?(events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
@@ -653,53 +683,59 @@ defmodule Memba.Messaging.SendClubMessageTest do
     conversation_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: conversation_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Board update",
-                 body: "Initial discussion."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: conversation_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Board update",
+                       body: "Initial discussion."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.follow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: conversation_id,
-                 member_id: carol.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: carol.person_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert {:ok, %Memba.Membership.CustomGroupRemoval{transition: :member_removed}} =
-             Memba.Membership.remove_custom_group_member(
-               %{
-                 club_id: club_id,
-                 group_id: board_group_id,
-                 membership_id: carol_membership_id,
-                 person_id: carol.person_id,
-                 actor_person_id: alice.person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Remove.prepare(%{
+                       club_id: club_id,
+                       group_id: board_group_id,
+                       membership_id: carol_membership_id,
+                       person_id: carol.person_id,
+                       actor_person_id: alice.person_id,
+                       removal_operation_id: Ecto.UUID.generate()
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     absent_reply_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: absent_reply_id,
-                 conversation_id: conversation_id,
-                 sender_id: alice.person_id,
-                 body: "Posted while Carol is absent."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PostMemberMessageReply.prepare(%{
+                       message_id: absent_reply_id,
+                       conversation_id: conversation_id,
+                       sender_id: alice.person_id,
+                       body: "Posted while Carol is absent."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Enum.any?(
              pending_deliveries_for_message(absent_reply_id),
@@ -719,22 +755,26 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
-    refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    refute MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
     assert ConversationFollowQueries.following_conversation?(conversation_id, carol.person_id)
 
     resumed_reply_id = Memba.ID.generate(:message)
 
     assert {:ok, %ExecutionResult{events: resumed_events}} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: resumed_reply_id,
-                 conversation_id: conversation_id,
-                 sender_id: alice.person_id,
-                 body: "Posted after Carol rejoins."
-               },
-               returning: :execution_result,
-               consistency: [MessageProjector]
-             )
+             (with {:ok, command} <-
+                     PostMemberMessageReply.prepare(%{
+                       message_id: resumed_reply_id,
+                       conversation_id: conversation_id,
+                       sender_id: alice.person_id,
+                       body: "Posted after Carol rejoins."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: [MessageProjector]
+                     ) do
+                dispatch_result
+              end)
 
     carol_id = carol.person_id
 
@@ -780,23 +820,27 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
-    assert Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
+    assert MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
 
     message_id = Memba.ID.generate(:message)
 
     assert {:ok, %ExecutionResult{events: events}} =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Private Board topic after departure",
-                 body: "A stale recipient projection must not create Carol's delivery."
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Private Board topic after departure",
+                       body: "A stale recipient projection must not create Carol's delivery."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     recipient_ids =
       for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
@@ -833,27 +877,33 @@ defmodule Memba.Messaging.SendClubMessageTest do
     conversation_access_projector_child_id = stop_projector!(ConversationGroupAccessProjector)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: conversation_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: board_group_id,
-                 subject: "Private Board topic",
-                 body: "Carol initially has access."
-               },
-               consistency: [MessageProjector]
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: conversation_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: board_group_id,
+                       subject: "Private Board topic",
+                       body: "Carol initially has access."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: [MessageProjector]) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.follow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: conversation_id,
-                 member_id: carol.person_id
-               },
-               consistency: [ConversationFollowProjector]
-             )
+             (with {:ok, command} <-
+                     ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: carol.person_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       consistency: [ConversationFollowProjector]
+                     ) do
+                dispatch_result
+              end)
 
     assert [] = ConversationListing.list_for_group(board_group_id)
 
@@ -890,9 +940,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
     ])
 
     assert ConversationFollowQueries.following_conversation?(conversation_id, carol.person_id)
-    assert Memba.Membership.active_member_of_club_authoritatively?(club_id, carol.person_id)
 
-    refute Memba.Membership.active_member_of_group_authoritatively?(
+    assert AuthoritativeMembershipQueries.active_member_of_club_authoritatively?(
+             club_id,
+             carol.person_id
+           )
+
+    refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
              club_id,
              board_group_id,
              carol.person_id
@@ -901,16 +955,20 @@ defmodule Memba.Messaging.SendClubMessageTest do
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:ok, %ExecutionResult{events: events}} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: conversation_id,
-                 sender_id: alice.person_id,
-                 body: "Carol must not receive this after rejoining only Everyone."
-               },
-               returning: :execution_result,
-               consistency: [MessageProjector]
-             )
+             (with {:ok, command} <-
+                     PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: conversation_id,
+                       sender_id: alice.person_id,
+                       body: "Carol must not receive this after rejoining only Everyone."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: [MessageProjector]
+                     ) do
+                dispatch_result
+              end)
 
     recipient_ids =
       for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
@@ -929,14 +987,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
     add_member(club_id, alice.person_id)
 
     assert {:error, :audience_group_not_found} =
-             Messaging.send_club_message(%{
-               message_id: Memba.ID.generate(:message),
-               club_id: club_id,
-               sender_id: alice.person_id,
-               audience_group_id: Memba.ID.generate(:group),
-               subject: "Private topic",
-               body: "Please discuss this with the selected group."
-             })
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: Memba.ID.generate(:message),
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: Memba.ID.generate(:group),
+                       subject: "Private topic",
+                       body: "Please discuss this with the selected group."
+                     }),
+                   {:ok, dispatch_result} <- Messaging.CommandDispatch.dispatch(command, []) do
+                dispatch_result
+              end)
 
     assert count_events(MessageSent) == 0
   end
@@ -953,14 +1015,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
     add_member(nelson_club_id, bob.person_id)
 
     assert {:error, :audience_group_not_found} =
-             Messaging.send_club_message(%{
-               message_id: Memba.ID.generate(:message),
-               club_id: kootenay_club_id,
-               sender_id: alice.person_id,
-               audience_group_id: SystemGroups.everyone_group_id(nelson_club_id),
-               subject: "Cross-club topic",
-               body: "This must not create a conversation."
-             })
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: Memba.ID.generate(:message),
+                       club_id: kootenay_club_id,
+                       sender_id: alice.person_id,
+                       audience_group_id: SystemGroups.everyone_group_id(nelson_club_id),
+                       subject: "Cross-club topic",
+                       body: "This must not create a conversation."
+                     }),
+                   {:ok, dispatch_result} <- Messaging.CommandDispatch.dispatch(command, []) do
+                dispatch_result
+              end)
 
     assert count_events(MessageSent) == 0
   end
@@ -1029,17 +1095,21 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 }
               ]
             }} =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert [
              %EmailDeliveryProjection{
@@ -1076,17 +1146,21 @@ defmodule Memba.Messaging.SendClubMessageTest do
     message_id = Memba.ID.generate(:message)
 
     assert {:ok, %ExecutionResult{}} =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert [%EmailDeliveryProjection{message_id: ^message_id, status: "pending"}] =
              pending_deliveries_for_message(message_id)
@@ -1101,13 +1175,17 @@ defmodule Memba.Messaging.SendClubMessageTest do
     add_member(club_id, alice.person_id)
 
     assert {:error, :invalid_subject} =
-             Messaging.send_club_message(%{
-               message_id: Memba.ID.generate(:message),
-               club_id: club_id,
-               sender_id: alice.person_id,
-               subject: "  ",
-               body: "Bring route ideas."
-             })
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: Memba.ID.generate(:message),
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "  ",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <- Messaging.CommandDispatch.dispatch(command, []) do
+                dispatch_result
+              end)
 
     assert Fake.deliveries() == []
   end
@@ -1131,16 +1209,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
     message_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
     assert Fake.deliveries() == []
@@ -1161,16 +1241,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
     message_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert [delivery] = pending_deliveries_for_message(message_id)
     assert count_events(MessageSent) == 1
@@ -1190,7 +1272,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
     |> Repo.update!()
 
     assert {:error, :manual_retry_disabled} =
-             Messaging.retry_failed_email_delivery(delivery.delivery_id)
+             (with {:ok, valid_id} <- Memba.ID.cast(:delivery, delivery.delivery_id) do
+                EmailDeliveryDispatcher.retry_failed_delivery(valid_id)
+              else
+                :error -> {:error, :invalid_delivery_id}
+              end)
 
     assert %EmailDeliveryProjection{status: "failed", attempt_count: 1} =
              Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
@@ -1212,16 +1298,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
     message_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert [%EmailDeliveryProjection{status: "pending"}] =
              pending_deliveries_for_message(message_id)
@@ -1421,7 +1509,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   defp ensure_club(club_id) do
-    if is_nil(Memba.Membership.get_club(club_id)) do
+    if is_nil(ClubGroupQueries.get_club(club_id)) do
       create_club(club_id, "Kootenay Mountaineering Club")
     end
   end
