@@ -4,14 +4,19 @@ defmodule Memba.Cucumber.MembershipSteps do
   import Ecto.Query
   import ExUnit.Assertions
 
-  alias Memba.Membership
   alias Memba.Membership.App
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -87,10 +92,9 @@ defmodule Memba.Cucumber.MembershipSteps do
     membership_id = active_membership_id!(context, person_name, club_name)
 
     assert :ok =
-             Membership.remove_member(
-               %{membership_id: membership_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <- ClubMember.Remove.prepare(%{membership_id: membership_id}) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     update_context_map(context, :memberships, {club_name, person_name}, nil)
   end
@@ -100,11 +104,11 @@ defmodule Memba.Cucumber.MembershipSteps do
     club_id = fetch_from_context!(context, :clubs, club_name)
     viewer_id = person_id_from_context!(context, viewer_name)
 
-    assert Membership.active_member_of_club?(club_id, viewer_id)
+    assert MembershipQueries.active_member_of_club?(club_id, viewer_id)
 
     context
     |> Map.put(:current_member_list_club, club_name)
-    |> Map.put(:current_member_list, Membership.list_active_members_of_club(club_id))
+    |> Map.put(:current_member_list, ClubGroupQueries.list_active_members_of_club(club_id))
   end
 
   step ~r/^(\w+)'s member row should show the roles (.+) and (.+)$/,
@@ -151,7 +155,7 @@ defmodule Memba.Cucumber.MembershipSteps do
       |> Repo.aggregate(:count)
 
     assert count == 1
-    assert %PersonProjection{name: "Alice"} = Membership.get_person(person_id)
+    assert %PersonProjection{name: "Alice"} = PersonQueries.get_person(person_id)
 
     context
   end
@@ -233,19 +237,23 @@ defmodule Memba.Cucumber.MembershipSteps do
                  )
 
         assert %ClubProjection{club_id: ^club_id, name: ^club_name, slug: ^slug} =
-                 Membership.get_club(club_id)
+                 ClubGroupQueries.get_club(club_id)
 
         update_context_map(context, :clubs, club_name, club_id)
 
       club_id ->
         assert :ok =
-                 Membership.update_club(
-                   %{club_id: club_id, name: club_name, slug: slug},
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         ClubCommands.prepare_update(%{
+                           club_id: club_id,
+                           name: club_name,
+                           slug: slug
+                         }) do
+                    CommandDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         assert %ClubProjection{club_id: ^club_id, name: ^club_name, slug: ^slug} =
-                 Membership.get_club(club_id)
+                 ClubGroupQueries.get_club(club_id)
 
         context
     end
@@ -302,11 +310,11 @@ defmodule Memba.Cucumber.MembershipSteps do
                )
 
       assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
-               Membership.get_person(person_id)
+               PersonQueries.get_person(person_id)
 
       assert [
                %{email: ^email, normalized_email: ^email, primary?: true}
-             ] = Membership.list_person_email_addresses(person_id)
+             ] = PersonQueries.list_person_email_addresses(person_id)
 
       update_context_map(context, :people, name, person_id)
     end
@@ -322,7 +330,7 @@ defmodule Memba.Cucumber.MembershipSteps do
     club_id = fetch_from_context!(context, :clubs, club_name)
     person_id = fetch_from_context!(context, :people, person_name)
 
-    refute Membership.active_member_of_club?(club_id, person_id)
+    refute MembershipQueries.active_member_of_club?(club_id, person_id)
 
     membership_id = Memba.ID.generate(:membership)
 
@@ -336,10 +344,13 @@ defmodule Memba.Cucumber.MembershipSteps do
                consistency: :strong
              )
 
-    assert Membership.active_member_of_club?(club_id, person_id)
+    assert MembershipQueries.active_member_of_club?(club_id, person_id)
 
     assert %{id: ^person_id, name: ^person_name, email: _email} =
-             Enum.find(Membership.list_active_members_of_club(club_id), &(&1.id == person_id))
+             Enum.find(
+               ClubGroupQueries.list_active_members_of_club(club_id),
+               &(&1.id == person_id)
+             )
 
     update_context_map(context, :memberships, {club_name, person_name}, membership_id)
   end
@@ -443,13 +454,13 @@ defmodule Memba.Cucumber.MembershipSteps do
 
   defp try_change_club_slug(context, club_name, slug) do
     club_id = fetch_from_context!(context, :clubs, club_name)
-    previous_slug = Membership.get_club(club_id).slug
+    previous_slug = ClubGroupQueries.get_club(club_id).slug
 
     result =
-      Membership.update_club(
-        %{club_id: club_id, name: club_name, slug: slug},
-        consistency: :strong
-      )
+      with {:ok, command} <-
+             ClubCommands.prepare_update(%{club_id: club_id, name: club_name, slug: slug}) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
 
     context
     |> Map.put(:club_slug_change_result, result)
@@ -458,7 +469,7 @@ defmodule Memba.Cucumber.MembershipSteps do
 
   defp assert_club_slug(context, club_name, expected_slug) do
     club_id = fetch_from_context!(context, :clubs, club_name)
-    assert %{slug: ^expected_slug} = Membership.get_club(club_id)
+    assert %{slug: ^expected_slug} = ClubGroupQueries.get_club(club_id)
     context
   end
 
@@ -480,9 +491,9 @@ defmodule Memba.Cucumber.MembershipSteps do
     person_id = person_id_from_context!(context, person_name)
     club_id = fetch_from_context!(context, :clubs, club_name)
 
-    assert Membership.active_member_of_club?(club_id, person_id)
+    assert MembershipQueries.active_member_of_club?(club_id, person_id)
 
-    assert Enum.any?(Membership.list_active_members_of_club(club_id), fn member ->
+    assert Enum.any?(ClubGroupQueries.list_active_members_of_club(club_id), fn member ->
              member.id == person_id and member.name == person_name
            end)
 

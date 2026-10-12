@@ -5,7 +5,10 @@ defmodule Memba.Cucumber.RequestAccountSteps do
   import ExUnit.Assertions
 
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonQueries
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
@@ -201,7 +204,7 @@ defmodule Memba.Cucumber.RequestAccountSteps do
 
     assert Map.get(context, :current_page) == :get_started
     assert get_in(context, [:signed_in_identity, :email]) == expected_email
-    refute Membership.get_person_by_email(expected_email)
+    refute PersonQueries.get_person_by_email(expected_email)
 
     context
   end
@@ -311,7 +314,7 @@ defmodule Memba.Cucumber.RequestAccountSteps do
   step "{word} should not be a person in Memba", %{args: [person_name]} = context do
     email = email_for_person_context(context, person_name)
 
-    refute Membership.get_person_by_email(email)
+    refute PersonQueries.get_person_by_email(email)
 
     context
   end
@@ -372,13 +375,13 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     club = fetch_club_by_name!(club_name)
     person = fetch_person_from_context!(context, person_name)
 
-    assert Membership.active_member_of_club?(club.club_id, person.person_id)
+    assert MembershipQueries.active_member_of_club?(club.club_id, person.person_id)
     context
   end
 
   step "{word} should be a person in Memba", %{args: [person_name]} = context do
     email = email_for_person_context(context, person_name)
-    person = Membership.get_person_by_email(email)
+    person = PersonQueries.get_person_by_email(email)
 
     assert person
 
@@ -399,7 +402,7 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     person = fetch_person_from_context!(context, person_name)
 
     count =
-      Membership.Projections.Person
+      Memba.Membership.Projections.Person
       |> where([person_projection], person_projection.person_id == ^person.person_id)
       |> Repo.aggregate(:count)
 
@@ -623,15 +626,15 @@ defmodule Memba.Cucumber.RequestAccountSteps do
         email = default_email_for(context, person_name)
 
         assert :ok =
-                 Membership.create_person(
-                   %{
-                     person_id: person_id,
-                     name: person_name,
-                     email: email,
-                     email_addresses: [%{email: email, is_primary: true}]
-                   },
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         PersonCommands.prepare_create(%{
+                           person_id: person_id,
+                           name: person_name,
+                           email: email,
+                           email_addresses: [%{email: email, is_primary: true}]
+                         }) do
+                    CommandDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         %{person_id: person_id, name: person_name, email: email}
     end
@@ -715,7 +718,7 @@ defmodule Memba.Cucumber.RequestAccountSteps do
   end
 
   defp fetch_club_by_name(club_name) do
-    Membership.Projections.Club
+    Memba.Membership.Projections.Club
     |> where([club], club.name == ^club_name)
     |> limit(1)
     |> Repo.one()

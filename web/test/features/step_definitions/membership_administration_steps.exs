@@ -4,11 +4,19 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
   import Ecto.Query
   import ExUnit.Assertions
 
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
   alias Memba.Membership.App
+  alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+  alias Memba.Membership.InvitationAcceptance
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.Permissions
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -35,7 +43,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     admin_names
     |> Enum.each(fn person_name ->
       person = fetch_person!(context, person_name)
-      assert Membership.active_member_of_group?(admin_group_id, person.person_id)
+      assert MembershipQueries.active_member_of_group?(admin_group_id, person.person_id)
     end)
 
     context
@@ -109,15 +117,15 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     target = fetch_person!(context, target_name)
 
     assert :ok =
-             Membership.assign_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target.person_id,
-                 actor_person_id: actor.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target.person_id,
+                       actor_person_id: actor.person_id
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     Map.put(context, :last_membership_administration_result, :ok)
   end
@@ -132,15 +140,15 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
 
     assert {:error, :unauthorized} =
              result =
-             Membership.assign_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target.person_id,
-                 actor_person_id: actor.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target.person_id,
+                       actor_person_id: actor.person_id
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     Map.put(context, :last_membership_administration_result, result)
   end
@@ -155,15 +163,15 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
 
     assert {:error, :last_membership_administrator} =
              result =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target.person_id,
-                 actor_person_id: actor.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target.person_id,
+                       actor_person_id: actor.person_id
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     Map.put(context, :last_membership_administration_result, result)
   end
@@ -179,7 +187,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
           invitation = fetch_invitation!(context, email)
 
           result =
-            Membership.complete_invited_club_member_profile(
+            InvitationAcceptance.complete_profile(
               %{invitation_id: invitation.invitation_id, name: "#{person_name} Example"},
               consistency: :strong
             )
@@ -393,7 +401,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     role_id = Roles.membership_administrator_role_id(club_id)
 
     active_role_assignment?(club_id, membership_id, person.person_id, role_id) and
-      Membership.person_has_club_permission?(
+      Authorization.has_permission?(
         club_id,
         person.person_id,
         Permissions.club_manage_members()
@@ -453,14 +461,14 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
         membership_id = Memba.ID.generate(:membership)
 
         assert :ok =
-                 Membership.add_member(
-                   %{
-                     membership_id: membership_id,
-                     club_id: club_id,
-                     person_id: person.person_id
-                   },
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         AddMember.prepare(%{
+                           membership_id: membership_id,
+                           club_id: club_id,
+                           person_id: person.person_id
+                         }) do
+                    CommandDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         {update_context_map(context, :memberships, membership_key, membership_id), membership_id}
 
@@ -477,14 +485,14 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
             club_id = Memba.ID.generate(:club)
 
             assert :ok =
-                     Membership.create_club(
-                       %{
-                         club_id: club_id,
-                         name: club_name,
-                         slug: scenario_slug(context, club_name)
-                       },
-                       consistency: :strong
-                     )
+                     (with {:ok, command} <-
+                             ClubCommands.prepare_create(%{
+                               club_id: club_id,
+                               name: club_name,
+                               slug: scenario_slug(context, club_name)
+                             }) do
+                        CommandDispatch.dispatch(command, consistency: :strong)
+                      end)
 
             update_context_map(context, :clubs, club_name, club_id)
 
@@ -510,15 +518,15 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
         email = default_email_for(context, person_name)
 
         assert :ok =
-                 Membership.create_person(
-                   %{
-                     person_id: person_id,
-                     name: person_name,
-                     email: email,
-                     email_addresses: [%{email: email, is_primary: true}]
-                   },
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         PersonCommands.prepare_create(%{
+                           person_id: person_id,
+                           name: person_name,
+                           email: email,
+                           email_addresses: [%{email: email, is_primary: true}]
+                         }) do
+                    CommandDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         update_context_map(context, :people, person_name, %{
           person_id: person_id,
@@ -547,11 +555,11 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
   defp fetch_person!(context, person_name) do
     case get_in(context, [:people, person_name]) do
       %{person_id: person_id} when is_binary(person_id) ->
-        Membership.get_person(person_id) ||
+        PersonQueries.get_person(person_id) ||
           flunk("Expected #{person_name} to exist as a projected person")
 
       person_id when is_binary(person_id) ->
-        Membership.get_person(person_id) ||
+        PersonQueries.get_person(person_id) ||
           flunk("Expected #{person_name} to exist as a projected person")
 
       _missing ->
@@ -606,10 +614,14 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     person = fetch_person!(context, person_name)
     membership_id = active_membership_id!(club_id, person.person_id)
 
-    Membership.remove_member(
-      %{club_id: club_id, membership_id: membership_id, person_id: person.person_id},
-      consistency: :strong
-    )
+    with {:ok, command} <-
+           ClubMember.Remove.prepare(%{
+             club_id: club_id,
+             membership_id: membership_id,
+             person_id: person.person_id
+           }) do
+      CommandDispatch.dispatch(command, consistency: :strong)
+    end
   end
 
   defp active_role_assignment?(club_id, membership_id, person_id, role_id) do

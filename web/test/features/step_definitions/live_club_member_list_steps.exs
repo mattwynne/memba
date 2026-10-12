@@ -6,7 +6,9 @@ defmodule Memba.Cucumber.LiveClubMemberListSteps do
   import Phoenix.LiveViewTest, only: [live: 2]
 
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
@@ -18,7 +20,7 @@ defmodule Memba.Cucumber.LiveClubMemberListSteps do
   step "Bob is viewing the Kootenay Mountaineering Club member list", context do
     club_id = fetch_club_id!(context)
     viewer = fetch_person!(context, @viewer_name)
-    club = Membership.get_club(club_id) || flunk("Expected #{@club_name} to exist")
+    club = ClubGroupQueries.get_club(club_id) || flunk("Expected #{@club_name} to exist")
     %{host: host} = club |> ClubSite.url() |> URI.parse()
 
     conn =
@@ -60,14 +62,14 @@ defmodule Memba.Cucumber.LiveClubMemberListSteps do
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: joining_member.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: joining_member.person_id
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     context
     |> update_context_map(

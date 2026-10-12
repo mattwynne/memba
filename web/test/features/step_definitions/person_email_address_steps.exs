@@ -4,7 +4,12 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   import ExUnit.Assertions
 
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.PersonEmailVerification
+  alias Memba.Membership.PersonQueries
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
 
@@ -78,10 +83,13 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     person_id = context_person_id!(context, person_name)
 
     assert :ok =
-             Membership.make_person_email_address_primary(
-               %{person_id: person_id, email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonEmailAddressCommands.prepare_make_primary(%{
+                       person_id: person_id,
+                       email: email
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     update_context_map(context, :people, person_name, %{email: email})
   end
@@ -91,7 +99,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     person_id = context_person_id!(context, person_name)
 
     assert :ok =
-             Membership.remove_person_email_address(
+             PersonEmailVerification.remove(
                %{person_id: person_id, email: email},
                consistency: :strong
              )
@@ -108,9 +116,9 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
        %{args: [person_name, email]} = context do
     token = verification_token_for!(context, person_name, email)
 
-    case Membership.consume_person_email_address_verification_token(token) do
+    case PersonEmailVerification.consume(token, []) do
       {:ok, request} ->
-        case Membership.verify_person_email_address(request, consistency: :strong) do
+        case PersonEmailVerification.verify(request, consistency: :strong) do
           :ok -> Map.put(context, :current_page, :email_verification_success)
           {:error, _reason} -> Map.put(context, :current_page, :email_verification_invalid)
         end
@@ -124,7 +132,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
        %{args: [person_name]} = context do
     assert Map.get(context, :current_page) == :account_settings
     assert %{person_id: person_id} = fetch_from_context!(context, :people, person_name)
-    assert %{name: ^person_name} = Membership.get_person(person_id)
+    assert %{name: ^person_name} = PersonQueries.get_person(person_id)
     context
   end
 
@@ -173,10 +181,13 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     person_id = context_person_id!(context, person_name)
 
     assert {:error, _reason} =
-             Membership.make_person_email_address_primary(
-               %{person_id: person_id, email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonEmailAddressCommands.prepare_make_primary(%{
+                       person_id: person_id,
+                       email: email
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert_pending_email_address(context, person_name, email)
   end
@@ -186,7 +197,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     person_id = context_person_id!(context, person_name)
 
     assert {:error, _reason} =
-             Membership.remove_person_email_address(
+             PersonEmailVerification.remove(
                %{person_id: person_id, email: email},
                consistency: :strong
              )
@@ -256,10 +267,10 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     person_id = context_person_id!(context, person_name)
 
     assert :ok =
-             Membership.add_person_email_address(
-               %{person_id: person_id, email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonEmailAddressCommands.prepare_add(%{person_id: person_id, email: email}) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     issue_verification_token(context, person_name, email)
   end
@@ -268,10 +279,13 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     person_id = context_person_id!(context, person_name)
 
     assert {:ok, %{issuer_result: %{token: token}}} =
-             Membership.resend_person_email_address_verification(%{
-               person_id: person_id,
-               email: email
-             })
+             PersonEmailVerification.resend(
+               %{
+                 person_id: person_id,
+                 email: email
+               },
+               []
+             )
 
     update_context_map(context, :verification_tokens, verification_key(person_name, email), %{
       token: token
@@ -281,8 +295,8 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   defp verify_email_address_from_stored_link(context, person_name, email) do
     token = verification_token_for!(context, person_name, email)
 
-    with {:ok, request} <- Membership.consume_person_email_address_verification_token(token),
-         :ok <- Membership.verify_person_email_address(request, consistency: :strong) do
+    with {:ok, request} <- PersonEmailVerification.consume(token, []),
+         :ok <- PersonEmailVerification.verify(request, consistency: :strong) do
       Map.put(context, :current_page, :email_verification_success)
     else
       _invalid -> Map.put(context, :current_page, :email_verification_invalid)
@@ -416,15 +430,15 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
         primary_email = primary_email!(email_addresses)
 
         assert :ok =
-                 Membership.create_person(
-                   %{
-                     person_id: person_id,
-                     name: person_name,
-                     email: primary_email,
-                     email_addresses: email_addresses
-                   },
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         PersonCommands.prepare_create(%{
+                           person_id: person_id,
+                           name: person_name,
+                           email: primary_email,
+                           email_addresses: email_addresses
+                         }) do
+                    CommandDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         update_context_map(context, :people, person_name, %{
           person_id: person_id,
@@ -435,7 +449,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
         ensure_desired_addresses_are_verified(person_id, email_addresses)
 
         assert :ok =
-                 Membership.replace_person_email_addresses(
+                 PersonEmailVerification.replace(
                    %{person_id: person_id, email_addresses: email_addresses},
                    consistency: :strong
                  )
@@ -454,7 +468,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
 
       person_id ->
         person_id
-        |> Membership.list_person_email_addresses()
+        |> PersonQueries.list_person_email_addresses()
         |> Enum.map(fn email_address ->
           %{email: email_address.email, is_primary: email_address.primary?}
         end)
@@ -464,7 +478,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   defp persisted_person_email_addresses(context, person_name) do
     case context_person_id(context, person_name) do
       nil -> flunk("Expected #{person_name} to be known in the scenario")
-      person_id -> Membership.list_person_email_addresses(person_id)
+      person_id -> PersonQueries.list_person_email_addresses(person_id)
     end
   end
 
@@ -496,7 +510,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   end
 
   defp person_id_by_email(email) when is_binary(email) do
-    case Membership.get_person_by_email(email) do
+    case PersonQueries.get_person_by_email(email) do
       nil -> nil
       person -> person.person_id
     end
@@ -513,7 +527,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
 
   defp active_club_names_for_person(person_id) do
     person_id
-    |> Membership.list_active_club_memberships_for_person()
+    |> MembershipQueries.list_active_club_memberships_for_person()
     |> Enum.map(& &1.club_name)
   end
 
@@ -525,18 +539,21 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   end
 
   defp ensure_desired_addresses_are_verified(person_id, email_addresses) do
-    current_email_addresses = Membership.list_person_email_addresses(person_id)
+    current_email_addresses = PersonQueries.list_person_email_addresses(person_id)
 
     Enum.each(email_addresses, fn %{email: email} ->
       unless Enum.any?(current_email_addresses, &same_email?(&1.email, email)) do
         assert :ok =
-                 Membership.add_person_email_address(
-                   %{person_id: person_id, email: email},
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         PersonEmailAddressCommands.prepare_add(%{
+                           person_id: person_id,
+                           email: email
+                         }) do
+                    CommandDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         assert :ok =
-                 Membership.verify_person_email_address(
+                 PersonEmailVerification.verify(
                    %{person_id: person_id, email: email},
                    consistency: :strong
                  )

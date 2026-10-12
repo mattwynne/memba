@@ -7,7 +7,13 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonEmailVerification
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Slug
   alias Memba.Repo
 
@@ -313,10 +319,14 @@ defmodule Memba.Cucumber.AuthenticationSteps do
       slug = scenario_slug(context, club_name)
 
       assert :ok =
-               Membership.create_club(
-                 %{club_id: club_id, name: club_name, slug: slug},
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       ClubCommands.prepare_create(%{
+                         club_id: club_id,
+                         name: club_name,
+                         slug: slug
+                       }) do
+                  CommandDispatch.dispatch(command, consistency: :strong)
+                end)
 
       update_context_map(context, :clubs, club_name, club_id)
     end
@@ -330,19 +340,19 @@ defmodule Memba.Cucumber.AuthenticationSteps do
       email = default_email_for(context, person_name)
 
       assert :ok =
-               Membership.create_person(
-                 %{
-                   person_id: person_id,
-                   name: person_name,
-                   email: email,
-                   email_addresses: [%{email: email, is_primary: true}]
-                 },
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       PersonCommands.prepare_create(%{
+                         person_id: person_id,
+                         name: person_name,
+                         email: email,
+                         email_addresses: [%{email: email, is_primary: true}]
+                       }) do
+                  CommandDispatch.dispatch(command, consistency: :strong)
+                end)
 
       assert [
                %{email: ^email, normalized_email: ^email, primary?: true}
-             ] = Membership.list_person_email_addresses(person_id)
+             ] = PersonQueries.list_person_email_addresses(person_id)
 
       update_context_map(context, :people, person_name, %{person_id: person_id, email: email})
     end
@@ -352,18 +362,18 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     club_id = fetch_from_context!(context, :clubs, club_name)
     %{person_id: person_id} = fetch_from_context!(context, :people, person_name)
 
-    if Membership.active_member_of_club?(club_id, person_id) do
+    if MembershipQueries.active_member_of_club?(club_id, person_id) do
       context
     else
       assert :ok =
-               Membership.add_member(
-                 %{
-                   membership_id: Memba.ID.generate(:membership),
-                   club_id: club_id,
-                   person_id: person_id
-                 },
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       AddMember.prepare(%{
+                         membership_id: Memba.ID.generate(:membership),
+                         club_id: club_id,
+                         person_id: person_id
+                       }) do
+                  CommandDispatch.dispatch(command, consistency: :strong)
+                end)
 
       update_context_map(context, :memberships, {club_name, person_name}, true)
     end
@@ -464,7 +474,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     case Accounts.consume_sign_in_token(token) do
       {:ok, %{email: email}} ->
         assert :ok =
-                 Membership.verify_pending_person_email_address_for_sign_in(email,
+                 PersonEmailVerification.verify_for_sign_in(email,
                    consistency: :strong
                  )
 
