@@ -169,11 +169,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   end
 
   @doc """
-  Manual retries are deliberately disabled. Only durable recovery may retry.
-  """
-  def retry_failed_delivery(_delivery_id), do: {:error, :manual_retry_disabled}
-
-  @doc """
   Hand email delivery work to the configured provider.
 
   For normal asynchronous dispatch, the dispatcher builds provider requests from

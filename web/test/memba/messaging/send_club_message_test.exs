@@ -1229,7 +1229,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              pending_deliveries_for_message(message_id)
   end
 
-  test "manual retry is disabled and cannot append events or hand off email" do
+  test "failed delivery is not handed off again by pending dispatch" do
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
 
     club_id = Memba.ID.generate(:club)
@@ -1271,12 +1271,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     )
     |> Repo.update!()
 
-    assert {:error, :manual_retry_disabled} =
-             (with {:ok, valid_id} <- Memba.ID.cast(:delivery, delivery.delivery_id) do
-                EmailDeliveryDispatcher.retry_failed_delivery(valid_id)
-              else
-                :error -> {:error, :invalid_delivery_id}
-              end)
+    assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
     assert %EmailDeliveryProjection{status: "failed", attempt_count: 1} =
              Repo.get!(EmailDeliveryProjection, delivery.delivery_id)

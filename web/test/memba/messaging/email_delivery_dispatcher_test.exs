@@ -611,13 +611,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
       assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-      assert {:error, :manual_retry_disabled} =
-               (with {:ok, delivery_id} <- Memba.ID.cast(:delivery, delivery.delivery_id) do
-                  Memba.Messaging.EmailDeliveryDispatcher.retry_failed_delivery(delivery_id)
-                else
-                  :error -> {:error, :invalid_delivery_id}
-                end)
-
       assert %EmailDeliveryProjection{
                status: "sent",
                attempt_count: 1,
@@ -1185,22 +1178,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       from(d in EmailDeliveryProjection, where: d.delivery_id == ^delivery.delivery_id),
       set: [last_dispatch_attempted_at: old]
     )
-  end
-
-  test "manual retries cannot resend a delivery" do
-    %{delivery: delivery} = insert_dispatchable_delivery!(status: "failed")
-
-    assert {:error, :manual_retry_disabled} =
-             (with {:ok, delivery_id} <- Memba.ID.cast(:delivery, delivery.delivery_id) do
-                Memba.Messaging.EmailDeliveryDispatcher.retry_failed_delivery(delivery_id)
-              else
-                :error -> {:error, :invalid_delivery_id}
-              end)
-
-    assert {:error, :manual_retry_disabled} =
-             EmailDeliveryDispatcher.retry_failed_delivery(delivery.delivery_id)
-
-    assert [] = Fake.deliveries()
   end
 
   defp insert_email_delivery!(attrs) when is_list(attrs) do
