@@ -9,7 +9,6 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   alias Memba.Messaging.ConversationListing
   alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.MessageQueries
-  alias Memba.Membership
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.EmailDeliveryProviders.Fake
@@ -444,7 +443,13 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     restart_projector!(group_membership_projector_child_id)
 
     assert {:ok, _result} =
-             Membership.await_group_access_projections(timeout: 1_000)
+             Memba.ProjectionBarrier.await(
+               [
+                 Memba.Membership.Projectors.GroupMembership,
+                 Memba.Membership.Projectors.Membership
+               ],
+               timeout: 1_000
+             )
   end
 
   test "submit accepts the message without waiting for every delivery diagnostics projector", %{
@@ -555,34 +560,39 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     if is_nil(ClubGroupQueries.get_club(club_id)) do
       assert :ok =
-               Membership.create_club(
-                 membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.ClubCommands.prepare_create(
+                         membership_club_attrs(
+                           club_id: club_id,
+                           name: "Kootenay Mountaineering Club"
+                         )
+                       ) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
     end
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: email,
-                 email_addresses: [%{email: email, is_primary: true}]
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: email,
+                       email_addresses: [%{email: email, is_primary: true}]
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     %{club_id: club_id, membership_id: membership_id, person_id: person_id}
   end

@@ -9,7 +9,6 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
   alias Commanded.Event.Mapper
   alias Commanded.EventStore
   alias Memba.ClubInboundEmailAddress
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Club, as: ClubAggregate
   alias Memba.Membership.Events.ClubCreated
@@ -610,15 +609,15 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
            )
 
     assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: robin.club_id,
-                 group_id: Memba.ID.generate(:group),
-                 actor_person_id: robin.person_id,
-                 name: "Board"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Create.prepare(%{
+                       club_id: robin.club_id,
+                       group_id: Memba.ID.generate(:group),
+                       actor_person_id: robin.person_id,
+                       name: "Board"
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     club_id = robin.club_id
 
@@ -728,15 +727,15 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     group_id = socket.assigns.group_id
 
     assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: robin.club_id,
-                 group_id: group_id,
-                 actor_person_id: robin.person_id,
-                 name: "Already claimed request"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Create.prepare(%{
+                       club_id: robin.club_id,
+                       group_id: group_id,
+                       actor_person_id: robin.person_id,
+                       name: "Already claimed request"
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     view
     |> form("#member-group-new-form", group: %{name: "Board"})
@@ -889,30 +888,34 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     email = Keyword.fetch!(attrs, :email)
 
     assert :ok =
-             Membership.create_club(
-               %{
-                 club_id: club_id,
-                 name: Keyword.fetch!(attrs, :club_name),
-                 slug: Keyword.fetch!(attrs, :club_slug)
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubCommands.prepare_create(%{
+                       club_id: club_id,
+                       name: Keyword.fetch!(attrs, :club_name),
+                       slug: Keyword.fetch!(attrs, :club_slug)
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: email
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: email
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     %{club_id: club_id, membership_id: membership_id, person_id: person_id}
   end
@@ -925,14 +928,14 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
     email = Keyword.fetch!(attrs, :email)
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: email
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: email
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     events =
       [

@@ -224,27 +224,33 @@ defmodule MembaWeb.MemberUIContractTest do
 
     unless Repo.get(Club, club_id) do
       assert :ok =
-               Memba.Membership.create_club(
-                 Map.new(club_attrs(attrs, club_id, club_name)),
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.ClubCommands.prepare_create(
+                         Map.new(club_attrs(attrs, club_id, club_name))
+                       ) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
     end
 
     assert :ok =
-             Memba.Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: Keyword.fetch!(attrs, :email)
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     %{club_id: club_id, membership_id: membership_id, person_id: person_id}
   end
@@ -255,15 +261,15 @@ defmodule MembaWeb.MemberUIContractTest do
     actor = club_id |> ClubGroupQueries.list_active_members_of_club() |> hd()
 
     assert :ok =
-             Memba.Membership.create_custom_group(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 actor_person_id: actor.id,
-                 name: Keyword.fetch!(attrs, :name)
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       actor_person_id: actor.id,
+                       name: Keyword.fetch!(attrs, :name)
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     Repo.get!(Group, group_id)
   end
@@ -272,16 +278,16 @@ defmodule MembaWeb.MemberUIContractTest do
     actor = group.group_id |> ClubGroupQueries.list_active_members_of_group() |> hd()
 
     assert {:ok, %Memba.Membership.CustomGroupAdmission{}} =
-             Memba.Membership.add_custom_group_member(
-               %{
-                 club_id: member.club_id,
-                 group_id: group.group_id,
-                 membership_id: member.membership_id,
-                 person_id: member.person_id,
-                 actor_person_id: actor.id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Admit.prepare(%{
+                       club_id: member.club_id,
+                       group_id: group.group_id,
+                       membership_id: member.membership_id,
+                       person_id: member.person_id,
+                       actor_person_id: actor.id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp grant_manage_members!(member) do

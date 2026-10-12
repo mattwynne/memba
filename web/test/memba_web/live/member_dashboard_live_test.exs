@@ -237,10 +237,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert rendered_member_names(view) == ["Aaron Able", "Alice Adams", "Zoe Zed"]
 
     assert :ok =
-             Memba.Membership.remove_member(
-               %{membership_id: zoe.membership_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubMember.Remove.prepare(%{
+                       membership_id: zoe.membership_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert has_element?(
              view,
@@ -732,7 +734,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-member-#{bob.person_id}")
 
     restart_projector!(group_membership_projector_child_id)
-    assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
+
+    assert {:ok, _result} =
+             Memba.ProjectionBarrier.await(
+               [
+                 Memba.Membership.Projectors.GroupMembership,
+                 Memba.Membership.Projectors.Membership
+               ],
+               timeout: 1_000
+             )
   end
 
   test "a direct section patch rechecks selected-group access before its notification arrives", %{
@@ -806,7 +816,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-member-#{bob.person_id}")
 
     restart_projector!(group_membership_projector_child_id)
-    assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
+
+    assert {:ok, _result} =
+             Memba.ProjectionBarrier.await(
+               [
+                 Memba.Membership.Projectors.GroupMembership,
+                 Memba.Membership.Projectors.Membership
+               ],
+               timeout: 1_000
+             )
   end
 
   test "a route patch replaces selected-group interests and ignores the old group's unrepresented changes",
@@ -1796,7 +1814,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            ) == 0
 
     restart_projector!(group_membership_projector_child_id)
-    assert {:ok, _result} = Memba.Membership.await_group_access_projections(timeout: 1_000)
+
+    assert {:ok, _result} =
+             Memba.ProjectionBarrier.await(
+               [
+                 Memba.Membership.Projectors.GroupMembership,
+                 Memba.Membership.Projectors.Membership
+               ],
+               timeout: 1_000
+             )
   end
 
   test "an ordinary non-member keeps Admin contact guidance without a request action",
@@ -3672,14 +3698,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     if active? do
       assert :ok =
-               Memba.Membership.add_member(
-                 %{
-                   membership_id: membership_id,
-                   club_id: club_id,
-                   person_id: person.person_id
-                 },
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.AddMember.prepare(%{
+                         membership_id: membership_id,
+                         club_id: club_id,
+                         person_id: person.person_id
+                       }) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
 
       preserve_projection_display_fixtures(club_id, membership_id)
     else
@@ -3701,7 +3727,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   defp ensure_authoritative_club(attrs, club_id, club_name) do
     unless ClubGroupQueries.get_club(club_id) do
       club_attrs = attrs |> club_attrs(club_id, club_name) |> membership_club_attrs()
-      assert :ok = Memba.Membership.create_club(club_attrs, consistency: :strong)
+
+      assert :ok =
+               (with {:ok, command} <- Memba.Membership.ClubCommands.prepare_create(club_attrs) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
     end
   end
 

@@ -7,8 +7,6 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
   alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.MessageQueries
-  alias Memba.Membership
-  alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -35,16 +33,18 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: Memba.ID.generate(:message),
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring your maps."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.SendClubMessage.prepare(%{
+                       message_id: Memba.ID.generate(:message),
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring your maps."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert [message] = MessageQueries.list_messages_for_club(club_id)
     refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
@@ -137,16 +137,18 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: Memba.ID.generate(:message),
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring your maps."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.SendClubMessage.prepare(%{
+                       message_id: Memba.ID.generate(:message),
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring your maps."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert [message] = MessageQueries.list_messages_for_club(club_id)
     refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
@@ -219,24 +221,28 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: Memba.ID.generate(:message),
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring your maps."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.SendClubMessage.prepare(%{
+                       message_id: Memba.ID.generate(:message),
+                       club_id: club_id,
+                       sender_id: alice.person_id,
+                       subject: "Trip planning night",
+                       body: "Bring your maps."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert [message] = MessageQueries.list_messages_for_club(club_id)
 
     assert :ok =
-             Membership.remove_member(
-               %{membership_id: bob.membership_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubMember.Remove.prepare(%{
+                       membership_id: bob.membership_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     conn =
       conn
@@ -265,32 +271,39 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
 
     if is_nil(ClubGroupQueries.get_club(club_id)) do
       assert :ok =
-               Membership.create_club(
-                 membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.ClubCommands.prepare_create(
+                         membership_club_attrs(
+                           club_id: club_id,
+                           name: "Kootenay Mountaineering Club"
+                         )
+                       ) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
     end
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: email,
-                 email_addresses: [%{email: email, is_primary: true}]
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: email,
+                       email_addresses: [%{email: email, is_primary: true}]
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
+
+    membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id = Memba.ID.generate(:membership),
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     %{club_id: club_id, person_id: person_id, membership_id: membership_id}
   end

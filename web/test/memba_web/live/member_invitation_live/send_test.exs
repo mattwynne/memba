@@ -11,7 +11,6 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.PersonQueries
   alias Memba.Accounts.AuthEmail
-  alias Memba.Membership
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
@@ -279,31 +278,37 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
 
     unless Repo.get(Club, club_id) do
       assert :ok =
-               Membership.create_club(
-                 attrs
-                 |> club_attrs(club_id)
-                 |> Map.new(),
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.ClubCommands.prepare_create(
+                         attrs
+                         |> club_attrs(club_id)
+                         |> Map.new()
+                       ) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
     end
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: Keyword.fetch!(attrs, :email)
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     %{
       club_id: club_id,

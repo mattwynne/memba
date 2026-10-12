@@ -3,8 +3,6 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
 
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.PersonQueries
-  alias Memba.Membership
-  alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Recipient
@@ -218,15 +216,15 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     email = email_for(name)
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: Memba.ID.generate(:person),
-                 name: name,
-                 email: email,
-                 email_addresses: [%{email: email, is_primary: true}]
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: Memba.ID.generate(:person),
+                       name: name,
+                       email: email,
+                       email_addresses: [%{email: email, is_primary: true}]
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     session
     |> visit(current_path)
@@ -241,14 +239,14 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     assert person
 
     assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club_id,
-                 person_id: person.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: Memba.ID.generate(:membership),
+                       club_id: club_id,
+                       person_id: person.person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     session
     |> visit(current_path)
@@ -267,16 +265,18 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     assert sender
 
     result =
-      Messaging.send_club_message(
-        %{
-          message_id: Memba.ID.generate(:message),
-          club_id: club_id,
-          sender_id: sender.id,
-          subject: subject,
-          body: body
-        },
-        consistency: :strong
-      )
+      with {:ok, command} <-
+             Memba.Messaging.SendClubMessage.prepare(%{
+               message_id: Memba.ID.generate(:message),
+               club_id: club_id,
+               sender_id: sender.id,
+               subject: subject,
+               body: body
+             }),
+           {:ok, dispatch_result} <-
+             Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+        dispatch_result
+      end
 
     assert result == :ok or match?({:ok, _result}, result)
 
@@ -295,19 +295,31 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
   end
 
   defp report_email_delivery_delivered(attrs) do
-    apply(Messaging, :report_email_delivery_delivered, [attrs, [consistency: :strong]])
+    with {:ok, command} <- Memba.Messaging.EmailDeliveryReport.delivered(attrs),
+         {:ok, result} <- Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+      result
+    end
   end
 
   defp report_email_delivery_delayed(attrs) do
-    apply(Messaging, :report_email_delivery_delayed, [attrs, [consistency: :strong]])
+    with {:ok, command} <- Memba.Messaging.EmailDeliveryReport.delayed(attrs),
+         {:ok, result} <- Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+      result
+    end
   end
 
   defp report_email_delivery_bounced(attrs) do
-    apply(Messaging, :report_email_delivery_bounced, [attrs, [consistency: :strong]])
+    with {:ok, command} <- Memba.Messaging.EmailDeliveryReport.bounced(attrs),
+         {:ok, result} <- Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+      result
+    end
   end
 
   defp report_email_delivery_spam_complaint(attrs) do
-    apply(Messaging, :report_email_delivery_spam_complaint, [attrs, [consistency: :strong]])
+    with {:ok, command} <- Memba.Messaging.EmailDeliveryReport.spam_complaint(attrs),
+         {:ok, result} <- Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+      result
+    end
   end
 
   defp send_projected_message_with_recipients(names) do

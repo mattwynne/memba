@@ -16,7 +16,6 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.MembershipQueries
   alias Commanded.EventStore
-  alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Projections.GroupMembership
@@ -443,10 +442,14 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     club_id = Memba.ID.generate(:club)
 
     assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: name, slug: slug},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubCommands.prepare_create(%{
+                       club_id: club_id,
+                       name: name,
+                       slug: slug
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     ClubGroupQueries.get_club(club_id)
   end
@@ -456,20 +459,24 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: name, email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: name,
+                       email: email
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Membership.add_member(
-               %{
-                 club_id: club.club_id,
-                 membership_id: membership_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       club_id: club.club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     %{club_id: club.club_id, membership_id: membership_id, person_id: person_id}
   end
@@ -478,46 +485,46 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     group_id = Memba.ID.generate(:group)
 
     assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: club.club_id,
-                 group_id: group_id,
-                 actor_person_id: creator.person_id,
-                 name: name
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Create.prepare(%{
+                       club_id: club.club_id,
+                       group_id: group_id,
+                       actor_person_id: creator.person_id,
+                       name: name
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     ClubGroupQueries.get_group(group_id)
   end
 
   defp add_group_member!(club, group, actor, target) do
     assert {:ok, _admission} =
-             Membership.add_custom_group_member(
-               %{
-                 club_id: club.club_id,
-                 group_id: group.group_id,
-                 membership_id: target.membership_id,
-                 person_id: target.person_id,
-                 actor_person_id: actor.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Admit.prepare(%{
+                       club_id: club.club_id,
+                       group_id: group.group_id,
+                       membership_id: target.membership_id,
+                       person_id: target.person_id,
+                       actor_person_id: actor.person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp remove_group_member!(club, group, actor, target) do
     assert {:ok, _removal} =
-             Membership.remove_custom_group_member(
-               %{
-                 club_id: club.club_id,
-                 group_id: group.group_id,
-                 membership_id: target.membership_id,
-                 person_id: target.person_id,
-                 actor_person_id: actor.person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Remove.prepare(%{
+                       club_id: club.club_id,
+                       group_id: group.group_id,
+                       membership_id: target.membership_id,
+                       person_id: target.person_id,
+                       actor_person_id: actor.person_id,
+                       removal_operation_id: Ecto.UUID.generate()
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp count_removal_events(club_id, operation_id) do
@@ -533,15 +540,15 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
 
   defp make_admin!(club, actor, target) do
     assert :ok =
-             Membership.assign_membership_administrator_as_club_member(
-               %{
-                 club_id: club.club_id,
-                 membership_id: target.membership_id,
-                 person_id: target.person_id,
-                 actor_person_id: actor.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club.club_id,
+                       membership_id: target.membership_id,
+                       person_id: target.person_id,
+                       actor_person_id: actor.person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp signed_in_club_host(conn, email, club) do

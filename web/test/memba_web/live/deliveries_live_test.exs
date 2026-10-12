@@ -1,7 +1,6 @@
 defmodule MembaWeb.DeliveriesLiveTest do
   use MembaWeb.FeatureCase, async: false
 
-  alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Recipient
@@ -31,24 +30,28 @@ defmodule MembaWeb.DeliveriesLiveTest do
     second_reason = "mailbox does not exist"
 
     assert :ok =
-             Messaging.report_email_delivery_delayed(
-               %{
-                 message_id: first_recipient.message_id,
-                 delivery_id: first_recipient.delivery_id,
-                 reason: first_reason
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.delayed(%{
+                       message_id: first_recipient.message_id,
+                       delivery_id: first_recipient.delivery_id,
+                       reason: first_reason
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.report_email_delivery_bounced(
-               %{
-                 message_id: second_recipient.message_id,
-                 delivery_id: second_recipient.delivery_id,
-                 reason: second_reason
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.bounced(%{
+                       message_id: second_recipient.message_id,
+                       delivery_id: second_recipient.delivery_id,
+                       reason: second_reason
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     conn
     |> sign_in_staff()
@@ -106,14 +109,16 @@ defmodule MembaWeb.DeliveriesLiveTest do
       ])
 
     assert :ok =
-             Messaging.report_email_delivery_bounced(
-               %{
-                 message_id: recipient.message_id,
-                 delivery_id: recipient.delivery_id,
-                 reason: "mailbox does not exist"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.bounced(%{
+                       message_id: recipient.message_id,
+                       delivery_id: recipient.delivery_id,
+                       reason: "mailbox does not exist"
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert_eventually(fn ->
       assert_delivery_row(session, recipient.delivery_id, [

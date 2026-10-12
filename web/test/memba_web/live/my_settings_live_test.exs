@@ -5,7 +5,6 @@ defmodule MembaWeb.MySettingsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.PersonQueries
-  alias Memba.Membership, as: MembershipContext
   alias Memba.Membership.Events.{ClubMemberAdded, ClubMemberRemoved, ClubUpdated}
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -952,10 +951,14 @@ defmodule MembaWeb.MySettingsLiveTest do
     email = Keyword.fetch!(attrs, :email)
 
     assert :ok =
-             MembershipContext.create_person(
-               %{person_id: person_id, name: Keyword.fetch!(attrs, :name), email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: email
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     Repo.insert!(%Membership{
       membership_id: Memba.ID.generate(:membership),
@@ -969,10 +972,13 @@ defmodule MembaWeb.MySettingsLiveTest do
 
   defp add_pending_email_address!(person_id, email) do
     assert :ok =
-             MembershipContext.add_person_email_address(
-               %{person_id: person_id, email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonEmailAddressCommands.prepare_add(%{
+                       person_id: person_id,
+                       email: email
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     :ok
   end
@@ -981,7 +987,7 @@ defmodule MembaWeb.MySettingsLiveTest do
     add_pending_email_address!(person_id, email)
 
     assert :ok =
-             MembershipContext.verify_person_email_address(
+             Memba.Membership.PersonEmailVerification.verify(
                %{person_id: person_id, email: email},
                consistency: :strong
              )
