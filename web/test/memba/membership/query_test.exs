@@ -608,7 +608,8 @@ defmodule Memba.Membership.QueryTest do
                  group_key: "everyone",
                  name: "Everyone"
                }
-             ] = Membership.list_discoverable_groups_for_member(club.club_id, alice.person_id)
+             ] =
+               ClubGroupQueries.list_discoverable_groups_for_member(club.club_id, alice.person_id)
     end
 
     test "requires a resolvable active member of the selected club" do
@@ -633,26 +634,35 @@ defmodule Memba.Membership.QueryTest do
         active: true
       })
 
-      assert Membership.list_discoverable_groups_for_member(club.club_id, pat.person_id) == []
+      assert ClubGroupQueries.list_discoverable_groups_for_member(club.club_id, pat.person_id) ==
+               []
 
-      assert Membership.list_discoverable_groups_for_member(
+      assert ClubGroupQueries.list_discoverable_groups_for_member(
                club.club_id,
                former_member.person_id
              ) == []
 
-      assert Membership.list_discoverable_groups_for_member(club.club_id, outsider.person_id) ==
+      assert ClubGroupQueries.list_discoverable_groups_for_member(
+               club.club_id,
+               outsider.person_id
+             ) ==
                []
 
-      assert Membership.list_discoverable_groups_for_member(club.club_id, orphan_person_id) == []
+      assert ClubGroupQueries.list_discoverable_groups_for_member(club.club_id, orphan_person_id) ==
+               []
 
-      assert Membership.list_discoverable_groups_for_member(
+      assert ClubGroupQueries.list_discoverable_groups_for_member(
                Memba.ID.generate(:club),
                alice.person_id
              ) == []
 
-      assert Membership.list_discoverable_groups_for_member("not-a-uuid", alice.person_id) == []
-      assert Membership.list_discoverable_groups_for_member(club.club_id, "not-a-uuid") == []
-      assert Membership.list_discoverable_groups_for_member(nil, nil) == []
+      assert ClubGroupQueries.list_discoverable_groups_for_member("not-a-uuid", alice.person_id) ==
+               []
+
+      assert ClubGroupQueries.list_discoverable_groups_for_member(club.club_id, "not-a-uuid") ==
+               []
+
+      assert ClubGroupQueries.list_discoverable_groups_for_member(nil, nil) == []
     end
   end
 
@@ -739,7 +749,7 @@ defmodule Memba.Membership.QueryTest do
       admin_group_id = SystemGroups.admin_group_id(club.club_id)
       everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
       club_id = club.club_id
-      groups = Membership.list_active_groups_for_member(club.club_id, alice.person_id)
+      groups = ClubGroupQueries.list_active_groups_for_member(club.club_id, alice.person_id)
 
       assert [
                %{
@@ -798,36 +808,42 @@ defmodule Memba.Membership.QueryTest do
       add_group_member(club.club_id, group_id, membership_id, alice.person_id)
 
       assert Enum.any?(
-               Membership.list_active_groups_for_member(club.club_id, alice.person_id),
+               ClubGroupQueries.list_active_groups_for_member(club.club_id, alice.person_id),
                &(&1.group_id == group_id)
              )
 
       remove_group_member(club.club_id, group_id, membership_id, alice.person_id)
 
       refute Enum.any?(
-               Membership.list_active_groups_for_member(club.club_id, alice.person_id),
+               ClubGroupQueries.list_active_groups_for_member(club.club_id, alice.person_id),
                &(&1.group_id == group_id)
              )
 
       add_group_member(club.club_id, group_id, membership_id, alice.person_id)
       remove_member(membership_id)
 
-      assert Membership.list_active_groups_for_member(club.club_id, alice.person_id) == []
+      assert ClubGroupQueries.list_active_groups_for_member(club.club_id, alice.person_id) == []
     end
 
     test "returns an empty list for invalid or unknown club and person IDs" do
-      assert Membership.list_active_groups_for_member(
+      assert ClubGroupQueries.list_active_groups_for_member(
                Memba.ID.generate(:club),
                Memba.ID.generate(:person)
              ) == []
 
-      assert Membership.list_active_groups_for_member("not-a-uuid", Memba.ID.generate(:person)) ==
+      assert ClubGroupQueries.list_active_groups_for_member(
+               "not-a-uuid",
+               Memba.ID.generate(:person)
+             ) ==
                []
 
-      assert Membership.list_active_groups_for_member(Memba.ID.generate(:club), "not-a-uuid") ==
+      assert ClubGroupQueries.list_active_groups_for_member(
+               Memba.ID.generate(:club),
+               "not-a-uuid"
+             ) ==
                []
 
-      assert Membership.list_active_groups_for_member(nil, nil) == []
+      assert ClubGroupQueries.list_active_groups_for_member(nil, nil) == []
     end
   end
 
