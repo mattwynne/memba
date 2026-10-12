@@ -120,15 +120,15 @@ memberships =
   )
   |> Memba.Repo.aggregate(:count, :membership_id)
 
-conversations = Memba.Messaging.list_conversations_for_group(group_id)
+conversations = Memba.Messaging.ConversationListing.list_for_group(group_id)
 
 %{
-  activeMember: Memba.Membership.active_member_of_group?(group_id, person_id),
+  activeMember: Memba.Membership.MembershipQueries.active_member_of_group?(group_id, person_id),
   activeMembershipCount: memberships,
   canReadAllConversations:
-    Memba.Membership.active_member_of_group?(group_id, person_id) and
+    Memba.Membership.MembershipQueries.active_member_of_group?(group_id, person_id) and
       Enum.all?(conversations, fn message ->
-      Memba.Messaging.member_has_conversation_access?(
+      Memba.Messaging.ConversationGroupAccessQueries.member_has_conversation_access?(
         message.message_id,
         message.club_id,
         person_id,
