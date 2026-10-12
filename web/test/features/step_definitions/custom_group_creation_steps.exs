@@ -5,17 +5,23 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
   import ExUnit.Assertions
 
   alias Memba.ClubInboundEmailAddress
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
   alias Memba.Membership.App
+  alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateGroup
+  alias Memba.Membership.CustomGroup
   alias Memba.Membership.GroupName
   alias Memba.Membership.Permissions
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
+  alias Memba.Messaging.ConversationListing
   alias Memba.Repo
 
   @kmc_name "Kootenay Mountaineering Club"
@@ -69,7 +75,7 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
     creation = Map.fetch!(context, :last_custom_group_creation)
 
     assert [%{id: person_id}] =
-             Membership.list_active_members_of_group(creation.group_id)
+             ClubGroupQueries.list_active_members_of_group(creation.group_id)
 
     assert person_id == person_id!(context, person_name)
     context
@@ -145,15 +151,15 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
             actor_person_id: person_id!(context, actor_name),
             group_id: group_id,
             result:
-              Membership.create_custom_group(
-                %{
-                  club_id: club_id,
-                  group_id: group_id,
-                  actor_person_id: person_id!(context, actor_name),
-                  name: group_name
-                },
-                consistency: :strong
-              )
+              with {:ok, command} <-
+                     CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       actor_person_id: person_id!(context, actor_name),
+                       name: group_name
+                     }) do
+                MembershipDispatch.dispatch(command, consistency: :strong)
+              end
           }
         end,
         ordered: false,
@@ -179,7 +185,7 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
     assert successful_creation
 
     board = custom_group!(club_id!(context, @kmc_name), "Board")
-    assert [%{id: member_id}] = Membership.list_active_members_of_group(board.group_id)
+    assert [%{id: member_id}] = ClubGroupQueries.list_active_members_of_group(board.group_id)
     assert member_id == successful_creation.actor_person_id
     context
   end
@@ -219,7 +225,7 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
     group = custom_group!(club_id!(context, @kmc_name), group_name)
 
     assert Enum.any?(
-             Messaging.list_conversations_for_group(group.group_id),
+             ConversationListing.list_for_group(group.group_id),
              &(&1.subject == subject)
            )
 
@@ -235,10 +241,10 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
       |> Map.get(:groups, %{})
       |> Enum.find_value(fn
         {{@kmc_name, _group_name}, group_id} ->
-          candidate = Membership.get_group(group_id)
+          candidate = ClubGroupQueries.get_group(group_id)
 
           if Enum.any?(
-               Messaging.list_conversations_for_group(group_id),
+               ConversationListing.list_for_group(group_id),
                &(&1.message_id == message.message_id)
              ),
              do: candidate
@@ -278,15 +284,15 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
       group_id: group_id,
       name: group_name,
       result:
-        Membership.create_custom_group(
-          %{
-            club_id: club_id,
-            group_id: group_id,
-            actor_person_id: person_id!(context, actor_name),
-            name: group_name
-          },
-          consistency: :strong
-        )
+        with {:ok, command} <-
+               CustomGroup.Create.prepare(%{
+                 club_id: club_id,
+                 group_id: group_id,
+                 actor_person_id: person_id!(context, actor_name),
+                 name: group_name
+               }) do
+          MembershipDispatch.dispatch(command, consistency: :strong)
+        end
     }
 
     context =
@@ -298,7 +304,7 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
   end
 
   defp remember_created_group(context, creation) do
-    group = Membership.get_group(creation.group_id)
+    group = ClubGroupQueries.get_group(creation.group_id)
 
     context
     |> Map.put(:last_custom_group_creation, Map.put(creation, :name, group.name))
@@ -310,17 +316,21 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
 
     case get_in(context, [:clubs, club_name]) do
       club_id when is_binary(club_id) ->
-        assert Membership.get_club(club_id).slug == slug
+        assert ClubGroupQueries.get_club(club_id).slug == slug
         context
 
       nil ->
         club_id = Memba.ID.generate(:club)
 
         assert :ok =
-                 Membership.create_club(
-                   %{club_id: club_id, name: club_name, slug: slug},
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         ClubCommands.prepare_create(%{
+                           club_id: club_id,
+                           name: club_name,
+                           slug: slug
+                         }) do
+                    MembershipDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         put_context(context, :clubs, club_name, club_id)
     end
@@ -333,7 +343,7 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
     person_id = person_id!(context, person_name)
     role_id = Roles.membership_administrator_role_id(club_id)
 
-    unless Membership.person_has_club_permission?(
+    unless Authorization.has_permission?(
              club_id,
              person_id,
              Permissions.club_manage_members()
@@ -360,10 +370,14 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.add_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipDispatch.dispatch(command, consistency: :strong)
+              end)
 
     put_context(
       context,
@@ -383,14 +397,14 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
         email = "#{String.downcase(person_name)}-#{scenario_suffix(context)}@example.test"
 
         assert :ok =
-                 Membership.create_person(
-                   %{
-                     person_id: person_id,
-                     name: person_name,
-                     email_addresses: [%{email: email, is_primary: true}]
-                   },
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         PersonCommands.prepare_create(%{
+                           person_id: person_id,
+                           name: person_name,
+                           email_addresses: [%{email: email, is_primary: true}]
+                         }) do
+                    MembershipDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         put_context(context, :people, person_name, %{
           person_id: person_id,
@@ -424,7 +438,7 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
                    consistency: :strong
                  )
 
-        group = Membership.get_group(group_id)
+        group = ClubGroupQueries.get_group(group_id)
         {put_context(context, :groups, {club_name, group_name}, group_id), group}
     end
   end
@@ -474,13 +488,13 @@ defmodule Memba.Cucumber.CustomGroupCreationSteps do
 
   defp current_system_groups(club_id) do
     [
-      Membership.get_group(SystemGroups.everyone_group_id(club_id)),
-      Membership.get_group(SystemGroups.admin_group_id(club_id))
+      ClubGroupQueries.get_group(SystemGroups.everyone_group_id(club_id)),
+      ClubGroupQueries.get_group(SystemGroups.admin_group_id(club_id))
     ]
   end
 
   defp group_address(context, club_name, group_name) do
-    club = Membership.get_club(club_id!(context, club_name))
+    club = ClubGroupQueries.get_club(club_id!(context, club_name))
     group = custom_group!(club.club_id, group_name)
     ClubInboundEmailAddress.address(club, group.email_slug)
   end

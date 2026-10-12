@@ -3,12 +3,26 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   import ExUnit.Assertions
 
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
+  alias Memba.Membership.CustomGroup
   alias Memba.Membership.CustomGroupAdmission
   alias Memba.Membership.GroupWelcomeEmail
+  alias Memba.Membership.InvitationIssuanceWorkflow
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.Permissions
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
+  alias Memba.Messaging.ConversationListing
+  alias Memba.Messaging.CurrentMemberConversationFollow
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
 
   @club_name "Kootenay Mountaineering Club"
   @board_name "Board"
@@ -61,15 +75,15 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   step "Alice is the only remaining club admin", context do
     assert :ok =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id!(context, @club_name),
-                 membership_id: membership_id!(context, @club_name, "Dan"),
-                 person_id: person_id!(context, "Dan"),
-                 actor_person_id: person_id!(context, "Alice")
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id!(context, @club_name),
+                       membership_id: membership_id!(context, @club_name, "Dan"),
+                       person_id: person_id!(context, "Dan"),
+                       actor_person_id: person_id!(context, "Alice")
+                     }) do
+                MembershipDispatch.dispatch(command, consistency: :strong)
+              end)
 
     context
   end
@@ -79,7 +93,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     email = person!(context, "Robin").email
 
     assert {:ok, %{invitation_id: invitation_id}} =
-             Membership.invite_club_member(
+             InvitationIssuanceWorkflow.invite(
                %{club_id: club_id!(context, @club_name), email: email},
                consistency: :strong
              )
@@ -91,10 +105,12 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   step "Carol is no longer an active member of KMC", context do
     assert :ok =
-             Membership.remove_member(
-               %{membership_id: membership_id!(context, @club_name, "Carol")},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Remove.prepare(%{
+                       membership_id: membership_id!(context, @club_name, "Carol")
+                     }) do
+                MembershipDispatch.dispatch(command, consistency: :strong)
+              end)
 
     context
   end
@@ -104,32 +120,36 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     message = message!(context, @agenda_subject)
 
     assert :ok =
-             Messaging.follow_conversation_as_current_member(
-               %{
-                 club_id: club_id!(context, @club_name),
-                 conversation_id: message.message_id,
-                 member_id: person_id!(context, "Carol")
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CurrentMemberConversationFollow.prepare_follow(%{
+                       club_id: club_id!(context, @club_name),
+                       conversation_id: message.message_id,
+                       member_id: person_id!(context, "Carol")
+                     }),
+                   {:ok, dispatch_result} <-
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Membership.remove_member(
-               %{membership_id: membership_id!(context, @club_name, "Carol")},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Remove.prepare(%{
+                       membership_id: membership_id!(context, @club_name, "Carol")
+                     }) do
+                MembershipDispatch.dispatch(command, consistency: :strong)
+              end)
 
     replacement_membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.add_member(
-               %{
-                 club_id: club_id!(context, @club_name),
-                 membership_id: replacement_membership_id,
-                 person_id: person_id!(context, "Carol")
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id!(context, @club_name),
+                       membership_id: replacement_membership_id,
+                       person_id: person_id!(context, "Carol")
+                     }) do
+                MembershipDispatch.dispatch(command, consistency: :strong)
+              end)
 
     put_context(
       context,
@@ -149,15 +169,15 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     bob_id = person_id!(context, "Bob")
     club_id = club_id!(context, @club_name)
 
-    assert Membership.active_member_of_club?(club_id, bob_id)
+    assert MembershipQueries.active_member_of_club?(club_id, bob_id)
 
-    refute Membership.person_has_club_permission?(
+    refute Authorization.has_permission?(
              club_id,
              bob_id,
              Permissions.club_manage_members()
            )
 
-    refute Membership.active_member_of_group?(
+    refute MembershipQueries.active_member_of_group?(
              SystemGroups.admin_group_id(club_id),
              bob_id
            )
@@ -169,9 +189,9 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     refute group_member?(context, @board_name, "Dan")
 
     Enum.each(
-      Messaging.list_conversations_for_group(group_id!(context, @board_name)),
+      ConversationListing.list_for_group(group_id!(context, @board_name)),
       fn message ->
-        refute Messaging.member_has_conversation_access?(
+        refute ConversationGroupAccessQueries.member_has_conversation_access?(
                  message.message_id,
                  club_id!(context, @club_name),
                  person_id!(context, "Dan"),
@@ -205,7 +225,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   step ~r/^(\w+) should not become an active KMC member through that attempt$/,
        %{args: [person_name]} = context do
-    refute Membership.active_member_of_club?(
+    refute MembershipQueries.active_member_of_club?(
              club_id!(context, @club_name),
              person_id!(context, person_name)
            )
@@ -215,7 +235,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   step ~r/^(\w+) should not belong to Admin$/,
        %{args: [person_name]} = context do
-    refute Membership.active_member_of_group?(
+    refute MembershipQueries.active_member_of_group?(
              SystemGroups.admin_group_id(club_id!(context, @club_name)),
              person_id!(context, person_name)
            )
@@ -244,7 +264,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
   end
 
   step "Bob should remain an active KMC member", context do
-    assert Membership.active_member_of_club?(
+    assert MembershipQueries.active_member_of_club?(
              club_id!(context, @club_name),
              person_id!(context, "Bob")
            )
@@ -258,7 +278,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
   end
 
   step "Bob should remain an active club member", context do
-    assert Membership.active_member_of_club?(
+    assert MembershipQueries.active_member_of_club?(
              club_id!(context, @club_name),
              person_id!(context, "Bob")
            )
@@ -276,9 +296,9 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     eve_id = person_id!(context, "Eve")
     club_id = club_id!(context, @club_name)
 
-    assert Membership.active_member_of_club?(club_id, eve_id)
+    assert MembershipQueries.active_member_of_club?(club_id, eve_id)
 
-    refute Membership.person_has_club_permission?(
+    refute Authorization.has_permission?(
              club_id,
              eve_id,
              Permissions.club_manage_members()
@@ -292,7 +312,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     assert_can_read(context, "Carol", subject)
 
     assert Enum.any?(
-             Messaging.list_conversation_messages(message!(context, subject).message_id),
+             MessageQueries.list_conversation_messages(message!(context, subject).message_id),
              &(&1.body == reply_body)
            )
 
@@ -303,7 +323,9 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     assert_can_read(context, "Carol", @agenda_subject)
 
     assert length(
-             Messaging.list_conversation_messages(message!(context, @agenda_subject).message_id)
+             MessageQueries.list_conversation_messages(
+               message!(context, @agenda_subject).message_id
+             )
            ) >= 2
 
     context
@@ -323,7 +345,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     |> conversation_message_ids(@agenda_subject)
     |> Enum.each(fn message_id ->
       refute Enum.any?(
-               Messaging.list_recipient_deliveries(message_id),
+               DeliveryQueries.list_recipient_deliveries(message_id),
                &(&1.recipient_id == carol_id)
              )
     end)
@@ -332,7 +354,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
   end
 
   step "Carol's former conversation follows should not be restored", context do
-    refute Messaging.following_conversation?(
+    refute ConversationFollowQueries.following_conversation?(
              message!(context, @agenda_subject).message_id,
              person_id!(context, "Carol")
            )
@@ -348,17 +370,17 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   defp attempt_removal(context, actor_name, target_name, group_name) do
     result =
-      Membership.remove_custom_group_member(
-        %{
-          club_id: club_id!(context, @club_name),
-          group_id: group_id!(context, group_name),
-          membership_id: membership_id!(context, @club_name, target_name),
-          person_id: person_id!(context, target_name),
-          actor_person_id: person_id!(context, actor_name),
-          removal_operation_id: Ecto.UUID.generate()
-        },
-        consistency: :strong
-      )
+      with {:ok, command} <-
+             CustomGroup.Remove.prepare(%{
+               club_id: club_id!(context, @club_name),
+               group_id: group_id!(context, group_name),
+               membership_id: membership_id!(context, @club_name, target_name),
+               person_id: person_id!(context, target_name),
+               actor_person_id: person_id!(context, actor_name),
+               removal_operation_id: Ecto.UUID.generate()
+             }) do
+        MembershipDispatch.dispatch(command, consistency: :strong)
+      end
 
     Map.put(context, :last_removal_result, result)
   end
@@ -372,16 +394,16 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   defp attempt_admission(context, actor_name, target_name, group_name, opts \\ []) do
     result =
-      Membership.add_custom_group_member(
-        %{
-          club_id: club_id!(context, @club_name),
-          group_id: group_id!(context, group_name),
-          membership_id: admission_membership_id!(context, target_name),
-          person_id: person_id!(context, target_name),
-          actor_person_id: person_id!(context, actor_name)
-        },
-        consistency: :strong
-      )
+      with {:ok, command} <-
+             CustomGroup.Admit.prepare(%{
+               club_id: club_id!(context, @club_name),
+               group_id: group_id!(context, group_name),
+               membership_id: admission_membership_id!(context, target_name),
+               person_id: person_id!(context, target_name),
+               actor_person_id: person_id!(context, actor_name)
+             }) do
+        MembershipDispatch.dispatch(command, consistency: :strong)
+      end
 
     context =
       context
@@ -407,8 +429,8 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     actor = person!(context, actor_name)
 
     GroupWelcomeEmail.deliver(%{
-      club: Membership.get_club(admission.club_id),
-      group: Membership.get_group(admission.group_id),
+      club: ClubGroupQueries.get_club(admission.club_id),
+      group: ClubGroupQueries.get_group(admission.group_id),
       recipient: %{person_id: admission.person_id, name: target.name, email: target.email},
       added_by: %{person_id: admission.actor_person_id, name: actor.name},
       group_url: group_url(context, group_name)
@@ -447,7 +469,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
   defp assert_can_read(context, person_name, subject) do
     message = message!(context, subject)
 
-    assert Messaging.member_has_conversation_access?(
+    assert ConversationGroupAccessQueries.member_has_conversation_access?(
              message.message_id,
              message.club_id,
              person_id!(context, person_name),
@@ -461,14 +483,14 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
     context
     |> message!(subject)
     |> Map.fetch!(:message_id)
-    |> Messaging.list_conversation_messages()
+    |> MessageQueries.list_conversation_messages()
     |> Enum.map(& &1.message_id)
   end
 
   defp active_group_member_names(context, group_name) do
     context
     |> group_id!(group_name)
-    |> Membership.list_active_members_of_group()
+    |> ClubGroupQueries.list_active_members_of_group()
     |> Enum.map(& &1.name)
     |> Enum.sort()
   end
@@ -478,12 +500,12 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
     context
     |> group_id!(group_name)
-    |> Membership.list_active_members_of_group()
+    |> ClubGroupQueries.list_active_members_of_group()
     |> Enum.count(&(&1.id == person_id))
   end
 
   defp group_member?(context, group_name, person_name) do
-    Membership.active_member_of_group?(
+    MembershipQueries.active_member_of_group?(
       group_id!(context, group_name),
       person_id!(context, person_name)
     )
@@ -499,14 +521,14 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
         email = "#{String.downcase(person_name)}-#{scenario_suffix(context)}@example.test"
 
         assert :ok =
-                 Membership.create_person(
-                   %{
-                     person_id: person_id,
-                     name: person_name,
-                     email_addresses: [%{email: email, is_primary: true}]
-                   },
-                   consistency: :strong
-                 )
+                 (with {:ok, command} <-
+                         PersonCommands.prepare_create(%{
+                           person_id: person_id,
+                           name: person_name,
+                           email_addresses: [%{email: email, is_primary: true}]
+                         }) do
+                    MembershipDispatch.dispatch(command, consistency: :strong)
+                  end)
 
         put_context(context, :people, person_name, %{
           person_id: person_id,
@@ -562,7 +584,7 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
   end
 
   defp club_admin?(context, person_name) do
-    Membership.person_has_club_permission?(
+    Authorization.has_permission?(
       club_id!(context, @club_name),
       person_id!(context, person_name),
       Permissions.club_manage_members()
@@ -571,9 +593,9 @@ defmodule Memba.Cucumber.CustomGroupMembershipSteps do
 
   defp refute_group_conversation_access(context, person_name) do
     Enum.each(
-      Messaging.list_conversations_for_group(group_id!(context, @board_name)),
+      ConversationListing.list_for_group(group_id!(context, @board_name)),
       fn message ->
-        refute Messaging.member_has_conversation_access?(
+        refute ConversationGroupAccessQueries.member_has_conversation_access?(
                  message.message_id,
                  club_id!(context, @club_name),
                  person_id!(context, person_name),
