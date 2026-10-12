@@ -1,11 +1,17 @@
 defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.InvitationAcceptance
+  alias Memba.Membership.InvitationIssuanceWorkflow
   alias Memba.Membership.InvitationQueries
   alias Memba.Membership.InvitationToken
+  alias Memba.Membership.PermissionQueries
   alias Memba.Membership.Permissions
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
   alias Memba.Membership.Projections.MemberPermission
@@ -21,7 +27,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       invitation_id = Memba.ID.generate(:club_invitation)
 
       assert {:ok, %{invitation_token: token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "Robin@Example.COM"},
                  consistency: :strong
                )
@@ -61,7 +67,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       invitation_id = Memba.ID.generate(:club_invitation)
 
       assert {:ok, %{invitation_id: ^invitation_id, invitation_token: invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{
                    invitation_id: invitation_id,
                    club_id: club_id,
@@ -99,27 +105,29 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       create_club!(club_id)
 
-      assert :ok =
-               Membership.create_person(
-                 %{
-                   person_id: person_id,
-                   name: "Robin",
-                   email_addresses: [
-                     %{email: "robin@example.com", is_primary: true},
-                     %{email: "Robin@Work.Example", is_primary: false}
-                   ]
-                 },
-                 consistency: :strong
-               )
+      assert {:ok, person_command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Robin",
+                 email_addresses: [
+                   %{email: "robin@example.com", is_primary: true},
+                   %{email: "Robin@Work.Example", is_primary: false}
+                 ]
+               })
 
-      assert :ok =
-               Membership.add_member(
-                 %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-                 consistency: :strong
-               )
+      assert :ok = CommandDispatch.dispatch(person_command, consistency: :strong)
+
+      assert {:ok, member_command} =
+               AddMember.prepare(%{
+                 membership_id: membership_id,
+                 club_id: club_id,
+                 person_id: person_id
+               })
+
+      assert :ok = CommandDispatch.dispatch(member_command, consistency: :strong)
 
       assert {:error, :already_active_member} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{
                    invitation_id: invitation_id,
                    club_id: club_id,
@@ -140,7 +148,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       duplicate_invitation_id = Memba.ID.generate(:club_invitation)
 
       assert {:ok, %{invitation_token: first_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{
                    invitation_id: original_invitation_id,
                    club_id: club_id,
@@ -152,7 +160,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       first_hash = InvitationToken.hash_token(first_token)
 
       assert {:ok, %{invitation_id: ^original_invitation_id, invitation_token: second_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{
                    invitation_id: duplicate_invitation_id,
                    club_id: club_id,
@@ -198,14 +206,17 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       create_club!(club_id)
 
-      assert :ok =
-               Membership.create_person(
-                 %{person_id: person_id, name: "Alice", email: "Alice@Example.COM"},
-                 consistency: :strong
-               )
+      assert {:ok, person_command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Alice",
+                 email: "Alice@Example.COM"
+               })
+
+      assert :ok = CommandDispatch.dispatch(person_command, consistency: :strong)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: " alice@example.com "},
                  consistency: :strong
                )
@@ -217,7 +228,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                 person_id: ^person_id,
                 membership_id: ^membership_id
               }} =
-               Membership.accept_club_member_invitation_for_existing_person(
+               InvitationAcceptance.accept_existing(
                  %{
                    invitation_id: invitation_id,
                    person_id: person_id,
@@ -232,7 +243,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
                ClubGroupQueries.list_active_members_of_club(club_id)
 
-      assert Membership.person_has_club_permission?(
+      assert PermissionQueries.has_permission?(
                club_id,
                person_id,
                Permissions.club_manage_members()
@@ -260,7 +271,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       create_club!(club_id)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: " Robin@Example.COM "},
                  consistency: :strong
                )
@@ -275,7 +286,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                 person_id: ^person_id,
                 membership_id: ^membership_id
               }} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{
                    invitation_id: invitation_id,
                    person_id: person_id,
@@ -303,7 +314,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
                ClubGroupQueries.list_active_members_of_club(club_id)
 
-      assert Membership.person_has_club_permission?(
+      assert PermissionQueries.has_permission?(
                club_id,
                person_id,
                Permissions.club_manage_members()
@@ -331,7 +342,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       create_club!(club_id)
 
       assert {:ok, %{invitation_token: invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
                  consistency: :strong
                )
@@ -356,7 +367,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
              } = InvitationQueries.get_by_token(invitation_token)
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{
                    invitation_id: invitation_id,
                    person_id: person_id,
@@ -383,13 +394,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       create_club!(club_id)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "Robin@Example.COM"},
                  consistency: :strong
                )
 
       assert {:error, :simulated_after_person_created} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{invitation_id: invitation_id, name: "Robin"},
                  after_invitation_person_created: fn ->
                    {:error, :simulated_after_person_created}
@@ -402,10 +413,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert is_nil(Repo.get(MembershipProjection, membership_id))
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.complete_invited_club_member_profile(%{
-                 invitation_id: invitation_id,
-                 name: "Robin"
-               })
+               InvitationAcceptance.complete_profile(
+                 %{
+                   invitation_id: invitation_id,
+                   name: "Robin"
+                 },
+                 []
+               )
 
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
       assert admin_assignment_count(club_id, membership_id) == 1
@@ -420,13 +434,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       create_club!(club_id)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "Robin@Example.COM"},
                  consistency: :strong
                )
 
       assert {:error, :simulated_after_membership_added} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{invitation_id: invitation_id, name: "Robin"},
                  consistency: :strong,
                  after_invitation_membership_added: fn ->
@@ -440,7 +454,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                InvitationQueries.get(invitation_id)
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{invitation_id: invitation_id, name: "Robin"},
                  consistency: :strong
                )
@@ -456,20 +470,23 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       create_club!(club_id)
 
-      assert :ok =
-               Membership.create_person(
-                 %{person_id: person_id, name: "Alice", email: "alice@example.com"},
-                 consistency: :strong
-               )
+      assert {:ok, person_command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Alice",
+                 email: "alice@example.com"
+               })
+
+      assert :ok = CommandDispatch.dispatch(person_command, consistency: :strong)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "alice@example.com"},
                  consistency: :strong
                )
 
       assert {:error, :simulated_after_membership_added} =
-               Membership.accept_club_member_invitation_for_existing_person(
+               InvitationAcceptance.accept_existing(
                  %{invitation_id: invitation_id, person_id: person_id},
                  after_invitation_membership_added: fn ->
                    {:error, :simulated_after_membership_added}
@@ -482,10 +499,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                InvitationQueries.get(invitation_id)
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.accept_club_member_invitation_for_existing_person(%{
-                 invitation_id: invitation_id,
-                 person_id: person_id
-               })
+               InvitationAcceptance.accept_existing(
+                 %{
+                   invitation_id: invitation_id,
+                   person_id: person_id
+                 },
+                 []
+               )
 
       assert admin_assignment_count(club_id, membership_id) == 1
 
@@ -502,28 +522,37 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       create_club!(club_id)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
                  consistency: :strong
                )
 
-      assert :ok =
-               Membership.create_person(
-                 %{person_id: person_id, name: "Robin", email: "robin@example.com"},
-                 consistency: :strong
-               )
+      assert {:ok, person_command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Robin",
+                 email: "robin@example.com"
+               })
 
-      assert :ok =
-               Membership.add_member(
-                 %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-                 consistency: :strong
-               )
+      assert :ok = CommandDispatch.dispatch(person_command, consistency: :strong)
+
+      assert {:ok, member_command} =
+               AddMember.prepare(%{
+                 membership_id: membership_id,
+                 club_id: club_id,
+                 person_id: person_id
+               })
+
+      assert :ok = CommandDispatch.dispatch(member_command, consistency: :strong)
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.complete_invited_club_member_profile(%{
-                 invitation_id: invitation_id,
-                 name: "Robin"
-               })
+               InvitationAcceptance.complete_profile(
+                 %{
+                   invitation_id: invitation_id,
+                   name: "Robin"
+                 },
+                 []
+               )
 
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
       assert admin_assignment_count(club_id, membership_id) == 1
@@ -537,29 +566,38 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       create_club!(club_id)
 
-      assert :ok =
-               Membership.create_person(
-                 %{person_id: person_id, name: "Alice", email: "alice@example.com"},
-                 consistency: :strong
-               )
+      assert {:ok, person_command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Alice",
+                 email: "alice@example.com"
+               })
+
+      assert :ok = CommandDispatch.dispatch(person_command, consistency: :strong)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "alice@example.com"},
                  consistency: :strong
                )
 
-      assert :ok =
-               Membership.add_member(
-                 %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-                 consistency: :strong
-               )
-
-      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.accept_club_member_invitation_for_existing_person(%{
-                 invitation_id: invitation_id,
+      assert {:ok, member_command} =
+               AddMember.prepare(%{
+                 membership_id: membership_id,
+                 club_id: club_id,
                  person_id: person_id
                })
+
+      assert :ok = CommandDispatch.dispatch(member_command, consistency: :strong)
+
+      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
+               InvitationAcceptance.accept_existing(
+                 %{
+                   invitation_id: invitation_id,
+                   person_id: person_id
+                 },
+                 []
+               )
 
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
     end
@@ -573,30 +611,36 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       create_club!(club_id)
 
       assert {:ok, %{invitation_token: token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
                  consistency: :strong
                )
 
       assert {:error, :paused} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{invitation_id: invitation_id, name: "Robin"},
                  after_invitation_membership_added: fn -> {:error, :paused} end
                )
 
       assert {:error, :invitation_person_mismatch} =
-               Membership.complete_invited_club_member_profile(%{
-                 invitation_id: invitation_id,
-                 name: "Robin",
-                 person_id: Memba.ID.generate(:person)
-               })
+               InvitationAcceptance.complete_profile(
+                 %{
+                   invitation_id: invitation_id,
+                   name: "Robin",
+                   person_id: Memba.ID.generate(:person)
+                 },
+                 []
+               )
 
       assert {:error, :invitation_membership_mismatch} =
-               Membership.complete_invited_club_member_profile(%{
-                 invitation_id: invitation_id,
-                 name: "Robin",
-                 membership_id: Memba.ID.generate(:membership)
-               })
+               InvitationAcceptance.complete_profile(
+                 %{
+                   invitation_id: invitation_id,
+                   name: "Robin",
+                   membership_id: Memba.ID.generate(:membership)
+                 },
+                 []
+               )
 
       assert %ClubInvitationProjection{status: "pending"} =
                InvitationQueries.get_by_token(token)
@@ -604,10 +648,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.complete_invited_club_member_profile(%{
-                 invitation_id: invitation_id,
-                 name: "Robin"
-               })
+               InvitationAcceptance.complete_profile(
+                 %{
+                   invitation_id: invitation_id,
+                   name: "Robin"
+                 },
+                 []
+               )
 
       assert admin_assignment_count(club_id, membership_id) == 1
     end
@@ -619,23 +666,29 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       create_club!(club_id)
 
-      assert :ok =
-               Membership.create_person(
-                 %{person_id: person_id, name: "Other", email: "other@example.com"},
-                 consistency: :strong
-               )
+      assert {:ok, person_command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Other",
+                 email: "other@example.com"
+               })
+
+      assert :ok = CommandDispatch.dispatch(person_command, consistency: :strong)
 
       assert {:ok, %{invitation_token: token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
                  consistency: :strong
                )
 
       assert {:error, :invitation_email_mismatch} =
-               Membership.accept_club_member_invitation_for_existing_person(%{
-                 invitation_id: invitation_id,
-                 person_id: person_id
-               })
+               InvitationAcceptance.accept_existing(
+                 %{
+                   invitation_id: invitation_id,
+                   person_id: person_id
+                 },
+                 []
+               )
 
       assert [] = ClubGroupQueries.list_active_members_of_club(club_id)
 
@@ -653,30 +706,33 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       create_club!(invited_club_id)
 
-      assert :ok =
-               Membership.create_club(
-                 membership_club_attrs(club_id: other_club_id, name: "Other Club"),
-                 consistency: :strong
+      assert {:ok, club_command} =
+               ClubCommands.prepare_create(
+                 membership_club_attrs(club_id: other_club_id, name: "Other Club")
                )
 
-      assert :ok =
-               Membership.create_person(
-                 %{person_id: person_id, name: "Robin", email: "robin@example.com"},
-                 consistency: :strong
-               )
+      assert :ok = CommandDispatch.dispatch(club_command, consistency: :strong)
 
-      assert :ok =
-               Membership.add_member(
-                 %{
-                   membership_id: other_membership_id,
-                   club_id: other_club_id,
-                   person_id: person_id
-                 },
-                 consistency: :strong
-               )
+      assert {:ok, person_command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Robin",
+                 email: "robin@example.com"
+               })
+
+      assert :ok = CommandDispatch.dispatch(person_command, consistency: :strong)
+
+      assert {:ok, member_command} =
+               AddMember.prepare(%{
+                 membership_id: other_membership_id,
+                 club_id: other_club_id,
+                 person_id: person_id
+               })
+
+      assert :ok = CommandDispatch.dispatch(member_command, consistency: :strong)
 
       assert {:ok, _invitation} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{
                    invitation_id: invitation_id,
                    club_id: invited_club_id,
@@ -686,10 +742,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                )
 
       assert {:ok, %{membership_id: ^invited_membership_id}} =
-               Membership.accept_club_member_invitation_for_existing_person(%{
-                 invitation_id: invitation_id,
-                 person_id: person_id
-               })
+               InvitationAcceptance.accept_existing(
+                 %{
+                   invitation_id: invitation_id,
+                   person_id: person_id
+                 },
+                 []
+               )
 
       assert one_active_membership!(invited_club_id, person_id).membership_id ==
                invited_membership_id
@@ -708,13 +767,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       create_club!(club_id)
 
       assert {:ok, %{invitation_token: invitation_token}} =
-               Membership.invite_club_member(
+               InvitationIssuanceWorkflow.invite(
                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
                  consistency: :strong
                )
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{
                    invitation_id: invitation_id,
                    person_id: person_id,
@@ -732,7 +791,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
              } = InvitationQueries.get_by_token(invitation_token)
 
       assert {:error, :already_accepted} =
-               Membership.complete_invited_club_member_profile(
+               InvitationAcceptance.complete_profile(
                  %{
                    invitation_id: invitation_id,
                    person_id: duplicate_person_id,
@@ -795,11 +854,12 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
   end
 
   defp create_club!(club_id) do
-    assert :ok =
-             Membership.create_club(
-               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
-               consistency: :strong
+    assert {:ok, club_command} =
+             ClubCommands.prepare_create(
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club")
              )
+
+    assert :ok = CommandDispatch.dispatch(club_command, consistency: :strong)
   end
 
   defp member_permission?(club_id, person_id, permission) do
