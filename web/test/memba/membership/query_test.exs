@@ -398,7 +398,7 @@ defmodule Memba.Membership.QueryTest do
                  email: "bob@example.com",
                  roles: []
                }
-             ] = Membership.list_active_members_of_group(everyone_group_id)
+             ] = ClubGroupQueries.list_active_members_of_group(everyone_group_id)
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
@@ -411,7 +411,7 @@ defmodule Memba.Membership.QueryTest do
                  email: "alice@example.com",
                  roles: ["Admin", "Chair"]
                }
-             ] = Membership.list_active_members_of_group(admin_group_id)
+             ] = ClubGroupQueries.list_active_members_of_group(admin_group_id)
 
       assert admin_person_id == alice.person_id
     end
@@ -465,9 +465,11 @@ defmodule Memba.Membership.QueryTest do
         roles: ["Alpine", "Zebra"]
       }
 
-      assert Membership.list_active_members_of_group(everyone_group_id) == [eligible_summary]
+      assert ClubGroupQueries.list_active_members_of_group(everyone_group_id) == [
+               eligible_summary
+             ]
 
-      assert Membership.list_active_members_of_group(
+      assert ClubGroupQueries.list_active_members_of_group(
                everyone_group_id,
                include_without_primary_email: true
              ) ==
@@ -521,7 +523,7 @@ defmodule Memba.Membership.QueryTest do
           "Other group"
         )
 
-      assert Membership.list_active_members_of_group(
+      assert ClubGroupQueries.list_active_members_of_group(
                selected_group_id,
                include_without_primary_email: true
              ) == [
@@ -543,19 +545,19 @@ defmodule Memba.Membership.QueryTest do
       everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
 
       assert [%{membership_id: ^membership_id}] =
-               Membership.list_active_members_of_group(everyone_group_id)
+               ClubGroupQueries.list_active_members_of_group(everyone_group_id)
 
       remove_member(membership_id)
 
-      assert [] = Membership.list_active_members_of_group(everyone_group_id)
+      assert [] = ClubGroupQueries.list_active_members_of_group(everyone_group_id)
     end
 
     test "returns an empty list for missing or invalid group IDs" do
-      assert Membership.list_active_members_of_group(Memba.ID.generate(:group)) == []
-      assert Membership.list_active_members_of_group(nil) == []
-      assert Membership.list_active_members_of_group("not-a-uuid") == []
+      assert ClubGroupQueries.list_active_members_of_group(Memba.ID.generate(:group)) == []
+      assert ClubGroupQueries.list_active_members_of_group(nil) == []
+      assert ClubGroupQueries.list_active_members_of_group("not-a-uuid") == []
 
-      assert Membership.list_active_members_of_group(
+      assert ClubGroupQueries.list_active_members_of_group(
                "not-a-uuid",
                include_without_primary_email: true
              ) == []
