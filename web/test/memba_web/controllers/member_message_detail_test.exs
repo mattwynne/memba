@@ -3,6 +3,8 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
   import Ecto.Query
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Messaging.MessageQueries
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
@@ -302,7 +304,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
       (person && person.person_id) ||
         Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
 
-    unless Memba.Membership.get_club(club_id) do
+    unless ClubGroupQueries.get_club(club_id) do
       assert :ok =
                Memba.Membership.create_club(
                  %{
@@ -335,7 +337,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
              )
 
     club_id
-    |> Memba.Membership.get_club()
+    |> ClubGroupQueries.get_club()
     |> Map.from_struct()
     |> Map.merge(%{
       person_id: person_id,
@@ -390,7 +392,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
       from(delivery in MembaStaffEmailDelivery, where: delivery.message_id == ^message_id)
     )
 
-    Memba.Messaging.get_message(message_id)
+    MessageQueries.get_message(message_id)
   end
 
   defp create_member_email_delivery(attrs) do

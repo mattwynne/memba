@@ -3,8 +3,12 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
 
   import Plug.Conn
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.MessageSourceQueries
   alias Memba.Membership
-  alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
 
@@ -64,7 +68,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert %{provider_event_id: "evt_dedicated", status: "rejected"} =
-             Messaging.get_inbound_email_source("resend", "email_dedicated")
+             MessageSourceQueries.get_inbound_email_source("resend", "email_dedicated")
   end
 
   test "translates parsed Resend payloads into the provider-neutral inbound email API",
@@ -100,7 +104,8 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              club_id: kmc_id,
              sender_id: alice_id,
              message_id: message_id
-           } = Messaging.get_inbound_email_source("resend", "email_controller_accepted")
+           } =
+             MessageSourceQueries.get_inbound_email_source("resend", "email_controller_accepted")
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
@@ -111,7 +116,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              sender_id: ^alice_id,
              subject: "Trip planning night",
              body: "Bring route ideas."
-           } = Messaging.get_message(message_id)
+           } = MessageQueries.get_message(message_id)
 
     assert [
              %{
@@ -120,7 +125,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
                status: "pending"
              },
              %{recipient_id: bob_id, recipient_address: "bob@example.com", status: "pending"}
-           ] = Messaging.list_recipient_deliveries(message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert bob_id == bob.person_id
     assert Fake.deliveries() == []
@@ -190,7 +195,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
                subject: "Trip planning night",
                body: "Bring route ideas."
              }
-           ] = Messaging.list_messages_for_club(kmc.club_id)
+           ] = MessageQueries.list_messages_for_club(kmc.club_id)
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
@@ -202,7 +207,8 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              provider_message_id: "email_controller_duplicate",
              provider_event_id: "evt_controller_duplicate_first",
              status: "accepted"
-           } = Messaging.get_inbound_email_source("resend", "email_controller_duplicate")
+           } =
+             MessageSourceQueries.get_inbound_email_source("resend", "email_controller_duplicate")
   end
 
   test "records rejection paths and does not send duplicate rejection emails on provider retries",
@@ -236,7 +242,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     conn = post_resend_inbound_event(conn, payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
 
     assert %{
@@ -250,7 +256,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              rejection_reason: "attachments_not_supported",
              rejection_email_delivery_reference: rejection_email_delivery_reference
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "resend",
                "email_controller_attachment_rejected"
              )
@@ -286,7 +292,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
       |> post_resend_inbound_event(retry_payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     refute_received {:email, %Swoosh.Email{}}
 
@@ -296,7 +302,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              rejection_reason: "attachments_not_supported",
              rejection_email_delivery_reference: ^rejection_email_delivery_reference
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "resend",
                "email_controller_attachment_rejected"
              )
@@ -358,9 +364,10 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert %{message_id: message_id} =
-             Messaging.get_inbound_email_source("resend", "email_fetched_content")
+             MessageSourceQueries.get_inbound_email_source("resend", "email_fetched_content")
 
-    assert %{body: "Bring route ideas from fetched content."} = Messaging.get_message(message_id)
+    assert %{body: "Bring route ideas from fetched content."} =
+             MessageQueries.get_message(message_id)
   end
 
   test "accepts valid received email webhooks with no body and records a domain rejection", %{
@@ -392,7 +399,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              message_id: nil,
              rejection_reason: "plain_text_required",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "email_no_body")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "email_no_body")
 
     assert is_binary(rejection_email_delivery_reference)
   end
@@ -482,7 +489,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
                consistency: :strong
              )
 
-    Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_person!(attrs) do
@@ -498,7 +505,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
                consistency: :strong
              )
 
-    Membership.get_person(person_id)
+    PersonQueries.get_person(person_id)
   end
 
   defp add_member!(club_id, person_id) do

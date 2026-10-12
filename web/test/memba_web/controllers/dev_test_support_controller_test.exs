@@ -8,6 +8,8 @@ defmodule MembaWeb.DevTestSupportControllerTest do
   import Plug.Conn
   import Phoenix.ConnTest
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Group, as: GroupProjection
@@ -147,7 +149,7 @@ defmodule MembaWeb.DevTestSupportControllerTest do
              )
 
     assert %ClubProjection{club_id: ^club_id, name: "Reset Regression Club"} =
-             Membership.get_club(club_id)
+             ClubGroupQueries.get_club(club_id)
 
     assert %GroupProjection{
              group_id: ^everyone_group_id,
@@ -165,7 +167,7 @@ defmodule MembaWeb.DevTestSupportControllerTest do
              )
 
     assert %PersonProjection{person_id: ^person_id, name: "Reset Riley"} =
-             Membership.get_person(person_id)
+             PersonQueries.get_person(person_id)
 
     assert :ok =
              Membership.add_member(
@@ -180,7 +182,7 @@ defmodule MembaWeb.DevTestSupportControllerTest do
                name: "Reset Riley",
                email: "reset-riley@example.com"
              }
-           ] = Membership.list_active_members_of_group(everyone_group_id)
+           ] = ClubGroupQueries.list_active_members_of_group(everyone_group_id)
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

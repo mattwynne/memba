@@ -3,8 +3,12 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
   import Plug.Conn
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.MessageSourceQueries
   alias Memba.Membership
-  alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
 
@@ -58,7 +62,11 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              club_id: kmc_id,
              sender_id: alice_id,
              message_id: message_id
-           } = Messaging.get_inbound_email_source("postmark", "postmark-controller-accepted")
+           } =
+             MessageSourceQueries.get_inbound_email_source(
+               "postmark",
+               "postmark-controller-accepted"
+             )
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
@@ -69,7 +77,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              sender_id: ^alice_id,
              subject: "Trip planning night",
              body: "Bring route ideas."
-           } = Messaging.get_message(message_id)
+           } = MessageQueries.get_message(message_id)
 
     assert [
              %{
@@ -78,7 +86,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
                status: "pending"
              },
              %{recipient_id: bob_id, recipient_address: "bob@example.com", status: "pending"}
-           ] = Messaging.list_recipient_deliveries(message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert bob_id == bob.person_id
     assert Fake.deliveries() == []
@@ -129,7 +137,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              sender_id: alice_id,
              message_id: message_id
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "postmark",
                "postmark-controller-alternate-sender"
              )
@@ -143,7 +151,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              sender_id: ^alice_id,
              subject: "Alternate sender address",
              body: "Posting from my work address."
-           } = Messaging.get_message(message_id)
+           } = MessageQueries.get_message(message_id)
 
     assert [
              %{
@@ -151,7 +159,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
                recipient_address: "alice@example.com",
                status: "pending"
              }
-           ] = Messaging.list_recipient_deliveries(message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert Fake.deliveries() == []
 
@@ -186,7 +194,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     conn = post_postmark_inbound_event(conn, payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
 
     assert %{
@@ -200,7 +208,10 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              rejection_reason: "unknown_sender",
              rejection_email_delivery_reference: rejection_email_delivery_reference
            } =
-             Messaging.get_inbound_email_source("postmark", "postmark-controller-unknown-sender")
+             MessageSourceQueries.get_inbound_email_source(
+               "postmark",
+               "postmark-controller-unknown-sender"
+             )
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -239,7 +250,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     conn = post_postmark_inbound_event(conn, payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
 
     assert %{
@@ -252,7 +263,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              rejection_reason: "attachments_not_supported",
              rejection_email_delivery_reference: rejection_email_delivery_reference
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "postmark",
                "postmark-controller-attachment-rejected"
              )
@@ -281,7 +292,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
       |> post_postmark_inbound_event(retry_payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     refute_received {:email, %Swoosh.Email{}}
 
@@ -290,7 +301,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              rejection_reason: "attachments_not_supported",
              rejection_email_delivery_reference: ^rejection_email_delivery_reference
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "postmark",
                "postmark-controller-attachment-rejected"
              )
@@ -318,7 +329,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     conn = post_postmark_inbound_event(conn, payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
 
     assert %{
@@ -330,7 +341,11 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              message_id: nil,
              rejection_reason: "plain_text_required",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("postmark", "postmark-controller-html-only")
+           } =
+             MessageSourceQueries.get_inbound_email_source(
+               "postmark",
+               "postmark-controller-html-only"
+             )
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -362,7 +377,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     conn = post_postmark_inbound_event(conn, payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
 
     assert %{
@@ -374,7 +389,11 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              message_id: nil,
              rejection_reason: "plain_text_required",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("postmark", "postmark-controller-quoted-only")
+           } =
+             MessageSourceQueries.get_inbound_email_source(
+               "postmark",
+               "postmark-controller-quoted-only"
+             )
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -440,7 +459,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
                subject: "Trip planning night",
                body: "Bring route ideas."
              }
-           ] = Messaging.list_messages_for_club(kmc.club_id)
+           ] = MessageQueries.list_messages_for_club(kmc.club_id)
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
@@ -452,7 +471,11 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              provider_message_id: "postmark-controller-duplicate",
              provider_event_id: nil,
              status: "accepted"
-           } = Messaging.get_inbound_email_source("postmark", "postmark-controller-duplicate")
+           } =
+             MessageSourceQueries.get_inbound_email_source(
+               "postmark",
+               "postmark-controller-duplicate"
+             )
   end
 
   test "returns unprocessable for malformed Postmark inbound payloads", %{conn: conn} do
@@ -498,7 +521,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
                consistency: :strong
              )
 
-    Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_person!(attrs) do
@@ -516,7 +539,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     assert :ok =
              Membership.create_person(create_attrs, consistency: :strong)
 
-    Membership.get_person(person_id)
+    PersonQueries.get_person(person_id)
   end
 
   defp add_member!(club_id, person_id) do

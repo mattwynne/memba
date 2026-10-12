@@ -1,6 +1,9 @@
 defmodule MembaWeb.ConversationFollowControllerTest do
   use MembaWeb.ConnCase, async: false
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.CreateClub
@@ -26,21 +29,21 @@ defmodule MembaWeb.ConversationFollowControllerTest do
     add_member!(club.club_id, bob.person_id)
 
     conversation_id = send_root_message!(club.club_id, alice.person_id)
-    assert Messaging.following_conversation?(conversation_id, alice.person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
 
     token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)
 
     conn = get(conn, ~p"/messages/conversations/stop-following/#{token}")
 
     assert html_response(conn, 200) =~ "You’ve stopped following this conversation"
-    refute Messaging.following_conversation?(conversation_id, alice.person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
 
     reuse_conn = get(build_conn(), ~p"/messages/conversations/stop-following/#{token}")
     assert html_response(reuse_conn, 200) =~ "You’ve stopped following this conversation"
-    refute Messaging.following_conversation?(conversation_id, alice.person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
 
     reply_message_id = post_reply!(conversation_id, bob.person_id)
-    assert Messaging.list_recipient_deliveries(reply_message_id) == []
+    assert DeliveryQueries.list_recipient_deliveries(reply_message_id) == []
   end
 
   test "an invalid stop-follow link changes nothing and shows a generic failure", %{conn: conn} do
@@ -56,7 +59,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
 
     assert html_response(conn, 422) =~ "This stop-follow link isn’t valid"
     refute html_response(conn, 422) =~ club.name
-    assert Messaging.following_conversation?(conversation_id, alice.person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
   end
 
   test "a valid token with the wrong club scope changes nothing", %{conn: conn} do
@@ -72,7 +75,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
     conn = get(conn, ~p"/messages/conversations/stop-following/#{token}")
 
     assert html_response(conn, 422) =~ "This stop-follow link isn’t valid"
-    assert Messaging.following_conversation?(conversation_id, alice.person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
   end
 
   test "a former member can use the signed stop-follow link", %{conn: conn} do
@@ -97,7 +100,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
     conn = get(conn, ~p"/messages/conversations/stop-following/#{token}")
 
     assert html_response(conn, 200) =~ "You’ve stopped following this conversation"
-    refute Messaging.following_conversation?(conversation_id, alice.person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
   end
 
   test "email workflow lets a former member stop following and preserves the result shape" do
@@ -129,7 +132,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
 
     assert club_id == club.club_id
     assert member_id == alice.person_id
-    refute Messaging.following_conversation?(conversation_id, alice.person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
 
     assert {:ok, %{dispatch_result: :ok}} =
              Messaging.stop_following_conversation_from_email_token(
@@ -167,8 +170,8 @@ defmodule MembaWeb.ConversationFollowControllerTest do
 
     assert [%ConversationUnfollowed{member_id: member_id}] = events
     assert member_id == alice.person_id
-    refute Messaging.following_conversation?(conversation_id, alice.person_id)
-    assert Messaging.following_conversation?(conversation_id, bob.person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, bob.person_id)
   end
 
   test "email workflow normalizes invalid token and root scope without changing follow state" do
@@ -192,7 +195,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
                consistency: :strong
              )
 
-    assert Messaging.following_conversation?(conversation_id, alice.person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
   end
 
   defp create_club!(attrs \\ []) do
@@ -206,7 +209,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
                consistency: :strong
              )
 
-    Memba.Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_person!(attrs) do

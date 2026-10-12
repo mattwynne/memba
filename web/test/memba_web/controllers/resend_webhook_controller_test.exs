@@ -1,7 +1,7 @@
 defmodule MembaWeb.ResendWebhookControllerTest do
   use MembaWeb.FeatureCase, async: false
 
-  alias Memba.Messaging
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Recipient
@@ -16,8 +16,10 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
-      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "delivered"
+      assert DeliveryQueries.get_member_email_delivery(message_id, bob.person_id).status ==
+               "delivered"
+
+      assert DeliveryQueries.get_memba_staff_email_delivery(bob.delivery_id).status == "delivered"
     end)
   end
 
@@ -36,13 +38,13 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status ==
+      assert DeliveryQueries.get_member_email_delivery(message_id, bob.person_id).status ==
                "delivery problem"
 
-      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
+      assert DeliveryQueries.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
                "delayed"
 
-      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).reason ==
+      assert DeliveryQueries.get_memba_staff_email_delivery(message_id, bob.person_id).reason ==
                "recipient server is temporarily unavailable"
     end)
 
@@ -56,13 +58,13 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, carol.person_id).status ==
+      assert DeliveryQueries.get_member_email_delivery(message_id, carol.person_id).status ==
                "delivery problem"
 
-      assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).status ==
+      assert DeliveryQueries.get_memba_staff_email_delivery(message_id, carol.person_id).status ==
                "bounced"
 
-      assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).reason ==
+      assert DeliveryQueries.get_memba_staff_email_delivery(message_id, carol.person_id).reason ==
                "mailbox does not exist"
     end)
 
@@ -78,13 +80,13 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, dana.person_id).status ==
+      assert DeliveryQueries.get_member_email_delivery(message_id, dana.person_id).status ==
                "delivery problem"
 
-      assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status ==
+      assert DeliveryQueries.get_memba_staff_email_delivery(message_id, dana.person_id).status ==
                "spam complaint"
 
-      assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).reason ==
+      assert DeliveryQueries.get_memba_staff_email_delivery(message_id, dana.person_id).reason ==
                "recipient marked the message as spam"
     end)
   end
@@ -97,7 +99,7 @@ defmodule MembaWeb.ResendWebhookControllerTest do
              conn |> post_resend_event(payload) |> json_response(202)
 
     assert_eventually(fn ->
-      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "delayed"
+      assert DeliveryQueries.get_memba_staff_email_delivery(bob.delivery_id).status == "delayed"
     end)
 
     assert %{"status" => "accepted"} =
@@ -146,7 +148,8 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+      assert DeliveryQueries.get_member_email_delivery(message_id, bob.person_id).status ==
+               "delivered"
     end)
   end
 
@@ -174,7 +177,8 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+      assert DeliveryQueries.get_member_email_delivery(message_id, bob.person_id).status ==
+               "delivered"
     end)
   end
 

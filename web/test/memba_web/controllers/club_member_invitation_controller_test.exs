@@ -4,6 +4,10 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
   import Ecto.Query
   import Plug.Conn
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.InvitationQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -44,13 +48,13 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
                status: "pending",
                accepted_person_id: nil,
                accepted_membership_id: nil
-             } = Membership.get_club_member_invitation(invitation.invitation_id)
+             } = InvitationQueries.get(invitation.invitation_id)
 
       assert %ClubInvitation{status: "pending"} =
-               Membership.get_club_member_invitation_by_token(token)
+               InvitationQueries.get_by_token(token)
 
-      refute Membership.get_person_by_email("robin@example.com")
-      refute Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
+      refute PersonQueries.get_person_by_email("robin@example.com")
+      refute MembershipQueries.active_member_of_club_by_email?(club.club_id, "robin@example.com")
     end
 
     test "accepts a pending invitation for an existing person, signs in, and lands in the club",
@@ -70,11 +74,11 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
                status: "accepted",
                accepted_person_id: accepted_person_id,
                accepted_membership_id: accepted_membership_id
-             } = Membership.get_club_member_invitation(invitation.invitation_id)
+             } = InvitationQueries.get(invitation.invitation_id)
 
       assert accepted_person_id == person.person_id
       assert is_binary(accepted_membership_id)
-      assert Membership.active_member_of_club_by_email?(club.club_id, "alice@example.com")
+      assert MembershipQueries.active_member_of_club_by_email?(club.club_id, "alice@example.com")
       assert membership_count(club.club_id, person.person_id) == 1
     end
 
@@ -130,10 +134,10 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
              |> Enum.any?()
 
       assert %ClubInvitation{status: "pending"} =
-               Membership.get_club_member_invitation(invitation.invitation_id)
+               InvitationQueries.get(invitation.invitation_id)
 
-      refute Membership.get_person_by_email("robin@example.com")
-      refute Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
+      refute PersonQueries.get_person_by_email("robin@example.com")
+      refute MembershipQueries.active_member_of_club_by_email?(club.club_id, "robin@example.com")
     end
 
     test "redirects browsers without a verified invitation journey", %{conn: conn} do
@@ -169,8 +173,8 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
                "Follow your invitation link before completing your profile."
 
       assert get_session(profile_conn, IdentityAuth.club_member_invitation_session_key()) == nil
-      assert Membership.get_club_member_invitation(invitation.invitation_id).status == "pending"
-      refute Membership.get_person_by_email("robin@example.com")
+      assert InvitationQueries.get(invitation.invitation_id).status == "pending"
+      refute PersonQueries.get_person_by_email("robin@example.com")
     end
 
     test "rejects a profile journey whose club does not match the verified invitation",
@@ -196,9 +200,13 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
 
       assert redirected_to(profile_conn) == ~p"/auth"
       assert get_session(profile_conn, IdentityAuth.club_member_invitation_session_key()) == nil
-      assert Membership.get_club_member_invitation(invitation.invitation_id).status == "pending"
-      refute Membership.get_person_by_email("robin@example.com")
-      refute Membership.active_member_of_club_by_email?(other_club.club_id, "robin@example.com")
+      assert InvitationQueries.get(invitation.invitation_id).status == "pending"
+      refute PersonQueries.get_person_by_email("robin@example.com")
+
+      refute MembershipQueries.active_member_of_club_by_email?(
+               other_club.club_id,
+               "robin@example.com"
+             )
     end
 
     test "keeps a blank-name invitee on profile completion without accepting the invitation",
@@ -226,13 +234,13 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
              }
 
       assert %ClubInvitation{status: "pending"} =
-               Membership.get_club_member_invitation(invitation.invitation_id)
+               InvitationQueries.get(invitation.invitation_id)
 
       assert %ClubInvitation{status: "pending"} =
-               Membership.get_club_member_invitation_by_token(token)
+               InvitationQueries.get_by_token(token)
 
-      refute Membership.get_person_by_email("robin@example.com")
-      refute Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
+      refute PersonQueries.get_person_by_email("robin@example.com")
+      refute MembershipQueries.active_member_of_club_by_email?(club.club_id, "robin@example.com")
     end
 
     test "creates the invitee profile, activates ordinary membership, and clears journey state",
@@ -253,16 +261,16 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
       assert get_session(profile_conn, IdentityAuth.club_member_invitation_session_key()) == nil
 
       assert %{person_id: person_id, name: "Robin Example", email: "robin@example.com"} =
-               Membership.get_person_by_email("robin@example.com")
+               PersonQueries.get_person_by_email("robin@example.com")
 
       assert %ClubInvitation{
                status: "accepted",
                accepted_person_id: ^person_id,
                accepted_membership_id: accepted_membership_id
-             } = Membership.get_club_member_invitation(invitation.invitation_id)
+             } = InvitationQueries.get(invitation.invitation_id)
 
       assert is_binary(accepted_membership_id)
-      assert Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
+      assert MembershipQueries.active_member_of_club_by_email?(club.club_id, "robin@example.com")
       assert membership_count(club.club_id, person_id) == 1
     end
   end
@@ -271,7 +279,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
     club_attrs = membership_club_attrs(attrs)
 
     assert :ok = Membership.create_club(club_attrs, consistency: :strong)
-    Membership.get_club(club_attrs.club_id)
+    ClubGroupQueries.get_club(club_attrs.club_id)
   end
 
   defp invite_member!(club, email) do
@@ -281,7 +289,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
                consistency: :strong
              )
 
-    {Membership.get_club_member_invitation(invitation_id), token}
+    {InvitationQueries.get(invitation_id), token}
   end
 
   defp membership_count(club_id, person_id) do

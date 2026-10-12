@@ -4,6 +4,9 @@ defmodule MembaWeb.PageControllerTest do
   import Ecto.Query
   import Swoosh.TestAssertions
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Messaging.MessageQueries
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.AuthEmailRequest
@@ -1139,7 +1142,7 @@ defmodule MembaWeb.PageControllerTest do
              role_assignments: Repo.aggregate(RoleAssignment, :count)
            } == membership_projection_counts
 
-    assert Memba.Membership.list_active_clubs_for_member_email("robin@example.com") == []
+    assert MembershipQueries.list_active_clubs_for_member_email("robin@example.com") == []
 
     response =
       conn
@@ -1249,7 +1252,7 @@ defmodule MembaWeb.PageControllerTest do
                consistency: :strong
              )
 
-    Memba.Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp club_host(conn, club) do
@@ -1265,7 +1268,7 @@ defmodule MembaWeb.PageControllerTest do
     person_id = (person && person.person_id) || Memba.ID.generate(:person)
 
     club =
-      Memba.Membership.get_club(club_id) ||
+      ClubGroupQueries.get_club(club_id) ||
         create_club(
           club_id: club_id,
           name: Keyword.fetch!(attrs, :club_name),
@@ -1324,7 +1327,7 @@ defmodule MembaWeb.PageControllerTest do
       from(delivery in MembaStaffEmailDelivery, where: delivery.message_id == ^message_id)
     )
 
-    Memba.Messaging.get_message(message_id)
+    MessageQueries.get_message(message_id)
   end
 
   defp create_member_email_delivery(attrs) do

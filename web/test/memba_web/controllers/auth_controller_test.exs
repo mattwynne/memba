@@ -4,6 +4,7 @@ defmodule MembaWeb.AuthControllerTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
+  alias Memba.Membership.PersonQueries
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.AuthEmailRequest
@@ -681,7 +682,7 @@ defmodule MembaWeb.AuthControllerTest do
       |> assert_has("#clubs-index")
 
       assert %{name: "Pat Staff", email: "pat@memba.io"} =
-               Memba.Membership.get_person_by_email("pat@memba.io")
+               PersonQueries.get_person_by_email("pat@memba.io")
     end
 
     test "creates a person record for first-time staff and redirects to the staff area", %{
@@ -698,7 +699,7 @@ defmodule MembaWeb.AuthControllerTest do
                |> render_submit()
 
       assert %{name: "Pat Staff", email: "pat@memba.io"} =
-               Memba.Membership.get_person_by_email("pat@memba.io")
+               PersonQueries.get_person_by_email("pat@memba.io")
     end
 
     test "shows the duplicate-email error when another person claims the email after mount", %{
@@ -741,7 +742,7 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert response =~ "Tell us your name"
       assert response =~ "Please tell us your name."
-      assert Memba.Membership.get_person_by_email("pat@memba.io") == nil
+      assert PersonQueries.get_person_by_email("pat@memba.io") == nil
     end
   end
 
