@@ -4,6 +4,7 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Messaging
   alias Memba.Messaging.App
+  alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationFollowed
@@ -25,8 +26,8 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
     conversation_id = Memba.ID.generate(:message)
     member_id = Memba.ID.generate(:person)
 
-    refute Messaging.following_conversation?(conversation_id, member_id)
-    assert Messaging.list_conversation_followers(conversation_id) == []
+    refute ConversationFollowQueries.following_conversation?(conversation_id, member_id)
+    assert ConversationFollowQueries.list_conversation_followers(conversation_id) == []
 
     assert {:ok,
             %ExecutionResult{
@@ -53,12 +54,12 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
              conversation_id: ^conversation_id,
              member_id: ^member_id,
              following: true
-           } = Messaging.get_conversation_follow(conversation_id, member_id)
+           } = ConversationFollowQueries.get_conversation_follow(conversation_id, member_id)
 
     assert [%ConversationFollowProjection{member_id: ^member_id}] =
-             Messaging.list_conversation_followers(conversation_id)
+             ConversationFollowQueries.list_conversation_followers(conversation_id)
 
-    assert true == Messaging.following_conversation?(conversation_id, member_id)
+    assert true == ConversationFollowQueries.following_conversation?(conversation_id, member_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -81,20 +82,20 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
              )
 
     assert %ConversationFollowProjection{following: false} =
-             Messaging.get_conversation_follow(conversation_id, member_id)
+             ConversationFollowQueries.get_conversation_follow(conversation_id, member_id)
 
-    refute Messaging.following_conversation?(conversation_id, member_id)
-    assert Messaging.list_conversation_followers(conversation_id) == []
+    refute ConversationFollowQueries.following_conversation?(conversation_id, member_id)
+    assert ConversationFollowQueries.list_conversation_followers(conversation_id) == []
   end
 
   test "invalid follow query IDs return the documented empty shapes" do
     conversation_id = Memba.ID.generate(:message)
     member_id = Memba.ID.generate(:person)
 
-    assert Messaging.get_conversation_follow("invalid", member_id) == nil
-    assert Messaging.get_conversation_follow(conversation_id, "invalid") == nil
-    refute Messaging.following_conversation?("invalid", member_id)
-    assert Messaging.list_conversation_followers("invalid") == []
+    assert ConversationFollowQueries.get_conversation_follow("invalid", member_id) == nil
+    assert ConversationFollowQueries.get_conversation_follow(conversation_id, "invalid") == nil
+    refute ConversationFollowQueries.following_conversation?("invalid", member_id)
+    assert ConversationFollowQueries.list_conversation_followers("invalid") == []
   end
 
   test "repeated follow and unfollow commands are idempotent" do
@@ -158,8 +159,8 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
                consistency: :strong
              )
 
-    assert true == Messaging.following_conversation?(root_message_id, alice_id)
-    refute Messaging.following_conversation?(root_message_id, bob_id)
+    assert true == ConversationFollowQueries.following_conversation?(root_message_id, alice_id)
+    refute ConversationFollowQueries.following_conversation?(root_message_id, bob_id)
 
     assert :ok =
              App.dispatch(
@@ -178,12 +179,12 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
 
     follower_ids =
       root_message_id
-      |> Messaging.list_conversation_followers()
+      |> ConversationFollowQueries.list_conversation_followers()
       |> Enum.map(& &1.member_id)
 
     assert follower_ids == Enum.sort([alice_id, bob_id])
 
-    refute Messaging.following_conversation?(root_message_id, carol_id)
+    refute ConversationFollowQueries.following_conversation?(root_message_id, carol_id)
   end
 
   test "a root sender excluded from delivery remains unfollowed after projection replay" do
@@ -212,12 +213,12 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
                consistency: :strong
              )
 
-    refute Messaging.following_conversation?(root_message_id, sender_id)
+    refute ConversationFollowQueries.following_conversation?(root_message_id, sender_id)
 
     projection_positions = event_sourced_projection_positions(@sender_follow_replay_projectors)
     Memba.EventSourcedCase.rebuild_event_sourced_projections!()
     await_event_sourced_projection_positions!(projection_positions)
 
-    refute Messaging.following_conversation?(root_message_id, sender_id)
+    refute ConversationFollowQueries.following_conversation?(root_message_id, sender_id)
   end
 end
