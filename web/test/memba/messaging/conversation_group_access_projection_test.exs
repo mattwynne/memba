@@ -8,6 +8,9 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
+  alias Memba.Messaging.ConversationListing
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
@@ -180,10 +183,30 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
              )
 
     assert Repo.all(ConversationGroupAccessProjection) == []
-    refute Messaging.group_has_conversation_access?(conversation_id, group_id, "admin")
-    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
-    refute Messaging.group_has_conversation_access?("not-a-message-id", group_id, :read)
-    refute Messaging.group_has_conversation_access?(conversation_id, "not-a-group-id", :read)
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             group_id,
+             "admin"
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             group_id,
+             :read
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             "not-a-message-id",
+             group_id,
+             :read
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             "not-a-group-id",
+             :read
+           )
   end
 
   test "member access resolves replies through authoritative participation and honors the required level" do
@@ -271,21 +294,21 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                consistency: :eventual
              )
 
-    assert Messaging.member_has_conversation_access?(
+    assert ConversationGroupAccessQueries.member_has_conversation_access?(
              reply.message_id,
              club.club_id,
              person.person_id,
              :read
            )
 
-    refute Messaging.member_has_conversation_access?(
+    refute ConversationGroupAccessQueries.member_has_conversation_access?(
              reply.message_id,
              club.club_id,
              person.person_id,
              :write
            )
 
-    refute Messaging.member_has_conversation_access?(
+    refute ConversationGroupAccessQueries.member_has_conversation_access?(
              reply.message_id,
              Memba.ID.generate(:club),
              person.person_id,
@@ -331,7 +354,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
           {writer.person_id, :write},
           {outsider.person_id, :read}
         ] do
-      refute Messaging.member_has_conversation_access?(
+      refute ConversationGroupAccessQueries.member_has_conversation_access?(
                root.message_id,
                club.club_id,
                person_id,
@@ -339,8 +362,8 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
              )
     end
 
-    assert Messaging.list_conversations_for_group(readers_group.group_id) == []
-    assert Messaging.list_conversations_for_group(writers_group.group_id) == []
+    assert ConversationListing.list_for_group(readers_group.group_id) == []
+    assert ConversationListing.list_for_group(writers_group.group_id) == []
   end
 
   test "discovering a group does not confer member access or permit in-app follow actions" do
@@ -460,7 +483,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
              |> Map.put(:conversation_id, "invalid")
              |> Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow()
 
-    refute Messaging.member_has_conversation_access?(
+    refute ConversationGroupAccessQueries.member_has_conversation_access?(
              conversation_id,
              club_id,
              bob_person_id,
@@ -473,7 +496,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     assert {:error, :not_current_member} =
              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
 
-    refute Messaging.following_conversation?(conversation_id, bob_person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert :ok =
              Memba.Membership.App.dispatch(
@@ -489,29 +512,29 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     assert {:ok, %Memba.Messaging.Commands.FollowConversation{member_id: ^bob_person_id} = follow} =
              Memba.Messaging.CurrentMemberConversationFollow.prepare_follow(attrs)
 
-    refute Messaging.following_conversation?(conversation_id, bob_person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
     assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(follow, consistency: :strong)
-    assert Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert {:ok, %Memba.Messaging.Commands.UnfollowConversation{} = unfollow} =
              Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow(attrs)
 
-    assert Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
     assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(unfollow, consistency: :strong)
 
-    refute Messaging.following_conversation?(conversation_id, bob_person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert :ok =
              Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
 
-    assert Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert {:error, :conversation_not_found} =
              attrs
              |> Map.put(:club_id, Memba.ID.generate(:club))
              |> Messaging.unfollow_conversation_as_current_member(consistency: :strong)
 
-    assert Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert {:ok, %Memba.Membership.CustomGroupRemoval{transition: :member_removed}} =
              Memba.Membership.remove_custom_group_member(
@@ -532,7 +555,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     assert {:error, :not_current_member} =
              Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
 
-    assert Messaging.following_conversation?(conversation_id, bob_person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
   end
 
   defp projector_metadata(event_number) do
