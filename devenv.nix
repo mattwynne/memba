@@ -218,6 +218,7 @@ in
               argc
               bashInteractive
               coreutils-full
+              diffutils
               devenv
               elixir
               findutils

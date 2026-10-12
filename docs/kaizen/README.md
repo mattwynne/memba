@@ -87,7 +87,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-05-31 | [Problem: deliver allows iterations to start out of order](2026-05-31-deliver-allows-out-of-order-iterations.md) | Closed | — |
 | 2026-05-31 | [Problem: failed deliver leaves stale implementing status](2026-05-31-deliver-leaves-stale-implementing-status.md) | Closed | — |
 | 2026-05-31 | [Problem: `dev check` cannot run beside `dev up`](2026-05-31-dev-check-cannot-run-beside-dev-up.md) | Closed | — |
-| 2026-05-31 | [Problem: implementation workflow publish depends on missing sandbox Python](2026-05-31-iteration-implementation-python3-publish-failure.md) | Closed | — |
+| 2026-05-31 | [Problem: implementation workflow publish depends on missing sandbox Python](2026-05-31-iteration-implementation-python3-publish-failure.md) | Open | — |
 | 2026-05-31 | [Problem: Review synthesis LLM outage failed an otherwise recoverable iteration review](2026-05-31-review-synthesis-llm-outage-fails-run.md) | Closed | — |
 | 2026-05-30 | [Problem: deliver command should handle validated plans and WIP waiting explicitly](2026-05-30-deliver-validated-plan-wip-waiting.md) | Closed | — |
 | 2026-05-30 | [Problem: Iteration deliver stalled waiting for child-run approval](2026-05-30-iteration-deliver-child-approval-stall.md) | Closed | — |

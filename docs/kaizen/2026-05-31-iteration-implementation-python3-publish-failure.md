@@ -104,3 +104,24 @@ Validation:
 Remaining follow-up:
 
 - Rebuild and load the `mattwynne/memba-fabro-dev:latest` image on the Fabro host so the new `/bin/python3` is present in remote sandboxes.
+
+### Additional observation: 2026-10-12 — missing `cmp` after a passing check
+
+The same bare-container tool gap recurred during exact-candidate 068 validation. Remote Fabro run `01M4QDXRM2HEM4N10ZYNX3Y9JJ`, using `ghcr.io/mattwynne/memba-fabro-dev:latest`, completed ordinary `./bin/dev check` successfully on `0ab89a4e374b529e233d32c332171101d2cdc3a0` (1,844 app tests, 19 package tests, ten responsive checks, seven journeys/114 steps). Its evidence script then failed because `cmp` was unavailable. The raw Fabro run remains failed; retained before/after records compare identically, and the product check's recorded exit remains zero.
+
+Evidence: `/home/matt/.local/state/memba/068-remote-validation-thr_mn79grxk54/HANDOFF.md`, `retained-check-evidence/orchestration.log`, and `retained-check-evidence/full-check-1.exit`. Both task-owned containers were subsequently verified stopped without deleting run history.
+
+#### Investigation
+
+- Occurrence: the evidence script invokes `cmp` outside `devenv shell`. `devenv.nix` links `coreutils-full` into the bare image but not `diffutils`; GNU `cmp` belongs to `diffutils`, not coreutils.
+- Escape: the documented image verification checked Git, Nix and Python but not the comparator. The required executable was first exercised after the expensive test run.
+- Alternatives: use existing Git/Python comparisons, or package `cmp`. Matt explicitly chose to install `cmp`, retaining the existing comparison safeguard and script.
+- Prediction: linking `diffutils` into the image's `/bin` makes `cmp` available before shell setup, eliminating this specific post-check missing-command failure. A bare-image comparison smoke and the exact committed ordinary quality gate will test the change. This does not establish complete workflow reliability or independently accept 068.
+
+#### Resolution update
+
+Date: 2026-10-12
+
+- `devenv.nix`: adds `diffutils` to the explicit Fabro image root layer, not merely the development shell.
+- `docs/reference/fabro-devenv.md`: documents the package and adds bare `cmp` availability/version to image verification.
+- Validation and image rollout are pending. Existing stopped containers and published image are not silently repaired or relabeled. The ledger is reopened until the updated image is installed/verified, or the remaining rollout is explicitly documented and deferred.
