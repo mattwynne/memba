@@ -1,7 +1,9 @@
 const { Given, When, Then } = require("@cucumber/cucumber");
 const { expect } = require("@playwright/test");
-const { startBoardConversationFixture } = require("../support/custom_group_conversations");
-const { openBoardConversation } = require("../support/custom_group_lifecycle");
+const {
+  openBoardConversation,
+  startBoardConversationFixture
+} = require("../support/custom_group_conversations");
 const { removeThroughBrowser } = require("../support/custom_group_membership");
 const { withMemberHarness } = require("../support/member_harness");
 

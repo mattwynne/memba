@@ -39,6 +39,47 @@ function ensureBoardMembers(world) {
   );
 }
 
+function startBoardConversationFixture(world, senderName, subject) {
+  const sender = person(world, senderName);
+  const result = serverCommands.sendClubMessage({
+    audienceGroupId: boardId(world),
+    body: `${subject} details.`,
+    clubId: club(world).clubId,
+    senderId: sender.personId,
+    senderName,
+    subject
+  });
+
+  world.messages[subject] = {
+    body: result.body,
+    clubId: result.clubId,
+    clubSlug: club(world).slug,
+    messageId: result.messageId,
+    senderName,
+    subject
+  };
+  world.lastMessageSubject = subject;
+  serverCommands.dispatchPendingEmailDeliveries();
+}
+
+async function openBoardConversation(world) {
+  const subject = world.lastMessageSubject;
+  const message = subject && world.messages && world.messages[subject];
+  assert.ok(message, "Expected a Board conversation to exist before opening it");
+
+  await withMemberHarness(world, "Carol", async (member) => {
+    const url = clubSiteUrl(
+      member.baseUrl,
+      club(world),
+      `/messages/${encodeURIComponent(message.messageId)}?group_id=${encodeURIComponent(boardId(world))}`
+    );
+    const response = await member.page.goto(url);
+    assert.equal(response && response.status(), 200);
+    await waitForLiveViewConnected(member);
+    await expect(member.page.getByRole("heading", { name: message.subject, exact: true })).toBeVisible();
+  });
+}
+
 function assertBoardAddress(world, expectedAddress) {
   const result = serverCommands.runCommand(
     `
@@ -261,5 +302,7 @@ module.exports = {
   assertMembersCannotReadOrReceiveLastConversation,
   ensureBoardMembers,
   ensureConversationBackground,
-  sendBoardConversationOnWebsite
+  openBoardConversation,
+  sendBoardConversationOnWebsite,
+  startBoardConversationFixture
 };

@@ -40,6 +40,25 @@ async function admitThroughBrowser(world, actorName, targetName, groupName = boa
   });
 }
 
+async function removeThroughBrowser(world, actorName, targetName, groupName = boardName) {
+  const groupId = groupIdFor(world, groupName);
+  const target = personFor(world, targetName);
+
+  await withMemberHarness(world, actorName, async (member) => {
+    await openGroupMembers(member, world, groupId);
+    await member.page
+      .locator(`#custom-group-member-remove-start-${target.personId}`)
+      .click();
+    await expect(
+      member.page.locator(`#custom-group-member-remove-confirmation-${target.personId}`)
+    ).toBeVisible();
+    await member.page
+      .locator(`#custom-group-member-remove-confirm-${target.personId}`)
+      .click();
+    await expect(member.page.locator(`#club-member-${target.personId}`)).toHaveCount(0);
+  });
+}
+
 async function pushForgedAdmission(world, actorName, targetName, groupName = boardName) {
   await rememberWelcomeBaseline(world);
   const groupId = groupIdFor(world, groupName);
@@ -227,5 +246,6 @@ function mailboxIdentity(email) {
 module.exports = {
   admitThroughBrowser,
   assertGroupMembership,
-  assertNoBoardConversationAccess
+  assertNoBoardConversationAccess,
+  removeThroughBrowser
 };
