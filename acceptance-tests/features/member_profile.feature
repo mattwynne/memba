@@ -93,12 +93,3 @@ Rule: A failed upload leaves the member's existing photo in place
       When Alice's photo upload fails
       Then Alice should be told "We couldn't upload that photo. Please try again."
       And Alice's photo should be "alice-on-the-summit.jpg"
-
-Rule: A member's photo is only visible to people signed in to Memba
-
-    @iteration-069 @todo
-    Scenario: A signed-out visitor cannot fetch Alice's photo
-      Given Alice is a member of Kootenay Mountaineering Club
-      And Alice has the photo "alice-on-the-summit.jpg"
-      When a signed-out visitor requests Alice's photo
-      Then Memba should not show Alice's photo

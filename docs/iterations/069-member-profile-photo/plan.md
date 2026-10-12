@@ -3,6 +3,15 @@
 Date: 2026-08-13
 Status: needs-revision — renumbered; review after 068 replanning
 
+## Review decision: public profile photos
+
+Matt confirmed that profile photos are public: fetching a photo does not require
+signing in. The signed-out-visitor restriction scenario has been deleted, leaving
+six photo scenarios. This decision supersedes the signed-in-only serving rule,
+unauthenticated-rejection tests, and privacy-based email rationale in the draft
+below. Reconcile those sections when replanning this needs-revision iteration;
+this decision does not add photo placement in emails to scope.
+
 ## Goal
 
 A signed-in member can add, replace, and remove a profile photo from the Profile tab of
