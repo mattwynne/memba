@@ -3,12 +3,22 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.AuthoritativeMembershipQueries
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
+  alias Memba.Messaging.ConversationListing
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.MessageSourceQueries
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
@@ -94,8 +104,18 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
-    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :write)
-    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             everyone_group_id,
+             :write
+           )
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             everyone_group_id,
+             :read
+           )
 
     assert %{
              message_id: ^message_id,
@@ -103,7 +123,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              sender_id: ^alice_id,
              subject: "Trip planning night",
              body: "Bring route ideas."
-           } = Messaging.get_message(message_id)
+           } = MessageQueries.get_message(message_id)
 
     assert [
              %{
@@ -136,7 +156,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                sent_at: nil,
                failed_at: nil
              }
-           ] = Messaging.list_recipient_deliveries(message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert bob_id == bob.person_id
     assert Fake.deliveries() == []
@@ -192,7 +212,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: ^message_id,
              rejection_reason: nil,
              rejection_email_delivery_reference: nil
-           } = Messaging.get_inbound_email_source("resend", "task-011-email")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-011-email")
   end
 
   test "authorization accepts an active club member outside the addressed group" do
@@ -209,7 +229,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              ])
 
     assert {:ok, sender} = Messaging.resolve_inbound_club_email_sender("dana@example.com")
-    refute Membership.active_member_of_group?(destination.group_id, sender.person_id)
+    refute MembershipQueries.active_member_of_group?(destination.group_id, sender.person_id)
     assert :ok = Messaging.authorize_inbound_club_email_sender(sender, destination)
   end
 
@@ -247,8 +267,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert Membership.list_active_members_of_group(board_group_id) == []
-    refute Membership.active_member_of_group?(board_group_id, eve.person_id)
+    assert ClubGroupQueries.list_active_members_of_group(board_group_id) == []
+    refute MembershipQueries.active_member_of_group?(board_group_id, eve.person_id)
 
     assert {:ok,
             %{
@@ -274,12 +294,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "sender_not_active_member"
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "resend",
                "task-064-custom-group-outsider-root"
              )
 
-    assert Messaging.list_conversations_for_group(board_group_id) == []
+    assert ConversationListing.list_for_group(board_group_id) == []
     assert count_events(MessageSent) == 0
   end
 
@@ -305,12 +325,21 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
-    refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             admin_group_id,
+             :write
+           )
 
-    assert [%{recipient_id: alice_id}] = Messaging.list_recipient_deliveries(message_id)
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             everyone_group_id,
+             :read
+           )
+
+    assert [%{recipient_id: alice_id}] = DeliveryQueries.list_recipient_deliveries(message_id)
     assert alice_id == alice.person_id
-    assert Messaging.following_conversation?(message_id, alice.person_id)
+    assert ConversationFollowQueries.following_conversation?(message_id, alice.person_id)
   end
 
   test "an active Admin member can reply to an inbound Admin conversation" do
@@ -338,8 +367,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert Membership.active_member_of_group?(admin_group_id, bob.person_id)
-    assert Messaging.group_has_conversation_access?(root_message_id, admin_group_id, :write)
+    assert MembershipQueries.active_member_of_group?(admin_group_id, bob.person_id)
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             root_message_id,
+             admin_group_id,
+             :write
+           )
 
     non_admin_reply_message_id = Memba.ID.generate(:message)
 
@@ -354,8 +388,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert is_nil(Messaging.get_message(non_admin_reply_message_id))
-    assert [] == Messaging.list_recipient_deliveries(non_admin_reply_message_id)
+    assert is_nil(MessageQueries.get_message(non_admin_reply_message_id))
+    assert [] == DeliveryQueries.list_recipient_deliveries(non_admin_reply_message_id)
 
     reply_message_id = Memba.ID.generate(:message)
 
@@ -378,7 +412,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              reply_to_message_id: ^root_message_id,
              subject: "Private Admin topic",
              body: "I will follow this up."
-           } = Messaging.get_message(reply_message_id)
+           } = MessageQueries.get_message(reply_message_id)
 
     assert kmc_id == kmc.club_id
     assert bob_id == bob.person_id
@@ -413,9 +447,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert Messaging.following_conversation?(root_message_id, bob.person_id)
-    refute Messaging.following_conversation?(root_message_id, carol.person_id)
-    refute Messaging.following_conversation?(root_message_id, dana.person_id)
+    assert ConversationFollowQueries.following_conversation?(root_message_id, bob.person_id)
+    refute ConversationFollowQueries.following_conversation?(root_message_id, carol.person_id)
+    refute ConversationFollowQueries.following_conversation?(root_message_id, dana.person_id)
 
     carol_outbound_message_id =
       outbound_message_id_for_recipient!(root_message_id, carol.person_id)
@@ -451,16 +485,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              reply_to_message_id: ^root_message_id,
              subject: "Committee meeting",
              body: "I can attend."
-           } = Messaging.get_message(reply_message_id)
+           } = MessageQueries.get_message(reply_message_id)
 
     assert [%{recipient_id: bob_id, status: "pending"}] =
-             Messaging.list_recipient_deliveries(reply_message_id)
+             DeliveryQueries.list_recipient_deliveries(reply_message_id)
 
     assert bob_id == bob.person_id
-    assert is_nil(Messaging.get_member_email_delivery(reply_message_id, alice.person_id))
-    assert is_nil(Messaging.get_member_email_delivery(reply_message_id, carol.person_id))
-    assert is_nil(Messaging.get_member_email_delivery(reply_message_id, dana.person_id))
-    assert Messaging.following_conversation?(root_message_id, carol.person_id)
+    assert is_nil(DeliveryQueries.get_member_email_delivery(reply_message_id, alice.person_id))
+    assert is_nil(DeliveryQueries.get_member_email_delivery(reply_message_id, carol.person_id))
+    assert is_nil(DeliveryQueries.get_member_email_delivery(reply_message_id, dana.person_id))
+    assert ConversationFollowQueries.following_conversation?(root_message_id, carol.person_id)
   end
 
   test "an active non-Admin cannot forge an Admin reply with another recipient's header" do
@@ -491,8 +525,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert Membership.active_member_of_club?(kmc.club_id, alice.person_id)
-    refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
+    assert MembershipQueries.active_member_of_club?(kmc.club_id, alice.person_id)
+    refute MembershipQueries.active_member_of_group?(admin_group_id, alice.person_id)
 
     carol_outbound_message_id =
       outbound_message_id_for_recipient!(root_message_id, carol.person_id)
@@ -523,7 +557,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              )
 
     assert [%{message_id: ^root_message_id}] =
-             Messaging.list_conversation_messages(root_message_id)
+             MessageQueries.list_conversation_messages(root_message_id)
 
     assert message_count_before == count_events(MessageSent)
     assert delivery_count_before == count_events(EmailDeliveryCreated)
@@ -536,9 +570,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              rejection_reason: "not_current_member",
              to_address: "admin@kmc.clubs.memba.io"
            } =
-             Messaging.get_inbound_email_source("resend", "task-057-forged-admin-reply")
+             MessageSourceQueries.get_inbound_email_source(
+               "resend",
+               "task-057-forged-admin-reply"
+             )
 
-    refute Messaging.following_conversation?(root_message_id, alice.person_id)
+    refute ConversationFollowQueries.following_conversation?(root_message_id, alice.person_id)
   end
 
   test "an active non-Admin sender receives no Admin delivery, receipt, access, or follow" do
@@ -570,21 +607,32 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    deliveries = Messaging.list_recipient_deliveries(message_id)
+    deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert Enum.map(deliveries, & &1.recipient_id) == [bob.person_id, carol.person_id]
     refute Enum.any?(deliveries, &(&1.recipient_id == alice.person_id))
-    assert is_nil(Messaging.get_member_email_delivery(message_id, alice.person_id))
-    refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
-    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
-    refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
-    refute Messaging.following_conversation?(message_id, alice.person_id)
+    assert is_nil(DeliveryQueries.get_member_email_delivery(message_id, alice.person_id))
+    refute MembershipQueries.active_member_of_group?(admin_group_id, alice.person_id)
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             admin_group_id,
+             :write
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             everyone_group_id,
+             :read
+           )
+
+    refute ConversationFollowQueries.following_conversation?(message_id, alice.person_id)
 
     assert [%{message_id: ^message_id}] =
-             Messaging.list_conversation_messages_for_group(message_id, admin_group_id)
+             MessageQueries.list_conversation_messages_for_group(message_id, admin_group_id)
 
     assert [] =
-             Messaging.list_conversation_messages_for_group(message_id, everyone_group_id)
+             MessageQueries.list_conversation_messages_for_group(message_id, everyone_group_id)
 
     assert 1 == count_events(ConversationAccessGrantedToGroup)
     assert 2 == count_events(EmailDeliveryCreated)
@@ -665,7 +713,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              reply_to_message_id: ^root_message_id,
              subject: "Trip planning night",
              body: "I can bring maps."
-           } = Messaging.get_message(reply_message_id)
+           } = MessageQueries.get_message(reply_message_id)
 
     assert [
              %{
@@ -682,11 +730,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                recipient_address: "carol@example.com",
                status: "pending"
              }
-           ] = Messaging.list_recipient_deliveries(reply_message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(reply_message_id)
 
     assert alice_id == alice.person_id
     assert carol_id == carol.person_id
-    assert Messaging.following_conversation?(root_message_id, bob.person_id)
+    assert ConversationFollowQueries.following_conversation?(root_message_id, bob.person_id)
     assert Fake.deliveries() == []
 
     assert %InboundEmailSourceProjection{
@@ -701,7 +749,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: ^reply_message_id,
              rejection_reason: nil,
              rejection_email_delivery_reference: nil
-           } = Messaging.get_inbound_email_source("resend", "task-041-reply-header-match")
+           } =
+             MessageSourceQueries.get_inbound_email_source(
+               "resend",
+               "task-041-reply-header-match"
+             )
   end
 
   test "unrecognized reply headers still create a new club-wide inbound message" do
@@ -759,12 +811,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              reply_to_message_id: nil,
              subject: "Re: Trip planning night",
              body: "This should start a separate club-wide thread."
-           } = Messaging.get_message(message_id)
+           } = MessageQueries.get_message(message_id)
 
     assert [
              %{message_id: ^root_message_id, conversation_id: ^root_message_id},
              %{message_id: ^message_id, conversation_id: ^message_id}
-           ] = Messaging.list_messages_for_club(kmc.club_id)
+           ] = MessageQueries.list_messages_for_club(kmc.club_id)
 
     assert %InboundEmailSourceProjection{
              provider: "resend",
@@ -775,7 +827,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: ^message_id,
              rejection_reason: nil
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "resend",
                "task-041-unknown-reply-header-fallback"
              )
@@ -828,12 +880,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              reply_to_message_id: nil,
              subject: "Re: Paddle planning",
              body: "This belongs to KMC, not the paddling club."
-           } = Messaging.get_message(kmc_message_id)
+           } = MessageQueries.get_message(kmc_message_id)
 
     assert [%{message_id: ^npc_root_message_id, conversation_id: ^npc_root_message_id}] =
-             Messaging.list_conversation_messages(npc_root_message_id)
+             MessageQueries.list_conversation_messages(npc_root_message_id)
 
-    assert [%{message_id: ^npc_root_message_id}] = Messaging.list_messages_for_club(npc.club_id)
+    assert [%{message_id: ^npc_root_message_id}] =
+             MessageQueries.list_messages_for_club(npc.club_id)
 
     assert [
              %{
@@ -846,7 +899,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                recipient_id: bob_id,
                status: "pending"
              }
-           ] = Messaging.list_recipient_deliveries(kmc_message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(kmc_message_id)
 
     assert bob_id == bob.person_id
   end
@@ -895,9 +948,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              )
 
     assert [%{message_id: ^root_message_id, conversation_id: ^root_message_id}] =
-             Messaging.list_conversation_messages(root_message_id)
+             MessageQueries.list_conversation_messages(root_message_id)
 
-    assert [%{message_id: ^root_message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [%{message_id: ^root_message_id}] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 1 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -908,7 +961,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "sender_not_active_member",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-041-reply-header-non-member")
+           } =
+             MessageSourceQueries.get_inbound_email_source(
+               "resend",
+               "task-041-reply-header-non-member"
+             )
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -966,9 +1023,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              )
 
     assert [%{message_id: ^root_message_id, conversation_id: ^root_message_id}] =
-             Messaging.list_conversation_messages(root_message_id)
+             MessageQueries.list_conversation_messages(root_message_id)
 
-    assert [%{message_id: ^root_message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [%{message_id: ^root_message_id}] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 1 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -979,7 +1036,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "attachments_not_supported",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-041-reply-header-attachment")
+           } =
+             MessageSourceQueries.get_inbound_email_source(
+               "resend",
+               "task-041-reply-header-attachment"
+             )
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1039,7 +1100,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                status: "sent",
                sent_at: %DateTime{}
              }
-           ] = Messaging.list_recipient_deliveries(message_id)
+           ] = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert [
              %EmailDeliveryRequest{
@@ -1079,7 +1140,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
 
     assert [%{status: "pending"}, %{status: "pending"}] =
-             Messaging.list_recipient_deliveries(message_id)
+             DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert Fake.deliveries() == []
 
@@ -1111,7 +1172,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                body: "Bring route ideas."
              }
            ] =
-             Messaging.list_messages_for_club(kmc.club_id)
+             MessageQueries.list_messages_for_club(kmc.club_id)
 
     assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
     assert Fake.deliveries() == first_deliveries
@@ -1120,7 +1181,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              status: "accepted",
              provider_event_id: "task-012-event-first",
              message_id: ^message_id
-           } = Messaging.get_inbound_email_source("resend", "task-012-duplicate-email")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-012-duplicate-email")
 
     assert 1 == count_events(MessageSent)
     assert 1 == count_events(InboundClubEmailAccepted)
@@ -1149,7 +1210,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
 
     assert [%{recipient_id: bob_id, status: "pending"}] =
-             Messaging.list_recipient_deliveries(message_id)
+             DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert bob_id == bob.person_id
 
@@ -1173,7 +1234,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            }
 
     assert [%{message_id: ^message_id, recipient_id: ^bob_id}] =
-             Messaging.list_recipient_deliveries(message_id)
+             DeliveryQueries.list_recipient_deliveries(message_id)
   end
 
   test "accepted inbound email uses normalized plain text and ignores HTML" do
@@ -1206,9 +1267,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert %{body: "Bring route ideas.\n\nMeet at 7."} = Messaging.get_message(message_id)
+    assert %{body: "Bring route ideas.\n\nMeet at 7."} = MessageQueries.get_message(message_id)
 
-    assert [%{status: "pending"}] = Messaging.list_recipient_deliveries(message_id)
+    assert [%{status: "pending"}] = DeliveryQueries.list_recipient_deliveries(message_id)
     assert Fake.deliveries() == []
 
     assert [%{status: "sent"}] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
@@ -1265,9 +1326,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              sender_id: ^alice_id,
              subject: "Alternate sender address",
              body: "Posting from my work address."
-           } = Messaging.get_message(message_id)
+           } = MessageQueries.get_message(message_id)
 
-    assert [%{status: "pending"}] = Messaging.list_recipient_deliveries(message_id)
+    assert [%{status: "pending"}] = DeliveryQueries.list_recipient_deliveries(message_id)
     assert Fake.deliveries() == []
 
     assert [%{status: "sent"}] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
@@ -1295,7 +1356,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              club_id: ^kmc_id,
              sender_id: ^alice_id,
              message_id: ^message_id
-           } = Messaging.get_inbound_email_source("resend", "task-020-alternate-sender")
+           } =
+             MessageSourceQueries.get_inbound_email_source("resend", "task-020-alternate-sender")
   end
 
   test "inbound email from a pending known sender address is rejected" do
@@ -1341,14 +1403,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "unknown_sender",
              rejection_email_delivery_reference: ^rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-053-pending-sender")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-053-pending-sender")
 
     assert_rejection_email_received(
       to: "alice.pending@example.com",
       reason: "We couldn't find a member account for this email address"
     )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1382,7 +1444,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1398,7 +1460,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "plain_text_required",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-013-html-only")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-013-html-only")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1434,7 +1496,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1445,7 +1507,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "plain_text_required",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-020-blank-plain-text")
+           } =
+             MessageSourceQueries.get_inbound_email_source("resend", "task-020-blank-plain-text")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1481,7 +1544,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1492,7 +1555,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "plain_text_required",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-020-html-only")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-020-html-only")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1535,7 +1598,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1551,7 +1614,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "attachments_not_supported",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-014-attachments")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-014-attachments")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1585,7 +1648,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1601,7 +1664,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "unknown_sender",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-015-unknown-sender")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-015-unknown-sender")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1651,7 +1714,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1663,7 +1726,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              rejection_reason: "unknown_sender",
              rejection_email_delivery_reference: rejection_email_delivery_reference
            } =
-             Messaging.get_inbound_email_source(
+             MessageSourceQueries.get_inbound_email_source(
                "postmark",
                "task-020-postmark-selected-rejection"
              )
@@ -1774,8 +1837,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
-    assert [] = Messaging.list_messages_for_club(npc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(npc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1786,7 +1849,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "sender_not_active_member",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-020-non-member")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-020-non-member")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1822,7 +1885,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1833,7 +1896,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "sender_not_active_member",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-020-inactive-member")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-020-inactive-member")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -1862,7 +1925,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :eventual
              )
 
-    assert Membership.active_member_of_club?(kmc.club_id, alice.person_id)
+    assert MembershipQueries.active_member_of_club?(kmc.club_id, alice.person_id)
 
     assert {:ok,
             %{
@@ -1883,7 +1946,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
     assert 1 == count_events(InboundClubEmailRejected)
@@ -1922,7 +1985,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 1 == count_events(InboundEmailReceived)
     assert 0 == count_events(InboundClubEmailAccepted)
     assert 0 == count_events(InboundClubEmailRejected)
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
 
     Application.put_env(:memba, :authorization_stability_timeout, 5_000)
 
@@ -1941,7 +2004,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(InboundClubEmailAccepted)
     assert 0 == count_events(InboundClubEmailRejected)
-    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [%{message_id: ^message_id}] = MessageQueries.list_messages_for_club(kmc.club_id)
   end
 
   test "provider retry accepts the same message after MessageSent committed before the receipt outcome" do
@@ -1993,7 +2056,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    refute Membership.active_member_of_club_authoritatively?(kmc.club_id, alice.person_id)
+    refute AuthoritativeMembershipQueries.active_member_of_club_authoritatively?(
+             kmc.club_id,
+             alice.person_id
+           )
 
     assert {:ok,
             %{
@@ -2011,7 +2077,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 2 == count_events(EmailDeliveryCreated)
     assert 1 == count_events(InboundClubEmailAccepted)
     assert 0 == count_events(InboundClubEmailRejected)
-    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [%{message_id: ^message_id}] = MessageQueries.list_messages_for_club(kmc.club_id)
     refute_receive {:email, %Swoosh.Email{}}
   end
 
@@ -2064,7 +2130,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: ^reply_message_id,
              conversation_id: ^root_message_id,
              subject: "Trip planning night"
-           } = Messaging.get_message(reply_message_id)
+           } = MessageQueries.get_message(reply_message_id)
 
     assert :ok =
              MembershipApp.dispatch(
@@ -2076,7 +2142,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    refute Membership.active_member_of_club_authoritatively?(kmc.club_id, bob.person_id)
+    refute AuthoritativeMembershipQueries.active_member_of_club_authoritatively?(
+             kmc.club_id,
+             bob.person_id
+           )
+
     Application.put_env(:memba, :authorization_stability_timeout, 0)
 
     assert {:ok,
@@ -2138,7 +2208,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 1 == count_events(MessageSent)
     assert 1 == count_events(EmailDeliveryCreated)
     assert 1 == count_events(InboundClubEmailAccepted)
-    assert [%{message_id: ^message_id}] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [%{message_id: ^message_id}] = MessageQueries.list_messages_for_club(kmc.club_id)
   end
 
   test "concurrent rejected provider retries send exactly one rejection email" do
@@ -2217,10 +2287,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                status: "rejected",
                message_id: nil,
                rejection_reason: "sender_not_active_member"
-             } = Messaging.get_inbound_email_source("resend", provider_message_id)
+             } = MessageSourceQueries.get_inbound_email_source("resend", provider_message_id)
     end
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(EmailDeliveryCreated)
@@ -2255,7 +2325,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -2268,7 +2338,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              message_id: nil,
              rejection_reason: "unknown_club_slug",
              rejection_email_delivery_reference: rejection_email_delivery_reference
-           } = Messaging.get_inbound_email_source("resend", "task-020-unknown-club")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "task-020-unknown-club")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -2344,7 +2414,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                message_id: nil,
                rejection_reason: ^rejection_reason,
                rejection_email_delivery_reference: ^rejection_email_delivery_reference
-             } = Messaging.get_inbound_email_source("resend", provider_message_id)
+             } = MessageSourceQueries.get_inbound_email_source("resend", provider_message_id)
 
       assert_rejection_email_received(
         to: "alice@example.com",
@@ -2352,7 +2422,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       )
     end
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -2401,7 +2471,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              })
              |> Messaging.receive_inbound_club_email(consistency: :strong)
 
-    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
     assert 0 == count_events(MessageSent)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -2422,7 +2492,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                consistency: :strong
              )
 
-    Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_person!(attrs) do
@@ -2439,7 +2509,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert :ok = Membership.create_person(create_attrs, consistency: :strong)
 
-    Membership.get_person(person_id)
+    PersonQueries.get_person(person_id)
   end
 
   defp add_member!(club_id, person_id) do
@@ -2498,7 +2568,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   defp outbound_message_id_for_recipient!(message_id, recipient_id) do
     message_id
-    |> Messaging.list_recipient_deliveries()
+    |> DeliveryQueries.list_recipient_deliveries()
     |> Enum.find(&(&1.recipient_id == recipient_id))
     |> case do
       %{outbound_message_id: outbound_message_id} when is_binary(outbound_message_id) ->
