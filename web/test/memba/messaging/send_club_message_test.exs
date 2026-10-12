@@ -18,6 +18,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
+  alias Memba.Messaging.ConversationListing
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
@@ -265,8 +269,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
     refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
     refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
-    assert is_nil(Messaging.get_member_email_delivery(message_id, dana.person_id))
-    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
+    assert is_nil(DeliveryQueries.get_member_email_delivery(message_id, dana.person_id))
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             admin_group_id,
+             :write
+           )
   end
 
   test "resolves recipients from a future named group without system-group assumptions" do
@@ -331,8 +340,14 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
     refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
     refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
-    assert Messaging.group_has_conversation_access?(message_id, trips_group_id, :write)
-    assert [%{message_id: ^message_id}] = Messaging.list_conversations_for_group(trips_group_id)
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             message_id,
+             trips_group_id,
+             :write
+           )
+
+    assert [%{message_id: ^message_id}] = ConversationListing.list_for_group(trips_group_id)
   end
 
   test "sends an already-created private delivery after departure but creates no later delivery" do
@@ -385,7 +400,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :strong
              )
 
-    assert Messaging.following_conversation?(private_message_id, carol.person_id)
+    assert ConversationFollowQueries.following_conversation?(private_message_id, carol.person_id)
 
     assert :ok =
              Memba.Membership.remove_member(
@@ -405,7 +420,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Memba.Membership.active_member_of_club?(club_id, carol.person_id)
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
-    refute Messaging.following_conversation?(private_message_id, carol.person_id)
+    refute ConversationFollowQueries.following_conversation?(private_message_id, carol.person_id)
 
     departed_reply_id = Memba.ID.generate(:message)
 
@@ -534,7 +549,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :strong
              )
 
-    refute Messaging.following_conversation?(message_id, carol.person_id)
+    refute ConversationFollowQueries.following_conversation?(message_id, carol.person_id)
 
     new_message_id = Memba.ID.generate(:message)
 
@@ -705,7 +720,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              )
 
     refute Memba.Membership.active_member_of_group?(board_group_id, carol.person_id)
-    assert Messaging.following_conversation?(conversation_id, carol.person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, carol.person_id)
 
     resumed_reply_id = Memba.ID.generate(:message)
 
@@ -840,7 +855,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: [ConversationFollowProjector]
              )
 
-    assert [] = Messaging.list_conversations_for_group(board_group_id)
+    assert [] = ConversationListing.list_for_group(board_group_id)
 
     assert :ok =
              MembershipApp.dispatch(
@@ -874,7 +889,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
       SystemGroupMembership
     ])
 
-    assert Messaging.following_conversation?(conversation_id, carol.person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, carol.person_id)
     assert Memba.Membership.active_member_of_club_authoritatively?(club_id, carol.person_id)
 
     refute Memba.Membership.active_member_of_group_authoritatively?(
