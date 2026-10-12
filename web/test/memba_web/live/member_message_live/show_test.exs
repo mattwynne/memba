@@ -9,7 +9,22 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Membership.PersonCommands
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
+  alias Memba.Messaging.ConversationFollowPreparation
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccess
+  alias Memba.Messaging.CurrentMemberConversationFollow
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.PostMemberMessageReply
+  alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.EmailDeliveryDelayed
   alias Memba.Messaging.Events.MessageSent
@@ -227,18 +242,17 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(view, "#member-message-detail", "Private planning details")
 
-    assert {:ok, _removal} =
-             Memba.Membership.remove_custom_group_member(
-               %{
-                 club_id: alice.club_id,
-                 group_id: private_group.group_id,
-                 membership_id: alice.membership_id,
-                 person_id: alice.person_id,
-                 actor_person_id: alice.person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             CustomGroup.Remove.prepare(%{
+               club_id: alice.club_id,
+               group_id: private_group.group_id,
+               membership_id: alice.membership_id,
+               person_id: alice.person_id,
+               actor_person_id: alice.person_id,
+               removal_operation_id: Ecto.UUID.generate()
+             })
+
+    assert {:ok, _removal} = MembershipDispatch.dispatch(command, consistency: :strong)
 
     notify_read_model_change(
       view,
@@ -280,16 +294,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/messages/#{message.message_id}?#{[group_id: private_group.group_id]}")
 
-    assert :ok =
-             Messaging.revoke_conversation_access_from_group(
-               %{
-                 conversation_id: message.message_id,
-                 club_id: alice.club_id,
-                 group_id: private_group.group_id,
-                 access_level: :write
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ConversationGroupAccess.prepare_revoke(%{
+               conversation_id: message.message_id,
+               club_id: alice.club_id,
+               group_id: private_group.group_id,
+               access_level: :write
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     notify_read_model_change(
       view,
@@ -426,7 +439,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         subject: "Trip planning night"
       )
 
-    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+    refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     {:ok, view, _html} =
       conn
@@ -451,7 +464,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     |> element("#member-conversation-follow-toggle")
     |> render_change()
 
-    assert Messaging.following_conversation?(message.message_id, bob.person_id)
+    assert ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     assert has_element?(
              view,
@@ -470,7 +483,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     |> element("#member-conversation-follow-toggle")
     |> render_change()
 
-    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+    refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     assert has_element?(
              view,
@@ -505,7 +518,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         body: "Bring your maps."
       )
 
-    selected_club = Memba.Membership.get_club(alice.club_id)
+    selected_club = ClubGroupQueries.get_club(alice.club_id)
 
     assert {:ok, detail_assigns} =
              MemberMessageDetail.load(
@@ -1044,7 +1057,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "#member-message-reply-error")
 
     assert Enum.map(
-             Memba.Messaging.list_conversation_messages(message.message_id),
+             MessageQueries.list_conversation_messages(message.message_id),
              & &1.message_id
            ) == [
              message.message_id
@@ -1151,16 +1164,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     reply_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 "message_id" => reply_id,
-                 "conversation_id" => message.message_id,
-                 "sender_id" => bob.person_id,
-                 "body" => "This arrived while the page stayed open."
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PostMemberMessageReply.prepare(%{
+               "message_id" => reply_id,
+               "conversation_id" => message.message_id,
+               "sender_id" => bob.person_id,
+               "body" => "This arrived while the page stayed open."
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     assert has_element?(
              view,
@@ -1395,19 +1407,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            )
 
     alice_follow =
-      Messaging.get_conversation_follow(message.message_id, alice.person_id)
+      ConversationFollowQueries.get_conversation_follow(message.message_id, alice.person_id)
       |> Ecto.Changeset.change(following: true)
       |> Repo.update!()
 
-    assert :ok =
-             Messaging.follow_conversation_as_current_member(
-               %{
-                 club_id: alice.club_id,
-                 conversation_id: message.message_id,
-                 member_id: bob.person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             CurrentMemberConversationFollow.prepare_follow(%{
+               club_id: alice.club_id,
+               conversation_id: message.message_id,
+               member_id: bob.person_id
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     assert has_element?(
              view,
@@ -1494,7 +1505,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     member_first_receipt =
       member_first_id
-      |> Messaging.get_member_email_delivery()
+      |> DeliveryQueries.get_member_email_delivery()
       |> Ecto.Changeset.change(status: "delivery problem")
       |> Repo.update!()
 
@@ -1510,7 +1521,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     member_first_staff =
       member_first_id
-      |> Messaging.get_memba_staff_email_delivery()
+      |> DeliveryQueries.get_memba_staff_email_delivery()
       |> Ecto.Changeset.change(status: "delayed", reason: "Mailbox temporarily unavailable")
       |> Repo.update!()
 
@@ -1526,7 +1537,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     staff_first =
       staff_first_id
-      |> Messaging.get_memba_staff_email_delivery()
+      |> DeliveryQueries.get_memba_staff_email_delivery()
       |> Ecto.Changeset.change(status: "delayed", reason: "Provider retrying")
       |> Repo.update!()
 
@@ -1542,7 +1553,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     staff_first_receipt =
       staff_first_id
-      |> Messaging.get_member_email_delivery()
+      |> DeliveryQueries.get_member_email_delivery()
       |> Ecto.Changeset.change(status: "delivery problem")
       |> Repo.update!()
 
@@ -1653,11 +1664,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> signed_in_club_host(bob.email, alice)
       |> live(~p"/messages/#{message.message_id}")
 
-    assert :ok =
-             Memba.Membership.remove_member(
-               %{membership_id: bob.membership_id},
-               consistency: :strong
-             )
+    assert {:ok, command} = ClubMember.Remove.prepare(%{membership_id: bob.membership_id})
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     assert_redirect(view, ~p"/conversations")
   end
@@ -1669,7 +1677,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end
@@ -1697,42 +1705,39 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
 
-    unless Memba.Membership.get_club(club_id) do
-      assert :ok =
-               Memba.Membership.create_club(
-                 %{
-                   club_id: club_id,
-                   name: Keyword.fetch!(attrs, :club_name),
-                   slug: Keyword.get(attrs, :slug, "alpine-club")
-                 },
-                 consistency: :strong
-               )
+    unless ClubGroupQueries.get_club(club_id) do
+      assert {:ok, command} =
+               ClubCommands.prepare_create(%{
+                 club_id: club_id,
+                 name: Keyword.fetch!(attrs, :club_name),
+                 slug: Keyword.get(attrs, :slug, "alpine-club")
+               })
+
+      assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
     end
 
-    assert :ok =
-             Memba.Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.get(attrs, :name, "Test Member"),
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: Keyword.get(attrs, :name, "Test Member"),
+               email: Keyword.fetch!(attrs, :email)
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Memba.Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     club_id
-    |> Memba.Membership.get_club()
+    |> ClubGroupQueries.get_club()
     |> Map.from_struct()
     |> Map.put(:person_id, person_id)
     |> Map.put(:membership_id, membership_id)
@@ -1743,31 +1748,30 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     group_id = Memba.ID.generate(:group)
     actor = Repo.get_by!(Membership, club_id: club_id, active: true)
 
-    assert :ok =
-             Memba.Membership.create_custom_group(
-               %{
-                 group_id: group_id,
-                 club_id: club_id,
-                 actor_person_id: actor.person_id,
-                 name: name
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             CustomGroup.Create.prepare(%{
+               group_id: group_id,
+               club_id: club_id,
+               actor_person_id: actor.person_id,
+               name: name
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     Repo.get!(Group, group_id)
   end
 
   defp add_group_member(group, member) do
-    case Memba.Membership.add_custom_group_member(
-           %{
-             club_id: member.club_id,
-             group_id: group.group_id,
-             membership_id: member.membership_id,
-             person_id: member.person_id,
-             actor_person_id: member.person_id
-           },
-           consistency: :strong
-         ) do
+    assert {:ok, command} =
+             CustomGroup.Admit.prepare(%{
+               club_id: member.club_id,
+               group_id: group.group_id,
+               membership_id: member.membership_id,
+               person_id: member.person_id,
+               actor_person_id: member.person_id
+             })
+
+    case MembershipDispatch.dispatch(command, consistency: :strong) do
       {:ok, _admission} ->
         Repo.get_by!(GroupMembership, group_id: group.group_id, person_id: member.person_id)
 
@@ -1800,37 +1804,35 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   defp create_authoritative_message(attrs) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.send_club_message_as_current_member(
-               %{
-                 message_id: message_id,
-                 club_id: Keyword.fetch!(attrs, :club_id),
-                 sender_id: Keyword.fetch!(attrs, :sender_id),
-                 audience_group_id:
-                   Keyword.get_lazy(attrs, :audience_group_id, fn ->
-                     SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id))
-                   end),
-                 subject: Keyword.fetch!(attrs, :subject),
-                 body: Keyword.get(attrs, :body, "Message body")
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             SendClubMessage.prepare_current_member(%{
+               message_id: message_id,
+               club_id: Keyword.fetch!(attrs, :club_id),
+               sender_id: Keyword.fetch!(attrs, :sender_id),
+               audience_group_id:
+                 Keyword.get_lazy(attrs, :audience_group_id, fn ->
+                   SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id))
+                 end),
+               subject: Keyword.fetch!(attrs, :subject),
+               body: Keyword.get(attrs, :body, "Message body")
+             })
 
-    :ok =
-      Messaging.unfollow_conversation(
-        %{
-          club_id: Keyword.fetch!(attrs, :club_id),
-          conversation_id: message_id,
-          member_id: Keyword.fetch!(attrs, :sender_id)
-        },
-        consistency: :strong
-      )
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             ConversationFollowPreparation.prepare_unfollow(%{
+               club_id: Keyword.fetch!(attrs, :club_id),
+               conversation_id: message_id,
+               member_id: Keyword.fetch!(attrs, :sender_id)
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     Repo.delete_all(
       from(delivery in MemberEmailDelivery, where: delivery.message_id == ^message_id)
     )
 
-    message = Messaging.get_message(message_id)
+    message = MessageQueries.get_message(message_id)
 
     case Keyword.fetch(attrs, :inserted_at) do
       {:ok, inserted_at} ->
