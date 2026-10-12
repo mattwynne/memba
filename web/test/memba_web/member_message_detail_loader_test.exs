@@ -3,7 +3,13 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
 
   import Memba.MessagingFixtures
 
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.App, as: MessagingApp
@@ -273,28 +279,26 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
 
     group_id = Memba.ID.generate(:group)
 
-    assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: alice.club_id,
-                 group_id: group_id,
-                 actor_person_id: alice.person_id,
-                 name: "Board"
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             CustomGroup.Create.prepare(%{
+               club_id: alice.club_id,
+               group_id: group_id,
+               actor_person_id: alice.person_id,
+               name: "Board"
+             })
 
-    assert {:ok, _admission} =
-             Membership.add_custom_group_member(
-               %{
-                 club_id: alice.club_id,
-                 group_id: group_id,
-                 membership_id: bob.membership_id,
-                 person_id: bob.person_id,
-                 actor_person_id: alice.person_id
-               },
-               consistency: :strong
-             )
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             CustomGroup.Admit.prepare(%{
+               club_id: alice.club_id,
+               group_id: group_id,
+               membership_id: bob.membership_id,
+               person_id: bob.person_id,
+               actor_person_id: alice.person_id
+             })
+
+    assert {:ok, _admission} = MembershipDispatch.dispatch(command, consistency: :strong)
 
     message =
       create_message(
@@ -306,20 +310,19 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
 
     projector_child_id = stop_projector!(GroupMembershipProjector)
 
-    assert {:ok, _removal} =
-             Membership.remove_custom_group_member(
-               %{
-                 club_id: alice.club_id,
-                 group_id: group_id,
-                 membership_id: bob.membership_id,
-                 person_id: bob.person_id,
-                 actor_person_id: alice.person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :eventual
-             )
+    assert {:ok, command} =
+             CustomGroup.Remove.prepare(%{
+               club_id: alice.club_id,
+               group_id: group_id,
+               membership_id: bob.membership_id,
+               person_id: bob.person_id,
+               actor_person_id: alice.person_id,
+               removal_operation_id: Ecto.UUID.generate()
+             })
 
-    assert Membership.active_member_of_group?(group_id, bob.person_id)
+    assert {:ok, _removal} = MembershipDispatch.dispatch(command, consistency: :eventual)
+
+    assert MembershipQueries.active_member_of_group?(group_id, bob.person_id)
 
     assert {:error, :not_found} =
              MemberMessageDetail.load(
@@ -346,34 +349,37 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     person_id = Memba.ID.generate(:person)
     club_name = Keyword.fetch!(attrs, :club_name)
 
-    if is_nil(Membership.get_club(club_id)) do
-      assert :ok =
-               Membership.create_club(
-                 membership_club_attrs(club_id: club_id, name: club_name),
-                 consistency: :strong
+    if is_nil(ClubGroupQueries.get_club(club_id)) do
+      assert {:ok, command} =
+               ClubCommands.prepare_create(
+                 membership_club_attrs(club_id: club_id, name: club_name)
                )
+
+      assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
     end
 
-    assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.get(attrs, :name, "Test Member"),
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: Keyword.get(attrs, :name, "Test Member"),
+               email: Keyword.fetch!(attrs, :email)
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     club_id
-    |> Membership.get_club()
+    |> ClubGroupQueries.get_club()
     |> Map.from_struct()
     |> Map.put(:person_id, person_id)
     |> Map.put(:membership_id, membership_id)

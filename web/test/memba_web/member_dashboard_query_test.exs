@@ -1,11 +1,13 @@
 defmodule MembaWeb.MemberDashboardQueryTest do
   use Memba.DataCase, async: false
 
+  alias LiveQuery.Query
   alias Memba.Accounts
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias MembaWeb.MemberDashboardQuery
-  alias LiveQuery.Query
 
   test "reloads active-club authority from the normalized authenticated email on every call" do
     alice = create_active_member(email: "Alice@Example.com", club_name: "Alpine Club")
@@ -141,14 +143,15 @@ defmodule MembaWeb.MemberDashboardQueryTest do
     person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.create_club(
+    assert {:ok, command} =
+             ClubCommands.prepare_create(
                membership_club_attrs(
                  club_id: club_id,
                  name: Keyword.fetch!(attrs, :club_name)
-               ),
-               consistency: :strong
+               )
              )
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     person =
       insert_membership_person!(
@@ -157,15 +160,14 @@ defmodule MembaWeb.MemberDashboardQueryTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person.person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person.person_id
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     %{
       club_id: club_id,

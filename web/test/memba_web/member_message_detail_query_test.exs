@@ -1,10 +1,18 @@
 defmodule MembaWeb.MemberMessageDetailQueryTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
-  alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
   alias LiveQuery.Query
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.PostMemberMessageReply
+  alias Memba.Messaging.SendClubMessage
   alias MembaWeb.MemberMessageDetailQuery
 
   test "describes one coherent message-detail result assign" do
@@ -121,11 +129,9 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
 
     assert detail.current_member.id == bob.person_id
 
-    assert :ok =
-             Membership.remove_member(
-               %{membership_id: bob.membership_id},
-               consistency: :strong
-             )
+    assert {:ok, command} = ClubMember.Remove.prepare(%{membership_id: bob.membership_id})
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     assert {:error, :forbidden} =
              MemberMessageDetailQuery.load(
@@ -151,16 +157,15 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
     before_interests = MemberMessageDetailQuery.interests(before_detail)
     refute {:person, carol.person_id} in before_interests
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 "message_id" => Memba.ID.generate(:message),
-                 "conversation_id" => message.message_id,
-                 "sender_id" => carol.person_id,
-                 "body" => "I can bring the route notes."
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PostMemberMessageReply.prepare(%{
+               "message_id" => Memba.ID.generate(:message),
+               "conversation_id" => message.message_id,
+               "sender_id" => carol.person_id,
+               "body" => "I can bring the route notes."
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     assert {:ok, after_detail} =
              MemberMessageDetailQuery.load(
@@ -175,36 +180,35 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
   end
 
   defp create_active_member(email, name, club_id \\ Memba.ID.generate(:club)) do
-    unless Membership.get_club(club_id) do
-      assert :ok =
-               Membership.create_club(
+    unless ClubGroupQueries.get_club(club_id) do
+      assert {:ok, command} =
+               ClubCommands.prepare_create(
                  membership_club_attrs(
                    club_id: club_id,
                    name: "Alpine Club"
-                 ),
-                 consistency: :strong
+                 )
                )
+
+      assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
     end
 
     person_id = Memba.ID.generate(:person)
 
-    assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: name, email: email},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{person_id: person_id, name: name, email: email})
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     %{
       club_id: club_id,
@@ -217,19 +221,18 @@ defmodule MembaWeb.MemberMessageDetailQueryTest do
   defp create_message(member, subject) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.send_club_message_as_current_member(
-               %{
-                 message_id: message_id,
-                 club_id: member.club_id,
-                 sender_id: member.person_id,
-                 audience_group_id: SystemGroups.everyone_group_id(member.club_id),
-                 subject: subject,
-                 body: "Bring your maps."
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             SendClubMessage.prepare_current_member(%{
+               message_id: message_id,
+               club_id: member.club_id,
+               sender_id: member.person_id,
+               audience_group_id: SystemGroups.everyone_group_id(member.club_id),
+               subject: subject,
+               body: "Bring your maps."
+             })
 
-    Messaging.get_message(message_id)
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
+
+    MessageQueries.get_message(message_id)
   end
 end

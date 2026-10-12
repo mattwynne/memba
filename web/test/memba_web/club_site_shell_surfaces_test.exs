@@ -3,10 +3,18 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
   alias Memba.Membership.Permissions
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.SendClubMessage
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -195,17 +203,16 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
   defp create_club(attrs) do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Memba.Membership.create_club(
-               %{
-                 club_id: club_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 slug: Keyword.fetch!(attrs, :slug)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ClubCommands.prepare_create(%{
+               club_id: club_id,
+               name: Keyword.fetch!(attrs, :name),
+               slug: Keyword.fetch!(attrs, :slug)
+             })
 
-    Memba.Membership.get_club(club_id)
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
+
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_active_member(club, attrs) do
@@ -214,19 +221,18 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
 
     requested_name = Keyword.fetch!(attrs, :name)
 
-    assert :ok =
-             Memba.Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name:
-                   if(String.trim(requested_name) == "",
-                     do: "Temporary Member",
-                     else: requested_name
-                   ),
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name:
+                 if(String.trim(requested_name) == "",
+                   do: "Temporary Member",
+                   else: requested_name
+                 ),
+               email: Keyword.fetch!(attrs, :email)
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     if String.trim(requested_name) == "" do
       Repo.get!(Person, person_id)
@@ -234,11 +240,14 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
       |> Repo.update!()
     end
 
-    assert :ok =
-             Memba.Membership.add_member(
-               %{membership_id: membership_id, club_id: club.club_id, person_id: person_id},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club.club_id,
+               person_id: person_id
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     club
     |> Map.from_struct()
@@ -269,20 +278,18 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
   defp create_message(attrs) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Memba.Messaging.send_club_message_as_current_member(
-               %{
-                 message_id: message_id,
-                 club_id: Keyword.fetch!(attrs, :club_id),
-                 sender_id: Keyword.fetch!(attrs, :sender_id),
-                 audience_group_id:
-                   SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id)),
-                 subject: Keyword.fetch!(attrs, :subject),
-                 body: Keyword.get(attrs, :body, "Message body")
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             SendClubMessage.prepare_current_member(%{
+               message_id: message_id,
+               club_id: Keyword.fetch!(attrs, :club_id),
+               sender_id: Keyword.fetch!(attrs, :sender_id),
+               audience_group_id: SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id)),
+               subject: Keyword.fetch!(attrs, :subject),
+               body: Keyword.get(attrs, :body, "Message body")
+             })
 
-    Memba.Messaging.get_message(message_id)
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
+
+    MessageQueries.get_message(message_id)
   end
 end

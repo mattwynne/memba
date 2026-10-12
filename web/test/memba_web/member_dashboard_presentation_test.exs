@@ -2,8 +2,11 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   use Memba.DataCase, async: false
 
   alias Memba.ClubInboundEmailAddress
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
   alias Memba.Membership.App
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Permissions
@@ -811,15 +814,14 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person.person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person.person_id
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     preserve_projection_display_fixtures(club_id, membership_id)
 
@@ -832,14 +834,16 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   end
 
   defp ensure_authoritative_club(club_id, club_name) do
-    case Membership.get_club(club_id) do
+    case ClubGroupQueries.get_club(club_id) do
       %Club{} = club ->
         club
 
       nil ->
         club_attrs = membership_club_attrs(club_id: club_id, name: club_name)
-        assert :ok = Membership.create_club(club_attrs, consistency: :strong)
-        Membership.get_club(club_id)
+        assert {:ok, command} = ClubCommands.prepare_create(club_attrs)
+
+        assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
+        ClubGroupQueries.get_club(club_id)
     end
   end
 
