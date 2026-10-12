@@ -8,7 +8,6 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
   alias Memba.Membership.InvitationQueries
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.PersonQueries
-  alias Memba.Membership
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Repo
@@ -278,13 +277,15 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
   defp create_membership_club!(attrs) do
     club_attrs = membership_club_attrs(attrs)
 
-    assert :ok = Membership.create_club(club_attrs, consistency: :strong)
+    assert {:ok, command} = Memba.Membership.ClubCommands.prepare_create(club_attrs)
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
     ClubGroupQueries.get_club(club_attrs.club_id)
   end
 
   defp invite_member!(club, email) do
     assert {:ok, %{invitation_id: invitation_id, invitation_token: token}} =
-             Membership.invite_club_member(
+             Memba.Membership.InvitationIssuanceWorkflow.invite(
                %{club_id: club.club_id, email: email},
                consistency: :strong
              )

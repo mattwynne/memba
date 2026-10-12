@@ -305,36 +305,37 @@ defmodule MembaWeb.MemberMessageDetailTest do
         Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
 
     unless ClubGroupQueries.get_club(club_id) do
-      assert :ok =
-               Memba.Membership.create_club(
-                 %{
-                   club_id: club_id,
-                   name: Keyword.fetch!(attrs, :club_name),
-                   slug: "club-#{String.slice(club_id, -8, 8)}"
-                 },
-                 consistency: :strong
-               )
+      assert {:ok, command} =
+               Memba.Membership.ClubCommands.prepare_create(%{
+                 club_id: club_id,
+                 name: Keyword.fetch!(attrs, :club_name),
+                 slug: "club-#{String.slice(club_id, -8, 8)}"
+               })
+
+      assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
     end
 
     unless person do
-      assert :ok =
-               Memba.Membership.create_person(
-                 %{
-                   person_id: person_id,
-                   name: Keyword.fetch!(attrs, :name),
-                   email: Keyword.fetch!(attrs, :email)
-                 },
-                 consistency: :strong
-               )
+      assert {:ok, command} =
+               Memba.Membership.PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: Keyword.fetch!(attrs, :email)
+               })
+
+      assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
     end
 
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Memba.Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Membership.AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
 
     club_id
     |> ClubGroupQueries.get_club()
@@ -368,21 +369,20 @@ defmodule MembaWeb.MemberMessageDetailTest do
   defp create_message(attrs) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Memba.Messaging.send_club_message_as_current_member(
-               %{
-                 message_id: message_id,
-                 club_id: Keyword.fetch!(attrs, :club_id),
-                 sender_id: Keyword.fetch!(attrs, :sender_id),
-                 audience_group_id:
-                   Keyword.get_lazy(attrs, :audience_group_id, fn ->
-                     SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id))
-                   end),
-                 subject: Keyword.fetch!(attrs, :subject),
-                 body: Keyword.get(attrs, :body, "Message body")
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Messaging.SendClubMessage.prepare_current_member(%{
+               message_id: message_id,
+               club_id: Keyword.fetch!(attrs, :club_id),
+               sender_id: Keyword.fetch!(attrs, :sender_id),
+               audience_group_id:
+                 Keyword.get_lazy(attrs, :audience_group_id, fn ->
+                   SystemGroups.everyone_group_id(Keyword.fetch!(attrs, :club_id))
+                 end),
+               subject: Keyword.fetch!(attrs, :subject),
+               body: Keyword.get(attrs, :body, "Message body")
+             })
+
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     Repo.delete_all(
       from(delivery in MemberEmailDelivery, where: delivery.message_id == ^message_id)

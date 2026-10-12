@@ -8,7 +8,6 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
   alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging.MessageQueries
   alias Memba.Messaging.MessageSourceQueries
-  alias Memba.Membership
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
 
@@ -511,15 +510,14 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
   defp create_club!(attrs) do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{
-                 club_id: club_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 slug: Keyword.fetch!(attrs, :slug)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Membership.ClubCommands.prepare_create(%{
+               club_id: club_id,
+               name: Keyword.fetch!(attrs, :name),
+               slug: Keyword.fetch!(attrs, :slug)
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
 
     ClubGroupQueries.get_club(club_id)
   end
@@ -536,22 +534,22 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         name: Keyword.fetch!(attrs, :name)
       })
 
-    assert :ok =
-             Membership.create_person(create_attrs, consistency: :strong)
+    assert {:ok, command} = Memba.Membership.PersonCommands.prepare_create(create_attrs)
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
 
     PersonQueries.get_person(person_id)
   end
 
   defp add_member!(club_id, person_id) do
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Membership.AddMember.prepare(%{
+               membership_id: Memba.ID.generate(:membership),
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

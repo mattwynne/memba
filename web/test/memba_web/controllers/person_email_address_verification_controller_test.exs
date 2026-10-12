@@ -1,7 +1,6 @@
 defmodule MembaWeb.PersonEmailAddressVerificationControllerTest do
   use MembaWeb.ConnCase, async: false
 
-  alias Memba.Membership
   alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Projectors.Person, as: PersonProjector
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -82,7 +81,7 @@ defmodule MembaWeb.PersonEmailAddressVerificationControllerTest do
       token = verification_token!(person_id, "pending.alternate@example.com")
 
       assert :ok =
-               Membership.verify_person_email_address(
+               Memba.Membership.PersonEmailVerification.verify(
                  %{person_id: person_id, email: "pending.alternate@example.com"},
                  consistency: :strong
                )
@@ -129,24 +128,29 @@ defmodule MembaWeb.PersonEmailAddressVerificationControllerTest do
     person_id = Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
     email = Keyword.fetch!(attrs, :email)
 
-    assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: "Alice Member", email: email},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Membership.PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Member",
+               email: email
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
 
     person_id
   end
 
   defp verification_token!(person_id, email, opts \\ []) do
-    assert :ok =
-             Membership.add_person_email_address(
-               %{person_id: person_id, email: email},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Membership.PersonEmailAddressCommands.prepare_add(%{
+               person_id: person_id,
+               email: email
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
 
     assert {:ok, %{issuer_result: %{token: token}}} =
-             Membership.resend_person_email_address_verification(
+             Memba.Membership.PersonEmailVerification.resend(
                %{person_id: person_id, email: email},
                opts
              )

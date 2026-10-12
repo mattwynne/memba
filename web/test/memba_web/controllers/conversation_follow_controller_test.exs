@@ -9,7 +9,6 @@ defmodule MembaWeb.ConversationFollowControllerTest do
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveClubMember
-  alias Memba.Messaging
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.EmailConversationStopFollow
   alias Memba.Messaging.Events.ConversationUnfollowed
@@ -135,7 +134,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
     refute ConversationFollowQueries.following_conversation?(conversation_id, alice.person_id)
 
     assert {:ok, %{dispatch_result: :ok}} =
-             Messaging.stop_following_conversation_from_email_token(
+             EmailConversationStopFollow.stop_following(
                token,
                consistency: :strong
              )
@@ -149,20 +148,19 @@ defmodule MembaWeb.ConversationFollowControllerTest do
     add_member!(club.club_id, bob.person_id)
     conversation_id = send_root_message!(club.club_id, alice.person_id)
 
-    assert :ok =
-             Messaging.follow_conversation(
-               %{
-                 club_id: club.club_id,
-                 conversation_id: conversation_id,
-                 member_id: bob.person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Messaging.ConversationFollowPreparation.prepare_follow(%{
+               club_id: club.club_id,
+               conversation_id: conversation_id,
+               member_id: bob.person_id
+             })
+
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)
 
     assert {:ok, %{dispatch_result: {:ok, %Commanded.Commands.ExecutionResult{events: events}}}} =
-             Messaging.stop_following_conversation_from_email_token(
+             EmailConversationStopFollow.stop_following(
                token,
                consistency: :strong,
                returning: :execution_result
@@ -251,17 +249,16 @@ defmodule MembaWeb.ConversationFollowControllerTest do
   defp send_root_message!(club_id, sender_id) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: sender_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Messaging.SendClubMessage.prepare(%{
+               message_id: message_id,
+               club_id: club_id,
+               sender_id: sender_id,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             })
+
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     message_id
   end
@@ -269,16 +266,15 @@ defmodule MembaWeb.ConversationFollowControllerTest do
   defp post_reply!(conversation_id, sender_id) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: message_id,
-                 conversation_id: conversation_id,
-                 sender_id: sender_id,
-                 body: "I can bring maps."
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             Memba.Messaging.PostMemberMessageReply.prepare(%{
+               message_id: message_id,
+               conversation_id: conversation_id,
+               sender_id: sender_id,
+               body: "I can bring maps."
+             })
+
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     message_id
   end

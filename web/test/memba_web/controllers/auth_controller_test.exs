@@ -710,15 +710,14 @@ defmodule MembaWeb.AuthControllerTest do
         |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
         |> live(~p"/auth/onboard")
 
-      assert :ok =
-               Memba.Membership.create_person(
-                 %{
-                   person_id: Memba.ID.generate(:person),
-                   name: "Existing",
-                   email: "pat@memba.io"
-                 },
-                 consistency: :strong
-               )
+      assert {:ok, command} =
+               Memba.Membership.PersonCommands.prepare_create(%{
+                 person_id: Memba.ID.generate(:person),
+                 name: "Existing",
+                 email: "pat@memba.io"
+               })
+
+      assert :ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
 
       response =
         view

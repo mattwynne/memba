@@ -10,7 +10,6 @@ defmodule MembaWeb.DevTestSupportControllerTest do
 
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.PersonQueries
-  alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -142,11 +141,13 @@ defmodule MembaWeb.DevTestSupportControllerTest do
     everyone_group_id = SystemGroups.everyone_group_id(club_id)
     admin_group_id = SystemGroups.admin_group_id(club_id)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: "Reset Regression Club"},
-               dispatch_opts
-             )
+    assert {:ok, command} =
+             Memba.Membership.ClubCommands.prepare_create(%{
+               club_id: club_id,
+               name: "Reset Regression Club"
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, dispatch_opts)
 
     assert %ClubProjection{club_id: ^club_id, name: "Reset Regression Club"} =
              ClubGroupQueries.get_club(club_id)
@@ -160,20 +161,26 @@ defmodule MembaWeb.DevTestSupportControllerTest do
     assert %GroupProjection{group_id: ^admin_group_id, group_key: "admin", name: "Admin"} =
              Repo.get_by(GroupProjection, group_id: admin_group_id)
 
-    assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: "Reset Riley", email: "reset-riley@example.com"},
-               dispatch_opts
-             )
+    assert {:ok, command} =
+             Memba.Membership.PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Reset Riley",
+               email: "reset-riley@example.com"
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, dispatch_opts)
 
     assert %PersonProjection{person_id: ^person_id, name: "Reset Riley"} =
              PersonQueries.get_person(person_id)
 
-    assert :ok =
-             Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               dispatch_opts
-             )
+    assert {:ok, command} =
+             Memba.Membership.AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = Memba.Membership.CommandDispatch.dispatch(command, dispatch_opts)
 
     assert [
              %{
