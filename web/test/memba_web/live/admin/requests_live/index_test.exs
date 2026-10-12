@@ -5,6 +5,8 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.SignInToken
   alias Memba.Membership
@@ -580,8 +582,8 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert converted_request.triaged_by_staff_email == "pat@memba.io"
     assert %DateTime{} = converted_request.triaged_at
 
-    club = Membership.get_club(converted_request.converted_club_id)
-    person = Membership.get_person(converted_request.converted_person_id)
+    club = ClubGroupQueries.get_club(converted_request.converted_club_id)
+    person = PersonQueries.get_person(converted_request.converted_person_id)
     membership = Repo.get!(MembershipProjection, converted_request.converted_membership_id)
 
     assert club.name == "Convertible Paddlers"
@@ -646,13 +648,13 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     |> render_submit()
 
     converted_request = Repo.get!(Request, request.request_id)
-    club = Membership.get_club(converted_request.converted_club_id)
+    club = ClubGroupQueries.get_club(converted_request.converted_club_id)
     membership = Repo.get!(MembershipProjection, converted_request.converted_membership_id)
 
     assert converted_request.status == "converted"
     assert converted_request.converted_person_id == existing_person_id
     assert Repo.aggregate(PersonProjection, :count) == person_count
-    assert Membership.get_person(existing_person_id).name == "Existing Robin"
+    assert PersonQueries.get_person(existing_person_id).name == "Existing Robin"
     assert membership.club_id == club.club_id
     assert membership.person_id == existing_person_id
     assert membership.active

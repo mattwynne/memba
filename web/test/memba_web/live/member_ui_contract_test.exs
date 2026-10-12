@@ -3,6 +3,7 @@ defmodule MembaWeb.MemberUIContractTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
@@ -251,7 +252,7 @@ defmodule MembaWeb.MemberUIContractTest do
   defp create_group(attrs) do
     club_id = Keyword.fetch!(attrs, :club_id)
     group_id = Memba.ID.generate(:group)
-    actor = club_id |> Memba.Membership.list_active_members_of_club() |> hd()
+    actor = club_id |> ClubGroupQueries.list_active_members_of_club() |> hd()
 
     assert :ok =
              Memba.Membership.create_custom_group(
@@ -268,7 +269,7 @@ defmodule MembaWeb.MemberUIContractTest do
   end
 
   defp add_group_member(group, member) do
-    actor = group.group_id |> Memba.Membership.list_active_members_of_group() |> hd()
+    actor = group.group_id |> ClubGroupQueries.list_active_members_of_group() |> hd()
 
     assert {:ok, %Memba.Membership.CustomGroupAdmission{}} =
              Memba.Membership.add_custom_group_member(
@@ -301,7 +302,7 @@ defmodule MembaWeb.MemberUIContractTest do
 
   defp group_address(club_id, group_email_slug) do
     club_id
-    |> Memba.Membership.get_club()
+    |> ClubGroupQueries.get_club()
     |> Memba.ClubInboundEmailAddress.address(group_email_slug)
   end
 
@@ -312,7 +313,7 @@ defmodule MembaWeb.MemberUIContractTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end

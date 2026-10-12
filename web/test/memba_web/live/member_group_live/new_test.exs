@@ -4,6 +4,8 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
   alias Commanded.Event.Mapper
   alias Commanded.EventStore
   alias Memba.ClubInboundEmailAddress
@@ -113,14 +115,14 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       assert has_element?(view, selector)
     end
 
-    members = Membership.list_active_members_of_club(robin.club_id)
+    members = ClubGroupQueries.list_active_members_of_club(robin.club_id)
 
     assert %{id: robin_id, email: "robin.primary@example.com"} =
-             Membership.find_member_for_email(members, "ROBIN.ALTERNATE@example.com")
+             PersonQueries.find_member_for_email(members, "ROBIN.ALTERNATE@example.com")
 
     assert robin_id == robin.person_id
-    assert is_nil(Membership.find_member_for_email(members, "unknown@example.com"))
-    assert is_nil(Membership.find_member_for_email([], "robin.alternate@example.com"))
+    assert is_nil(PersonQueries.find_member_for_email(members, "unknown@example.com"))
+    assert is_nil(PersonQueries.find_member_for_email([], "robin.alternate@example.com"))
 
     outsider =
       create_active_member(
@@ -130,8 +132,8 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     assert is_nil(
-             Membership.find_member_for_email(
-               Membership.list_active_members_of_club(outsider.club_id),
+             PersonQueries.find_member_for_email(
+               ClubGroupQueries.list_active_members_of_club(outsider.club_id),
                "robin.alternate@example.com"
              )
            )
@@ -183,7 +185,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     grant_manage_members!(robin)
-    club = Membership.get_club(robin.club_id)
+    club = ClubGroupQueries.get_club(robin.club_id)
 
     conn = signed_in_club_host(conn, "robin@example.com", robin)
     {:ok, view, _html} = live(conn, ~p"/groups/new")
@@ -250,7 +252,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     grant_manage_members!(robin)
-    club = Membership.get_club(robin.club_id)
+    club = ClubGroupQueries.get_club(robin.club_id)
 
     conn = signed_in_club_host(conn, "robin@example.com", robin)
     {:ok, view, _html} = live(conn, ~p"/groups/new")
@@ -306,8 +308,8 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     grant_manage_members!(robin)
-    club = Membership.get_club(robin.club_id)
-    other_club = Membership.get_club(other.club_id)
+    club = ClubGroupQueries.get_club(robin.club_id)
+    other_club = ClubGroupQueries.get_club(other.club_id)
 
     conn = signed_in_club_host(conn, "robin@example.com", robin)
     {:ok, view, _html} = live(conn, ~p"/groups/new")
@@ -421,7 +423,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
 
     %{host: host} =
       robin.club_id
-      |> Memba.Membership.get_club()
+      |> ClubGroupQueries.get_club()
       |> ClubSite.url(~p"/groups/new")
       |> URI.parse()
 
@@ -447,7 +449,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     grant_manage_members!(robin)
-    club = Membership.get_club(robin.club_id)
+    club = ClubGroupQueries.get_club(robin.club_id)
     insert_custom_group!(robin.club_id, "Board", "board")
 
     session =
@@ -516,7 +518,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     grant_manage_members!(robin)
-    club = Membership.get_club(robin.club_id)
+    club = ClubGroupQueries.get_club(robin.club_id)
 
     conn = signed_in_club_host(conn, "robin@example.com", robin)
     {:ok, view, _html} = live(conn, ~p"/groups/new")
@@ -555,7 +557,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
       )
 
     grant_manage_members!(robin)
-    club = Membership.get_club(robin.club_id)
+    club = ClubGroupQueries.get_club(robin.club_id)
     insert_custom_group!(robin.club_id, "Huts & maintenance", "huts-maintenance")
     insert_custom_group!(robin.club_id, "Translations", "group")
 
@@ -666,7 +668,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
              name: "Board"
            } =
              Enum.find(
-               Membership.list_active_groups_for_member(robin.club_id, robin.person_id),
+               ClubGroupQueries.list_active_groups_for_member(robin.club_id, robin.person_id),
                &(&1.name == "Board")
              )
 
@@ -676,7 +678,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
              email_slug: "board",
              group_key: nil,
              name: "Board"
-           } = Membership.get_group(group_id)
+           } = ClubGroupQueries.get_group(group_id)
 
     assert club_id == robin.club_id
 
@@ -841,7 +843,7 @@ defmodule MembaWeb.MemberGroupLive.NewTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end

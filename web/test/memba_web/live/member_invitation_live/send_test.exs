@@ -5,6 +5,11 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
   import Swoosh.TestAssertions
   import Ecto.Query
 
+  alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.InvitationQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Accounts.AuthEmail
   alias Memba.Membership
   alias Memba.Membership.Permissions
@@ -72,14 +77,14 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
              normalized_email: "dana@example.com",
              status: "pending"
            } =
-             Membership.get_pending_club_member_invitation_by_email(
+             InvitationQueries.get_pending_by_email(
                robin.club_id,
                "dana@example.com"
              )
 
     assert club_id == robin.club_id
-    refute Membership.get_person_by_email("dana@example.com")
-    refute Membership.active_member_of_club_by_email?(robin.club_id, "dana@example.com")
+    refute PersonQueries.get_person_by_email("dana@example.com")
+    refute MembershipQueries.active_member_of_club_by_email?(robin.club_id, "dana@example.com")
 
     invitation_path = delivered_invitation_path!("dana@example.com")
 
@@ -95,14 +100,14 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
     |> assert_has("#member-section-tab-conversations[aria-current='page']", "Conversations")
 
     assert %{person_id: dana_person_id, name: "Dana Example", email: "dana@example.com"} =
-             Membership.get_person_by_email("dana@example.com")
+             PersonQueries.get_person_by_email("dana@example.com")
 
     assert %MembershipProjection{active: true, person_id: ^dana_person_id} =
              active_membership(robin.club_id, dana_person_id)
 
-    assert Membership.active_member_of_club_by_email?(robin.club_id, "dana@example.com")
+    assert MembershipQueries.active_member_of_club_by_email?(robin.club_id, "dana@example.com")
 
-    refute Membership.person_has_club_permission?(
+    refute Authorization.has_permission?(
              robin.club_id,
              dana_person_id,
              Permissions.club_manage_members()
@@ -144,7 +149,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
     assert has_element?(view, "#flash-info", "Invitation resent to dana@example.com")
 
     assert %ClubInvitation{resend_count: 1} =
-             Membership.get_pending_club_member_invitation_by_email(
+             InvitationQueries.get_pending_by_email(
                robin.club_id,
                "dana@example.com"
              )
@@ -198,7 +203,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
            )
 
     assert is_nil(
-             Membership.get_pending_club_member_invitation_by_email(
+             InvitationQueries.get_pending_by_email(
                robin.club_id,
                "alice@example.com"
              )
@@ -245,7 +250,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
     assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
 
     assert is_nil(
-             Membership.get_pending_club_member_invitation_by_email(
+             InvitationQueries.get_pending_by_email(
                robin.club_id,
                "dana@example.com"
              )
@@ -262,7 +267,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
 
   defp club_host(conn, club) do
     club_id = club.club_id
-    assert %Club{club_id: ^club_id} = projected_club = Membership.get_club(club_id)
+    assert %Club{club_id: ^club_id} = projected_club = ClubGroupQueries.get_club(club_id)
 
     %{host: host} = URI.parse(ClubSite.url(projected_club))
     Map.put(conn, :host, host)

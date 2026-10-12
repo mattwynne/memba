@@ -4,6 +4,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.AuthoritativeMembershipQueries
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
+  alias Memba.Messaging.ConversationListing
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.CreateGroup
@@ -700,7 +705,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                consistency: :eventual
              )
 
-    assert Memba.Membership.active_member_of_group?(
+    assert MembershipQueries.active_member_of_group?(
              private_group.group_id,
              alice.person_id
            )
@@ -785,7 +790,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                consistency: :eventual
              )
 
-    assert Memba.Membership.active_member_of_group?(
+    assert MembershipQueries.active_member_of_group?(
              private_group.group_id,
              alice.person_id
            )
@@ -1091,7 +1096,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     expected_group_address =
       alice.club_id
-      |> Memba.Membership.get_club()
+      |> ClubGroupQueries.get_club()
       |> Memba.ClubInboundEmailAddress.address(trip_planning_group.email_slug)
 
     everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
@@ -1658,13 +1663,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              access_level: "write"
            )
 
-    refute Memba.Membership.active_member_of_group_authoritatively?(
+    refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
              admin.club_id,
              private_group.group_id,
              eve.person_id
            )
 
-    refute Memba.Messaging.member_has_conversation_access?(
+    refute ConversationGroupAccessQueries.member_has_conversation_access?(
              first_request.message_id,
              admin.club_id,
              eve.person_id,
@@ -1711,7 +1716,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert length(request_ids) == 2
     assert Enum.uniq(request_ids) == request_ids
 
-    refute Memba.Membership.active_member_of_group_authoritatively?(
+    refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
              admin.club_id,
              private_group.group_id,
              eve.person_id
@@ -1763,7 +1768,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                consistency: :eventual
              )
 
-    refute Memba.Membership.active_member_of_group?(
+    refute MembershipQueries.active_member_of_group?(
              private_group.group_id,
              eve.person_id
            )
@@ -2466,9 +2471,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       )
 
     assert Enum.any?(
-             Memba.Messaging.list_conversations_for_group(
-               SystemGroups.everyone_group_id(alice.club_id)
-             ),
+             ConversationListing.list_for_group(SystemGroups.everyone_group_id(alice.club_id)),
              &(&1.message_id == message.message_id)
            )
 
@@ -3696,7 +3699,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp ensure_authoritative_club(attrs, club_id, club_name) do
-    unless Memba.Membership.get_club(club_id) do
+    unless ClubGroupQueries.get_club(club_id) do
       club_attrs = attrs |> club_attrs(club_id, club_name) |> membership_club_attrs()
       assert :ok = Memba.Membership.create_club(club_attrs, consistency: :strong)
     end
@@ -3783,7 +3786,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
   defp group_address(club_id, email_slug) do
     club_id
-    |> Memba.Membership.get_club()
+    |> ClubGroupQueries.get_club()
     |> Memba.ClubInboundEmailAddress.address(email_slug)
   end
 
@@ -3921,7 +3924,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end

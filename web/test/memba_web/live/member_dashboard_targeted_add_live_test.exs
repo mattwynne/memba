@@ -13,6 +13,9 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
       render_keydown: 2
     ]
 
+  alias Memba.Membership.Authorization
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
   alias Commanded.EventStore
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
@@ -105,7 +108,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
 
     assert has_element?(view, "#targeted-group-member-cancel", "Cancel")
     assert has_element?(view, "#club-member-#{alice.person_id}", "Alice Adams")
-    refute Membership.active_member_of_group?(group.group_id, eve.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, eve.person_id)
     assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
     refute_received {:email, %Swoosh.Email{}}
   end
@@ -152,8 +155,8 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
            )
 
     refute has_element?(view, "#club-member-#{alice.person_id}[tabindex]")
-    assert Membership.active_member_of_group?(group.group_id, eve.person_id)
-    refute Membership.active_member_of_group?(group.group_id, mallory.person_id)
+    assert MembershipQueries.active_member_of_group?(group.group_id, eve.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, mallory.person_id)
 
     assert target_addition_count(club.club_id, group.group_id, eve.person_id) ==
              additions_before + 1
@@ -228,7 +231,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
                consistency: :eventual
              )
 
-    assert Membership.person_has_club_permission?(
+    assert Authorization.has_permission?(
              club.club_id,
              dan.person_id,
              Memba.Membership.Permissions.club_manage_members()
@@ -242,7 +245,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
              "We couldn't add that member. Refresh and try again."
            )
 
-    refute Membership.active_member_of_group?(group.group_id, eve.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, eve.person_id)
     assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
     refute_received {:email, %Swoosh.Email{}}
 
@@ -286,7 +289,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
                consistency: :eventual
              )
 
-    assert Membership.active_member_of_club?(club.club_id, eve.person_id)
+    assert MembershipQueries.active_member_of_club?(club.club_id, eve.person_id)
     _html = render_click(view, "confirm_targeted_group_member", %{})
 
     assert has_element?(
@@ -295,7 +298,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
              "We couldn't add that member. Refresh and try again."
            )
 
-    refute Membership.active_member_of_group?(group.group_id, eve.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, eve.person_id)
     assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
     refute_received {:email, %Swoosh.Email{}}
 
@@ -331,7 +334,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
 
     assert_patch(escape_view, ordinary_path)
     refute has_element?(escape_view, "#targeted-group-member-panel")
-    refute Membership.active_member_of_group?(group.group_id, eve.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, eve.person_id)
     assert target_addition_count(club.club_id, group.group_id, eve.person_id) == additions_before
     refute_received {:email, %Swoosh.Email{}}
   end
@@ -527,7 +530,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
                consistency: :strong
              )
 
-    Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_member!(club, name, email) do
@@ -572,7 +575,7 @@ defmodule MembaWeb.MemberDashboardTargetedAddLiveTest do
                consistency: :strong
              )
 
-    Membership.get_group(group_id)
+    ClubGroupQueries.get_group(group_id)
   end
 
   defp add_group_member!(club, group, actor, target) do

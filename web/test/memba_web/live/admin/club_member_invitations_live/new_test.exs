@@ -4,6 +4,10 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.InvitationQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Accounts.AuthEmail
   alias Memba.Membership
   alias Memba.Membership.Projections.ClubInvitation
@@ -75,15 +79,15 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
              normalized_email: "robin@example.com",
              status: "pending"
            } =
-             Membership.get_pending_club_member_invitation_by_email(
+             InvitationQueries.get_pending_by_email(
                club.club_id,
                "robin@example.com"
              )
 
     assert club_id == club.club_id
 
-    refute Membership.get_person_by_email("robin@example.com")
-    refute Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
+    refute PersonQueries.get_person_by_email("robin@example.com")
+    refute MembershipQueries.active_member_of_club_by_email?(club.club_id, "robin@example.com")
 
     assert_email_sent(fn email ->
       assert email.to == [{"", "robin@example.com"}]
@@ -110,7 +114,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     assert has_element?(view, "#flash-info", "Invitation sent to robin@example.com")
 
     assert %ClubInvitation{resend_count: 0, invitation_id: invitation_id} =
-             Membership.get_pending_club_member_invitation_by_email(
+             InvitationQueries.get_pending_by_email(
                club.club_id,
                "robin@example.com"
              )
@@ -122,7 +126,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     assert has_element?(view, "#flash-info", "Invitation resent to robin@example.com")
 
     assert %ClubInvitation{resend_count: 1, invitation_id: ^invitation_id} =
-             Membership.get_pending_club_member_invitation_by_email(
+             InvitationQueries.get_pending_by_email(
                club.club_id,
                "robin@example.com"
              )
@@ -142,7 +146,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
                consistency: :strong
              )
 
-    club = Membership.get_club(club_id)
+    club = ClubGroupQueries.get_club(club_id)
 
     conn
     |> sign_in_staff()
@@ -168,9 +172,9 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     |> assert_has("#member-section-tab-conversations[aria-current='page']", "Conversations")
 
     assert %{name: "Robin Example", email: "robin@example.com"} =
-             Membership.get_person_by_email("robin@example.com")
+             PersonQueries.get_person_by_email("robin@example.com")
 
-    assert Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
+    assert MembershipQueries.active_member_of_club_by_email?(club.club_id, "robin@example.com")
   end
 
   test "staff sees a form error for an invalid invitation email", %{conn: conn} do
@@ -188,9 +192,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     assert has_element?(view, "#club-member-invitation-email-input.input-error")
     assert has_element?(view, "#club-member-invitation-form", "Enter a valid email address.")
 
-    assert is_nil(
-             Membership.get_pending_club_member_invitation_by_email(club.club_id, "not-an-email")
-           )
+    assert is_nil(InvitationQueries.get_pending_by_email(club.club_id, "not-an-email"))
 
     assert_no_email_sent()
   end

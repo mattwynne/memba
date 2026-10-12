@@ -4,12 +4,14 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
   alias Memba.Messaging.Events.EmailDeliveryDelayed
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projections.MemberEmailDelivery
@@ -707,7 +709,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
 
     member_first_staff =
       member_first.delivery_id
-      |> Messaging.get_memba_staff_email_delivery()
+      |> DeliveryQueries.get_memba_staff_email_delivery()
       |> Ecto.Changeset.change(
         status: "delayed",
         reason: "Mailbox temporarily unavailable"
@@ -729,7 +731,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
 
     staff_first_staff =
       staff_first.delivery_id
-      |> Messaging.get_memba_staff_email_delivery()
+      |> DeliveryQueries.get_memba_staff_email_delivery()
       |> Ecto.Changeset.change(status: "delayed", reason: "Provider retrying")
       |> Repo.update!()
 
@@ -1061,7 +1063,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end
@@ -1070,7 +1072,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
 
-    unless Memba.Membership.get_club(club_id) do
+    unless ClubGroupQueries.get_club(club_id) do
       assert :ok =
                Memba.Membership.create_club(
                  %{
@@ -1101,7 +1103,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
              )
 
     club_id
-    |> Memba.Membership.get_club()
+    |> ClubGroupQueries.get_club()
     |> Map.from_struct()
     |> Map.put(:person_id, person_id)
     |> Map.put(:membership_id, membership_id)
@@ -1203,7 +1205,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
       from(delivery in MembaStaffEmailDelivery, where: delivery.message_id == ^message_id)
     )
 
-    Memba.Messaging.get_message(message_id)
+    MessageQueries.get_message(message_id)
   end
 
   defp create_member_email_delivery(attrs) do

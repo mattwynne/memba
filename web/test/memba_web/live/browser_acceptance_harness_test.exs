@@ -1,6 +1,8 @@
 defmodule MembaWeb.BrowserAcceptanceHarnessTest do
   use MembaWeb.FeatureCase, async: false
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
@@ -234,7 +236,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
   defp add_member(session, name) do
     current_path = PhoenixTest.Driver.current_path(session)
     club_id = current_path |> String.split("/", trim: true) |> List.last()
-    person = Membership.get_person_by_email(email_for(name))
+    person = PersonQueries.get_person_by_email(email_for(name))
 
     assert person
 
@@ -259,7 +261,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
 
     sender =
       club_id
-      |> Membership.list_active_members_of_club()
+      |> ClubGroupQueries.list_active_members_of_club()
       |> Enum.find(&(&1.name == sender_name))
 
     assert sender

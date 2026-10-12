@@ -4,6 +4,7 @@ defmodule MembaWeb.MySettingsLiveTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership, as: MembershipContext
   alias Memba.Membership.Events.{ClubMemberAdded, ClubMemberRemoved, ClubUpdated}
   alias Memba.Membership.Projections.Membership
@@ -963,7 +964,7 @@ defmodule MembaWeb.MySettingsLiveTest do
       active: true
     })
 
-    MembershipContext.get_person(person_id)
+    PersonQueries.get_person(person_id)
   end
 
   defp add_pending_email_address!(person_id, email) do

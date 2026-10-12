@@ -4,6 +4,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.Events.ClubMemberAdded
   alias Memba.Membership.Events.ClubMemberRemoved
   alias Memba.Membership.Events.ClubRoleRemovedFromMember
@@ -280,7 +281,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     |> form("#member-club-invitation-form", invitation: %{email: "not-an-email"})
     |> render_change()
 
-    club = Memba.Membership.get_club(robin.club_id)
+    club = ClubGroupQueries.get_club(robin.club_id)
 
     club
     |> Ecto.Changeset.change(name: "West Coast Alpine Club")
@@ -347,8 +348,8 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     |> render_change()
 
     %{socket: before_socket} = :sys.get_state(view.pid)
-    selected_club = Memba.Membership.get_club(robin.club_id)
-    other_club = Memba.Membership.get_club(other.club_id)
+    selected_club = ClubGroupQueries.get_club(robin.club_id)
+    other_club = ClubGroupQueries.get_club(other.club_id)
 
     selected_club
     |> Ecto.Changeset.change(name: "Must Not Be Loaded")
@@ -513,7 +514,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     %{host: host} =
       robin.club_id
-      |> Memba.Membership.get_club()
+      |> ClubGroupQueries.get_club()
       |> ClubSite.url("/members/invitations/new")
       |> URI.parse()
 
@@ -535,7 +536,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end

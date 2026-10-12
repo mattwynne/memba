@@ -13,6 +13,8 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
       render_keydown: 2
     ]
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
   alias Commanded.EventStore
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
@@ -47,7 +49,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> assert_has("#club-member-#{carol.person_id}", "Carol Canoe")
     |> assert_has("#member-group-member-count", "2 members")
 
-    assert Membership.active_member_of_group?(group.group_id, carol.person_id)
+    assert MembershipQueries.active_member_of_group?(group.group_id, carol.person_id)
   end
 
   test "an outside club admin adds themselves and immediately receives the participating view",
@@ -74,7 +76,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> assert_has("#club-member-#{admin.person_id}", "Dan Delgado")
     |> assert_has("#member-group-member-count", "2 members")
 
-    assert Membership.active_member_of_group?(group.group_id, admin.person_id)
+    assert MembershipQueries.active_member_of_group?(group.group_id, admin.person_id)
   end
 
   test "a confirmed new admission sends one welcome and an idempotent retry sends none",
@@ -157,7 +159,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
 
     Memba.EventSourcedCase.await_event_sourced_projection_positions!(projection_positions)
 
-    assert Membership.active_member_of_group?(group.group_id, carol.person_id)
+    assert MembershipQueries.active_member_of_group?(group.group_id, carol.person_id)
     refute_received {:email, %Swoosh.Email{}}
   end
 
@@ -249,7 +251,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> refute_has("#flash-error")
     |> refute_has("[data-testid='delivery-status']")
 
-    assert Membership.active_member_of_group?(group.group_id, carol.person_id)
+    assert MembershipQueries.active_member_of_group?(group.group_id, carol.person_id)
   end
 
   test "a participant confirms and removes another participant without changing club membership",
@@ -275,8 +277,8 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> refute_has("#club-member-#{bob.person_id}")
     |> assert_has("#member-group-member-count", "1 member")
 
-    refute Membership.active_member_of_group?(group.group_id, bob.person_id)
-    assert Membership.active_member_of_club?(club.club_id, bob.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, bob.person_id)
+    assert MembershipQueries.active_member_of_club?(club.club_id, bob.person_id)
   end
 
   test "a queued duplicate removal survives reconnect with one domain removal and no auth flash",
@@ -338,7 +340,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
 
     refute has_element?(reconnected_view, "#flash-error")
     assert count_removal_events(club.club_id, operation_id) == 1
-    refute Membership.active_member_of_group?(group.group_id, bob.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, bob.person_id)
   end
 
   test "the last ordinary participant can leave and sees the restricted group surface", %{
@@ -367,8 +369,8 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> assert_has("#flash-info", "You still belong to Alpine Club")
     |> refute_has("#member-section-tabs")
 
-    refute Membership.active_member_of_group?(group.group_id, bob.person_id)
-    assert Membership.active_member_of_club?(club.club_id, bob.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, bob.person_id)
+    assert MembershipQueries.active_member_of_club?(club.club_id, bob.person_id)
   end
 
   test "an outside admin can remove a participant but an ordinary outsider gets no control",
@@ -405,7 +407,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> assert_has("#active-members-empty-state", "Board has no members")
     |> refute_has("#member-section-tab-conversations")
 
-    refute Membership.active_member_of_group?(group.group_id, alice.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, alice.person_id)
   end
 
   test "stale projected group access does not expose admission controls",
@@ -434,7 +436,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
     |> refute_has("#custom-group-member-candidate-#{target.person_id}")
     |> refute_has("#club-member-#{target.person_id}")
 
-    refute Membership.active_member_of_group?(group.group_id, target.person_id)
+    refute MembershipQueries.active_member_of_group?(group.group_id, target.person_id)
   end
 
   defp create_club!(name, slug) do
@@ -446,7 +448,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
                consistency: :strong
              )
 
-    Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_member!(club, name, email) do
@@ -486,7 +488,7 @@ defmodule MembaWeb.MemberDashboardAdmissionLiveTest do
                consistency: :strong
              )
 
-    Membership.get_group(group_id)
+    ClubGroupQueries.get_group(group_id)
   end
 
   defp add_group_member!(club, group, actor, target) do

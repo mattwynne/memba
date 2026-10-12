@@ -4,6 +4,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
@@ -731,7 +732,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
       )
 
     [everyone_group] =
-      Memba.Membership.list_active_groups_for_member(alice.club_id, alice.person_id)
+      ClubGroupQueries.list_active_groups_for_member(alice.club_id, alice.person_id)
 
     assert everyone_group.active_member_count == 2
 
@@ -888,7 +889,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
       )
 
     %{host: host} =
-      alice.club_id |> Memba.Membership.get_club() |> ClubSite.url("/messages/new") |> URI.parse()
+      alice.club_id |> ClubGroupQueries.get_club() |> ClubSite.url("/messages/new") |> URI.parse()
 
     return_path = "http://#{host}/messages/new"
 
@@ -979,7 +980,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end

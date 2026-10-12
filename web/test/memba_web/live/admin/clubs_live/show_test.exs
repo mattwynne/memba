@@ -3,6 +3,8 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Messaging
@@ -84,7 +86,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
                consistency: :strong
              )
 
-    club = Membership.get_club(club_id)
+    club = ClubGroupQueries.get_club(club_id)
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
     assert :ok =
@@ -159,10 +161,10 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     assert input_value(updated_html, "#edit-club-slug-input") == "kmc-alpine"
 
     assert %ClubProjection{name: "KMC Alpine Club", slug: "kmc-alpine"} =
-             Membership.get_club(club_id)
+             ClubGroupQueries.get_club(club_id)
 
-    assert %ClubProjection{club_id: ^club_id} = Membership.get_club_by_slug("kmc-alpine")
-    assert is_nil(Membership.get_club_by_slug("kmc"))
+    assert %ClubProjection{club_id: ^club_id} = ClubGroupQueries.get_club_by_slug("kmc-alpine")
+    assert is_nil(ClubGroupQueries.get_club_by_slug("kmc"))
   end
 
   test "invalid edit submissions leave the form editable without changing the projection", %{
@@ -190,7 +192,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     assert input_value(invalid_html, "#edit-club-slug-input") == "KMC Club!"
 
     assert %ClubProjection{name: "Kootenay Mountaineering Club", slug: "kmc"} =
-             Membership.get_club(club_id)
+             ClubGroupQueries.get_club(club_id)
   end
 
   test "slug validation feedback updates live while editing", %{conn: conn} do
@@ -277,7 +279,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     assert has_element?(view, "#flash-error", "Could not update club: :slug taken")
     assert input_value(render(view), "#edit-club-name-input") == "Changed Club"
     assert input_value(render(view), "#edit-club-slug-input") == "cycling"
-    assert Membership.get_club(club.club_id).slug == "alpine"
+    assert ClubGroupQueries.get_club(club.club_id).slug == "alpine"
   end
 
   test "people and member lists show primary and alternate email addresses distinctly", %{
@@ -381,7 +383,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     render_hook(view, "add_member", %{"membership" => %{"person_id" => alice.person_id}})
 
     assert_redirect(view, ~p"/admin/clubs/#{club.club_id}/invitations/new")
-    refute Membership.active_member_of_club?(club.club_id, alice.person_id)
+    refute MembershipQueries.active_member_of_club?(club.club_id, alice.person_id)
   end
 
   test "staff can remove a member from a club", %{conn: conn} do
@@ -434,14 +436,14 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     |> render_click()
 
     refute has_element?(view, "#member-#{alice.person_id}")
-    refute Membership.active_member_of_club?(club.club_id, alice.person_id)
+    refute MembershipQueries.active_member_of_club?(club.club_id, alice.person_id)
   end
 
   defp create_membership_club!(attrs) do
     club_attrs = membership_club_attrs(attrs)
 
     assert :ok = Membership.create_club(club_attrs, consistency: :strong)
-    Membership.get_club(club_attrs.club_id)
+    ClubGroupQueries.get_club(club_attrs.club_id)
   end
 
   defp input_value(html, selector) do

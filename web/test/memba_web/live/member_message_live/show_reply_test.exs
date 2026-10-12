@@ -3,6 +3,10 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
   alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
@@ -42,8 +46,8 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
                consistency: :strong
              )
 
-    assert [message] = Messaging.list_messages_for_club(club_id)
-    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+    assert [message] = MessageQueries.list_messages_for_club(club_id)
+    refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     {:ok, view, _html} =
       conn
@@ -62,7 +66,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
       "reply" => %{"sender_id" => alice.person_id, "body" => "I'll bring snacks."}
     })
 
-    assert [root, reply] = Messaging.list_conversation_messages(message.message_id)
+    assert [root, reply] = MessageQueries.list_conversation_messages(message.message_id)
     assert root.message_id == message.message_id
     assert Memba.ID.valid?(:message, reply.message_id)
     assert reply.sender_id == bob.person_id
@@ -71,7 +75,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     assert reply.subject == "Trip planning night"
     assert reply.body == "I'll bring snacks."
 
-    assert [receipt] = Messaging.list_member_email_deliverys(reply.message_id)
+    assert [receipt] = DeliveryQueries.list_member_email_deliverys(reply.message_id)
     assert receipt.recipient_id == alice.person_id
     assert receipt.status == "sent"
 
@@ -106,7 +110,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
              "Your reply inherits the subject and is emailed to current followers except you."
            )
 
-    assert Messaging.following_conversation?(message.message_id, bob.person_id)
+    assert ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     assert has_element?(
              view,
@@ -144,8 +148,8 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
                consistency: :strong
              )
 
-    assert [message] = Messaging.list_messages_for_club(club_id)
-    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+    assert [message] = MessageQueries.list_messages_for_club(club_id)
+    refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     {:ok, view, _html} =
       conn
@@ -172,7 +176,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     |> element("#member-conversation-follow-toggle")
     |> render_change()
 
-    assert Messaging.following_conversation?(message.message_id, bob.person_id)
+    assert ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     assert has_element?(
              view,
@@ -190,7 +194,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     |> element("#member-conversation-follow-toggle")
     |> render_change()
 
-    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+    refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
 
     assert has_element?(
              view,
@@ -226,7 +230,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
                consistency: :strong
              )
 
-    assert [message] = Messaging.list_messages_for_club(club_id)
+    assert [message] = MessageQueries.list_messages_for_club(club_id)
 
     assert :ok =
              Membership.remove_member(
@@ -240,7 +244,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
       |> get(~p"/messages/#{message.message_id}")
 
     assert response(conn, 403) == "Forbidden"
-    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+    refute ConversationFollowQueries.following_conversation?(message.message_id, bob.person_id)
   end
 
   defp signed_in_club_host(conn, email, club) do
@@ -250,7 +254,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end
@@ -259,7 +263,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     person_id = Memba.ID.generate(:person)
     email = Keyword.fetch!(attrs, :email)
 
-    if is_nil(Membership.get_club(club_id)) do
+    if is_nil(ClubGroupQueries.get_club(club_id)) do
       assert :ok =
                Membership.create_club(
                  membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),

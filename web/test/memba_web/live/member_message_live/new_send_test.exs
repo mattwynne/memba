@@ -4,10 +4,14 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   import Ecto.Query
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Messaging.ConversationListing
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.MessageQueries
   alias Memba.Membership
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
   alias Memba.Repo
@@ -77,26 +81,26 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     await_delivery_projection!()
 
-    assert [message] = Messaging.list_messages_for_club(club_id)
+    assert [message] = MessageQueries.list_messages_for_club(club_id)
     assert Memba.ID.valid?(:message, message.message_id)
     assert message.sender_id == alice.person_id
     assert message.subject == "Trip planning night"
     assert message.body == "Bring route ideas."
 
-    assert [conversation] = Messaging.list_conversations_for_group(everyone_group_id)
+    assert [conversation] = ConversationListing.list_for_group(everyone_group_id)
     assert conversation.message_id == message.message_id
-    assert Messaging.list_conversations_for_group(trip_planning_group.group_id) == []
+    assert ConversationListing.list_for_group(trip_planning_group.group_id) == []
 
     assert [
              %{recipient_id: alice_recipient_id, status: "sent"},
              %{recipient_id: bob_recipient_id, status: "sent"}
-           ] = Messaging.list_member_email_deliverys(message.message_id)
+           ] = DeliveryQueries.list_member_email_deliverys(message.message_id)
 
     assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
 
     delivery_statuses =
       message.message_id
-      |> Messaging.list_recipient_deliveries()
+      |> DeliveryQueries.list_recipient_deliveries()
       |> Enum.map(& &1.status)
 
     assert length(delivery_statuses) == 2
@@ -176,11 +180,11 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     await_delivery_projection!()
 
-    assert [message] = Messaging.list_messages_for_club(club_id)
+    assert [message] = MessageQueries.list_messages_for_club(club_id)
 
     recipient_ids =
       message.message_id
-      |> Messaging.list_member_email_deliverys()
+      |> DeliveryQueries.list_member_email_deliverys()
       |> Enum.map(& &1.recipient_id)
       |> Enum.sort()
 
@@ -188,11 +192,11 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     refute carol.person_id in recipient_ids
 
     assert [%{message_id: message_id}] =
-             Messaging.list_conversations_for_group(trip_planning_group.group_id)
+             ConversationListing.list_for_group(trip_planning_group.group_id)
 
     assert message_id == message.message_id
 
-    assert Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(club_id)) == []
+    assert ConversationListing.list_for_group(SystemGroups.everyone_group_id(club_id)) == []
 
     assert has_element?(
              view,
@@ -266,7 +270,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     })
 
     assert_redirect(view, ~p"/groups/#{private_group.group_id}")
-    assert Messaging.list_messages_for_club(club_id) == []
+    assert MessageQueries.list_messages_for_club(club_id) == []
     assert Fake.deliveries() == []
   end
 
@@ -356,7 +360,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              "#member-message-cancel-link[href='/groups/#{trip_planning_group.group_id}']"
            )
 
-    assert Messaging.list_messages_for_club(club_id) == []
+    assert MessageQueries.list_messages_for_club(club_id) == []
   end
 
   test "blank body validation keeps the compose form and does not send", %{conn: conn} do
@@ -381,7 +385,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert has_element?(view, "#member-message-compose[data-compose-state='composing']")
     assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
     assert render(view) =~ "Trip planning night"
-    assert Messaging.list_messages_for_club(club_id) == []
+    assert MessageQueries.list_messages_for_club(club_id) == []
     assert Fake.deliveries() == []
   end
 
@@ -413,7 +417,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
                consistency: :eventual
              )
 
-    assert Membership.active_member_of_group?(
+    assert MembershipQueries.active_member_of_group?(
              SystemGroups.everyone_group_id(club_id),
              alice.person_id
            )
@@ -433,7 +437,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
            )
 
     assert has_element?(view, "#member-compose-error-state", "Your message was not accepted.")
-    assert Messaging.list_messages_for_club(club_id) == []
+    assert MessageQueries.list_messages_for_club(club_id) == []
     assert Fake.deliveries() == []
 
     restart_projector!(membership_projector_child_id)
@@ -468,7 +472,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     await_delivery_projection!()
 
-    assert [message] = Messaging.list_messages_for_club(club_id)
+    assert [message] = MessageQueries.list_messages_for_club(club_id)
     assert message.sender_id == alice.person_id
 
     assert has_element?(
@@ -513,18 +517,18 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     await_delivery_projection!()
 
-    assert [message] = Messaging.list_messages_for_club(club_id)
+    assert [message] = MessageQueries.list_messages_for_club(club_id)
 
     assert [
              %{recipient_id: alice_recipient_id, status: "sent"},
              %{recipient_id: bob_recipient_id, status: "sent"}
-           ] = Messaging.list_member_email_deliverys(message.message_id)
+           ] = DeliveryQueries.list_member_email_deliverys(message.message_id)
 
     assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
 
     delivery_statuses =
       message.message_id
-      |> Messaging.list_recipient_deliveries()
+      |> DeliveryQueries.list_recipient_deliveries()
       |> Enum.map(& &1.status)
 
     assert length(delivery_statuses) == 2
@@ -540,7 +544,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   end
 
   defp club_host(conn, club) do
-    club = Memba.Membership.get_club(club.club_id) || club
+    club = ClubGroupQueries.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
   end
@@ -549,7 +553,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     person_id = Memba.ID.generate(:person)
     email = Keyword.fetch!(attrs, :email)
 
-    if is_nil(Membership.get_club(club_id)) do
+    if is_nil(ClubGroupQueries.get_club(club_id)) do
       assert :ok =
                Membership.create_club(
                  membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
@@ -602,7 +606,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
                consistency: :strong
              )
 
-    Membership.get_group(group_id)
+    ClubGroupQueries.get_group(group_id)
   end
 
   defp add_group_member(group, member) do

@@ -3,6 +3,7 @@ defmodule MembaWeb.Admin.ClubsLive.IndexTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
@@ -86,10 +87,10 @@ defmodule MembaWeb.Admin.ClubsLive.IndexTest do
     assert input_value(duplicate_html, "#club-slug-input") == "kmc"
 
     assert %ClubProjection{club_id: ^existing_club_id, slug: "kmc"} =
-             Membership.get_club_by_slug("kmc")
+             ClubGroupQueries.get_club_by_slug("kmc")
 
     assert [^existing_club_id] =
-             Membership.list_clubs()
+             ClubGroupQueries.list_clubs()
              |> Enum.filter(&(&1.slug == "kmc"))
              |> Enum.map(& &1.club_id)
   end

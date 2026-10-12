@@ -3,6 +3,8 @@ defmodule MembaWeb.AdminPeopleLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership
   alias MembaWeb.Admin.PersonEmailAddressForm
 
@@ -169,7 +171,7 @@ defmodule MembaWeb.AdminPeopleLiveTest do
     assert_redirect(view, ~p"/admin/clubs/#{club.club_id}")
 
     assert %{person_id: person_id, email: "Alice@Example.COM"} =
-             Membership.list_people()
+             PersonQueries.list_people()
              |> Enum.find(&(&1.name == "Alice Example"))
 
     assert [
@@ -185,9 +187,9 @@ defmodule MembaWeb.AdminPeopleLiveTest do
                primary?: false,
                verified_at: %DateTime{}
              }
-           ] = Membership.list_person_email_addresses(person_id)
+           ] = PersonQueries.list_person_email_addresses(person_id)
 
-    refute Membership.active_member_of_club?(club.club_id, person_id)
+    refute MembershipQueries.active_member_of_club?(club.club_id, person_id)
   end
 
   test "staff create form rejects malformed, missing-primary, multiple-primary, and duplicate email submissions",
@@ -264,7 +266,7 @@ defmodule MembaWeb.AdminPeopleLiveTest do
              "An email address is already used by another person."
            )
 
-    refute Membership.list_people() |> Enum.any?(&(&1.name == "Duplicate Alice"))
+    refute PersonQueries.list_people() |> Enum.any?(&(&1.name == "Duplicate Alice"))
   end
 
   test "staff edit form replaces addresses and primary selection", %{conn: conn} do
@@ -304,7 +306,7 @@ defmodule MembaWeb.AdminPeopleLiveTest do
 
     assert_redirect(view, ~p"/admin/clubs/#{club.club_id}")
 
-    assert %{email: "alice@work.example"} = Membership.get_person(person_id)
+    assert %{email: "alice@work.example"} = PersonQueries.get_person(person_id)
 
     assert [
              %{
@@ -319,6 +321,6 @@ defmodule MembaWeb.AdminPeopleLiveTest do
                primary?: false,
                verified_at: %DateTime{}
              }
-           ] = Membership.list_person_email_addresses(person_id)
+           ] = PersonQueries.list_person_email_addresses(person_id)
   end
 end
