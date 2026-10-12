@@ -4,7 +4,8 @@ defmodule MembaWeb.Admin.ClubsLive.IndexTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.ClubGroupQueries
-  alias Memba.Membership
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
   test "staff clubs index uses the operations page treatment", %{conn: conn} do
@@ -65,11 +66,14 @@ defmodule MembaWeb.Admin.ClubsLive.IndexTest do
   } do
     existing_club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: existing_club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ClubCommands.prepare_create(%{
+               club_id: existing_club_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "kmc"
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     {:ok, view, _initial_html} =
       conn

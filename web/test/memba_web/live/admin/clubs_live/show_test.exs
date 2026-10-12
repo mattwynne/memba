@@ -3,26 +3,21 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.MembershipQueries
-  alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
+  alias Memba.Messaging.SendClubMessage
   alias MembaWeb.ClubSite
 
   test "club detail separates club facts, person records, and memberships", %{conn: conn} do
     club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club.club_id,
-                 person_id: person.person_id
-               },
-               consistency: :strong
-             )
+    add_club_member!(club, person)
 
     {:ok, view, _initial_html} =
       conn
@@ -48,15 +43,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club.club_id,
-                 person_id: person.person_id
-               },
-               consistency: :strong
-             )
+    add_club_member!(club, person)
 
     {:ok, view, _initial_html} =
       conn
@@ -80,36 +67,23 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   } do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
-               consistency: :strong
-             )
+    club =
+      create_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc")
 
-    club = ClubGroupQueries.get_club(club_id)
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club.club_id,
-                 person_id: person.person_id
-               },
-               consistency: :strong
-             )
+    add_club_member!(club, person)
 
-    result =
-      Messaging.send_club_message(
-        %{
-          message_id: Memba.ID.generate(:message),
-          club_id: club.club_id,
-          sender_id: person.person_id,
-          subject: "Trip planning night",
-          body: "Bring route ideas."
-        },
-        consistency: :strong
-      )
+    assert {:ok, command} =
+             SendClubMessage.prepare(%{
+               message_id: Memba.ID.generate(:message),
+               club_id: club.club_id,
+               sender_id: person.person_id,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             })
+
+    assert {:ok, result} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     assert result == :ok or match?({:ok, _result}, result)
 
@@ -135,11 +109,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "edit form displays and saves a club name and slug", %{conn: conn} do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
-               consistency: :strong
-             )
+    create_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc")
 
     {:ok, view, initial_html} =
       conn
@@ -172,11 +142,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   } do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
-               consistency: :strong
-             )
+    create_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc")
 
     {:ok, view, _initial_html} =
       conn
@@ -198,11 +164,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "slug validation feedback updates live while editing", %{conn: conn} do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
-               consistency: :strong
-             )
+    create_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc")
 
     {:ok, view, _initial_html} =
       conn
@@ -228,17 +190,8 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     club_id = Memba.ID.generate(:club)
     other_club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
-               consistency: :strong
-             )
-
-    assert :ok =
-             Membership.create_club(
-               %{club_id: other_club_id, name: "Alpine Club", slug: "alpine"},
-               consistency: :strong
-             )
+    create_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc")
+    create_membership_club!(club_id: other_club_id, name: "Alpine Club", slug: "alpine")
 
     {:ok, view, _initial_html} =
       conn
@@ -294,15 +247,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
       is_primary: false
     )
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club.club_id,
-                 person_id: person.person_id
-               },
-               consistency: :strong
-             )
+    add_club_member!(club, person)
 
     {:ok, view, _initial_html} =
       conn
@@ -393,25 +338,8 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     membership_id = Memba.ID.generate(:membership)
     bob_membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club.club_id,
-                 person_id: alice.person_id
-               },
-               consistency: :strong
-             )
-
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: bob_membership_id,
-                 club_id: club.club_id,
-                 person_id: bob.person_id
-               },
-               consistency: :strong
-             )
+    add_club_member!(club, alice, membership_id)
+    add_club_member!(club, bob, bob_membership_id)
 
     assert :ok =
              Memba.Membership.App.dispatch(
@@ -442,8 +370,20 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   defp create_membership_club!(attrs) do
     club_attrs = membership_club_attrs(attrs)
 
-    assert :ok = Membership.create_club(club_attrs, consistency: :strong)
+    assert {:ok, command} = ClubCommands.prepare_create(club_attrs)
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
     ClubGroupQueries.get_club(club_attrs.club_id)
+  end
+
+  defp add_club_member!(club, person, membership_id \\ Memba.ID.generate(:membership)) do
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club.club_id,
+               person_id: person.person_id
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
   end
 
   defp input_value(html, selector) do

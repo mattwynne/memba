@@ -9,7 +9,9 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   alias Memba.Membership.PersonQueries
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.SignInToken
-  alias Memba.Membership
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -512,15 +514,14 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
   test "conversion preparation reports taken slugs with the same availability rule as club creation",
        %{conn: conn} do
-    assert :ok =
-             Membership.create_club(
-               %{
-                 club_id: Memba.ID.generate(:club),
-                 name: "Existing West Coast Paddlers",
-                 slug: "west-coast-paddlers"
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ClubCommands.prepare_create(%{
+               club_id: Memba.ID.generate(:club),
+               name: "Existing West Coast Paddlers",
+               slug: "west-coast-paddlers"
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     request = request_fixture("West Coast Paddlers", requester_name: "Robin Requester")
 
@@ -610,15 +611,14 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     configure_auth_email()
     existing_person_id = Memba.ID.generate(:person)
 
-    assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: existing_person_id,
-                 name: "Existing Robin",
-                 email: "robin@example.com"
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: existing_person_id,
+               name: "Existing Robin",
+               email: "robin@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     request =
       verified_request_fixture(conn, "Existing Person Paddlers",

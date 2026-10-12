@@ -5,7 +5,8 @@ defmodule MembaWeb.AdminPeopleLiveTest do
 
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.PersonQueries
-  alias Memba.Membership
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonCommands
   alias MembaWeb.Admin.PersonEmailAddressForm
 
   test "staff can open the dedicated new-person LiveView for a club", %{conn: conn} do
@@ -196,16 +197,15 @@ defmodule MembaWeb.AdminPeopleLiveTest do
        %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
 
-    assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: Memba.ID.generate(:person),
-                 name: "Existing Alice",
-                 email: "alice@example.com",
-                 email_addresses: [%{email: "alice@example.com", is_primary: true}]
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: Memba.ID.generate(:person),
+               name: "Existing Alice",
+               email: "alice@example.com",
+               email_addresses: [%{email: "alice@example.com", is_primary: true}]
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     {:ok, view, _html} =
       conn
@@ -273,18 +273,17 @@ defmodule MembaWeb.AdminPeopleLiveTest do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
     person_id = Memba.ID.generate(:person)
 
-    assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: "Alice Example",
-                 email_addresses: [
-                   %{email: "alice@example.com", is_primary: true},
-                   %{email: "alice@work.example", is_primary: false}
-                 ]
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Example",
+               email_addresses: [
+                 %{email: "alice@example.com", is_primary: true},
+                 %{email: "alice@work.example", is_primary: false}
+               ]
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     {:ok, view, _html} =
       conn

@@ -9,7 +9,8 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.PersonQueries
   alias Memba.Accounts.AuthEmail
-  alias Memba.Membership
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Projections.ClubInvitation
 
   setup :set_swoosh_global
@@ -136,15 +137,14 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
        %{conn: conn} do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{
-                 club_id: club_id,
-                 name: "Kootenay Mountaineering Club",
-                 slug: "kootenay-mountaineering"
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ClubCommands.prepare_create(%{
+               club_id: club_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "kootenay-mountaineering"
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     club = ClubGroupQueries.get_club(club_id)
 

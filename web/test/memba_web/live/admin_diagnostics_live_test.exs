@@ -1,7 +1,8 @@
 defmodule MembaWeb.AdminDiagnosticsLiveTest do
   use MembaWeb.FeatureCase, async: false
 
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch
+  alias Memba.Messaging.EmailDeliveryReport
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -14,11 +15,14 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
 
     reason = "recipient server is temporarily unavailable"
 
-    assert :ok =
-             Messaging.report_email_delivery_delayed(
-               %{message_id: message_id, delivery_id: bob.delivery_id, reason: reason},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             EmailDeliveryReport.delayed(%{
+               message_id: message_id,
+               delivery_id: bob.delivery_id,
+               reason: reason
+             })
+
+    assert {:ok, :ok} = CommandDispatch.dispatch(command, consistency: :strong)
 
     response =
       conn
@@ -92,11 +96,14 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
 
     reason = "recipient marked the message as spam"
 
-    assert :ok =
-             Messaging.report_email_delivery_spam_complaint(
-               %{message_id: message_id, delivery_id: recipient.delivery_id, reason: reason},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             EmailDeliveryReport.spam_complaint(%{
+               message_id: message_id,
+               delivery_id: recipient.delivery_id,
+               reason: reason
+             })
+
+    assert {:ok, :ok} = CommandDispatch.dispatch(command, consistency: :strong)
 
     response =
       conn
