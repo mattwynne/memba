@@ -1,6 +1,9 @@
 defmodule Memba.Membership.MemberRoleAuthorizationTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+  alias Memba.Membership.SystemGroups
+
   alias Memba.Membership.AddMember
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubMember
@@ -516,5 +519,143 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
       {:error, :role_already_assigned} -> :ok
       other -> flunk("expected role assignment to succeed, got #{inspect(other)}")
     end
+  end
+
+  test "member and Admin role command dispatch waits for system group membership projection by default" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(
+                       membership_club_attrs(
+                         club_id: club_id,
+                         name: "Kootenay Mountaineering Club"
+                       )
+                     ) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: actor_person_id,
+                       name: "Alice",
+                       email: "alice@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: target_person_id,
+                       name: "Bob",
+                       email: "bob@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       membership_id: actor_membership_id,
+                       club_id: club_id,
+                       person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command)
+              end)
+
+    assert %GroupMembershipProjection{
+             active: true,
+             club_id: ^club_id,
+             group_id: ^everyone_group_id,
+             membership_id: ^actor_membership_id,
+             person_id: ^actor_person_id
+           } = group_membership(everyone_group_id, actor_membership_id)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       membership_id: target_membership_id,
+                       club_id: club_id,
+                       person_id: target_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command)
+              end)
+
+    assert %GroupMembershipProjection{
+             active: true,
+             club_id: ^club_id,
+             group_id: ^everyone_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(everyone_group_id, target_membership_id)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command)
+              end)
+
+    assert %GroupMembershipProjection{
+             active: true,
+             club_id: ^club_id,
+             group_id: ^admin_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(admin_group_id, target_membership_id)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command)
+              end)
+
+    assert %GroupMembershipProjection{
+             active: false,
+             club_id: ^club_id,
+             group_id: ^admin_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(admin_group_id, target_membership_id)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     ClubMember.Remove.prepare(%{membership_id: target_membership_id}) do
+                MembershipCommandDispatch.dispatch(command)
+              end)
+
+    assert %GroupMembershipProjection{
+             active: false,
+             club_id: ^club_id,
+             group_id: ^everyone_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(everyone_group_id, target_membership_id)
+  end
+
+  defp group_membership(group_id, membership_id) do
+    Repo.one(
+      from(group_membership in GroupMembershipProjection,
+        where: group_membership.group_id == ^group_id,
+        where: group_membership.membership_id == ^membership_id
+      )
+    )
   end
 end

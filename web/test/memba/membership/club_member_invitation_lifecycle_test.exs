@@ -1,6 +1,14 @@
 defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Commanded.Commands.ExecutionResult
+  alias Memba.Membership.Events.ClubMemberInvitationAccepted
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.MembershipQueries
+
   alias Memba.Membership.AddMember
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
@@ -870,5 +878,195 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
         where: member_permission.permission == ^permission
       )
     )
+  end
+
+  test "accept_existing/2 returns membership and acceptance execution results" do
+    club_id = Memba.ID.generate(:club)
+    invitation_id = Memba.ID.generate(:club_invitation)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(
+                       membership_club_attrs(
+                         club_id: club_id,
+                         name: "Kootenay Mountaineering Club"
+                       )
+                     ) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Alice",
+                       email: "Alice@Example.COM"
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
+
+    assert {:ok, %{invitation_token: _token}} =
+             InvitationIssuanceWorkflow.invite(
+               %{invitation_id: invitation_id, club_id: club_id, email: " alice@example.com "},
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %{
+              invitation_id: ^invitation_id,
+              club_id: ^club_id,
+              person_id: ^person_id,
+              membership_id: ^membership_id,
+              membership_execution_result: %ExecutionResult{
+                aggregate_uuid: ^club_id,
+                events: [
+                  %ClubMemberAdded{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id
+                  },
+                  %ClubRoleAssignedToMember{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id,
+                    assignment_source: "automatic_first_club_member"
+                  }
+                ]
+              },
+              invitation_execution_result: %ExecutionResult{
+                aggregate_uuid: ^invitation_id,
+                events: [
+                  %ClubMemberInvitationAccepted{
+                    invitation_id: ^invitation_id,
+                    person_id: ^person_id,
+                    membership_id: ^membership_id
+                  }
+                ]
+              }
+            }} =
+             InvitationAcceptance.accept_existing(
+               %{
+                 invitation_id: invitation_id,
+                 person_id: person_id,
+                 membership_id: membership_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert MembershipQueries.active_member_of_club?(club_id, person_id)
+
+    assert %ClubInvitationProjection{
+             status: "accepted",
+             accepted_person_id: ^person_id,
+             accepted_membership_id: ^membership_id
+           } = InvitationQueries.get(invitation_id)
+  end
+
+  test "complete_profile/2 returns person, membership, and acceptance execution results" do
+    club_id = Memba.ID.generate(:club)
+    invitation_id = Memba.ID.generate(:club_invitation)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(
+                       membership_club_attrs(
+                         club_id: club_id,
+                         name: "Kootenay Mountaineering Club"
+                       )
+                     ) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
+
+    assert {:ok, %{invitation_token: _token}} =
+             InvitationIssuanceWorkflow.invite(
+               %{invitation_id: invitation_id, club_id: club_id, email: " Robin@Example.COM "},
+               consistency: :strong
+             )
+
+    assert is_nil(PersonQueries.get_person(person_id))
+
+    assert {:ok,
+            %{
+              invitation_id: ^invitation_id,
+              club_id: ^club_id,
+              person_id: ^person_id,
+              membership_id: ^membership_id,
+              person_execution_result: %ExecutionResult{
+                aggregate_uuid: ^person_id,
+                events: [
+                  %PersonCreated{
+                    person_id: ^person_id,
+                    name: "Robin"
+                  },
+                  %PersonEmailAddressesReplaced{
+                    person_id: ^person_id,
+                    primary_email: "Robin@Example.COM"
+                  }
+                ]
+              },
+              membership_execution_result: %ExecutionResult{
+                aggregate_uuid: ^club_id,
+                events: [
+                  %ClubMemberAdded{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id
+                  },
+                  %ClubRoleAssignedToMember{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id,
+                    assignment_source: "automatic_first_club_member"
+                  }
+                ]
+              },
+              invitation_execution_result: %ExecutionResult{
+                aggregate_uuid: ^invitation_id,
+                events: [
+                  %ClubMemberInvitationAccepted{
+                    invitation_id: ^invitation_id,
+                    person_id: ^person_id,
+                    membership_id: ^membership_id
+                  }
+                ]
+              }
+            }} =
+             InvitationAcceptance.complete_profile(
+               %{
+                 invitation_id: invitation_id,
+                 person_id: person_id,
+                 membership_id: membership_id,
+                 name: " Robin "
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{
+             person_id: ^person_id,
+             name: "Robin",
+             email: "Robin@Example.COM"
+           } = PersonQueries.get_person(person_id)
+
+    assert [%{email: "Robin@Example.COM", normalized_email: "robin@example.com", primary?: true}] =
+             PersonQueries.list_person_email_addresses(person_id)
+
+    assert %MembershipProjection{
+             membership_id: ^membership_id,
+             club_id: ^club_id,
+             person_id: ^person_id,
+             active: true
+           } = Repo.get(MembershipProjection, membership_id)
+
+    assert %ClubInvitationProjection{
+             status: "accepted",
+             accepted_person_id: ^person_id,
+             accepted_membership_id: ^membership_id
+           } = InvitationQueries.get(invitation_id)
   end
 end
