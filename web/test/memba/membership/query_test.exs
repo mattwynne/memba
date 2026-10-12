@@ -143,6 +143,8 @@ defmodule Memba.Membership.QueryTest do
   end
 
   describe "find_member_for_email/2" do
+    alias Memba.Membership.PersonQueries
+
     test "resolves primary and alternate addresses to the first matching scoped row" do
       person =
         create_person(
@@ -158,8 +160,10 @@ defmodule Memba.Membership.QueryTest do
       second = %{first | membership_id: "second"}
       members = [%{id: Memba.ID.generate(:person)}, first, second]
 
-      assert Membership.find_member_for_email(members, " ROBIN.ALTERNATE@example.com ") == first
-      assert Membership.find_member_for_email(members, "robin.primary@example.com") == first
+      assert PersonQueries.find_member_for_email(members, " ROBIN.ALTERNATE@example.com ") ==
+               first
+
+      assert PersonQueries.find_member_for_email(members, "robin.primary@example.com") == first
     end
 
     test "does not return a person outside the supplied membership scope" do
@@ -176,13 +180,13 @@ defmodule Memba.Membership.QueryTest do
       other_member = %{id: Memba.ID.generate(:person), email: "robin.alternate@example.com"}
 
       assert is_nil(
-               Membership.find_member_for_email([other_member], "robin.alternate@example.com")
+               PersonQueries.find_member_for_email([other_member], "robin.alternate@example.com")
              )
 
-      assert is_nil(Membership.find_member_for_email([], "robin.alternate@example.com"))
-      assert is_nil(Membership.find_member_for_email([other_member], "unknown@example.com"))
-      assert is_nil(Membership.find_member_for_email([other_member], nil))
-      assert is_nil(Membership.find_member_for_email(nil, "robin.alternate@example.com"))
+      assert is_nil(PersonQueries.find_member_for_email([], "robin.alternate@example.com"))
+      assert is_nil(PersonQueries.find_member_for_email([other_member], "unknown@example.com"))
+      assert is_nil(PersonQueries.find_member_for_email([other_member], nil))
+      assert is_nil(PersonQueries.find_member_for_email(nil, "robin.alternate@example.com"))
       refute other_member.id == person.person_id
     end
   end
@@ -215,7 +219,7 @@ defmodule Memba.Membership.QueryTest do
                  name: "Bob",
                  email: "bob@example.com"
                }
-             ] = Membership.list_active_members_of_club(kootenay_club_id)
+             ] = ClubGroupQueries.list_active_members_of_club(kootenay_club_id)
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
@@ -229,7 +233,7 @@ defmodule Memba.Membership.QueryTest do
                  name: "Pat",
                  email: "pat@example.com"
                }
-             ] = Membership.list_active_members_of_club(nelson_club_id)
+             ] = ClubGroupQueries.list_active_members_of_club(nelson_club_id)
 
       assert pat_person_id == pat.person_id
       assert Memba.ID.valid?(:membership, pat_membership_id)
@@ -252,7 +256,7 @@ defmodule Memba.Membership.QueryTest do
         active: false
       })
 
-      assert Membership.list_active_members_of_club(club_id) == []
+      assert ClubGroupQueries.list_active_members_of_club(club_id) == []
     end
 
     test "returns one row per active member using each person's primary email address" do
@@ -285,7 +289,7 @@ defmodule Memba.Membership.QueryTest do
       assert [
                %{id: alice_person_id, name: "Alice", email: "alice@work.example"},
                %{id: bob_person_id, name: "Bob", email: "bob@example.com"}
-             ] = Membership.list_active_members_of_club(club_id)
+             ] = ClubGroupQueries.list_active_members_of_club(club_id)
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
@@ -320,7 +324,7 @@ defmodule Memba.Membership.QueryTest do
                  name: "Bob",
                  roles: []
                }
-             ] = Membership.list_active_members_of_club(club.club_id)
+             ] = ClubGroupQueries.list_active_members_of_club(club.club_id)
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
@@ -345,15 +349,15 @@ defmodule Memba.Membership.QueryTest do
                  name: "Active Alice",
                  roles: ["Admin"]
                }
-             ] = Membership.list_active_members_of_club(club.club_id)
+             ] = ClubGroupQueries.list_active_members_of_club(club.club_id)
 
       assert active_person_id == active_person.person_id
     end
 
     test "returns an empty list for missing or invalid club IDs" do
-      assert Membership.list_active_members_of_club(Memba.ID.generate(:club)) == []
-      assert Membership.list_active_members_of_club(nil) == []
-      assert Membership.list_active_members_of_club("not-a-uuid") == []
+      assert ClubGroupQueries.list_active_members_of_club(Memba.ID.generate(:club)) == []
+      assert ClubGroupQueries.list_active_members_of_club(nil) == []
+      assert ClubGroupQueries.list_active_members_of_club("not-a-uuid") == []
     end
   end
 
