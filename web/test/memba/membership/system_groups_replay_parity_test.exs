@@ -2,8 +2,12 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Event.Mapper
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
   alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
@@ -11,7 +15,9 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.Permissions
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projectors.Group, as: GroupProjector
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
@@ -19,6 +25,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   alias Memba.Membership.Projectors.Person, as: PersonProjector
   alias Memba.Membership.Projectors.Role, as: RoleProjector
   alias Memba.Membership.Roles
+  alias Memba.Membership.SystemGroupBackfillQueries
   alias Memba.Membership.SystemGroups
   alias Memba.Membership.SystemGroups.Backfill
   alias Memba.Messaging
@@ -144,11 +151,10 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
     name = "Modern Sailing Club #{System.unique_integer([:positive])}"
     slug = membership_club_slug(name, club_id)
 
-    assert :ok =
-             Membership.create_club(
-               %{club_id: club_id, name: name, slug: slug},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ClubCommands.prepare_create(%{club_id: club_id, name: name, slug: slug})
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     %{club_id: club_id, name: name, slug: slug}
   end
@@ -157,17 +163,19 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
     person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: name, email: email},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{person_id: person_id, name: name, email: email})
 
-    assert :ok =
-             Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     %{membership_id: membership_id, person_id: person_id, name: name, email: email}
   end
@@ -185,15 +193,15 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   end
 
   defp assign_admin_role_as_member!(club_id, target_member, actor_member) do
-    Membership.assign_membership_administrator_as_club_member(
-      %{
-        club_id: club_id,
-        membership_id: target_member.membership_id,
-        person_id: target_member.person_id,
-        actor_person_id: actor_member.person_id
-      },
-      consistency: :strong
-    )
+    assert {:ok, command} =
+             ClubMember.Role.prepare_assign_administrator(%{
+               club_id: club_id,
+               membership_id: target_member.membership_id,
+               person_id: target_member.person_id,
+               actor_person_id: actor_member.person_id
+             })
+
+    CommandDispatch.dispatch(command, consistency: :strong)
   end
 
   defp send_historic_root_conversation!(club_id, sender) do
@@ -250,66 +258,70 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
 
     %{
       backfill_pages: %{
-        system_group_definitions: Membership.list_system_group_definition_backfill_page(nil, 100),
+        system_group_definitions:
+          SystemGroupBackfillQueries.list_system_group_definition_backfill_page(nil, 100),
         everyone_group_memberships:
-          Membership.list_everyone_group_membership_backfill_page(nil, 100),
-        admin_group_memberships: Membership.list_admin_group_membership_backfill_page(nil, 100),
+          SystemGroupBackfillQueries.list_everyone_group_membership_backfill_page(nil, 100),
+        admin_group_memberships:
+          SystemGroupBackfillQueries.list_admin_group_membership_backfill_page(nil, 100),
         everyone_conversation_access:
           Messaging.list_everyone_conversation_access_backfill_page(nil, 100)
       },
       groups_by_email_slug: %{
         historic_everyone:
-          Membership.get_group_by_email_slug(fixture.historic_club.club_id, "everyone"),
+          ClubGroupQueries.get_group_by_email_slug(fixture.historic_club.club_id, "everyone"),
         historic_admin:
-          Membership.get_group_by_email_slug(fixture.historic_club.club_id, "admin"),
+          ClubGroupQueries.get_group_by_email_slug(fixture.historic_club.club_id, "admin"),
         modern_everyone:
-          Membership.get_group_by_email_slug(fixture.modern_club.club_id, "everyone"),
-        modern_admin: Membership.get_group_by_email_slug(fixture.modern_club.club_id, "admin")
+          ClubGroupQueries.get_group_by_email_slug(fixture.modern_club.club_id, "everyone"),
+        modern_admin:
+          ClubGroupQueries.get_group_by_email_slug(fixture.modern_club.club_id, "admin")
       },
       group_members: %{
-        historic_everyone: Membership.list_active_members_of_group(historic_everyone_group_id),
-        historic_admin: Membership.list_active_members_of_group(historic_admin_group_id),
-        modern_everyone: Membership.list_active_members_of_group(modern_everyone_group_id),
-        modern_admin: Membership.list_active_members_of_group(modern_admin_group_id)
+        historic_everyone:
+          ClubGroupQueries.list_active_members_of_group(historic_everyone_group_id),
+        historic_admin: ClubGroupQueries.list_active_members_of_group(historic_admin_group_id),
+        modern_everyone: ClubGroupQueries.list_active_members_of_group(modern_everyone_group_id),
+        modern_admin: ClubGroupQueries.list_active_members_of_group(modern_admin_group_id)
       },
       group_membership_checks: %{
         alice_everyone:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             historic_everyone_group_id,
             fixture.historic_members.alice.person_id
           ),
         alice_admin:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             historic_admin_group_id,
             fixture.historic_members.alice.person_id
           ),
         bob_everyone:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             historic_everyone_group_id,
             fixture.historic_members.bob.person_id
           ),
         bob_admin:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             historic_admin_group_id,
             fixture.historic_members.bob.person_id
           ),
         charlie_everyone:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             historic_everyone_group_id,
             fixture.historic_members.charlie.person_id
           ),
         charlie_admin:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             historic_admin_group_id,
             fixture.historic_members.charlie.person_id
           ),
         dana_everyone:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             modern_everyone_group_id,
             fixture.modern_members.dana.person_id
           ),
         dana_admin:
-          Membership.active_member_of_group?(
+          MembershipQueries.active_member_of_group?(
             modern_admin_group_id,
             fixture.modern_members.dana.person_id
           )
