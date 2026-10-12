@@ -18,6 +18,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
@@ -88,35 +89,39 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     message_id = Memba.ID.generate(:message)
 
+    assert {:ok, command} =
+             SendClubMessage.prepare(%{
+               message_id: message_id,
+               club_id: kootenay_club_id,
+               sender_id: alice.person_id,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             })
+
     assert {:ok,
-            %ExecutionResult{
-              aggregate_uuid: ^message_id,
-              aggregate_version: 5,
-              events: [
-                %MessageSent{
-                  message_id: ^message_id,
-                  club_id: ^kootenay_club_id,
-                  sender_id: sender_id,
-                  subject: "Trip planning night",
-                  body: "Bring route ideas."
-                },
-                %ConversationAccessGrantedToGroup{
-                  conversation_id: ^message_id,
-                  club_id: ^kootenay_club_id,
-                  group_id: ^everyone_group_id,
-                  access_level: "write"
-                }
-                | delivery_events
-              ]
-            }} =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: kootenay_club_id,
-                 sender_id: alice.person_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
+            {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^message_id,
+               aggregate_version: 5,
+               events: [
+                 %MessageSent{
+                   message_id: ^message_id,
+                   club_id: ^kootenay_club_id,
+                   sender_id: sender_id,
+                   subject: "Trip planning night",
+                   body: "Bring route ideas."
+                 },
+                 %ConversationAccessGrantedToGroup{
+                   conversation_id: ^message_id,
+                   club_id: ^kootenay_club_id,
+                   group_id: ^everyone_group_id,
+                   access_level: "write"
+                 }
+                 | delivery_events
+               ]
+             }}} =
+             Messaging.CommandDispatch.dispatch(
+               command,
                returning: :execution_result,
                consistency: :strong
              )
@@ -220,30 +225,34 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     message_id = Memba.ID.generate(:message)
 
+    assert {:ok, command} =
+             SendClubMessage.prepare(%{
+               message_id: message_id,
+               club_id: club_id,
+               sender_id: alice.person_id,
+               audience_group_id: admin_group_id,
+               subject: "Private Admin topic",
+               body: "Please discuss this with the Admin group."
+             })
+
     assert {:ok,
-            %ExecutionResult{
-              aggregate_uuid: ^message_id,
-              aggregate_version: 4,
-              events: [
-                %MessageSent{message_id: ^message_id},
-                %ConversationAccessGrantedToGroup{
-                  conversation_id: ^message_id,
-                  club_id: ^club_id,
-                  group_id: ^admin_group_id,
-                  access_level: "write"
-                }
-                | delivery_events
-              ]
-            }} =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: admin_group_id,
-                 subject: "Private Admin topic",
-                 body: "Please discuss this with the Admin group."
-               },
+            {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^message_id,
+               aggregate_version: 4,
+               events: [
+                 %MessageSent{message_id: ^message_id},
+                 %ConversationAccessGrantedToGroup{
+                   conversation_id: ^message_id,
+                   club_id: ^club_id,
+                   group_id: ^admin_group_id,
+                   access_level: "write"
+                 }
+                 | delivery_events
+               ]
+             }}} =
+             Messaging.CommandDispatch.dispatch(
+               command,
                returning: :execution_result,
                consistency: :strong
              )
@@ -282,30 +291,34 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     message_id = Memba.ID.generate(:message)
 
+    assert {:ok, command} =
+             SendClubMessage.prepare(%{
+               message_id: message_id,
+               club_id: club_id,
+               sender_id: alice.person_id,
+               audience_group_id: trips_group_id,
+               subject: "Summer objectives",
+               body: "Choose the committee's next trip."
+             })
+
     assert {:ok,
-            %ExecutionResult{
-              aggregate_uuid: ^message_id,
-              aggregate_version: 4,
-              events: [
-                %MessageSent{message_id: ^message_id},
-                %ConversationAccessGrantedToGroup{
-                  conversation_id: ^message_id,
-                  club_id: ^club_id,
-                  group_id: ^trips_group_id,
-                  access_level: "write"
-                }
-                | delivery_events
-              ]
-            }} =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: alice.person_id,
-                 audience_group_id: trips_group_id,
-                 subject: "Summer objectives",
-                 body: "Choose the committee's next trip."
-               },
+            {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^message_id,
+               aggregate_version: 4,
+               events: [
+                 %MessageSent{message_id: ^message_id},
+                 %ConversationAccessGrantedToGroup{
+                   conversation_id: ^message_id,
+                   club_id: ^club_id,
+                   group_id: ^trips_group_id,
+                   access_level: "write"
+                 }
+                 | delivery_events
+               ]
+             }}} =
+             Messaging.CommandDispatch.dispatch(
+               command,
                returning: :execution_result,
                consistency: :strong
              )
