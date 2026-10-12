@@ -1,6 +1,10 @@
 defmodule Memba.Membership.SystemGroupsBackfillTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Messaging.EveryoneConversationAccessBackfillQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
+  alias Memba.Membership.SystemGroupBackfillQueries
+  alias Memba.Membership.ClubGroupQueries
   alias Commanded.Event.Mapper
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
@@ -22,7 +26,6 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Membership.SystemGroups.Backfill
-  alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
@@ -61,8 +64,17 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     assert active_group_membership?(admin_group_id, alice.membership_id)
     refute active_group_membership?(admin_group_id, bob.membership_id)
 
-    assert Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :write)
-    assert Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             everyone_group_id,
+             :write
+           )
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             everyone_group_id,
+             :read
+           )
   end
 
   test "does not give Everyone access to a conversation that already has an Admin audience" do
@@ -75,14 +87,32 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     conversation_id =
       send_group_root_conversation!(club.club_id, member.person_id, admin_group_id)
 
-    assert Messaging.group_has_conversation_access?(conversation_id, admin_group_id, :write)
-    refute Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             admin_group_id,
+             :write
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             everyone_group_id,
+             :read
+           )
 
     assert %{everyone_conversation_access: %{dispatched_count: 0}} =
              Backfill.run!(page_size: 10)
 
-    assert Messaging.group_has_conversation_access?(conversation_id, admin_group_id, :write)
-    refute Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             admin_group_id,
+             :write
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             everyone_group_id,
+             :read
+           )
   end
 
   test "second run is idempotent and appends no duplicate facts" do
@@ -123,10 +153,10 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 2
 
     assert %{email_slug: "everyone"} =
-             Membership.get_group_by_email_slug(club.club_id, "everyone")
+             ClubGroupQueries.get_group_by_email_slug(club.club_id, "everyone")
 
     assert %{email_slug: "admin"} =
-             Membership.get_group_by_email_slug(club.club_id, "admin")
+             ClubGroupQueries.get_group_by_email_slug(club.club_id, "admin")
 
     assert %{system_group_definitions: %{dispatched_count: 0}} =
              Backfill.run!(page_size: 2)
@@ -254,43 +284,52 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     root = send_historic_root_conversation!(club.club_id, first.person_id)
 
     assert %{entries: [definition, _admin], source_count: 1, next_cursor: club_id} =
-             Membership.list_system_group_definition_backfill_page("", 1)
+             SystemGroupBackfillQueries.list_system_group_definition_backfill_page("", 1)
 
     assert definition.club_id == club.club_id
     assert club_id == club.club_id
 
     assert %{entries: [everyone], source_count: 1, next_cursor: membership_id} =
-             Membership.list_everyone_group_membership_backfill_page(nil, 1)
+             SystemGroupBackfillQueries.list_everyone_group_membership_backfill_page(nil, 1)
 
     assert membership_id == Enum.min([first.membership_id, second.membership_id])
     assert everyone.membership_id == membership_id
     assert everyone.group_id == SystemGroups.everyone_group_id(club.club_id)
 
     assert %{entries: [admin], source_count: 1, next_cursor: ^membership_id} =
-             Membership.list_admin_group_membership_backfill_page(nil, 1)
+             SystemGroupBackfillQueries.list_admin_group_membership_backfill_page(nil, 1)
 
     assert admin.group_id == SystemGroups.admin_group_id(club.club_id)
 
     assert %{entries: [%{conversation_id: ^root}], source_count: 1, next_cursor: ^root} =
-             Messaging.list_everyone_conversation_access_backfill_page(nil, 1)
+             EveryoneConversationAccessBackfillQueries.list_everyone_conversation_access_backfill_page(
+               nil,
+               1
+             )
 
     assert %{entries: [%{membership_id: second_id}], source_count: 1} =
-             Membership.list_everyone_group_membership_backfill_page(membership_id, 1)
+             SystemGroupBackfillQueries.list_everyone_group_membership_backfill_page(
+               membership_id,
+               1
+             )
 
     assert second_id == Enum.max([first.membership_id, second.membership_id])
     Backfill.run!(page_size: 1)
 
     assert %{entries: [], source_count: 1, next_cursor: ^club_id} =
-             Membership.list_system_group_definition_backfill_page(nil, 1)
+             SystemGroupBackfillQueries.list_system_group_definition_backfill_page(nil, 1)
 
     assert %{entries: [], source_count: 1, next_cursor: ^membership_id} =
-             Membership.list_everyone_group_membership_backfill_page(nil, 1)
+             SystemGroupBackfillQueries.list_everyone_group_membership_backfill_page(nil, 1)
 
     assert %{entries: [], source_count: 1, next_cursor: ^membership_id} =
-             Membership.list_admin_group_membership_backfill_page(nil, 1)
+             SystemGroupBackfillQueries.list_admin_group_membership_backfill_page(nil, 1)
 
     assert %{entries: [], source_count: 1, next_cursor: ^root} =
-             Messaging.list_everyone_conversation_access_backfill_page(nil, 1)
+             EveryoneConversationAccessBackfillQueries.list_everyone_conversation_access_backfill_page(
+               nil,
+               1
+             )
   end
 
   test "backfill traverses multiple keyset pages" do
@@ -319,7 +358,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
       assert Repo.get(GroupProjection, admin_group_id)
       assert active_group_membership?(everyone_group_id, member.membership_id)
       assert active_group_membership?(admin_group_id, member.membership_id)
-      assert Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :write)
+
+      assert ConversationGroupAccessQueries.group_has_conversation_access?(
+               conversation_id,
+               everyone_group_id,
+               :write
+             )
     end)
   end
 
@@ -359,7 +403,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     assert messaging_event_count(conversation_id, ConversationAccessGrantedToGroup) == 1
     assert active_group_membership?(everyone_group_id, member.membership_id)
     assert active_group_membership?(admin_group_id, member.membership_id)
-    assert Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :write)
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             everyone_group_id,
+             :write
+           )
   end
 
   test "rerunning release migration resumes interrupted system-group backfill without duplicates" do

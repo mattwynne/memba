@@ -1,6 +1,7 @@
 defmodule Memba.Membership.PersonCommandsTest do
   use Memba.DataCase, async: false
 
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.PersonCommands
@@ -19,7 +20,7 @@ defmodule Memba.Membership.PersonCommandsTest do
              PersonCommands.prepare_create(attrs)
 
     assert {:ok, ^command} = PersonCommands.prepare_create(attrs)
-    assert is_nil(Membership.get_person(person_id))
+    assert is_nil(PersonQueries.get_person(person_id))
   end
 
   test "prepares a multi-address command with both email fields intact" do
@@ -39,7 +40,7 @@ defmodule Memba.Membership.PersonCommandsTest do
                email_addresses: addresses
              })
 
-    assert is_nil(Membership.get_person(person_id))
+    assert is_nil(PersonQueries.get_person(person_id))
   end
 
   test "preserves missing, invalid set, and invalid person identity errors" do
@@ -82,6 +83,6 @@ defmodule Memba.Membership.PersonCommandsTest do
                ])
              )
 
-    assert is_nil(Membership.get_person(attrs.person_id))
+    assert is_nil(PersonQueries.get_person(attrs.person_id))
   end
 end

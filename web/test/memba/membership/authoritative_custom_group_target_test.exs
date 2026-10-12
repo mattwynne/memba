@@ -1,7 +1,7 @@
 defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
+  alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddGroupMember
@@ -45,7 +45,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                 },
                 active_group_member?: false
               }} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  target.person_id,
                  group_id
@@ -61,7 +61,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
       add_group_member!(club.club_id, group_id, target)
 
       assert {:ok, %{active_group_member?: true, membership: %{membership_id: membership_id}}} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  target.person_id,
                  group_id
@@ -93,7 +93,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                  consistency: :eventual
                )
 
-      assert Membership.active_member_of_club_authoritatively?(
+      assert AuthoritativeMembershipQueries.active_member_of_club_authoritatively?(
                club.club_id,
                target.person_id
              )
@@ -105,7 +105,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                )
 
       assert {:ok, %{active_group_member?: false}} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  target.person_id,
                  group_id
@@ -120,42 +120,42 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
       %{club: club, group_id: group_id, target: target} = setup_target()
 
       assert {:error, :invalid_club_id} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  "not-a-club-id",
                  target.person_id,
                  group_id
                )
 
       assert {:error, :invalid_person_id} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  nil,
                  group_id
                )
 
       assert {:error, :invalid_group_id} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  target.person_id,
                  Memba.ID.generate(:person)
                )
 
       assert {:error, :not_found} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  Memba.ID.generate(:club),
                  target.person_id,
                  group_id
                )
 
       assert {:error, :member_not_active} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  Memba.ID.generate(:person),
                  group_id
                )
 
       assert {:error, :group_not_defined} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  target.person_id,
                  Memba.ID.generate(:group)
@@ -167,21 +167,21 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
       %{club: other_club, group_id: other_group_id, target: other_target} = setup_target("ncc")
 
       assert {:error, :member_not_active} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  other_target.person_id,
                  group_id
                )
 
       assert {:error, :group_not_defined} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  target.person_id,
                  other_group_id
                )
 
       assert {:error, :group_not_defined} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  other_club.club_id,
                  other_target.person_id,
                  group_id
@@ -196,7 +196,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
             SystemGroups.admin_group_id(club.club_id)
           ] do
         assert {:error, :system_group_not_allowed} =
-                 Membership.resolve_custom_group_target_authoritatively(
+                 AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                    club.club_id,
                    target.person_id,
                    group_id
@@ -222,7 +222,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                Repo.get!(MembershipProjection, target.membership_id)
 
       assert {:error, :member_not_active} =
-               Membership.resolve_custom_group_target_authoritatively(
+               AuthoritativeMembershipQueries.resolve_custom_group_target_authoritatively(
                  club.club_id,
                  target.person_id,
                  group_id
@@ -237,7 +237,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
       %{club: club, group_id: group_id, target: target} = setup_target()
       add_group_member!(club.club_id, group_id, target)
 
-      assert Membership.active_member_of_group_authoritatively?(
+      assert AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
                club.club_id,
                group_id,
                target.person_id
@@ -245,7 +245,7 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
 
       assert [%{group_id: ^group_id, active_member_count: 1}] =
                Enum.filter(
-                 Membership.list_active_groups_for_member_authoritatively(
+                 AuthoritativeMembershipQueries.list_active_groups_for_member_authoritatively(
                    club.club_id,
                    target.person_id
                  ),
@@ -253,7 +253,10 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                )
 
       assert [%{membership_id: membership_id, id: person_id, email: "eve-kmc@example.com"}] =
-               Membership.list_active_members_of_group_authoritatively(club.club_id, group_id)
+               AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(
+                 club.club_id,
+                 group_id
+               )
 
       assert membership_id == target.membership_id
       assert person_id == target.person_id
@@ -277,21 +280,24 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                  membership_id: target.membership_id
                )
 
-      refute Membership.active_member_of_group_authoritatively?(
+      refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
                club.club_id,
                group_id,
                target.person_id
              )
 
       refute Enum.any?(
-               Membership.list_active_groups_for_member_authoritatively(
+               AuthoritativeMembershipQueries.list_active_groups_for_member_authoritatively(
                  club.club_id,
                  target.person_id
                ),
                &(&1.group_id == group_id)
              )
 
-      assert Membership.list_active_members_of_group_authoritatively(club.club_id, group_id) == []
+      assert AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(
+               club.club_id,
+               group_id
+             ) == []
 
       Memba.ProjectionBarrier.await!([ClearRemovedGroupMemberFollows], timeout: 5_000)
       restart_projector!(projector_child_id)
@@ -303,23 +309,33 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
       %{club: other_club, target: other_target} = setup_target("ncc")
       add_group_member!(club.club_id, group_id, target)
 
-      refute Membership.active_member_of_group_authoritatively?(
+      refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
                other_club.club_id,
                group_id,
                target.person_id
              )
 
-      refute Membership.active_member_of_group_authoritatively?(
+      refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
                club.club_id,
                group_id,
                other_target.person_id
              )
 
-      assert Membership.list_active_members_of_group_authoritatively(other_club.club_id, group_id) ==
+      assert AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(
+               other_club.club_id,
+               group_id
+             ) ==
                []
 
-      assert Membership.list_active_groups_for_member_authoritatively(club.club_id, nil) == []
-      assert Membership.list_active_members_of_group_authoritatively(club.club_id, nil) == []
+      assert AuthoritativeMembershipQueries.list_active_groups_for_member_authoritatively(
+               club.club_id,
+               nil
+             ) == []
+
+      assert AuthoritativeMembershipQueries.list_active_members_of_group_authoritatively(
+               club.club_id,
+               nil
+             ) == []
     end
   end
 

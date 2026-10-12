@@ -1,6 +1,8 @@
 defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.ClubGroupQueries
   alias Commanded.Commands.ExecutionResult
   alias Commanded.EventStore
   alias Commanded.EventStore.EventData
@@ -23,19 +25,19 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
     assert {:ok, %CustomGroupRemoval{transition: :member_removed}} =
              remove(ids, ids.second_membership_id, ids.second_person_id, ids.first_person_id)
 
-    refute Membership.active_member_of_group?(ids.group_id, ids.second_person_id)
+    refute MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
 
     add_group_member!(ids, ids.second_membership_id, ids.second_person_id)
 
     assert {:error, :unauthorized} =
              remove(ids, ids.second_membership_id, ids.second_person_id, ids.third_person_id)
 
-    assert Membership.active_member_of_group?(ids.group_id, ids.second_person_id)
+    assert MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
 
     assert {:ok, %CustomGroupRemoval{transition: :member_removed}} =
              remove(ids, ids.second_membership_id, ids.second_person_id, ids.second_person_id)
 
-    refute Membership.active_member_of_group?(ids.group_id, ids.second_person_id)
+    refute MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
   end
 
   test "an active Admin outside the group removes a participant without joining or changing club roles" do
@@ -44,15 +46,15 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
     assign_admin!(ids, ids.third_membership_id, ids.third_person_id)
     assign_admin!(ids, ids.second_membership_id, ids.second_person_id)
 
-    refute Membership.active_member_of_group?(ids.group_id, ids.third_person_id)
-    members_before = Membership.list_active_members_of_club(ids.club_id)
+    refute MembershipQueries.active_member_of_group?(ids.group_id, ids.third_person_id)
+    members_before = ClubGroupQueries.list_active_members_of_club(ids.club_id)
 
     assert {:ok, %CustomGroupRemoval{transition: :member_removed}} =
              remove(ids, ids.second_membership_id, ids.second_person_id, ids.third_person_id)
 
-    refute Membership.active_member_of_group?(ids.group_id, ids.second_person_id)
-    refute Membership.active_member_of_group?(ids.group_id, ids.third_person_id)
-    assert Membership.list_active_members_of_club(ids.club_id) == members_before
+    refute MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
+    refute MembershipQueries.active_member_of_group?(ids.group_id, ids.third_person_id)
+    assert ClubGroupQueries.list_active_members_of_club(ids.club_id) == members_before
   end
 
   test "rejects target mismatch, inactive targets, and both system groups" do
@@ -90,12 +92,12 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
     assert {:ok, %CustomGroupRemoval{transition: :member_removed}} =
              remove(ids, ids.first_membership_id, ids.first_person_id, ids.first_person_id)
 
-    refute Membership.active_member_of_group?(ids.group_id, ids.first_person_id)
-    assert [] = Membership.list_active_members_of_group(ids.group_id)
-    assert Membership.get_group(ids.group_id).name == "Board"
+    refute MembershipQueries.active_member_of_group?(ids.group_id, ids.first_person_id)
+    assert [] = ClubGroupQueries.list_active_members_of_group(ids.group_id)
+    assert ClubGroupQueries.get_group(ids.group_id).name == "Board"
 
     assert Enum.any?(
-             Membership.list_active_members_of_club(ids.club_id),
+             ClubGroupQueries.list_active_members_of_club(ids.club_id),
              &(&1.id == ids.first_person_id)
            )
   end
@@ -136,7 +138,7 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
     assert {:ok, %CustomGroupRemoval{transition: :member_removed}} =
              Membership.remove_custom_group_member(attrs, consistency: :strong)
 
-    assert Membership.active_member_of_group?(ids.group_id, ids.second_person_id)
+    assert MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
 
     assert %GroupMembershipProjection{active: true} =
              Repo.get_by!(GroupMembershipProjection,
@@ -193,7 +195,7 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
     assert {:ok, %ExecutionResult{events: []}} =
              Membership.remove_custom_group_member(attrs, returning: :execution_result)
 
-    assert Membership.active_member_of_group?(ids.group_id, ids.second_person_id)
+    assert MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
     assert count_removal_operation_events(ids.club_id, operation_id) == 1
   end
 

@@ -1,6 +1,7 @@
 defmodule Memba.Membership.InvitationIssuanceTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.InvitationQueries
   alias Commanded.Commands.ExecutionResult
   alias Memba.ID
   alias Memba.Membership
@@ -23,12 +24,12 @@ defmodule Memba.Membership.InvitationIssuanceTest do
     assert command.invitation_id == invitation_id
     assert command.token_hash == InvitationToken.hash_token(token)
     refute command.token_hash == token
-    assert nil == Membership.get_club_member_invitation(invitation_id)
+    assert nil == InvitationQueries.get(invitation_id)
 
     assert {:ok, %ExecutionResult{aggregate_uuid: ^invitation_id}} =
              CommandDispatch.dispatch(command, returning: :execution_result, consistency: :strong)
 
-    assert %{token_hash: hash} = Membership.get_club_member_invitation(invitation_id)
+    assert %{token_hash: hash} = InvitationQueries.get(invitation_id)
     assert hash == InvitationToken.hash_token(token)
   end
 
@@ -61,7 +62,7 @@ defmodule Memba.Membership.InvitationIssuanceTest do
     assert command.token_hash == InvitationToken.hash_token(token)
 
     assert %{resend_count: 0, token_hash: original_hash} =
-             Membership.get_club_member_invitation(invitation_id)
+             InvitationQueries.get(invitation_id)
 
     assert original_hash == InvitationToken.hash_token(original_token)
 

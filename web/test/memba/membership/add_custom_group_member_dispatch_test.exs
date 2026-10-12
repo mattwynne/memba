@@ -1,6 +1,10 @@
 defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.PermissionQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.InvitationQueries
+  alias Memba.Membership.ClubGroupQueries
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.App
@@ -159,7 +163,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
     create_custom_group!(club_id, group_id, creator_person_id)
     assign_admin!(club_id, actor_membership_id, actor_person_id)
 
-    refute Membership.active_member_of_group?(group_id, actor_person_id)
+    refute MembershipQueries.active_member_of_group?(group_id, actor_person_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -180,8 +184,8 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                returning: :execution_result
              )
 
-    refute Membership.active_member_of_group?(group_id, actor_person_id)
-    assert Membership.active_member_of_group?(group_id, target_person_id)
+    refute MembershipQueries.active_member_of_group?(group_id, actor_person_id)
+    assert MembershipQueries.active_member_of_group?(group_id, target_person_id)
   end
 
   test "add_custom_group_member/2 rejects forged and unauthorized actor identities" do
@@ -235,7 +239,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                outsider_person_id
              )
 
-    refute Membership.active_member_of_group?(group_id, target_person_id)
+    refute MembershipQueries.active_member_of_group?(group_id, target_person_id)
   end
 
   test "add_custom_group_member/2 requires the exact active target membership in the same club" do
@@ -283,8 +287,8 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                actor_person_id
              )
 
-    refute Membership.active_member_of_group?(group_id, target_person_id)
-    refute Membership.active_member_of_group?(group_id, foreign_person_id)
+    refute MembershipQueries.active_member_of_group?(group_id, target_person_id)
+    refute MembershipQueries.active_member_of_group?(group_id, foreign_person_id)
   end
 
   test "the public custom-group use case rejects system groups while trusted commands remain available" do
@@ -362,13 +366,13 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                consistency: :strong
              )
 
-    invitation_before = Membership.get_club_member_invitation(invitation_id)
-    club_members_before = Membership.list_active_members_of_club(club_id)
+    invitation_before = InvitationQueries.get(invitation_id)
+    club_members_before = ClubGroupQueries.list_active_members_of_club(club_id)
 
     assert %{roles: []} =
              Enum.find(club_members_before, &(&1.id == target_person_id))
 
-    refute Membership.person_has_club_permission?(
+    refute PermissionQueries.has_permission?(
              club_id,
              target_person_id,
              Permissions.club_manage_members()
@@ -383,14 +387,14 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                actor_person_id
              )
 
-    assert Membership.get_club_member_invitation(invitation_id) == invitation_before
+    assert InvitationQueries.get(invitation_id) == invitation_before
 
-    assert Membership.get_pending_club_member_invitation_by_email(club_id, pending_email) ==
+    assert InvitationQueries.get_pending_by_email(club_id, pending_email) ==
              invitation_before
 
-    assert Membership.list_active_members_of_club(club_id) == club_members_before
+    assert ClubGroupQueries.list_active_members_of_club(club_id) == club_members_before
 
-    refute Membership.person_has_club_permission?(
+    refute PermissionQueries.has_permission?(
              club_id,
              target_person_id,
              Permissions.club_manage_members()

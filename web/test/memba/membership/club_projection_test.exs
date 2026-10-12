@@ -1,7 +1,7 @@
 defmodule Memba.Membership.ClubProjectionTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.UpdateClub
@@ -27,7 +27,7 @@ defmodule Memba.Membership.ClubProjectionTest do
   test "CreateClub is projected into the public Membership club query API" do
     club_id = Memba.ID.generate(:club)
 
-    assert is_nil(Membership.get_club(club_id))
+    assert is_nil(ClubGroupQueries.get_club(club_id))
 
     assert :ok =
              App.dispatch(
@@ -43,7 +43,7 @@ defmodule Memba.Membership.ClubProjectionTest do
              club_id: ^club_id,
              name: "Kootenay Mountaineering Club",
              slug: "kmc"
-           } = Membership.get_club(club_id)
+           } = ClubGroupQueries.get_club(club_id)
   end
 
   test "UpdateClub updates the projected club name and slug" do
@@ -73,10 +73,10 @@ defmodule Memba.Membership.ClubProjectionTest do
              club_id: ^club_id,
              name: "KMC Alpine Club",
              slug: "kmc-alpine"
-           } = Membership.get_club(club_id)
+           } = ClubGroupQueries.get_club(club_id)
 
-    assert %ClubProjection{club_id: ^club_id} = Membership.get_club_by_slug("kmc-alpine")
-    assert is_nil(Membership.get_club_by_slug("kmc"))
+    assert %ClubProjection{club_id: ^club_id} = ClubGroupQueries.get_club_by_slug("kmc-alpine")
+    assert is_nil(ClubGroupQueries.get_club_by_slug("kmc"))
   end
 
   test "slug-less ClubCreated events are not replay-compatible" do
@@ -95,12 +95,12 @@ defmodule Memba.Membership.ClubProjectionTest do
                }
              )
 
-    assert is_nil(Membership.get_club(club_id))
+    assert is_nil(ClubGroupQueries.get_club(club_id))
   end
 
   test "get_club/1 returns nil for missing or invalid club IDs" do
-    assert is_nil(Membership.get_club(Memba.ID.generate(:club)))
-    assert is_nil(Membership.get_club(nil))
-    assert is_nil(Membership.get_club("not-a-uuid"))
+    assert is_nil(ClubGroupQueries.get_club(Memba.ID.generate(:club)))
+    assert is_nil(ClubGroupQueries.get_club(nil))
+    assert is_nil(ClubGroupQueries.get_club("not-a-uuid"))
   end
 end

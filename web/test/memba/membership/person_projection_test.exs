@@ -1,7 +1,7 @@
 defmodule Memba.Membership.PersonProjectionTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
@@ -11,7 +11,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   test "CreatePerson is projected into the public Membership person query API" do
     person_id = Memba.ID.generate(:person)
 
-    assert is_nil(Membership.get_person(person_id))
+    assert is_nil(PersonQueries.get_person(person_id))
 
     assert :ok =
              App.dispatch(
@@ -27,7 +27,7 @@ defmodule Memba.Membership.PersonProjectionTest do
              person_id: ^person_id,
              name: "Alice",
              email: "alice@example.com"
-           } = Membership.get_person(person_id)
+           } = PersonQueries.get_person(person_id)
   end
 
   test "legacy CreatePerson projects one primary email-address row" do
@@ -46,7 +46,7 @@ defmodule Memba.Membership.PersonProjectionTest do
     assert %PersonProjection{
              person_id: ^person_id,
              email: "alice@example.com"
-           } = Membership.get_person(person_id)
+           } = PersonQueries.get_person(person_id)
 
     assert [
              %PersonEmailAddress{
@@ -77,7 +77,7 @@ defmodule Memba.Membership.PersonProjectionTest do
     assert %PersonProjection{
              person_id: ^person_id,
              email: "Alice@Example.COM"
-           } = Membership.get_person(person_id)
+           } = PersonQueries.get_person(person_id)
 
     assert [
              %PersonEmailAddress{
@@ -126,7 +126,7 @@ defmodule Memba.Membership.PersonProjectionTest do
     assert %PersonProjection{
              person_id: ^person_id,
              email: "alice@work.example"
-           } = Membership.get_person(person_id)
+           } = PersonQueries.get_person(person_id)
 
     assert [
              %PersonEmailAddress{
@@ -145,9 +145,9 @@ defmodule Memba.Membership.PersonProjectionTest do
   end
 
   test "get_person/1 returns nil for missing or invalid person IDs" do
-    assert is_nil(Membership.get_person(Memba.ID.generate(:person)))
-    assert is_nil(Membership.get_person(nil))
-    assert is_nil(Membership.get_person("not-a-uuid"))
+    assert is_nil(PersonQueries.get_person(Memba.ID.generate(:person)))
+    assert is_nil(PersonQueries.get_person(nil))
+    assert is_nil(PersonQueries.get_person("not-a-uuid"))
   end
 
   defp email_addresses_for(person_id) do

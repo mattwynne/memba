@@ -1,6 +1,7 @@
 defmodule Memba.Membership.ClubCommandsTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership
   alias Memba.Membership.ClubCommands
   alias Memba.Membership.CommandDispatch
@@ -13,9 +14,9 @@ defmodule Memba.Membership.ClubCommandsTest do
             %CreateClub{club_id: ^club_id, name: " Alpine Club ", slug: "alpine-club"} = command} =
              ClubCommands.prepare_create(%{"club_id" => club_id, "name" => " Alpine Club "})
 
-    assert is_nil(Membership.get_club(club_id))
+    assert is_nil(ClubGroupQueries.get_club(club_id))
     assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
-    assert Membership.get_club(club_id).slug == "alpine-club"
+    assert ClubGroupQueries.get_club(club_id).slug == "alpine-club"
 
     assert {:ok, %CreateClub{slug: "another-club"}} =
              ClubCommands.prepare_create(%{
@@ -101,8 +102,8 @@ defmodule Memba.Membership.ClubCommandsTest do
                "slug" => "alpine"
              })
 
-    assert is_nil(Membership.get_club(other_id))
+    assert is_nil(ClubGroupQueries.get_club(other_id))
     assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
-    assert Membership.get_club(club_id).name == "Alpine Again"
+    assert ClubGroupQueries.get_club(club_id).name == "Alpine Again"
   end
 end

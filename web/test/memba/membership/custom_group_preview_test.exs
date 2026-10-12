@@ -27,7 +27,7 @@ defmodule Memba.Membership.CustomGroupPreviewTest do
     }
 
     assert {:ok, ^expected} = Preview.call(attrs)
-    assert {:ok, ^expected} = Membership.preview_custom_group(attrs)
+    assert {:ok, ^expected} = Preview.call(attrs)
     assert {:ok, ^expected} = Preview.call(attrs)
 
     assert {:error, {:group_name_already_defined, "Board!"}} =

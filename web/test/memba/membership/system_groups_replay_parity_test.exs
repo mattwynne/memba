@@ -1,6 +1,8 @@
 defmodule Memba.Membership.SystemGroupsReplayParityTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Messaging.EveryoneConversationAccessBackfillQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
   alias Commanded.Event.Mapper
   alias Memba.Membership.AddMember
   alias Memba.Membership.App, as: MembershipApp
@@ -265,7 +267,10 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
         admin_group_memberships:
           SystemGroupBackfillQueries.list_admin_group_membership_backfill_page(nil, 100),
         everyone_conversation_access:
-          Messaging.list_everyone_conversation_access_backfill_page(nil, 100)
+          EveryoneConversationAccessBackfillQueries.list_everyone_conversation_access_backfill_page(
+            nil,
+            100
+          )
       },
       groups_by_email_slug: %{
         historic_everyone:
@@ -328,37 +333,37 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
       },
       conversation_access: %{
         historic_everyone_write:
-          Messaging.group_has_conversation_access?(
+          ConversationGroupAccessQueries.group_has_conversation_access?(
             fixture.historic_conversation_id,
             historic_everyone_group_id,
             :write
           ),
         historic_everyone_read:
-          Messaging.group_has_conversation_access?(
+          ConversationGroupAccessQueries.group_has_conversation_access?(
             fixture.historic_conversation_id,
             historic_everyone_group_id,
             :read
           ),
         historic_admin_read:
-          Messaging.group_has_conversation_access?(
+          ConversationGroupAccessQueries.group_has_conversation_access?(
             fixture.historic_conversation_id,
             historic_admin_group_id,
             :read
           ),
         historic_admin_write:
-          Messaging.group_has_conversation_access?(
+          ConversationGroupAccessQueries.group_has_conversation_access?(
             fixture.historic_conversation_id,
             historic_admin_group_id,
             :write
           ),
         modern_everyone_write:
-          Messaging.group_has_conversation_access?(
+          ConversationGroupAccessQueries.group_has_conversation_access?(
             fixture.modern_conversation_id,
             modern_everyone_group_id,
             :write
           ),
         modern_everyone_read:
-          Messaging.group_has_conversation_access?(
+          ConversationGroupAccessQueries.group_has_conversation_access?(
             fixture.modern_conversation_id,
             modern_everyone_group_id,
             :read

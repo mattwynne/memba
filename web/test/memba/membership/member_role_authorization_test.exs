@@ -1,6 +1,7 @@
 defmodule Memba.Membership.MemberRoleAuthorizationTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.PermissionQueries
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.App
@@ -50,7 +51,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                consistency: :strong
              )
 
-    assert Membership.person_has_club_permission?(
+    assert PermissionQueries.has_permission?(
              club_id,
              target_person_id,
              Permissions.club_manage_members()
@@ -96,13 +97,13 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                consistency: :strong
              )
 
-    refute Membership.person_has_club_permission?(
+    refute PermissionQueries.has_permission?(
              club_id,
              target_person_id,
              Permissions.club_manage_members()
            )
 
-    assert Membership.person_has_club_permission?(
+    assert PermissionQueries.has_permission?(
              club_id,
              actor_person_id,
              Permissions.club_manage_members()
@@ -130,7 +131,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                consistency: :strong
              )
 
-    assert Membership.person_has_club_permission?(
+    assert PermissionQueries.has_permission?(
              club_id,
              actor_person_id,
              Permissions.club_manage_members()
@@ -155,7 +156,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     grant_manage_members!(club_id, custom_role_id)
     assign_role_by_system!(club_id, actor_membership_id, actor_person_id, custom_role_id)
 
-    assert Membership.person_has_club_permission?(
+    assert PermissionQueries.has_permission?(
              club_id,
              actor_person_id,
              Permissions.club_manage_members()
@@ -172,7 +173,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                consistency: :strong
              )
 
-    assert Membership.person_has_club_permission?(
+    assert PermissionQueries.has_permission?(
              club_id,
              target_person_id,
              Permissions.club_manage_members()
@@ -203,7 +204,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     create_person!(target_person_id, "Bob", "bob@example.com")
     add_member!(target_membership_id, club_id, target_person_id)
 
-    refute Membership.person_has_club_permission?(
+    refute PermissionQueries.has_permission?(
              club_id,
              actor_person_id,
              Permissions.club_manage_members()
@@ -220,7 +221,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                consistency: :strong
              )
 
-    refute Membership.person_has_club_permission?(
+    refute PermissionQueries.has_permission?(
              club_id,
              target_person_id,
              Permissions.club_manage_members()
@@ -252,7 +253,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     add_member!(target_membership_id, club_id, target_person_id)
     assign_membership_administrator!(club_id, target_membership_id, target_person_id)
 
-    refute Membership.person_has_club_permission?(
+    refute PermissionQueries.has_permission?(
              club_id,
              actor_person_id,
              Permissions.club_manage_members()
@@ -269,7 +270,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                consistency: :strong
              )
 
-    assert Membership.person_has_club_permission?(
+    assert PermissionQueries.has_permission?(
              club_id,
              target_person_id,
              Permissions.club_manage_members()
@@ -466,7 +467,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
       Roles.membership_administrator_role_id(club_id)
     )
 
-    assert Membership.person_has_club_permission?(
+    assert PermissionQueries.has_permission?(
              club_id,
              person_id,
              Permissions.club_manage_members()

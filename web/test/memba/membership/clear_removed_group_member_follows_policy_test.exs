@@ -1,6 +1,8 @@
 defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Membership.MembershipQueries
   alias Commanded.EventStore
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
@@ -52,7 +54,7 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
     assert :ok = ClearRemovedGroupMemberFollows.handle(event, %{})
 
-    refute Messaging.following_conversation?(conversation_id, person_id)
+    refute ConversationFollowQueries.following_conversation?(conversation_id, person_id)
     assert count_unfollow_events(conversation_id, person_id) == 1
   end
 
@@ -86,8 +88,8 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
                consistency: :strong
              )
 
-    refute Membership.active_member_of_group?(group_id, target_person_id)
-    assert Messaging.following_conversation?(conversation_id, target_person_id)
+    refute MembershipQueries.active_member_of_group?(group_id, target_person_id)
+    assert ConversationFollowQueries.following_conversation?(conversation_id, target_person_id)
     assert count_unfollow_events(conversation_id, target_person_id) == 0
   end
 

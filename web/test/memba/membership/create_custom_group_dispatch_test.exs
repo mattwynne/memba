@@ -4,6 +4,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   import Ecto.Query
   import ExUnit.CaptureLog
 
+  alias Memba.Membership.ClubGroupQueries
   alias Commanded.Commands.ExecutionResult
   alias Commanded.Event.Mapper
   alias Commanded.EventStore
@@ -690,7 +691,7 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   defp grant_projected_manage_members!(club_id, person_id) do
     membership_id =
       club_id
-      |> Membership.list_active_members_of_club()
+      |> ClubGroupQueries.list_active_members_of_club()
       |> Enum.find(&(&1.id == person_id))
       |> Map.fetch!(:membership_id)
 
