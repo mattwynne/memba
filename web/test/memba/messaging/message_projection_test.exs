@@ -303,7 +303,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
                  latest_replier_id: latest_replier_id,
                  latest_replier_name: "Carol Snacks"
                }
-             ] = Messaging.list_conversations_for_club(club_id)
+             ] = ConversationListing.list_for_club(club_id)
 
       assert newer_root_id == newer_root.message_id
       assert older_root_id == older_root.message_id
@@ -390,7 +390,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
       assert [
                %{message_id: quiet_root_id, participant_ids: []},
                %{message_id: active_root_id, participant_ids: participant_ids}
-             ] = Messaging.list_conversations_for_club(club_id)
+             ] = ConversationListing.list_for_club(club_id)
 
       assert quiet_root_id == quiet_root.message_id
       assert active_root_id == active_root.message_id
@@ -463,12 +463,12 @@ defmodule Memba.Messaging.MessageProjectionTest do
                  latest_replier_id: ^replier_id,
                  latest_replier_name: "Robin Replier"
                }
-             ] = Messaging.list_conversations_for_group(everyone_group_id)
+             ] = ConversationListing.list_for_group(everyone_group_id)
 
       assert everyone_root_id == everyone_root.message_id
 
       assert [%{message_id: admin_root_id}] =
-               Messaging.list_conversations_for_group(admin_group_id)
+               ConversationListing.list_for_group(admin_group_id)
 
       assert admin_root_id == admin_root.message_id
 
@@ -487,7 +487,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
       group_id = Memba.ID.generate(:group)
       grant_group_access!(root, group_id, "read", club_id: Memba.ID.generate(:club))
 
-      assert Messaging.list_conversations_for_group(group_id) == []
+      assert ConversationListing.list_for_group(group_id) == []
     end
   end
 
@@ -547,7 +547,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
                  message_id: newer_reply_id,
                  reply_to_message_id: newer_reply_to_message_id
                }
-             ] = Messaging.list_conversation_messages(root.message_id)
+             ] = MessageQueries.list_conversation_messages(root.message_id)
 
       assert root_id == root.message_id
       assert older_reply_id == older_reply.message_id
@@ -583,7 +583,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
       assert [
                %MessageProjection{message_id: root_id},
                %MessageProjection{message_id: reply_id}
-             ] = Messaging.list_conversation_messages(reply.message_id)
+             ] = MessageQueries.list_conversation_messages(reply.message_id)
 
       assert root_id == root.message_id
       assert reply_id == reply.message_id
@@ -602,7 +602,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
           inserted_at: ~U[2026-06-05 12:01:00.000000Z]
         )
 
-      assert Messaging.list_conversation_messages(missing_root_id) == []
+      assert MessageQueries.list_conversation_messages(missing_root_id) == []
     end
   end
 
@@ -634,12 +634,13 @@ defmodule Memba.Messaging.MessageProjectionTest do
       assert [
                %MessageProjection{message_id: root_id},
                %MessageProjection{message_id: reply_id}
-             ] = Messaging.list_conversation_messages_for_group(reply.message_id, group_id)
+             ] = MessageQueries.list_conversation_messages_for_group(reply.message_id, group_id)
 
       assert root_id == root.message_id
       assert reply_id == reply.message_id
 
-      assert Messaging.list_conversation_messages_for_group(root.message_id, other_group_id) == []
+      assert MessageQueries.list_conversation_messages_for_group(root.message_id, other_group_id) ==
+               []
     end
 
     test "requires the access row to match the root conversation's club" do
@@ -654,7 +655,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
       group_id = Memba.ID.generate(:group)
       grant_group_access!(root, group_id, "write", club_id: Memba.ID.generate(:club))
 
-      assert Messaging.list_conversation_messages_for_group(root.message_id, group_id) == []
+      assert MessageQueries.list_conversation_messages_for_group(root.message_id, group_id) == []
     end
   end
 
@@ -725,7 +726,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
                  sender_email: "alice@example.com",
                  projected_at: ^older_projected_at
                }
-             ] = Messaging.list_operator_messages()
+             ] = MessageQueries.list_operator_messages()
 
       assert newer_id == newer.message_id
       assert newer_club_id == nelson.club_id
