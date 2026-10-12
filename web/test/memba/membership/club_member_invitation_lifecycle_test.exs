@@ -2,8 +2,11 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
   use Memba.EventSourcedCase, async: false
 
   alias Memba.Membership
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.InvitationQueries
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Permissions
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -24,37 +27,33 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                )
 
       assert %ClubInvitationProjection{invitation_id: ^invitation_id} =
-               Membership.get_pending_club_member_invitation_by_email(
+               InvitationQueries.get_pending_by_email(
                  club_id,
                  " robin@EXAMPLE.com "
                )
 
       for invalid_id <- [nil, "not-an-id", other_club_id] do
-        assert is_nil(Membership.get_club_member_invitation(invalid_id))
+        assert is_nil(InvitationQueries.get(invalid_id))
       end
 
       for invalid_email <- [nil, "", "not-an-email"] do
-        assert is_nil(
-                 Membership.get_pending_club_member_invitation_by_email(club_id, invalid_email)
-               )
+        assert is_nil(InvitationQueries.get_pending_by_email(club_id, invalid_email))
       end
 
       assert is_nil(
-               Membership.get_pending_club_member_invitation_by_email(
+               InvitationQueries.get_pending_by_email(
                  other_club_id,
                  "robin@example.com"
                )
              )
 
-      assert is_nil(
-               Membership.get_pending_club_member_invitation_by_email(nil, "robin@example.com")
-             )
+      assert is_nil(InvitationQueries.get_pending_by_email(nil, "robin@example.com"))
 
-      assert is_nil(Membership.get_club_member_invitation_by_token(nil))
-      assert is_nil(Membership.get_club_member_invitation_by_token("wrong-token"))
+      assert is_nil(InvitationQueries.get_by_token(nil))
+      assert is_nil(InvitationQueries.get_by_token("wrong-token"))
 
       assert %ClubInvitationProjection{invitation_id: ^invitation_id} =
-               Membership.get_club_member_invitation_by_token(token)
+               InvitationQueries.get_by_token(token)
     end
 
     test "pending invitation creation stores only the invitation before profile completion" do
@@ -83,13 +82,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                accepted_person_id: nil,
                accepted_membership_id: nil,
                resend_count: 0
-             } = Membership.get_club_member_invitation(invitation_id)
+             } = InvitationQueries.get(invitation_id)
 
       assert %ClubInvitationProjection{invitation_id: ^invitation_id, status: "pending"} =
-               Membership.get_club_member_invitation_by_token(invitation_token)
+               InvitationQueries.get_by_token(invitation_token)
 
-      assert is_nil(Membership.get_person_by_email("robin@example.com"))
-      assert [] = Membership.list_active_members_of_club(club_id)
+      assert is_nil(PersonQueries.get_person_by_email("robin@example.com"))
+      assert [] = ClubGroupQueries.list_active_members_of_club(club_id)
     end
 
     test "duplicate active member invitation is blocked using normalized email" do
@@ -129,10 +128,10 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                  consistency: :strong
                )
 
-      assert is_nil(Membership.get_club_member_invitation(invitation_id))
+      assert is_nil(InvitationQueries.get(invitation_id))
 
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
-               Membership.list_active_members_of_club(club_id)
+               ClubGroupQueries.list_active_members_of_club(club_id)
     end
 
     test "duplicate pending invitation resends and keeps a single pending invitation" do
@@ -166,7 +165,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       refute second_token == first_token
       refute second_hash == first_hash
-      assert is_nil(Membership.get_club_member_invitation(duplicate_invitation_id))
+      assert is_nil(InvitationQueries.get(duplicate_invitation_id))
 
       assert %ClubInvitationProjection{
                invitation_id: ^original_invitation_id,
@@ -175,7 +174,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                status: "pending",
                resend_count: 1
              } =
-               Membership.get_pending_club_member_invitation_by_email(
+               InvitationQueries.get_pending_by_email(
                  club_id,
                  "ROBIN@example.com"
                )
@@ -228,10 +227,10 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                )
 
       assert %PersonProjection{person_id: ^person_id, name: "Alice"} =
-               Membership.get_person_by_email("ALICE@example.com")
+               PersonQueries.get_person_by_email("ALICE@example.com")
 
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
-               Membership.list_active_members_of_club(club_id)
+               ClubGroupQueries.list_active_members_of_club(club_id)
 
       assert Membership.person_has_club_permission?(
                club_id,
@@ -249,7 +248,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                status: "accepted",
                accepted_person_id: ^person_id,
                accepted_membership_id: ^membership_id
-             } = Membership.get_club_member_invitation(invitation_id)
+             } = InvitationQueries.get(invitation_id)
     end
 
     test "unknown first invitee profile completion creates the person, Admin membership, and acceptance" do
@@ -266,8 +265,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                  consistency: :strong
                )
 
-      assert is_nil(Membership.get_person_by_email("robin@example.com"))
-      assert [] = Membership.list_active_members_of_club(club_id)
+      assert is_nil(PersonQueries.get_person_by_email("robin@example.com"))
+      assert [] = ClubGroupQueries.list_active_members_of_club(club_id)
 
       assert {:ok,
               %{
@@ -290,7 +289,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                person_id: ^person_id,
                name: "Robin",
                email: "Robin@Example.COM"
-             } = Membership.get_person_by_email("robin@example.com")
+             } = PersonQueries.get_person_by_email("robin@example.com")
 
       assert [
                %{
@@ -299,10 +298,10 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                  primary?: true
                }
              ] =
-               Membership.list_person_email_addresses(person_id)
+               PersonQueries.list_person_email_addresses(person_id)
 
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
-               Membership.list_active_members_of_club(club_id)
+               ClubGroupQueries.list_active_members_of_club(club_id)
 
       assert Membership.person_has_club_permission?(
                club_id,
@@ -320,7 +319,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                status: "accepted",
                accepted_person_id: ^person_id,
                accepted_membership_id: ^membership_id
-             } = Membership.get_club_member_invitation(invitation_id)
+             } = InvitationQueries.get(invitation_id)
     end
 
     test "abandoned profile completion leaves invitation pending and token reusable" do
@@ -345,16 +344,16 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                status: "pending",
                accepted_person_id: nil,
                accepted_membership_id: nil
-             } = Membership.get_club_member_invitation_by_token(invitation_token)
+             } = InvitationQueries.get_by_token(invitation_token)
 
-      assert is_nil(Membership.get_person_by_email("robin@example.com"))
-      assert [] = Membership.list_active_members_of_club(club_id)
+      assert is_nil(PersonQueries.get_person_by_email("robin@example.com"))
+      assert [] = ClubGroupQueries.list_active_members_of_club(club_id)
 
       assert %ClubInvitationProjection{
                invitation_id: ^invitation_id,
                token_hash: ^token_hash,
                status: "pending"
-             } = Membership.get_club_member_invitation_by_token(invitation_token)
+             } = InvitationQueries.get_by_token(invitation_token)
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
                Membership.complete_invited_club_member_profile(
@@ -372,7 +371,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                status: "accepted",
                accepted_person_id: ^person_id,
                accepted_membership_id: ^membership_id
-             } = Membership.get_club_member_invitation_by_token(invitation_token)
+             } = InvitationQueries.get_by_token(invitation_token)
     end
 
     test "profile completion retries after person creation with deterministic identities" do
@@ -398,7 +397,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                )
 
       assert %PersonProjection{person_id: ^person_id, name: "Robin"} =
-               Membership.get_person_by_email("robin@example.com")
+               PersonQueries.get_person_by_email("robin@example.com")
 
       assert is_nil(Repo.get(MembershipProjection, membership_id))
 
@@ -438,7 +437,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
 
       assert %Memba.Membership.Projections.ClubInvitation{status: "pending"} =
-               Membership.get_club_member_invitation(invitation_id)
+               InvitationQueries.get(invitation_id)
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
                Membership.complete_invited_club_member_profile(
@@ -480,7 +479,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
 
       assert %Memba.Membership.Projections.ClubInvitation{status: "pending"} =
-               Membership.get_club_member_invitation(invitation_id)
+               InvitationQueries.get(invitation_id)
 
       assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
                Membership.accept_club_member_invitation_for_existing_person(%{
@@ -491,7 +490,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert admin_assignment_count(club_id, membership_id) == 1
 
       assert %Memba.Membership.Projections.ClubInvitation{status: "accepted"} =
-               Membership.get_club_member_invitation(invitation_id)
+               InvitationQueries.get(invitation_id)
     end
 
     test "profile completion recovers pre-existing non-deterministic person and membership IDs" do
@@ -600,7 +599,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                })
 
       assert %ClubInvitationProjection{status: "pending"} =
-               Membership.get_club_member_invitation_by_token(token)
+               InvitationQueries.get_by_token(token)
 
       assert one_active_membership!(club_id, person_id).membership_id == membership_id
 
@@ -638,10 +637,10 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                  person_id: person_id
                })
 
-      assert [] = Membership.list_active_members_of_club(club_id)
+      assert [] = ClubGroupQueries.list_active_members_of_club(club_id)
 
       assert %ClubInvitationProjection{status: "pending"} =
-               Membership.get_club_member_invitation_by_token(token)
+               InvitationQueries.get_by_token(token)
     end
 
     test "recovered membership belongs to the invited club, not another club" do
@@ -730,7 +729,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                status: "accepted",
                accepted_person_id: ^person_id,
                accepted_membership_id: ^membership_id
-             } = Membership.get_club_member_invitation_by_token(invitation_token)
+             } = InvitationQueries.get_by_token(invitation_token)
 
       assert {:error, :already_accepted} =
                Membership.complete_invited_club_member_profile(
@@ -744,7 +743,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                )
 
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
-               Membership.list_active_members_of_club(club_id)
+               ClubGroupQueries.list_active_members_of_club(club_id)
 
       assert 1 ==
                Repo.aggregate(
@@ -757,7 +756,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                  :count
                )
 
-      assert is_nil(Membership.get_person(duplicate_person_id))
+      assert is_nil(PersonQueries.get_person(duplicate_person_id))
       assert is_nil(Repo.get(MembershipProjection, duplicate_membership_id))
     end
   end
