@@ -164,42 +164,6 @@ async function createCustomGroupInBrowser(world, actorName, clubName, groupName)
   };
 }
 
-async function tryCreateCustomGroupInBrowser(world, actorName, clubName, groupName) {
-  const countBefore = customGroupCount(world, clubName);
-  const existingSystemGroups = systemGroupSnapshot(world, clubName);
-
-  await withMemberHarness(world, actorName, async (member) => {
-    const response = await openNewGroupForm(member, clubName, { allowForbidden: true });
-
-    if (response && response.status() === 403) {
-      world.lastCreationAttempt = {
-        actorName,
-        clubName,
-        countBefore,
-        existingSystemGroups,
-        groupName,
-        result: "forbidden"
-      };
-      return;
-    }
-
-    await fillGroupName(member, groupName);
-    await expect(member.page.locator("#member-group-name-input-error-1")).toContainText(
-      "already a group"
-    );
-    await expect(member.page.locator("#member-group-create-button")).toBeDisabled();
-
-    world.lastCreationAttempt = {
-      actorName,
-      clubName,
-      countBefore,
-      existingSystemGroups,
-      groupName,
-      result: "duplicate"
-    };
-  });
-}
-
 async function concurrentlyCreateCustomGroup(world, actorNames, clubName, groupName) {
   const countBefore = customGroupCount(world, clubName);
 
@@ -427,13 +391,6 @@ function assertEachClubHasBoard(world) {
   assert.notEqual(kmcBoard.groupId, nelsonBoard.groupId);
 }
 
-function assertSystemGroupsUnchanged(world) {
-  assert.deepEqual(
-    systemGroupSnapshot(world, kootenayClubName),
-    world.lastCreationAttempt.existingSystemGroups
-  );
-}
-
 function assertOneConcurrentGroup(world) {
   const creation = world.concurrentCreation;
   assert.ok(creation, "Expected a concurrent custom-group creation attempt");
@@ -569,7 +526,7 @@ function activeGroupMemberNames(world, clubName, groupName) {
     `
 names =
   Map.fetch!(payload, "groupId")
-  |> Memba.Membership.list_active_members_of_group()
+  |> Memba.Membership.ClubGroupQueries.list_active_members_of_group()
   |> Enum.map(& &1.name)
   |> Enum.sort()
 
@@ -577,34 +534,6 @@ names =
 `,
     { groupId: group.groupId }
   ).names;
-}
-
-function systemGroupSnapshot(world, clubName) {
-  const club = clubFor(world, clubName);
-
-  return serverCommands.runCommand(
-    `
-club_id = Map.fetch!(payload, "clubId")
-
-groups =
-  [
-    Memba.Membership.SystemGroups.everyone_group_id(club_id),
-    Memba.Membership.SystemGroups.admin_group_id(club_id)
-  ]
-  |> Enum.map(&Memba.Membership.get_group/1)
-  |> Enum.map(fn group ->
-    %{
-      emailSlug: group.email_slug,
-      groupId: group.group_id,
-      groupKey: group.group_key,
-      name: group.name
-    }
-  end)
-
-%{groups: groups}
-`,
-    { clubId: club.clubId }
-  ).groups;
 }
 
 async function openNewGroupForm(world, clubName, { allowForbidden = false } = {}) {
@@ -727,7 +656,6 @@ module.exports = {
   assertProposedAddress,
   assertStoredAddressMatchesProposal,
   assertStoredEmailSlug,
-  assertSystemGroupsUnchanged,
   changeNewGroupName,
   concurrentlyCreateCustomGroup,
   createCustomGroupInBrowser,
@@ -739,6 +667,5 @@ module.exports = {
   clearNewGroupName,
   kootenayClubName,
   nelsonClubName,
-  submitEnteredCustomGroup,
-  tryCreateCustomGroupInBrowser
+  submitEnteredCustomGroup
 };

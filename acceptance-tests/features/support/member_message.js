@@ -2484,31 +2484,6 @@ async function assertMemberCannotReplyToMessage(
   return world;
 }
 
-function removeMemberFromClub(world, personName, clubName) {
-  ensureState(world);
-
-  const membershipKey = `${clubName}:${personName}`;
-  const membership = world.memberships[membershipKey];
-  assert.ok(membership, `Expected ${personName} to be a member of ${clubName} before removing them`);
-
-  serverCommands.runCommand(
-    `
-membership_id = Map.fetch!(payload, "membershipId")
-
-case Memba.Membership.remove_member(%{membership_id: membership_id}, consistency: :strong) do
-  :ok -> %{status: "removed", membershipId: membership_id}
-  {:ok, _result} -> %{status: "removed", membershipId: membership_id}
-  {:error, reason} -> raise "Could not remove member #{membership_id}: #{inspect(reason)}"
-end
-`,
-    { membershipId: membership.membershipId }
-  );
-
-  delete world.memberships[membershipKey];
-
-  return world;
-}
-
 async function assertMemberMessageAddressedTo(
   world,
   expectedNames,
@@ -3573,12 +3548,12 @@ function inboundEmailResult(providerMessageId) {
   return serverCommands.runCommand(
     `
 provider_message_id = Map.fetch!(payload, "providerMessageId")
-source = Memba.Messaging.get_inbound_email_source("resend", provider_message_id)
+source = Memba.Messaging.MessageSourceQueries.get_inbound_email_source("resend", provider_message_id)
 
 message =
   case source && source.message_id do
     nil -> nil
-    message_id -> Memba.Messaging.get_message(message_id)
+    message_id -> Memba.Messaging.MessageQueries.get_message(message_id)
   end
 
 %{
@@ -4105,7 +4080,6 @@ module.exports = {
   openDeliveriesOverview,
   openClub,
   openMessage,
-  removeMemberFromClub,
   recordAcceptedInboundRootMessage,
   recordMembershipProjectionCheckpoint,
   restoreClubMessageSending,

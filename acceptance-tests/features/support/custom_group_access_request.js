@@ -93,7 +93,7 @@ function assertBoardMembership(world, personName, expected) {
     `
 %{
   activeMember:
-    Memba.Membership.active_member_of_group_authoritatively?(
+    Memba.Membership.AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
       Map.fetch!(payload, "clubId"),
       Map.fetch!(payload, "groupId"),
       Map.fetch!(payload, "personId")
