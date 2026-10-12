@@ -4,12 +4,14 @@ defmodule MembaWeb.AuthControllerTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
-  alias Memba.Membership.PersonQueries
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
-  alias Memba.Membership, as: MembershipContext
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Repo
@@ -568,7 +570,7 @@ defmodule MembaWeb.AuthControllerTest do
                  normalized_email: "alice.primary@example.com"
                )
 
-      assert MembershipContext.get_person_primary_email(person_id) == "alice.primary@example.com"
+      assert PersonQueries.get_person_primary_email(person_id) == "alice.primary@example.com"
     end
 
     test "rejects unknown tokens without signing in", %{conn: conn} do
@@ -863,21 +865,22 @@ defmodule MembaWeb.AuthControllerTest do
 
     insert_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club")
 
-    assert :ok =
-             MembershipContext.create_person(
-               %{
-                 person_id: person_id,
-                 name: "Test Member",
-                 email: Keyword.fetch!(attrs, :primary_email)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Test Member",
+               email: Keyword.fetch!(attrs, :primary_email)
+             })
 
-    assert :ok =
-             MembershipContext.add_person_email_address(
-               %{person_id: person_id, email: Keyword.fetch!(attrs, :pending_email)},
-               consistency: :strong
-             )
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             PersonEmailAddressCommands.prepare_add(%{
+               person_id: person_id,
+               email: Keyword.fetch!(attrs, :pending_email)
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     Repo.insert!(%Membership{
       membership_id: Memba.ID.generate(:membership),
