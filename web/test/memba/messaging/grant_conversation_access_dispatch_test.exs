@@ -3,7 +3,6 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
 
   alias Memba.Messaging.ConversationGroupAccessQueries
   alias Commanded.Commands.ExecutionResult
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
@@ -108,12 +107,22 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
     send_root_conversation(conversation_id, club_id)
 
     assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club_id,
-               group_id: group_id,
-               access_level: :write
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: conversation_id,
+                       club_id: club_id,
+                       group_id: group_id,
+                       access_level: :write
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     assert ConversationGroupAccessQueries.group_has_conversation_access?(
              conversation_id,
@@ -136,20 +145,40 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
     send_root_conversation(conversation_id, club_id)
 
     assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club_id,
-               group_id: admin_group_id,
-               access_level: :write
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: conversation_id,
+                       club_id: club_id,
+                       group_id: admin_group_id,
+                       access_level: :write
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.grant_initial_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club_id,
-               group_id: everyone_group_id,
-               access_level: :write
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_initial_grant(%{
+                       conversation_id: conversation_id,
+                       club_id: club_id,
+                       group_id: everyone_group_id,
+                       access_level: :write
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     assert ConversationGroupAccessQueries.group_has_conversation_access?(
              conversation_id,
@@ -184,12 +213,22 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
     send_root_conversation(conversation_id, club_id)
 
     assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club_id,
-               group_id: first_group_id,
-               access_level: :write
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: conversation_id,
+                       club_id: club_id,
+                       group_id: first_group_id,
+                       access_level: :write
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     stop_projector!(ConversationGroupAccessProjector)
 
@@ -222,12 +261,22 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
     send_root_conversation(conversation_id, club_id)
 
     assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club_id,
-               group_id: group_id,
-               access_level: :write
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: conversation_id,
+                       club_id: club_id,
+                       group_id: group_id,
+                       access_level: :write
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     stop_projector!(ConversationGroupAccessProjector)
 
@@ -258,19 +307,39 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
     send_root_conversation(conversation_id, club_id)
 
     assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club_id,
-               group_id: group_id,
-               access_level: :write
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: conversation_id,
+                       club_id: club_id,
+                       group_id: group_id,
+                       access_level: :write
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.revoke_conversation_access_from_group(%{
-               conversation_id: conversation_id,
-               club_id: club_id,
-               group_id: group_id
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_revoke(%{
+                       conversation_id: conversation_id,
+                       club_id: club_id,
+                       group_id: group_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     refute ConversationGroupAccessQueries.group_has_conversation_access?(
              conversation_id,
@@ -323,12 +392,22 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
              )
 
     assert {:error, :conversation_id_mismatch} =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: reply_id,
-               club_id: club_id,
-               group_id: group_id,
-               access_level: :read
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: reply_id,
+                       club_id: club_id,
+                       group_id: group_id,
+                       access_level: :read
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
   end
 
   defp send_root_conversation(conversation_id, club_id) do

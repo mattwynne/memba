@@ -2,14 +2,13 @@ defmodule Memba.Messaging.InboundEmailDispatchTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Events.InboundEmailReceived
   alias Memba.Messaging.InboundEmailReceipt
 
   test "Messaging app dispatch routes ReceiveInboundEmail to the inbound email aggregate" do
     assert {:ok, command} =
-             Messaging.receive_inbound_club_email_command(%{
+             Memba.Messaging.InboundClubEmail.command(%{
                provider: "resend",
                provider_message_id: "email-123",
                provider_event_id: "event-456",

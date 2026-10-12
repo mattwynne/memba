@@ -2,7 +2,6 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.Commands.PostMessageReply
@@ -39,15 +38,19 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
                 }
               ]
             }} =
-             Messaging.follow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: conversation_id,
-                 member_id: member_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert %ConversationFollowProjection{
              club_id: ^club_id,
@@ -71,15 +74,19 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
                 }
               ]
             }} =
-             Messaging.unfollow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: conversation_id,
-                 member_id: member_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_unfollow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert %ConversationFollowProjection{following: false} =
              ConversationFollowQueries.get_conversation_follow(conversation_id, member_id)
@@ -104,32 +111,64 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
     member_id = Memba.ID.generate(:person)
 
     assert {:ok, %ExecutionResult{events: [%ConversationFollowed{}]}} =
-             Messaging.follow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert {:ok, %ExecutionResult{events: []}} =
-             Messaging.follow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert {:ok, %ExecutionResult{events: [%ConversationUnfollowed{}]}} =
-             Messaging.unfollow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_unfollow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert {:ok, %ExecutionResult{events: []}} =
-             Messaging.unfollow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_unfollow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
   end
 
   test "MessageSent auto-follows the root sender and each reply author" do

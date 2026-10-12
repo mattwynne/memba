@@ -1,17 +1,18 @@
 defmodule Memba.Messaging.InboundEmailApiTest do
   use ExUnit.Case, async: true
 
-  alias Memba.Messaging
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailAttachment
 
   test "receive rejects invalid input before dispatching a receipt" do
-    assert {:error, :invalid_inbound_email} = Messaging.receive_inbound_club_email(nil)
-    assert {:error, :invalid_inbound_email} = Messaging.receive_inbound_club_email(%{}, :invalid)
+    assert {:error, :invalid_inbound_email} = Memba.Messaging.InboundClubEmail.receive(nil, [])
+
+    assert {:error, :invalid_inbound_email} =
+             Memba.Messaging.InboundClubEmail.receive(%{}, :invalid)
 
     assert {:error, {:missing_required_attribute, :provider}} =
-             Messaging.receive_inbound_club_email(%{})
+             Memba.Messaging.InboundClubEmail.receive(%{}, [])
   end
 
   describe "receive_inbound_club_email_command/1" do
@@ -68,7 +69,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
                     }
                   ]
                 }
-              }} = Messaging.receive_inbound_club_email_command(attrs)
+              }} = Memba.Messaging.InboundClubEmail.command(attrs)
     end
 
     test "accepts string-keyed attrs and keeps optional provider fields optional" do
@@ -96,7 +97,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
                   references_message_ids: [],
                   attachments: []
                 }
-              }} = Messaging.receive_inbound_club_email_command(attrs)
+              }} = Memba.Messaging.InboundClubEmail.command(attrs)
     end
 
     test "rejects malformed provider-neutral attrs before any provider-specific parsing" do
@@ -111,24 +112,24 @@ defmodule Memba.Messaging.InboundEmailApiTest do
       assert {:error, {:missing_required_attribute, :provider_message_id}} =
                valid_attrs
                |> Map.delete(:provider_message_id)
-               |> Messaging.receive_inbound_club_email_command()
+               |> Memba.Messaging.InboundClubEmail.command()
 
       assert {:error, :invalid_provider} =
                %{valid_attrs | provider: " "}
-               |> Messaging.receive_inbound_club_email_command()
+               |> Memba.Messaging.InboundClubEmail.command()
 
       assert {:error, :invalid_from_address} =
                %{valid_attrs | from_address: "not an email address"}
-               |> Messaging.receive_inbound_club_email_command()
+               |> Memba.Messaging.InboundClubEmail.command()
 
       assert {:error, :invalid_recipient_addresses} =
                %{valid_attrs | recipient_addresses: []}
-               |> Messaging.receive_inbound_club_email_command()
+               |> Memba.Messaging.InboundClubEmail.command()
 
       assert {:error, :invalid_attachment} =
                valid_attrs
                |> Map.put(:attachments, ["route.gpx"])
-               |> Messaging.receive_inbound_club_email_command()
+               |> Memba.Messaging.InboundClubEmail.command()
     end
   end
 end

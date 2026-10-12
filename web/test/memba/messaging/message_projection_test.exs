@@ -1,7 +1,6 @@
 defmodule Memba.Messaging.MessageProjectionTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.ConversationListing
@@ -769,12 +768,22 @@ defmodule Memba.Messaging.MessageProjectionTest do
 
   defp grant_canonical_group_access!(conversation, group_id, access_level) do
     assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation.message_id,
-               club_id: conversation.club_id,
-               group_id: group_id,
-               access_level: access_level
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: conversation.message_id,
+                       club_id: conversation.club_id,
+                       group_id: group_id,
+                       access_level: access_level
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
   end
 
   defp insert_message_projection!(attrs) when is_list(attrs) do

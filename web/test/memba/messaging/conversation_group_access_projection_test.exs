@@ -6,7 +6,6 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
-  alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.SendMessage
@@ -217,37 +216,43 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     group_id = Memba.ID.generate(:group)
 
     assert :ok =
-             Memba.Membership.create_club(
-               membership_club_attrs(club_id: club_id, name: "Alpine Club"),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubCommands.prepare_create(
+                       membership_club_attrs(club_id: club_id, name: "Alpine Club")
+                     ) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.create_person(
-               %{person_id: person_id, name: "Alice Adams", email: "alice@example.com"},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Alice Adams",
+                       email: "alice@example.com"
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.add_member(
-               %{
-                 club_id: club_id,
-                 membership_id: Memba.ID.generate(:membership),
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: Memba.ID.generate(:membership),
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.create_custom_group(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 actor_person_id: person_id,
-                 name: "Trip planners"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       actor_person_id: person_id,
+                       name: "Trip planners"
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     club = ClubGroupQueries.get_club(club_id)
     person = PersonQueries.get_person(person_id)
@@ -378,50 +383,52 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     conversation_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Memba.Membership.create_club(
-               membership_club_attrs(club_id: club_id, name: "Alpine Club"),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubCommands.prepare_create(
+                       membership_club_attrs(club_id: club_id, name: "Alpine Club")
+                     ) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.create_person(
-               %{
-                 person_id: alice_person_id,
-                 name: "Alice Adams",
-                 email: "alice@example.com"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: alice_person_id,
+                       name: "Alice Adams",
+                       email: "alice@example.com"
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.create_person(
-               %{
-                 person_id: bob_person_id,
-                 name: "Bob Builder",
-                 email: "bob@example.com"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: bob_person_id,
+                       name: "Bob Builder",
+                       email: "bob@example.com"
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.add_member(
-               %{
-                 club_id: club_id,
-                 membership_id: alice_membership_id,
-                 person_id: alice_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: alice_membership_id,
+                       person_id: alice_person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Memba.Membership.add_member(
-               %{
-                 club_id: club_id,
-                 membership_id: bob_membership_id,
-                 person_id: bob_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: bob_membership_id,
+                       person_id: bob_person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
              Memba.Membership.App.dispatch(
@@ -459,17 +466,19 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
            )
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: conversation_id,
-                 club_id: club_id,
-                 sender_id: alice_person_id,
-                 audience_group_id: group_id,
-                 subject: "Private trip planning",
-                 body: "Bring route ideas."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.SendClubMessage.prepare(%{
+                       message_id: conversation_id,
+                       club_id: club_id,
+                       sender_id: alice_person_id,
+                       audience_group_id: group_id,
+                       subject: "Private trip planning",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     attrs = %{
       club_id: club_id,
@@ -496,7 +505,12 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
              Memba.Messaging.CurrentMemberConversationFollow.prepare_follow(attrs)
 
     assert {:error, :not_current_member} =
-             Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
+             (with {:ok, command} <-
+                     Memba.Messaging.CurrentMemberConversationFollow.prepare_follow(attrs),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
@@ -527,35 +541,51 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     refute ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert :ok =
-             Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
+             (with {:ok, command} <-
+                     Memba.Messaging.CurrentMemberConversationFollow.prepare_follow(attrs),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert {:error, :conversation_not_found} =
-             attrs
-             |> Map.put(:club_id, Memba.ID.generate(:club))
-             |> Messaging.unfollow_conversation_as_current_member(consistency: :strong)
+             (with {:ok, command} <-
+                     Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow(
+                       attrs
+                       |> Map.put(:club_id, Memba.ID.generate(:club))
+                     ),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
 
     assert {:ok, %Memba.Membership.CustomGroupRemoval{transition: :member_removed}} =
-             Memba.Membership.remove_custom_group_member(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 membership_id: bob_membership_id,
-                 person_id: bob_person_id,
-                 actor_person_id: alice_person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Remove.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       membership_id: bob_membership_id,
+                       person_id: bob_person_id,
+                       actor_person_id: alice_person_id,
+                       removal_operation_id: Ecto.UUID.generate()
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert {:error, :not_current_member} =
              Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow(attrs)
 
     assert {:error, :not_current_member} =
-             Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
+             (with {:ok, command} <-
+                     Memba.Messaging.CurrentMemberConversationFollow.prepare_unfollow(attrs),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert ConversationFollowQueries.following_conversation?(conversation_id, bob_person_id)
   end

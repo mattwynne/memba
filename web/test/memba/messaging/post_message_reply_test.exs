@@ -15,7 +15,6 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
-  alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -162,16 +161,20 @@ defmodule Memba.Messaging.PostMessageReplyTest do
                 | delivery_events
               ]
             }} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: " I can bring maps. "
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: bob.person_id,
+                       body: " I can bring maps. "
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert bob_id == bob.person_id
 
@@ -254,16 +257,20 @@ defmodule Memba.Messaging.PostMessageReplyTest do
             %ExecutionResult{
               events: [%MessageSent{message_id: ^reply_message_id}]
             }} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: "I can bring maps."
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: bob.person_id,
+                       body: "I can bring maps."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     assert [] = pending_deliveries_for_message(reply_message_id)
   end
@@ -281,15 +288,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: pat.person_id,
-                 body: "Can I join?"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: pat.person_id,
+                       body: "Can I join?"
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, reply_message_id)
   end
@@ -310,15 +319,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: "I used to be in the access group."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: bob.person_id,
+                       body: "I used to be in the access group."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, reply_message_id)
   end
@@ -339,15 +350,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: "I'm in another group."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: bob.person_id,
+                       body: "I'm in another group."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, reply_message_id)
   end
@@ -367,15 +380,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: "No grant, no reply."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: bob.person_id,
+                       body: "No grant, no reply."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, reply_message_id)
   end
@@ -393,28 +408,37 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     root_message_id = send_root_message_to_group(club_id, first_group_id, alice)
 
     assert :ok =
-             Messaging.grant_conversation_access_to_group(
-               %{
-                 conversation_id: root_message_id,
-                 club_id: club_id,
-                 group_id: second_group_id,
-                 access_level: :write
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: root_message_id,
+                       club_id: club_id,
+                       group_id: second_group_id,
+                       access_level: :write
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(
+                       command,
+                       Keyword.put_new([consistency: :strong], :consistency, [
+                         Memba.Messaging.Projectors.ConversationGroupAccess
+                       ])
+                     ) do
+                dispatch_result
+              end)
 
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: alice.person_id,
-                 body: "Ambiguous audiences must fail closed."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: alice.person_id,
+                       body: "Ambiguous audiences must fail closed."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, reply_message_id)
   end
@@ -434,30 +458,32 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     follow_conversation(club_id, root_message_id, bob.person_id)
 
     assert {:ok, %Memba.Membership.CustomGroupRemoval{transition: :member_removed}} =
-             Memba.Membership.remove_custom_group_member(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 membership_id: bob_membership_id,
-                 person_id: bob.person_id,
-                 actor_person_id: alice.person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.CustomGroup.Remove.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       membership_id: bob_membership_id,
+                       person_id: bob.person_id,
+                       actor_person_id: alice.person_id,
+                       removal_operation_id: Ecto.UUID.generate()
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     absent_reply_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: absent_reply_id,
-                 conversation_id: root_message_id,
-                 sender_id: alice.person_id,
-                 body: "Posted while Bob is absent."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: absent_reply_id,
+                       conversation_id: root_message_id,
+                       sender_id: alice.person_id,
+                       body: "Posted while Bob is absent."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert ConversationFollowQueries.following_conversation?(root_message_id, bob.person_id)
     assert pending_deliveries_for_message(absent_reply_id) == []
@@ -467,15 +493,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     resumed_reply_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: resumed_reply_id,
-                 conversation_id: root_message_id,
-                 sender_id: alice.person_id,
-                 body: "Posted after Bob rejoins."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: resumed_reply_id,
+                       conversation_id: root_message_id,
+                       sender_id: alice.person_id,
+                       body: "Posted after Bob rejoins."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert [%EmailDeliveryProjection{recipient_id: bob_id}] =
              pending_deliveries_for_message(resumed_reply_id)
@@ -496,15 +524,17 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :invalid_body} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: "   "
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.PostMemberMessageReply.prepare(%{
+                       message_id: reply_message_id,
+                       conversation_id: root_message_id,
+                       sender_id: bob.person_id,
+                       body: "   "
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     refute Repo.get(MessageProjection, reply_message_id)
   end
@@ -513,16 +543,18 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     message_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: sender_id,
-                 subject: "Trip planning night",
-                 body: "Bring route ideas."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.SendClubMessage.prepare(%{
+                       message_id: message_id,
+                       club_id: club_id,
+                       sender_id: sender_id,
+                       subject: "Trip planning night",
+                       body: "Bring route ideas."
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     message_id
   end
@@ -693,17 +725,29 @@ defmodule Memba.Messaging.PostMessageReplyTest do
 
   defp follow_conversation(club_id, conversation_id, member_id) do
     assert :ok =
-             Messaging.follow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
   end
 
   defp unfollow_conversation(club_id, conversation_id, member_id) do
     assert :ok =
-             Messaging.unfollow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.ConversationFollowPreparation.prepare_unfollow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: member_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
   end
 end

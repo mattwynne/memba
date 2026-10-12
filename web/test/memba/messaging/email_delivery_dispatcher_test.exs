@@ -20,7 +20,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.ConversationStopFollowToken
@@ -477,12 +476,22 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
         insert_dispatchable_delivery!(status: "dispatching")
 
       assert :ok =
-               Messaging.grant_conversation_access_to_group(%{
-                 conversation_id: message.conversation_id,
-                 club_id: message.club_id,
-                 group_id: Memba.ID.generate(:group),
-                 access_level: :write
-               })
+               (with {:ok, command} <-
+                       Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                         conversation_id: message.conversation_id,
+                         club_id: message.club_id,
+                         group_id: Memba.ID.generate(:group),
+                         access_level: :write
+                       }),
+                     {:ok, dispatch_result} <-
+                       Memba.Messaging.CommandDispatch.dispatch(
+                         command,
+                         Keyword.put_new([], :consistency, [
+                           Memba.Messaging.Projectors.ConversationGroupAccess
+                         ])
+                       ) do
+                  dispatch_result
+                end)
 
       assert {:error, :ambiguous_conversation_audience} =
                EmailDeliveryDispatcher.deliver_to_provider(delivery)
@@ -603,7 +612,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
       assert {:error, :manual_retry_disabled} =
-               Messaging.retry_failed_email_delivery(delivery.delivery_id)
+               (with {:ok, delivery_id} <- Memba.ID.cast(:delivery, delivery.delivery_id) do
+                  Memba.Messaging.EmailDeliveryDispatcher.retry_failed_delivery(delivery_id)
+                else
+                  :error -> {:error, :invalid_delivery_id}
+                end)
 
       assert %EmailDeliveryProjection{
                status: "sent",
@@ -1178,7 +1191,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
     %{delivery: delivery} = insert_dispatchable_delivery!(status: "failed")
 
     assert {:error, :manual_retry_disabled} =
-             Messaging.retry_failed_email_delivery(delivery.delivery_id)
+             (with {:ok, delivery_id} <- Memba.ID.cast(:delivery, delivery.delivery_id) do
+                Memba.Messaging.EmailDeliveryDispatcher.retry_failed_delivery(delivery_id)
+              else
+                :error -> {:error, :invalid_delivery_id}
+              end)
 
     assert {:error, :manual_retry_disabled} =
              EmailDeliveryDispatcher.retry_failed_delivery(delivery.delivery_id)
@@ -1339,12 +1356,22 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
         end
 
         assert :ok =
-                 Messaging.grant_conversation_access_to_group(%{
-                   conversation_id: message.conversation_id,
-                   club_id: message.club_id,
-                   group_id: group_id,
-                   access_level: :write
-                 })
+                 (with {:ok, command} <-
+                         Memba.Messaging.ConversationGroupAccess.prepare_grant(%{
+                           conversation_id: message.conversation_id,
+                           club_id: message.club_id,
+                           group_id: group_id,
+                           access_level: :write
+                         }),
+                       {:ok, dispatch_result} <-
+                         Memba.Messaging.CommandDispatch.dispatch(
+                           command,
+                           Keyword.put_new([], :consistency, [
+                             Memba.Messaging.Projectors.ConversationGroupAccess
+                           ])
+                         ) do
+                    dispatch_result
+                  end)
 
         group_id
     end

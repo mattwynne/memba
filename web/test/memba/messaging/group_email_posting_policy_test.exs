@@ -5,7 +5,6 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.PersonQueries
   alias Memba.Messaging.InboundClubEmailPreparation
-  alias Memba.Membership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
@@ -75,15 +74,15 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
       group_id = Memba.ID.generate(:group)
 
       assert :ok =
-               Membership.create_custom_group(
-                 %{
-                   club_id: club.club_id,
-                   group_id: group_id,
-                   actor_person_id: alice.person_id,
-                   name: "Board"
-                 },
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.CustomGroup.Create.prepare(%{
+                         club_id: club.club_id,
+                         group_id: group_id,
+                         actor_person_id: alice.person_id,
+                         name: "Board"
+                       }) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
 
       custom_destination = %InboundClubDestination{
         club_id: club.club_id,
@@ -102,16 +101,16 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                )
 
       assert {:ok, _admission} =
-               Membership.add_custom_group_member(
-                 %{
-                   club_id: club.club_id,
-                   group_id: group_id,
-                   membership_id: eve_membership_id,
-                   person_id: eve.person_id,
-                   actor_person_id: alice.person_id
-                 },
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.CustomGroup.Admit.prepare(%{
+                         club_id: club.club_id,
+                         group_id: group_id,
+                         membership_id: eve_membership_id,
+                         person_id: eve.person_id,
+                         actor_person_id: alice.person_id
+                       }) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
 
       assert :ok =
                InboundClubEmailPreparation.authorize(
@@ -128,14 +127,14 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
       membership_id = add_member!(club.club_id, alice.person_id)
 
       assert :ok =
-               Membership.remove_member(
-                 %{
-                   club_id: club.club_id,
-                   membership_id: membership_id,
-                   person_id: alice.person_id
-                 },
-                 consistency: :strong
-               )
+               (with {:ok, command} <-
+                       Memba.Membership.ClubMember.Remove.prepare(%{
+                         club_id: club.club_id,
+                         membership_id: membership_id,
+                         person_id: alice.person_id
+                       }) do
+                  Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+                end)
 
       assert {:error, :sender_not_active_member,
               %{
@@ -187,14 +186,14 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
     club_id = Memba.ID.generate(:club)
 
     assert :ok =
-             Membership.create_club(
-               %{
-                 club_id: club_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 slug: Keyword.fetch!(attrs, :slug)
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.ClubCommands.prepare_create(%{
+                       club_id: club_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       slug: Keyword.fetch!(attrs, :slug)
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     ClubGroupQueries.get_club(club_id)
   end
@@ -203,14 +202,14 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
     person_id = Memba.ID.generate(:person)
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: Keyword.fetch!(attrs, :name),
+                       email: Keyword.fetch!(attrs, :email)
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     PersonQueries.get_person(person_id)
   end
@@ -219,14 +218,14 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Membership.AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                Memba.Membership.CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     membership_id
   end

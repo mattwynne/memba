@@ -20,7 +20,6 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
@@ -148,24 +147,28 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
                 %EmailDeliveryCreated{recipient_id: ^dan_id}
               ]
             }} =
-             Messaging.request_group_access(
-               %{
-                 message_id: message_id,
-                 club_id: club.club_id,
-                 requester_person_id: eve.person_id,
-                 group_id: board_id,
-                 sender_id: Memba.ID.generate(:person),
-                 audience_group_id: Memba.ID.generate(:group),
-                 recipients: [],
-                 subject: "Forged subject",
-                 body: "Forged body",
-                 club: %{name: "Forged club", slug: "forged"},
-                 person: %{name: "Forged requester"},
-                 group: %{name: "Forged group"}
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.RequestGroupAccess.prepare(%{
+                       message_id: message_id,
+                       club_id: club.club_id,
+                       requester_person_id: eve.person_id,
+                       group_id: board_id,
+                       sender_id: Memba.ID.generate(:person),
+                       audience_group_id: Memba.ID.generate(:group),
+                       recipients: [],
+                       subject: "Forged subject",
+                       body: "Forged body",
+                       club: %{name: "Forged club", slug: "forged"},
+                       person: %{name: "Forged requester"},
+                       group: %{name: "Forged group"}
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command,
+                       returning: :execution_result,
+                       consistency: :strong
+                     ) do
+                dispatch_result
+              end)
 
     refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
              club.club_id,
@@ -390,15 +393,16 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
          message_id \\ Memba.ID.generate(:message),
          opts \\ []
        ) do
-    Messaging.request_group_access(
-      %{
-        message_id: message_id,
-        club_id: club.club_id,
-        requester_person_id: person.person_id,
-        group_id: group_id
-      },
-      opts
-    )
+    with {:ok, command} <-
+           Memba.Messaging.RequestGroupAccess.prepare(%{
+             message_id: message_id,
+             club_id: club.club_id,
+             requester_person_id: person.person_id,
+             group_id: group_id
+           }),
+         {:ok, dispatch_result} <- Memba.Messaging.CommandDispatch.dispatch(command, opts) do
+      dispatch_result
+    end
   end
 
   defp create_club!(slug, name) do

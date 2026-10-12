@@ -2,7 +2,6 @@ defmodule Memba.Messaging.StatusReportApiTest do
   use Memba.EventSourcedCase, async: false
 
   alias Memba.Messaging.DeliveryQueries
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Recipient
@@ -26,40 +25,51 @@ defmodule Memba.Messaging.StatusReportApiTest do
              )
 
     assert :ok =
-             Messaging.report_email_delivery_delivered(
-               %{"message_id" => message_id, "delivery_id" => bob.delivery_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.delivered(%{
+                       "message_id" => message_id,
+                       "delivery_id" => bob.delivery_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.report_email_delivery_delayed(
-               %{
-                 message_id: message_id,
-                 delivery_id: carol.delivery_id,
-                 reason: "recipient server is temporarily unavailable"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.delayed(%{
+                       message_id: message_id,
+                       delivery_id: carol.delivery_id,
+                       reason: "recipient server is temporarily unavailable"
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.report_email_delivery_bounced(
-               %{
-                 message_id: message_id,
-                 delivery_id: dana.delivery_id,
-                 reason: "mailbox does not exist"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.bounced(%{
+                       message_id: message_id,
+                       delivery_id: dana.delivery_id,
+                       reason: "mailbox does not exist"
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert :ok =
-             Messaging.report_email_delivery_spam_complaint(
-               %{
-                 message_id: message_id,
-                 delivery_id: alice.delivery_id,
-                 reason: "recipient marked the message as spam"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.spam_complaint(%{
+                       message_id: message_id,
+                       delivery_id: alice.delivery_id,
+                       reason: "recipient marked the message as spam"
+                     }),
+                   {:ok, dispatch_result} <-
+                     Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     assert DeliveryQueries.get_member_email_delivery(message_id, bob.person_id).status ==
              "delivered"
@@ -85,10 +95,14 @@ defmodule Memba.Messaging.StatusReportApiTest do
 
   test "public status reporting APIs surface aggregate validation errors" do
     assert {:error, :message_not_sent} =
-             Messaging.report_email_delivery_delivered(%{
-               message_id: Memba.ID.generate(:message),
-               delivery_id: Memba.ID.generate(:delivery)
-             })
+             (with {:ok, command} <-
+                     Memba.Messaging.EmailDeliveryReport.delivered(%{
+                       message_id: Memba.ID.generate(:message),
+                       delivery_id: Memba.ID.generate(:delivery)
+                     }),
+                   {:ok, dispatch_result} <- Memba.Messaging.CommandDispatch.dispatch(command, []) do
+                dispatch_result
+              end)
   end
 
   defp recipients(names) do
