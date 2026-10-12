@@ -30,6 +30,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.Events.InboundEmailReceived
   alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.InboundClubEmail
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -89,7 +90,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-011-email",
@@ -276,7 +277,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               rejection_reason: "sender_not_active_member",
               to_address: "board@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-064-custom-group-outsider-root",
@@ -312,7 +313,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
 
     assert {:ok, %{message_id: message_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-057-admin-audience",
@@ -354,7 +355,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
 
     assert {:ok, %{message_id: root_message_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-057-admin-reply-root",
@@ -434,7 +435,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assign_admin_role!(kmc.club_id, dana_membership_id, dana.person_id)
 
     assert {:ok, %{message_id: root_message_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-057-admin-header-root",
@@ -462,7 +463,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               sender_id: carol_id,
               to_address: "admin@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-057-admin-header-reply",
@@ -512,7 +513,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
 
     assert {:ok, %{message_id: root_message_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-057-forged-admin-root",
@@ -542,7 +543,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               rejection_reason: "not_current_member",
               to_address: "admin@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-057-forged-admin-reply",
@@ -594,7 +595,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
 
     assert {:ok, %{message_id: message_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-057-non-admin-sender",
@@ -682,7 +683,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "bob@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-041-reply-header-match",
@@ -781,7 +782,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "bob@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-041-unknown-reply-header-fallback",
@@ -856,7 +857,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       outbound_message_id_for_recipient!(npc_root_message_id, alice.person_id)
 
     assert {:ok, %{message_id: kmc_message_id, club_id: kmc_id, sender_id: alice_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-041-other-club-reply-header-fallback",
@@ -933,7 +934,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "pat@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-041-reply-header-non-member",
@@ -1001,7 +1002,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "bob@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-041-reply-header-attachment",
@@ -1063,7 +1064,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     add_member!(kmc.club_id, alice.person_id)
 
     assert {:ok, %{message_id: message_id, club_id: kmc_id, sender_id: alice_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-011-async-dispatch",
@@ -1137,7 +1138,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     }
 
     assert {:ok, %{message_id: message_id}} =
-             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+             InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
     assert [%{status: "pending"}, %{status: "pending"}] =
              DeliveryQueries.list_recipient_deliveries(message_id)
@@ -1163,7 +1164,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                subject: "Trip planning night retry",
                text_body: "This retry must not be posted."
              })
-             |> Messaging.receive_inbound_club_email(consistency: :strong)
+             |> InboundClubEmail.receive(consistency: :strong)
 
     assert [
              %{
@@ -1207,7 +1208,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     }
 
     assert {:ok, %{message_id: message_id}} =
-             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+             InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
     assert [%{recipient_id: bob_id, status: "pending"}] =
              DeliveryQueries.list_recipient_deliveries(message_id)
@@ -1224,7 +1225,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert {:ok, %{duplicate?: true, status: :accepted, message_id: ^message_id}} =
              inbound_attrs
              |> Map.put(:provider_event_id, "task-057-duplicate-admin-event-retry")
-             |> Messaging.receive_inbound_club_email(consistency: :strong)
+             |> InboundClubEmail.receive(consistency: :strong)
 
     assert ^event_counts = %{
              messages: count_events(MessageSent),
@@ -1244,7 +1245,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     add_member!(kmc.club_id, alice.person_id)
 
     assert {:ok, %{message_id: message_id}} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-013-normalized-body",
@@ -1304,7 +1305,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice.work@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-alternate-sender",
@@ -1381,7 +1382,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               to_address: "everyone@kmc.clubs.memba.io",
               rejection_email_delivery_reference: rejection_email_delivery_reference
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-053-pending-sender",
@@ -1431,7 +1432,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-013-html-only",
@@ -1484,7 +1485,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-blank-plain-text",
@@ -1532,7 +1533,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-html-only",
@@ -1579,7 +1580,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-014-attachments",
@@ -1635,7 +1636,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "unknown@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-015-unknown-sender",
@@ -1702,7 +1703,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "unknown@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "postmark",
                  provider_message_id: "task-020-postmark-selected-rejection",
@@ -1766,7 +1767,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               rejection_reason: "unknown_sender",
               rejection_email_delivery_reference: rejection_email_delivery_reference
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "1b700cb9-3a48-460d-a2d1-255fe01ed4e2",
@@ -1825,7 +1826,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "pat@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-non-member",
@@ -1873,7 +1874,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-inactive-member",
@@ -1934,7 +1935,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@kmc.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-019-departed-projection-lag",
@@ -1980,7 +1981,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     Application.put_env(:memba, :authorization_stability_timeout, 0)
 
     assert {:error, :authorization_stability_timeout} =
-             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+             InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
     assert 1 == count_events(InboundEmailReceived)
     assert 0 == count_events(InboundClubEmailAccepted)
@@ -1995,7 +1996,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               message_id: message_id,
               club_id: club_id,
               sender_id: sender_id
-            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+            }} = InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
     assert is_binary(inbound_email_id)
     assert club_id == kmc.club_id
@@ -2024,7 +2025,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       text_body: "A provider retry must reuse this message."
     }
 
-    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert {:ok, receive_command} = InboundClubEmail.command(inbound_attrs)
     assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
 
     message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
@@ -2067,7 +2068,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               message_id: ^message_id,
               club_id: club_id,
               sender_id: sender_id
-            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+            }} = InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
     assert inbound_email_id == receive_command.inbound_email_id
     assert club_id == kmc.club_id
@@ -2110,7 +2111,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       in_reply_to_message_ids: [bob_outbound_message_id]
     }
 
-    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert {:ok, receive_command} = InboundClubEmail.command(inbound_attrs)
     assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
 
     reply_message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
@@ -2156,7 +2157,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               conversation_id: ^root_message_id,
               club_id: club_id,
               sender_id: sender_id
-            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+            }} = InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
     assert inbound_email_id == receive_command.inbound_email_id
     assert club_id == kmc.club_id
@@ -2187,7 +2188,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       1..2
       |> Task.async_stream(
         fn _attempt ->
-          Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+          InboundClubEmail.receive(inbound_attrs, consistency: :strong)
         end,
         max_concurrency: 2,
         timeout: 10_000
@@ -2221,14 +2222,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       text_body: "A provider retry must not send another rejection."
     }
 
-    assert {:ok, receive_command} = Messaging.receive_inbound_club_email_command(inbound_attrs)
+    assert {:ok, receive_command} = InboundClubEmail.command(inbound_attrs)
     assert :ok = Memba.Messaging.App.dispatch(receive_command, consistency: :strong)
 
     results =
       1..8
       |> Task.async_stream(
         fn _attempt ->
-          Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+          InboundClubEmail.receive(inbound_attrs, consistency: :strong)
         end,
         max_concurrency: 8,
         timeout: 10_000
@@ -2271,7 +2272,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                 from_address: ^from_address,
                 to_address: "admin@kmc.clubs.memba.io"
               }} =
-               Messaging.receive_inbound_club_email(
+               InboundClubEmail.receive(
                  %{
                    provider: "resend",
                    provider_message_id: provider_message_id,
@@ -2313,7 +2314,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               from_address: "alice@example.com",
               to_address: "everyone@unknown.clubs.memba.io"
             }} =
-             Messaging.receive_inbound_club_email(
+             InboundClubEmail.receive(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-unknown-club",
@@ -2391,7 +2392,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                 to_address: recipient_address,
                 rejection_email_delivery_reference: rejection_email_delivery_reference
               }} =
-               Messaging.receive_inbound_club_email(
+               InboundClubEmail.receive(
                  %{
                    provider: "resend",
                    provider_message_id: provider_message_id,
@@ -2450,7 +2451,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
             %{
               status: :rejected,
               rejection_reason: "attachments_not_supported"
-            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+            }} = InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
     assert_rejection_email_received(
       to: "alice@example.com",
@@ -2469,7 +2470,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                provider_event_id: "task-015-event-retry",
                subject: "Trip planning night retry"
              })
-             |> Messaging.receive_inbound_club_email(consistency: :strong)
+             |> InboundClubEmail.receive(consistency: :strong)
 
     assert [] = MessageQueries.list_messages_for_club(kmc.club_id)
     assert [] = Fake.deliveries()
