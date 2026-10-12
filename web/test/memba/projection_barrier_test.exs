@@ -1,16 +1,17 @@
 defmodule Memba.ProjectionBarrierTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch
   alias Memba.ProjectionBarrier
 
   test "a barrier is satisfied when selected projectors reach the current checkpoint" do
     club_id = Memba.ID.generate(:club)
 
-    :ok =
-      Memba.Membership.create_club(
-        %{club_id: club_id, name: "Barrier Club", slug: "barrier-club"},
-        consistency: :strong
-      )
+    {:ok, command} =
+      ClubCommands.prepare_create(%{club_id: club_id, name: "Barrier Club", slug: "barrier-club"})
+
+    :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     assert {:ok, result} =
              ProjectionBarrier.await([Memba.Membership.Projectors.Club], timeout: 100)
@@ -23,11 +24,14 @@ defmodule Memba.ProjectionBarrierTest do
     club_id = Memba.ID.generate(:club)
     projector = "Memba.Membership.Projectors.Membership"
 
-    :ok =
-      Memba.Membership.create_club(
-        %{club_id: club_id, name: "Ignored Event Club", slug: "ignored-event-club"},
-        consistency: :strong
-      )
+    {:ok, command} =
+      ClubCommands.prepare_create(%{
+        club_id: club_id,
+        name: "Ignored Event Club",
+        slug: "ignored-event-club"
+      })
+
+    :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     checkpoint = ProjectionBarrier.current_checkpoint()
 
@@ -57,11 +61,10 @@ defmodule Memba.ProjectionBarrierTest do
   test "a barrier times out with the current projector positions" do
     club_id = Memba.ID.generate(:club)
 
-    :ok =
-      Memba.Membership.create_club(
-        %{club_id: club_id, name: "Timeout Club", slug: "timeout-club"},
-        consistency: :strong
-      )
+    {:ok, command} =
+      ClubCommands.prepare_create(%{club_id: club_id, name: "Timeout Club", slug: "timeout-club"})
+
+    :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     checkpoint = ProjectionBarrier.current_checkpoint()
 

@@ -3,7 +3,11 @@ defmodule Memba.OnboardingConversionTest do
 
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.SignInToken
-  alias Memba.Membership
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonCommands
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -58,7 +62,7 @@ defmodule Memba.OnboardingConversionTest do
       assert %MembershipProjection{active: true} =
                Repo.get!(MembershipProjection, conversion.membership_id)
 
-      assert Membership.active_member_of_club_by_email?(
+      assert MembershipQueries.active_member_of_club_by_email?(
                conversion.club.club_id,
                request.requester_email
              )
@@ -80,11 +84,14 @@ defmodule Memba.OnboardingConversionTest do
     test "reuses an existing person when the request email already belongs to one" do
       person_id = Memba.ID.generate(:person)
 
-      assert :ok =
-               Membership.create_person(
-                 %{person_id: person_id, name: "Existing Robin", email: "robin@example.com"},
-                 consistency: :strong
-               )
+      assert {:ok, command} =
+               PersonCommands.prepare_create(%{
+                 person_id: person_id,
+                 name: "Existing Robin",
+                 email: "robin@example.com"
+               })
+
+      assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
       request = request_fixture("Reuse Paddlers", requester_email: "Robin@Example.com")
 
@@ -99,7 +106,7 @@ defmodule Memba.OnboardingConversionTest do
       assert conversion.person.name == "Existing Robin"
       assert conversion.request.converted_person_id == person_id
 
-      assert Membership.active_member_of_club_by_email?(
+      assert MembershipQueries.active_member_of_club_by_email?(
                conversion.club.club_id,
                "robin@example.com"
              )
@@ -108,15 +115,14 @@ defmodule Memba.OnboardingConversionTest do
     end
 
     test "does not mark the request converted or deliver welcome email when club creation fails" do
-      assert :ok =
-               Membership.create_club(
-                 %{
-                   club_id: Memba.ID.generate(:club),
-                   name: "Existing Club",
-                   slug: "taken-slug"
-                 },
-                 consistency: :strong
-               )
+      assert {:ok, command} =
+               ClubCommands.prepare_create(%{
+                 club_id: Memba.ID.generate(:club),
+                 name: "Existing Club",
+                 slug: "taken-slug"
+               })
+
+      assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
       request = request_fixture("Taken Slug Club")
       parent = self()
@@ -152,9 +158,9 @@ defmodule Memba.OnboardingConversionTest do
 
       assert conversion.welcome_email == {:error, :smtp_down}
       assert Repo.get!(Request, request.request_id).status == "converted"
-      assert Membership.get_club(conversion.club.club_id)
+      assert ClubGroupQueries.get_club(conversion.club.club_id)
 
-      assert Membership.active_member_of_club_by_email?(
+      assert MembershipQueries.active_member_of_club_by_email?(
                conversion.club.club_id,
                request.requester_email
              )

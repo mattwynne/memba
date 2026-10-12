@@ -3,7 +3,11 @@ defmodule Memba.AccountsTest do
 
   alias Memba.Accounts
   alias Memba.Accounts.SignInToken
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonQueries
   alias Memba.Repo
 
   describe "email identity helpers" do
@@ -166,29 +170,26 @@ defmodule Memba.AccountsTest do
     club_id = Memba.ID.generate(:club)
     person_id = Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
 
-    assert :ok =
-             Membership.create_club(
-               membership_club_attrs(club_id: club_id, name: Keyword.fetch!(attrs, :club_name)),
-               consistency: :strong
+    assert {:ok, command} =
+             ClubCommands.prepare_create(
+               membership_club_attrs(club_id: club_id, name: Keyword.fetch!(attrs, :club_name))
              )
 
-    unless Membership.get_person(person_id) do
-      assert :ok =
-               Membership.create_person(
-                 create_person_attrs(attrs, person_id),
-                 consistency: :strong
-               )
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    unless PersonQueries.get_person(person_id) do
+      assert {:ok, command} = PersonCommands.prepare_create(create_person_attrs(attrs, person_id))
+      assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
     end
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: Memba.ID.generate(:membership),
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: Memba.ID.generate(:membership),
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     %{club_id: club_id, person_id: person_id}
   end

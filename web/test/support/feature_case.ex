@@ -35,7 +35,7 @@ defmodule MembaWeb.FeatureCase do
   def sign_in_staff(conn, email \\ "pat@memba.io") do
     normalized_email = Memba.Accounts.normalize_email(email)
 
-    if is_nil(Memba.Membership.get_person_by_email(normalized_email)) do
+    if is_nil(Memba.Membership.PersonQueries.get_person_by_email(normalized_email)) do
       Memba.MembershipFixtures.insert_membership_person!(
         name: staff_name_from_email(normalized_email),
         email: normalized_email

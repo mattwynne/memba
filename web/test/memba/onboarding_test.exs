@@ -3,7 +3,7 @@ defmodule Memba.OnboardingTest do
 
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
-  alias Memba.Membership
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -103,7 +103,7 @@ defmodule Memba.OnboardingTest do
       assert request.requester_email == "robin@example.com"
 
       assert membership_projection_counts() == membership_projection_counts
-      assert Membership.list_active_clubs_for_member_email("robin@example.com") == []
+      assert MembershipQueries.list_active_clubs_for_member_email("robin@example.com") == []
     end
   end
 
