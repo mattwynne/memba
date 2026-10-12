@@ -31,7 +31,7 @@ defmodule Memba.Membership.QueryTest do
                club_id: club_id,
                name: "Kootenay Mountaineering Club",
                slug: "kmc"
-             } = Membership.get_club_by_slug("kmc")
+             } = ClubGroupQueries.get_club_by_slug("kmc")
 
       assert club_id == club.club_id
     end
@@ -40,7 +40,7 @@ defmodule Memba.Membership.QueryTest do
       club = create_club("Kootenay Mountaineering Club", slug: "kmc")
 
       assert %ClubProjection{club_id: club_id, slug: "kmc"} =
-               Membership.get_club_by_slug(" KMC ")
+               ClubGroupQueries.get_club_by_slug(" KMC ")
 
       assert club_id == club.club_id
     end
@@ -48,17 +48,17 @@ defmodule Memba.Membership.QueryTest do
     test "returns nil for invalid, unknown, or non-string slugs" do
       _club = create_club("Kootenay Mountaineering Club", slug: "kmc")
 
-      assert is_nil(Membership.get_club_by_slug("unknown"))
-      assert is_nil(Membership.get_club_by_slug("kmc club"))
-      assert is_nil(Membership.get_club_by_slug("kmc_club"))
-      assert is_nil(Membership.get_club_by_slug("kmc.club"))
-      assert is_nil(Membership.get_club_by_slug("-kmc"))
-      assert is_nil(Membership.get_club_by_slug(nil))
+      assert is_nil(ClubGroupQueries.get_club_by_slug("unknown"))
+      assert is_nil(ClubGroupQueries.get_club_by_slug("kmc club"))
+      assert is_nil(ClubGroupQueries.get_club_by_slug("kmc_club"))
+      assert is_nil(ClubGroupQueries.get_club_by_slug("kmc.club"))
+      assert is_nil(ClubGroupQueries.get_club_by_slug("-kmc"))
+      assert is_nil(ClubGroupQueries.get_club_by_slug(nil))
     end
   end
 
   describe "list_club_summaries/1" do
-    test "returns plain projected summaries keyed by club ID for both query entry points" do
+    test "returns plain projected summaries keyed by club ID" do
       club = create_club("Kootenay Mountaineering Club", slug: "kmc")
       other = create_club("Nelson Cycling Club", slug: "ncc")
       unknown_id = Memba.ID.generate(:club)
@@ -70,13 +70,11 @@ defmodule Memba.Membership.QueryTest do
 
       ids = [club.club_id, "invalid", club.club_id, unknown_id, other.club_id, nil]
       assert ClubGroupQueries.list_club_summaries(ids) == summaries
-      assert Membership.list_club_summaries(ids) == summaries
     end
 
     test "ignores invalid IDs and returns an empty map for empty or non-list input" do
       for ids <- [[], ["invalid", nil], nil, "invalid"] do
         assert ClubGroupQueries.list_club_summaries(ids) == %{}
-        assert Membership.list_club_summaries(ids) == %{}
       end
     end
   end
@@ -92,16 +90,16 @@ defmodule Memba.Membership.QueryTest do
                email_slug: "admin",
                group_key: "admin",
                name: "Admin"
-             } = Membership.get_group(admin_group_id)
+             } = ClubGroupQueries.get_group(admin_group_id)
 
       assert club_id == club.club_id
-      refute match?(%GroupProjection{}, Membership.get_group(admin_group_id))
+      refute match?(%GroupProjection{}, ClubGroupQueries.get_group(admin_group_id))
     end
 
     test "returns nil for invalid or unknown group IDs" do
-      assert is_nil(Membership.get_group(Memba.ID.generate(:group)))
-      assert is_nil(Membership.get_group("not-a-uuid"))
-      assert is_nil(Membership.get_group(nil))
+      assert is_nil(ClubGroupQueries.get_group(Memba.ID.generate(:group)))
+      assert is_nil(ClubGroupQueries.get_group("not-a-uuid"))
+      assert is_nil(ClubGroupQueries.get_group(nil))
     end
   end
 
@@ -116,14 +114,18 @@ defmodule Memba.Membership.QueryTest do
                email_slug: "admin",
                group_key: "admin",
                name: "Admin"
-             } = Membership.get_group_by_email_slug(club.club_id, " ADMIN ")
+             } = ClubGroupQueries.get_group_by_email_slug(club.club_id, " ADMIN ")
 
       assert club_id == club.club_id
       assert group_id == SystemGroups.admin_group_id(club.club_id)
-      refute match?(%GroupProjection{}, Membership.get_group_by_email_slug(club.club_id, "admin"))
+
+      refute match?(
+               %GroupProjection{},
+               ClubGroupQueries.get_group_by_email_slug(club.club_id, "admin")
+             )
 
       assert %{club_id: other_club_id, group_id: other_group_id, email_slug: "admin"} =
-               Membership.get_group_by_email_slug(other_club.club_id, "admin")
+               ClubGroupQueries.get_group_by_email_slug(other_club.club_id, "admin")
 
       assert other_club_id == other_club.club_id
       assert other_group_id == SystemGroups.admin_group_id(other_club.club_id)
@@ -132,11 +134,11 @@ defmodule Memba.Membership.QueryTest do
     test "returns nil for invalid IDs and invalid, unknown, or non-string email slugs" do
       club = create_club("Kootenay Mountaineering Club", slug: "kmc")
 
-      assert is_nil(Membership.get_group_by_email_slug(club.club_id, "unknown"))
-      assert is_nil(Membership.get_group_by_email_slug(club.club_id, "admin group"))
-      assert is_nil(Membership.get_group_by_email_slug(club.club_id, nil))
-      assert is_nil(Membership.get_group_by_email_slug("not-a-uuid", "admin"))
-      assert is_nil(Membership.get_group_by_email_slug(nil, "admin"))
+      assert is_nil(ClubGroupQueries.get_group_by_email_slug(club.club_id, "unknown"))
+      assert is_nil(ClubGroupQueries.get_group_by_email_slug(club.club_id, "admin group"))
+      assert is_nil(ClubGroupQueries.get_group_by_email_slug(club.club_id, nil))
+      assert is_nil(ClubGroupQueries.get_group_by_email_slug("not-a-uuid", "admin"))
+      assert is_nil(ClubGroupQueries.get_group_by_email_slug(nil, "admin"))
     end
   end
 
