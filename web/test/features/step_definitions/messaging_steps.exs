@@ -3,8 +3,21 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   import ExUnit.Assertions
 
-  alias Memba.Membership
-  alias Memba.Messaging
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
+  alias Memba.Messaging.CommandDispatch
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
+  alias Memba.Messaging.ConversationListing
+  alias Memba.Messaging.CurrentMemberConversationFollow
+  alias Memba.Messaging.DeliveryQueries
+  alias Memba.Messaging.EmailConversationStopFollow
+  alias Memba.Messaging.InboundClubEmail
+  alias Memba.Messaging.MessageQueries
+  alias Memba.Messaging.PostMemberMessageReply
+  alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
@@ -708,19 +721,18 @@ defmodule Memba.Cucumber.MessagingSteps do
     sender_id = person_id_from_context!(context, sender_name)
     body = "#{subject} details."
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: sender_id,
-                 subject: subject,
-                 body: body
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             SendClubMessage.prepare(%{
+               message_id: message_id,
+               club_id: club_id,
+               sender_id: sender_id,
+               subject: subject,
+               body: body
+             })
 
-    assert Messaging.get_message(message_id)
+    assert {:ok, :ok} = CommandDispatch.dispatch(command, consistency: :strong)
+
+    assert MessageQueries.get_message(message_id)
 
     context
     |> Map.put(:sent_message, %{
@@ -751,18 +763,17 @@ defmodule Memba.Cucumber.MessagingSteps do
     root_message = fetch_from_context!(context, :messages, subject)
     sender_id = person_id_from_context!(context, sender_name)
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message.message_id,
-                 sender_id: sender_id,
-                 body: body
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PostMemberMessageReply.prepare(%{
+               message_id: reply_message_id,
+               conversation_id: root_message.message_id,
+               sender_id: sender_id,
+               body: body
+             })
 
-    assert reply = Messaging.get_message(reply_message_id)
+    assert {:ok, :ok} = CommandDispatch.dispatch(command, consistency: :strong)
+
+    assert reply = MessageQueries.get_message(reply_message_id)
 
     reply_context = %{
       body: reply.body,
@@ -783,15 +794,14 @@ defmodule Memba.Cucumber.MessagingSteps do
     root_message = fetch_from_context!(context, :messages, subject)
     member_id = person_id_from_context!(context, member_name)
 
-    assert :ok =
-             Messaging.follow_conversation_as_current_member(
-               %{
-                 club_id: root_message.club_id,
-                 conversation_id: root_message.message_id,
-                 member_id: member_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             CurrentMemberConversationFollow.prepare_follow(%{
+               club_id: root_message.club_id,
+               conversation_id: root_message.message_id,
+               member_id: member_id
+             })
+
+    assert {:ok, :ok} = CommandDispatch.dispatch(command, consistency: :strong)
 
     context
   end
@@ -800,15 +810,14 @@ defmodule Memba.Cucumber.MessagingSteps do
     root_message = fetch_from_context!(context, :messages, subject)
     member_id = person_id_from_context!(context, member_name)
 
-    assert :ok =
-             Messaging.unfollow_conversation_as_current_member(
-               %{
-                 club_id: root_message.club_id,
-                 conversation_id: root_message.message_id,
-                 member_id: member_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             CurrentMemberConversationFollow.prepare_unfollow(%{
+               club_id: root_message.club_id,
+               conversation_id: root_message.message_id,
+               member_id: member_id
+             })
+
+    assert {:ok, :ok} = CommandDispatch.dispatch(command, consistency: :strong)
 
     context
   end
@@ -816,7 +825,8 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp remove_member_from_club(context, member_name, club_name) do
     membership_id = fetch_from_context!(context, :memberships, {club_name, member_name})
 
-    assert :ok = Membership.remove_member(%{membership_id: membership_id}, consistency: :strong)
+    assert {:ok, command} = ClubMember.Remove.prepare(%{membership_id: membership_id})
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     memberships =
       context
@@ -830,7 +840,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     root_message = fetch_from_context!(context, :messages, subject)
     member_id = person_id_from_context!(context, member_name)
 
-    assert Messaging.following_conversation?(root_message.message_id, member_id) ==
+    assert ConversationFollowQueries.following_conversation?(root_message.message_id, member_id) ==
              expected_following
 
     context
@@ -840,9 +850,12 @@ defmodule Memba.Cucumber.MessagingSteps do
     root_message = fetch_from_context!(context, :messages, subject)
     sender_id = person_id_from_context!(context, sender_name)
 
-    assert Enum.any?(Messaging.list_conversation_messages(root_message.message_id), fn message ->
-             message.sender_id == sender_id and message.body == body
-           end)
+    assert Enum.any?(
+             MessageQueries.list_conversation_messages(root_message.message_id),
+             fn message ->
+               message.sender_id == sender_id and message.body == body
+             end
+           )
 
     context
   end
@@ -851,17 +864,22 @@ defmodule Memba.Cucumber.MessagingSteps do
     root_message = fetch_from_context!(context, :messages, subject)
     sender_id = person_id_from_context!(context, sender_name)
 
-    refute Enum.any?(Messaging.list_conversation_messages(root_message.message_id), fn message ->
-             message.sender_id == sender_id and message.body == body and
-               is_binary(message.reply_to_message_id)
-           end)
+    refute Enum.any?(
+             MessageQueries.list_conversation_messages(root_message.message_id),
+             fn message ->
+               message.sender_id == sender_id and message.body == body and
+                 is_binary(message.reply_to_message_id)
+             end
+           )
 
     context
   end
 
   defp assert_conversation_order(context, subject, earlier_body, later_body) do
     root_message = fetch_from_context!(context, :messages, subject)
-    bodies = Enum.map(Messaging.list_conversation_messages(root_message.message_id), & &1.body)
+
+    bodies =
+      Enum.map(MessageQueries.list_conversation_messages(root_message.message_id), & &1.body)
 
     earlier_index = Enum.find_index(bodies, &(&1 == earlier_body))
     later_index = Enum.find_index(bodies, &(&1 == later_body))
@@ -882,14 +900,14 @@ defmodule Memba.Cucumber.MessagingSteps do
 
     club_name
     |> then(&fetch_from_context!(context, :clubs, &1))
-    |> Messaging.list_conversations_for_club()
+    |> ConversationListing.list_for_club()
   end
 
   defp club_home_conversation_for!(context, subject) do
     conversations =
       Map.get_lazy(context, :current_club_home_conversations, fn ->
         club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
-        Messaging.list_conversations_for_club(club_id)
+        ConversationListing.list_for_club(club_id)
       end)
 
     Enum.find(conversations, &(&1.subject == subject)) ||
@@ -906,7 +924,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     reply = latest_reply_for!(context, subject, sender_name)
     dispatch_pending_email_deliveries()
 
-    member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
+    member_deliveries = DeliveryQueries.list_member_email_deliverys(reply.message_id)
     assert Enum.map(member_deliveries, & &1.recipient_name) == expected_recipient_names
 
     provider_deliveries =
@@ -941,7 +959,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     reply = latest_reply_for!(context, subject, sender_name)
     dispatch_pending_email_deliveries()
 
-    member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
+    member_deliveries = DeliveryQueries.list_member_email_deliverys(reply.message_id)
     provider_deliveries = Fake.deliveries()
 
     Enum.each(excluded_recipient_names, fn recipient_name ->
@@ -963,7 +981,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     reply = Map.fetch!(context, :last_reply)
     sender_id = person_id_from_context!(context, sender_name)
 
-    refute Enum.any?(Messaging.list_member_email_deliverys(reply.message_id), fn receipt ->
+    refute Enum.any?(DeliveryQueries.list_member_email_deliverys(reply.message_id), fn receipt ->
              receipt.recipient_id == sender_id
            end)
 
@@ -991,7 +1009,7 @@ defmodule Memba.Cucumber.MessagingSteps do
 
     token = stop_follow_url |> String.split("/") |> List.last()
 
-    result = Messaging.stop_following_conversation_from_email_token(token, consistency: :strong)
+    result = EmailConversationStopFollow.stop_following(token, consistency: :strong)
 
     assert {:ok, _scope} = result
 
@@ -1010,7 +1028,7 @@ defmodule Memba.Cucumber.MessagingSteps do
              })
 
     result =
-      Messaging.stop_following_conversation_from_email_token(token <> "tampered",
+      EmailConversationStopFollow.stop_following(token <> "tampered",
         consistency: :strong
       )
 
@@ -1022,18 +1040,21 @@ defmodule Memba.Cucumber.MessagingSteps do
     root_message = fetch_from_context!(context, :messages, subject)
     sender_id = person_id_from_context!(context, sender_name)
 
-    assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message.message_id,
-                 sender_id: sender_id,
-                 body: "I should not be able to post this."
-               },
-               consistency: :strong
-             )
+    result =
+      with {:ok, command} <-
+             PostMemberMessageReply.prepare(%{
+               message_id: reply_message_id,
+               conversation_id: root_message.message_id,
+               sender_id: sender_id,
+               body: "I should not be able to post this."
+             }),
+           {:ok, dispatch_result} <- CommandDispatch.dispatch(command, consistency: :strong) do
+        dispatch_result
+      end
 
-    refute Messaging.get_message(reply_message_id)
+    assert {:error, :not_current_member} = result
+
+    refute MessageQueries.get_message(reply_message_id)
 
     context
   end
@@ -1061,16 +1082,17 @@ defmodule Memba.Cucumber.MessagingSteps do
 
     result =
       try do
-        Messaging.send_club_message(
-          %{
-            message_id: message_id,
-            club_id: club_id,
-            sender_id: sender_id,
-            subject: subject,
-            body: body
-          },
-          consistency: :strong
-        )
+        with {:ok, command} <-
+               SendClubMessage.prepare(%{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: sender_id,
+                 subject: subject,
+                 body: body
+               }),
+             {:ok, dispatch_result} <- CommandDispatch.dispatch(command, consistency: :strong) do
+          dispatch_result
+        end
       after
         context
         |> Map.get(:messaging_email_delivery_provider_before_unavailable, :missing)
@@ -1101,7 +1123,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     references_message_ids = Keyword.get(opts, :references_message_ids, [])
 
     result =
-      Messaging.receive_inbound_club_email(
+      InboundClubEmail.receive(
         %{
           provider: "domain-cucumber",
           provider_message_id: provider_message_id(context, sender_name, subject, from_address),
@@ -1128,7 +1150,7 @@ defmodule Memba.Cucumber.MessagingSteps do
         Map.put(context, :last_rejection_reason, reason)
 
       {:ok, %{message_id: message_id, club_id: club_id, sender_id: sender_id}} ->
-        message = Messaging.get_message(message_id)
+        message = MessageQueries.get_message(message_id)
 
         if is_binary(message.reply_to_message_id) do
           record_inbound_reply_context(context, message, sender_name)
@@ -1190,7 +1212,7 @@ defmodule Memba.Cucumber.MessagingSteps do
         person_id_from_context!(context, preferred_recipient_name)
       end
 
-    deliveries = Messaging.list_recipient_deliveries(message.message_id)
+    deliveries = DeliveryQueries.list_recipient_deliveries(message.message_id)
 
     delivery =
       (preferred_recipient_id &&
@@ -1210,7 +1232,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp assert_no_club_message(context, club_name, subject) do
     club_id = fetch_from_context!(context, :clubs, club_name)
 
-    refute Enum.any?(Messaging.list_messages_for_club(club_id), &(&1.subject == subject))
+    refute Enum.any?(MessageQueries.list_messages_for_club(club_id), &(&1.subject == subject))
 
     context
   end
@@ -1219,7 +1241,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     admin_group_id = admin_group_id(context, club_name)
 
     refute Enum.any?(
-             Messaging.list_conversations_for_group(admin_group_id),
+             ConversationListing.list_for_group(admin_group_id),
              &(&1.subject == subject)
            )
 
@@ -1235,9 +1257,13 @@ defmodule Memba.Cucumber.MessagingSteps do
     message = fetch_from_context!(context, :messages, subject)
     admin_group_id = admin_group_id(context, club_name)
 
-    assert Messaging.group_has_conversation_access?(message.message_id, admin_group_id, :write)
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             message.message_id,
+             admin_group_id,
+             :write
+           )
 
-    deliveries = Messaging.list_recipient_deliveries(message.message_id)
+    deliveries = DeliveryQueries.list_recipient_deliveries(message.message_id)
 
     assert Enum.sort(Enum.map(deliveries, & &1.recipient_name)) ==
              Enum.sort(expected_recipient_names)
@@ -1265,7 +1291,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     message = fetch_from_context!(context, :messages, subject)
     recipient_id = person_id_from_context!(context, recipient_name)
 
-    refute Enum.any?(Messaging.list_recipient_deliveries(message.message_id), fn delivery ->
+    refute Enum.any?(DeliveryQueries.list_recipient_deliveries(message.message_id), fn delivery ->
              delivery.recipient_id == recipient_id
            end)
 
@@ -1291,11 +1317,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     Enum.each(viewer_names, &assert_active_member!(context, &1, club_name))
 
     refute Enum.any?(
-             Messaging.list_conversations_for_group(everyone_group_id),
+             ConversationListing.list_for_group(everyone_group_id),
              &(&1.subject == subject)
            )
 
-    assert Messaging.list_conversation_messages_for_group(
+    assert MessageQueries.list_conversation_messages_for_group(
              message.message_id,
              everyone_group_id
            ) == []
@@ -1309,7 +1335,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     sender_id = person_id_from_context!(context, sender_name)
 
     assert Enum.any?(
-             Messaging.list_conversation_messages_for_group(
+             MessageQueries.list_conversation_messages_for_group(
                root_message.message_id,
                admin_group_id
              ),
@@ -1449,7 +1475,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     message = fetch_from_context!(context, :messages, subject)
     recipient_id = person_id_from_context!(context, recipient_name)
 
-    Messaging.get_member_email_delivery(message.message_id, recipient_id) ||
+    DeliveryQueries.get_member_email_delivery(message.message_id, recipient_id) ||
       flunk("Expected a member email delivery for #{recipient_name} and #{inspect(subject)}")
   end
 
@@ -1462,7 +1488,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     message = fetch_from_context!(context, :messages, subject)
     recipient_id = person_id_from_context!(context, recipient_name)
 
-    Messaging.get_memba_staff_email_delivery(message.message_id, recipient_id) ||
+    DeliveryQueries.get_memba_staff_email_delivery(message.message_id, recipient_id) ||
       flunk("Expected Memba staff email delivery for #{recipient_name} and #{inspect(subject)}")
   end
 
@@ -1471,7 +1497,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     recipient_id = person_id_from_context!(context, recipient_name)
 
     message.message_id
-    |> Messaging.list_recipient_deliveries()
+    |> DeliveryQueries.list_recipient_deliveries()
     |> Enum.find(&(&1.recipient_id == recipient_id))
     |> case do
       %EmailDelivery{} = delivery ->
@@ -1485,14 +1511,14 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp deliveries_for_last_message!(context) do
     context
     |> Map.fetch!(:last_message_id)
-    |> Messaging.list_recipient_deliveries()
+    |> DeliveryQueries.list_recipient_deliveries()
   end
 
   defp assert_active_member!(context, person_name, club_name) do
     club_id = fetch_from_context!(context, :clubs, club_name)
     person_id = person_id_from_context!(context, normalize_person_name(person_name))
 
-    assert Membership.active_member_of_club?(club_id, person_id)
+    assert MembershipQueries.active_member_of_club?(club_id, person_id)
   end
 
   defp member_email_delivery_status_for_label("Sending"), do: "sent"
@@ -1520,13 +1546,13 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp primary_email_for(context, person_name) do
     context
     |> person_id_from_context!(person_name)
-    |> Membership.get_person_primary_email()
+    |> PersonQueries.get_person_primary_email()
   end
 
   defp email_address_for(context, person_name) do
     case Map.get(context, :people, %{}) |> Map.get(person_name) do
       %{email: email} -> email
-      person_id when is_binary(person_id) -> Membership.get_person_primary_email(person_id)
+      person_id when is_binary(person_id) -> PersonQueries.get_person_primary_email(person_id)
       nil -> default_email_for(context, person_name)
     end
   end
