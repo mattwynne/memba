@@ -4,7 +4,6 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
   alias Memba.Membership.GroupName
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundEmail
 
@@ -23,7 +22,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                 group_name: "Everyone",
                 to_address: "everyone@kmc.clubs.memba.io"
               }} ==
-               Messaging.resolve_inbound_club_email_destination([
+               InboundClubDestination.resolve([
                  "everyone@kmc.clubs.memba.io"
                ])
     end
@@ -44,7 +43,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                 group_name: "Admin",
                 to_address: "admin@kmc.clubs.memba.io"
               }} ==
-               Messaging.resolve_inbound_club_email_destination([
+               InboundClubDestination.resolve([
                  "admin@kmc.clubs.memba.io"
                ])
 
@@ -70,12 +69,12 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                 group_name: "Everyone",
                 to_address: "everyone@kmc-alpine.clubs.memba.io"
               }} ==
-               Messaging.resolve_inbound_club_email_destination([
+               InboundClubDestination.resolve([
                  "everyone@kmc-alpine.clubs.memba.io"
                ])
 
       assert {:error, :unknown_club_slug, "everyone@kmc.clubs.memba.io"} ==
-               Messaging.resolve_inbound_club_email_destination([
+               InboundClubDestination.resolve([
                  "everyone@kmc.clubs.memba.io"
                ])
     end
@@ -101,7 +100,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                 group_email_slug: "admin",
                 group_name: "Admin",
                 to_address: "admin@kmc.clubs.memba.io"
-              }} == Messaging.resolve_inbound_club_email_destination(inbound_email)
+              }} == InboundClubDestination.resolve(inbound_email)
     end
 
     test "uses the configured inbound email domain" do
@@ -119,7 +118,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                   group_name: "Everyone",
                   to_address: "everyone@kmc.example.clubs.memba.io"
                 }} ==
-                 Messaging.resolve_inbound_club_email_destination([
+                 InboundClubDestination.resolve([
                    "everyone@kmc.example.clubs.memba.io"
                  ])
       end)
@@ -131,7 +130,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
       insert_addressable_system_group!(club, :admin)
 
       assert {:error, :unsupported_recipient_address, "committee@kmc.clubs.memba.io"} ==
-               Messaging.resolve_inbound_club_email_destination([
+               InboundClubDestination.resolve([
                  "friend@example.org",
                  "committee@kmc.clubs.memba.io"
                ])
@@ -141,12 +140,12 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
       insert_membership_club!(slug: "kmc")
 
       assert {:error, :unsupported_recipient_address, "everyone@example.org"} ==
-               Messaging.resolve_inbound_club_email_destination(["everyone@example.org"])
+               InboundClubDestination.resolve(["everyone@example.org"])
     end
 
     test "rejects a known group slug on an unknown club subdomain" do
       assert {:error, :unknown_club_slug, "admin@unknown.clubs.memba.io"} ==
-               Messaging.resolve_inbound_club_email_destination([
+               InboundClubDestination.resolve([
                  "admin@unknown.clubs.memba.io"
                ])
     end
@@ -155,21 +154,21 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
       insert_membership_club!(slug: "kmc")
 
       assert {:error, :unsupported_recipient_address, "kmc@clubs.memba.io"} ==
-               Messaging.resolve_inbound_club_email_destination(["kmc@clubs.memba.io"])
+               InboundClubDestination.resolve(["kmc@clubs.memba.io"])
     end
 
     test "rejects malformed or missing recipient input as unsupported" do
       assert {:error, :unsupported_recipient_address, nil} ==
-               Messaging.resolve_inbound_club_email_destination([])
+               InboundClubDestination.resolve([])
 
       assert {:error, :unsupported_recipient_address, nil} ==
-               Messaging.resolve_inbound_club_email_destination(nil)
+               InboundClubDestination.resolve(nil)
 
       assert {:error, :unsupported_recipient_address, "not-an-email-address"} ==
-               Messaging.resolve_inbound_club_email_destination(["not-an-email-address"])
+               InboundClubDestination.resolve(["not-an-email-address"])
 
       assert {:error, :unsupported_recipient_address, "not_safe@clubs.memba.io"} ==
-               Messaging.resolve_inbound_club_email_destination(["not_safe@clubs.memba.io"])
+               InboundClubDestination.resolve(["not_safe@clubs.memba.io"])
     end
   end
 

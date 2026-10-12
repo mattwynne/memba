@@ -1,7 +1,6 @@
 defmodule Memba.Messaging.InboundClubSenderTest do
   use Memba.DataCase, async: true
 
-  alias Memba.Messaging
   alias Memba.Messaging.InboundClubSender
   alias Memba.Messaging.InboundEmail
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -24,7 +23,7 @@ defmodule Memba.Messaging.InboundClubSenderTest do
                 person_id: alice.person_id,
                 name: "Alice Example",
                 from_address: "alice@example.com"
-              }} == Messaging.resolve_inbound_club_email_sender(" Alice@Example.COM ")
+              }} == InboundClubSender.resolve(" Alice@Example.COM ")
     end
 
     test "resolves a sender from any alternate email address" do
@@ -52,18 +51,18 @@ defmodule Memba.Messaging.InboundClubSenderTest do
                 person_id: alice.person_id,
                 name: "Alice Example",
                 from_address: "alice.work@example.com"
-              }} == Messaging.resolve_inbound_club_email_sender(inbound_email)
+              }} == InboundClubSender.resolve(inbound_email)
     end
 
     test "rejects unknown, blank, or missing sender addresses" do
       assert {:error, :unknown_sender, "unknown@example.com"} ==
-               Messaging.resolve_inbound_club_email_sender("unknown@example.com")
+               InboundClubSender.resolve("unknown@example.com")
 
       assert {:error, :unknown_sender, nil} ==
-               Messaging.resolve_inbound_club_email_sender("   ")
+               InboundClubSender.resolve("   ")
 
       assert {:error, :unknown_sender, nil} ==
-               Messaging.resolve_inbound_club_email_sender(nil)
+               InboundClubSender.resolve(nil)
     end
 
     test "rejects a pending known email address as an unknown sender" do
@@ -78,7 +77,7 @@ defmodule Memba.Messaging.InboundClubSenderTest do
       verify_email_address!("alice@example.com")
 
       assert {:error, :unknown_sender, "alice.pending@example.com"} ==
-               Messaging.resolve_inbound_club_email_sender(" Alice.Pending@Example.COM ")
+               InboundClubSender.resolve(" Alice.Pending@Example.COM ")
     end
   end
 

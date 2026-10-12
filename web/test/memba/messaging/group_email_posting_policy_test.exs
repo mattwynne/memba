@@ -1,9 +1,12 @@
 defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
+  alias Memba.Messaging.InboundClubEmailPreparation
   alias Memba.Membership
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
   alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
@@ -19,7 +22,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
       add_member!(club.club_id, alice.person_id)
 
       assert :ok ==
-               Messaging.authorize_inbound_club_email_sender(
+               InboundClubEmailPreparation.authorize(
                  sender(alice, "alice@example.com"),
                  destination(club, "kmc@clubs.memba.io")
                )
@@ -38,7 +41,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                 from_address: "pat@example.com",
                 to_address: "kmc@clubs.memba.io"
               }} ==
-               Messaging.authorize_inbound_club_email_sender(
+               InboundClubEmailPreparation.authorize(
                  sender(pat, "pat@example.com"),
                  destination(kmc, "kmc@clubs.memba.io")
                )
@@ -51,13 +54,13 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
       add_member!(club.club_id, bob.person_id)
       add_member!(club.club_id, alice.person_id)
 
-      refute Membership.active_member_of_group?(
+      refute MembershipQueries.active_member_of_group?(
                SystemGroups.admin_group_id(club.club_id),
                alice.person_id
              )
 
       assert :ok ==
-               Messaging.authorize_inbound_club_email_sender(
+               InboundClubEmailPreparation.authorize(
                  sender(alice, "alice@example.com"),
                  admin_destination(club, "admin@kmc.clubs.memba.io")
                )
@@ -93,7 +96,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
       }
 
       assert {:error, :sender_not_active_member, _details} =
-               Messaging.authorize_inbound_club_email_sender(
+               InboundClubEmailPreparation.authorize(
                  sender(eve, "eve@example.com"),
                  custom_destination
                )
@@ -111,7 +114,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                )
 
       assert :ok =
-               Messaging.authorize_inbound_club_email_sender(
+               InboundClubEmailPreparation.authorize(
                  sender(eve, "eve@example.com"),
                  custom_destination
                )
@@ -141,7 +144,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                 from_address: "alice@example.com",
                 to_address: "kmc@clubs.memba.io"
               }} ==
-               Messaging.authorize_inbound_club_email_sender(
+               InboundClubEmailPreparation.authorize(
                  sender(alice, "alice@example.com"),
                  destination(club, "kmc@clubs.memba.io")
                )
@@ -193,7 +196,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                consistency: :strong
              )
 
-    Membership.get_club(club_id)
+    ClubGroupQueries.get_club(club_id)
   end
 
   defp create_person!(attrs) do
@@ -209,7 +212,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                consistency: :strong
              )
 
-    Membership.get_person(person_id)
+    PersonQueries.get_person(person_id)
   end
 
   defp add_member!(club_id, person_id) do

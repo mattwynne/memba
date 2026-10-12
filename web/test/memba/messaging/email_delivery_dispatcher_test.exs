@@ -3,6 +3,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
   import ExUnit.CaptureLog
 
+  alias Memba.Messaging.ConversationGroupAccessQueries
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
@@ -592,7 +593,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           set: [active: false]
         )
 
-      refute Messaging.member_has_conversation_access?(
+      refute ConversationGroupAccessQueries.member_has_conversation_access?(
                message.message_id,
                message.club_id,
                delivery.recipient_id,

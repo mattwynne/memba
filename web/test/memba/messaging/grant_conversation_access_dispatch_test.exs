@@ -1,6 +1,7 @@
 defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Messaging.ConversationGroupAccessQueries
   alias Commanded.Commands.ExecutionResult
   alias Memba.Messaging
   alias Memba.Messaging.App
@@ -114,8 +115,17 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
                access_level: :write
              })
 
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
-    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             group_id,
+             :write
+           )
+
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             group_id,
+             :read
+           )
   end
 
   test "initial-access API cannot widen a conversation that already has an audience" do
@@ -141,8 +151,17 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
                access_level: :write
              })
 
-    assert Messaging.group_has_conversation_access?(conversation_id, admin_group_id, :write)
-    refute Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
+    assert ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             admin_group_id,
+             :write
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             everyone_group_id,
+             :read
+           )
 
     assert {:ok, %ExecutionResult{events: []}} =
              App.dispatch(
@@ -180,11 +199,20 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
                consistency: :eventual
              )
 
-    refute Messaging.group_has_conversation_access?(conversation_id, first_group_id, :read)
-    refute Messaging.group_has_conversation_access?(conversation_id, second_group_id, :read)
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             first_group_id,
+             :read
+           )
+
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             second_group_id,
+             :read
+           )
 
     assert {:error, :ambiguous_conversation_audience} =
-             Messaging.resolve_conversation_audience(conversation_id)
+             ConversationGroupAccessQueries.resolve_conversation_audience(conversation_id)
   end
 
   test "an unprojected canonical revocation denies stale projected access" do
@@ -213,10 +241,14 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
                consistency: :eventual
              )
 
-    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             group_id,
+             :read
+           )
 
     assert {:error, :conversation_audience_not_found} =
-             Messaging.resolve_conversation_audience(conversation_id)
+             ConversationGroupAccessQueries.resolve_conversation_audience(conversation_id)
   end
 
   test "public API revokes access, projects the removal, and is idempotent" do
@@ -240,7 +272,11 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
                group_id: group_id
              })
 
-    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
+    refute ConversationGroupAccessQueries.group_has_conversation_access?(
+             conversation_id,
+             group_id,
+             :read
+           )
 
     assert {:ok,
             %ExecutionResult{

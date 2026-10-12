@@ -1,9 +1,9 @@
 defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Messaging.DeliveryQueries
   alias Commanded.Commands.ExecutionResult
   alias Commanded.Event.Mapper
-  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.EmailDeliveryOpened
@@ -89,14 +89,14 @@ defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
                recipient_id: ^recipient_id,
                status: "sent"
              }
-           ] = Messaging.list_member_email_deliverys(message_id)
+           ] = DeliveryQueries.list_member_email_deliverys(message_id)
 
     assert %MemberEmailDeliveryProjection{
              delivery_id: ^delivery_id,
              message_id: ^message_id,
              recipient_id: ^recipient_id,
              status: "sent"
-           } = Messaging.get_member_email_delivery(message_id, recipient_id)
+           } = DeliveryQueries.get_member_email_delivery(message_id, recipient_id)
 
     assert [
              %MembaStaffEmailDeliveryProjection{
@@ -106,7 +106,7 @@ defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
                status: "sent",
                reason: nil
              }
-           ] = Messaging.list_operator_email_deliveries(message_id)
+           ] = DeliveryQueries.list_operator_email_deliveries(message_id)
 
     assert %MembaStaffEmailDeliveryProjection{
              delivery_id: ^delivery_id,
@@ -114,6 +114,6 @@ defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
              recipient_id: ^recipient_id,
              status: "sent",
              reason: nil
-           } = Messaging.get_memba_staff_email_delivery(message_id, recipient_id)
+           } = DeliveryQueries.get_memba_staff_email_delivery(message_id, recipient_id)
   end
 end

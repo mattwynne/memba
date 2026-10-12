@@ -1,7 +1,7 @@
 defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Messaging
+  alias Memba.Messaging.MessageSourceQueries
   alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
@@ -44,7 +44,7 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
              rejection_email_delivery_reference: nil,
              inserted_at: %DateTime{},
              updated_at: %DateTime{}
-           } = Messaging.get_inbound_email_source("resend", "email-123")
+           } = MessageSourceQueries.get_inbound_email_source("resend", "email-123")
   end
 
   test "rejected inbound club email events project source status and rejection audit fields" do
@@ -78,7 +78,7 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
              rejection_email_delivery_reference: "resend-rejection-123",
              inserted_at: %DateTime{},
              updated_at: %DateTime{}
-           } = Messaging.get_inbound_email_source(" resend ", " EMAIL-456 ")
+           } = MessageSourceQueries.get_inbound_email_source(" resend ", " EMAIL-456 ")
   end
 
   test "inbound source projection enforces provider message id uniqueness defensively" do
@@ -128,19 +128,19 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
         updated_at: now
       })
 
-    assert Messaging.get_inbound_email_source(" RESEND ", " SHARED-ID ") == source
-    assert is_nil(Messaging.get_inbound_email_source("postmark", "shared-id"))
+    assert MessageSourceQueries.get_inbound_email_source(" RESEND ", " SHARED-ID ") == source
+    assert is_nil(MessageSourceQueries.get_inbound_email_source("postmark", "shared-id"))
   end
 
   test "inbound source query returns nil for absent or invalid provider identity" do
-    assert is_nil(Messaging.get_inbound_email_source("resend", "missing"))
-    assert is_nil(Messaging.get_inbound_email_source(nil, "email-123"))
-    assert is_nil(Messaging.get_inbound_email_source("resend", nil))
-    assert is_nil(Messaging.get_inbound_email_source("", "email-123"))
-    assert is_nil(Messaging.get_inbound_email_source("resend", ""))
-    assert is_nil(Messaging.get_inbound_email_source("  ", "email-123"))
-    assert is_nil(Messaging.get_inbound_email_source("resend", "  "))
-    assert is_nil(Messaging.get_inbound_email_source(:resend, "email-123"))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source("resend", "missing"))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source(nil, "email-123"))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source("resend", nil))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source("", "email-123"))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source("resend", ""))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source("  ", "email-123"))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source("resend", "  "))
+    assert is_nil(MessageSourceQueries.get_inbound_email_source(:resend, "email-123"))
   end
 
   defp projector_metadata(event_number) do

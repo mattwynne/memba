@@ -3,6 +3,9 @@ defmodule Memba.Messaging.PostMessageReplyTest do
 
   import Ecto.Query
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.MessageQueries
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddGroupMember
@@ -204,7 +207,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              reply_to_message_id: ^root_message_id,
              subject: "Trip planning night",
              body: "I can bring maps."
-           } = Messaging.get_message(reply_message_id)
+           } = MessageQueries.get_message(reply_message_id)
 
     assert [
              %EmailDeliveryProjection{
@@ -456,7 +459,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
                consistency: :strong
              )
 
-    assert Messaging.following_conversation?(root_message_id, bob.person_id)
+    assert ConversationFollowQueries.following_conversation?(root_message_id, bob.person_id)
     assert pending_deliveries_for_message(absent_reply_id) == []
 
     add_group_member(club_id, group_id, bob_membership_id, bob.person_id)
@@ -618,7 +621,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   end
 
   defp ensure_club(club_id) do
-    if is_nil(Memba.Membership.get_club(club_id)) do
+    if is_nil(ClubGroupQueries.get_club(club_id)) do
       assert :ok =
                MembershipApp.dispatch(
                  %CreateClub{

@@ -1,6 +1,8 @@
 defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.ClubGroupQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
@@ -247,8 +249,8 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                consistency: :strong
              )
 
-    club = Memba.Membership.get_club(club_id)
-    person = Memba.Membership.get_person(person_id)
+    club = ClubGroupQueries.get_club(club_id)
+    person = PersonQueries.get_person(person_id)
 
     root_message_id = Memba.ID.generate(:message)
 
@@ -444,7 +446,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
              )
 
     assert Enum.any?(
-             Memba.Membership.list_discoverable_groups_for_member(
+             ClubGroupQueries.list_discoverable_groups_for_member(
                club_id,
                bob_person_id
              ),
@@ -452,7 +454,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
            )
 
     refute Enum.any?(
-             Memba.Membership.list_active_groups_for_member(club_id, bob_person_id),
+             ClubGroupQueries.list_active_groups_for_member(club_id, bob_person_id),
              &(&1.group_id == group_id)
            )
 

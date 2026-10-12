@@ -1,8 +1,11 @@
 defmodule Memba.Messaging.RequestGroupAccessTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AuthoritativeMembershipQueries
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Messaging.ConversationFollowQueries
+  alias Memba.Messaging.ConversationGroupAccessQueries
   alias Commanded.Commands.ExecutionResult
-  alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddGroupMember
@@ -164,20 +167,20 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
                consistency: :strong
              )
 
-    refute Membership.active_member_of_group_authoritatively?(
+    refute AuthoritativeMembershipQueries.active_member_of_group_authoritatively?(
              club.club_id,
              board_id,
              eve.person_id
            )
 
-    refute Messaging.member_has_conversation_access?(
+    refute ConversationGroupAccessQueries.member_has_conversation_access?(
              message_id,
              club.club_id,
              eve.person_id,
              :read
            )
 
-    refute Messaging.following_conversation?(message_id, eve.person_id)
+    refute ConversationFollowQueries.following_conversation?(message_id, eve.person_id)
     assert Fake.deliveries() == []
   end
 
@@ -283,7 +286,7 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
                consistency: :eventual
              )
 
-    assert Membership.active_member_of_club?(club.club_id, eve.person_id)
+    assert MembershipQueries.active_member_of_club?(club.club_id, eve.person_id)
 
     assert {:error, :member_not_active} =
              request_access(club, eve, board_id)
@@ -336,14 +339,14 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
              )
            )
 
-    assert Messaging.member_has_conversation_access?(
+    assert ConversationGroupAccessQueries.member_has_conversation_access?(
              message_id,
              club.club_id,
              alice.person_id,
              :write
            )
 
-    assert Messaging.following_conversation?(message_id, alice.person_id)
+    assert ConversationFollowQueries.following_conversation?(message_id, alice.person_id)
   end
 
   test "propagates ordinary :ok, execution-result, and dispatch-error outcomes" do

@@ -1,6 +1,7 @@
 defmodule Memba.Messaging.StatusReportApiTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Messaging.DeliveryQueries
   alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
@@ -60,24 +61,25 @@ defmodule Memba.Messaging.StatusReportApiTest do
                consistency: :strong
              )
 
-    assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+    assert DeliveryQueries.get_member_email_delivery(message_id, bob.person_id).status ==
+             "delivered"
 
-    assert Messaging.get_member_email_delivery(message_id, carol.person_id).status ==
+    assert DeliveryQueries.get_member_email_delivery(message_id, carol.person_id).status ==
              "delivery problem"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).status ==
+    assert DeliveryQueries.get_memba_staff_email_delivery(message_id, carol.person_id).status ==
              "delayed"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).reason ==
+    assert DeliveryQueries.get_memba_staff_email_delivery(message_id, carol.person_id).reason ==
              "recipient server is temporarily unavailable"
 
-    assert Messaging.get_member_email_delivery(message_id, dana.person_id).status ==
+    assert DeliveryQueries.get_member_email_delivery(message_id, dana.person_id).status ==
              "delivery problem"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status ==
+    assert DeliveryQueries.get_memba_staff_email_delivery(message_id, dana.person_id).status ==
              "bounced"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status ==
+    assert DeliveryQueries.get_memba_staff_email_delivery(message_id, alice.person_id).status ==
              "spam complaint"
   end
 
