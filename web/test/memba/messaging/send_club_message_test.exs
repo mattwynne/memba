@@ -20,7 +20,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
   alias Memba.Messaging.ConversationFollowPreparation
   alias Memba.Messaging.CurrentMemberConversationFollow
   alias Memba.Messaging.PostMemberMessageReply
@@ -130,7 +130,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                  | delivery_events
                ]
              }}} =
-             Messaging.CommandDispatch.dispatch(
+             MessagingDispatch.dispatch(
                command,
                returning: :execution_result,
                consistency: :strong
@@ -261,7 +261,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                  | delivery_events
                ]
              }}} =
-             Messaging.CommandDispatch.dispatch(
+             MessagingDispatch.dispatch(
                command,
                returning: :execution_result,
                consistency: :strong
@@ -332,7 +332,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                  | delivery_events
                ]
              }}} =
-             Messaging.CommandDispatch.dispatch(
+             MessagingDispatch.dispatch(
                command,
                returning: :execution_result,
                consistency: :strong
@@ -383,7 +383,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Only current Board members should receive this."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -406,7 +406,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        member_id: carol.person_id
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -445,7 +445,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Rejoining the club must not restore this private action."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -478,7 +478,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Carol should not be resolved as a recipient."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        returning: :execution_result,
                        consistency: :strong
                      ) do
@@ -519,7 +519,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Do not hand this off using stale access."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -555,7 +555,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "A stale membership projection must not authorize this reply."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -569,7 +569,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        member_id: carol.person_id
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -588,7 +588,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "A stale compose view must not authorize this message."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -653,7 +653,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Carol joined before this was posted."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        returning: :execution_result,
                        consistency: [MessageProjector]
                      ) do
@@ -693,7 +693,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Initial discussion."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -705,7 +705,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        member_id: carol.person_id
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -733,7 +733,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Posted while Carol is absent."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -769,7 +769,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Posted after Carol rejoins."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        returning: :execution_result,
                        consistency: [MessageProjector]
                      ) do
@@ -835,7 +835,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "A stale recipient projection must not create Carol's delivery."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        returning: :execution_result,
                        consistency: :strong
                      ) do
@@ -887,7 +887,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Carol initially has access."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: [MessageProjector]) do
+                     MessagingDispatch.dispatch(command, consistency: [MessageProjector]) do
                 dispatch_result
               end)
 
@@ -899,7 +899,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        member_id: carol.person_id
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        consistency: [ConversationFollowProjector]
                      ) do
                 dispatch_result
@@ -963,7 +963,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Carol must not receive this after rejoining only Everyone."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        returning: :execution_result,
                        consistency: [MessageProjector]
                      ) do
@@ -996,7 +996,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        subject: "Private topic",
                        body: "Please discuss this with the selected group."
                      }),
-                   {:ok, dispatch_result} <- Messaging.CommandDispatch.dispatch(command, []) do
+                   {:ok, dispatch_result} <- MessagingDispatch.dispatch(command, []) do
                 dispatch_result
               end)
 
@@ -1024,7 +1024,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        subject: "Cross-club topic",
                        body: "This must not create a conversation."
                      }),
-                   {:ok, dispatch_result} <- Messaging.CommandDispatch.dispatch(command, []) do
+                   {:ok, dispatch_result} <- MessagingDispatch.dispatch(command, []) do
                 dispatch_result
               end)
 
@@ -1104,7 +1104,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Bring route ideas."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        returning: :execution_result,
                        consistency: :strong
                      ) do
@@ -1155,7 +1155,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Bring route ideas."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command,
+                     MessagingDispatch.dispatch(command,
                        returning: :execution_result,
                        consistency: :strong
                      ) do
@@ -1183,7 +1183,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        subject: "  ",
                        body: "Bring route ideas."
                      }),
-                   {:ok, dispatch_result} <- Messaging.CommandDispatch.dispatch(command, []) do
+                   {:ok, dispatch_result} <- MessagingDispatch.dispatch(command, []) do
                 dispatch_result
               end)
 
@@ -1218,7 +1218,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Bring route ideas."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -1250,7 +1250,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Bring route ideas."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 
@@ -1307,7 +1307,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                        body: "Bring route ideas."
                      }),
                    {:ok, dispatch_result} <-
-                     Messaging.CommandDispatch.dispatch(command, consistency: :strong) do
+                     MessagingDispatch.dispatch(command, consistency: :strong) do
                 dispatch_result
               end)
 

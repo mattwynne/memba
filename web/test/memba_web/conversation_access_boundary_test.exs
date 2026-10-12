@@ -21,10 +21,10 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
       source = read_source!(relative_path)
 
       refute source =~ "Memba.Membership.Projections",
-             "#{relative_path} must use the public Membership API"
+             "#{relative_path} must use focused Membership boundaries"
 
       refute source =~ "Memba.Messaging.Projections",
-             "#{relative_path} must use the public Messaging API"
+             "#{relative_path} must use focused Messaging boundaries"
 
       refute source =~ "import Ecto.Query",
              "#{relative_path} must not build projection queries"
@@ -48,7 +48,6 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
     assert source =~ "AuthoritativeMembershipQueries.active_member_of_group_authoritatively?("
     assert source =~ "ConversationListing.list_for_group("
     assert source =~ "PersonQueries.find_member_for_email("
-    refute source =~ "Membership.find_member_for_email("
   end
 
   test "detail and compose access use public context authorization boundaries" do
@@ -65,14 +64,11 @@ defmodule MembaWeb.ConversationAccessBoundaryTest do
     source = read_source!("lib/memba_web/controllers/conversation_follow_controller.ex")
 
     assert source =~ "ClubGroupQueries.get_club("
-    refute source =~ "Membership.get_club("
   end
 
-  test "scoped email member resolution lives in PersonQueries behind the facade" do
-    facade = read_source!("lib/memba/membership.ex")
+  test "scoped email member resolution lives in PersonQueries" do
     query = read_source!("lib/memba/membership/person_queries.ex")
 
-    assert facade =~ "do: PersonQueries.find_member_for_email(members, email)"
     assert query =~ "case get_person_by_email(email) do"
     assert query =~ "Enum.find(members, &(&1.id == person_id))"
   end

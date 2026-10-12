@@ -12,9 +12,9 @@ defmodule Memba.Membership.Commands.CreateGroup do
   work and event-sourced fixture setup. It deliberately remains actor-free so
   those existing producers can replay and repair historical group definitions.
 
-  User-facing custom-group creation must instead use
-  `Memba.Membership.create_custom_group/2`, whose actor-bearing command is
-  authorized by the Club aggregate.
+  User-facing custom-group creation must instead prepare an actor-bearing
+  command with `Memba.Membership.CustomGroup.Create.prepare/1` and dispatch it
+  through `Memba.Membership.CommandDispatch`. The Club aggregate authorizes it.
   """
 
   @enforce_keys [:club_id, :group_id, :name]
