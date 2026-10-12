@@ -4,10 +4,109 @@ defmodule Memba.Membership.PersonEmailVerificationReplacementTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonEmailAddressCommands
   alias Memba.Membership.PersonEmailVerification
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Projections.PersonEmailAddress
+
+  test "replace/2 preserves verified addresses and revokes removed pending verification tokens" do
+    person_id = Memba.ID.generate(:person)
+    verified_at = ~U[2026-07-13 20:00:00.000000Z]
+    parent = self()
+
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice",
+               email: "alice@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             PersonEmailAddressCommands.prepare_add(%{
+               person_id: person_id,
+               email: " Alice+Verified@Example.COM "
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             PersonEmailAddressCommands.prepare_verify(%{
+               person_id: person_id,
+               email: "alice+verified@example.com",
+               verified_at: verified_at
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             PersonEmailAddressCommands.prepare_add(%{
+               person_id: person_id,
+               email: " Alice+Stale@Example.COM "
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    verification_revoker = fn request ->
+      send(parent, {:verification_revoked, request})
+      :ok
+    end
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonEmailAddressesReplaced{
+                  person_id: ^person_id,
+                  primary_email: "alice@example.com",
+                  email_addresses: [
+                    %{
+                      normalized_email: "alice@example.com",
+                      is_primary: true,
+                      verified_at: %DateTime{}
+                    },
+                    %{
+                      normalized_email: "alice+verified@example.com",
+                      is_primary: false,
+                      verified_at: ^verified_at
+                    }
+                  ]
+                }
+              ]
+            }} =
+             PersonEmailVerification.replace(
+               %{
+                 person_id: person_id,
+                 email_addresses: [
+                   %{email: "alice@example.com", is_primary: true},
+                   %{email: "Alice+Verified@Example.COM", is_primary: false}
+                 ]
+               },
+               returning: :execution_result,
+               consistency: :strong,
+               verification_revoker: verification_revoker
+             )
+
+    assert_received {:verification_revoked,
+                     %{
+                       person_id: ^person_id,
+                       email: "Alice+Stale@Example.COM",
+                       normalized_email: "alice+stale@example.com"
+                     }}
+
+    assert %PersonEmailAddress{verified_at: ^verified_at} =
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice+verified@example.com"
+             )
+
+    refute Repo.get_by(PersonEmailAddress,
+             person_id: person_id,
+             normalized_email: "alice+stale@example.com"
+           )
+  end
 
   test "replace/2 keeps staff-added alternate addresses pending" do
     person_id = Memba.ID.generate(:person)
