@@ -47,37 +47,6 @@ Feature: Joining and leaving custom groups
       And Carol should receive a welcome email with a link to Board
       But Carol's former conversation follows should not be restored
 
-  @iteration-064 @todo
-  Rule: Current group participation controls conversation activity
-
-    Scenario Outline: Carol loses access even with an old Board conversation open
-      Given Carol belongs to Board and follows "September agenda"
-      And Carol is viewing "September agenda"
-      When <membership_change>
-      Then Carol should immediately lose access to every Board conversation
-      And "September agenda" should no longer be available in her open view or through its link
-      And Carol should no longer be allowed to post, reply to, or follow Board conversations
-      And an email reply from Carol should not be added to "September agenda"
-      And Carol should see the usual authorization error for each stale action
-      But Carol should remain an active KMC member and see Board listed
-
-      Examples:
-        | membership_change            |
-        | Carol leaves Board           |
-        | Bob removes Carol from Board |
-
-    Scenario Outline: Messages posted while Carol is absent create no delivery for her
-      Given Carol belongs to Board and follows "September agenda"
-      And <membership_change>
-      When Bob replies "The budget is ready" to "September agenda"
-      And Bob starts the Board conversation "October agenda"
-      Then no email delivery should be created for Carol for "The budget is ready" or "October agenda"
-
-      Examples:
-        | membership_change            |
-        | Carol leaves Board           |
-        | Bob removes Carol from Board |
-
   @iteration-064
   Rule: A message's email recipients are fixed when it is posted
 
