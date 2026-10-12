@@ -6,8 +6,9 @@ defmodule Memba.Membership.Router do
   club roles and their invariants. There is no membership-ID aggregate route.
 
   The router also retains trusted actor-free commands used by Membership
-  policies and backfills. Web delivery uses the public `Memba.Membership`
-  application service rather than dispatching those commands directly.
+  policies and backfills. Web delivery prepares actor-bearing commands through
+  focused Membership modules and submits them through `CommandDispatch`
+  rather than dispatching trusted actor-free commands directly.
   """
 
   use Commanded.Commands.Router

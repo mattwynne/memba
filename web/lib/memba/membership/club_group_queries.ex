@@ -2,8 +2,8 @@ defmodule Memba.Membership.ClubGroupQueries do
   @moduledoc """
   Projected club and conversation-group reads for the Membership context.
 
-  Queries here do not depend on the Membership application service. Public
-  callers continue to use `Memba.Membership` as their stable API.
+  Queries here are the focused projected-read boundary for callers; they do
+  not depend on a broad Membership application service.
   """
 
   import Ecto.Query

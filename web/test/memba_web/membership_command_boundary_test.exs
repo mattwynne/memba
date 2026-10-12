@@ -5,7 +5,7 @@ defmodule MembaWeb.MembershipCommandBoundaryTest do
 
   @internal_membership_namespace ["Memba", "Membership", "Commands"]
 
-  test "web delivery does not bypass the public Membership command boundary" do
+  test "web delivery does not bypass actor-bearing Membership command preparation" do
     manifest = Path.join(Mix.Project.manifest_path(), "compile.elixir")
     {_modules, sources} = ElixirCompiler.read_manifest(manifest)
 
@@ -21,7 +21,7 @@ defmodule MembaWeb.MembershipCommandBoundaryTest do
 
     assert violations == [],
            """
-           web delivery must use the public Memba.Membership API, not internal commands:
+           web delivery must prepare actor-bearing Membership commands, not dispatch trusted internal commands:
            #{format_violations(violations)}
            """
   end

@@ -181,72 +181,6 @@ club_id = Map.fetch!(payload, "clubId")
   assertNotMembershipAdministrator(world, personName, clubName);
 }
 
-function makeMembershipAdministrator(world, actorName, targetName, clubName) {
-  const actor = memberStatus(world, actorName, clubName);
-  const target = ensureMember(world, targetName, clubName);
-
-  assert.ok(actor.personId, `Expected ${actorName} to be known in ${clubName}`);
-
-  const result = membershipAdministratorCommand("assign", {
-    actorPersonId: actor.personId,
-    clubId: target.clubId,
-    membershipId: target.membershipId,
-    personId: target.personId
-  });
-
-  assert.deepEqual(result, { status: "ok" });
-  world.lastMembershipAdministrationResult = result;
-}
-
-function tryMakeMembershipAdministrator(world, actorName, targetName, clubName) {
-  const actor = memberStatus(world, actorName, clubName);
-  const target = ensureMember(world, targetName, clubName);
-
-  assert.ok(actor.personId, `Expected ${actorName} to be known in ${clubName}`);
-
-  const result = membershipAdministratorCommand("assign", {
-    actorPersonId: actor.personId,
-    clubId: target.clubId,
-    membershipId: target.membershipId,
-    personId: target.personId
-  });
-
-  assert.deepEqual(result, { status: "error", reason: "unauthorized" });
-  world.lastMembershipAdministrationResult = result;
-}
-
-function removeMembershipAdministrator(world, actorName, targetName, clubName) {
-  const actor = memberStatus(world, actorName, clubName);
-  const target = memberStatus(world, targetName, clubName);
-
-  const result = membershipAdministratorCommand("remove", {
-    actorPersonId: actor.personId,
-    clubId: target.clubId,
-    membershipId: target.membershipId,
-    personId: target.personId
-  });
-
-  assert.deepEqual(result, { status: "ok" });
-}
-
-function tryRemoveClubMembershipAdministrator(world, actorName, targetName, clubName) {
-  const actor = memberStatus(world, actorName, clubName);
-  const target = memberStatus(world, targetName, clubName);
-
-  assert.ok(actor.personId, `Expected ${actorName} to be known in ${clubName}`);
-  assert.ok(target.membershipId, `Expected ${targetName} to be an active member of ${clubName}`);
-
-  const result = membershipAdministratorCommand("remove", {
-    actorPersonId: actor.personId,
-    clubId: target.clubId,
-    membershipId: target.membershipId,
-    personId: target.personId
-  });
-
-  assert.deepEqual(result, { status: "error", reason: "last_membership_administrator" });
-  world.lastMembershipAdministrationResult = result;
-}
-
 async function removeMemberAsStaff(world, personName, clubName) {
   const member = memberStatus(world, personName, clubName);
 
@@ -474,34 +408,6 @@ count =
   ).count;
 }
 
-function membershipAdministratorCommand(action, attrs) {
-  const functionName =
-    action === "assign"
-      ? "assign_membership_administrator_as_club_member"
-      : "remove_membership_administrator_as_club_member";
-
-  return serverCommands.runCommand(
-    `
-function_name = Map.fetch!(payload, "functionName")
-
-attrs = %{
-  club_id: Map.fetch!(payload, "clubId"),
-  membership_id: Map.fetch!(payload, "membershipId"),
-  person_id: Map.fetch!(payload, "personId"),
-  actor_person_id: Map.fetch!(payload, "actorPersonId")
-}
-
-result = apply(Memba.Membership, String.to_existing_atom(function_name), [attrs, [consistency: :strong]])
-
-case result do
-  :ok -> %{status: "ok"}
-  {:error, reason} -> %{status: "error", reason: to_string(reason)}
-end
-`,
-    { ...attrs, functionName }
-  );
-}
-
 function rememberMember(world, member) {
   ensureState(world);
 
@@ -539,9 +445,5 @@ module.exports = {
   ensureMembershipAdministrators,
   ensureOnlyMembershipAdministrator,
   ensureOrdinaryMember,
-  makeMembershipAdministrator,
-  removeMemberAsStaff,
-  removeMembershipAdministrator,
-  tryMakeMembershipAdministrator,
-  tryRemoveClubMembershipAdministrator
+  removeMemberAsStaff
 };

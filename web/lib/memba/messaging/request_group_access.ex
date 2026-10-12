@@ -1,7 +1,8 @@
 defmodule Memba.Messaging.RequestGroupAccess do
   @moduledoc """
   Prepare a current member's request to join a custom group as an ordinary
-  message to the club Admin group. Dispatch belongs to the Messaging API.
+  message to the club Admin group. Callers submit the prepared command through
+  `Memba.Messaging.CommandDispatch`.
   """
 
   alias Memba.ID
