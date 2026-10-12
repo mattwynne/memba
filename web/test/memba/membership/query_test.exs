@@ -1,7 +1,6 @@
 defmodule Memba.Membership.QueryTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.Commands.AddGroupMember
@@ -13,6 +12,8 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.MembershipQueries
+  alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
@@ -867,22 +868,22 @@ defmodule Memba.Membership.QueryTest do
 
       pending |> Ecto.Changeset.change(verified_at: nil) |> Repo.update!()
 
-      assert %PersonProjection{person_id: person_id} = Membership.get_person(alice.person_id)
+      assert %PersonProjection{person_id: person_id} = PersonQueries.get_person(alice.person_id)
       assert person_id == alice.person_id
-      assert Membership.get_person(nil) == nil
-      assert Membership.get_person("not-a-uuid") == nil
+      assert PersonQueries.get_person(nil) == nil
+      assert PersonQueries.get_person("not-a-uuid") == nil
 
       assert %PersonProjection{person_id: ^person_id} =
-               Membership.get_person_by_email(" ALICE+OTHER@EXAMPLE.COM ")
+               PersonQueries.get_person_by_email(" ALICE+OTHER@EXAMPLE.COM ")
 
-      assert Membership.get_verified_person_by_email(" ALICE+OTHER@EXAMPLE.COM ") == nil
+      assert PersonQueries.get_verified_person_by_email(" ALICE+OTHER@EXAMPLE.COM ") == nil
 
       assert %PersonProjection{person_id: ^person_id} =
-               Membership.get_verified_person_by_email(" ALICE@EXAMPLE.COM ")
+               PersonQueries.get_verified_person_by_email(" ALICE@EXAMPLE.COM ")
 
       for invalid <- [nil, " ", "missing@example.com"] do
-        assert Membership.get_person_by_email(invalid) == nil
-        assert Membership.get_verified_person_by_email(invalid) == nil
+        assert PersonQueries.get_person_by_email(invalid) == nil
+        assert PersonQueries.get_verified_person_by_email(invalid) == nil
       end
     end
 
@@ -909,7 +910,7 @@ defmodule Memba.Membership.QueryTest do
                  primary_email: "legacy@example.com"
                }
              } =
-               Membership.list_person_contact_summaries([
+               PersonQueries.list_person_contact_summaries([
                  alice.person_id,
                  legacy_id,
                  alice.person_id,
@@ -918,8 +919,8 @@ defmodule Memba.Membership.QueryTest do
                  nil
                ])
 
-      assert Membership.list_person_contact_summaries(nil) == %{}
-      assert Membership.list_person_contact_summaries(["not-a-uuid"]) == %{}
+      assert PersonQueries.list_person_contact_summaries(nil) == %{}
+      assert PersonQueries.list_person_contact_summaries(["not-a-uuid"]) == %{}
     end
   end
 
@@ -936,9 +937,9 @@ defmodule Memba.Membership.QueryTest do
           ]
         )
 
-      assert Membership.get_person_primary_email(alice.person_id) == "alice@work.example"
+      assert PersonQueries.get_person_primary_email(alice.person_id) == "alice@work.example"
 
-      assert Membership.list_person_alternate_emails(alice.person_id) == [
+      assert PersonQueries.list_person_alternate_emails(alice.person_id) == [
                "alice+old@example.com",
                "alice@example.com"
              ]
@@ -962,21 +963,21 @@ defmodule Memba.Membership.QueryTest do
                  primary?: false,
                  verified_at: %DateTime{}
                }
-             ] = Membership.list_person_email_addresses(alice.person_id)
+             ] = PersonQueries.list_person_email_addresses(alice.person_id)
     end
 
     test "returns nil or empty lists for missing or invalid person IDs" do
-      assert Membership.get_person_primary_email(Memba.ID.generate(:person)) == nil
-      assert Membership.get_person_primary_email(nil) == nil
-      assert Membership.get_person_primary_email("not-a-uuid") == nil
+      assert PersonQueries.get_person_primary_email(Memba.ID.generate(:person)) == nil
+      assert PersonQueries.get_person_primary_email(nil) == nil
+      assert PersonQueries.get_person_primary_email("not-a-uuid") == nil
 
-      assert Membership.list_person_alternate_emails(Memba.ID.generate(:person)) == []
-      assert Membership.list_person_alternate_emails(nil) == []
-      assert Membership.list_person_alternate_emails("not-a-uuid") == []
+      assert PersonQueries.list_person_alternate_emails(Memba.ID.generate(:person)) == []
+      assert PersonQueries.list_person_alternate_emails(nil) == []
+      assert PersonQueries.list_person_alternate_emails("not-a-uuid") == []
 
-      assert Membership.list_person_email_addresses(Memba.ID.generate(:person)) == []
-      assert Membership.list_person_email_addresses(nil) == []
-      assert Membership.list_person_email_addresses("not-a-uuid") == []
+      assert PersonQueries.list_person_email_addresses(Memba.ID.generate(:person)) == []
+      assert PersonQueries.list_person_email_addresses(nil) == []
+      assert PersonQueries.list_person_email_addresses("not-a-uuid") == []
     end
   end
 
@@ -1045,7 +1046,7 @@ defmodule Memba.Membership.QueryTest do
                    }
                  ]
                }
-             ] = Membership.list_operator_people()
+             ] = PersonQueries.list_operator_people()
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
@@ -1071,11 +1072,11 @@ defmodule Memba.Membership.QueryTest do
       add_member(kootenay_club_id, alice.person_id)
       add_member(nelson_club_id, pat.person_id)
 
-      assert Membership.active_member_of_club?(kootenay_club_id, alice.person_id)
-      refute Membership.active_member_of_club?(kootenay_club_id, pat.person_id)
-      refute Membership.active_member_of_club?(nelson_club_id, alice.person_id)
-      refute Membership.active_member_of_club?("not-a-uuid", alice.person_id)
-      refute Membership.active_member_of_club?(kootenay_club_id, "not-a-uuid")
+      assert MembershipQueries.active_member_of_club?(kootenay_club_id, alice.person_id)
+      refute MembershipQueries.active_member_of_club?(kootenay_club_id, pat.person_id)
+      refute MembershipQueries.active_member_of_club?(nelson_club_id, alice.person_id)
+      refute MembershipQueries.active_member_of_club?("not-a-uuid", alice.person_id)
+      refute MembershipQueries.active_member_of_club?(kootenay_club_id, "not-a-uuid")
     end
   end
 
@@ -1093,16 +1094,16 @@ defmodule Memba.Membership.QueryTest do
       everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
       admin_group_id = SystemGroups.admin_group_id(club.club_id)
 
-      assert Membership.active_member_of_group?(everyone_group_id, alice.person_id)
-      assert Membership.active_member_of_group?(admin_group_id, alice.person_id)
-      refute Membership.active_member_of_group?(everyone_group_id, pat.person_id)
+      assert MembershipQueries.active_member_of_group?(everyone_group_id, alice.person_id)
+      assert MembershipQueries.active_member_of_group?(admin_group_id, alice.person_id)
+      refute MembershipQueries.active_member_of_group?(everyone_group_id, pat.person_id)
 
       remove_member(membership_id)
 
-      refute Membership.active_member_of_group?(everyone_group_id, alice.person_id)
-      refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
-      refute Membership.active_member_of_group?("not-a-uuid", alice.person_id)
-      refute Membership.active_member_of_group?(everyone_group_id, "not-a-uuid")
+      refute MembershipQueries.active_member_of_group?(everyone_group_id, alice.person_id)
+      refute MembershipQueries.active_member_of_group?(admin_group_id, alice.person_id)
+      refute MembershipQueries.active_member_of_group?("not-a-uuid", alice.person_id)
+      refute MembershipQueries.active_member_of_group?(everyone_group_id, "not-a-uuid")
     end
   end
 
@@ -1132,7 +1133,7 @@ defmodule Memba.Membership.QueryTest do
       assert [
                %ClubProjection{club_id: kootenay_id, name: "Kootenay Mountaineering Club"},
                %ClubProjection{club_id: nelson_id, name: "Nelson Cycling Club"}
-             ] = Membership.list_active_clubs_for_member_email(" ALICE@EXAMPLE.COM ")
+             ] = MembershipQueries.list_active_clubs_for_member_email(" ALICE@EXAMPLE.COM ")
 
       assert kootenay_id == kootenay.club_id
       assert nelson_id == nelson.club_id
@@ -1154,15 +1155,15 @@ defmodule Memba.Membership.QueryTest do
       add_member(kootenay.club_id, alice.person_id)
 
       assert [%ClubProjection{club_id: kootenay_id}] =
-               Membership.list_active_clubs_for_member_email(" ALICE@WORK.EXAMPLE ")
+               MembershipQueries.list_active_clubs_for_member_email(" ALICE@WORK.EXAMPLE ")
 
       assert kootenay_id == kootenay.club_id
     end
 
     test "returns an empty list for blank, nil, or unknown email addresses" do
-      assert Membership.list_active_clubs_for_member_email("unknown@example.com") == []
-      assert Membership.list_active_clubs_for_member_email("   ") == []
-      assert Membership.list_active_clubs_for_member_email(nil) == []
+      assert MembershipQueries.list_active_clubs_for_member_email("unknown@example.com") == []
+      assert MembershipQueries.list_active_clubs_for_member_email("   ") == []
+      assert MembershipQueries.list_active_clubs_for_member_email(nil) == []
     end
   end
 
@@ -1176,19 +1177,26 @@ defmodule Memba.Membership.QueryTest do
       add_member(club.club_id, alice.person_id)
       add_member(other_club.club_id, other_person.person_id)
 
-      assert Membership.active_member_of_club_by_email?(club.club_id, " alice@example.com ")
+      assert MembershipQueries.active_member_of_club_by_email?(
+               club.club_id,
+               " alice@example.com "
+             )
 
-      refute Membership.active_member_of_club_by_email?(club.club_id, "other@example.com")
-      refute Membership.active_member_of_club_by_email?(other_club.club_id, "alice@example.com")
+      refute MembershipQueries.active_member_of_club_by_email?(club.club_id, "other@example.com")
 
-      refute Membership.active_member_of_club_by_email?(
+      refute MembershipQueries.active_member_of_club_by_email?(
+               other_club.club_id,
+               "alice@example.com"
+             )
+
+      refute MembershipQueries.active_member_of_club_by_email?(
                Memba.ID.generate(:club),
                "alice@example.com"
              )
 
-      refute Membership.active_member_of_club_by_email?("not-a-uuid", "alice@example.com")
-      refute Membership.active_member_of_club_by_email?(club.club_id, "   ")
-      refute Membership.active_member_of_club_by_email?(club.club_id, nil)
+      refute MembershipQueries.active_member_of_club_by_email?("not-a-uuid", "alice@example.com")
+      refute MembershipQueries.active_member_of_club_by_email?(club.club_id, "   ")
+      refute MembershipQueries.active_member_of_club_by_email?(club.club_id, nil)
     end
 
     test "matches alternate known email addresses attached to the active member" do
@@ -1206,7 +1214,10 @@ defmodule Memba.Membership.QueryTest do
 
       add_member(club.club_id, alice.person_id)
 
-      assert Membership.active_member_of_club_by_email?(club.club_id, " ALICE@WORK.EXAMPLE ")
+      assert MembershipQueries.active_member_of_club_by_email?(
+               club.club_id,
+               " ALICE@WORK.EXAMPLE "
+             )
     end
   end
 
