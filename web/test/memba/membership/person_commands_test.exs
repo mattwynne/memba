@@ -1,10 +1,11 @@
 defmodule Memba.Membership.PersonCommandsTest do
   use Memba.DataCase, async: false
 
-  alias Memba.Membership.PersonQueries
-  alias Memba.Membership
-  alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
   alias Memba.Membership.PersonCommands
+
+  alias Memba.Membership.PersonQueries
+  alias Memba.Membership.Commands.CreatePerson
 
   test "prepares a legacy email command without dispatching or changing its input" do
     person_id = Memba.ID.generate(:person)
@@ -61,14 +62,14 @@ defmodule Memba.Membership.PersonCommandsTest do
 
   test "rejects projected ownership of primary or alternate email before dispatch" do
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: Memba.ID.generate(:person),
-                 name: "Existing",
-                 email: "Alice@Example.COM"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: Memba.ID.generate(:person),
+                       name: "Existing",
+                       email: "Alice@Example.COM"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     attrs = %{person_id: Memba.ID.generate(:person), name: "New"}
 

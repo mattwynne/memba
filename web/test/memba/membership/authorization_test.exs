@@ -1,7 +1,11 @@
 defmodule Memba.Membership.AuthorizationTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+  alias Memba.Membership.PersonCommands
+
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -82,25 +86,38 @@ defmodule Memba.Membership.AuthorizationTest do
 
   defp create_club!(club_id) do
     assert :ok =
-             Membership.create_club(
-               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(
+                       membership_club_attrs(
+                         club_id: club_id,
+                         name: "Kootenay Mountaineering Club"
+                       )
+                     ) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp create_person!(person_id, name \\ "Alice", email \\ "alice@example.com") do
     assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: name, email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: name,
+                       email: email
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp add_member!(membership_id, club_id, person_id) do
     assert :ok =
-             Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 end

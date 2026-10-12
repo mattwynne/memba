@@ -1,12 +1,14 @@
 defmodule Memba.Membership.SystemGroupsBackfillTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+
   alias Memba.Messaging.EveryoneConversationAccessBackfillQueries
   alias Memba.Messaging.ConversationGroupAccessQueries
   alias Memba.Membership.SystemGroupBackfillQueries
   alias Memba.Membership.ClubGroupQueries
   alias Commanded.Event.Mapper
-  alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -186,46 +188,49 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     assert_group_membership_active?(admin_group_id, bob.membership_id, nil)
 
     assert :ok =
-             Membership.assign_membership_administrator_as_club_member(
-               %{
-                 club_id: club.club_id,
-                 membership_id: bob.membership_id,
-                 person_id: bob.person_id,
-                 actor_person_id: alice.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club.club_id,
+                       membership_id: bob.membership_id,
+                       person_id: bob.person_id,
+                       actor_person_id: alice.person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert_group_membership_active?(admin_group_id, bob.membership_id, true)
 
     assert :ok =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club.club_id,
-                 membership_id: bob.membership_id,
-                 person_id: bob.person_id,
-                 actor_person_id: alice.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club.club_id,
+                       membership_id: bob.membership_id,
+                       person_id: bob.person_id,
+                       actor_person_id: alice.person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert_group_membership_active?(admin_group_id, bob.membership_id, false)
 
     assert :ok =
-             Membership.assign_membership_administrator_as_club_member(
-               %{
-                 club_id: club.club_id,
-                 membership_id: bob.membership_id,
-                 person_id: bob.person_id,
-                 actor_person_id: alice.person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club.club_id,
+                       membership_id: bob.membership_id,
+                       person_id: bob.person_id,
+                       actor_person_id: alice.person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert_group_membership_active?(admin_group_id, bob.membership_id, true)
 
     assert :ok =
-             Membership.remove_member(%{membership_id: alice.membership_id}, consistency: :strong)
+             (with {:ok, command} <-
+                     ClubMember.Remove.prepare(%{membership_id: alice.membership_id}) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert_group_membership_active?(everyone_group_id, alice.membership_id, false)
     assert_group_membership_active?(admin_group_id, alice.membership_id, false)

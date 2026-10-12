@@ -1,8 +1,12 @@
 defmodule Memba.Membership.WriteApiTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+
   alias Commanded.Commands.ExecutionResult
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.DefineClubRole
@@ -47,22 +51,26 @@ defmodule Memba.Membership.WriteApiTest do
                 }
               ]
             }} =
-             Membership.add_member(attrs,
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <- AddMember.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
 
     assert {:ok, %ExecutionResult{aggregate_uuid: ^club_id, events: []}} =
-             Membership.add_member(attrs,
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <- AddMember.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
 
     assert {:error, :already_active_member} =
-             Membership.add_member(
-               %{attrs | membership_id: Memba.ID.generate(:membership)},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{attrs | membership_id: Memba.ID.generate(:membership)}) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   test "role assignment delegates target activity to Club state when its projection is absent" do
@@ -96,17 +104,19 @@ defmodule Memba.Membership.WriteApiTest do
                 }
               ]
             }} =
-             Membership.assign_member_role_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 role_id: role_id,
-                 actor_person_id: actor_person_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       role_id: role_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
   end
 
   test "Admin removal delegates the Admin floor to Club state when its projection is stale" do
@@ -151,16 +161,18 @@ defmodule Memba.Membership.WriteApiTest do
                 }
               ]
             }} =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
   end
 
   test "remove_member/2 uses explicit routing identity but delegates the member floor to Club state" do
@@ -179,26 +191,34 @@ defmodule Memba.Membership.WriteApiTest do
     })
 
     assert {:error, :last_active_member} =
-             Membership.remove_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Remove.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp create_club!(club_id) do
     assert :ok =
-             Membership.create_club(
-               membership_club_attrs(club_id: club_id),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(membership_club_attrs(club_id: club_id)) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp add_member!(club_id, membership_id, person_id) do
     assert :ok =
-             Membership.add_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp define_role!(club_id, role_id) do

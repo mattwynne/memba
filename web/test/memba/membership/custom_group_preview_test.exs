@@ -1,9 +1,14 @@
 defmodule Memba.Membership.CustomGroupPreviewTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Membership.PersonCommands
+
   alias Memba.ClubInboundEmailAddress
   alias Memba.ID
-  alias Memba.Membership
   alias Memba.Membership.CustomGroup.Preview
   alias Memba.Membership.Projections.Club
 
@@ -44,16 +49,24 @@ defmodule Memba.Membership.CustomGroupPreviewTest do
     membership_id = ID.generate(:membership)
 
     assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: "Member", email: "#{person_id}@example.com"},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Member",
+                       email: "#{person_id}@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Membership.add_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     attrs = %{club_id: club_id, actor_person_id: person_id, name: ""}
     assert {:error, :unauthorized} = Preview.call(attrs)
@@ -84,30 +97,45 @@ defmodule Memba.Membership.CustomGroupPreviewTest do
     membership_id = ID.generate(:membership)
 
     assert :ok =
-             Membership.create_club(
-               membership_club_attrs(club_id: club_id, name: "Preview Club"),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(
+                       membership_club_attrs(club_id: club_id, name: "Preview Club")
+                     ) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: "Admin", email: "#{person_id}@example.com"},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Admin",
+                       email: "#{person_id}@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Membership.add_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     {club_id, person_id}
   end
 
   defp create_group!(club_id, actor_id, name) do
-    Membership.create_custom_group(
-      %{club_id: club_id, group_id: ID.generate(:group), actor_person_id: actor_id, name: name},
-      consistency: :strong
-    )
+    with {:ok, command} <-
+           CustomGroup.Create.prepare(%{
+             club_id: club_id,
+             group_id: ID.generate(:group),
+             actor_person_id: actor_id,
+             name: name
+           }) do
+      MembershipCommandDispatch.dispatch(command, consistency: :strong)
+    end
   end
 end

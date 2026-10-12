@@ -1,6 +1,13 @@
 defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Membership.PersonCommands
+
   import Ecto.Query
   import ExUnit.CaptureLog
 
@@ -9,7 +16,6 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   alias Commanded.Event.Mapper
   alias Commanded.EventStore
   alias Commanded.EventStore.RecordedEvent
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
   alias Memba.Membership.Club
@@ -76,16 +82,18 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                 }
               ]
             }} =
-             Membership.create_custom_group(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 actor_person_id: actor_person_id,
-                 name: " Board "
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       actor_person_id: actor_person_id,
+                       name: " Board "
+                     }) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
 
     assert_receive {:events,
                     [
@@ -142,7 +150,10 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
       name: "Board"
     }
 
-    assert :ok = Membership.create_custom_group(attrs, consistency: :strong)
+    assert :ok =
+             (with {:ok, command} <- CustomGroup.Create.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
              create_custom_group(
@@ -158,11 +169,12 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
     events_before_retry = group_events(club_id, group_id)
 
     assert {:ok, %ExecutionResult{events: [], aggregate_state: %Club{} = retried_club}} =
-             Membership.create_custom_group(
-               attrs,
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <- CustomGroup.Create.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
 
     assert %{email_slug: "board", name: "Board"} = retried_club.groups[group_id]
     assert group_events(club_id, group_id) == events_before_retry
@@ -214,19 +226,25 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
     create_club!(club_id)
 
     assert {:error, {:missing_required_attribute, :actor_person_id}} =
-             Membership.create_custom_group(%{
-               club_id: club_id,
-               group_id: Memba.ID.generate(:group),
-               name: "Board"
-             })
+             (with {:ok, command} <-
+                     CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: Memba.ID.generate(:group),
+                       name: "Board"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, [])
+              end)
 
     assert {:error, :invalid_actor_person_id} =
-             Membership.create_custom_group(%{
-               club_id: club_id,
-               group_id: Memba.ID.generate(:group),
-               actor_person_id: "not-a-person-id",
-               name: "Board"
-             })
+             (with {:ok, command} <-
+                     CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: Memba.ID.generate(:group),
+                       actor_person_id: "not-a-person-id",
+                       name: "Board"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, [])
+              end)
   end
 
   test "create_custom_group/2 rejects a nonexistent actor without appending or projecting a group" do
@@ -252,14 +270,14 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
     assign_admin!(club_id, actor_membership_id, actor_person_id)
 
     assert :ok =
-             Membership.remove_member(
-               %{
-                 club_id: club_id,
-                 membership_id: actor_membership_id,
-                 person_id: actor_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Remove.prepare(%{
+                       club_id: club_id,
+                       membership_id: actor_membership_id,
+                       person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert {:error, :unauthorized} = create_custom_group(club_id, group_id, actor_person_id)
     refute_partial_group(club_id, group_id)
@@ -560,13 +578,15 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
 
   defp create_club!(club_id) do
     assert :ok =
-             Membership.create_club(
-               membership_club_attrs(
-                 club_id: club_id,
-                 name: "Kootenay Mountaineering Club"
-               ),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(
+                       membership_club_attrs(
+                         club_id: club_id,
+                         name: "Kootenay Mountaineering Club"
+                       )
+                     ) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp create_club_with_admin!(club_id) do
@@ -582,24 +602,28 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
 
   defp create_member!(club_id, membership_id, person_id) do
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: "Test Member",
-                 email: "#{person_id}@example.com"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Test Member",
+                       email: "#{person_id}@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     add_member!(club_id, membership_id, person_id)
   end
 
   defp add_member!(club_id, membership_id, person_id) do
     assert :ok =
-             Membership.add_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp assign_admin!(club_id, membership_id, person_id) do
@@ -621,14 +645,14 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
     role_id = Roles.membership_administrator_role_id(club_id)
 
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: "Projection Admin",
-                 email: "#{person_id}@example.com"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Projection Admin",
+                       email: "#{person_id}@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     events =
       [
@@ -705,15 +729,15 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
   end
 
   defp create_custom_group(club_id, group_id, actor_person_id, name \\ "Board") do
-    Membership.create_custom_group(
-      %{
-        club_id: club_id,
-        group_id: group_id,
-        actor_person_id: actor_person_id,
-        name: name
-      },
-      consistency: :strong
-    )
+    with {:ok, command} <-
+           CustomGroup.Create.prepare(%{
+             club_id: club_id,
+             group_id: group_id,
+             actor_person_id: actor_person_id,
+             name: name
+           }) do
+      MembershipCommandDispatch.dispatch(command, consistency: :strong)
+    end
   end
 
   defp group_events(club_id, group_id) do

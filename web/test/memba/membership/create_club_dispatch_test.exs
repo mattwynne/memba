@@ -1,10 +1,12 @@
 defmodule Memba.Membership.CreateClubDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+
   alias Commanded.Commands.ExecutionResult
   alias Commanded.Event.Mapper
   alias Commanded.EventStore
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddGroupMember
@@ -220,16 +222,18 @@ defmodule Memba.Membership.CreateClubDispatchTest do
               aggregate_uuid: ^club_id,
               aggregate_version: 7
             }} =
-             Membership.create_club(
-               %{
-                 club_id: club_id,
-                 name: "Kootenay Mountaineering Club",
-                 slug: "kmc"
-               },
-               consistency: :strong,
-               returning: :execution_result,
-               timeout: 1_000
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(%{
+                       club_id: club_id,
+                       name: "Kootenay Mountaineering Club",
+                       slug: "kmc"
+                     }) do
+                MembershipCommandDispatch.dispatch(command,
+                  consistency: :strong,
+                  returning: :execution_result,
+                  timeout: 1_000
+                )
+              end)
   end
 
   test "Membership app rejects a duplicate CreateClub for the same aggregate identity" do

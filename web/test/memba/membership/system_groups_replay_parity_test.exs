@@ -1,14 +1,19 @@
 defmodule Memba.Membership.SystemGroupsReplayParityTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.PersonCommands
+  alias Memba.Messaging.CommandDispatch, as: MessagingCommandDispatch
+  alias Memba.Messaging.ConversationGroupAccess
+  alias Memba.Messaging.SendClubMessage
+
   alias Memba.Messaging.EveryoneConversationAccessBackfillQueries
   alias Memba.Messaging.ConversationGroupAccessQueries
   alias Commanded.Event.Mapper
-  alias Memba.Membership.AddMember
   alias Memba.Membership.App, as: MembershipApp
-  alias Memba.Membership.ClubCommands
   alias Memba.Membership.ClubGroupQueries
-  alias Memba.Membership.ClubMember
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Events.ClubCreated
@@ -19,7 +24,6 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.Permissions
-  alias Memba.Membership.PersonCommands
   alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projectors.Group, as: GroupProjector
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
@@ -30,7 +34,6 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   alias Memba.Membership.SystemGroupBackfillQueries
   alias Memba.Membership.SystemGroups
   alias Memba.Membership.SystemGroups.Backfill
-  alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
@@ -75,15 +78,17 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
     modern_conversation_id = send_current_root_conversation!(modern_club.club_id, dana)
 
     assert :ok =
-             Messaging.grant_conversation_access_to_group(
-               %{
-                 conversation_id: historic_conversation_id,
-                 club_id: historic_club.club_id,
-                 group_id: SystemGroups.admin_group_id(historic_club.club_id),
-                 access_level: :read
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ConversationGroupAccess.prepare_grant(%{
+                       conversation_id: historic_conversation_id,
+                       club_id: historic_club.club_id,
+                       group_id: SystemGroups.admin_group_id(historic_club.club_id),
+                       access_level: :read
+                     }),
+                   {:ok, dispatch_result} <-
+                     MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     fixture = %{
       historic_club: historic_club,
@@ -229,16 +234,18 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
     conversation_id = Memba.ID.generate(:message)
 
     assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: conversation_id,
-                 club_id: club_id,
-                 sender_id: sender.person_id,
-                 subject: "Modern race night",
-                 body: "Bring your life jacket."
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     SendClubMessage.prepare(%{
+                       message_id: conversation_id,
+                       club_id: club_id,
+                       sender_id: sender.person_id,
+                       subject: "Modern race night",
+                       body: "Bring your life jacket."
+                     }),
+                   {:ok, dispatch_result} <-
+                     MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
 
     conversation_id
   end

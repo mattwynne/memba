@@ -1,13 +1,18 @@
 defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Membership.PersonCommands
+
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.ClubGroupQueries
   alias Commanded.Commands.ExecutionResult
   alias Commanded.EventStore
   alias Commanded.EventStore.EventData
   alias Commanded.EventStore.TypeProvider
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddGroupMember
@@ -120,23 +125,30 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
                   actor_person_id: actor_person_id
                 }
               ]
-            }} = Membership.remove_custom_group_member(attrs, returning: :execution_result)
+            }} =
+             (with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, returning: :execution_result)
+              end)
 
     assert actor_person_id == ids.first_person_id
 
     assert {:ok, %ExecutionResult{events: []}} =
-             Membership.remove_custom_group_member(attrs, returning: :execution_result)
+             (with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, returning: :execution_result)
+              end)
 
     assert {:error, :removal_operation_conflict} =
-             Membership.remove_custom_group_member(
-               %{attrs | actor_person_id: ids.third_person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Remove.prepare(%{attrs | actor_person_id: ids.third_person_id}) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     add_group_member!(ids, ids.second_membership_id, ids.second_person_id)
 
     assert {:ok, %CustomGroupRemoval{transition: :member_removed}} =
-             Membership.remove_custom_group_member(attrs, consistency: :strong)
+             (with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
 
@@ -158,20 +170,24 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
       |> Map.put(:removal_operation_id, operation_id)
 
     assert {:ok, %ExecutionResult{events: [%GroupMemberRemoved{}]}} =
-             Membership.remove_custom_group_member(attrs, returning: :execution_result)
+             (with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, returning: :execution_result)
+              end)
 
     Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
 
     assert {:ok, %ExecutionResult{events: []}} =
-             Membership.remove_custom_group_member(attrs, returning: :execution_result)
+             (with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, returning: :execution_result)
+              end)
 
     Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
 
     assert {:error, :removal_operation_conflict} =
-             Membership.remove_custom_group_member(
-               %{attrs | actor_person_id: ids.third_person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Remove.prepare(%{attrs | actor_person_id: ids.third_person_id}) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert count_removal_operation_events(ids.club_id, operation_id) == 1
   end
@@ -187,13 +203,17 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
       |> Map.put(:removal_operation_id, operation_id)
 
     assert {:ok, %CustomGroupRemoval{}} =
-             Membership.remove_custom_group_member(attrs, consistency: :strong)
+             (with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     add_group_member!(ids, ids.second_membership_id, ids.second_person_id)
     Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
 
     assert {:ok, %ExecutionResult{events: []}} =
-             Membership.remove_custom_group_member(attrs, returning: :execution_result)
+             (with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+                MembershipCommandDispatch.dispatch(command, returning: :execution_result)
+              end)
 
     assert MembershipQueries.active_member_of_group?(ids.group_id, ids.second_person_id)
     assert count_removal_operation_events(ids.club_id, operation_id) == 1
@@ -254,13 +274,16 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
 
   test "requires a caller-generated removal operation ID" do
     assert {:error, {:missing_required_attribute, :removal_operation_id}} =
-             Membership.remove_custom_group_member(%{
-               club_id: Memba.ID.generate(:club),
-               group_id: Memba.ID.generate(:group),
-               membership_id: Memba.ID.generate(:membership),
-               person_id: Memba.ID.generate(:person),
-               actor_person_id: Memba.ID.generate(:person)
-             })
+             (with {:ok, command} <-
+                     CustomGroup.Remove.prepare(%{
+                       club_id: Memba.ID.generate(:club),
+                       group_id: Memba.ID.generate(:group),
+                       membership_id: Memba.ID.generate(:membership),
+                       person_id: Memba.ID.generate(:person),
+                       actor_person_id: Memba.ID.generate(:person)
+                     }) do
+                MembershipCommandDispatch.dispatch(command, [])
+              end)
   end
 
   defp fixture_with_three_members do
@@ -275,38 +298,50 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
       third_person_id: Memba.ID.generate(:person)
     }
 
-    assert :ok = Membership.create_club(membership_club_attrs(club_id: ids.club_id))
+    assert :ok =
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(membership_club_attrs(club_id: ids.club_id)) do
+                MembershipCommandDispatch.dispatch(command, [])
+              end)
+
     create_member!(ids.club_id, ids.first_membership_id, ids.first_person_id)
     create_member!(ids.club_id, ids.second_membership_id, ids.second_person_id)
     create_member!(ids.club_id, ids.third_membership_id, ids.third_person_id)
 
     assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: ids.club_id,
-                 group_id: ids.group_id,
-                 actor_person_id: ids.first_person_id,
-                 name: "Board"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Create.prepare(%{
+                       club_id: ids.club_id,
+                       group_id: ids.group_id,
+                       actor_person_id: ids.first_person_id,
+                       name: "Board"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     ids
   end
 
   defp create_member!(club_id, membership_id, person_id) do
     assert :ok =
-             Membership.create_person(%{
-               person_id: person_id,
-               name: "Test member",
-               email: "#{person_id}@example.com"
-             })
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Test member",
+                       email: "#{person_id}@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, [])
+              end)
 
     assert :ok =
-             Membership.add_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp add_group_member!(ids, membership_id, person_id) do
@@ -336,10 +371,14 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
   end
 
   defp remove(ids, membership_id, person_id, actor_person_id) do
-    ids
-    |> removal_attrs(membership_id, person_id, actor_person_id)
-    |> Map.put(:removal_operation_id, Ecto.UUID.generate())
-    |> Membership.remove_custom_group_member(consistency: :strong)
+    attrs =
+      ids
+      |> removal_attrs(membership_id, person_id, actor_person_id)
+      |> Map.put(:removal_operation_id, Ecto.UUID.generate())
+
+    with {:ok, command} <- CustomGroup.Remove.prepare(attrs) do
+      MembershipCommandDispatch.dispatch(command, consistency: :strong)
+    end
   end
 
   defp count_removal_operation_events(club_id, operation_id) do

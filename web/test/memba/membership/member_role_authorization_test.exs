@@ -1,9 +1,14 @@
 defmodule Memba.Membership.MemberRoleAuthorizationTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+  alias Memba.Membership.PersonCommands
+
   alias Memba.Membership.PermissionQueries
   alias Commanded.Commands.ExecutionResult
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.DefineClubRole
@@ -40,16 +45,18 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                 }
               ]
             }} =
-             Membership.assign_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
 
     assert PermissionQueries.has_permission?(
              club_id,
@@ -86,16 +93,18 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                 }
               ]
             }} =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
 
     refute PermissionQueries.has_permission?(
              club_id,
@@ -121,15 +130,15 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
 
     assert {:error, :last_membership_administrator} =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: actor_membership_id,
-                 person_id: actor_person_id,
-                 actor_person_id: actor_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id,
+                       membership_id: actor_membership_id,
+                       person_id: actor_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert PermissionQueries.has_permission?(
              club_id,
@@ -163,15 +172,15 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
            )
 
     assert {:error, :last_membership_administrator} =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert PermissionQueries.has_permission?(
              club_id,
@@ -211,15 +220,15 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
            )
 
     assert {:error, :unauthorized} =
-             Membership.assign_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     refute PermissionQueries.has_permission?(
              club_id,
@@ -260,15 +269,15 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
            )
 
     assert {:error, :unauthorized} =
-             Membership.remove_membership_administrator_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_remove_administrator(%{
+                       club_id: club_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert PermissionQueries.has_permission?(
              club_id,
@@ -306,7 +315,9 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     }
 
     assert {:error, :unauthorized} =
-             Membership.assign_member_role_as_club_member(attrs, consistency: :strong)
+             (with {:ok, command} <- ClubMember.Role.prepare_assign(attrs) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
 
@@ -322,11 +333,12 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                 }
               ]
             }} =
-             Membership.assign_member_role_as_club_member(
-               attrs,
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <- ClubMember.Role.prepare_assign(attrs) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
   end
 
   test "remove_member_role_as_club_member/2 requires club.manage_members" do
@@ -359,7 +371,9 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     }
 
     assert {:error, :unauthorized} =
-             Membership.remove_member_role_as_club_member(attrs, consistency: :strong)
+             (with {:ok, command} <- ClubMember.Role.prepare_remove(attrs) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
 
@@ -375,11 +389,12 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                 }
               ]
             }} =
-             Membership.remove_member_role_as_club_member(
-               attrs,
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <- ClubMember.Role.prepare_remove(attrs) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
   end
 
   test "club-member role assignment requires the target to be an active member" do
@@ -398,40 +413,53 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     define_role!(club_id, role_id)
 
     assert {:error, :member_not_active} =
-             Membership.assign_member_role_as_club_member(
-               %{
-                 club_id: club_id,
-                 membership_id: missing_membership_id,
-                 person_id: target_person_id,
-                 role_id: role_id,
-                 actor_person_id: actor_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Role.prepare_assign(%{
+                       club_id: club_id,
+                       membership_id: missing_membership_id,
+                       person_id: target_person_id,
+                       role_id: role_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp create_club!(club_id) do
     assert :ok =
-             Membership.create_club(
-               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(
+                       membership_club_attrs(
+                         club_id: club_id,
+                         name: "Kootenay Mountaineering Club"
+                       )
+                     ) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp create_person!(person_id, name, email) do
     assert :ok =
-             Membership.create_person(
-               %{person_id: person_id, name: name, email: email},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: name,
+                       email: email
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp add_member!(membership_id, club_id, person_id) do
     assert :ok =
-             Membership.add_member(
-               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       membership_id: membership_id,
+                       club_id: club_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp define_role!(club_id, role_id) do

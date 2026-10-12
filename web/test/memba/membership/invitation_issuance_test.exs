@@ -1,10 +1,11 @@
 defmodule Memba.Membership.InvitationIssuanceTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.InvitationIssuanceWorkflow
+
   alias Memba.Membership.InvitationQueries
   alias Commanded.Commands.ExecutionResult
   alias Memba.ID
-  alias Memba.Membership
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.{InviteClubMember, ResendClubMemberInvitation}
   alias Memba.Membership.InvitationIssuance
@@ -39,7 +40,7 @@ defmodule Memba.Membership.InvitationIssuanceTest do
     invitation_id = ID.generate(:club_invitation)
 
     assert {:ok, %{invitation_token: original_token}} =
-             Membership.invite_club_member(
+             InvitationIssuanceWorkflow.invite(
                %{club_id: club_id, invitation_id: invitation_id, email: "Robin@Example.com"},
                consistency: :strong
              )

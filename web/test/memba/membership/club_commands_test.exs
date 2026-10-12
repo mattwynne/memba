@@ -1,9 +1,9 @@
 defmodule Memba.Membership.ClubCommandsTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership.ClubGroupQueries
-  alias Memba.Membership
   alias Memba.Membership.ClubCommands
+
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Commands.{CreateClub, ReconcileLegacyAdminHistory, UpdateClub}
 
@@ -85,9 +85,14 @@ defmodule Memba.Membership.ClubCommandsTest do
     other_id = Memba.ID.generate(:club)
 
     assert :ok =
-             Membership.create_club(%{club_id: club_id, name: "Alpine", slug: "alpine"},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(%{
+                       club_id: club_id,
+                       name: "Alpine",
+                       slug: "alpine"
+                     }) do
+                CommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert {:error, :slug_taken} =
              ClubCommands.prepare_create(%{club_id: other_id, name: "Other", slug: "alpine"})

@@ -1,12 +1,19 @@
 defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.ClubMember
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Membership.InvitationIssuanceWorkflow
+  alias Memba.Membership.PersonCommands
+
   alias Memba.Membership.PermissionQueries
   alias Memba.Membership.MembershipQueries
   alias Memba.Membership.InvitationQueries
   alias Memba.Membership.ClubGroupQueries
   alias Commanded.Commands.ExecutionResult
-  alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddCustomGroupMember
   alias Memba.Membership.Commands.AddGroupMember
@@ -34,15 +41,15 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
     create_member!(club_id, target_membership_id, target_person_id)
 
     assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 actor_person_id: creator_person_id,
-                 name: "Board"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       actor_person_id: creator_person_id,
+                       name: "Board"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     add_group_member!(club_id, group_id, actor_membership_id, actor_person_id)
 
@@ -73,17 +80,19 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
                 }
               ]
             }} =
-             Membership.add_custom_group_member(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Admit.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command,
+                  returning: :execution_result,
+                  consistency: :strong
+                )
+              end)
 
     assert %GroupMembershipProjection{
              club_id: ^club_id,
@@ -221,14 +230,14 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
     add_group_member!(club_id, group_id, outsider_membership_id, outsider_person_id)
 
     assert :ok =
-             Membership.remove_member(
-               %{
-                 club_id: club_id,
-                 membership_id: outsider_membership_id,
-                 person_id: outsider_person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubMember.Remove.prepare(%{
+                       club_id: club_id,
+                       membership_id: outsider_membership_id,
+                       person_id: outsider_person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert {:error, :unauthorized} =
              add_custom_group_member(
@@ -338,12 +347,15 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
 
   test "add_custom_group_member/2 requires the authenticated actor identity" do
     assert {:error, {:missing_required_attribute, :actor_person_id}} =
-             Membership.add_custom_group_member(%{
-               club_id: Memba.ID.generate(:club),
-               group_id: Memba.ID.generate(:group),
-               membership_id: Memba.ID.generate(:membership),
-               person_id: Memba.ID.generate(:person)
-             })
+             (with {:ok, command} <-
+                     CustomGroup.Admit.prepare(%{
+                       club_id: Memba.ID.generate(:club),
+                       group_id: Memba.ID.generate(:group),
+                       membership_id: Memba.ID.generate(:membership),
+                       person_id: Memba.ID.generate(:person)
+                     }) do
+                MembershipCommandDispatch.dispatch(command, [])
+              end)
   end
 
   test "custom-group admission leaves club invitations and club roles unchanged" do
@@ -361,7 +373,7 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
     create_custom_group!(club_id, group_id, actor_person_id)
 
     assert {:ok, %{invitation_id: invitation_id}} =
-             Membership.invite_club_member(
+             InvitationIssuanceWorkflow.invite(
                %{club_id: club_id, email: pending_email},
                consistency: :strong
              )
@@ -403,23 +415,23 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
 
   defp create_club!(club_id) do
     assert :ok =
-             Membership.create_club(
-               membership_club_attrs(club_id: club_id),
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ClubCommands.prepare_create(membership_club_attrs(club_id: club_id)) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp create_custom_group!(club_id, group_id, actor_person_id) do
     assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 actor_person_id: actor_person_id,
-                 name: "Board"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Create.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       actor_person_id: actor_person_id,
+                       name: "Board"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 
   defp assign_admin!(club_id, membership_id, person_id) do
@@ -456,33 +468,37 @@ defmodule Memba.Membership.AddCustomGroupMemberDispatchTest do
          actor_person_id,
          opts \\ []
        ) do
-    Membership.add_custom_group_member(
-      %{
-        club_id: club_id,
-        group_id: group_id,
-        membership_id: membership_id,
-        person_id: person_id,
-        actor_person_id: actor_person_id
-      },
-      Keyword.put_new(opts, :consistency, :strong)
-    )
+    with {:ok, command} <-
+           CustomGroup.Admit.prepare(%{
+             club_id: club_id,
+             group_id: group_id,
+             membership_id: membership_id,
+             person_id: person_id,
+             actor_person_id: actor_person_id
+           }) do
+      MembershipCommandDispatch.dispatch(command, Keyword.put_new(opts, :consistency, :strong))
+    end
   end
 
   defp create_member!(club_id, membership_id, person_id) do
     assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: "Test member",
-                 email: "#{person_id}@example.com"
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     PersonCommands.prepare_create(%{
+                       person_id: person_id,
+                       name: "Test member",
+                       email: "#{person_id}@example.com"
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     assert :ok =
-             Membership.add_member(
-               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     AddMember.prepare(%{
+                       club_id: club_id,
+                       membership_id: membership_id,
+                       person_id: person_id
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
   end
 end

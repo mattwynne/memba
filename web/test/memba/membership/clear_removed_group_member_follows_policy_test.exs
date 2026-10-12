@@ -1,10 +1,14 @@
 defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Membership.CommandDispatch, as: MembershipCommandDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Messaging.CommandDispatch, as: MessagingCommandDispatch
+  alias Memba.Messaging.ConversationFollowPreparation
+
   alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Membership.MembershipQueries
   alias Commanded.EventStore
-  alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddGroupMember
@@ -12,7 +16,6 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
-  alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationUnfollowed
@@ -76,17 +79,17 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     create_followed_conversation(club_id, group_id, conversation_id, target_person_id)
 
     assert {:ok, _outcome} =
-             Membership.remove_custom_group_member(
-               %{
-                 club_id: club_id,
-                 group_id: group_id,
-                 membership_id: target_membership_id,
-                 person_id: target_person_id,
-                 actor_person_id: actor_person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     CustomGroup.Remove.prepare(%{
+                       club_id: club_id,
+                       group_id: group_id,
+                       membership_id: target_membership_id,
+                       person_id: target_person_id,
+                       actor_person_id: actor_person_id,
+                       removal_operation_id: Ecto.UUID.generate()
+                     }) do
+                MembershipCommandDispatch.dispatch(command, consistency: :strong)
+              end)
 
     refute MembershipQueries.active_member_of_group?(group_id, target_person_id)
     assert ConversationFollowQueries.following_conversation?(conversation_id, target_person_id)
@@ -166,14 +169,16 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
              )
 
     assert :ok =
-             Messaging.follow_conversation(
-               %{
-                 club_id: club_id,
-                 conversation_id: conversation_id,
-                 member_id: person_id
-               },
-               consistency: :strong
-             )
+             (with {:ok, command} <-
+                     ConversationFollowPreparation.prepare_follow(%{
+                       club_id: club_id,
+                       conversation_id: conversation_id,
+                       member_id: person_id
+                     }),
+                   {:ok, dispatch_result} <-
+                     MessagingCommandDispatch.dispatch(command, consistency: :strong) do
+                dispatch_result
+              end)
   end
 
   defp count_unfollow_events(conversation_id, person_id) do
