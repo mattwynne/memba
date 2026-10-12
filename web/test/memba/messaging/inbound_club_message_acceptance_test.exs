@@ -1,7 +1,14 @@
 defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   use Memba.EventSourcedCase, async: false
 
-  alias Memba.Membership
+  alias Memba.Membership.AddMember
+  alias Memba.Membership.ClubCommands
+  alias Memba.Membership.CommandDispatch, as: MembershipDispatch
+  alias Memba.Membership.CustomGroup
+  alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
+  alias Memba.ProjectionBarrier
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.AuthoritativeMembershipQueries
   alias Memba.Membership.ClubGroupQueries
@@ -12,7 +19,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
-  alias Memba.Messaging
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
+  alias Memba.Messaging.ConversationFollowPreparation
+  alias Memba.Messaging.InboundClubDestination
+  alias Memba.Messaging.InboundClubEmailPreparation
+  alias Memba.Messaging.InboundClubSender
+  alias Memba.Messaging.PostMemberMessageReply
+  alias Memba.Messaging.SendClubMessage
   alias Memba.Messaging.ConversationFollowQueries
   alias Memba.Messaging.ConversationGroupAccessQueries
   alias Memba.Messaging.ConversationListing
@@ -225,13 +238,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     add_member!(kmc.club_id, dana.person_id)
 
     assert {:ok, destination} =
-             Messaging.resolve_inbound_club_email_destination([
+             InboundClubDestination.resolve([
                "admin@kmc.clubs.memba.io"
              ])
 
-    assert {:ok, sender} = Messaging.resolve_inbound_club_email_sender("dana@example.com")
+    assert {:ok, sender} = InboundClubSender.resolve("dana@example.com")
     refute MembershipQueries.active_member_of_group?(destination.group_id, sender.person_id)
-    assert :ok = Messaging.authorize_inbound_club_email_sender(sender, destination)
+    assert :ok = InboundClubEmailPreparation.authorize(sender, destination)
   end
 
   test "an empty custom-group address rejects an ordinary outsider without creating a message" do
@@ -244,29 +257,27 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     board_group_id = Memba.ID.generate(:group)
 
-    assert :ok =
-             Membership.create_custom_group(
-               %{
-                 club_id: kmc.club_id,
-                 group_id: board_group_id,
-                 actor_person_id: alice.person_id,
-                 name: "Board"
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             CustomGroup.Create.prepare(%{
+               club_id: kmc.club_id,
+               group_id: board_group_id,
+               actor_person_id: alice.person_id,
+               name: "Board"
+             })
 
-    assert {:ok, _removal} =
-             Membership.remove_custom_group_member(
-               %{
-                 club_id: kmc.club_id,
-                 group_id: board_group_id,
-                 membership_id: alice_membership_id,
-                 person_id: alice.person_id,
-                 actor_person_id: alice.person_id,
-                 removal_operation_id: Ecto.UUID.generate()
-               },
-               consistency: :strong
-             )
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
+
+    assert {:ok, command} =
+             CustomGroup.Remove.prepare(%{
+               club_id: kmc.club_id,
+               group_id: board_group_id,
+               membership_id: alice_membership_id,
+               person_id: alice.person_id,
+               actor_person_id: alice.person_id,
+               removal_operation_id: Ecto.UUID.generate()
+             })
+
+    assert {:ok, _removal} = MembershipDispatch.dispatch(command, consistency: :strong)
 
     assert ClubGroupQueries.list_active_members_of_group(board_group_id) == []
     refute MembershipQueries.active_member_of_group?(board_group_id, eve.person_id)
@@ -379,31 +390,27 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     non_admin_reply_message_id = Memba.ID.generate(:message)
 
     assert {:error, :not_current_member} =
-             Messaging.post_message_reply(
-               %{
-                 message_id: non_admin_reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: alice.person_id,
-                 body: "I should not be able to post this reply."
-               },
-               consistency: :strong
-             )
+             PostMemberMessageReply.prepare(%{
+               message_id: non_admin_reply_message_id,
+               conversation_id: root_message_id,
+               sender_id: alice.person_id,
+               body: "I should not be able to post this reply."
+             })
 
     assert is_nil(MessageQueries.get_message(non_admin_reply_message_id))
     assert [] == DeliveryQueries.list_recipient_deliveries(non_admin_reply_message_id)
 
     reply_message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: "I will follow this up."
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PostMemberMessageReply.prepare(%{
+               message_id: reply_message_id,
+               conversation_id: root_message_id,
+               sender_id: bob.person_id,
+               body: "I will follow this up."
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     assert %{
              message_id: ^reply_message_id,
@@ -1365,11 +1372,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
 
-    assert :ok =
-             Membership.add_person_email_address(
-               %{person_id: alice.person_id, email: "Alice.Pending@Example.COM"},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PersonEmailAddressCommands.prepare_add(%{
+               person_id: alice.person_id,
+               email: "Alice.Pending@Example.COM"
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     add_member!(kmc.club_id, alice.person_id)
 
@@ -1960,7 +1969,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     restart_projector!(membership_projector_child_id)
 
     assert {:ok, _result} =
-             Membership.await_group_access_projections(timeout: 1_000)
+             ProjectionBarrier.await([GroupMembershipProjector, MembershipProjector],
+               timeout: 1_000
+             )
   end
 
   test "provider retry resumes a receipt left incomplete by authorization stabilization" do
@@ -2030,17 +2041,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: kmc.club_id,
-                 sender_id: alice.person_id,
-                 subject: inbound_attrs.subject,
-                 body: inbound_attrs.text_body
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             SendClubMessage.prepare(%{
+               message_id: message_id,
+               club_id: kmc.club_id,
+               sender_id: alice.person_id,
+               subject: inbound_attrs.subject,
+               body: inbound_attrs.text_body
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(MessageSent)
@@ -2116,16 +2126,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     reply_message_id = Memba.ID.deterministic(:message, [receive_command.inbound_email_id])
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply_message_id,
-                 conversation_id: root_message_id,
-                 sender_id: bob.person_id,
-                 body: inbound_attrs.text_body
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             PostMemberMessageReply.prepare(%{
+               message_id: reply_message_id,
+               conversation_id: root_message_id,
+               sender_id: bob.person_id,
+               body: inbound_attrs.text_body
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     assert %{
              message_id: ^reply_message_id,
@@ -2483,15 +2492,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   defp create_club!(attrs) do
     club_id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(
-               %{
-                 club_id: club_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 slug: Keyword.fetch!(attrs, :slug)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ClubCommands.prepare_create(%{
+               club_id: club_id,
+               name: Keyword.fetch!(attrs, :name),
+               slug: Keyword.fetch!(attrs, :slug)
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     ClubGroupQueries.get_club(club_id)
   end
@@ -2508,7 +2516,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
         name: Keyword.fetch!(attrs, :name)
       })
 
-    assert :ok = Membership.create_person(create_attrs, consistency: :strong)
+    assert {:ok, command} = PersonCommands.prepare_create(create_attrs)
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     PersonQueries.get_person(person_id)
   end
@@ -2516,15 +2525,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   defp add_member!(club_id, person_id) do
     membership_id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.add_member(
-               %{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             AddMember.prepare(%{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
+
+    assert :ok = MembershipDispatch.dispatch(command, consistency: :strong)
 
     membership_id
   end
@@ -2544,27 +2552,29 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   defp send_club_message!(attrs) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: Keyword.fetch!(attrs, :club_id),
-                 sender_id: Keyword.fetch!(attrs, :sender_id),
-                 subject: Keyword.fetch!(attrs, :subject),
-                 body: Keyword.fetch!(attrs, :body)
-               },
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             SendClubMessage.prepare(%{
+               message_id: message_id,
+               club_id: Keyword.fetch!(attrs, :club_id),
+               sender_id: Keyword.fetch!(attrs, :sender_id),
+               subject: Keyword.fetch!(attrs, :subject),
+               body: Keyword.fetch!(attrs, :body)
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     message_id
   end
 
   defp follow_conversation!(club_id, conversation_id, member_id) do
-    assert :ok =
-             Messaging.follow_conversation(
-               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
-               consistency: :strong
-             )
+    assert {:ok, command} =
+             ConversationFollowPreparation.prepare_follow(%{
+               club_id: club_id,
+               conversation_id: conversation_id,
+               member_id: member_id
+             })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
   end
 
   defp outbound_message_id_for_recipient!(message_id, recipient_id) do
