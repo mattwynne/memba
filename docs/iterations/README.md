@@ -76,7 +76,7 @@ historical plans, specify current behaviour.
 | 065 | 2026-09-27 | merged | Browser journeys distinct from domain rule examples | [delivery log](065-browser-journeys-and-domain-examples/plan.md) — `features/journeys/`, domain features, conditional responsive checks |
 | 066 | 2026-09-27 | merged | Ask to join a group | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `journeys/custom_group_access_request.feature`, `group_conversations.feature` |
 | 067 | 2026-09-28 | merged | Live projection queries for open club-member pages | [plan](067-live-projection-queries/plan.md) — `live_club_member_list.feature` |
-| 068 | 2026-08-13 | draft | Members change their own name (replanning) | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
+| 068 | 2026-08-13 | merged | Members change their own name (release candidate; publication pending) | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
 | 069 | 2026-08-13 | needs-revision | Members set their own profile photo (renumbered; dependency review pending) | [plan](069-member-profile-photo/plan.md) — `member_profile.feature` |
 
 The former 065–067 plans were shifted to 066–068 to make room for the
@@ -86,6 +86,9 @@ from 067–068 to 068–069 to insert the live-query foundation at 067. Those
 renumbered drafts are not covered by their old Fabro validation results.
 
 Status notes:
+
+- The private 068 candidate's `merged` metadata is publication intent, conditional on independent
+  acceptance, exact gates and parent publication; it does not claim deployment verification.
 
 - `deferred` means deliberately parked, even if previously validated; not selected for current delivery.
 - `draft` means a captured plan still needs human review before validation or implementation.
@@ -116,5 +119,5 @@ Shared acceptance feature files used across these iterations (tag descriptions b
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
 - [`live_club_member_list.feature`](../../acceptance-tests/features/live_club_member_list.feature) (`@iteration-067` executable example for an already-open club member list updating automatically).
-- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (replanning 068 for self-service name editing and 069 for photo management. Current `@iteration-068 @todo` name examples and six `@iteration-069 @todo` photo examples remain excluded from both runners until implemented.)
+- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (068 self-service name domain examples are executable, alongside the focused [`member_profile` browser journey](../../acceptance-tests/features/journeys/member_profile.feature). All six `@iteration-069 @todo` photo examples remain deferred and unchanged.)
 - [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (058 introduced selected-group scope and composition; 061 added discovery and restricted surfaces. 065 intentionally removed remembered restoration; the explicit group URL remains. the superseded 066 affordance-only `@todo` example was replaced by the focused request feature and browser journey. Existing Board privacy/placeholder assertions remain executable until delivery changes the UI.)

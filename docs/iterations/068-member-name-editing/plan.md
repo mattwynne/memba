@@ -1,7 +1,21 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: ready
+Status: merged
+
+## Release candidate — publication pending
+
+The status above is the intended metadata for the parent-owned 068 release candidate, not a
+claim that this private branch is already published or deployed. Publication remains conditional
+on the additional independent source review accepting, exact committed `dev check` and connected
+browser proofs passing, and safe integration with public main. The parent owns publication,
+normal CI/Fly observation and deployed verification; none is claimed here in advance.
+
+The approved scope, designs, model decisions and planning evidence below are retained as history.
+Statements about then-current repository gaps or pending implementation describe the planning
+baseline, not the completed candidate. The three 068 domain examples and Profile editing browser
+journey are now executable; all six deferred 069 photo scenarios remain unchanged. The historical
+unattended attempt is not resumed or relabelled as delivered.
 
 ## Goal
 
@@ -366,7 +380,7 @@ non-durable: this iteration does not promise recovery of a lost broadcast to an 
 - Do not impose new validation retrospectively on existing Person creation/history.
 - A name can match another Person's name; this is not an identity merge or a new impersonation policy.
 
-## Planning Completion and Launch Constraints
+## Planning Completion and Launch Constraints (historical)
 
 Scope, examples, local designs and current-value/no-op direction are agreed. Required bounded
 review and parent final two-family review are complete; corrections are incorporated. Matt judged
