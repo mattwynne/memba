@@ -84,8 +84,8 @@ defmodule MembaWeb.MemberNameRefreshTest do
     club = club("Recipient History", "recipient-history")
     alice = person("Alice Smith", "alice.recipient@example.test")
     bob = person("Bob Builder", "bob.recipient@example.test")
-    membership = add_member(club, alice)
     add_member(club, bob)
+    membership = add_member(club, alice)
     root = message(club, bob, "Earlier recipient")
     records = Memba.Messaging.DeliveryQueries.list_member_email_deliverys(root)
     assert Enum.find(records, &(&1.recipient_id == alice)).recipient_name == "Alice Smith"
