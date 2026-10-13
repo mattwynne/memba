@@ -301,6 +301,8 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                consistency: :eventual
              )
 
+    grant_checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+
     assert ConversationGroupAccessQueries.member_has_conversation_access?(
              reply.message_id,
              club.club_id,
@@ -321,6 +323,19 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
              person.person_id,
              :read
            )
+
+    # The authoritative reads above need not wait for the read-model projector.
+    # Join its eventual grant before the sandbox owner can be released.
+    Memba.ProjectionBarrier.await!([ConversationGroupAccessProjector],
+      checkpoint: grant_checkpoint,
+      timeout: 5_000
+    )
+
+    assert %ConversationGroupAccessProjection{access_level: "read"} =
+             Repo.get_by!(ConversationGroupAccessProjection,
+               conversation_id: root.message_id,
+               group_id: group_id
+             )
   end
 
   test "member access fails closed when a conversation has more than one group" do
