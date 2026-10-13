@@ -3,13 +3,13 @@
 Date: 2026-08-13
 Status: merged
 
-## Release candidate — publication pending
+## Delivery boundary
 
-The status above is the intended metadata for the parent-owned 068 release candidate, not a
-claim that this private branch is already published or deployed. Publication remains conditional
-on the additional independent source review accepting, exact committed `dev check` and connected
-browser proofs passing, and safe integration with public main. The parent owns publication,
-normal CI/Fly observation and deployed verification; none is claimed here in advance.
+The `merged` status becomes authoritative when this candidate is published on main; on a private
+branch it is release intent, not a claim of publication. Publication requires independent source
+acceptance, exact committed `dev check` and connected browser proofs, and safe integration with
+public main. The parent owns publication, normal CI/Fly observation and deployed verification.
+The status alone does not establish or claim production verification.
 
 The approved scope, designs, model decisions and planning evidence below are retained as history.
 Statements about then-current repository gaps or pending implementation describe the planning

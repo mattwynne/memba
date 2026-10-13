@@ -163,9 +163,16 @@ for (const width of [390, 1320]) {
         return {
           card: { left: card.left, right: card.right, top: card.top, bottom: card.bottom },
           edit: { left: edit.left, right: edit.right, top: edit.top, bottom: edit.bottom },
-          viewport: { width: innerWidth, height: innerHeight }
+          viewport: { width: innerWidth, height: innerHeight },
+          styles: {
+            rowDisplay: getComputedStyle(button.parentElement).display,
+            cardOverflow: getComputedStyle(button.closest("#my-settings-profile-card")).overflow,
+            nameMinWidth: getComputedStyle(document.querySelector("#my-settings-profile-name")).minWidth,
+            nameOverflowWrap: getComputedStyle(document.querySelector("#my-settings-profile-name")).overflowWrap
+          }
         };
       });
+      console.info(`Saved maximum ASCII name at ${width}px: ${JSON.stringify(bounds)}`);
       assert.ok(bounds.edit.right > bounds.edit.left && bounds.edit.bottom > bounds.edit.top);
       assert.ok(bounds.edit.left >= Math.max(bounds.card.left, 0)
         && bounds.edit.right <= Math.min(bounds.card.right, bounds.viewport.width)

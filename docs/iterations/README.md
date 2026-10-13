@@ -76,7 +76,7 @@ historical plans, specify current behaviour.
 | 065 | 2026-09-27 | merged | Browser journeys distinct from domain rule examples | [delivery log](065-browser-journeys-and-domain-examples/plan.md) — `features/journeys/`, domain features, conditional responsive checks |
 | 066 | 2026-09-27 | merged | Ask to join a group | [plan](066-request-group-access/plan.md) — `custom_group_access_requests.feature`, `journeys/custom_group_access_request.feature`, `group_conversations.feature` |
 | 067 | 2026-09-28 | merged | Live projection queries for open club-member pages | [plan](067-live-projection-queries/plan.md) — `live_club_member_list.feature` |
-| 068 | 2026-08-13 | merged | Members change their own name (release candidate; publication pending) | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
+| 068 | 2026-08-13 | merged | Members change their own name | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
 | 069 | 2026-08-13 | needs-revision | Members set their own profile photo (renumbered; dependency review pending) | [plan](069-member-profile-photo/plan.md) — `member_profile.feature` |
 
 The former 065–067 plans were shifted to 066–068 to make room for the
@@ -87,8 +87,8 @@ renumbered drafts are not covered by their old Fabro validation results.
 
 Status notes:
 
-- The private 068 candidate's `merged` metadata is publication intent, conditional on independent
-  acceptance, exact gates and parent publication; it does not claim deployment verification.
+- The 068 `merged` status becomes authoritative on main, following independent acceptance,
+  exact gates and parent publication; status alone does not establish deployment verification.
 
 - `deferred` means deliberately parked, even if previously validated; not selected for current delivery.
 - `draft` means a captured plan still needs human review before validation or implementation.
