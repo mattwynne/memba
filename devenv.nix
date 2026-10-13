@@ -110,6 +110,11 @@ in
   languages.elixir.enable = true;
 
   env = {
+    # CI overrides these together with the unique container version. They are
+    # observable in a bare sandbox before runtime devenv shell setup.
+    MEMBA_FABRO_IMAGE_VERSION = "local";
+    MEMBA_FABRO_IMAGE_SOURCE = "unpublished";
+    MEMBA_FABRO_IMAGE_BUILD = "local";
     PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
     SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
@@ -199,7 +204,8 @@ in
   containers."fabro-dev" = {
     name = "mattwynne/memba-fabro-dev";
     registry = "docker://ghcr.io/";
-    version = "latest";
+    # Local builds are not deployment versions. CI supplies a never-reused tag.
+    version = "local";
     # Fabro supplies the container command itself. The default devenv entrypoint
     # runs enterShell and then exits, which terminates Fabro's run container and
     # kills in-flight docker exec commands such as git clone with exit 137.
