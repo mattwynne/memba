@@ -70,6 +70,8 @@ defmodule MembaWeb.MySettingsLive do
               name |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
             end
 
+            previous_draft = state.draft["name"]
+
             state =
               MembaWeb.FormConflict.observe(
                 state,
@@ -77,7 +79,11 @@ defmodule MembaWeb.MySettingsLive do
                 normalize
               )
 
-            assign(socket, name_state: state, name_form: to_form(state.draft, as: :person))
+            assign(socket,
+              name_state: state,
+              name_form: to_form(state.draft, as: :person),
+              name_reconcile_from: if(state.draft["name"] != previous_draft, do: previous_draft)
+            )
           else
             socket
           end
@@ -120,12 +126,14 @@ defmodule MembaWeb.MySettingsLive do
       value |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
     end
 
+    previous_draft = state.draft["name"]
     state = MembaWeb.FormConflict.observe(state, state.latest, normalize)
 
     {:noreply,
      assign(socket,
        name_state: state,
        name_form: to_form(state.draft, as: :person),
+       name_reconcile_from: if(state.draft["name"] != previous_draft, do: previous_draft),
        name_error: nil
      )}
   end
@@ -439,6 +447,7 @@ defmodule MembaWeb.MySettingsLive do
                     phx-submit="save_name"
                     phx-hook=".ProfileNameBaseline"
                     data-latest-name={@name_state.latest["name"]}
+                    data-reconcile-from={Map.get(assigns, :name_reconcile_from)}
                     data-latest-baseline={
                       name_baseline_token(@current_person.person_id, @name_state.latest["name"])
                     }
@@ -465,7 +474,7 @@ defmodule MembaWeb.MySettingsLive do
                           this.localDirty = input.value !== baseline.dataset.name
                         },
                         updated() {
-                          if (this.localDirty) {
+                          if (this.localDirty && this.localValue !== this.el.dataset.reconcileFrom) {
                             this.el.querySelector("#my-settings-name-input").value = this.localValue
                           }
                           this.reconcile()
@@ -475,7 +484,7 @@ defmodule MembaWeb.MySettingsLive do
                           const baseline = this.el.querySelector("[name='person[baseline_token]']")
                           // A patch may precede a locally typed change event. Never
                           // advance that draft's baseline or overwrite its text.
-                          if (input.value === baseline.dataset.name) {
+                          if (input.value === baseline.dataset.name || input.value === this.el.dataset.reconcileFrom) {
                             input.value = this.el.dataset.latestName
                             baseline.dataset.name = this.el.dataset.latestName
                             baseline.value = this.el.dataset.latestBaseline
