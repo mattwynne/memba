@@ -633,6 +633,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              Repo.get!(MembershipProjection, carol_membership_id)
 
     refute MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
+
     refute MembershipQueries.active_member_of_group?(
              SystemGroups.everyone_group_id(club_id),
              carol.person_id

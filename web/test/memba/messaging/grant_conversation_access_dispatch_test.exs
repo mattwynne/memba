@@ -256,6 +256,7 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
 
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
     restart_projector!(projector_child_id)
+
     Memba.ProjectionBarrier.await!([ConversationGroupAccessProjector],
       checkpoint: checkpoint,
       timeout: 5_000
@@ -315,6 +316,7 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
 
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
     restart_projector!(projector_child_id)
+
     Memba.ProjectionBarrier.await!([ConversationGroupAccessProjector],
       checkpoint: checkpoint,
       timeout: 5_000
