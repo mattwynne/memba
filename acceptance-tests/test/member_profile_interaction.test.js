@@ -138,6 +138,49 @@ for (const width of [390, 1320]) {
     }
   });
 
+  test(`saved unbroken 100-character name keeps Edit inside the visible card at ${width}px`, { timeout: 120000 }, async () => {
+    const context = await browser.newContext({ viewport: { width, height: 1000 } });
+    try {
+      const page = await context.newPage();
+      const world = { browser, context, page, baseUrl: lifecycle.baseUrl };
+      assert.equal((await context.request.post(new URL("/dev/test-support/reset", world.baseUrl).toString())).status(), 204);
+      await ensureMember(world, "Alice Smith", kootenayClubName);
+      await signInDirectly(world, "Alice Smith");
+      await openClubPage(world, kootenayClubName);
+      await expect(page.locator(".phx-connected #club-site-identity-menu-button")).toBeVisible();
+      await page.locator("#club-site-identity-menu-button").click();
+      await page.locator("#club-site-account-settings-link").click();
+      await expect(page.locator(".phx-connected #my-settings")).toBeVisible();
+      const name = "W".repeat(100);
+      await edit(page);
+      await save(page, name);
+      await expect(page.locator("#my-settings-profile-name")).toHaveText(name);
+      const card = page.locator("#my-settings-profile-card");
+      await card.scrollIntoViewIfNeeded();
+      const bounds = await page.locator("#my-settings-edit-name").evaluate(button => {
+        const card = button.closest("#my-settings-profile-card").getBoundingClientRect();
+        const edit = button.getBoundingClientRect();
+        return {
+          card: { left: card.left, right: card.right, top: card.top, bottom: card.bottom },
+          edit: { left: edit.left, right: edit.right, top: edit.top, bottom: edit.bottom },
+          viewport: { width: innerWidth, height: innerHeight }
+        };
+      });
+      assert.ok(bounds.edit.right > bounds.edit.left && bounds.edit.bottom > bounds.edit.top);
+      assert.ok(bounds.edit.left >= Math.max(bounds.card.left, 0)
+        && bounds.edit.right <= Math.min(bounds.card.right, bounds.viewport.width)
+        && bounds.edit.top >= Math.max(bounds.card.top, 0)
+        && bounds.edit.bottom <= Math.min(bounds.card.bottom, bounds.viewport.height),
+      `Edit must be entirely inside the visible card: ${JSON.stringify(bounds)}`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      // A bounded rectangle alone is not proof that the saved name is editable.
+      await edit(page);
+      await expect(page.getByLabel("Your name", { exact: true })).toHaveValue(name);
+    } finally {
+      await context.close();
+    }
+  });
+
   test(`untouched stale Save never confirms an undisplayed draft at ${width}px`, { timeout: 120000 }, async () => {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const projector = `
