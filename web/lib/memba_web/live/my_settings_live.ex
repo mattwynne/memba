@@ -107,6 +107,7 @@ defmodule MembaWeb.MySettingsLive do
      assign(socket,
        name_state: state,
        name_opened_name: state.baseline["name"],
+       name_reconcile_from: nil,
        name_form: to_form(state.draft, as: :person),
        name_error: nil
      )}
@@ -474,7 +475,7 @@ defmodule MembaWeb.MySettingsLive do
                           this.localDirty = input.value !== baseline.dataset.name
                         },
                         updated() {
-                          if (this.localDirty && this.localValue !== this.el.dataset.reconcileFrom) {
+                          if (this.localDirty) {
                             this.el.querySelector("#my-settings-name-input").value = this.localValue
                           }
                           this.reconcile()
@@ -482,9 +483,13 @@ defmodule MembaWeb.MySettingsLive do
                         reconcile() {
                           const input = this.el.querySelector("#my-settings-name-input")
                           const baseline = this.el.querySelector("[name='person[baseline_token]']")
+                          const from = this.el.dataset.reconcileFrom
+                          const freshReconciliation = from !== this.reconciledFrom
+                          this.reconciledFrom = from
                           // A patch may precede a locally typed change event. Never
                           // advance that draft's baseline or overwrite its text.
-                          if (input.value === baseline.dataset.name || input.value === this.el.dataset.reconcileFrom) {
+                          // Consume normalized-undo acknowledgements only once.
+                          if (input.value === baseline.dataset.name || (freshReconciliation && input.value === from)) {
                             input.value = this.el.dataset.latestName
                             baseline.dataset.name = this.el.dataset.latestName
                             baseline.value = this.el.dataset.latestBaseline

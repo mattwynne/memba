@@ -176,17 +176,9 @@ defmodule MembaWeb.MySettingsLiveTest do
       |> LazyHTML.attribute("data-latest-baseline")
       |> hd()
 
-    older
-    |> form("#my-settings-name-form",
-      person: %{name: "Alice Green", baseline_token: adopted_baseline}
-    )
-    |> render_change()
-
-    older
-    |> form("#my-settings-name-form",
-      person: %{name: "Alice Green", baseline_token: adopted_baseline}
-    )
-    |> render_submit()
+    params = %{"person" => %{"name" => "Alice Green", "baseline_token" => adopted_baseline}}
+    render_change(older, "change_name", params)
+    render_submit(older, "save_name", params)
 
     assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Alice Green"
   end
