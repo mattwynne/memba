@@ -13,8 +13,11 @@ defmodule MembaWeb.FormConflict do
   def observe(%__MODULE__{} = state, latest, normalize \\ &Function.identity/1)
       when is_map(latest) do
     Enum.reduce(latest, %{state | latest: latest}, fn {field, value}, state ->
-      if normalize.(Map.fetch!(state.draft, field)) ==
-           normalize.(Map.fetch!(state.baseline, field)) do
+      confirming_field? = is_map(state.confirmation) and Map.has_key?(state.confirmation, field)
+
+      if not confirming_field? and
+           normalize.(Map.fetch!(state.draft, field)) ==
+             normalize.(Map.fetch!(state.baseline, field)) do
         %{
           state
           | baseline: Map.put(state.baseline, field, value),
