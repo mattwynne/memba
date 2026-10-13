@@ -945,10 +945,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
+    # Finish the custom-group follow cleanup before re-adding Carol; the stopped
+    # access projector keeps the conversation invisible to that policy.
     await_restarted_subscribers!([
       MembershipProjector,
       GroupMembershipProjector,
-      SystemGroupMembership
+      SystemGroupMembership,
+      ClearRemovedGroupMemberFollows
     ])
 
     assert :ok =
