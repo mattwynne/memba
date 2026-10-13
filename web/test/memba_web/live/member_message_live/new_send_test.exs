@@ -459,7 +459,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
     _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
 
-    stop_projector!(Memba.Messaging.Projectors.MembaStaffEmailDelivery)
+    staff_projector = Memba.Messaging.Projectors.MembaStaffEmailDelivery
+    staff_projector_child_id = stop_projector!(staff_projector)
 
     {:ok, view, _html} =
       conn
@@ -486,6 +487,15 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
            )
 
     refute has_element?(view, "#member-compose-error-state")
+
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+    restart_projector!(staff_projector_child_id)
+    Memba.ProjectionBarrier.await!([staff_projector], checkpoint: checkpoint, timeout: 5_000)
+
+    assert Repo.exists?(
+             from delivery in Memba.Messaging.Projections.MembaStaffEmailDelivery,
+               where: delivery.message_id == ^message.message_id
+           )
   end
 
   test "provider failure still accepts the message and renders the success state", %{

@@ -13,6 +13,7 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
   alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Message
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
+  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Recipient
 
   test "Messaging app dispatch routes GrantConversationAccessToGroup to the root Message stream" do
@@ -230,7 +231,7 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
                 dispatch_result
               end)
 
-    stop_projector!(ConversationGroupAccessProjector)
+    projector_child_id = stop_projector!(ConversationGroupAccessProjector)
 
     assert :ok =
              App.dispatch(
@@ -252,6 +253,19 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
 
     assert {:error, :ambiguous_conversation_audience} =
              ConversationGroupAccessQueries.resolve_conversation_audience(conversation_id)
+
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+    restart_projector!(projector_child_id)
+    Memba.ProjectionBarrier.await!([ConversationGroupAccessProjector],
+      checkpoint: checkpoint,
+      timeout: 5_000
+    )
+
+    assert %ConversationGroupAccessProjection{access_level: "write"} =
+             Repo.get_by!(ConversationGroupAccessProjection,
+               conversation_id: conversation_id,
+               group_id: second_group_id
+             )
   end
 
   test "an unprojected canonical revocation denies stale projected access" do
@@ -278,7 +292,7 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
                 dispatch_result
               end)
 
-    stop_projector!(ConversationGroupAccessProjector)
+    projector_child_id = stop_projector!(ConversationGroupAccessProjector)
 
     assert :ok =
              App.dispatch(
@@ -298,6 +312,18 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
 
     assert {:error, :conversation_audience_not_found} =
              ConversationGroupAccessQueries.resolve_conversation_audience(conversation_id)
+
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+    restart_projector!(projector_child_id)
+    Memba.ProjectionBarrier.await!([ConversationGroupAccessProjector],
+      checkpoint: checkpoint,
+      timeout: 5_000
+    )
+
+    refute Repo.get_by(ConversationGroupAccessProjection,
+             conversation_id: conversation_id,
+             group_id: group_id
+           )
   end
 
   test "public API revokes access, projects the removal, and is idempotent" do
@@ -444,13 +470,16 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
     assert child_id
     assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
 
-    on_exit(fn ->
-      case Supervisor.restart_child(Memba.Supervisor, child_id) do
-        {:ok, _pid} -> :ok
-        {:ok, _pid, _info} -> :ok
-        {:error, :running} -> :ok
-      end
-    end)
+    on_exit(fn -> restart_projector!(child_id) end)
+    child_id
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+    end
   end
 
   defp grant_command(conversation_id, club_id, group_id, access_level) do
