@@ -4,6 +4,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -142,6 +143,57 @@ defmodule Memba.Membership.PersonProjectionTest do
                is_primary: true
              }
            ] = email_addresses_for(person_id)
+  end
+
+  test "PersonMerged moves email ownership and hides the source from active people" do
+    target_id = Memba.ID.generate(:person)
+    source_id = Memba.ID.generate(:person)
+    verified_at = ~U[2026-10-13 06:00:00Z]
+
+    assert :ok =
+             App.dispatch(
+               %CreatePerson{person_id: target_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %CreatePerson{
+                 person_id: source_id,
+                 name: "Duplicate Alice",
+                 email: "alice@work.example"
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %MergePerson{
+                 person_id: target_id,
+                 source_person_id: source_id,
+                 email_addresses: [
+                   %{
+                     email: "alice@example.com",
+                     normalized_email: "alice@example.com",
+                     is_primary: true,
+                     verified_at: verified_at
+                   },
+                   %{
+                     email: "alice@work.example",
+                     normalized_email: "alice@work.example",
+                     is_primary: false,
+                     verified_at: verified_at
+                   }
+                 ]
+               },
+               consistency: :strong
+             )
+
+    assert %{merged_into_person_id: ^target_id} = PersonQueries.get_person(source_id)
+    refute Enum.any?(PersonQueries.list_people(), &(&1.person_id == source_id))
+    assert %{person_id: ^target_id} = PersonQueries.get_person_by_email("alice@work.example")
+    assert email_addresses_for(source_id) == []
+    assert length(email_addresses_for(target_id)) == 2
   end
 
   test "get_person/1 returns nil for missing or invalid person IDs" do

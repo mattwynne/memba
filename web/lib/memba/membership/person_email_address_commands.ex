@@ -22,11 +22,13 @@ defmodule Memba.Membership.PersonEmailAddressCommands do
 
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.Membership.Projections.Person
 
   def prepare_add(attrs) when is_map(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, email} <- fetch_required(attrs, :email),
          {:ok, normalized} <- EmailAddresses.normalize_email(email),
+         :ok <- ensure_not_merged(person_id),
          :ok <- prevent_duplicate(person_id, [normalized]) do
       {:ok, %AddPersonEmailAddress{person_id: person_id, email: email}}
     end
@@ -36,6 +38,7 @@ defmodule Memba.Membership.PersonEmailAddressCommands do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, email_addresses} <- fetch_required(attrs, :email_addresses),
          {:ok, normalized} <- EmailAddresses.validate_set(email_addresses),
+         :ok <- ensure_not_merged(person_id),
          :ok <- prevent_duplicate(person_id, normalized),
          {:ok, requests} <- pending_removed_requests(person_id, normalized) do
       {:ok, %ReplacePersonEmailAddresses{person_id: person_id, email_addresses: email_addresses},
@@ -46,7 +49,8 @@ defmodule Memba.Membership.PersonEmailAddressCommands do
   def prepare_verify(attrs) when is_map(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, email} <- fetch_required(attrs, :email),
-         {:ok, verified_at} <- verified_at(attrs) do
+         {:ok, verified_at} <- verified_at(attrs),
+         :ok <- ensure_not_merged(person_id) do
       {:ok,
        %VerifyPersonEmailAddress{person_id: person_id, email: email, verified_at: verified_at}}
     end
@@ -54,14 +58,16 @@ defmodule Memba.Membership.PersonEmailAddressCommands do
 
   def prepare_make_primary(attrs) when is_map(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, email} <- fetch_required(attrs, :email) do
+         {:ok, email} <- fetch_required(attrs, :email),
+         :ok <- ensure_not_merged(person_id) do
       {:ok, %MakePersonEmailAddressPrimary{person_id: person_id, email: email}}
     end
   end
 
   def prepare_remove(attrs) when is_map(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
-         {:ok, email} <- fetch_required(attrs, :email) do
+         {:ok, email} <- fetch_required(attrs, :email),
+         :ok <- ensure_not_merged(person_id) do
       command = %RemovePersonEmailAddress{person_id: person_id, email: email}
       {:ok, command, pending_removed_requests(person_id, email)}
     end
@@ -131,6 +137,23 @@ defmodule Memba.Membership.PersonEmailAddressCommands do
     case ID.cast(:person, id) do
       {:ok, person_id} -> {:ok, person_id}
       :error -> {:error, :invalid_person_id}
+    end
+  end
+
+  defp ensure_not_merged(person_id) do
+    case cast_person_id(person_id) do
+      {:ok, person_id} ->
+        case Repo.get(Person, person_id) do
+          %Person{merged_into_person_id: merged_into_person_id}
+          when is_binary(merged_into_person_id) ->
+            {:error, :person_merged}
+
+          _active_or_unprojected ->
+            :ok
+        end
+
+      {:error, :invalid_person_id} ->
+        :ok
     end
   end
 

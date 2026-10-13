@@ -8,11 +8,13 @@ defmodule Memba.Membership.Person do
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+  alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.Events.PersonEmailAddressAdded
+  alias Memba.Membership.Events.PersonMerged
   alias Memba.Membership.Events.PersonEmailAddressRemoved
   alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
@@ -22,7 +24,7 @@ defmodule Memba.Membership.Person do
   @behaviour Aggregate
   @legacy_verified_at ~U[1970-01-01 00:00:00Z]
 
-  defstruct [:person_id, :name, :email, :email_addresses]
+  defstruct [:person_id, :name, :email, :email_addresses, merged_source_person_ids: []]
 
   @impl Aggregate
   def execute(%__MODULE__{person_id: nil}, %CreatePerson{} = command) do
@@ -183,6 +185,32 @@ defmodule Memba.Membership.Person do
   end
 
   @impl Aggregate
+  def execute(%__MODULE__{person_id: nil}, %MergePerson{}), do: {:error, :person_not_created}
+
+  def execute(%__MODULE__{} = person, %MergePerson{} = command) do
+    if command.source_person_id in person.merged_source_person_ids do
+      []
+    else
+      with :ok <- validate_person_id(command.person_id),
+           :ok <- validate_matching_person_id(person, command),
+           :ok <- validate_person_id(command.source_person_id),
+           :ok <- reject_self_merge(command),
+           {:ok, email_addresses} <- EmailAddresses.validate_state(command.email_addresses),
+           {:ok, primary_email} <- primary_email(email_addresses),
+           :ok <- preserve_target_primary(person, primary_email),
+           :ok <- preserve_target_addresses(person, email_addresses),
+           :ok <- require_imported_addresses_verified(person, email_addresses) do
+        %PersonMerged{
+          person_id: command.person_id,
+          source_person_id: command.source_person_id,
+          email_addresses: email_addresses,
+          primary_email: primary_email
+        }
+      end
+    end
+  end
+
+  @impl Aggregate
   def apply(%__MODULE__{} = person, %PersonCreated{} = event) do
     %__MODULE__{
       person
@@ -240,6 +268,47 @@ defmodule Memba.Membership.Person do
       person
       | email_addresses: remove_non_primary!(person.email_addresses, event.normalized_email)
     }
+  end
+
+  def apply(%__MODULE__{} = person, %PersonMerged{} = event) do
+    %__MODULE__{
+      person
+      | email: event.primary_email,
+        email_addresses: replacement_email_addresses!(event.email_addresses),
+        merged_source_person_ids:
+          Enum.uniq([event.source_person_id | person.merged_source_person_ids])
+    }
+  end
+
+  defp reject_self_merge(%MergePerson{person_id: person_id, source_person_id: person_id}),
+    do: {:error, :cannot_merge_person_into_itself}
+
+  defp reject_self_merge(%MergePerson{}), do: :ok
+
+  defp preserve_target_primary(person, primary_email) do
+    if person.email == primary_email, do: :ok, else: {:error, :target_primary_email_changed}
+  end
+
+  defp preserve_target_addresses(person, merged_addresses) do
+    merged = MapSet.new(merged_addresses, & &1.normalized_email)
+
+    if Enum.all?(person.email_addresses, &MapSet.member?(merged, &1.normalized_email)) do
+      :ok
+    else
+      {:error, :target_email_address_missing}
+    end
+  end
+
+  defp require_imported_addresses_verified(person, merged_addresses) do
+    existing = MapSet.new(person.email_addresses, & &1.normalized_email)
+
+    if Enum.all?(merged_addresses, fn address ->
+         MapSet.member?(existing, address.normalized_email) or not is_nil(address.verified_at)
+       end) do
+      :ok
+    else
+      {:error, :source_has_pending_email_address}
+    end
   end
 
   defp validate_person_id(person_id) do

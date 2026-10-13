@@ -10,6 +10,7 @@ defmodule Memba.Membership.Projectors.Person do
     consistency: :strong
 
   alias Memba.Membership.Events.PersonEmailAddressAdded
+  alias Memba.Membership.Events.PersonMerged
   alias Memba.Membership.Events.PersonEmailAddressRemoved
   alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
@@ -17,6 +18,7 @@ defmodule Memba.Membership.Projectors.Person do
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.Membership.EmailAddressVerificationToken
 
   project(%PersonCreated{} = event, fn multi ->
     multi
@@ -97,6 +99,32 @@ defmodule Memba.Membership.Projectors.Person do
     )
   end)
 
+  project(%PersonMerged{} = event, fn multi ->
+    now = DateTime.utc_now(:microsecond)
+
+    multi
+    |> mark_source_merged(event.source_person_id, event.person_id, now)
+    |> Ecto.Multi.update_all(
+      :membership_source_verification_tokens_revoked,
+      pending_verification_tokens_query(event.source_person_id),
+      set: [revoked_at: now, updated_at: now]
+    )
+    |> Ecto.Multi.delete_all(
+      :membership_source_email_addresses_deleted,
+      email_addresses_query(event.source_person_id)
+    )
+    |> Ecto.Multi.update_all(
+      :membership_merged_person_primary_email,
+      person_query(event.person_id),
+      set: [email: event.primary_email, updated_at: now]
+    )
+    |> Ecto.Multi.delete_all(
+      :membership_merged_person_email_addresses_replaced,
+      email_addresses_query(event.person_id)
+    )
+    |> insert_email_addresses(event.person_id, event.email_addresses)
+  end)
+
   defp upsert_legacy_primary_email_address(multi, %PersonCreated{} = event) do
     changeset =
       PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
@@ -175,6 +203,33 @@ defmodule Memba.Membership.Projectors.Person do
         email_address.person_id == ^person_id and
           email_address.normalized_email == ^normalized_email
     )
+  end
+
+  defp pending_verification_tokens_query(person_id) do
+    Ecto.Query.from(token in EmailAddressVerificationToken,
+      where:
+        token.person_id == ^person_id and is_nil(token.consumed_at) and
+          is_nil(token.revoked_at)
+    )
+  end
+
+  defp mark_source_merged(multi, source_person_id, target_person_id, now) do
+    Ecto.Multi.run(multi, :membership_source_person_merged, fn repo, _changes ->
+      query =
+        Ecto.Query.from(person in PersonProjection,
+          where:
+            person.person_id == ^source_person_id and
+              (is_nil(person.merged_into_person_id) or
+                 person.merged_into_person_id == ^target_person_id)
+        )
+
+      case repo.update_all(query,
+             set: [merged_into_person_id: target_person_id, updated_at: now]
+           ) do
+        {1, nil} -> {:ok, target_person_id}
+        {0, nil} -> {:error, :source_person_missing_or_already_merged_elsewhere}
+      end
+    end)
   end
 
   defp verified_at!(%DateTime{} = verified_at), do: verified_at

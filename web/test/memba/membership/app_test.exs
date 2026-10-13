@@ -19,6 +19,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+  alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
   alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
@@ -114,6 +115,7 @@ defmodule Memba.Membership.AppTest do
         GrantClubRolePermission,
         InviteClubMember,
         MakePersonEmailAddressPrimary,
+        MergePerson,
         ReconcileLegacyAdminHistory,
         RemoveCustomGroupMember,
         RemoveGroupMember,

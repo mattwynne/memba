@@ -64,6 +64,7 @@ defmodule Memba.Membership.PersonQueries do
 
   def list_people do
     Person
+    |> where([person], is_nil(person.merged_into_person_id))
     |> order_by([person], asc: person.name, asc: person.person_id)
     |> Repo.all()
   end
