@@ -2,7 +2,25 @@
 
 Fabro runs Memba iteration-implementation work inside Docker images built from this project's `devenv.nix` using `devenv container`.
 
+## Published image versions
+
+`.github/workflows/fabro-dev-image.yml` publishes a new tag for each build attempt:
+`sha-<full-source-SHA>-run-<GitHub-run-ID>-<attempt>`. Rerunning a build creates a different tag; the pipeline does not publish or promote `latest`. The build and copy commands receive identical version/source/build overrides. Bare containers expose these as `MEMBA_FABRO_IMAGE_VERSION`, `MEMBA_FABRO_IMAGE_SOURCE`, and `MEMBA_FABRO_IMAGE_BUILD` before `devenv shell` resets the runtime environment.
+
+After registry identity and bare `cmp` checks pass, CI uploads the `published-fabro-image-<run-ID>-<attempt>` artifact containing `published-fabro-image.json` (reference, registry digest, source, run ID, attempt) and the registry inspection. **Only select a receipt from a completed, successful image workflow run.** A failed/cancelled run, an incomplete upload, or a current application HEAD with no image build is not a deployment candidate.
+
+Roll out in two stages:
+
+1. Publish the image pipeline/source change and wait for that exact image CI run to succeed. Download its receipt and confirm the source SHA and attempt against the successful run.
+2. Set all Memba-owned `.fabro/workflows/*/workflow.toml` Docker image references to the receipt's full **version-tagged** reference. Update the corresponding static test, validate the exact pin commit, and publish it. Do not synthesize a tag from the current application HEAD. Keep the registry digest as evidence, not as the workflow image syntax (installed Fabro 0.316 expects a full version-tagged reference).
+
+A fresh Fabro Docker run with this previously uncached tag pulls the published version without relying on a host refresh of `latest`. Verify its bare tools and baked version/source/build identity on `https://fabro.home.wynne.family` before calling rollout complete. The sandbox API exposes the requested tag and container ID, not necessarily a host-local digest: report only the identity actually observed. Existing running/resumed containers are not upgraded or stopped.
+
+Local `devenv container` builds use the non-deployment tag `local`. Manual local builds/copies are not published deployment versions. Use CI for normal publication.
+
 ## Operational notes
+
+The following host-maintenance route is historical/manual; normal version-tag rollout does not require SSH or host Docker access.
 
 The production Fabro host is managed from the sibling `hub.local` project.
 
@@ -127,10 +145,10 @@ A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-d
 
 ## Verification
 
-After rebuilding/loading the image on Fabro, verify with:
+For manual host verification, set `IMAGE` to the full reference from a successful CI receipt (never `latest` or an arbitrary source SHA), then run:
 
 ```sh
-docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && command -v nix && nix --version && command -v python3 && python3 --version && command -v cmp && cmp --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
+docker run --rm --entrypoint /bin/sh "$IMAGE" -lc 'command -v git && git --version && command -v nix && nix --version && command -v python3 && python3 --version && command -v cmp && cmp --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
 ```
 
 Expected shape:

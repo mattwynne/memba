@@ -9,6 +9,8 @@ on:
       - devenv.lock
       - devenv.yaml
       - .github/workflows/fabro-dev-image.yml
+      - .github/scripts/fabro-dev-image.sh
+      - .github/scripts/test-fabro-dev-image.sh
 
 permissions:
   contents: read
@@ -16,14 +18,24 @@ permissions:
 
 concurrency:
   group: fabro-dev-image
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Check publication helper
+        run: .github/scripts/test-fabro-dev-image.sh
+
+      - name: Select never-reused build version
+        run: |
+          version="$(.github/scripts/fabro-dev-image.sh version)"
+          echo "FABRO_IMAGE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "FABRO_IMAGE_REFERENCE=ghcr.io/mattwynne/memba-fabro-dev:$version" >> "$GITHUB_ENV"
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -36,14 +48,55 @@ jobs:
         with:
           name: devenv
 
-      - name: Install devenv
-        run: nix profile install nixpkgs#devenv
+      - name: Install publication tools
+        run: nix profile install nixpkgs#devenv nixpkgs#skopeo
 
       - name: Build devenv container
-        run: devenv container build fabro-dev
+        run: .github/scripts/fabro-dev-image.sh build
 
       - name: Log in to GitHub Container Registry
         run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Push devenv container to GHCR
-        run: devenv container copy fabro-dev
+      - name: Push versioned devenv container to GHCR
+        run: .github/scripts/fabro-dev-image.sh copy
+
+      - name: Verify published identity and bare tools
+        run: |
+          skopeo inspect --authfile "$HOME/.docker/config.json" "docker://$FABRO_IMAGE_REFERENCE" > published-image-inspect.json
+          jq -e --arg version "$FABRO_IMAGE_VERSION" --arg source "$GITHUB_SHA" --arg build "$GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT" '
+            (.Env | index("MEMBA_FABRO_IMAGE_VERSION=" + $version)) != null and
+            (.Env | index("MEMBA_FABRO_IMAGE_SOURCE=" + $source)) != null and
+            (.Env | index("MEMBA_FABRO_IMAGE_BUILD=" + $build)) != null and
+            (.Digest | test("^sha256:[0-9a-f]{64}$"))
+          ' published-image-inspect.json
+          docker run --rm --entrypoint /bin/bash "$FABRO_IMAGE_REFERENCE" -c '
+            set -euo pipefail
+            command -v cmp
+            cmp --version
+            printf "equal\\n" > /tmp/left
+            cp /tmp/left /tmp/right
+            cmp /tmp/left /tmp/right
+            printf "different\\n" > /tmp/right
+            set +e
+            cmp /tmp/left /tmp/right
+            status=$?
+            set -e
+            test "$status" -eq 1
+          '
+          jq -n --arg reference "$FABRO_IMAGE_REFERENCE" --arg version "$FABRO_IMAGE_VERSION" \
+            --arg source "$GITHUB_SHA" --arg run_id "$GITHUB_RUN_ID" --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg digest "$(jq -r .Digest published-image-inspect.json)" \
+            '{reference: $reference, version: $version, source: $source, run_id: $run_id, run_attempt: $run_attempt, digest: $digest}' \
+            > published-fabro-image.json
+          cat published-fabro-image.json >> "$GITHUB_STEP_SUMMARY"
+
+      # No moving tag or workflow pin is promoted by this job. Select this
+      # receipt only after the entire run finishes successfully.
+      - name: Retain successful publication receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-fabro-image-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            published-fabro-image.json
+            published-image-inspect.json
+          if-no-files-found: error
