@@ -19,6 +19,7 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
   alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.CustomGroupRemoval
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -249,6 +250,7 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
                [event_data]
              )
 
+    legacy_checkpoint = Memba.ProjectionBarrier.current_checkpoint()
     Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
 
     assert %GroupMemberRemoved{
@@ -270,6 +272,14 @@ defmodule Memba.Membership.RemoveCustomGroupMemberDispatchTest do
              },
              removal_operations: %{}
            } = App.aggregate_state(Club, ids.club_id)
+
+    # Raw EventStore appends have no dispatch consistency boundary; join the
+    # legacy event's follow-cleanup handler before releasing the sandbox owner.
+    assert %{checkpoint: ^legacy_checkpoint} =
+             Memba.ProjectionBarrier.await!([ClearRemovedGroupMemberFollows],
+               checkpoint: legacy_checkpoint,
+               timeout: 5_000
+             )
   end
 
   test "requires a caller-generated removal operation ID" do
