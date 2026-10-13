@@ -58,8 +58,11 @@ for (const width of [390, 1320]) {
       await expect(page.locator("#my-settings-name-form")).toHaveCount(0);
       await expect(page.locator("#my-settings-profile-name")).toHaveText("Robin Jones");
       await edit(page);
+      await input.fill("Not saved");
       await edit(other);
       await save(other, "Alice Smith");
+      await expect(input).toHaveValue("Not saved");
+      await input.fill(" Robin   Jones ");
       await expect(input).toHaveValue("Alice Smith");
       // Delay this tab's change event so the remote refresh reaches its server
       // before the locally typed draft. Neither the draft nor its baseline may
