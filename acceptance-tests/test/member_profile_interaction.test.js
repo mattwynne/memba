@@ -19,24 +19,6 @@ after(async () => {
   await lifecycle.stop();
 });
 
-async function traceEditor(page, label) {
-  const snapshot = await page.evaluate(() => {
-    const form = document.querySelector("#my-settings-name-form");
-    const baseline = document.querySelector("#my-settings-name-baseline-token");
-    return { input: document.querySelector("#my-settings-name-input")?.value,
-      baseline: baseline?.dataset.name, latest: form?.dataset.latestName,
-      from: form?.dataset.reconcileFrom, confirming: form?.dataset.confirmingName,
-      hook: form?.getAttribute("phx-hook"), assets: [...document.querySelectorAll("script[src]")].map(s => s.src) };
-  });
-  const app = snapshot.assets.find(url => /\/app[^/]*\.js/.test(url));
-  if (app) {
-    const source = await (await page.request.get(app)).text();
-    snapshot.assetHasConfirmationGuard = source.includes("confirmingName");
-    snapshot.assetHasAcknowledgement = source.includes("freshReconciliation");
-  }
-  console.error(label, JSON.stringify(snapshot));
-}
-
 async function edit(page) {
   await page.locator("#my-settings-edit-name").click();
   await expect(page.getByLabel("Your name", { exact: true })).toBeVisible();
@@ -95,12 +77,12 @@ for (const width of [390, 1320]) {
       await expect(page.locator("#my-settings-profile-name")).toHaveText("Alice Jones");
       await expect(input).toHaveValue("Alice Brown");
       await expect(input).toBeFocused();
-      await traceEditor(page, "R3 before Enter");
       await input.press("Enter");
-      await page.waitForTimeout(3500);
-      await traceEditor(page, "R3 after Enter");
       const warning = page.locator("#my-settings-name-conflict");
-      await expect(warning).toContainText("Changed elsewhere to “Alice Jones”.");
+      // The deliberately delayed submit and its reply each take 3 seconds.
+      // Wait for the outcome, not an arbitrary sleep or a shorter default timeout.
+      await expect(warning).toContainText("Changed elsewhere to “Alice Jones”.", { timeout: 15000 });
+      await expect(input).toHaveValue("Alice Brown");
       await expect(warning).toHaveAttribute("role", "alert");
       await expect(warning).toBeFocused();
       await page.evaluate(() => window.liveSocket.disableLatencySim());
@@ -192,7 +174,6 @@ for (const width of [390, 1320]) {
 `, { personId: world.people["Alice Smith"].personId });
         await input.press("Enter");
         await expect(page.locator("#my-settings-name-conflict")).toContainText("Alice Jones");
-        await traceEditor(page, "R4 after rejection");
         await expect(input).toHaveValue("Alice Smith");
       } finally {
         runCommand(`${projector}

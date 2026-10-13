@@ -448,7 +448,7 @@ defmodule MembaWeb.MySettingsLive do
                     phx-hook=".ProfileNameBaseline"
                     data-latest-name={@name_state.latest["name"]}
                     data-reconcile-from={Map.get(assigns, :name_reconcile_from)}
-                    data-confirming-name={not is_nil(@name_state.confirmation)}
+                    data-confirming-name={if(@name_state.confirmation, do: "true", else: "false")}
                     data-latest-baseline={
                       name_baseline_token(@current_person.person_id, @name_state.latest["name"])
                     }
