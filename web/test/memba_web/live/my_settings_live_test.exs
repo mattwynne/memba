@@ -169,11 +169,25 @@ defmodule MembaWeb.MySettingsLiveTest do
     # LiveViewTest does not execute the hook. A real browser adopts this signed
     # baseline only after it has reconciled the displayed untouched value.
     adopted_baseline =
-      older |> render() |> Floki.parse_fragment!() |> Floki.find("#my-settings-name-form")
-      |> Floki.attribute("data-latest-baseline") |> hd()
+      older
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#my-settings-name-form")
+      |> LazyHTML.attribute("data-latest-baseline")
+      |> hd()
 
-    older |> form("#my-settings-name-form", person: %{name: "Alice Green", baseline_token: adopted_baseline}) |> render_change()
-    older |> form("#my-settings-name-form", person: %{name: "Alice Green", baseline_token: adopted_baseline}) |> render_submit()
+    older
+    |> form("#my-settings-name-form",
+      person: %{name: "Alice Green", baseline_token: adopted_baseline}
+    )
+    |> render_change()
+
+    older
+    |> form("#my-settings-name-form",
+      person: %{name: "Alice Green", baseline_token: adopted_baseline}
+    )
+    |> render_submit()
+
     assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Alice Green"
   end
 
