@@ -16,6 +16,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
@@ -624,7 +625,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     )
 
     Memba.ProjectionBarrier.await!(
-      [GroupMembershipProjector],
+      [GroupMembershipProjector, ClearRemovedGroupMemberFollows],
       checkpoint: Memba.ProjectionBarrier.current_checkpoint(),
       timeout: 5_000
     )
@@ -881,7 +882,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
     await_restarted_subscribers!([
       MembershipProjector,
       GroupMembershipProjector,
-      SystemGroupMembership
+      SystemGroupMembership,
+      ClearRemovedGroupMemberFollows
     ])
   end
 

@@ -735,14 +735,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     restart_projector!(group_membership_projector_child_id)
 
-    assert {:ok, _result} =
-             Memba.ProjectionBarrier.await(
-               [
-                 Memba.Membership.Projectors.GroupMembership,
-                 Memba.Membership.Projectors.Membership
-               ],
-               timeout: 1_000
-             )
+    # The follow-cleanup policy also reads the removed member's custom group.
+    Memba.ProjectionBarrier.await!(
+      [
+        Memba.Membership.Projectors.GroupMembership,
+        Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+      ],
+      timeout: 5_000
+    )
+
+    refute MembershipQueries.active_member_of_group?(private_group.group_id, alice.person_id)
   end
 
   test "a direct section patch rechecks selected-group access before its notification arrives", %{
@@ -817,14 +819,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     restart_projector!(group_membership_projector_child_id)
 
-    assert {:ok, _result} =
-             Memba.ProjectionBarrier.await(
-               [
-                 Memba.Membership.Projectors.GroupMembership,
-                 Memba.Membership.Projectors.Membership
-               ],
-               timeout: 1_000
-             )
+    Memba.ProjectionBarrier.await!(
+      [
+        Memba.Membership.Projectors.GroupMembership,
+        Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+      ],
+      timeout: 5_000
+    )
+
+    refute MembershipQueries.active_member_of_group?(private_group.group_id, alice.person_id)
   end
 
   test "a route patch replaces selected-group interests and ignores the old group's unrepresented changes",
