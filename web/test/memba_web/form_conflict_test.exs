@@ -22,6 +22,18 @@ defmodule MembaWeb.FormConflictTest do
     assert state.baseline.name == "Alice Jones"
   end
 
+  test "a rejected untouched field stays the displayed draft while unrelated untouched fields follow" do
+    state =
+      FormConflict.new(%{name: "Alice Smith", description: "Saved"})
+      |> FormConflict.rejected(%{name: "Alice Jones"})
+      |> FormConflict.observe(%{name: "Alice Green", description: "New description"})
+
+    assert state.draft == %{name: "Alice Smith", description: "New description"}
+    assert state.baseline == %{name: "Alice Smith", description: "New description"}
+    assert state.confirmation == %{name: "Alice Jones"}
+    assert state.latest == %{name: "Alice Green", description: "New description"}
+  end
+
   test "each rejected attempt can be announced again even when the displayed value is unchanged" do
     state = FormConflict.new(%{name: "Alice"}) |> FormConflict.edit(%{name: "Robin"})
     first = FormConflict.rejected(state, %{name: "Jones"})
