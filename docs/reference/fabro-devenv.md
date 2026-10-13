@@ -12,7 +12,7 @@ After registry identity and bare `cmp` checks pass, CI uploads the `published-fa
 Roll out in two stages:
 
 1. Publish the image pipeline/source change and wait for that exact image CI run to succeed. Download its receipt and confirm the source SHA and attempt against the successful run.
-2. Set all Memba-owned `.fabro/workflows/*/workflow.toml` Docker image references to the receipt's full **version-tagged** reference. Update the corresponding static test, validate the exact pin commit, and publish it. Do not synthesize a tag from the current application HEAD. Keep the registry digest as evidence, not as the workflow image syntax (installed Fabro 0.316 expects a full version-tagged reference).
+2. Copy that successful receipt to `.fabro/fabro-dev-image.json` and set all Memba-owned `.fabro/workflows/*/workflow.toml` Docker image references to its full **version-tagged** reference. Run `python3 .fabro/workflows/scripts/test_fabro_dev_image_pin.py` and `.fabro/workflows/plan-validation/test.sh --static`, validate the exact pin commit with ordinary remote `dev check`, and publish it. Do not synthesize a tag from the current application HEAD. Keep the registry digest as evidence, not as the workflow image syntax (installed Fabro 0.316 expects a full version-tagged reference).
 
 A fresh Fabro Docker run with this previously uncached tag pulls the published version without relying on a host refresh of `latest`. Verify its bare tools and baked version/source/build identity on `https://fabro.home.wynne.family` before calling rollout complete. The sandbox API exposes the requested tag and container ID, not necessarily a host-local digest: report only the identity actually observed. Existing running/resumed containers are not upgraded or stopped.
 

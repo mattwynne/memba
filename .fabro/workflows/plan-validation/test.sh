@@ -7,6 +7,8 @@ WORKFLOW=".fabro/workflows/plan-validation/workflow.toml"
 PASS_PLAN=".fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md"
 FAIL_PLAN=".fabro/workflows/plan-validation/test/fixtures/definite-fail/plan.md"
 VISIBLE_PATHS=(
+  ".fabro/fabro-dev-image.json"
+  ".fabro/workflows/scripts/test_fabro_dev_image_pin.py"
   ".fabro/workflows/plan-validation/workflow.toml"
   ".fabro/workflows/plan-validation/workflow.fabro"
   ".fabro/workflows/plan-validation/prompts/review.md"
@@ -80,16 +82,19 @@ require_publish_attestation_contract() {
 
 require_publish_environment() {
   python3 - "$REPO_ROOT/$WORKFLOW" <<'PY'
+import json
 import sys
 import tomllib
 from pathlib import Path
 
-config = tomllib.loads(Path(sys.argv[1]).read_text())
+workflow = Path(sys.argv[1])
+config = tomllib.loads(workflow.read_text())
+receipt = json.loads((workflow.parents[2] / "fabro-dev-image.json").read_text())
 selected = config["run"].get("environment", {}).get("id")
 assert selected, "plan publication requires an explicit devenv-capable environment"
 environment = config["environments"][selected]
 assert environment["provider"] == "docker"
-assert environment["image"]["docker"] == "ghcr.io/mattwynne/memba-fabro-dev:latest", (
+assert environment["image"]["docker"] == receipt["reference"], (
     "plan publication runs bin/dev check; the default buildpack image lacks devenv"
 )
 PY
@@ -174,6 +179,7 @@ run_eval() {
 cd "$REPO_ROOT"
 require_parallel_fan_in
 require_publish_attestation_contract
+python3 "$REPO_ROOT/.fabro/workflows/scripts/test_fabro_dev_image_pin.py"
 require_publish_environment
 
 # Offline regression checks must not start paid reviews or publish anything.
