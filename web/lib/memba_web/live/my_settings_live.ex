@@ -70,8 +70,6 @@ defmodule MembaWeb.MySettingsLive do
               name |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
             end
 
-            previous_draft = state.draft["name"]
-
             state =
               MembaWeb.FormConflict.observe(
                 state,
@@ -82,7 +80,8 @@ defmodule MembaWeb.MySettingsLive do
             assign(socket,
               name_state: state,
               name_form: to_form(state.draft, as: :person),
-              name_reconcile_from: if(state.draft["name"] != previous_draft, do: previous_draft)
+              # Notifications cannot acknowledge a locally submitted draft.
+              name_reconcile_from: nil
             )
           else
             socket
@@ -449,6 +448,7 @@ defmodule MembaWeb.MySettingsLive do
                     phx-hook=".ProfileNameBaseline"
                     data-latest-name={@name_state.latest["name"]}
                     data-reconcile-from={Map.get(assigns, :name_reconcile_from)}
+                    data-confirming-name={not is_nil(@name_state.confirmation)}
                     data-latest-baseline={
                       name_baseline_token(@current_person.person_id, @name_state.latest["name"])
                     }
@@ -486,6 +486,9 @@ defmodule MembaWeb.MySettingsLive do
                           const from = this.el.dataset.reconcileFrom
                           const freshReconciliation = from !== this.reconciledFrom
                           this.reconciledFrom = from
+                          // A rejected Save freezes the displayed/server draft
+                          // until the member explicitly confirms or edits it.
+                          if (this.el.dataset.confirmingName === "true") return
                           // A patch may precede a locally typed change event. Never
                           // advance that draft's baseline or overwrite its text.
                           // Consume normalized-undo acknowledgements only once.
