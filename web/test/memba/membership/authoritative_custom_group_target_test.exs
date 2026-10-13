@@ -10,7 +10,9 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.MembershipQueries
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projectors.GroupMembership, as: GroupMembershipProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
@@ -228,7 +230,29 @@ defmodule Memba.Membership.AuthoritativeCustomGroupTargetTest do
                  group_id
                )
 
+      removal_checkpoint = Memba.ProjectionBarrier.current_checkpoint()
       restart_projector!(projector_child_id)
+
+      # The policy appends system-group removals while replaying this departure.
+      Memba.ProjectionBarrier.await!(
+        [MembershipProjector, SystemGroupMembership],
+        checkpoint: removal_checkpoint,
+        timeout: 5_000
+      )
+
+      Memba.ProjectionBarrier.await!(
+        [GroupMembershipProjector],
+        checkpoint: Memba.ProjectionBarrier.current_checkpoint(),
+        timeout: 5_000
+      )
+
+      assert %MembershipProjection{active: false} =
+               Repo.get!(MembershipProjection, target.membership_id)
+
+      refute MembershipQueries.active_member_of_group?(
+               SystemGroups.everyone_group_id(club.club_id),
+               target.person_id
+             )
     end
   end
 

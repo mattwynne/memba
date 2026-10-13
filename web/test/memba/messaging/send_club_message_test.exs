@@ -542,7 +542,9 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :eventual
              )
 
+    # Preserve the stale read while both membership projectors are stopped.
     assert MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
+    removal_checkpoint = Memba.ProjectionBarrier.current_checkpoint()
 
     reply_message_id = Memba.ID.generate(:message)
 
@@ -612,6 +614,29 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     restart_projector!(membership_projector_child_id)
     restart_projector!(group_membership_projector_child_id)
+
+    # The policy can append system-group removals after the original removal.
+    # Wait for its acknowledgement before capturing the checkpoint for those events.
+    Memba.ProjectionBarrier.await!(
+      [MembershipProjector, GroupMembershipProjector, SystemGroupMembership],
+      checkpoint: removal_checkpoint,
+      timeout: 5_000
+    )
+
+    Memba.ProjectionBarrier.await!(
+      [GroupMembershipProjector],
+      checkpoint: Memba.ProjectionBarrier.current_checkpoint(),
+      timeout: 5_000
+    )
+
+    assert %MembershipProjection{active: false} =
+             Repo.get!(MembershipProjection, carol_membership_id)
+
+    refute MembershipQueries.active_member_of_group?(board_group_id, carol.person_id)
+    refute MembershipQueries.active_member_of_group?(
+             SystemGroups.everyone_group_id(club_id),
+             carol.person_id
+           )
   end
 
   test "a newly joined participant receives a root while the group projection is stale" do
