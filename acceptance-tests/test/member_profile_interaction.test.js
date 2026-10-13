@@ -155,6 +155,15 @@ for (const width of [390, 1320]) {
       await edit(page);
       await save(page, name);
       await expect(page.locator("#my-settings-profile-name")).toHaveText(name);
+      // Saving returns focus to Edit, which can scroll an overflow-hidden card
+      // sideways and conceal the clipping. A real reload must keep the saved
+      // name editable without relying on that transient focus side effect.
+      await page.reload();
+      await expect(page.locator(".phx-connected #my-settings")).toBeVisible();
+      await expect(page.locator("#my-settings-profile-name")).toHaveText(name);
+      await page.evaluate(() => document.fonts.ready);
+      const stylesheetUrl = await page.locator('link[rel="stylesheet"][href*="/assets/css/app.css"]').getAttribute("href");
+      assert.equal((await context.request.get(new URL(stylesheetUrl, page.url()).toString())).status(), 200);
       const card = page.locator("#my-settings-profile-card");
       await card.scrollIntoViewIfNeeded();
       const bounds = await page.locator("#my-settings-edit-name").evaluate(button => {
@@ -164,15 +173,24 @@ for (const width of [390, 1320]) {
           card: { left: card.left, right: card.right, top: card.top, bottom: card.bottom },
           edit: { left: edit.left, right: edit.right, top: edit.top, bottom: edit.bottom },
           viewport: { width: innerWidth, height: innerHeight },
+          cardScrollLeft: button.closest("#my-settings-profile-card").scrollLeft,
           styles: {
             rowDisplay: getComputedStyle(button.parentElement).display,
+            rowFlexWrap: getComputedStyle(button.parentElement).flexWrap,
             cardOverflow: getComputedStyle(button.closest("#my-settings-profile-card")).overflow,
             nameMinWidth: getComputedStyle(document.querySelector("#my-settings-profile-name")).minWidth,
-            nameOverflowWrap: getComputedStyle(document.querySelector("#my-settings-profile-name")).overflowWrap
+            nameOverflowWrap: getComputedStyle(document.querySelector("#my-settings-profile-name")).overflowWrap,
+            nameWordBreak: getComputedStyle(document.querySelector("#my-settings-profile-name")).wordBreak,
+            nameFontSize: getComputedStyle(document.querySelector("#my-settings-profile-name")).fontSize,
+            buttonFlexShrink: getComputedStyle(button).flexShrink
           }
+
         };
       });
       console.info(`Saved maximum ASCII name at ${width}px: ${JSON.stringify(bounds)}`);
+      assert.equal(bounds.styles.rowDisplay, "flex");
+      assert.equal(bounds.styles.cardOverflow, "hidden");
+      assert.equal(bounds.styles.nameFontSize, "20px");
       assert.ok(bounds.edit.right > bounds.edit.left && bounds.edit.bottom > bounds.edit.top);
       assert.ok(bounds.edit.left >= Math.max(bounds.card.left, 0)
         && bounds.edit.right <= Math.min(bounds.card.right, bounds.viewport.width)
