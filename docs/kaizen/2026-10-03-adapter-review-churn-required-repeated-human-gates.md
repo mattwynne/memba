@@ -46,3 +46,13 @@ Matt had to respond repeatedly to a technical repair loop; each stop required op
 **Matt's sizing constraint:** Smaller is not automatically better: every task pays a planner/review/test-setup cost. The goal is the smallest *coherent independently reviewable* unit that finishes with margin, not a task per file/event/step. Batch related changes sharing context and focused proof; make internal worker checkpoints cheap and review once per meaningful outcome. Split only when multiple outcomes/proofs compete for the time or review budget, and retain one integrated check. An arbitrary file-count or task-count limit would be counterproductive.
 
 **Decision pending:** Matt has not selected a factory countermeasure. Repairing the present candidate and altering the future escalation/handoff workflow are separate decisions. This investigation does not change application or workflow code and does not accept 008A.
+
+## Cross-workflow investigation — 2026-10-09
+
+The earlier account ends after four revisions. Later run evidence records nine 008A revisions before independent acceptance; iteration 067 ultimately reached main through manual recovery, not autonomous Fabro completion. Its initial production deployment then failed during asset packaging after CI tests passed. These later facts do not change the historical acceptance state described above.
+
+Matt requested a radically simpler unattended workflow rather than more packet-sizing or escalation patches. The [replacement proposal](../notes/2026-10-09-unattended-delivery-workflow.md) and [evidence inventory](../notes/2026-10-09-unattended-delivery-evidence.md) generalize this note's lesson: remove model-maintained task brokerage and operator-dependent continuation; use a scenario-first builder, independent review and a small deterministic controller for candidate preservation, bounded recovery, exact-artifact validation and verified deployment. Preserve genuine decision gates and all publication safety properties.
+
+The investigation includes the existing `goal-directed-bdd` historical rehearsal; its successful continuation required prior manual recovery and does not prove whole-iteration autonomy. The recommendation is to prove the replacement's interruption/recovery and publication contract with an isolated walking skeleton before adding real agents or launching a delivery.
+
+**Status remains Open; recommendation awaiting approval.** No factory code, run, delivery authorization or experiment status changed. The active post-merge healer experiment remains separate and occupies the ledger's experiment slot. This is a proposed replacement direction, not an approved second experiment or a claim of resolution.
