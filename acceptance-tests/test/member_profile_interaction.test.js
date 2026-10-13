@@ -49,7 +49,24 @@ for (const width of [390, 1320]) {
       await edit(page);
       await edit(other);
       const input = page.getByLabel("Your name", { exact: true });
+      // LiveView normally preserves a focused input, even if it is untouched.
+      await input.focus();
+      await save(other, "Robin Jones");
+      await expect(input).toHaveValue("Robin Jones");
+      await expect(input).toBeFocused();
+      await input.press("Enter");
+      await expect(page.locator("#my-settings-name-form")).toHaveCount(0);
+      await expect(page.locator("#my-settings-profile-name")).toHaveText("Robin Jones");
+      await edit(page);
+      await edit(other);
+      await save(other, "Alice Smith");
+      await expect(input).toHaveValue("Alice Smith");
+      // Delay this tab's change event so the remote refresh reaches its server
+      // before the locally typed draft. Neither the draft nor its baseline may
+      // be silently advanced by that patch.
+      await page.evaluate(() => window.liveSocket.enableLatencySim(1000));
       await input.fill("Alice Brown");
+      await edit(other);
       await save(other, "Alice Jones");
       await expect(page.locator("#my-settings-profile-name")).toHaveText("Alice Jones");
       await expect(input).toHaveValue("Alice Brown");
@@ -59,6 +76,7 @@ for (const width of [390, 1320]) {
       await expect(warning).toContainText("Changed elsewhere to “Alice Jones”.");
       await expect(warning).toHaveAttribute("role", "alert");
       await expect(warning).toBeFocused();
+      await page.evaluate(() => window.liveSocket.disableLatencySim());
       await page.keyboard.press("Enter");
       await expect(warning).toBeVisible();
       await expect(page.locator("#my-settings-profile-name")).toHaveText("Alice Jones");

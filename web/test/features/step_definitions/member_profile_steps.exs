@@ -1,9 +1,7 @@
 defmodule Memba.Cucumber.MemberProfileSteps do
   use Cucumber.StepDefinition
   import ExUnit.Assertions
-  alias Memba.Membership
   alias Memba.Membership.{CommandDispatch, PersonCommands, ClubCommands, AddMember}
-  alias Memba.Messaging
 
   step "Alice is a member of Rockies Cycling Co-op", context do
     club_id = Memba.ID.generate(:club)
@@ -68,16 +66,15 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context = start_conversation(context, "Rockies Cycling Co-op", subject)
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: message_id,
-                 conversation_id: context.profile_messages[subject],
-                 sender_id: person(context).person_id,
-                 body: "An earlier reply."
-               },
-               consistency: :strong
-             )
+    {:ok, command} =
+      Memba.Messaging.PostMemberMessageReply.prepare(%{
+        message_id: message_id,
+        conversation_id: context.profile_messages[subject],
+        sender_id: person(context).person_id,
+        body: "An earlier reply."
+      })
+
+    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     Map.put(context, :profile_reply, message_id)
   end
@@ -90,7 +87,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   step ~r/^Alice should be known as "([^"]+)" in (.+)$/, %{args: [name, club_name]} = context do
     member =
       Enum.find(
-        Membership.list_active_members_of_club(context.clubs[club_name]),
+        Memba.Membership.ClubGroupQueries.list_active_members_of_club(context.clubs[club_name]),
         &(&1.id == person(context).person_id)
       )
 
@@ -171,7 +168,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context
   end
 
-  defp person(context), do: Membership.get_person(context.people["Alice"].person_id)
+  defp person(context), do: Memba.Membership.PersonQueries.get_person(context.people["Alice"].person_id)
 
   defp rename(context, name, expected) do
     id = person(context).person_id
@@ -189,17 +186,16 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   defp start_conversation(context, club_name, subject) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: context.clubs[club_name],
-                 sender_id: person(context).person_id,
-                 subject: subject,
-                 body: "An earlier conversation."
-               },
-               consistency: :strong
-             )
+    {:ok, command} =
+      Memba.Messaging.SendClubMessage.prepare_current_member(%{
+        message_id: message_id,
+        club_id: context.clubs[club_name],
+        sender_id: person(context).person_id,
+        subject: subject,
+        body: "An earlier conversation."
+      })
+
+    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     Map.put(
       context,
@@ -209,12 +205,12 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   end
 
   defp detail(context, message_id) do
-    message = Messaging.get_message(message_id)
+    message = Memba.Messaging.MessageQueries.get_message(message_id)
 
     {:ok, detail} =
       MembaWeb.MemberMessageDetail.load(
         %{"club_id" => message.club_id, "message_id" => message_id},
-        [Membership.get_club(message.club_id)],
+        [Memba.Membership.ClubGroupQueries.get_club(message.club_id)],
         %{email: person(context).email}
       )
 

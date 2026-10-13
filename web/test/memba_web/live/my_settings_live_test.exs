@@ -66,7 +66,7 @@ defmodule MembaWeb.MySettingsLiveTest do
     view |> element("#my-settings-edit-name") |> render_click()
     assert has_element?(view, "#my-settings-save-name[type='submit']", "Save")
     view |> form("#my-settings-name-form", person: %{name: "Robin Jones"}) |> render_submit()
-    assert MembershipContext.get_person(member.person_id).name == "Robin Jones"
+    assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Robin Jones"
     assert has_element?(view, "#my-settings-profile-name", "Robin Jones")
     refute has_element?(view, "#my-settings-name-form")
   end
@@ -107,7 +107,7 @@ defmodule MembaWeb.MySettingsLiveTest do
     newer |> form("#my-settings-name-form", person: %{name: "Alice Jones"}) |> render_submit()
     assert has_element?(older, "#my-settings-name-input[value='Alice Brown']")
     older |> form("#my-settings-name-form", person: %{name: "Alice Brown"}) |> render_submit()
-    assert MembershipContext.get_person(member.person_id).name == "Alice Jones"
+    assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Alice Jones"
     assert has_element?(older, "#my-settings-name-conflict[role='alert']", "Alice Jones")
     assert_push_event(older, "focus_form_conflict", %{id: "my-settings-name-conflict"})
     assert has_element?(older, "#my-settings-name-input[value='Alice Brown']")
@@ -116,10 +116,10 @@ defmodule MembaWeb.MySettingsLiveTest do
     newer |> form("#my-settings-name-form", person: %{name: "Alice Green"}) |> render_submit()
     assert has_element?(older, "#my-settings-name-conflict", "Alice Jones")
     older |> element("#my-settings-name-save-anyway") |> render_click()
-    assert MembershipContext.get_person(member.person_id).name == "Alice Green"
+    assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Alice Green"
     assert has_element?(older, "#my-settings-name-conflict", "Alice Green")
     older |> element("#my-settings-name-save-anyway") |> render_click()
-    assert MembershipContext.get_person(member.person_id).name == "Alice Brown"
+    assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Alice Brown"
     refute has_element?(older, "#my-settings-name-form")
   end
 
@@ -168,7 +168,7 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(older, "#my-settings-name-input[value='Alice Jones']")
     older |> form("#my-settings-name-form", person: %{name: "Alice Green"}) |> render_change()
     older |> form("#my-settings-name-form", person: %{name: "Alice Green"}) |> render_submit()
-    assert MembershipContext.get_person(member.person_id).name == "Alice Green"
+    assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Alice Green"
   end
 
   test "invalid name keeps raw input with labelled associated field feedback", %{conn: conn} do
@@ -192,7 +192,7 @@ defmodule MembaWeb.MySettingsLiveTest do
              )
 
       assert has_element?(view, "#my-settings-name-error", message)
-      assert MembershipContext.get_person(member.person_id).name == "Alice Smith"
+      assert Memba.Membership.PersonQueries.get_person(member.person_id).name == "Alice Smith"
       assert has_element?(view, "#my-settings-name-input[value='#{name}']")
     end
   end

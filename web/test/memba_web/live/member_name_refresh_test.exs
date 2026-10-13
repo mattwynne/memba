@@ -1,9 +1,7 @@
 defmodule MembaWeb.MemberNameRefreshTest do
   use MembaWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
-  alias Memba.Membership
   alias Memba.Membership.{PersonCommands, CommandDispatch}
-  alias Memba.Messaging
 
   setup do
     Memba.EventSourcedCase.reset_event_sourced_system!()
@@ -24,21 +22,22 @@ defmodule MembaWeb.MemberNameRefreshTest do
     bob_root = message(first, bob, "Earlier Bob root")
     reply = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: reply,
-                 conversation_id: bob_root,
-                 sender_id: alice,
-                 body: "Earlier Alice reply"
-               },
-               consistency: :strong
-             )
+    {:ok, command} =
+      Memba.Messaging.PostMemberMessageReply.prepare(%{
+        message_id: reply,
+        conversation_id: bob_root,
+        sender_id: alice,
+        body: "Earlier Alice reply"
+      })
+
+    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     other_root = message(second, alice, "Other club root")
 
-    assert :ok =
-             Membership.remove_member(%{membership_id: alice_membership}, consistency: :strong)
+    {:ok, removal} =
+      Memba.Membership.ClubMember.Remove.prepare(%{membership_id: alice_membership})
+
+    assert :ok = CommandDispatch.dispatch(removal, consistency: :strong)
 
     bob_conn = sign_in(conn, first, "bob.history@example.test")
     alice_conn = sign_in(conn, second, "alice.history@example.test")
@@ -79,6 +78,39 @@ defmodule MembaWeb.MemberNameRefreshTest do
     row = Enum.find(socket.assigns.dashboard.message_rows, &(&1.message_id == bob_root))
     assert row.latest_replier_name == "Robin Jones"
     refute has_element?(dashboard, "#club-member-#{alice}")
+  end
+
+  test "open delivery names and initials follow inactive recipients without rewriting snapshots", %{conn: conn} do
+    club = club("Recipient History", "recipient-history")
+    alice = person("Alice Smith", "alice.recipient@example.test")
+    bob = person("Bob Builder", "bob.recipient@example.test")
+    membership = add_member(club, alice)
+    add_member(club, bob)
+    root = message(club, bob, "Earlier recipient")
+    records = Memba.Messaging.DeliveryQueries.list_member_email_deliverys(root)
+    assert Enum.find(records, &(&1.recipient_id == alice)).recipient_name == "Alice Smith"
+    message_before = Memba.Messaging.App.aggregate_state(Memba.Messaging.Message, root)
+    artifact_fields = [:delivery_id, :recipient_id, :recipient_name, :recipient_address, :outbound_message_id]
+    artifacts_before = Memba.Messaging.DeliveryQueries.list_operator_email_deliveries(root)
+      |> Enum.map(&Map.take(&1, artifact_fields))
+
+    {:ok, removal} = Memba.Membership.ClubMember.Remove.prepare(%{membership_id: membership})
+    assert :ok = CommandDispatch.dispatch(removal, consistency: :strong)
+    {:ok, view, _} = live(sign_in(conn, club, "bob.recipient@example.test"), ~p"/messages/#{root}/delivery")
+    assert has_element?(view, "#member-delivery-receipt-#{alice}", "Alice Smith")
+    {:ok, rename} = PersonCommands.prepare_rename(%{person_id: alice}, %{
+      person_id: alice, name: "Robin Jones", expected_name: "Alice Smith"
+    })
+    assert :ok = CommandDispatch.dispatch(rename, consistency: :strong)
+    assert has_element?(view, "#member-delivery-receipt-#{alice}[data-recipient-name='Robin Jones']", "RJ")
+    assert has_element?(view, "#member-delivery-receipt-#{alice} .recipient__name", "Robin Jones")
+    assert Memba.Messaging.DeliveryQueries.list_member_email_deliverys(root) == records
+    assert Memba.Messaging.App.aggregate_state(Memba.Messaging.Message, root) == message_before
+    artifacts_after = Memba.Messaging.DeliveryQueries.list_operator_email_deliveries(root)
+      |> Enum.map(&Map.take(&1, artifact_fields))
+    assert artifacts_after == artifacts_before
+    {:ok, reopened, _} = live(sign_in(conn, club, "bob.recipient@example.test"), ~p"/messages/#{root}/delivery")
+    assert has_element?(reopened, "#member-delivery-receipt-#{alice}", "Robin Jones")
   end
 
   test "other member query shells declare and reread their represented Person names", %{
@@ -138,10 +170,12 @@ defmodule MembaWeb.MemberNameRefreshTest do
   defp club(name, slug) do
     id = Memba.ID.generate(:club)
 
-    assert :ok =
-             Membership.create_club(%{club_id: id, name: name, slug: slug}, consistency: :strong)
+    {:ok, command} =
+      Memba.Membership.ClubCommands.prepare_create(%{club_id: id, name: name, slug: slug})
 
-    Membership.get_club(id)
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+
+    Memba.Membership.ClubGroupQueries.get_club(id)
   end
 
   defp person(name, email) do
@@ -154,11 +188,12 @@ defmodule MembaWeb.MemberNameRefreshTest do
   defp add_member(club, person_id) do
     id = Memba.ID.generate(:membership)
 
-    assert :ok =
-             Membership.add_member(
-               %{membership_id: id, club_id: club.club_id, person_id: person_id},
-               consistency: :strong
-             )
+    {:ok, command} =
+      Memba.Membership.AddMember.prepare(%{
+        membership_id: id, club_id: club.club_id, person_id: person_id
+      })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
     id
   end
@@ -166,17 +201,13 @@ defmodule MembaWeb.MemberNameRefreshTest do
   defp message(club, sender_id, subject) do
     id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: id,
-                 club_id: club.club_id,
-                 sender_id: sender_id,
-                 subject: subject,
-                 body: "History remains unchanged."
-               },
-               consistency: :strong
-             )
+    {:ok, command} =
+      Memba.Messaging.SendClubMessage.prepare_current_member(%{
+        message_id: id, club_id: club.club_id, sender_id: sender_id,
+        subject: subject, body: "History remains unchanged."
+      })
+
+    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     id
   end

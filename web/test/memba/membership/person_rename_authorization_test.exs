@@ -33,7 +33,7 @@ defmodule Memba.Membership.PersonRenameAuthorizationTest do
              PersonCommands.prepare_rename(%{person_id: actor}, %{person_id: other})
 
     assert Memba.ProjectionBarrier.current_checkpoint() == checkpoint
-    assert Memba.Membership.get_person(other).name == "Bob Builder"
+    assert Memba.Membership.PersonQueries.get_person(other).name == "Bob Builder"
 
     {:ok, command} =
       PersonCommands.prepare_rename(%{person_id: actor}, %{
@@ -45,7 +45,7 @@ defmodule Memba.Membership.PersonRenameAuthorizationTest do
 
     assert command.person_id == actor
     assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
-    assert Memba.Membership.get_person(actor).name == "Robin Jones"
+    assert Memba.Membership.PersonQueries.get_person(actor).name == "Robin Jones"
   end
 
   defp create(name, email) do

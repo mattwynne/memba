@@ -40,7 +40,7 @@ defmodule Memba.Membership.PersonRenameDispatchTest do
     results = Enum.map(tasks, &Task.await(&1, 10_000))
     assert Enum.count(results, &(&1 == :ok)) == 1
     assert Enum.count(results, &match?({:error, {:name_conflict, _}}, &1)) == 1
-    name = Memba.Membership.get_person(id).name
+    name = Memba.Membership.PersonQueries.get_person(id).name
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
 
     {:ok, command} =

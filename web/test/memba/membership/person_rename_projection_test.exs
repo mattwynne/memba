@@ -18,9 +18,9 @@ defmodule Memba.Membership.PersonRenameProjectionTest do
       assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
     end
 
-    before = Memba.Membership.get_person(id)
-    other_before = Memba.Membership.get_person(other)
-    emails_before = Memba.Membership.list_person_email_addresses(id)
+    before = Memba.Membership.PersonQueries.get_person(id)
+    other_before = Memba.Membership.PersonQueries.get_person(other)
+    emails_before = Memba.Membership.PersonQueries.list_person_email_addresses(id)
     Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
 
     {:ok, command} =
@@ -38,11 +38,11 @@ defmodule Memba.Membership.PersonRenameProjectionTest do
                       source_event: %PersonRenamed{person_id: ^id, name: "Robin Jones"}
                     } = change}
 
-    assert Memba.Membership.get_person(id).name == "Robin Jones"
-    assert Memba.Membership.get_person(id).email == before.email
-    assert Memba.Membership.get_person(id).person_id == before.person_id
-    assert Memba.Membership.get_person(other) == other_before
-    assert Memba.Membership.list_person_email_addresses(id) == emails_before
+    assert Memba.Membership.PersonQueries.get_person(id).name == "Robin Jones"
+    assert Memba.Membership.PersonQueries.get_person(id).email == before.email
+    assert Memba.Membership.PersonQueries.get_person(id).person_id == before.person_id
+    assert Memba.Membership.PersonQueries.get_person(other) == other_before
+    assert Memba.Membership.PersonQueries.list_person_email_addresses(id) == emails_before
 
     assert MembaWeb.LiveQuery.MembaReadModelSource.classify({:read_model_changed, change}) ==
              {:ok, [{:person, id}]}
@@ -51,8 +51,8 @@ defmodule Memba.Membership.PersonRenameProjectionTest do
     refute MembaWeb.LiveQuery.MembaReadModelSource.matches?({:person_emails, id}, {:person, id})
     Memba.EventSourcedCase.rebuild_event_sourced_projections!()
     Memba.ProjectionBarrier.await!([PersonProjector])
-    assert Memba.Membership.get_person(id).name == "Robin Jones"
-    assert Memba.Membership.get_person(id).email == before.email
-    assert Memba.Membership.get_person(other).name == "Alice Smith"
+    assert Memba.Membership.PersonQueries.get_person(id).name == "Robin Jones"
+    assert Memba.Membership.PersonQueries.get_person(id).email == before.email
+    assert Memba.Membership.PersonQueries.get_person(other).name == "Alice Smith"
   end
 end

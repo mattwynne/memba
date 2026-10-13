@@ -1,8 +1,7 @@
 defmodule MembaWeb.MySettingsNameTest do
   use MembaWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
-  alias Memba.Membership
-  alias Memba.Membership.{PersonCommands, CommandDispatch}
+  alias Memba.Membership.{PersonCommands, PersonEmailAddressCommands, CommandDispatch}
 
   setup %{conn: conn} do
     Memba.EventSourcedCase.reset_event_sourced_system!()
@@ -52,7 +51,7 @@ defmodule MembaWeb.MySettingsNameTest do
       }
     })
 
-    assert Membership.get_person(id).name == "Robin Jones"
+    assert Memba.Membership.PersonQueries.get_person(id).name == "Robin Jones"
     assert has_element?(view, "#my-settings[data-active-tab='emails']")
     assert has_element?(view, "#settings-add-email-input[value='invalid']")
   end
@@ -68,9 +67,9 @@ defmodule MembaWeb.MySettingsNameTest do
     view |> form("#my-settings-name-form", person: %{name: " Alice Brown "}) |> render_change()
     refute has_element?(view, "#my-settings-name-conflict")
     render_click(view, "confirm_name", %{"expected_name" => "Alice Jones"})
-    assert Membership.get_person(id).name == "Alice Jones"
+    assert Memba.Membership.PersonQueries.get_person(id).name == "Alice Jones"
     view |> form("#my-settings-name-form", person: %{name: " Alice Brown "}) |> render_submit()
-    assert Membership.get_person(id).name == "Alice Jones"
+    assert Memba.Membership.PersonQueries.get_person(id).name == "Alice Jones"
     assert has_element?(view, "#my-settings-name-conflict", "Alice Jones")
   end
 
@@ -97,26 +96,20 @@ defmodule MembaWeb.MySettingsNameTest do
     %{socket: socket} = :sys.get_state(view.pid)
     GenServer.stop(view.pid)
 
-    assert :ok =
-             Membership.add_person_email_address(
-               %{person_id: id, email: "new.identity@example.test"},
-               consistency: :strong
-             )
+    {:ok, add} = PersonEmailAddressCommands.prepare_add(%{
+      person_id: id, email: "new.identity@example.test"
+    })
+    assert :ok = CommandDispatch.dispatch(add, consistency: :strong)
 
-    assert :ok =
-             Membership.verify_person_email_address(
-               %{person_id: id, email: "new.identity@example.test"},
-               consistency: :strong
-             )
+    assert :ok = Memba.Membership.PersonEmailVerification.verify(%{
+      person_id: id, email: "new.identity@example.test"
+    }, consistency: :strong)
 
-    assert :ok =
-             Membership.replace_person_email_addresses(
-               %{
-                 person_id: id,
-                 email_addresses: [%{email: "new.identity@example.test", is_primary: true}]
-               },
-               consistency: :strong
-             )
+    {:ok, replacement} = PersonEmailAddressCommands.prepare_replace(%{
+      person_id: id,
+      email_addresses: [%{email: "new.identity@example.test", is_primary: true}]
+    })
+    assert :ok = CommandDispatch.dispatch(replacement, consistency: :strong)
 
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
 

@@ -44,7 +44,7 @@ defmodule Memba.Membership.PersonRenameReadbackTest do
     projector = suspend_projector()
     winner(id)
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
-    assert Memba.Membership.get_person(id).name == "Alice Smith"
+    assert Memba.Membership.PersonQueries.get_person(id).name == "Alice Smith"
     view |> form("#my-settings-name-form", person: %{name: "Alice Jones"}) |> render_submit()
     assert has_element?(view, "#my-settings-name-input[value='Alice Jones']")
     assert has_element?(view, "#flash-error", "latest name")
@@ -64,7 +64,7 @@ defmodule Memba.Membership.PersonRenameReadbackTest do
     winner(id)
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
     view |> form("#my-settings-name-form", person: %{name: "Alice Brown"}) |> render_submit()
-    assert Memba.Membership.get_person(id).name == "Alice Smith"
+    assert Memba.Membership.PersonQueries.get_person(id).name == "Alice Smith"
     assert has_element?(view, "#my-settings-name-conflict", "Alice Jones")
     view |> element("#my-settings-name-cancel-changes") |> render_click()
     assert has_element?(view, "#my-settings-name-input[value='Alice Brown']")
