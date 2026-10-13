@@ -100,17 +100,18 @@ defmodule MembaWeb.MySettingsLive do
     {:noreply,
      assign(socket,
        name_state: state,
+       name_opened_name: state.baseline["name"],
        name_form: to_form(state.draft, as: :person),
        name_error: nil
      )}
   end
 
-  def handle_event("change_name", %{"person" => %{"name" => name}}, socket) do
+  def handle_event("change_name", %{"person" => %{"name" => name}} = params, socket) do
     state =
       Map.get(socket.assigns, :name_state) ||
         MembaWeb.FormConflict.new(%{"name" => socket.assigns.name_form.params["name"]})
 
-    state = MembaWeb.FormConflict.edit(state, %{"name" => name})
+    state = state |> browser_name_baseline(params, socket) |> MembaWeb.FormConflict.edit(%{"name" => name})
 
     normalize = fn value ->
       value |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
@@ -126,12 +127,12 @@ defmodule MembaWeb.MySettingsLive do
      )}
   end
 
-  def handle_event("save_name", %{"person" => %{"name" => name}}, socket) do
+  def handle_event("save_name", %{"person" => %{"name" => name}} = params, socket) do
     state =
       Map.get(socket.assigns, :name_state) ||
         MembaWeb.FormConflict.new(socket.assigns.name_form.params)
 
-    state = MembaWeb.FormConflict.edit(state, %{"name" => name})
+    state = state |> browser_name_baseline(params, socket) |> MembaWeb.FormConflict.edit(%{"name" => name})
     socket = refresh_settings(socket)
     person = current_person(socket)
 
@@ -429,8 +430,48 @@ defmodule MembaWeb.MySettingsLive do
                     phx-remove={JS.focus(to: "#my-settings-edit-name")}
                     phx-change="change_name"
                     phx-submit="save_name"
+                    phx-hook=".ProfileNameBaseline"
+                    data-latest-name={@name_state.latest["name"]}
+                    data-latest-baseline={name_baseline_token(@current_person.person_id, @name_state.latest["name"])}
                     class="mt-4"
                   >
+                    <span id="my-settings-name-baseline" hidden phx-update="ignore">
+                      <input
+                        id="my-settings-name-baseline-token"
+                        type="hidden"
+                        name="person[baseline_token]"
+                        value={name_baseline_token(@current_person.person_id, @name_state.baseline["name"])}
+                        data-name={@name_state.baseline["name"]}
+                      />
+                    </span>
+                    <script :type={Phoenix.LiveView.ColocatedHook} name=".ProfileNameBaseline">
+                      export default {
+                        mounted() { this.reconcile() },
+                        beforeUpdate() {
+                          const input = this.el.querySelector("#my-settings-name-input")
+                          const baseline = this.el.querySelector("[name='person[baseline_token]']")
+                          this.localValue = input.value
+                          this.localDirty = input.value !== baseline.dataset.name
+                        },
+                        updated() {
+                          if (this.localDirty) {
+                            this.el.querySelector("#my-settings-name-input").value = this.localValue
+                          }
+                          this.reconcile()
+                        },
+                        reconcile() {
+                          const input = this.el.querySelector("#my-settings-name-input")
+                          const baseline = this.el.querySelector("[name='person[baseline_token]']")
+                          // A patch may precede a locally typed change event. Never
+                          // advance that draft's baseline or overwrite its text.
+                          if (input.value === baseline.dataset.name) {
+                            input.value = this.el.dataset.latestName
+                            baseline.dataset.name = this.el.dataset.latestName
+                            baseline.value = this.el.dataset.latestBaseline
+                          }
+                        }
+                      }
+                    </script>
                     <.input
                       id="my-settings-name-input"
                       field={@name_form[:name]}
@@ -777,6 +818,25 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   defp settings_tab_selected?(active_tab, tab), do: to_string(active_tab == tab)
+
+  defp name_baseline_token(person_id, name) do
+    Phoenix.Token.sign(MembaWeb.Endpoint, "profile-name-baseline", %{person_id: person_id, name: name})
+  end
+
+  defp browser_name_baseline(state, params, socket) do
+    person_id = current_person(socket).person_id
+    token = get_in(params, ["person", "baseline_token"])
+
+    baseline =
+      case Phoenix.Token.verify(MembaWeb.Endpoint, "profile-name-baseline", token, max_age: 86_400) do
+        {:ok, %{person_id: ^person_id, name: name}} when is_binary(name) -> name
+        # A missing/forged/expired acknowledgement must never advance the
+        # baseline. Keep the trusted name with which this editor was opened.
+        _invalid -> Map.get(socket.assigns, :name_opened_name, state.baseline["name"])
+      end
+
+    %{state | baseline: %{"name" => baseline}}
+  end
 
   defp person_initials(name), do: initials(name)
 

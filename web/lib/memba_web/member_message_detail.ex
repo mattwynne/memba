@@ -144,8 +144,18 @@ defmodule MembaWeb.MemberMessageDetail do
     member_email_deliverys =
       DeliveryQueries.list_member_email_deliverys(message.message_id)
 
+    recipient_summaries =
+      member_email_deliverys
+      |> Enum.map(& &1.recipient_id)
+      |> PersonQueries.list_person_contact_summaries()
+
     receipt_model =
-      MemberEmailDeliveryPresentation.present_receipts(member_email_deliverys)
+      member_email_deliverys
+      |> Enum.map(fn receipt ->
+        name = recipient_summaries |> Map.get(receipt.recipient_id, %{}) |> Map.get(:name)
+        Map.put(receipt, :recipient_name, name || receipt.recipient_name)
+      end)
+      |> MemberEmailDeliveryPresentation.present_receipts()
 
     sender = PersonQueries.get_person(message.sender_id)
 
