@@ -80,7 +80,8 @@ defmodule MembaWeb.MemberNameRefreshTest do
     refute has_element?(dashboard, "#club-member-#{alice}")
   end
 
-  test "open delivery names and initials follow inactive recipients without rewriting snapshots", %{conn: conn} do
+  test "open delivery names and initials follow inactive recipients without rewriting snapshots",
+       %{conn: conn} do
     club = club("Recipient History", "recipient-history")
     alice = person("Alice Smith", "alice.recipient@example.test")
     bob = person("Bob Builder", "bob.recipient@example.test")
@@ -90,26 +91,55 @@ defmodule MembaWeb.MemberNameRefreshTest do
     records = Memba.Messaging.DeliveryQueries.list_member_email_deliverys(root)
     assert Enum.find(records, &(&1.recipient_id == alice)).recipient_name == "Alice Smith"
     message_before = Memba.Messaging.App.aggregate_state(Memba.Messaging.Message, root)
-    artifact_fields = [:delivery_id, :recipient_id, :recipient_name, :recipient_address, :outbound_message_id]
-    artifacts_before = Memba.Messaging.DeliveryQueries.list_operator_email_deliveries(root)
+
+    artifact_fields = [
+      :delivery_id,
+      :recipient_id,
+      :recipient_name,
+      :recipient_address,
+      :outbound_message_id
+    ]
+
+    artifacts_before =
+      Memba.Messaging.DeliveryQueries.list_operator_email_deliveries(root)
       |> Enum.map(&Map.take(&1, artifact_fields))
 
     {:ok, removal} = Memba.Membership.ClubMember.Remove.prepare(%{membership_id: membership})
     assert :ok = CommandDispatch.dispatch(removal, consistency: :strong)
-    {:ok, view, _} = live(sign_in(conn, club, "bob.recipient@example.test"), ~p"/messages/#{root}/delivery")
+
+    {:ok, view, _} =
+      live(sign_in(conn, club, "bob.recipient@example.test"), ~p"/messages/#{root}/delivery")
+
     assert has_element?(view, "#member-delivery-receipt-#{alice}", "Alice Smith")
-    {:ok, rename} = PersonCommands.prepare_rename(%{person_id: alice}, %{
-      person_id: alice, name: "Robin Jones", expected_name: "Alice Smith"
-    })
+
+    {:ok, rename} =
+      PersonCommands.prepare_rename(%{person_id: alice}, %{
+        person_id: alice,
+        name: "Robin Jones",
+        expected_name: "Alice Smith"
+      })
+
     assert :ok = CommandDispatch.dispatch(rename, consistency: :strong)
-    assert has_element?(view, "#member-delivery-receipt-#{alice}[data-recipient-name='Robin Jones']", "RJ")
+
+    assert has_element?(
+             view,
+             "#member-delivery-receipt-#{alice}[data-recipient-name='Robin Jones']",
+             "RJ"
+           )
+
     assert has_element?(view, "#member-delivery-receipt-#{alice} .recipient__name", "Robin Jones")
     assert Memba.Messaging.DeliveryQueries.list_member_email_deliverys(root) == records
     assert Memba.Messaging.App.aggregate_state(Memba.Messaging.Message, root) == message_before
-    artifacts_after = Memba.Messaging.DeliveryQueries.list_operator_email_deliveries(root)
+
+    artifacts_after =
+      Memba.Messaging.DeliveryQueries.list_operator_email_deliveries(root)
       |> Enum.map(&Map.take(&1, artifact_fields))
+
     assert artifacts_after == artifacts_before
-    {:ok, reopened, _} = live(sign_in(conn, club, "bob.recipient@example.test"), ~p"/messages/#{root}/delivery")
+
+    {:ok, reopened, _} =
+      live(sign_in(conn, club, "bob.recipient@example.test"), ~p"/messages/#{root}/delivery")
+
     assert has_element?(reopened, "#member-delivery-receipt-#{alice}", "Robin Jones")
   end
 
@@ -190,7 +220,9 @@ defmodule MembaWeb.MemberNameRefreshTest do
 
     {:ok, command} =
       Memba.Membership.AddMember.prepare(%{
-        membership_id: id, club_id: club.club_id, person_id: person_id
+        membership_id: id,
+        club_id: club.club_id,
+        person_id: person_id
       })
 
     assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
@@ -203,8 +235,11 @@ defmodule MembaWeb.MemberNameRefreshTest do
 
     {:ok, command} =
       Memba.Messaging.SendClubMessage.prepare_current_member(%{
-        message_id: id, club_id: club.club_id, sender_id: sender_id,
-        subject: subject, body: "History remains unchanged."
+        message_id: id,
+        club_id: club.club_id,
+        sender_id: sender_id,
+        subject: subject,
+        body: "History remains unchanged."
       })
 
     assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)

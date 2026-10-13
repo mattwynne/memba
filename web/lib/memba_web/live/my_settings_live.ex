@@ -111,7 +111,10 @@ defmodule MembaWeb.MySettingsLive do
       Map.get(socket.assigns, :name_state) ||
         MembaWeb.FormConflict.new(%{"name" => socket.assigns.name_form.params["name"]})
 
-    state = state |> browser_name_baseline(params, socket) |> MembaWeb.FormConflict.edit(%{"name" => name})
+    state =
+      state
+      |> browser_name_baseline(params, socket)
+      |> MembaWeb.FormConflict.edit(%{"name" => name})
 
     normalize = fn value ->
       value |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
@@ -132,7 +135,11 @@ defmodule MembaWeb.MySettingsLive do
       Map.get(socket.assigns, :name_state) ||
         MembaWeb.FormConflict.new(socket.assigns.name_form.params)
 
-    state = state |> browser_name_baseline(params, socket) |> MembaWeb.FormConflict.edit(%{"name" => name})
+    state =
+      state
+      |> browser_name_baseline(params, socket)
+      |> MembaWeb.FormConflict.edit(%{"name" => name})
+
     socket = refresh_settings(socket)
     person = current_person(socket)
 
@@ -432,7 +439,9 @@ defmodule MembaWeb.MySettingsLive do
                     phx-submit="save_name"
                     phx-hook=".ProfileNameBaseline"
                     data-latest-name={@name_state.latest["name"]}
-                    data-latest-baseline={name_baseline_token(@current_person.person_id, @name_state.latest["name"])}
+                    data-latest-baseline={
+                      name_baseline_token(@current_person.person_id, @name_state.latest["name"])
+                    }
                     class="mt-4"
                   >
                     <span id="my-settings-name-baseline" hidden phx-update="ignore">
@@ -440,7 +449,9 @@ defmodule MembaWeb.MySettingsLive do
                         id="my-settings-name-baseline-token"
                         type="hidden"
                         name="person[baseline_token]"
-                        value={name_baseline_token(@current_person.person_id, @name_state.baseline["name"])}
+                        value={
+                          name_baseline_token(@current_person.person_id, @name_state.baseline["name"])
+                        }
                         data-name={@name_state.baseline["name"]}
                       />
                     </span>
@@ -820,7 +831,10 @@ defmodule MembaWeb.MySettingsLive do
   defp settings_tab_selected?(active_tab, tab), do: to_string(active_tab == tab)
 
   defp name_baseline_token(person_id, name) do
-    Phoenix.Token.sign(MembaWeb.Endpoint, "profile-name-baseline", %{person_id: person_id, name: name})
+    Phoenix.Token.sign(MembaWeb.Endpoint, "profile-name-baseline", %{
+      person_id: person_id,
+      name: name
+    })
   end
 
   defp browser_name_baseline(state, params, socket) do
@@ -828,7 +842,9 @@ defmodule MembaWeb.MySettingsLive do
     token = get_in(params, ["person", "baseline_token"])
 
     baseline =
-      case Phoenix.Token.verify(MembaWeb.Endpoint, "profile-name-baseline", token, max_age: 86_400) do
+      case Phoenix.Token.verify(MembaWeb.Endpoint, "profile-name-baseline", token,
+             max_age: 86_400
+           ) do
         {:ok, %{person_id: ^person_id, name: name}} when is_binary(name) -> name
         # A missing/forged/expired acknowledgement must never advance the
         # baseline. Keep the trusted name with which this editor was opened.

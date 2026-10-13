@@ -168,7 +168,8 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context
   end
 
-  defp person(context), do: Memba.Membership.PersonQueries.get_person(context.people["Alice"].person_id)
+  defp person(context),
+    do: Memba.Membership.PersonQueries.get_person(context.people["Alice"].person_id)
 
   defp rename(context, name, expected) do
     id = person(context).person_id

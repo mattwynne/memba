@@ -96,19 +96,29 @@ defmodule MembaWeb.MySettingsNameTest do
     %{socket: socket} = :sys.get_state(view.pid)
     GenServer.stop(view.pid)
 
-    {:ok, add} = PersonEmailAddressCommands.prepare_add(%{
-      person_id: id, email: "new.identity@example.test"
-    })
+    {:ok, add} =
+      PersonEmailAddressCommands.prepare_add(%{
+        person_id: id,
+        email: "new.identity@example.test"
+      })
+
     assert :ok = CommandDispatch.dispatch(add, consistency: :strong)
 
-    assert :ok = Memba.Membership.PersonEmailVerification.verify(%{
-      person_id: id, email: "new.identity@example.test"
-    }, consistency: :strong)
+    assert :ok =
+             Memba.Membership.PersonEmailVerification.verify(
+               %{
+                 person_id: id,
+                 email: "new.identity@example.test"
+               },
+               consistency: :strong
+             )
 
-    {:ok, replacement, []} = PersonEmailAddressCommands.prepare_replace(%{
-      person_id: id,
-      email_addresses: [%{email: "new.identity@example.test", is_primary: true}]
-    })
+    {:ok, replacement, []} =
+      PersonEmailAddressCommands.prepare_replace(%{
+        person_id: id,
+        email_addresses: [%{email: "new.identity@example.test", is_primary: true}]
+      })
+
     assert :ok = CommandDispatch.dispatch(replacement, consistency: :strong)
 
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
