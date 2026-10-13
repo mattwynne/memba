@@ -105,7 +105,7 @@ defmodule MembaWeb.MySettingsNameTest do
       person_id: id, email: "new.identity@example.test"
     }, consistency: :strong)
 
-    {:ok, replacement} = PersonEmailAddressCommands.prepare_replace(%{
+    {:ok, replacement, []} = PersonEmailAddressCommands.prepare_replace(%{
       person_id: id,
       email_addresses: [%{email: "new.identity@example.test", is_primary: true}]
     })

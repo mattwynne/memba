@@ -30,7 +30,7 @@ defmodule MembaWeb.MemberNameRefreshTest do
         body: "Earlier Alice reply"
       })
 
-    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     other_root = message(second, alice, "Other club root")
 
@@ -207,7 +207,7 @@ defmodule MembaWeb.MemberNameRefreshTest do
         subject: subject, body: "History remains unchanged."
       })
 
-    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     id
   end

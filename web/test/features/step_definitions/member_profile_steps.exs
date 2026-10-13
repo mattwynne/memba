@@ -74,7 +74,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
         body: "An earlier reply."
       })
 
-    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     Map.put(context, :profile_reply, message_id)
   end
@@ -195,7 +195,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
         body: "An earlier conversation."
       })
 
-    assert :ok = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
+    assert {:ok, :ok} = Memba.Messaging.CommandDispatch.dispatch(command, consistency: :strong)
 
     Map.put(
       context,
