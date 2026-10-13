@@ -212,7 +212,17 @@ defmodule MembaWeb.MemberDashboardPresentation do
         current_member.id
       )
 
-    member_names_by_id = Map.new(members, &{&1.id, &1.name})
+    represented_person_ids =
+      Enum.map(members, & &1.id) ++
+        Enum.flat_map(messages, fn message ->
+          [message.sender_id, message.latest_replier_id | message.participant_ids]
+        end)
+
+    member_names_by_id =
+      represented_person_ids
+      |> Enum.reject(&is_nil/1)
+      |> PersonQueries.list_person_contact_summaries()
+      |> Map.new(fn {person_id, person} -> {person_id, person.name} end)
 
     {participating_group,
      %{

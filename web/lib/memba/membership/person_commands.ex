@@ -21,6 +21,26 @@ defmodule Memba.Membership.PersonCommands do
     end
   end
 
+  @doc "Prepare a self-service rename using a trusted server-established Person actor."
+  def prepare_rename(%{person_id: actor_person_id}, attrs) when is_map(attrs) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         true <- is_binary(actor_person_id) and person_id == actor_person_id,
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
+      {:ok,
+       struct!(Memba.Membership.Commands.RenamePerson,
+         person_id: person_id,
+         name: name,
+         expected_name: expected_name
+       )}
+    else
+      false -> {:error, :forbidden}
+      error -> error
+    end
+  end
+
+  def prepare_rename(_actor, _attrs), do: {:error, :forbidden}
+
   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
     with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
       {:ok, [%{normalized_email: normalized_email}]}

@@ -109,6 +109,7 @@ defmodule Memba.Membership.AppTest do
         CreateCustomGroup,
         CreateGroup,
         CreatePerson,
+        Memba.Membership.Commands.RenamePerson,
         DefineClubRole,
         GrantClubRolePermission,
         InviteClubMember,

@@ -351,7 +351,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     assert assigns.member_names_by_id == %{
              alice.person_id => "Alice Adams",
-             bob.person_id => "Bob Builder"
+             bob.person_id => "Bob Builder",
+             carol.person_id => "Carol Canoe"
            }
 
     assert assigns.active_member_count == 2
@@ -382,7 +383,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
                latest_replier_name: "Alice Adams",
                reply_activity_label: "2 replies · latest from Alice Adams",
                participants: [
-                 %{id: outside_group_member_id, name: "Club member", initials: "CM"},
+                 %{id: outside_group_member_id, name: "Carol Canoe", initials: "CC"},
                  %{id: selected_member_id, name: "Alice Adams", initials: "AA"}
                ],
                additional_participant_count: 0
@@ -396,7 +397,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert selected_member_id == alice.person_id
 
     refute Enum.any?(assigns.messages, &(&1.message_id == everyone_conversation.message_id))
-    refute Map.has_key?(assigns.member_names_by_id, carol.person_id)
+    assert Map.fetch!(assigns.member_names_by_id, carol.person_id) == "Carol Canoe"
     refute Enum.any?(assigns.members, &(&1.id == carol.person_id))
     refute Enum.any?(assigns.members, &("Treasurer" in &1.roles))
   end

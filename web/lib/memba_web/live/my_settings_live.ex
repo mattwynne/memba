@@ -26,7 +26,8 @@ defmodule MembaWeb.MySettingsLive do
         page_title: "Account settings",
         add_email_form: to_form(%{"email" => ""}, as: :email_address),
         add_email_error: nil,
-        active_tab: :profile
+        active_tab: :profile,
+        name_form: nil
       )
 
     case Binding.bind(
@@ -52,11 +53,35 @@ defmodule MembaWeb.MySettingsLive do
 
   @impl Phoenix.LiveView
   def handle_info({:read_model_changed, _change} = notification, socket) do
+    previous_name = current_person(socket).name
+
     case Binding.handle_notification(socket, notification) do
       {:ignored, socket} ->
         {:noreply, socket}
 
       {:ok, socket} ->
+        socket =
+          if socket.assigns.name_form do
+            state =
+              Map.get(socket.assigns, :name_state) ||
+                MembaWeb.FormConflict.new(%{"name" => previous_name})
+
+            normalize = fn name ->
+              name |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
+            end
+
+            state =
+              MembaWeb.FormConflict.observe(
+                state,
+                %{"name" => current_person(socket).name},
+                normalize
+              )
+
+            assign(socket, name_state: state, name_form: to_form(state.draft, as: :person))
+          else
+            socket
+          end
+
         {:noreply, socket}
 
       {:error, errors, socket} ->
@@ -67,6 +92,151 @@ defmodule MembaWeb.MySettingsLive do
   def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
+  def handle_event("edit_name", _params, socket) do
+    socket = refresh_settings(socket)
+
+    state = MembaWeb.FormConflict.new(%{"name" => current_person(socket).name})
+
+    {:noreply,
+     assign(socket,
+       name_state: state,
+       name_form: to_form(state.draft, as: :person),
+       name_error: nil
+     )}
+  end
+
+  def handle_event("change_name", %{"person" => %{"name" => name}}, socket) do
+    state =
+      Map.get(socket.assigns, :name_state) ||
+        MembaWeb.FormConflict.new(%{"name" => socket.assigns.name_form.params["name"]})
+
+    state = MembaWeb.FormConflict.edit(state, %{"name" => name})
+
+    normalize = fn value ->
+      value |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
+    end
+
+    state = MembaWeb.FormConflict.observe(state, state.latest, normalize)
+
+    {:noreply,
+     assign(socket,
+       name_state: state,
+       name_form: to_form(state.draft, as: :person),
+       name_error: nil
+     )}
+  end
+
+  def handle_event("save_name", %{"person" => %{"name" => name}}, socket) do
+    state =
+      Map.get(socket.assigns, :name_state) ||
+        MembaWeb.FormConflict.new(socket.assigns.name_form.params)
+
+    state = MembaWeb.FormConflict.edit(state, %{"name" => name})
+    socket = refresh_settings(socket)
+    person = current_person(socket)
+
+    result =
+      with {:ok, command} <-
+             Memba.Membership.PersonCommands.prepare_rename(
+               %{person_id: person.person_id},
+               %{person_id: person.person_id, name: name, expected_name: state.baseline["name"]}
+             ) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    case normalize_context_result(result) do
+      :ok ->
+        case Memba.ProjectionBarrier.await([Memba.Membership.Projectors.Person], timeout: 1_000) do
+          {:ok, _checkpoint} ->
+            {:noreply, socket |> refresh_settings() |> assign(name_form: nil, name_state: nil)}
+
+          {:error, :timeout, _checkpoint} ->
+            {:noreply,
+             socket
+             |> assign(name_state: state, name_form: to_form(state.draft, as: :person))
+             |> put_flash(:error, "We could not load your latest name. Please try again.")}
+        end
+
+      {:error, {:name_conflict, latest}} ->
+        state = MembaWeb.FormConflict.rejected(state, %{"name" => latest})
+
+        {:noreply,
+         socket
+         |> assign(name_state: state, name_form: to_form(state.draft, as: :person))
+         |> push_event("focus_form_conflict", %{id: "my-settings-name-conflict"})}
+
+      {:error, reason} when reason in [:invalid_name, :name_too_long] ->
+        {:noreply,
+         assign(socket,
+           name_state: state,
+           name_form: to_form(state.draft, as: :person),
+           name_error: MembaWeb.PersonNameTransition.error_message(reason)
+         )}
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> assign(name_state: state, name_form: to_form(state.draft, as: :person))
+         |> put_flash(:error, "We could not update your name. Please try again.")}
+    end
+  end
+
+  def handle_event("confirm_name", _params, socket) do
+    socket = refresh_settings(socket)
+    state = Map.get(socket.assigns, :name_state)
+    person = current_person(socket)
+
+    if state && state.confirmation do
+      result =
+        with {:ok, command} <-
+               Memba.Membership.PersonCommands.prepare_rename(
+                 %{person_id: person.person_id},
+                 %{
+                   person_id: person.person_id,
+                   name: state.draft["name"],
+                   expected_name: state.confirmation["name"]
+                 }
+               ) do
+          CommandDispatch.dispatch(command, consistency: :strong)
+        end
+
+      case normalize_context_result(result) do
+        :ok ->
+          case Memba.ProjectionBarrier.await([Memba.Membership.Projectors.Person], timeout: 1_000) do
+            {:ok, _checkpoint} ->
+              {:noreply, socket |> refresh_settings() |> assign(name_form: nil, name_state: nil)}
+
+            {:error, :timeout, _checkpoint} ->
+              {:noreply,
+               put_flash(socket, :error, "We could not load your latest name. Please try again.")}
+          end
+
+        {:error, {:name_conflict, latest}} ->
+          {:noreply,
+           assign(socket, :name_state, MembaWeb.FormConflict.rejected(state, %{"name" => latest}))}
+
+        {:error, _reason} ->
+          {:noreply,
+           put_flash(socket, :error, "We could not update your name. Please try again.")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_name", _params, socket) do
+    socket = refresh_settings(socket)
+
+    case Memba.ProjectionBarrier.await([Memba.Membership.Projectors.Person], timeout: 1_000) do
+      {:ok, _checkpoint} ->
+        {:noreply, socket |> refresh_settings() |> assign(name_form: nil, name_state: nil)}
+
+      {:error, :timeout, _checkpoint} ->
+        {:noreply,
+         put_flash(socket, :error, "We could not load your latest name. Please try again.")}
+    end
+  end
+
   def handle_event(
         "add_email_address",
         %{"email_address" => %{"email" => email}},
@@ -241,7 +411,76 @@ defmodule MembaWeb.MySettingsLive do
                     <p id="my-settings-profile-name" class="text-xl font-bold text-ink">
                       {@current_person.name}
                     </p>
+                    <.button
+                      :if={!@name_form}
+                      id="my-settings-edit-name"
+                      type="button"
+                      phx-click="edit_name"
+                      variant="secondary"
+                      size="sm"
+                    >
+                      Edit
+                    </.button>
                   </div>
+                  <.form
+                    :if={@name_form}
+                    for={@name_form}
+                    id="my-settings-name-form"
+                    phx-remove={JS.focus(to: "#my-settings-edit-name")}
+                    phx-change="change_name"
+                    phx-submit="save_name"
+                    class="mt-4"
+                  >
+                    <.input
+                      id="my-settings-name-input"
+                      field={@name_form[:name]}
+                      type="text"
+                      label="Your name"
+                      aria-invalid={Map.get(assigns, :name_error) && "true"}
+                      aria-describedby={Map.get(assigns, :name_error) && "my-settings-name-error"}
+                    />
+                    <p
+                      :if={Map.get(assigns, :name_error)}
+                      id="my-settings-name-error"
+                      class="mt-2 rounded-lg border border-error bg-error/10 p-3 text-sm font-semibold text-error"
+                    >
+                      {Map.get(assigns, :name_error)}
+                    </p>
+                    <.button id="my-settings-save-name" type="submit" size="sm">Save</.button>
+                    <.button
+                      id="my-settings-cancel-name"
+                      type="button"
+                      phx-click="cancel_name"
+                      variant="ghost"
+                      size="sm"
+                    >
+                      Cancel
+                    </.button>
+                    <MembaWeb.FormConflictComponents.warning
+                      id="my-settings-name-conflict"
+                      state={Map.get(assigns, :name_state)}
+                    >
+                      <:actions>
+                        <.button
+                          id="my-settings-name-save-anyway"
+                          type="button"
+                          phx-click="confirm_name"
+                          size="sm"
+                        >
+                          Save anyway
+                        </.button>
+                        <.button
+                          id="my-settings-name-cancel-changes"
+                          type="button"
+                          phx-click="cancel_name"
+                          variant="secondary"
+                          size="sm"
+                        >
+                          Cancel my changes
+                        </.button>
+                      </:actions>
+                    </MembaWeb.FormConflictComponents.warning>
+                  </.form>
                 </.settings_card>
               </section>
 

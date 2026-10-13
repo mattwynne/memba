@@ -95,6 +95,9 @@ defmodule Memba.Membership.CommandDispatch do
   # CreatePerson preserves the caller's consistency and Commanded returning mode.
   def dispatch(%CreatePerson{} = command, opts), do: raw_dispatch(command, opts)
 
+  def dispatch(%Memba.Membership.Commands.RenamePerson{} = command, opts),
+    do: raw_dispatch(command, opts)
+
   # Issuance workflow owns token handling and result shape; preserve caller options.
   def dispatch(%InviteClubMember{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%ResendClubMemberInvitation{} = command, opts), do: raw_dispatch(command, opts)

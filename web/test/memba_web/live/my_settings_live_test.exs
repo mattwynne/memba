@@ -38,6 +38,165 @@ defmodule MembaWeb.MySettingsLiveTest do
     :ok
   end
 
+  test "opens a name editor prefilled with the current Person name", %{conn: conn} do
+    club = insert_membership_club!(name: "Name Edit Club", slug: "name-edit")
+    member = create_active_member(club, email: "name.edit@example.com", name: "Alice Smith")
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings")
+
+    assert has_element?(view, "#my-settings-edit-name", "Edit")
+    view |> element("#my-settings-edit-name") |> render_click()
+    assert has_element?(view, "#my-settings-name-form")
+    assert has_element?(view, "#my-settings-name-input[value='Alice Smith']")
+    assert has_element?(view, "label[for='my-settings-name-input']", "Your name")
+  end
+
+  test "saves a corrected name through the Person command and reads it back", %{conn: conn} do
+    club = insert_membership_club!(name: "Name Save Club", slug: "name-save")
+
+    member =
+      create_commanded_active_member(club, email: "name.save@example.com", name: "Alice Smith")
+
+    {:ok, view, _html} =
+      conn |> signed_in_club_host(club, member.email) |> live(~p"/my/settings")
+
+    view |> element("#my-settings-edit-name") |> render_click()
+    assert has_element?(view, "#my-settings-save-name[type='submit']", "Save")
+    view |> form("#my-settings-name-form", person: %{name: "Robin Jones"}) |> render_submit()
+    assert MembershipContext.get_person(member.person_id).name == "Robin Jones"
+    assert has_element?(view, "#my-settings-profile-name", "Robin Jones")
+    refute has_element?(view, "#my-settings-name-form")
+  end
+
+  test "a real rename updates an already-open untouched name editor", %{conn: conn} do
+    club = insert_membership_club!(name: "Name Refresh Club", slug: "name-refresh")
+
+    member =
+      create_commanded_active_member(club, email: "name.refresh@example.com", name: "Alice Smith")
+
+    conn = signed_in_club_host(conn, club, member.email)
+    {:ok, first, _} = live(conn, ~p"/my/settings")
+    {:ok, second, _} = live(conn, ~p"/my/settings")
+    first |> element("#my-settings-edit-name") |> render_click()
+    second |> element("#my-settings-edit-name") |> render_click()
+    first |> form("#my-settings-name-form", person: %{name: "Robin Jones"}) |> render_submit()
+    assert has_element?(second, "#my-settings-profile-name", "Robin Jones")
+    assert has_element?(second, "#my-settings-name-input[value='Robin Jones']")
+  end
+
+  test "a dirty older name draft is retained and warns with authoritative newer value", %{
+    conn: conn
+  } do
+    club = insert_membership_club!(name: "Name Conflict Club", slug: "name-conflict")
+
+    member =
+      create_commanded_active_member(club,
+        email: "name.conflict@example.com",
+        name: "Alice Smith"
+      )
+
+    conn = signed_in_club_host(conn, club, member.email)
+    {:ok, older, _} = live(conn, ~p"/my/settings")
+    {:ok, newer, _} = live(conn, ~p"/my/settings")
+    older |> element("#my-settings-edit-name") |> render_click()
+    newer |> element("#my-settings-edit-name") |> render_click()
+    older |> form("#my-settings-name-form", person: %{name: "Alice Brown"}) |> render_change()
+    newer |> form("#my-settings-name-form", person: %{name: "Alice Jones"}) |> render_submit()
+    assert has_element?(older, "#my-settings-name-input[value='Alice Brown']")
+    older |> form("#my-settings-name-form", person: %{name: "Alice Brown"}) |> render_submit()
+    assert MembershipContext.get_person(member.person_id).name == "Alice Jones"
+    assert has_element?(older, "#my-settings-name-conflict[role='alert']", "Alice Jones")
+    assert_push_event(older, "focus_form_conflict", %{id: "my-settings-name-conflict"})
+    assert has_element?(older, "#my-settings-name-input[value='Alice Brown']")
+    assert has_element?(older, "#my-settings-name-save-anyway[type='button']", "Save anyway")
+    newer |> element("#my-settings-edit-name") |> render_click()
+    newer |> form("#my-settings-name-form", person: %{name: "Alice Green"}) |> render_submit()
+    assert has_element?(older, "#my-settings-name-conflict", "Alice Jones")
+    older |> element("#my-settings-name-save-anyway") |> render_click()
+    assert MembershipContext.get_person(member.person_id).name == "Alice Green"
+    assert has_element?(older, "#my-settings-name-conflict", "Alice Green")
+    older |> element("#my-settings-name-save-anyway") |> render_click()
+    assert MembershipContext.get_person(member.person_id).name == "Alice Brown"
+    refute has_element?(older, "#my-settings-name-form")
+  end
+
+  test "Cancel my changes adopts the latest saved name without a write", %{conn: conn} do
+    club = insert_membership_club!(name: "Name Cancel Club", slug: "name-cancel")
+
+    member =
+      create_commanded_active_member(club, email: "name.cancel@example.com", name: "Alice Smith")
+
+    conn = signed_in_club_host(conn, club, member.email)
+    {:ok, older, _} = live(conn, ~p"/my/settings")
+    {:ok, newer, _} = live(conn, ~p"/my/settings")
+    older |> element("#my-settings-edit-name") |> render_click()
+    older |> form("#my-settings-name-form", person: %{name: "Alice Brown"}) |> render_change()
+    newer |> element("#my-settings-edit-name") |> render_click()
+    newer |> form("#my-settings-name-form", person: %{name: "Alice Jones"}) |> render_submit()
+    older |> form("#my-settings-name-form", person: %{name: "Alice Brown"}) |> render_submit()
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+    assert has_element?(older, "#my-settings-name-cancel-changes", "Cancel my changes")
+    assert has_element?(older, "#my-settings-name-form[phx-remove]")
+    older |> element("#my-settings-name-cancel-changes") |> render_click()
+    assert has_element?(older, "#my-settings-profile-name", "Alice Jones")
+    refute has_element?(older, "#my-settings-name-form")
+    assert Memba.ProjectionBarrier.current_checkpoint() == checkpoint
+    older |> element("#my-settings-edit-name") |> render_click()
+    older |> form("#my-settings-name-form", person: %{name: "Not saved"}) |> render_change()
+    older |> element("#my-settings-cancel-name") |> render_click()
+    assert Memba.ProjectionBarrier.current_checkpoint() == checkpoint
+    refute has_element?(older, "#my-settings-name-form")
+  end
+
+  test "reverting a dirty draft to its normalized baseline follows latest again", %{conn: conn} do
+    club = insert_membership_club!(name: "Name Revert Club", slug: "name-revert")
+
+    member =
+      create_commanded_active_member(club, email: "name.revert@example.com", name: "Alice Smith")
+
+    conn = signed_in_club_host(conn, club, member.email)
+    {:ok, older, _} = live(conn, ~p"/my/settings")
+    {:ok, newer, _} = live(conn, ~p"/my/settings")
+    older |> element("#my-settings-edit-name") |> render_click()
+    older |> form("#my-settings-name-form", person: %{name: "Robin"}) |> render_change()
+    newer |> element("#my-settings-edit-name") |> render_click()
+    newer |> form("#my-settings-name-form", person: %{name: "Alice Jones"}) |> render_submit()
+    older |> form("#my-settings-name-form", person: %{name: " Alice   Smith "}) |> render_change()
+    assert has_element?(older, "#my-settings-name-input[value='Alice Jones']")
+    older |> form("#my-settings-name-form", person: %{name: "Alice Green"}) |> render_change()
+    older |> form("#my-settings-name-form", person: %{name: "Alice Green"}) |> render_submit()
+    assert MembershipContext.get_person(member.person_id).name == "Alice Green"
+  end
+
+  test "invalid name keeps raw input with labelled associated field feedback", %{conn: conn} do
+    club = insert_membership_club!(name: "Name Error Club", slug: "name-error")
+
+    member =
+      create_commanded_active_member(club, email: "name.error@example.com", name: "Alice Smith")
+
+    {:ok, view, _} = conn |> signed_in_club_host(club, member.email) |> live(~p"/my/settings")
+    view |> element("#my-settings-edit-name") |> render_click()
+
+    for {name, message} <- [
+          {"   ", "Enter the name your clubs should see."},
+          {String.duplicate("界", 101), "That name is too long."}
+        ] do
+      view |> form("#my-settings-name-form", person: %{name: name}) |> render_submit()
+
+      assert has_element?(
+               view,
+               "#my-settings-name-input[aria-invalid='true'][aria-describedby='my-settings-name-error']"
+             )
+
+      assert has_element?(view, "#my-settings-name-error", message)
+      assert MembershipContext.get_person(member.person_id).name == "Alice Smith"
+      assert has_element?(view, "#my-settings-name-input[value='#{name}']")
+    end
+  end
+
   test "renders the default settings route with the profile tab selected", %{conn: conn} do
     club = insert_membership_club!(name: "Settings Shell Club", slug: "settings-shell")
 

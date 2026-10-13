@@ -28,6 +28,12 @@ defmodule Memba.Membership.Projectors.Person do
     |> upsert_legacy_primary_email_address(event)
   end)
 
+  project(%Memba.Membership.Events.PersonRenamed{} = event, fn multi ->
+    Ecto.Multi.update_all(multi, :membership_person_name, person_query(event.person_id),
+      set: [name: event.name, updated_at: DateTime.utc_now()]
+    )
+  end)
+
   project(%PersonEmailAddressesReplaced{} = event, fn multi ->
     multi
     |> Ecto.Multi.update_all(

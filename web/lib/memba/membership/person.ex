@@ -53,6 +53,35 @@ defmodule Memba.Membership.Person do
 
   def execute(%__MODULE__{}, %CreatePerson{}), do: {:error, :already_created}
 
+  def execute(%__MODULE__{person_id: nil}, %Memba.Membership.Commands.RenamePerson{}),
+    do: {:error, :person_not_created}
+
+  def execute(%__MODULE__{} = person, %Memba.Membership.Commands.RenamePerson{} = command) do
+    normalize = fn value ->
+      value |> String.split(~r/[\s\p{Z}]+/u, trim: true) |> Enum.join(" ")
+    end
+
+    with :ok <- validate_person_id(command.person_id),
+         :ok <- validate_matching_person_id(person, command),
+         {:ok, raw_name} <- normalize_name(command.name),
+         true <- is_binary(command.expected_name) do
+      name = normalize.(raw_name)
+      expected = normalize.(command.expected_name)
+      current = normalize.(person.name)
+
+      cond do
+        name == "" -> {:error, :invalid_name}
+        String.length(name) > 100 -> {:error, :name_too_long}
+        name == current -> []
+        expected != current -> {:error, {:name_conflict, current}}
+        true -> %Memba.Membership.Events.PersonRenamed{person_id: person.person_id, name: name}
+      end
+    else
+      false -> {:error, :invalid_name}
+      error -> error
+    end
+  end
+
   @impl Aggregate
   def execute(%__MODULE__{person_id: nil}, %ReplacePersonEmailAddresses{}) do
     {:error, :person_not_created}
@@ -165,6 +194,10 @@ defmodule Memba.Membership.Person do
             %{email: event.email, is_primary: true}
           ])
     }
+  end
+
+  def apply(%__MODULE__{} = person, %Memba.Membership.Events.PersonRenamed{} = event) do
+    %__MODULE__{person | name: event.name}
   end
 
   def apply(%__MODULE__{} = person, %PersonEmailAddressesReplaced{} = event) do
