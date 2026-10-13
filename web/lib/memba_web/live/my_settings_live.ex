@@ -424,12 +424,16 @@ defmodule MembaWeb.MySettingsLive do
                     >
                       {person_initials(@current_person.name)}
                     </div>
-                    <p id="my-settings-profile-name" class="text-xl font-bold text-ink">
+                    <p
+                      id="my-settings-profile-name"
+                      class="min-w-0 flex-1 wrap-anywhere text-xl font-bold text-ink"
+                    >
                       {@current_person.name}
                     </p>
                     <.button
                       :if={!@name_form}
                       id="my-settings-edit-name"
+                      class="shrink-0"
                       type="button"
                       phx-click="edit_name"
                       variant="secondary"
