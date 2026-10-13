@@ -32,6 +32,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+  alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
@@ -62,6 +63,7 @@ defmodule Memba.Membership.Router do
   dispatch(InviteClubMember, to: ClubInvitation)
   dispatch(ReconcileLegacyAdminHistory, to: Club)
   dispatch(MakePersonEmailAddressPrimary, to: Person)
+  dispatch(MergePerson, to: Person)
   dispatch(RemoveCustomGroupMember, to: Club)
   dispatch(RemoveGroupMember, to: Club)
   dispatch(RemoveClubMember, to: Club)

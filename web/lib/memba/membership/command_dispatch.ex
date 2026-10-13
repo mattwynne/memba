@@ -34,6 +34,7 @@ defmodule Memba.Membership.CommandDispatch do
     ReplacePersonEmailAddresses,
     RemovePersonEmailAddress,
     MakePersonEmailAddressPrimary,
+    MergePerson,
     VerifyPersonEmailAddress,
     CreatePerson,
     CreateClub,
@@ -87,6 +88,7 @@ defmodule Memba.Membership.CommandDispatch do
   def dispatch(%ReplacePersonEmailAddresses{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%RemovePersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%MakePersonEmailAddressPrimary{} = command, opts), do: raw_dispatch(command, opts)
+  def dispatch(%MergePerson{} = command, opts), do: raw_dispatch(command, opts)
   def dispatch(%VerifyPersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
 
   def dispatch(%CreateClub{} = command, opts), do: raw_dispatch(command, opts)

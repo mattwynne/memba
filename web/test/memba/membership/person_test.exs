@@ -4,6 +4,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+  alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
@@ -13,6 +14,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+  alias Memba.Membership.Events.PersonMerged
   alias Memba.Membership.Person
 
   describe "execute/2 CreatePerson" do
@@ -442,6 +444,60 @@ defmodule Memba.Membership.PersonTest do
                email_addresses: email_addresses,
                primary_email: "alice@work.example"
              })
+  end
+
+  describe "execute/2 MergePerson" do
+    test "preserves the target primary and records imported verified addresses" do
+      target_id = Memba.ID.generate(:person)
+      source_id = Memba.ID.generate(:person)
+      person = created_person(target_id)
+      verified_at = ~U[2026-10-13 06:00:00Z]
+
+      command = %MergePerson{
+        person_id: target_id,
+        source_person_id: source_id,
+        email_addresses: [
+          hd(person.email_addresses),
+          %{
+            email: "alice@work.example",
+            normalized_email: "alice@work.example",
+            is_primary: false,
+            verified_at: verified_at
+          }
+        ]
+      }
+
+      assert %PersonMerged{
+               person_id: ^target_id,
+               source_person_id: ^source_id,
+               primary_email: "alice@example.com"
+             } = event = Person.execute(person, command)
+
+      merged = Person.apply(person, event)
+      assert merged.email == "alice@example.com"
+      assert source_id in merged.merged_source_person_ids
+      assert Person.execute(merged, command) == []
+    end
+
+    test "rejects a pending imported address" do
+      target_id = Memba.ID.generate(:person)
+      person = created_person(target_id)
+
+      assert {:error, :source_has_pending_email_address} =
+               Person.execute(person, %MergePerson{
+                 person_id: target_id,
+                 source_person_id: Memba.ID.generate(:person),
+                 email_addresses: [
+                   hd(person.email_addresses),
+                   %{
+                     email: "pending@example.com",
+                     normalized_email: "pending@example.com",
+                     is_primary: false,
+                     verified_at: nil
+                   }
+                 ]
+               })
+    end
   end
 
   defp created_person(person_id) do
