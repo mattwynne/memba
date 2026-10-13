@@ -5,6 +5,7 @@ const { expect } = require("@playwright/test");
 const { createBrowserAcceptanceLifecycle } = require("../features/support/lifecycle");
 const { configureBrowserEnvironment } = require("../features/support/browser_environment");
 const { ensureMember, signInDirectly, openClubPage, kootenayClubName } = require("../features/support/authentication");
+const { runCommand } = require("../features/support/server_commands");
 const lifecycle = createBrowserAcceptanceLifecycle();
 let browser;
 
@@ -67,8 +68,10 @@ for (const width of [390, 1320]) {
       // Delay this tab's change event so the remote refresh reaches its server
       // before the locally typed draft. Neither the draft nor its baseline may
       // be silently advanced by that patch.
-      await page.evaluate(() => window.liveSocket.enableLatencySim(1000));
+      await page.evaluate(() => window.liveSocket.enableLatencySim(3000));
       await input.fill("Alice Brown");
+      await edit(other);
+      await save(other, "Alice Brown");
       await edit(other);
       await save(other, "Alice Jones");
       await expect(page.locator("#my-settings-profile-name")).toHaveText("Alice Jones");
@@ -130,6 +133,57 @@ for (const width of [390, 1320]) {
       await save(page, "界".repeat(100));
       await expect(page.locator("#my-settings-profile-name")).toHaveText("界".repeat(100));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`untouched stale Save never confirms an undisplayed draft at ${width}px`, { timeout: 120000 }, async () => {
+    const context = await browser.newContext({ viewport: { width, height: 1000 } });
+    const projector = `
+{_child, pid, :worker, _modules} =
+  Enum.find(Supervisor.which_children(Memba.Supervisor), fn
+    {{Memba.Membership.Projectors.Person, _opts}, pid, :worker, _modules} -> is_pid(pid)
+    _ -> false
+  end)
+`;
+    try {
+      const page = await context.newPage();
+      const world = { browser, context, page, baseUrl: lifecycle.baseUrl };
+      assert.equal((await context.request.post(new URL("/dev/test-support/reset", world.baseUrl).toString())).status(), 204);
+      await ensureMember(world, "Alice Smith", kootenayClubName);
+      await signInDirectly(world, "Alice Smith");
+      await openClubPage(world, kootenayClubName);
+      await expect(page.locator(".phx-connected #club-site-identity-menu-button")).toBeVisible();
+      await page.locator("#club-site-identity-menu-button").click();
+      await page.locator("#club-site-account-settings-link").click();
+      await expect(page.locator(".phx-connected #my-settings")).toBeVisible();
+      await edit(page);
+      const input = page.getByLabel("Your name", { exact: true });
+      try {
+        runCommand(`${projector}
+:ok = :sys.suspend(pid)
+{:ok, command} = Memba.Membership.PersonCommands.prepare_rename(
+  %{person_id: payload["personId"]},
+  %{person_id: payload["personId"], name: "Alice Jones", expected_name: "Alice Smith"})
+:ok = Memba.Membership.CommandDispatch.dispatch(command, consistency: :eventual)
+%{suspended: true}
+`, { personId: world.people["Alice Smith"].personId });
+        await input.press("Enter");
+        await expect(page.locator("#my-settings-name-conflict")).toContainText("Alice Jones");
+        await expect(input).toHaveValue("Alice Smith");
+      } finally {
+        runCommand(`${projector}
+:ok = :sys.resume(pid)
+Memba.ProjectionBarrier.await!([Memba.Membership.Projectors.Person])
+%{resumed: true}
+`, {});
+      }
+      await expect(page.locator("#my-settings-profile-name")).toHaveText("Alice Jones");
+      await expect(input).toHaveValue("Alice Smith");
+      await page.locator("#my-settings-name-save-anyway").click();
+      await expect(page.locator("#my-settings-profile-name")).toHaveText("Alice Smith");
+      await expect(page.locator("#my-settings-name-form")).toHaveCount(0);
     } finally {
       await context.close();
     }
