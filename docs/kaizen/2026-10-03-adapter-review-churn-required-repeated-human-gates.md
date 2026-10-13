@@ -56,3 +56,40 @@ Matt requested a radically simpler unattended workflow rather than more packet-s
 The investigation includes the existing `goal-directed-bdd` historical rehearsal; its successful continuation required prior manual recovery and does not prove whole-iteration autonomy. The recommendation is to prove the replacement's interruption/recovery and publication contract with an isolated walking skeleton before adding real agents or launching a delivery.
 
 **Status remains Open; recommendation awaiting approval.** No factory code, run, delivery authorization or experiment status changed. The active post-merge healer experiment remains separate and occupies the ledger's experiment slot. This is a proposed replacement direction, not an approved second experiment or a claim of resolution.
+
+## Additional observation: 2026-10-13 — 068 required operator takeover
+
+### Expected and observed
+
+The intended path was Plan → Implement → Focused checks → Independent review → Repair → Final checks → Accepted candidate, with one persistent builder workflow owning ordinary technical repair and current-main integration. Review findings are normal; parent-agent editing and manual stage handoffs outside that workflow are a failure of unattended completion.
+
+The actual Fabro implementation run `01M4PD6HB4TPF9T2VVZQBYY837`, job `3b445881827e48b8bc7d75efee7e3d0c`, stopped with `Model visit budget exhausted`: ten coding-agent work visits, 351 tool operations, one process start and one provider recovery. A visit means a coding-agent run/resume, not necessarily a new SDK session or subscription quota. Ten was our runner-configured limit, not a Fabro-imposed limit. Candidate `0ab89a4e` was preserved **unaccepted**; no independent review ran. The original deadline, `2026-10-12T02:09:20.518459Z`, expired and was never renewed.
+
+Historical offline bubblewrap gates repeatedly failed on unchanged source because of hostname/font/network dependencies. Later, the saved candidate passed the ordinary gate in normal Fabro Docker: 1,844 app tests, 19 package tests, seven journeys/114 steps. That validation wrapper then failed because `cmp` was missing; its separate packaging repair is recorded in the [missing-tool note](2026-05-31-iteration-implementation-python3-publish-failure.md). Neither result proves autonomous end-to-end completion.
+
+Matt separately requested manual 068 completion. The parent integrated saved product into main `4910a5d9`, then `5645fb62`, accommodating owner API drift and iteration 070, and obtained actual-host tests. Three fresh Sol/high read-only source reviews rejected successive candidates:
+
+- Review 1: focused untouched input could restore an old name (R1); inactive historical recipient names remained stale (R2).
+- Review 2: remote raw-value acknowledgements could overwrite an unacknowledged dirty draft (R3); rejected untouched Save could leave browser text, server draft and confirmation inconsistent (R4).
+- Review 3: an allowed 100-character unbroken Latin name pushed Edit outside an overflow-hidden card (R5). The 100-CJK and document-overflow checks missed the clipped control.
+
+The parent repaired R1–R4 outside the intended workflow, retaining same-scenario connected-browser red/green evidence and committed-source receipts. Candidate `8d2e0432` passed the ordinary gate: 1,851 app tests, 19 package tests, eight journeys/121 steps; focused proof was 60 tests plus four Chromium tests at 390px/1320px. Ten actual responsive checks passed separately under a forced run, not the ordinary gate's skipped responsive pages. Review 3 still **rejected** it. Separately, complete config tests were 104 total/103 passed/one failed on a hard-coded lifecycle name; the relevant files were byte-identical to published main. This is not an all-green claim.
+
+At this observation's cutoff, Matt explicitly approved one additional repair/review cycle at `2026-10-13T20:34:05Z`. Delegated R5 work was ongoing, not accepted or deployed. This new allowance did not renew either prior admission.
+
+### Impact and system weakness
+
+The work was preserved, but completion depended on operator recovery, integration, repairs and review scheduling. The product defects themselves are not factory kaizen findings; discovering and repairing them outside the intended workflow is the weakness. Green checks could not substitute for independent acceptance, and using the wrong test environment consumed effort without changing the candidate.
+
+Uniquely versioned pinned images are now a completed foundation, not proof of this delivery loop. Normal-launcher/image-A-to-B proof remains unperformed. Selected attempts do not support a success-rate conclusion; even a later manual 068 shipment would not prove factory success.
+
+### Open questions and possible prevention ideas
+
+- Admit the correct normal test environment from the start, including network/font dependencies and checks that would otherwise be conditionally skipped.
+- Keep independent review, bounded repair and current-main integration inside the persistent builder workflow, without parent editing or manual stage handoffs.
+- Separate infrastructure, product work and review time in budget evidence; reserve review capacity and report the actual stop cause rather than simply increasing visits. Whether the existing cap was adequate for product work remains unknown.
+- Preserve candidate-bound receipts and adversarial browser proof: focused inputs, delayed local changes, rejected-save consent and a visible, usable control—not only document overflow.
+
+These are prevention ideas, not implemented fixes or changed experiment terms. The earlier investigation/proposal remains historical; this note stays **Open**. The separate post-merge healer retains its original five-qualifying-run requirement and October 19 review date.
+
+Evidence: private local `/home/matt/.local/state/memba/fabro-proof/CURRENT.md`; `/home/matt/.local/state/memba/068-completion/HANDOFF.md`, `admission.json`, `independent-review-{1,2,3}-result.json`, and `extra-cycle-20261013/admission.json`. Raw private artifacts are not copied into the repository.
