@@ -93,3 +93,15 @@ Rule: A failed upload leaves the member's existing photo in place
       When Alice's photo upload fails
       Then Alice should be told "We couldn't upload that photo. Please try again."
       And Alice's photo should be "alice-on-the-summit.jpg"
+
+Rule: A conflicting stale change must not silently replace a newer name
+
+    @iteration-068
+    Scenario: Alice's older edit requires confirmation of the newer name
+      Given Alice began changing their name when it was "Alice Smith"
+      And Alice has since changed their name to "Alice Jones"
+      When Alice submits the older change to "Alice Brown"
+      Then the change should be rejected because their name changed elsewhere
+      And Alice should be known as "Alice Jones"
+      When Alice confirms replacing "Alice Jones" with "Alice Brown"
+      Then Alice should be known as "Alice Brown"
