@@ -1,0 +1,17 @@
+digraph NativeHookSmoke {
+ graph [goal="Native hook/tool/source binding: one read-only model visit; no app/scenario", default_max_retries=0, model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"]
+ start [shape=Mdiamond]
+ bdd_navigator [shape=box, backend="api", fidelity="full", thread_id="bdd-navigator", timeout="180s", prompt="Native read-only hook/tool smoke. Do not implement or test application code. Run exactly this single shell command from /workspace/memba:\n\n```\npython3 -B .fabro/workflows/bdd-implementation/runner/guard.py inspect read .fabro/tmp/bdd-implementation/task.json\n```\n\nIf it succeeds, return JSON with decision=smoke_complete, source=the exact source string from that JSON file, and reason=task inspected. If the command fails, return decision=blocked and explain; do not claim inspection. No other tools, edits, subagents, network or tests.", output_schema="{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}"]
+
+ admit [shape=parallelogram, script="python3 -B - <<'PY_NATIVE_HOOK_SMOKE'\nimport json,subprocess\nfrom pathlib import Path\np=Path(\".fabro/tmp/hook-smoke/facts.json\");p.parent.mkdir(parents=True,exist_ok=True);p.write_text('{\"feature\": \"acceptance-tests/features/member_profile.feature\", \"scenario\": \"Alice\\'s older edit requires confirmation of the newer name\", \"spec\": \"docs/iterations/068-member-name-editing/plan.md\", \"acceptance_kind\": \"domain\", \"setup_id\": \"native-hook-smoke-source-1d595e328ce40964f348bea10cac3995897e2e01\", \"deadline_utc\": \"2026-10-16T13:03:37Z\", \"aggregate_operations\": 20, \"operations_spent_before_run\": 0, \"allowed_paths\": [\"web/lib/memba/membership\", \"web/test/memba/membership\", \"web/test/features/step_definitions\"]}'+\"\\n\")\nsubprocess.run([\"python3\",\"-B\",\".fabro/workflows/bdd-implementation/runner/guard.py\",\"admit\",str(p),\"1d595e328ce40964f348bea10cac3995897e2e01\"],check=True)\nPY_NATIVE_HOOK_SMOKE\n"]
+ probe [shape=parallelogram, stdin_source="output.bdd_navigator", script="python3 -B -c 'import json,sys;from pathlib import Path;p=Path('\"'\"'.fabro/tmp/bdd-implementation'\"'\"');s=json.loads((p/'\"'\"'state.json'\"'\"').read_text());b=json.loads((p/'\"'\"'boot.json'\"'\"').read_text());r=json.load(sys.stdin);assert s['\"'\"'run_id'\"'\"']==b['\"'\"'run_id'\"'\"'];assert s['\"'\"'node'\"'\"']=='\"'\"'probe'\"'\"';assert s['\"'\"'operations'\"'\"']>=3;assert not s.get('\"'\"'active_tool'\"'\"');assert r['\"'\"'decision'\"'\"']=='\"'\"'smoke_complete'\"'\"' and isinstance(r['\"'\"'source'\"'\"'],str) and r['\"'\"'source'\"'\"']==s['\"'\"'role_source'\"'\"'];print('\"'\"'NATIVE_HOOK_TOOL_SMOKE_OK '\"'\"'+json.dumps({'\"'\"'run_id'\"'\"':s['\"'\"'run_id'\"'\"'],'\"'\"'source'\"'\"':r['\"'\"'source'\"'\"'],'\"'\"'operations'\"'\"':s['\"'\"'operations'\"'\"'],'\"'\"'source_base'\"'\"':s['\"'\"'base'\"'\"']}))'"]
+ stop [shape=parallelogram, script="exit 1"]
+ done [shape=Msquare]
+ start -> admit
+ admit -> bdd_navigator [condition="outcome=succeeded"]
+ bdd_navigator -> probe [condition="outcome=succeeded"]
+ bdd_navigator -> stop
+ admit -> stop
+ probe -> done [condition="outcome=succeeded"]
+ probe -> stop
+}

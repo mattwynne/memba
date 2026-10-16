@@ -1,0 +1,453 @@
+{
+  "title": "Implement one agreed example, refactor where worthwhile, full dev check and one combined review/f...",
+  "spec": {
+    "run_id": "01M51W9MT2MYFZG33VCH5R7QRE",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "hook-smoke.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Implement one agreed example, refactor where worthwhile, full dev check and one combined review/fix loop; no publication"
+        },
+        "working_dir": null,
+        "metadata": {
+          "prompt": "v3",
+          "owner": "thr_ra2ff7hjn2",
+          "kind": "native-hook-tool-smoke",
+          "overnight": "20261016"
+        },
+        "inputs": {
+          "admission_path": "",
+          "expected_source_head": ""
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.6-sol",
+          "fallbacks": {
+            "gpt-5.6-sol": []
+          },
+          "controls": {
+            "reasoning_effort": "high",
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**",
+            ".fabro/blobs",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [
+          {
+            "name": "bdd-no-resume",
+            "event": "run_start",
+            "command": "python3 -B .fabro/workflows/bdd-implementation/runner/guard.py begin",
+            "matcher": null,
+            "blocking": true,
+            "timeout_ms": null,
+            "sandbox": true
+          },
+          {
+            "name": "bdd-shared-limits-and-packet",
+            "event": "stage_start",
+            "command": "python3 -B .fabro/workflows/bdd-implementation/runner/guard.py stage",
+            "matcher": null,
+            "blocking": true,
+            "timeout_ms": null,
+            "sandbox": true
+          },
+          {
+            "name": "bdd-tool-boundary",
+            "event": "pre_tool_use",
+            "command": "python3 -B .fabro/workflows/bdd-implementation/runner/guard.py tool",
+            "matcher": null,
+            "blocking": true,
+            "timeout_ms": null,
+            "sandbox": true
+          },
+          {
+            "name": "bdd-tool-finished",
+            "event": "post_tool_use",
+            "command": "python3 -B .fabro/workflows/bdd-implementation/runner/guard.py tool_done",
+            "matcher": null,
+            "blocking": true,
+            "timeout_ms": null,
+            "sandbox": true
+          },
+          {
+            "name": "bdd-tool-failed",
+            "event": "post_tool_use_failure",
+            "command": "python3 -B .fabro/workflows/bdd-implementation/runner/guard.py tool_done",
+            "matcher": null,
+            "blocking": true,
+            "timeout_ms": null,
+            "sandbox": true
+          }
+        ],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/bdd-implementation/*.json",
+            ".fabro/tmp/bdd-implementation/*.log"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "NativeHookSmoke",
+      "nodes": {
+        "done": {
+          "id": "done",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "Msquare"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "probe": {
+          "id": "probe",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "stdin_source": {
+              "String": "output.bdd_navigator"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "python3 -B -c 'import json,sys;from pathlib import Path;p=Path('\"'\"'.fabro/tmp/bdd-implementation'\"'\"');s=json.loads((p/'\"'\"'state.json'\"'\"').read_text());b=json.loads((p/'\"'\"'boot.json'\"'\"').read_text());r=json.load(sys.stdin);assert s['\"'\"'run_id'\"'\"']==b['\"'\"'run_id'\"'\"'];assert s['\"'\"'node'\"'\"']=='\"'\"'probe'\"'\"';assert s['\"'\"'operations'\"'\"']>=3;assert not s.get('\"'\"'active_tool'\"'\"');assert r['\"'\"'decision'\"'\"']=='\"'\"'smoke_complete'\"'\"' and isinstance(r['\"'\"'source'\"'\"'],str) and r['\"'\"'source'\"'\"']==s['\"'\"'role_source'\"'\"'];print('\"'\"'NATIVE_HOOK_TOOL_SMOKE_OK '\"'\"'+json.dumps({'\"'\"'run_id'\"'\"':s['\"'\"'run_id'\"'\"'],'\"'\"'source'\"'\"':r['\"'\"'source'\"'\"'],'\"'\"'operations'\"'\"':s['\"'\"'operations'\"'\"'],'\"'\"'source_base'\"'\"':s['\"'\"'base'\"'\"']}))'"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "stop": {
+          "id": "stop",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "exit 1"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "admit": {
+          "id": "admit",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "python3 -B - <<'PY_NATIVE_HOOK_SMOKE'\nimport json,subprocess\nfrom pathlib import Path\np=Path(\".fabro/tmp/hook-smoke/facts.json\");p.parent.mkdir(parents=True,exist_ok=True);p.write_text('{\"feature\": \"acceptance-tests/features/member_profile.feature\", \"scenario\": \"Alice\\'s older edit requires confirmation of the newer name\", \"spec\": \"docs/iterations/068-member-name-editing/plan.md\", \"acceptance_kind\": \"domain\", \"setup_id\": \"native-hook-smoke-source-1d595e328ce40964f348bea10cac3995897e2e01\", \"deadline_utc\": \"2026-10-16T13:03:37Z\", \"aggregate_operations\": 20, \"operations_spent_before_run\": 0, \"allowed_paths\": [\"web/lib/memba/membership\", \"web/test/memba/membership\", \"web/test/features/step_definitions\"]}'+\"\\n\")\nsubprocess.run([\"python3\",\"-B\",\".fabro/workflows/bdd-implementation/runner/guard.py\",\"admit\",str(p),\"1d595e328ce40964f348bea10cac3995897e2e01\"],check=True)\nPY_NATIVE_HOOK_SMOKE\n"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        },
+        "bdd_navigator": {
+          "id": "bdd_navigator",
+          "attrs": {
+            "thread_id": {
+              "String": "bdd-navigator"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "output_schema": {
+              "String": "{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "prompt": {
+              "String": "Native read-only hook/tool smoke. Do not implement or test application code. Run exactly this single shell command from /workspace/memba:\n\n```\npython3 -B .fabro/workflows/bdd-implementation/runner/guard.py inspect read .fabro/tmp/bdd-implementation/task.json\n```\n\nIf it succeeds, return JSON with decision=smoke_complete, source=the exact source string from that JSON file, and reason=task inspected. If the command fails, return decision=blocked and explain; do not claim inspection. No other tools, edits, subagents, network or tests."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 180,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "admit",
+          "attrs": {}
+        },
+        {
+          "from": "admit",
+          "to": "bdd_navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "bdd_navigator",
+          "to": "probe",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "bdd_navigator",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "admit",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "probe",
+          "to": "done",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "probe",
+          "to": "stop",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "default_max_retries": {
+          "Integer": 0
+        },
+        "goal": {
+          "String": "Implement one agreed example, refactor where worthwhile, full dev check and one combined review/fix loop; no publication"
+        },
+        "model_stylesheet": {
+          "String": "* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"
+        }
+      }
+    },
+    "graph_source": "digraph NativeHookSmoke {\n graph [goal=\"Native hook/tool/source binding: one read-only model visit; no app/scenario\", default_max_retries=0, model_stylesheet=\"* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\"]\n start [shape=Mdiamond]\n bdd_navigator [shape=box, backend=\"api\", fidelity=\"full\", thread_id=\"bdd-navigator\", timeout=\"180s\", prompt=\"Native read-only hook/tool smoke. Do not implement or test application code. Run exactly this single shell command from /workspace/memba:\\n\\n```\\npython3 -B .fabro/workflows/bdd-implementation/runner/guard.py inspect read .fabro/tmp/bdd-implementation/task.json\\n```\\n\\nIf it succeeds, return JSON with decision=smoke_complete, source=the exact source string from that JSON file, and reason=task inspected. If the command fails, return decision=blocked and explain; do not claim inspection. No other tools, edits, subagents, network or tests.\", output_schema=\"{\\\"type\\\":\\\"object\\\",\\\"required\\\":[\\\"decision\\\",\\\"source\\\",\\\"reason\\\"]}\"]\n\n admit [shape=parallelogram, script=\"python3 -B - <<'PY_NATIVE_HOOK_SMOKE'\\nimport json,subprocess\\nfrom pathlib import Path\\np=Path(\\\".fabro/tmp/hook-smoke/facts.json\\\");p.parent.mkdir(parents=True,exist_ok=True);p.write_text('{\\\"feature\\\": \\\"acceptance-tests/features/member_profile.feature\\\", \\\"scenario\\\": \\\"Alice\\\\'s older edit requires confirmation of the newer name\\\", \\\"spec\\\": \\\"docs/iterations/068-member-name-editing/plan.md\\\", \\\"acceptance_kind\\\": \\\"domain\\\", \\\"setup_id\\\": \\\"native-hook-smoke-source-1d595e328ce40964f348bea10cac3995897e2e01\\\", \\\"deadline_utc\\\": \\\"2026-10-16T13:03:37Z\\\", \\\"aggregate_operations\\\": 20, \\\"operations_spent_before_run\\\": 0, \\\"allowed_paths\\\": [\\\"web/lib/memba/membership\\\", \\\"web/test/memba/membership\\\", \\\"web/test/features/step_definitions\\\"]}'+\\\"\\\\n\\\")\\nsubprocess.run([\\\"python3\\\",\\\"-B\\\",\\\".fabro/workflows/bdd-implementation/runner/guard.py\\\",\\\"admit\\\",str(p),\\\"1d595e328ce40964f348bea10cac3995897e2e01\\\"],check=True)\\nPY_NATIVE_HOOK_SMOKE\\n\"]\n probe [shape=parallelogram, stdin_source=\"output.bdd_navigator\", script=\"python3 -B -c 'import json,sys;from pathlib import Path;p=Path('\\\"'\\\"'.fabro/tmp/bdd-implementation'\\\"'\\\"');s=json.loads((p/'\\\"'\\\"'state.json'\\\"'\\\"').read_text());b=json.loads((p/'\\\"'\\\"'boot.json'\\\"'\\\"').read_text());r=json.load(sys.stdin);assert s['\\\"'\\\"'run_id'\\\"'\\\"']==b['\\\"'\\\"'run_id'\\\"'\\\"'];assert s['\\\"'\\\"'node'\\\"'\\\"']=='\\\"'\\\"'probe'\\\"'\\\"';assert s['\\\"'\\\"'operations'\\\"'\\\"']>=3;assert not s.get('\\\"'\\\"'active_tool'\\\"'\\\"');assert r['\\\"'\\\"'decision'\\\"'\\\"']=='\\\"'\\\"'smoke_complete'\\\"'\\\"' and isinstance(r['\\\"'\\\"'source'\\\"'\\\"'],str) and r['\\\"'\\\"'source'\\\"'\\\"']==s['\\\"'\\\"'role_source'\\\"'\\\"'];print('\\\"'\\\"'NATIVE_HOOK_TOOL_SMOKE_OK '\\\"'\\\"'+json.dumps({'\\\"'\\\"'run_id'\\\"'\\\"':s['\\\"'\\\"'run_id'\\\"'\\\"'],'\\\"'\\\"'source'\\\"'\\\"':r['\\\"'\\\"'source'\\\"'\\\"'],'\\\"'\\\"'operations'\\\"'\\\"':s['\\\"'\\\"'operations'\\\"'\\\"'],'\\\"'\\\"'source_base'\\\"'\\\"':s['\\\"'\\\"'base'\\\"'\\\"']}))'\"]\n stop [shape=parallelogram, script=\"exit 1\"]\n done [shape=Msquare]\n start -> admit\n admit -> bdd_navigator [condition=\"outcome=succeeded\"]\n bdd_navigator -> probe [condition=\"outcome=succeeded\"]\n bdd_navigator -> stop\n admit -> stop\n probe -> done [condition=\"outcome=succeeded\"]\n probe -> stop\n}\n",
+    "workflow_slug": "hook-smoke",
+    "source_directory": "/home/matt/.local/state/memba/native-bdd-overnight-20261016/source-check",
+    "labels": {
+      "owner": "thr_ra2ff7hjn2",
+      "prompt": "v3",
+      "kind": "native-hook-tool-smoke",
+      "overnight": "20261016"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "ad923fcc2591360de5bfbd04839c42c138702ac73868365320ab75e4e4838a5d",
+    "definition_blob": "6d3e2a58f45a1b912052ea647ee812623a8d6b7da4a13386d73d4e93486d9e22",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "trial/native-bdd-source-20261016",
+      "sha": "1d595e328ce40964f348bea10cac3995897e2e01",
+      "dirty": "dirty"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M51W9MT2MYFZG33VCH5R7QRE",
+  "start": {
+    "start_time": "2026-10-16T08:12:21.542940681Z",
+    "run_branch": "fabro/run/01M51W9MT2MYFZG33VCH5R7QRE",
+    "base_sha": "1d595e328ce40964f348bea10cac3995897e2e01"
+  },
+  "status": {
+    "kind": "running"
+  },
+  "status_updated_at": "2026-10-16T08:12:21.544722011Z",
+  "last_event_at": "2026-10-16T08:12:21.544722011Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "2189d0959ca64007f183b4611fc37e5db264b505711bae3abad63eb581e02f5a",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "trial/native-bdd-source-20261016",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
