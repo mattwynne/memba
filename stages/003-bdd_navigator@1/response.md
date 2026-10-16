@@ -1,0 +1,1 @@
+{"decision":"smoke_complete","source":null,"reason":"task inspected"}
