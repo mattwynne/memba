@@ -47,7 +47,12 @@ Review gets whole source/spec/results and the previous finding list, not histori
 
 Sandbox `pre_tool_use` enforces read-only navigator/review tools, blocks subagents,
 unknown/web/MCP/run-management tools, and restricts shell to exact guarded
-`inspect`/`observe` commands. Drivers cannot write before required baseline or
+`inspect`/`observe` commands or driver-only scoped formatting:
+`devenv shell -- bin/mix format <web-relative .ex/.exs/.heex files>`. Formatting
+requires explicit existing assigned/approved files, baseline/edit permission and
+no handback, no flags/globs/traversal, and the same tool reservation as other edits.
+It uses the normal devenv Mix toolchain, not bare host PATH. Format BEFORE final
+supporting/acceptance tests; those results must match the formatted bytes. Drivers cannot write before required baseline or
 after recorded handback, outside assigned paths, or to workflows/.feature files.
 Apply-patch paths (including moves) and native edit paths are checked. Native API
 tools may run in parallel: a file lock serializes counters/observations, and
@@ -88,6 +93,14 @@ There is intentionally no automatic cross-run recovery platform.
 Pass `admission_path` (simple repo-relative path, no quotes/shell characters) and
 `expected_source_head` (exact prepared 40-hex commit) as normal Fabro run inputs.
 The SHA is passed separately to avoid a committed file containing its own SHA.
+Optional JSON fact `scenario_base_sha` may name the original pre-scenario product
+commit when deliberately starting from preserved unaccepted native work. It must
+be an exact existing commit and ancestor of the prepared source (`cat-file` and
+`merge-base --is-ancestor`), otherwise admission stops. Default is the prepared
+source. `inspect diff` uses this base and ONLY admitted app/test `allowed_paths`,
+so the whole product change is visible without factory/admission overlays.
+This is not old-conversation/state restoration or a new allowance; a new native
+job still starts fresh and explicitly carries already-spent original operations.
 The facts file must already be in that managed clone; admission rejects dirty or
 wrong source, missing spec/example and absent/expired/nonfinite original limits.
 Normal launch is directly against this TOML, NOT `dev fabro deliver`, an eval
@@ -123,7 +136,15 @@ never green. It halts edits/tests and returns to the assigning navigator to corr
 the SAME bounded task's selector (prefer a focused whole file, no guessed lines),
 without dropping required coverage or requesting routine human approval. Normal
 refactoring returns to its navigator; review-repair feedback returns to the BDD
-repair navigator. Missing summaries, skipped tests and setup failures stay blockers. Finish requires
+repair navigator. Missing summaries, skipped tests and setup failures stay blockers.
+A driver's early `decision=handback` for assignment omissions is also NONPASSING
+`replan` feedback: no predicted acceptance result is required to ask its navigator
+to correct the task. Partial work/red observations remain; actual changed paths
+must still be assigned AND approved, source binding must match, pre-baseline work
+must stay untouched, and optional `needed_paths` must stay within approved facts.
+It never expands driver authority or marks tests green. Existing blocked/invalid
+states and explicit environment/scope blockers still fail. Normal refactoring
+returns to its own navigator; repair handbacks return to the repair-owning BDD one. Finish requires
 current selected green, real full-check exit/test summaries and one complete clean
 review on the SAME bytes. Agent declarations/zero/missing/skipped checks cannot
 supply test green. Approved examples/assertions/authorisation remain unchanged.
@@ -204,9 +225,16 @@ preflight and matched its domain baseline, then stopped on a guessed unit line
 that selected zero tests. Its unchanged `5.log` is retained as
 `runner/tests/fixtures/unit-zero-selection.log`. The narrow correction adds six
 regressions (31 total) and explicit selector-error handback paths, not product code
-or a recovery platform. Original campaign limits remain 600 aggregate operations,
-91 already spent after that attempt, and deadline 2026-10-16T13:03:37Z; parent owns
-the remaining two attempts and carries actual consumed work forward.
+or a recovery platform. After that attempt, 91 operations were spent and two attempts remained.
+The second parent-owned run `01M51Y5D2Y42021EYE1PHYB875` preserved aggregate unit
+green and dispatch unit red, then failed because the guard rejected a scope-respecting
+early handback for omitted `CommandDispatch`. Its state/response/raw unit log are
+retained under `runner/tests/fixtures/case2-*`. The new nonpassing replan path,
+optional ancestor base and scoped formatting have isolated regression coverage
+(46 total); no product repair, formatter invocation or native launch was done here.
+Current ORIGINAL campaign limits: **600 total operations, 208 spent (392 remain),
+one launch left, deadline 2026-10-16T13:03:37Z**. Parent owns that final launch and
+carries any additional actual consumed work forward.
 
 This remains an unfinished draft, not a successful end-to-end run. Stop at handoff for parent
 inspection/integration; do not interpret these focused checks as a successful run.

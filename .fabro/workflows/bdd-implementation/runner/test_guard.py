@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import subprocess
 import sys
 import tomllib
 from unittest.mock import patch
@@ -337,5 +338,171 @@ with patch.object(g, "source", return_value="A"), patch.object(g, "write"), \
 
     check("synthetic whole-file retry preserves exact selector and requires executed tests", focused_file_retry)
 
-assert count == 31
+# Regression from REAL normal run 01M51Y5D2Y42021EYE1PHYB875: unaccepted
+# partial work, scope-respecting handback, and current dispatch-unit red.
+case2 = json.loads((fixtures / "case2-state.json").read_text())
+response2 = json.loads((fixtures / "case2-driver-response.json").read_text())
+red2 = (fixtures / "case2-dispatch-red.log").read_text()
+unit2 = "web/test/memba/membership/person_command_dispatch_test.exs"
+live2 = case2["tests"][unit2]["source"]
+needed2 = "web/lib/memba/membership/command_dispatch.ex"
+
+
+def changed2(*args):
+    return "\n".join(response2["changed_files"]).encode() if args[0] == "diff" else b""
+
+
+with patch.object(g, "source", return_value=live2), patch.object(g, "write"), \
+        patch.object(g, "git", side_effect=changed2):
+    def early_scope_handback():
+        s = copy.deepcopy(case2)
+        assert g.exunit_counts(red2)[0]["failures"] == 1 and "FunctionClauseError" in red2
+        with patch.object(g, "route") as routed:
+            g.accept(s, "bdd_driver", copy.deepcopy(response2))
+            routed.assert_called_once_with("replan")
+        assert s["assignment"]["halt"] and s["assignment"]["result"] == "replan"
+        assert s["handback"]["actual"] == "replan" and s["handback"]["source_after"] == live2
+        assert s["tests"][unit2]["status"] == "failed" and not g.current_green(s)
+        assert needed2 not in s["assignment"]["paths"] and s["operations"] == 208
+
+    check("real early scope handback preserves partial work/red evidence and replans", early_scope_handback)
+
+    def requested_paths_stay_advisory():
+        s, r = copy.deepcopy(case2), copy.deepcopy(response2)
+        r["needed_paths"] = [needed2]
+        g.accept(s, "bdd_driver", r)
+        assert needed2 not in s["assignment"]["paths"]
+        assert s["handback"]["needed_paths"] == [needed2]
+        r["needed_paths"] = [".fabro/workflows/bdd-implementation/runner/guard.py"]
+        block(lambda: g.accept(copy.deepcopy(case2), "bdd_driver", r))
+
+    check("requested approved path is feedback only; outside approved facts stays blocked", requested_paths_stay_advisory)
+
+    def early_path_and_source_guards():
+        with patch.object(g, "git", side_effect=lambda *a: needed2.encode() if a[0] == "diff" else b""):
+            block(lambda: g.accept(copy.deepcopy(case2), "bdd_driver", copy.deepcopy(response2)))
+        r = copy.deepcopy(response2)
+        r["source"] = "stale-source"
+        block(lambda: g.accept(copy.deepcopy(case2), "bdd_driver", r))
+
+    check("early replan cannot forgive unassigned edits or a stale source binding", early_path_and_source_guards)
+
+    def genuine_blockers_stay_blocked():
+        s, r = copy.deepcopy(case2), copy.deepcopy(response2)
+        s["assignment"].update(halt=True, result="blocked", error="test changed source/setup failed")
+        block(lambda: g.accept(s, "bdd_driver", r))
+        r["decision"] = "blocked"
+        block(lambda: g.accept(copy.deepcopy(case2), "bdd_driver", r))
+
+    check("genuine blocked/stale/environment failure cannot become early replan", genuine_blockers_stay_blocked)
+
+    def prebaseline_handback_is_untouched():
+        s = copy.deepcopy(case2)
+        s["assignment"]["edit_allowed"] = False
+        block(lambda: g.accept(s, "bdd_driver", copy.deepcopy(response2)))
+        with patch.object(g, "source", return_value=s["role_source"]), patch.object(g, "git", return_value=b""):
+            g.accept(s, "bdd_driver", copy.deepcopy(response2))
+            assert s["handback"]["actual"] == "replan"
+
+    check("scope question before baseline needs no predicted result but must stay untouched", prebaseline_handback_is_untouched)
+
+head, ancestor = "b" * 40, "a" * 40
+
+
+def ancestor_git(*args):
+    return b"commit\n" if args[0] == "cat-file" else b""
+
+
+with patch.object(g, "git", side_effect=ancestor_git) as checked:
+    def default_base():
+        assert g.scenario_base({"expected_source_head": head}) == head
+
+    check("scenario product base defaults to prepared source", default_base)
+
+    def explicit_base():
+        assert g.scenario_base({"expected_source_head": head, "scenario_base_sha": ancestor}) == ancestor
+        assert ("merge-base", "--is-ancestor", ancestor, head) in [c.args for c in checked.call_args_list]
+
+    check("optional scenario base is an existing commit ancestor, not restored state", explicit_base)
+
+    def invalid_bases():
+        with patch.object(g, "git", return_value=b"blob\n"):
+            block(lambda: g.scenario_base({"expected_source_head": head, "scenario_base_sha": ancestor}))
+        with patch.object(g, "git", side_effect=subprocess.CalledProcessError(1, ["git", "cat-file"])):
+            block(lambda: g.scenario_base({"expected_source_head": head, "scenario_base_sha": ancestor}))
+        def nonancestor(*args):
+            if args[0] == "cat-file":
+                return b"commit\n"
+            raise subprocess.CalledProcessError(1, ["git", "merge-base", "--is-ancestor"])
+        with patch.object(g, "git", side_effect=nonancestor):
+            block(lambda: g.scenario_base({"expected_source_head": head, "scenario_base_sha": ancestor}))
+        block(lambda: g.scenario_base({"expected_source_head": head, "scenario_base_sha": "HEAD~1"}))
+
+    check("missing/noncommit/nonancestor/unpinned scenario bases are rejected", invalid_bases)
+
+    def scoped_product_diff():
+        s = copy.deepcopy(case2)
+        s["base"] = ancestor
+        checked.reset_mock()
+        g.inspect(s, "diff")
+        checked.assert_called_once_with("diff", ancestor, "--", *s["facts"]["allowed_paths"])
+
+    check("cumulative diff includes prior product work but excludes factory/admission changes", scoped_product_diff)
+
+# Formatting is only a guarded command proposal here; never execute Mix/devenv.
+format_file = "lib/memba/membership/person.ex"
+format_args = ["devenv", "shell", "--", "bin/mix", "format", format_file]
+
+
+def format_state(role="bdd_driver"):
+    s = state(role)
+    s["assignment"].update(edit_allowed=True, paths=["web/" + format_file])
+    return s
+
+
+with patch.object(g, "write"):
+    def scoped_format_allowed():
+        s = format_state()
+        g.hook_tool(s, ctx(s, "shell_command", {"command": shlex.join(format_args)}))
+        assert s["active_tool"] == "shell_command"
+
+    check("exact native scoped formatter is an assigned driver edit with reservation", scoped_format_allowed)
+
+    def formatter_baseline_and_handback():
+        s = format_state()
+        s["assignment"]["edit_allowed"] = False
+        block(lambda: g.hook_tool(s, ctx(s, "shell_command", {"command": shlex.join(format_args)})))
+        s["assignment"].update(edit_allowed=True, halt=True)
+        block(lambda: g.hook_tool(s, ctx(s, "shell_command", {"command": shlex.join(format_args)})))
+
+    check("formatter requires baseline and cannot run after handback", formatter_baseline_and_handback)
+
+    def readonly_no_format():
+        s = format_state("review")
+        block(lambda: g.hook_tool(s, ctx(s, "shell_command", {"command": shlex.join(format_args)})))
+
+    check("read-only reviewer cannot format even an assigned-looking path", readonly_no_format)
+
+    def no_format_flags_or_shell():
+        for args in (format_args + ["--check-formatted"], format_args[:5], format_args + ["&&", "echo", "bypass"]):
+            s = format_state()
+            block(lambda: g.hook_tool(s, ctx(s, "shell_command", {"command": shlex.join(args)})))
+
+    check("formatter rejects flags, implicit whole project, and compound commands", no_format_flags_or_shell)
+
+    def format_scope_and_traversal():
+        for path in ("lib/memba/membership/command_dispatch.ex", "../packages/live_query/mix.exs", "../.fabro/workflows/bdd-implementation/runner/guard.py"):
+            s = format_state()
+            args = format_args[:5] + [path]
+            block(lambda: g.hook_tool(s, ctx(s, "shell_command", {"command": shlex.join(args)})))
+
+    check("formatter rejects unassigned, traversing and protected paths", format_scope_and_traversal)
+
+    def format_correct_workdir():
+        s = format_state()
+        block(lambda: g.hook_tool(s, ctx(s, "shell_command", {"command": shlex.join(format_args), "workdir": "/tmp"})))
+
+    check("formatter stays in managed checkout root for bin/mix web-relative paths", format_correct_workdir)
+
+assert count == 46
 print(f"{count} current domain/preflight/protocol fixture checks PASS; AST/TOML/five-role structure PASS. No app tests, model, container, workflow run, commit or push.")

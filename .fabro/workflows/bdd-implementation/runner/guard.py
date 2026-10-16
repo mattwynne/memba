@@ -43,6 +43,17 @@ def git(*args):
     return subprocess.check_output(["git", *args], cwd=ROOT)
 
 
+def scenario_base(facts):
+    base = facts.get("scenario_base_sha") or facts["expected_source_head"]
+    require(isinstance(base, str) and re.fullmatch(r"[0-9a-f]{40}", base), "scenario_base_sha must be an exact commit SHA")
+    try:
+        require(git("cat-file", "-t", base).strip() == b"commit", "scenario_base_sha must identify an existing commit")
+        git("merge-base", "--is-ancestor", base, facts["expected_source_head"])
+    except subprocess.CalledProcessError as error:
+        raise ValueError("scenario_base_sha must exist and be an ancestor of the prepared source") from error
+    return base
+
+
 def path_in_repo(value):
     path = (ROOT / value).resolve()
     require(path.is_relative_to(ROOT) and path != ROOT, "Path must be inside source checkout")
@@ -272,7 +283,7 @@ def observe(s, mode, raw, unit=None):
 
 def inspect(s, mode, *args):
     if mode == "diff":
-        print(git("diff", s["base"], "--", ".", ":(exclude).fabro/tmp", ":(exclude).fabro/blobs").decode())
+        print(git("diff", s["base"], "--", *s["facts"]["allowed_paths"]).decode())
     elif mode == "status":
         print(git("status", "--short").decode())
     elif mode == "read":
@@ -296,6 +307,15 @@ def reserve_tool(s, name):
     write(STATE, s)
 
 
+def guard_edit_paths(s, paths):
+    require(s["node"] in DRIVERS and s["assignment"].get("edit_allowed") and not s["assignment"].get("halt"), "Read-only or pre-baseline/handed-back driver: no edits")
+    for value in paths:
+        p = str(path_in_repo(value).relative_to(ROOT))
+        require(not p.startswith((".fabro/", ".pi/", ".github/")) and not p.endswith(".feature"), "Workflow, examples and settings are protected")
+        require(any(p == q or p.startswith(q.rstrip("/") + "/") for q in s["assignment"]["paths"]), "Edit outside assigned change")
+        require(any(p == q or p.startswith(q.rstrip("/") + "/") for q in s["facts"]["allowed_paths"]), "Edit outside approved facts")
+
+
 def hook_tool(s, context):
     require(context.get("node_id") == s["node"] and s["node"] in ROLES, "Tool call outside active role")
     limits(s, spend=True)
@@ -306,13 +326,21 @@ def hook_tool(s, context):
         command = data.get("command", "")
         args = shlex.split(command)
         require(command == shlex.join(args), "Use canonical shlex command spelling; no shell expressions")
-        require(args[:3] == ["python3", "-B", HERE] and len(args) >= 5, "Shell is limited to this guard's inspect/observe commands")
         require(Path(data.get("workdir") or ROOT).resolve() == ROOT, "Keep shell in checkout root (managed symlink is fine)")
+        if args[:5] == ["devenv", "shell", "--", "bin/mix", "format"]:
+            require(len(args) > 5, "Formatter needs explicit assigned files, never implicit whole-project scope")
+            for value in args[5:]:
+                p = Path(value)
+                require(not p.is_absolute() and not value.startswith("-") and ".." not in p.parts and p.suffix in {".ex", ".exs", ".heex"}, "Formatter accepts web-relative source files only, no flags/traversal")
+                require(path_in_repo("web/" + value).is_file(), "Formatter target must be an existing source file")
+            guard_edit_paths(s, ["web/" + value for value in args[5:]])
+            reserve_tool(s, name)
+            return
+        require(args[:3] == ["python3", "-B", HERE] and len(args) >= 5, "Shell is limited to guarded inspect/observe or exact scoped devenv/bin/mix formatting")
         require(args[3] == "inspect" or args[3] == "observe" and s["node"] in DRIVERS, "Read-only role: inspection only")
         require(args[3] != "observe" or not s["assignment"].get("halt"), "Driver has handed back")
         reserve_tool(s, name)
         return
-    require(s["node"] in DRIVERS and s["assignment"].get("edit_allowed") and not s["assignment"].get("halt"), "Read-only or pre-baseline/handed-back driver: no edits")
     if name == "apply_patch":
         require(isinstance(data, str), "Unknown patch input shape; inspect native tools before extending")
         paths = re.findall(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$", data, re.M)
@@ -320,10 +348,7 @@ def hook_tool(s, context):
     else:
         require(name in {"write_file", "edit_file"}, "No subagents, web/MCP, run-management or unknown tools")
         paths = [data.get("file_path") or data.get("path") or ""]
-    for value in paths:
-        p = str(path_in_repo(value).relative_to(ROOT))
-        require(not p.startswith((".fabro/", ".pi/", ".github/")) and not p.endswith(".feature"), "Workflow, examples and settings are protected")
-        require(any(p == q or p.startswith(q.rstrip("/") + "/") for q in s["assignment"]["paths"]), "Edit outside assigned change")
+    guard_edit_paths(s, paths)
     reserve_tool(s, name)
 
 
@@ -391,21 +416,30 @@ def accept(s, role, result):
         a = s["assignment"]
         permitted = {"green", "baseline_red_untouched"} if role == "refactoring_driver" else {"reached_prediction", "unexpected_result", "baseline_mismatch_untouched", "initial_green_untouched"}
         permitted.add("selection_error")
-        require(decision == "handback" and a.get("halt") and a.get("result") in permitted, "Driver must reach a real observation/handback, not prose or an invalid/blocked test result")
+        early_replan = decision == "handback" and not a.get("halt") and not a.get("result") and not a.get("error")
+        require(decision == "handback" and (early_replan or a.get("halt") and a.get("result") in permitted), "Driver must hand back nonpassing work or a real observation, never bypass a blocked/invalid result")
+        require(not s.get("active_tool") and result.get("reason"), "Handback needs a reason and completed tools")
+        for p in result.get("needed_paths", []):
+            p = str(path_in_repo(p).relative_to(ROOT))
+            require(any(p == q or p.startswith(q.rstrip("/") + "/") for q in s["facts"]["allowed_paths"]), "Requested path is outside approved facts; a real scope decision is required")
         changed = git("diff", "--name-only", s["role_head"]).decode().splitlines()
         changed += git("ls-files", "--others", "--exclude-standard").decode().splitlines()
         changed = [p for p in changed if not p.startswith((".fabro/tmp/", ".fabro/blobs/"))]
-        require(all(any(p == q or p.startswith(q.rstrip("/") + "/") for q in a["paths"]) for p in changed), "Driver changed unassigned source")
+        require(all(any(p == q or p.startswith(q.rstrip("/") + "/") for q in a["paths"]) and any(p == q or p.startswith(q.rstrip("/") + "/") for q in s["facts"]["allowed_paths"]) for p in changed), "Driver changed unassigned/unapproved source")
+        if early_replan:
+            if not a.get("edit_allowed"):
+                require(source() == s["role_source"], "Pre-baseline handback must not edit source")
+            a.update(halt=True, result="replan")
         if "untouched" in a["result"] or selection_error and not a.get("edit_allowed"):
             require(source() == s["role_source"], "Baseline mismatch/red/invalid selection must return without source edits")
         if a["result"] in {"green", "reached_prediction"}:
             require(all(s.get("tests", {}).get(k, {}).get("source") == source() and s["tests"][k]["status"] == "passed" for k in a.get("units", []) + a.get("earlier", [])), "Supporting selection missing/stale/not green")
-        s["handback"] = {**result, "actual": a["result"]}
+        s["handback"] = {**result, "actual": a["result"], "source_after": source()}
         if selection_error:
             s["handback"]["selection_error"] = a.get("selection_error")
         label = "green" if role == "refactoring_driver" and a["result"] == "green" and s["phase"] != "repair" else "handback"
-        if selection_error and (role == "bdd_driver" or s["phase"] != "repair"):
-            label = "selection_error"
+        if (selection_error or early_replan) and (role == "bdd_driver" or s["phase"] != "repair"):
+            label = "selection_error" if selection_error else "replan"
     else:
         require(role == "review" and s.get("full", {}).get("source") == source() and s["full"].get("green"), "Review needs actual current full check")
         require(decision in {"clean", "findings"} and set(result.get("lenses", {})) == {"architecture", "quality", "spec", "ux", "copy"}, "Complete all applicable lenses in one review")
@@ -448,7 +482,7 @@ def main():
         for p in f["allowed_paths"]:
             path_in_repo(p)
             require(any(p == q or p.startswith(q + "/") for q in ("web/lib", "web/test", "web/assets")), "Scope must be explicit application/domain-test paths; no JS harness/dependency/config/workflow changes")
-        s = {"facts": f, "run_id": read(TMP / "boot.json")["run_id"], "base": f["expected_source_head"], "operations": f["operations_spent_before_run"], "serial": 0, "phase": "scenario", "tests": {}}
+        s = {"facts": f, "run_id": read(TMP / "boot.json")["run_id"], "base": scenario_base(f), "operations": f["operations_spent_before_run"], "serial": 0, "phase": "scenario", "tests": {}}
         s["image_metadata"] = image_metadata()  # Available baked metadata, NOT a verified digest.
         write(STATE, s)
         limits(s)
