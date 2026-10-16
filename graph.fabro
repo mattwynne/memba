@@ -1,0 +1,107 @@
+// DRAFT / NOT TESTED. Native API graph for Matt's review; DO NOT LAUNCH YET.
+digraph BddImplementation {
+    graph [
+        goal="One agreed example, worthwhile refactoring, ordinary full dev check, one combined review/fix loop; no publication",
+        default_fidelity="truncate",
+        default_max_retries=0,
+        max_node_visits=128,
+        model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"
+    ]
+    rankdir=LR
+    start [shape=Mdiamond]
+    done [shape=Msquare, label="Checked and reviewed — not published"]
+    stop [shape=parallelogram, label="Preserve work and stop — inspect native logs/checkpoints",
+        script="echo 'Blocked or incomplete; inspect the preceding stage. No acceptance or publication.' >&2\nexit 1"]
+
+    admit [shape=parallelogram, label="Bind reviewed job facts / original limits / scenario base",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py admit '{{ inputs.admission_path }}' '{{ inputs.expected_source_head }}'"]
+    preflight [shape=parallelogram, label="Normal Docker toolchain + forced genuine browser/network preflight",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py preflight", timeout="2400s"]
+
+    // Only these two sessions are cached. Distinct IDs, never driver threads.
+    // Each visit MUST read the newly supplied task.json even with full fidelity.
+    bdd_navigator [shape=box, backend="api", label="BDD navigator — one change / predictions or repair assignment",
+        prompt="@prompts/bdd-navigator.md", fidelity="full", thread_id="bdd-navigator",
+        output_schema="{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}", output_retries=0, timeout="900s"]
+    route_bdd [shape=parallelogram, label="Check source, assignment, actual green / repair routing",
+        stdin_source="output.bdd_navigator", output_schema="routing",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py accept bdd_navigator"]
+
+    // Non-full fidelity means a NEW native API session on EVERY visit, not merely
+    // on the first visit to this node. No default_thread or threaded edges.
+    bdd_driver [shape=box, backend="api", label="Fresh BDD driver — baseline first when needed; inner unit loop",
+        prompt="@prompts/bdd-driver.md", fidelity="truncate",
+        output_schema="{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}", output_retries=0, timeout="2400s"]
+    observe_bdd [shape=parallelogram, label="Check actual source-bound observations; do NOT rerun baseline",
+        stdin_source="output.bdd_driver", output_schema="routing",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py accept bdd_driver"]
+
+    refactoring_navigator [shape=box, backend="api", label="Separate continuing refactoring navigator — cumulative diff / one smell",
+        prompt="@prompts/refactoring-navigator.md", fidelity="full", thread_id="refactoring-navigator",
+        output_schema="{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}", output_retries=0, timeout="900s"]
+    route_refactoring [shape=parallelogram, label="Worthwhile cleanup, needs BDD, or no cleanup",
+        stdin_source="output.refactoring_navigator", output_schema="routing",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py accept refactoring_navigator"]
+    refactoring_driver [shape=box, backend="api", label="Fresh refactoring driver — ALL selected tests green before edit",
+        prompt="@prompts/refactoring-driver.md", fidelity="truncate",
+        output_schema="{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}", output_retries=0, timeout="2400s"]
+    observe_refactoring [shape=parallelogram, label="Verify green / untouched red baseline; no redundant rerun",
+        stdin_source="output.refactoring_driver", output_schema="routing",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py accept refactoring_driver"]
+
+    full_gate [shape=parallelogram, label="Full ordinary dev check — actual source, exit and test summaries",
+        output_schema="routing", timeout="2400s",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py full"]
+    review [shape=box, backend="api", label="ONE fresh read-only same-model review — applicable lenses, one list",
+        prompt="@prompts/review.md", fidelity="truncate",
+        output_schema="{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}", output_retries=0, timeout="1200s"]
+    route_review [shape=parallelogram, label="Retain one combined list / require complete clean review",
+        stdin_source="output.review", output_schema="routing",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py accept review"]
+    finish [shape=parallelogram, label="Same actual source: selected example + full check + clean review",
+        script="python3 -B .fabro/workflows/bdd-implementation/runner/guard.py finish"]
+
+    start -> admit
+    admit -> preflight [condition="outcome=succeeded"]
+    admit -> stop
+    preflight -> bdd_navigator [condition="outcome=succeeded"]
+    preflight -> stop
+    bdd_navigator -> route_bdd [condition="outcome=succeeded"]
+    bdd_navigator -> stop
+    route_bdd -> bdd_driver [condition="outcome=succeeded && preferred_label=change"]
+    route_bdd -> refactoring_driver [condition="outcome=succeeded && preferred_label=repair_refactor"]
+    route_bdd -> refactoring_navigator [condition="outcome=succeeded && preferred_label=scenario_green"]
+    route_bdd -> full_gate [condition="outcome=succeeded && preferred_label=repairs_done"]
+    route_bdd -> stop
+    bdd_driver -> observe_bdd [condition="outcome=succeeded"]
+    bdd_driver -> stop
+    observe_bdd -> bdd_navigator [condition="outcome=succeeded && preferred_label=handback"]
+    observe_bdd -> bdd_navigator [condition="outcome=succeeded && preferred_label=selection_error"]
+    observe_bdd -> stop
+
+    refactoring_navigator -> route_refactoring [condition="outcome=succeeded"]
+    refactoring_navigator -> stop
+    route_refactoring -> refactoring_driver [condition="outcome=succeeded && preferred_label=refactor"]
+    route_refactoring -> bdd_navigator [condition="outcome=succeeded && preferred_label=needs_bdd"]
+    route_refactoring -> full_gate [condition="outcome=succeeded && preferred_label=done"]
+    route_refactoring -> stop
+    refactoring_driver -> observe_refactoring [condition="outcome=succeeded"]
+    refactoring_driver -> stop
+    observe_refactoring -> refactoring_navigator [condition="outcome=succeeded && preferred_label=green"]
+    observe_refactoring -> bdd_navigator [condition="outcome=succeeded && preferred_label=handback"]
+    observe_refactoring -> refactoring_navigator [condition="outcome=succeeded && preferred_label=selection_error"]
+    observe_refactoring -> stop
+
+    full_gate -> review [condition="outcome=succeeded && preferred_label=green"]
+    full_gate -> bdd_navigator [condition="outcome=succeeded && preferred_label=repair"]
+    full_gate -> stop
+    review -> route_review [condition="outcome=succeeded"]
+    review -> stop
+    route_review -> bdd_navigator [condition="outcome=succeeded && preferred_label=findings"]
+    route_review -> finish [condition="outcome=succeeded && preferred_label=clean"]
+    route_review -> stop
+    finish -> done [condition="outcome=succeeded"]
+    finish -> stop
+    // No publication, iteration-status edits or hand-built container cleanup.
+    // Fabro checkpoints and environment lifecycle preserve work / stop its Docker.
+}
