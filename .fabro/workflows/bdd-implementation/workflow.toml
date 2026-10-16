@@ -1,0 +1,90 @@
+# DRAFT / NOT TESTED — Matt must review the graph and prompts before any launch.
+_version = 1
+
+[workflow]
+graph = "workflow.fabro"
+
+[run]
+goal = "Implement one agreed example, refactor where worthwhile, full dev check and one combined review/fix loop; no publication"
+
+# Built-in API agents. Fabro resolves its normal configured provider credentials.
+# Clear inherited fallback lists; do not silently substitute a different model.
+[run.model]
+provider = "openai"
+name = "gpt-5.6-sol"
+fallbacks = []
+
+[run.model.controls]
+reasoning_effort = "high"
+
+# Keep normal inferred source clone, managed run branch and checkpoints.
+[run.environment]
+id = "memba-dev"
+
+[run.checkpoint]
+exclude_globs = [".fabro/tmp", ".fabro/tmp/**", ".fabro/blobs", ".fabro/blobs/**"]
+
+[environments.memba-dev]
+provider = "docker"
+
+[environments.memba-dev.image]
+docker = "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+
+[environments.memba-dev.network]
+mode = "allow_all"
+
+# Preserve partial work for inspection, but let Fabro stop its own sandbox.
+[environments.memba-dev.lifecycle]
+preserve = true
+stop_on_terminal = true
+
+[run.agent]
+fabro_tools = false
+
+[run.integrations.github]
+permissions = {}
+
+# A reviewed, committed JSON file of job facts, not an inherited admission.
+# See README. Use a simple repo-relative path without quotes/shell characters.
+[run.inputs]
+admission_path = ""
+expected_source_head = ""
+
+[run.artifacts]
+include = [".fabro/tmp/bdd-implementation/*.json", ".fabro/tmp/bdd-implementation/*.log"]
+
+# These are sandbox guards, NOT host hooks, an agent adapter or provider bridge.
+[[run.hooks]]
+id = "bdd-no-resume"
+event = "run_start"
+command = ["python3", "-B", ".fabro/workflows/bdd-implementation/runner/guard.py", "begin"]
+blocking = true
+sandbox = true
+
+[[run.hooks]]
+id = "bdd-shared-limits-and-packet"
+event = "stage_start"
+command = ["python3", "-B", ".fabro/workflows/bdd-implementation/runner/guard.py", "stage"]
+blocking = true
+sandbox = true
+
+[[run.hooks]]
+id = "bdd-tool-boundary"
+event = "pre_tool_use"
+command = ["python3", "-B", ".fabro/workflows/bdd-implementation/runner/guard.py", "tool"]
+blocking = true
+sandbox = true
+
+[[run.hooks]]
+id = "bdd-tool-finished"
+event = "post_tool_use"
+command = ["python3", "-B", ".fabro/workflows/bdd-implementation/runner/guard.py", "tool_done"]
+blocking = true
+sandbox = true
+
+[[run.hooks]]
+id = "bdd-tool-failed"
+event = "post_tool_use_failure"
+command = ["python3", "-B", ".fabro/workflows/bdd-implementation/runner/guard.py", "tool_done"]
+blocking = true
+sandbox = true
