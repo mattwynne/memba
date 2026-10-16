@@ -1,0 +1,17 @@
+digraph NativeHookSmoke {
+ graph [goal="Native hook/context/source binding smoke only; no model/app/scenario", default_max_retries=0, model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"]
+ start [shape=Mdiamond]
+ bdd_navigator [shape=box, backend="api", fidelity="full", thread_id="bdd-navigator", timeout="180s", prompt="Native hook/tool smoke only. Do not implement or test anything. Make exactly one read-only shell tool call using this exact command from checkout root: python3 -B .fabro/workflows/bdd-implementation/runner/guard.py inspect read .fabro/tmp/bdd-implementation/task.json . Do not include the final sentence period in the command. Read its source field and return JSON only: decision=smoke_complete, source=the supplied source field, reason=task inspected. No other commands, edits, subagents, network or tests.", output_schema="{\"type\":\"object\",\"required\":[\"decision\",\"source\",\"reason\"]}"]
+
+ admit [shape=parallelogram, script="python3 -B - <<'PY_NATIVE_HOOK_SMOKE'\nimport json,subprocess\nfrom pathlib import Path\np=Path(\".fabro/tmp/hook-smoke/facts.json\");p.parent.mkdir(parents=True,exist_ok=True);p.write_text('{\"feature\": \"acceptance-tests/features/member_profile.feature\", \"scenario\": \"Alice\\'s older edit requires confirmation of the newer name\", \"spec\": \"docs/iterations/068-member-name-editing/plan.md\", \"acceptance_kind\": \"domain\", \"setup_id\": \"native-hook-smoke-source-1d595e328ce40964f348bea10cac3995897e2e01\", \"deadline_utc\": \"2026-10-16T13:03:37Z\", \"aggregate_operations\": 20, \"operations_spent_before_run\": 0, \"allowed_paths\": [\"web/lib/memba/membership\", \"web/test/memba/membership\", \"web/test/features/step_definitions\"]}'+\"\\n\")\nsubprocess.run([\"python3\",\"-B\",\".fabro/workflows/bdd-implementation/runner/guard.py\",\"admit\",str(p),\"1d595e328ce40964f348bea10cac3995897e2e01\"],check=True)\nPY_NATIVE_HOOK_SMOKE\n"]
+ probe [shape=parallelogram, script="python3 -B - <<'PY_NATIVE_HOOK_CHECK'\nimport json,sys\nfrom pathlib import Path\np=Path('.fabro/tmp/bdd-implementation');s=json.loads((p/'state.json').read_text());b=json.loads((p/'boot.json').read_text());r=json.load(sys.stdin) if False else None\nassert s['run_id']==b['run_id'];assert s['node']=='probe';assert s['operations']>=3;assert not s.get('active_tool');print('NATIVE_HOOK_TOOL_SMOKE_OK '+json.dumps({'run_id':s['run_id'],'node':s['node'],'operations':s['operations'],'source_base':s['base']}))\nPY_NATIVE_HOOK_CHECK\n"]
+ stop [shape=parallelogram, script="exit 1"]
+ done [shape=Msquare]
+ start -> admit
+ admit -> bdd_navigator [condition="outcome=succeeded"]
+ bdd_navigator -> probe [condition="outcome=succeeded"]
+ bdd_navigator -> stop
+ admit -> stop
+ probe -> done [condition="outcome=succeeded"]
+ probe -> stop
+}
