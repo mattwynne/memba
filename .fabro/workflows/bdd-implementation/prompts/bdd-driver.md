@@ -32,7 +32,9 @@ This is an illustrative command: supply the actual assigned prediction, not that
 placeholder. The helper returns raw result references, actual selection, source,
 exit and updated assignment state. A mismatch, including unexpected green,
 returns immediately WITHOUT editing. No self-directed repair of the mismatch.
-Missing/zero/skipped tests and setup failures block; predicted undefined steps
+Missing/skipped tests and setup failures block; a supporting unit selector that
+executes ZERO tests returns `selection_error` for navigator replanning, never green.
+Predicted undefined steps
 are legitimate implementation. Do not manufacture a red or weaken assertions.
 
 If `change.edit_allowed` is true, the guard already bound a matching previous
@@ -52,6 +54,11 @@ unit tests as needed within assigned paths; never fake red or relax coverage.
 The same command can observe an assigned earlier
 `domain:acceptance-tests/features/example.feature::Exact scenario name` selector
 as one shell-quoted argument (escape apostrophes with canonical shlex spelling).
+Prefer assigned whole focused test files; do not guess a new line selector.
+On `selection_error`, STOP and return `decision=handback`, citing exact selector,
+counts/log and preserved partial work. Do not rerun with another selector yourself,
+edit more, claim supporting green or ask a human to repair this navigator mistake.
+The navigator corrects the same assignment and sends a fresh driver.
 Run supporting units/earlier examples after your edit and BEFORE the acceptance
 observation likely to hand back. They must be current and green on a reached
 prediction. No full suite or `dev check` in this role; the graph owns that gate.

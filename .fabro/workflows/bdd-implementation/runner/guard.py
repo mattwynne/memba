@@ -142,12 +142,21 @@ def run(s, argv, label):
     return e, text
 
 
+class SelectionError(ValueError):
+    """An actual zero-test selector, not green or an environment diagnosis."""
+    def __init__(self, counts):
+        self.counts = counts
+        super().__init__("Zero selected ExUnit tests; return the exact selector/log to the navigator")
+
+
 def exunit_counts(text):
     text = re.sub(r"\x1b\[[0-9;]*m", "", text)
     matches = re.findall(r"^(?:\d+ (?:doctests?|properties), )*(\d+) tests?, (\d+) failures?(?:, (\d+) excluded)?(?:, (\d+) skipped)?\s*$", text, re.M)
     require(matches, "No actual ExUnit summary")
     counts = [{"total": int(n), "failures": int(f), "excluded": int(x or 0), "skipped": int(k or 0)} for n, f, x, k in matches]
-    require(all(c["total"] - c["excluded"] > 0 and c["skipped"] == 0 for c in counts), "Zero selected or skipped ExUnit tests")
+    require(all(c["total"] >= c["excluded"] and c["skipped"] == 0 for c in counts), "Invalid counts or skipped ExUnit tests")
+    if any(c["total"] == c["excluded"] for c in counts):
+        raise SelectionError(counts)
     return counts
 
 
@@ -196,8 +205,13 @@ def observe_one(s, key, p):
     e, text = run(s, argv, key)
     require(e["source"] == e["source_after"], "Test changed source; result cannot be reused")
     if unit:
-        counts = exunit_counts(text)
-        e.update(counts=counts, status="passed" if e["exit"] == 0 and all(c["failures"] == 0 for c in counts) else "failed")
+        try:
+            counts = exunit_counts(text)
+            e.update(counts=counts, status="passed" if e["exit"] == 0 and all(c["failures"] == 0 for c in counts) else "failed")
+        except SelectionError as error:
+            require(e["exit"] == 0 and all(c["failures"] == 0 for c in error.counts), "Zero tests with a failing command is not a supported selector-only error")
+            e.update(counts=error.counts, status="selection_error", error=str(error))
+            s["assignment"].update(halt=True, result="selection_error", selection_error=e)
     else:
         e.update(domain_result(text, e["exit"], feature, name))
     s.setdefault("tests", {})[key] = e
@@ -218,14 +232,16 @@ def observe(s, mode, raw, unit=None):
         else:
             require(a.get("edit_allowed"), "Run green baseline before editing")
         for key in selected(s):
-            observe_one(s, key, p)
-        green = checks_green(s)
-        if mode == "baseline" and green:
-            a["edit_allowed"] = True
-        elif mode == "baseline":
-            a.update(halt=True, result="baseline_red_untouched")
-        elif green:
-            a.update(halt=True, result="green")
+            if observe_one(s, key, p)["status"] == "selection_error":
+                break
+        if a.get("result") != "selection_error":
+            green = checks_green(s)
+            if mode == "baseline" and green:
+                a["edit_allowed"] = True
+            elif mode == "baseline":
+                a.update(halt=True, result="baseline_red_untouched")
+            elif green:
+                a.update(halt=True, result="green")
     elif mode == "unit":
         require(unit in a.get("units", []) + a.get("earlier", []) and a.get("edit_allowed"), "Supporting selector must be assigned, after baseline")
         observe_one(s, unit, p)
@@ -325,6 +341,9 @@ def dispositions(s, result, done=False):
 def accept(s, role, result):
     require(result["source"] == s["role_source"], "Role response bound to wrong source")
     decision = result["decision"]
+    selection_error = role in DRIVERS and s["assignment"].get("result") == "selection_error"
+    if selection_error and decision in {"handback", "selection_error", "blocked"}:
+        decision = "handback"  # Actual invalid selector goes back for planning, never acceptance.
     if role not in DRIVERS:
         require(source() == s["role_source"], "Read-only role changed source")
     if decision == "blocked":
@@ -371,17 +390,22 @@ def accept(s, role, result):
     elif role in DRIVERS:
         a = s["assignment"]
         permitted = {"green", "baseline_red_untouched"} if role == "refactoring_driver" else {"reached_prediction", "unexpected_result", "baseline_mismatch_untouched", "initial_green_untouched"}
+        permitted.add("selection_error")
         require(decision == "handback" and a.get("halt") and a.get("result") in permitted, "Driver must reach a real observation/handback, not prose or an invalid/blocked test result")
         changed = git("diff", "--name-only", s["role_head"]).decode().splitlines()
         changed += git("ls-files", "--others", "--exclude-standard").decode().splitlines()
         changed = [p for p in changed if not p.startswith((".fabro/tmp/", ".fabro/blobs/"))]
         require(all(any(p == q or p.startswith(q.rstrip("/") + "/") for q in a["paths"]) for p in changed), "Driver changed unassigned source")
-        if "untouched" in a["result"]:
-            require(source() == s["role_source"], "Baseline mismatch/red must return without source edits")
+        if "untouched" in a["result"] or selection_error and not a.get("edit_allowed"):
+            require(source() == s["role_source"], "Baseline mismatch/red/invalid selection must return without source edits")
         if a["result"] in {"green", "reached_prediction"}:
             require(all(s.get("tests", {}).get(k, {}).get("source") == source() and s["tests"][k]["status"] == "passed" for k in a.get("units", []) + a.get("earlier", [])), "Supporting selection missing/stale/not green")
         s["handback"] = {**result, "actual": a["result"]}
+        if selection_error:
+            s["handback"]["selection_error"] = a.get("selection_error")
         label = "green" if role == "refactoring_driver" and a["result"] == "green" and s["phase"] != "repair" else "handback"
+        if selection_error and (role == "bdd_driver" or s["phase"] != "repair"):
+            label = "selection_error"
     else:
         require(role == "review" and s.get("full", {}).get("source") == source() and s["full"].get("green"), "Review needs actual current full check")
         require(decision in {"clean", "findings"} and set(result.get("lenses", {})) == {"architecture", "quality", "spec", "ux", "copy"}, "Complete all applicable lenses in one review")
