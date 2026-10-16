@@ -1,4 +1,4 @@
-"""Retained 25 isolated guard cases; run with python3 -B .../runner/test_guard.py.
+"""Retained isolated guard cases; run with python3 -B .../runner/test_guard.py.
 
 No app/test process, model, network, container or Fabro run is executed. The three
 frozen stdout fixtures are unchanged historical logs from fabro-implementation/
@@ -243,5 +243,99 @@ with patch.object(g, "source", return_value="A"), patch.object(g, "write"), \
 
     check("original aggregate/deadline exhausted across visits", limits)
 
-assert count == 25
+# Regression from REAL normal run 01M51WR9N7CT1RWX9W9938FT0N, artifact 5.log.
+# As above, only frozen output is parsed: no application process is started.
+zero_log = (fixtures / "unit-zero-selection.log").read_text()
+zero_key = "web/test/memba/membership/create_person_dispatch_test.exs:19"
+
+
+def selection_state(role="bdd_driver"):
+    s = state(role)
+    s["operations"] = 91  # Carry the campaign's already-spent operations.
+    s["assignment"]["units"] = [zero_key]
+    s["assignment"]["edit_allowed"] = role == "bdd_driver"
+    return s
+
+
+def zero_run(s, argv, label):
+    return {"source": "A", "source_after": "A", "exit": 0, "log": "5.log"}, zero_log
+
+
+with patch.object(g, "source", return_value="A"), patch.object(g, "write"), \
+        patch.object(g, "git", return_value=b""), patch.object(g, "run", side_effect=zero_run):
+    def zero_unit_handback():
+        s = selection_state()
+        s["tests"][zero_key] = {"source": "A", "status": "passed"}
+        g.observe(s, "unit", json.dumps(pg), zero_key)
+        assert s["assignment"]["halt"] and s["assignment"]["result"] == "selection_error"
+        assert s["tests"][zero_key]["status"] == "selection_error"
+        assert s["tests"][zero_key]["counts"][0]["total"] == 5
+        assert s["tests"][zero_key]["counts"][0]["excluded"] == 5
+        assert s["tests"][zero_key]["log"] == "5.log" and not g.checks_green(s)
+        assert s["operations"] == 91
+        block(lambda: g.observe(s, "unit", json.dumps(pg), zero_key))
+        block(lambda: g.hook_tool(s, ctx(s, "apply_patch", "*** Begin Patch\n*** Update File: web/lib/memba/a.ex\n*** End Patch")))
+
+    check("real zero-selected unit is invalid evidence and halts for replanning", zero_unit_handback)
+
+    def blocked_selection_routes_back():
+        s = selection_state()
+        g.observe(s, "unit", json.dumps(pg), zero_key)
+        # The first real driver's blocked prose must not make this recoverable
+        # selector error terminal. Guard-derived status owns the replan route.
+        with patch.object(g, "route") as routed:
+            g.accept(s, "bdd_driver", dict(decision="blocked", source="A", reason="zero selected"))
+            routed.assert_called_once_with("selection_error")
+        assert s["handback"]["actual"] == "selection_error" and not g.current_green(s)
+
+    check("authoritative selection_error returns even blocked driver prose to navigator", blocked_selection_routes_back)
+
+    def refactoring_selection_error():
+        s = selection_state("refactoring_driver")
+        s["assignment"]["units"].append("web/test/should_not_run_test.exs")
+        passed = ({"source": "A", "source_after": "A", "exit": 0, "log": "baseline.log"}, trace_green)
+        with patch.object(g, "run", side_effect=[passed, zero_run(None, None, None)]) as observed:
+            g.observe(s, "baseline", json.dumps(pg))
+            assert observed.call_count == 2
+        assert s["assignment"]["result"] == "selection_error" and not s["assignment"]["edit_allowed"]
+        with patch.object(g, "route") as routed:
+            g.accept(s, "refactoring_driver", dict(decision="handback", source="A", reason="fix selector"))
+            routed.assert_called_once_with("selection_error")
+
+    check("refactoring selector error stays untouched and returns to its navigator", refactoring_selection_error)
+
+    def repair_selection_error():
+        s = selection_state("refactoring_driver")
+        s["phase"] = "repair"
+        s["assignment"].update(halt=True, result="selection_error")
+        with patch.object(g, "route") as routed:
+            g.accept(s, "refactoring_driver", dict(decision="handback", source="A", reason="repair selector"))
+            routed.assert_called_once_with("handback")
+
+    check("review-repair selector feedback returns to repair-owning BDD navigator", repair_selection_error)
+
+    def skipped_is_not_selector_repair():
+        skipped = zero_log.replace("5 tests, 0 failures, 5 excluded", "5 tests, 0 failures, 1 skipped")
+        with patch.object(g, "run", return_value=({"source": "A", "source_after": "A", "exit": 0}, skipped)):
+            s = selection_state()
+            block(lambda: g.observe(s, "unit", json.dumps(pg), zero_key))
+            assert s["assignment"].get("result") != "selection_error"
+
+    check("skipped execution remains invalid, not reclassified as zero-selector feedback", skipped_is_not_selector_repair)
+
+    def focused_file_retry():
+        key = zero_key.split(":")[0]
+        s = selection_state()
+        s["assignment"]["units"] = [key]
+        whole_file = zero_log.replace("5 tests, 0 failures, 5 excluded", "5 tests, 0 failures")
+        whole_file = whole_file.replace("All tests have been excluded.", "")
+        with patch.object(g, "run", return_value=({"source": "A", "source_after": "A", "exit": 0}, whole_file)) as observed:
+            g.observe(s, "unit", json.dumps(pg), key)
+            assert observed.call_args.args[1] == ["bin/dev", "test", key.removeprefix("web/")]
+        assert s["tests"][key]["status"] == "passed"
+        assert s["tests"][key]["counts"][0]["total"] == 5
+
+    check("synthetic whole-file retry preserves exact selector and requires executed tests", focused_file_retry)
+
+assert count == 31
 print(f"{count} current domain/preflight/protocol fixture checks PASS; AST/TOML/five-role structure PASS. No app tests, model, container, workflow run, commit or push.")

@@ -28,7 +28,13 @@ domain examples through the existing ExUnit runner in normal Fabro-managed
 Docker, NOT JS step definitions. Prior green is NOT a substitute.
 Require actual execution/selection, source, counts, zero skips for green, raw
 output and real exit. Red, skipped/missing/zero checks or setup failure => return
-WITHOUT editing. Do not fix a pre-existing red baseline under this assignment.
+WITHOUT editing. Do not fix a pre-existing red baseline under this assignment. A zero-selected
+supporting unit is specifically `selection_error`, NOT green or environment red:
+stop and return `decision=handback` with its exact selector/counts/log. Navigator
+corrects the SAME cleanup's selection, preferably the whole focused test FILE,
+without dropping coverage. Do not guess line filters or choose a substitute test.
+After an edit, preserve partial work on this handback; do not continue editing or
+testing until a fresh assignment. Neither handback nor replanning resets limits.
 
 ## One behaviour-preserving cleanup
 

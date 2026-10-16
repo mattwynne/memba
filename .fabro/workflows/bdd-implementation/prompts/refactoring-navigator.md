@@ -42,6 +42,12 @@ A red baseline returns untouched. A product fix belongs with the BDD navigator,
 not a cleanup label used to evade acceptance guidance. A driver may fix only its
 OWN introduced regressions within this cleanup to green/blocker.
 
+On `handback.actual=selection_error`, inspect the exact zero-selected check and
+raw counts/log. Correct the SAME cleanup's selector to its focused whole test file;
+do not drop coverage, claim green, pick a different smell or require human approval.
+A fresh driver still needs its entire selection green before editing. Preserve any
+partial diff from a post-edit selector error and the original remaining allowance.
+
 After each handback inspect the cumulative diff again. Choose another smell only
 if worthwhile within the ORIGINAL shared deadline/aggregate operations, reserving
 time for full dev check, one combined review and routine repairs. No cleanup is
@@ -53,7 +59,7 @@ Always `decision`, `source` (exact `task.source`) and evidence-backed `reason`.
 Decisions: `refactor`, `done`, `needs_bdd`, `blocked`.
 
 For `refactor` include `change` with one `goal`, bounded `paths` inside approved
-`facts.allowed_paths`, `units` (focused `web/test/..._test.exs[:LINE]`), `earlier`
+`facts.allowed_paths`, `units` (prefer whole focused `web/test/..._test.exs` FILES, not guessed line filters), `earlier`
 (exact `domain:acceptance-tests/features/...feature::Scenario name`), and `preserved_behaviour`.
 This task uses domain/Elixir Cucumber, not JS step definitions or a new harness.
 Explain any empty supporting-test list and identify the smell/benefit. Predict

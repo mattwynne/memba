@@ -117,7 +117,13 @@ Earlier selections use `domain:acceptance-tests/features/file.feature::Exact nam
 Green requires exit zero, exactly one executed test and zero failures/skips.
 Failure matching uses step + status + stable causal error;
 known-failure comparison ignores stack locations, not assertion values. Supporting
-checks must be current/green before reached-prediction handback. Finish requires
+checks must be current/green before reached-prediction handback. A supporting
+unit selecting zero tests produces explicit `selection_error` evidence/handback,
+never green. It halts edits/tests and returns to the assigning navigator to correct
+the SAME bounded task's selector (prefer a focused whole file, no guessed lines),
+without dropping required coverage or requesting routine human approval. Normal
+refactoring returns to its navigator; review-repair feedback returns to the BDD
+repair navigator. Missing summaries, skipped tests and setup failures stay blockers. Finish requires
 current selected green, real full-check exit/test summaries and one complete clean
 review on the SAME bytes. Agent declarations/zero/missing/skipped checks cannot
 supply test green. Approved examples/assertions/authorisation remain unchanged.
@@ -152,7 +158,9 @@ These inspections are not a proof that every deployed behaviour matches the draf
   remaining time. This is NOT a hard controller-inference/process billing cap;
   parent must monitor/cancel at the original deadline. Remote resource caps and
   descendant-process cancellation are not newly established by this helper.
-- Focused units currently support only `web/test/..._test.exs[:line]`. Other runners
+- Prefer focused whole unit FILES: `web/test/..._test.exs`. The helper still checks
+  explicit line selectors exactly, but zero-selection returns planner feedback.
+  Other runners
   (including package units) need a small reviewed selector addition, NOT arbitrary
   shell. Full check uses ordinary `bin/dev check`, never quick/ci substitution.
 - Domain ExUnit trace/error/full-check summary parsing, native hook payloads/output/
@@ -191,5 +199,14 @@ by that parser; actual hook execution remains for the parent's normal smoke.
 No workflow execution, app test, model/eval call, container/probe, `dev check`,
 compile/lint/format, commit or push was performed by this child.
 
-This remains an unfinished, not runtime-tested draft. Stop at handoff for parent
+A subsequent parent-owned normal run `01M51WR9N7CT1RWX9W9938FT0N` passed forced
+preflight and matched its domain baseline, then stopped on a guessed unit line
+that selected zero tests. Its unchanged `5.log` is retained as
+`runner/tests/fixtures/unit-zero-selection.log`. The narrow correction adds six
+regressions (31 total) and explicit selector-error handback paths, not product code
+or a recovery platform. Original campaign limits remain 600 aggregate operations,
+91 already spent after that attempt, and deadline 2026-10-16T13:03:37Z; parent owns
+the remaining two attempts and carries actual consumed work forward.
+
+This remains an unfinished draft, not a successful end-to-end run. Stop at handoff for parent
 inspection/integration; do not interpret these focused checks as a successful run.
