@@ -1,0 +1,1 @@
+{"decision":"smoke_complete","source":"0ce3381e22a35980dfccd6c0b5836b83ca2b391e21807a935989cbfee4173659","reason":"task inspected"}
