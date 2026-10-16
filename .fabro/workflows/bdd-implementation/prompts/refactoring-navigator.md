@@ -42,6 +42,13 @@ A red baseline returns untouched. A product fix belongs with the BDD navigator,
 not a cleanup label used to evade acceptance guidance. A driver may fix only its
 OWN introduced regressions within this cleanup to green/blocker.
 
+An early NONPASSING `handback.actual=replan` can identify an omitted collaborator
+or assignment constraint without claiming green. Inspect the full product diff,
+actual results/reason and optional `needed_paths`; correct the SAME cleanup inside
+approved facts and dispatch a fresh driver. Do not discard partial work, bypass
+existing CQRS/CommandDispatch boundaries or reset limits. Outside-facts scope or
+real environment/evidence blockers still require attention.
+
 On `handback.actual=selection_error`, inspect the exact zero-selected check and
 raw counts/log. Correct the SAME cleanup's selector to its focused whole test file;
 do not drop coverage, claim green, pick a different smell or require human approval.

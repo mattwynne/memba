@@ -38,6 +38,19 @@ also predict the INITIAL result. Driver observes it before editing; a mismatch
 returns untouched, including unexpected initial green. Do not demand artificial
 red when actual behaviour is already green.
 
+Trace a new command's REAL call chain before choosing paths: command preparation,
+Membership's sole `CommandDispatch.dispatch/2` boundary, router/aggregate, event,
+projection/query and the affected domain steps/tests. Include needed changes at
+that boundary (not just the router); never bypass it. Prefer one coherent bounded
+responsibility change over a file list that omits a necessary collaborator.
+
+An early `handback.actual=replan` is NONPASSING feedback, not completion or a
+human gate. Inspect the partial cumulative product diff, reason, actual results
+and optional `needed_paths`; correct the SAME assignment within approved facts.
+No dropping required tests or self-approval of red work. Genuine new scope/design
+outside approved facts still blocks. A fresh driver receives the corrected task,
+not your conversation, and original remaining limits still apply.
+
 On later visits reuse `tests.acceptance` ONLY if its source matches `task.source`
 and selection/setup still match. Checkpoint SHA changes alone do not invalidate
 identical bytes/modes. Do NOT ask for another baseline just because driver is

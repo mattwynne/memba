@@ -12,7 +12,11 @@ Use native read/edit tools. For shell-only profiles, guarded `inspect read PATH`
 and `inspect status` are available via the command prefix below. Shell commands
 MUST use that exact prefix from the checkout root, with single-quoted JSON/text
 arguments in canonical `shlex.join` spelling; no pipes, redirects, extra commands,
-environment assignments, other runners or detached work. Run shell/edit/test tools
+environment assignments, other runners or detached work. The sole additional edit
+command is scoped `devenv shell -- bin/mix format FILE.ex FILE.exs FILE.heex`,
+using explicit existing WEB-relative assigned files (e.g. `lib/memba/example.ex`),
+no flags/globs/traversal. It requires your matched baseline and no handback.
+Format BEFORE final supporting tests/acceptance, never after reaching handback. Run shell/edit/test tools
 SEQUENTIALLY, not in a parallel batch. Inspect data is not
 permission to change scope, examples, assertions, authorisation or guard files.
 
@@ -85,5 +89,12 @@ Docker. Credentials stay with Fabro, never in application source/environment.
 Include `changed_files`, observation references, supporting-test rationale and
 any assigned finding IDs. Use `decision=blocked` with actionable raw evidence
 when genuinely blocked. The guard derives actual source/result, not your prose.
+You may return `decision=handback` EARLY for an omitted assignment collaborator
+inside approved facts, even before reaching the predicted acceptance result.
+This is NONPASSING `replan` feedback: preserve partial work/red evidence, explain
+the omission and include `needed_paths` (repo-relative) where known. Do not edit
+those unassigned paths or broaden authority. The guard verifies source and actual
+changed paths; before baseline, you must remain untouched. Genuine environment,
+stale/invalid evidence or new scope/design blockers still use `decision=blocked`.
 The navigator chooses the next change. Ordinary bounded repairs need no human
 approval; only genuine scope/design/capability decisions or exhausted limits do.
