@@ -23,7 +23,7 @@ This folder is not permission to launch. No historical branch/run is created her
 | [Review](prompts/review.md) | `truncate`, NEW read-only session every pass after full ordinary `bin/dev check`; all applicable architecture/ADRs, quality/Elixir, spec, UX and human-copy lenses in ONE list |
 
 All use **normal OpenAI `gpt-5.6-sol`, high**, explicitly styled in the graph and
-TOML with an empty fallback list. Parent reported the normal server/client as
+TOML with an explicitly empty model-keyed fallback chain (`"gpt-5.6-sol" = []`). Parent reported the normal server/client as
 `0.316.0-nightly.0 git0abf229`, catalog `openai/gpt-5.6-sol` default/configured,
 reasoning high, and no `gpt-6.1-sol` match. This is an explicit normal-config model
 choice following the later instruction, not silent fallback or a provider invention.
@@ -183,6 +183,11 @@ selection/handback/guard cases. No old result is treated as a new runtime result
 Synthetic decisions/old raw logs are NOT current product/model/runtime proof.
 `fabro validate workflow.fabro` passed: 17 nodes/37 edges, with the expected
 graph-only warning about unbound `admission_path` (normal TOML/launch supplies it).
+Follow-up validation of the actual TOML reproduced the unsupported flat fallback
+array; changing it to the native model-keyed map fixed parsing. Direct TOML
+validation then passed with no warnings; see `runner/tests/toml-validate-01.log`
+(failure) and `toml-validate-02.log` (pass). Existing hook command arrays were accepted
+by that parser; actual hook execution remains for the parent's normal smoke.
 No workflow execution, app test, model/eval call, container/probe, `dev check`,
 compile/lint/format, commit or push was performed by this child.
 

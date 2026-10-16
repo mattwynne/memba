@@ -26,6 +26,7 @@ ast.parse((WORKFLOW / "runner/guard.py").read_text())
 config = tomllib.loads((WORKFLOW / "workflow.toml").read_text())
 assert len(list((WORKFLOW / "prompts").glob("*.md"))) == 5
 assert len(config["run"]["hooks"]) == 5
+assert config["run"]["model"]["fallbacks"] == {"gpt-5.6-sol": []}
 spec = importlib.util.spec_from_file_location("guard", WORKFLOW / "runner/guard.py")
 g = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(g)
