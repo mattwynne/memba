@@ -107,17 +107,27 @@ def route(label):
 
 def current_green(s):
     e = s.get("tests", {}).get("acceptance", {})
-    return e.get("source") == source() and e.get("status") == "passed"
+    return (e.get("source") == source() and e.get("status") == "passed"
+            and e.get("feature") == s["facts"]["feature"] and e.get("scenario") == s["facts"]["scenario"])
+
+
+def current_example(s):
+    return "domain:" + s["facts"]["feature"] + "::" + s["facts"]["scenario"]
+
+
+def supporting_selectors(s):
+    a = s.get("assignment", {})
+    # The current example is already observed as acceptance, not another check.
+    return list(dict.fromkeys(k for k in a.get("units", []) + a.get("earlier", []) if k != current_example(s)))
 
 
 def selected(s):
-    a = s.get("assignment", {})
-    return ["acceptance", *a.get("units", []), *a.get("earlier", [])]
+    return ["acceptance", *supporting_selectors(s)]
 
 
 def checks_green(s):
     now = source()
-    return all(s.get("tests", {}).get(k, {}).get("source") == now and s["tests"][k]["status"] == "passed" for k in selected(s))
+    return current_green(s) and all(s.get("tests", {}).get(k, {}).get("source") == now and s["tests"][k]["status"] == "passed" for k in supporting_selectors(s))
 
 
 def matches(actual, prediction):
@@ -385,6 +395,7 @@ def accept(s, role, result):
                 require(re.fullmatch(r"web/test/[A-Za-z0-9_/-]+_test\.exs(?::[1-9][0-9]*)?", unit), "Unsupported unit selection")
             for earlier in a.get("earlier", []):
                 require(re.fullmatch(r"domain:acceptance-tests/features/[A-Za-z0-9_/-]+\.feature::[^\r\n]+", earlier), "Select earlier domain examples by exact feature and scenario name")
+            a["earlier"] = list(dict.fromkeys(k for k in a.get("earlier", []) if k != current_example(s)))
             a.update(edit_allowed=False, halt=False)
             if decision in {"change", "repair_bdd"}:
                 prediction(a["next_prediction"])
@@ -432,8 +443,13 @@ def accept(s, role, result):
             a.update(halt=True, result="replan")
         if "untouched" in a["result"] or selection_error and not a.get("edit_allowed"):
             require(source() == s["role_source"], "Baseline mismatch/red/invalid selection must return without source edits")
+        if a["result"] == "reached_prediction":
+            observed = s.get("tests", {}).get("acceptance", {})
+            require(observed.get("source") == source() and observed.get("feature") == s["facts"]["feature"] and observed.get("scenario") == s["facts"]["scenario"] and matches(observed, a["next_prediction"]), "Predicted acceptance observation missing/stale or wrong identity/result")
+        if a["result"] == "green":
+            require(checks_green(s), "Selected regression checks missing/stale/not green")
         if a["result"] in {"green", "reached_prediction"}:
-            require(all(s.get("tests", {}).get(k, {}).get("source") == source() and s["tests"][k]["status"] == "passed" for k in a.get("units", []) + a.get("earlier", [])), "Supporting selection missing/stale/not green")
+            require(all(s.get("tests", {}).get(k, {}).get("source") == source() and s["tests"][k]["status"] == "passed" for k in supporting_selectors(s)), "Supporting selection missing/stale/not green")
         s["handback"] = {**result, "actual": a["result"], "source_after": source()}
         if selection_error:
             s["handback"]["selection_error"] = a.get("selection_error")

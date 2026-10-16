@@ -35,7 +35,8 @@ risk: misplaced responsibility, duplication, obscure collaboration or similar.
 Preserve approved examples, assertions, observable behaviour and authorisation.
 No forced refactor, metric chase, dependency or speculative platform.
 
-Select the current scenario, relevant focused units AND affected earlier examples;
+Select the current scenario ONCE, relevant focused units AND DIFFERENT affected
+earlier examples (never repeat the current feature/name in `earlier`);
 explain what earlier behaviour could regress. Every fresh refactoring driver must
 run that WHOLE selection green BEFORE editing, even if another driver saw green.
 A red baseline returns untouched. A product fix belongs with the BDD navigator,

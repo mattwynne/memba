@@ -96,7 +96,9 @@ For a change/repair include `change`:
   approved `facts.allowed_paths` (never workflow/settings/dependencies/features).
 - `units`: e.g. `["web/test/memba/example_test.exs"]`; `earlier`: affected
   domain examples as `["domain:acceptance-tests/features/example.feature::Exact scenario name"]`,
-  or empty lists with rationale in `reason`. Never substitute whole suites.
+  or empty lists with rationale in `reason`. `earlier` means DIFFERENT affected
+  examples: the identical current feature/name is already observed as acceptance
+  and must not be listed/run again. Never substitute whole suites.
 - `initial_prediction`: required only when no matching previous actual exists.
 - `next_prediction`: required for BDD work; green before/after for cleanup.
   In failure predictions `step` is exact text WITHOUT its Given/When/Then keyword.

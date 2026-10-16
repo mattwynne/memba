@@ -146,7 +146,12 @@ It never expands driver authority or marks tests green. Existing blocked/invalid
 states and explicit environment/scope blockers still fail. Normal refactoring
 returns to its own navigator; repair handbacks return to the repair-owning BDD one. Finish requires
 current selected green, real full-check exit/test summaries and one complete clean
-review on the SAME bytes. Agent declarations/zero/missing/skipped checks cannot
+review on the SAME bytes. The current `acceptance` and its identical
+`domain:FEATURE::NAME` alias are ONE obligation: remove that duplicate at handoff
+and schedule/check it once. No duplicate green record is invented; the actual
+primary observation still must match feature/name, source and predicted result.
+A different feature/name remains independent, and predicted-next RED still hands
+back without a false green. No extra test runs after handback. Agent declarations/zero/missing/skipped checks cannot
 supply test green. Approved examples/assertions/authorisation remain unchanged.
 
 ## Source basis and honest limitations
@@ -216,7 +221,7 @@ Follow-up validation of the actual TOML reproduced the unsupported flat fallback
 array; changing it to the native model-keyed map fixed parsing. Direct TOML
 validation then passed with no warnings; see `runner/tests/toml-validate-01.log`
 (failure) and `toml-validate-02.log` (pass). Existing hook command arrays were accepted
-by that parser; actual hook execution remains for the parent's normal smoke.
+by that parser; actual hook execution was left for the parent's normal smoke.
 No workflow execution, app test, model/eval call, container/probe, `dev check`,
 compile/lint/format, commit or push was performed by this child.
 
@@ -232,9 +237,33 @@ early handback for omitted `CommandDispatch`. Its state/response/raw unit log ar
 retained under `runner/tests/fixtures/case2-*`. The new nonpassing replan path,
 optional ancestor base and scoped formatting have isolated regression coverage
 (46 total); no product repair, formatter invocation or native launch was done here.
-Current ORIGINAL campaign limits: **600 total operations, 208 spent (392 remain),
-one launch left, deadline 2026-10-16T13:03:37Z**. Parent owns that final launch and
-carries any additional actual consumed work forward.
+The final third run `01M5200JAVXEK2XYST6YG4KYRR` also failed terminally. Its initial
+prediction mismatch returned untouched, the same navigator revisited, and a fresh
+driver reached actual current-scenario green (1 executed/131 excluded), aggregate
+21/21 and dispatch 4/4 on the SAME `9686ebc2...` source. But the assignment repeated
+the current scenario in `earlier`; the guard wrongly required a second alias record
+after correct predicted-green handback. This REVIEW-ONLY correction deduplicates
+that identity and has actual-state regression coverage (54 total focused checks).
+It does NOT turn the failed run into a pass: refactoring, full ordinary dev check
+and the final review were never reached. No fourth launch/resume/hotpatch or manual
+product rescue is authorised. Cumulative operations: **316/600**, all **three launches
+exhausted**, original deadline **2026-10-16T13:03:37Z** unchanged.
+
+### Observed formatter gap — unresolved, no formatting pass claimed
+
+The retained `case3-formatter-events.jsonl` contains exact native records:
+- seq 628/629: the first request used `/workspace/memba/web` and the pre-tool hook
+  rejected it (exit 2), consistent with the required checkout-root workdir.
+- seq 633/634/635: retry at `/workspace/memba` passed the hook and actually ran
+  `devenv shell -- bin/mix format ...`. Mix exited **1** with `File.Error`: it could
+  not write `/repos/mattwynne/memba/web/test/features/step_definitions/member_profile_steps.exs`
+  because permission was denied. This was NOT a formatter allowlist rejection.
+
+The logs establish a filesystem write-permission failure inside that execution,
+not a successful format. They do not establish UID/ownership, mount flags or the
+underlying permission cause. The driver's description of a "devenv mount" is not
+independent proof. No permission repair, runtime probe or formatter platform was
+added; this gap needs separate approved investigation, not another campaign run.
 
 This remains an unfinished draft, not a successful end-to-end run. Stop at handoff for parent
 inspection/integration; do not interpret these focused checks as a successful run.

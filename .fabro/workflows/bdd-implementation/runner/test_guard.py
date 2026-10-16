@@ -504,5 +504,102 @@ with patch.object(g, "write"):
 
     check("formatter stays in managed checkout root for bin/mix web-relative paths", format_correct_workdir)
 
-assert count == 46
+# REVIEW ONLY: the third and final real run failed. Its actual primary example
+# and unit greens do not imply a full gate, refactoring or review ever happened.
+case3 = json.loads((fixtures / "case3-state.json").read_text())
+response3 = json.loads((fixtures / "case3-driver-response.json").read_text())
+green3 = (fixtures / "case3-acceptance-green.log").read_text()
+source3 = case3["tests"]["acceptance"]["source"]
+alias3 = case3["assignment"]["earlier"][0]
+changed3 = ["web/lib/memba/membership/command_dispatch.ex", "web/test/features/step_definitions/member_profile_steps.exs"]
+
+with patch.object(g, "source", return_value=source3), patch.object(g, "write"), \
+        patch.object(g, "git", side_effect=lambda *a: "\n".join(changed3).encode() if a[0] == "diff" else b""), \
+        patch.object(g, "run") as no_rerun:
+    def actual_duplicate_alias():
+        s = copy.deepcopy(case3)
+        parsed = g.domain_result(green3, 0, s["facts"]["feature"], s["facts"]["scenario"])
+        assert parsed["status"] == "passed" and parsed["counts"][0]["total"] - parsed["counts"][0]["excluded"] == 1
+        with patch.object(g, "route") as routed:
+            g.accept(s, "bdd_driver", copy.deepcopy(response3))
+            routed.assert_called_once_with("handback")
+        assert alias3 not in s["tests"]  # No fabricated alias green/second receipt.
+        assert s["operations"] == 316 and s["assignment"]["halt"]
+        assert not s.get("full") and not s.get("review")
+        no_rerun.assert_not_called()
+
+    check("real identical current-example alias reuses actual source-bound green without rerun", actual_duplicate_alias)
+
+    def duplicate_still_needs_current_source():
+        s = copy.deepcopy(case3)
+        s["tests"]["acceptance"]["source"] = "stale-other-version"
+        block(lambda: g.accept(s, "bdd_driver", copy.deepcopy(response3)))
+
+    check("current-example dedupe cannot accept stale primary evidence", duplicate_still_needs_current_source)
+
+    def duplicate_still_needs_identity():
+        for key, value in (("feature", "acceptance-tests/features/other.feature"), ("scenario", "another example")):
+            s = copy.deepcopy(case3)
+            s["tests"]["acceptance"][key] = value
+            block(lambda: g.accept(s, "bdd_driver", copy.deepcopy(response3)))
+
+    check("current-example dedupe cannot reuse a different feature or scenario", duplicate_still_needs_identity)
+
+    def distinct_earlier_still_required():
+        for alias in (alias3 + " (different scenario)", alias3.replace("member_profile.feature", "other.feature")):
+            s = copy.deepcopy(case3)
+            s["assignment"]["earlier"] = [alias]
+            block(lambda: g.accept(s, "bdd_driver", copy.deepcopy(response3)))
+
+    check("different earlier examples retain their independent current-green obligation", distinct_earlier_still_required)
+
+    def refactoring_selection_once():
+        s = copy.deepcopy(case3)
+        s["assignment"]["earlier"] = [alias3, alias3]
+        assert g.selected(s) == ["acceptance", *s["assignment"]["units"]]
+        assert g.checks_green(s)
+        no_rerun.assert_not_called()
+
+    check("refactoring selection schedules the identical current example only once", refactoring_selection_once)
+
+    def new_assignment_dedupes_current_only():
+        s = copy.deepcopy(case3)
+        s["role_source"] = source3
+        change = {k: copy.deepcopy(s["assignment"][k]) for k in ("goal", "paths", "units", "earlier", "next_prediction")}
+        other_alias = alias3 + " (different scenario)"
+        change["earlier"] = [alias3, other_alias, alias3, other_alias]
+        g.accept(s, "bdd_navigator", dict(decision="change", source=source3, reason="fixture", change=change))
+        assert s["assignment"]["earlier"] == [other_alias]
+
+    check("navigator handoff removes only current/duplicate identities, not other coverage", new_assignment_dedupes_current_only)
+
+    def expected_red_remains_nonpassing():
+        s = copy.deepcopy(case3)
+        p = dict(status="undefined", step="a predicted next step", reason="synthetic boundary case")
+        s["assignment"]["next_prediction"] = p
+        s["tests"]["acceptance"].update(status="undefined", step=p["step"], exit=2, log="SYNTHETIC-NOT-A-RUNTIME-RESULT")
+        s["tests"]["acceptance"]["counts"][0]["failures"] = 1
+        g.accept(s, "bdd_driver", copy.deepcopy(response3))
+        assert not g.current_green(s) and alias3 not in s["tests"]
+        no_rerun.assert_not_called()
+
+    check("identical alias does not force green or prevent predicted-next-red handback", expected_red_remains_nonpassing)
+
+formatter_events = {e["seq"]: e for e in map(json.loads, (fixtures / "case3-formatter-events.jsonl").read_text().splitlines())}
+
+
+def actual_formatter_gap():
+    assert formatter_events[628]["properties"]["arguments"]["workdir"] == "/workspace/memba/web"
+    assert formatter_events[629]["properties"]["is_error"]
+    assert formatter_events[633]["properties"]["arguments"]["workdir"] == "/workspace/memba"
+    result = formatter_events[634]["properties"]
+    assert result["exit_code"] == 1 and result["termination"] == "exited"
+    stderr = result["exec_output_tail"]["stderr"]
+    assert "mix format failed for file: test/features/step_definitions/member_profile_steps.exs" in stderr
+    assert "could not write to file" in stderr and "permission denied" in stderr
+
+
+check("real formatter command reached Mix but failed writing the new file; no format pass", actual_formatter_gap)
+
+assert count == 54
 print(f"{count} current domain/preflight/protocol fixture checks PASS; AST/TOML/five-role structure PASS. No app tests, model, container, workflow run, commit or push.")
