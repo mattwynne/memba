@@ -6,6 +6,7 @@ defmodule Memba.Membership.Person do
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
   alias Memba.Membership.Commands.AddPersonEmailAddress
+  alias Memba.Membership.Commands.ChangePersonName
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
@@ -19,6 +20,7 @@ defmodule Memba.Membership.Person do
   alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.Events.PersonNameChanged
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
 
   @behaviour Aggregate
@@ -54,6 +56,26 @@ defmodule Memba.Membership.Person do
   end
 
   def execute(%__MODULE__{}, %CreatePerson{}), do: {:error, :already_created}
+
+  @impl Aggregate
+  def execute(%__MODULE__{person_id: nil}, %ChangePersonName{}) do
+    {:error, :person_not_created}
+  end
+
+  def execute(%__MODULE__{} = person, %ChangePersonName{} = command) do
+    with :ok <- validate_person_id(command.person_id),
+         :ok <- validate_matching_person_id(person, command),
+         :ok <- validate_self_authority(person, command),
+         {:ok, expected_name} <- normalize_expected_name(command.expected_name),
+         {:ok, name} <- normalize_changed_name(command.name),
+         :ok <- validate_expected_name(person, expected_name) do
+      if name == normalize_name_whitespace(person.name) do
+        []
+      else
+        %PersonNameChanged{person_id: person.person_id, name: name}
+      end
+    end
+  end
 
   @impl Aggregate
   def execute(%__MODULE__{person_id: nil}, %ReplacePersonEmailAddresses{}) do
@@ -182,6 +204,10 @@ defmodule Memba.Membership.Person do
   end
 
   @impl Aggregate
+  def apply(%__MODULE__{} = person, %PersonNameChanged{} = event) do
+    %{person | name: event.name}
+  end
+
   def apply(%__MODULE__{} = person, %PersonCreated{} = event) do
     %__MODULE__{
       person
@@ -326,6 +352,52 @@ defmodule Memba.Membership.Person do
 
   defp validate_matching_person_id(%__MODULE__{}, %{person_id: _person_id}) do
     {:error, :invalid_person_id}
+  end
+
+  defp validate_self_authority(
+         %__MODULE__{person_id: person_id},
+         %ChangePersonName{actor_person_id: person_id}
+       ) do
+    :ok
+  end
+
+  defp validate_self_authority(%__MODULE__{}, %ChangePersonName{}) do
+    {:error, :self_authorization_required}
+  end
+
+  defp validate_expected_name(%__MODULE__{name: current_name}, expected_name) do
+    if normalize_name_whitespace(current_name) == expected_name do
+      :ok
+    else
+      {:error, :name_changed}
+    end
+  end
+
+  defp normalize_expected_name(name) when is_binary(name) do
+    case normalize_name_whitespace(name) do
+      "" -> {:error, :invalid_name}
+      normalized_name -> {:ok, normalized_name}
+    end
+  end
+
+  defp normalize_expected_name(_name), do: {:error, :invalid_name}
+
+  defp normalize_changed_name(name) when is_binary(name) do
+    normalized_name = normalize_name_whitespace(name)
+
+    if normalized_name == "" or String.length(normalized_name) > 100 do
+      {:error, :invalid_name}
+    else
+      {:ok, normalized_name}
+    end
+  end
+
+  defp normalize_changed_name(_name), do: {:error, :invalid_name}
+
+  defp normalize_name_whitespace(name) do
+    name
+    |> String.split(~r/\s+/u, trim: true)
+    |> Enum.join(" ")
   end
 
   defp validate_verified_at(%DateTime{}), do: :ok

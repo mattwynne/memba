@@ -2,6 +2,7 @@ defmodule Memba.Membership.PersonTest do
   use ExUnit.Case, async: true
 
   alias Memba.Membership.Commands.AddPersonEmailAddress
+  alias Memba.Membership.Commands.ChangePersonName
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
@@ -13,6 +14,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.Events.PersonNameChanged
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.Events.PersonMerged
   alias Memba.Membership.Person
@@ -496,6 +498,92 @@ defmodule Memba.Membership.PersonTest do
                      verified_at: nil
                    }
                  ]
+               })
+    end
+  end
+
+  describe "execute/2 ChangePersonName" do
+    test "rejects a stale expected name and accepts confirmation based on the current name" do
+      person_id = Memba.ID.generate(:person)
+
+      person =
+        Person.apply(%Person{}, %PersonCreated{
+          person_id: person_id,
+          name: "Alice Jones",
+          email: "alice@example.com"
+        })
+
+      assert {:error, :name_changed} =
+               Person.execute(person, %ChangePersonName{
+                 person_id: person_id,
+                 actor_person_id: person_id,
+                 expected_name: "Alice Smith",
+                 name: "Alice Brown"
+               })
+
+      assert %PersonNameChanged{person_id: ^person_id, name: "Alice Brown"} = event =
+               Person.execute(person, %ChangePersonName{
+                 person_id: person_id,
+                 actor_person_id: person_id,
+                 expected_name: "Alice Jones",
+                 name: " Alice   Brown "
+               })
+
+      assert %Person{
+               person_id: ^person_id,
+               name: "Alice Brown",
+               email: "alice@example.com"
+             } = Person.apply(person, event)
+    end
+
+    test "allows only the person to change their own name" do
+      person_id = Memba.ID.generate(:person)
+
+      assert {:error, :self_authorization_required} =
+               Person.execute(created_person(person_id), %ChangePersonName{
+                 person_id: person_id,
+                 actor_person_id: Memba.ID.generate(:person),
+                 expected_name: "Alice",
+                 name: "Alice Jones"
+               })
+    end
+
+    test "normalizes names, validates Unicode grapheme length, and emits no event for a no-op" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      assert [] =
+               Person.execute(person, %ChangePersonName{
+                 person_id: person_id,
+                 actor_person_id: person_id,
+                 expected_name: " Alice ",
+                 name: " Alice "
+               })
+
+      assert %PersonNameChanged{name: name} =
+               Person.execute(person, %ChangePersonName{
+                 person_id: person_id,
+                 actor_person_id: person_id,
+                 expected_name: "Alice",
+                 name: String.duplicate("é", 100)
+               })
+
+      assert String.length(name) == 100
+
+      assert {:error, :invalid_name} =
+               Person.execute(person, %ChangePersonName{
+                 person_id: person_id,
+                 actor_person_id: person_id,
+                 expected_name: "Alice",
+                 name: String.duplicate("👍🏽", 101)
+               })
+
+      assert %PersonNameChanged{name: "李・O'Connor"} =
+               Person.execute(person, %ChangePersonName{
+                 person_id: person_id,
+                 actor_person_id: person_id,
+                 expected_name: "Alice",
+                 name: " 李・O'Connor "
                })
     end
   end

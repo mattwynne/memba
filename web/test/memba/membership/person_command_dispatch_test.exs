@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonNameChanged
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -138,5 +139,69 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
 
     assert is_nil(PersonQueries.get_person(duplicate_person_id))
     assert is_nil(PersonQueries.get_person(duplicate_alternate_person_id))
+  end
+
+  test "changes a person's own name only when the expected name is still current" do
+    person_id = Memba.ID.generate(:person)
+
+    assert {:ok, create} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Smith",
+               email: "alice-name-change@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create, consistency: :strong)
+
+    assert {:error, :self_authorization_required} =
+             PersonCommands.prepare_change_name(%{
+               person_id: person_id,
+               actor_person_id: Memba.ID.generate(:person),
+               expected_name: "Alice Smith",
+               name: "Alice Jones"
+             })
+
+    assert {:ok, first_change} =
+             PersonCommands.prepare_change_name(%{
+               person_id: person_id,
+               actor_person_id: person_id,
+               expected_name: "Alice Smith",
+               name: "Alice Jones"
+             })
+
+    assert :ok = CommandDispatch.dispatch(first_change, consistency: :strong)
+
+    assert {:ok, stale_change} =
+             PersonCommands.prepare_change_name(%{
+               person_id: person_id,
+               actor_person_id: person_id,
+               expected_name: "Alice Smith",
+               name: "Alice Brown"
+             })
+
+    assert {:error, :name_changed} =
+             CommandDispatch.dispatch(stale_change, consistency: :strong)
+
+    assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
+
+    assert {:ok, confirmed_change} =
+             PersonCommands.prepare_change_name(%{
+               person_id: person_id,
+               actor_person_id: person_id,
+               expected_name: "Alice Jones",
+               name: " Alice   Brown "
+             })
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [%PersonNameChanged{person_id: ^person_id, name: "Alice Brown"}]
+            }} =
+             CommandDispatch.dispatch(confirmed_change,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{name: "Alice Brown"} = PersonQueries.get_person(person_id)
   end
 end

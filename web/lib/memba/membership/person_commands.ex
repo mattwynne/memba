@@ -4,6 +4,7 @@ defmodule Memba.Membership.PersonCommands do
   ownership check is a preflight; the Person aggregate still validates creation.
   """
 
+  alias Memba.Membership.Commands.ChangePersonName
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.PersonEmailAddressCommands
@@ -18,6 +19,22 @@ defmodule Memba.Membership.PersonCommands do
            :ok <- PersonEmailAddressCommands.prevent_duplicate(person_id, email_addresses) do
         {:ok, command}
       end
+    end
+  end
+
+  def prepare_change_name(attrs) when is_map(attrs) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+         :ok <- validate_self_authority(person_id, actor_person_id),
+         {:ok, expected_name} <- fetch_required(attrs, :expected_name),
+         {:ok, name} <- fetch_required(attrs, :name) do
+      {:ok,
+       %ChangePersonName{
+         person_id: person_id,
+         actor_person_id: actor_person_id,
+         expected_name: expected_name,
+         name: name
+       }}
     end
   end
 
@@ -54,6 +71,12 @@ defmodule Memba.Membership.PersonCommands do
       {:ok, value} -> {:ok, value}
       :error -> {:error, {:missing_required_attribute, key}}
     end
+  end
+
+  defp validate_self_authority(person_id, person_id), do: :ok
+
+  defp validate_self_authority(_person_id, _actor_person_id) do
+    {:error, :self_authorization_required}
   end
 
   defp fetch_optional(attrs, key) do
