@@ -1,0 +1,266 @@
+{
+  "title": "Untitled run",
+  "spec": {
+    "run_id": "01M564CEA0YNWV6TEVSKQPMX7Z",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "source-quality.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": null,
+        "working_dir": null,
+        "metadata": {
+          "kind": "wip-command-quality",
+          "owner": "thr_ra2ff7hjn2"
+        },
+        "inputs": {},
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-5",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**",
+            ".fabro/blobs",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/source-quality/*.json",
+            ".fabro/tmp/source-quality/*.log"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "SourceQuality",
+      "nodes": {
+        "check": {
+          "id": "check",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "python3 -B - <<'QUALITY_PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = '4f489b1770d8538827ddb5e2b1bfea8fe14d2ea2'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\n# Temporary command probes in the normal managed test sandbox, not workflow code.\nimport re\n\ndef probe(name, command, expected_code=None, contains=(), excludes=()):\n    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)\n    (out / (name + '.log')).write_text(result.stdout)\n    (out / (name + '.json')).write_text(json.dumps({'command': command, 'exit': result.returncode}) + '\\n')\n    print('PROBE', name, 'EXIT', result.returncode, flush=True)\n    if expected_code is not None:\n        assert result.returncode == expected_code, (name, result.stdout[-8000:])\n    else:\n        assert result.returncode != 0, (name, result.stdout[-8000:])\n    for needle in contains:\n        assert needle in result.stdout, (name, needle, result.stdout[-8000:])\n    for needle in excludes:\n        assert needle not in result.stdout, (name, needle, result.stdout[-8000:])\n    print(result.stdout[-2500:], flush=True)\n\nprobe('focused-tooling', ['bin/dev', 'test', 'test/features/domain_cucumber_runner_test.exs', 'test/features/dev_wip_command_test.exs'], 0, ['12 tests, 0 failures'])\nmessage = 'This scenario now passes. Remove its @wip tag.'\nprobe('no-wip', ['bin/dev', 'test:wip'], contains=['found none'], excludes=[message])\nfixture = Path('acceptance-tests/features/eval_wip_command_probe.feature')\nassert not fixture.exists()\ntry:\n    fixture.write_text('''Feature: WIP command observation\n  @wip\n  Scenario: Real undefined scenario\n    Given a deliberately undefined WIP command probe\n''')\n    probe('red-wip', ['bin/dev', 'test:wip'], contains=['Real undefined scenario', 'No matching step definition', '1 test, 1 failure'], excludes=[message])\n    fixture.write_text('''Feature: WIP command observation\n  @wip\n  Scenario: First selected scenario\n    Given a deliberately undefined WIP command probe\n  @wip\n  Scenario: Second selected scenario\n    Given another deliberately undefined WIP command probe\n''')\n    probe('multiple-wip', ['bin/dev', 'test:wip'], contains=['found 2', 'First selected scenario', 'Second selected scenario'], excludes=[message, 'No matching step definition'])\n    fixture.write_text('''Feature: WIP command observation\n  @wip\n  Scenario: Real passing scenario\n    Given Alice has the primary email \"alice-wip-probe@example.com\"\n    Then \"alice-wip-probe@example.com\" should identify Alice\n''')\n    probe('green-wip', ['bin/dev', 'test:wip'], 1, ['Real passing scenario', '1 test, 0 failures', message])\n    fixture.write_text(fixture.read_text().replace('  @wip\\n', ''))\n    probe('untagged-regression', ['bin/dev', 'test', 'test/features/domain_cucumber_acceptance_test.exs', '--only', 'scenario_name:Real passing scenario', '--trace'], 0, ['Real passing scenario', '0 failures'])\n    probe('removed-wip', ['bin/dev', 'test:wip'], contains=['found none'], excludes=[message])\nfinally:\n    fixture.unlink(missing_ok=True)\nprint('ACTUAL_WIP_COMMAND_CASES_PASSED', flush=True)\n\nverify('after-probes')\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode)\n\nQUALITY_PY\n"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 3600,
+                "nanos": 0
+              }
+            }
+          }
+        },
+        "failed": {
+          "id": "failed",
+          "attrs": {
+            "script": {
+              "String": "exit 1"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        },
+        "done": {
+          "id": "done",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "check",
+          "attrs": {}
+        },
+        {
+          "from": "check",
+          "to": "done",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "check",
+          "to": "failed",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": ""
+        }
+      }
+    },
+    "graph_source": "digraph SourceQuality {\n start [shape=Mdiamond]\n done [shape=Msquare]\n check [shape=parallelogram, timeout=\"3600s\", script=\"python3 -B - <<'QUALITY_PY'\\nimport hashlib\\nimport io\\nimport json\\nimport os\\nfrom pathlib import Path\\nimport stat\\nimport subprocess\\nimport sys\\n\\nout = Path('.fabro/tmp/source-quality')\\nout.mkdir(parents=True, exist_ok=True)\\nexpected = '4f489b1770d8538827ddb5e2b1bfea8fe14d2ea2'\\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\\\n')\\n\\ndef git(*args):\\n    return subprocess.check_output(['git', *args])\\n\\ndef verify(label):\\n    head = git('rev-parse', 'HEAD').decode().strip()\\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\\n    assert head == expected, ('wrong HEAD', head, expected)\\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\\n    entries = []\\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\\\0'):\\n        if row:\\n            meta, path = row.split(b'\\\\t', 1)\\n            mode, kind, blob = meta.split()\\n            assert kind == b'blob', ('unsupported tracked entry', path)\\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\\\n'.join(blob for _, blob, _ in entries) + b'\\\\n')\\n    stream = io.BytesIO(raw)\\n    digest = hashlib.sha256()\\n    for mode, blob, name in entries:\\n        header = stream.readline().split()\\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\\n        body = stream.read(int(header[2]))\\n        assert stream.read(1) == b'\\\\n'\\n        path = Path(name)\\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\\n        digest.update(os.fsencode(name) + b'\\\\0' + mode.encode() + b'\\\\0' + body)\\n    assert stream.read() == b''\\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\\n    assert result['index_tree'] == tree\\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\\\n')\\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\\n    return result\\n\\nbefore = verify('before')\\n# Temporary command probes in the normal managed test sandbox, not workflow code.\\nimport re\\n\\ndef probe(name, command, expected_code=None, contains=(), excludes=()):\\n    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)\\n    (out / (name + '.log')).write_text(result.stdout)\\n    (out / (name + '.json')).write_text(json.dumps({'command': command, 'exit': result.returncode}) + '\\\\n')\\n    print('PROBE', name, 'EXIT', result.returncode, flush=True)\\n    if expected_code is not None:\\n        assert result.returncode == expected_code, (name, result.stdout[-8000:])\\n    else:\\n        assert result.returncode != 0, (name, result.stdout[-8000:])\\n    for needle in contains:\\n        assert needle in result.stdout, (name, needle, result.stdout[-8000:])\\n    for needle in excludes:\\n        assert needle not in result.stdout, (name, needle, result.stdout[-8000:])\\n    print(result.stdout[-2500:], flush=True)\\n\\nprobe('focused-tooling', ['bin/dev', 'test', 'test/features/domain_cucumber_runner_test.exs', 'test/features/dev_wip_command_test.exs'], 0, ['12 tests, 0 failures'])\\nmessage = 'This scenario now passes. Remove its @wip tag.'\\nprobe('no-wip', ['bin/dev', 'test:wip'], contains=['found none'], excludes=[message])\\nfixture = Path('acceptance-tests/features/eval_wip_command_probe.feature')\\nassert not fixture.exists()\\ntry:\\n    fixture.write_text('''Feature: WIP command observation\\n  @wip\\n  Scenario: Real undefined scenario\\n    Given a deliberately undefined WIP command probe\\n''')\\n    probe('red-wip', ['bin/dev', 'test:wip'], contains=['Real undefined scenario', 'No matching step definition', '1 test, 1 failure'], excludes=[message])\\n    fixture.write_text('''Feature: WIP command observation\\n  @wip\\n  Scenario: First selected scenario\\n    Given a deliberately undefined WIP command probe\\n  @wip\\n  Scenario: Second selected scenario\\n    Given another deliberately undefined WIP command probe\\n''')\\n    probe('multiple-wip', ['bin/dev', 'test:wip'], contains=['found 2', 'First selected scenario', 'Second selected scenario'], excludes=[message, 'No matching step definition'])\\n    fixture.write_text('''Feature: WIP command observation\\n  @wip\\n  Scenario: Real passing scenario\\n    Given Alice has the primary email \\\"alice-wip-probe@example.com\\\"\\n    Then \\\"alice-wip-probe@example.com\\\" should identify Alice\\n''')\\n    probe('green-wip', ['bin/dev', 'test:wip'], 1, ['Real passing scenario', '1 test, 0 failures', message])\\n    fixture.write_text(fixture.read_text().replace('  @wip\\\\n', ''))\\n    probe('untagged-regression', ['bin/dev', 'test', 'test/features/domain_cucumber_acceptance_test.exs', '--only', 'scenario_name:Real passing scenario', '--trace'], 0, ['Real passing scenario', '0 failures'])\\n    probe('removed-wip', ['bin/dev', 'test:wip'], contains=['found none'], excludes=[message])\\nfinally:\\n    fixture.unlink(missing_ok=True)\\nprint('ACTUAL_WIP_COMMAND_CASES_PASSED', flush=True)\\n\\nverify('after-probes')\\nresult = subprocess.run(['bin/dev', 'check'])\\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\\\n')\\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\\nafter = verify('after')\\nassert before == after, 'source metadata changed during check'\\nsys.exit(result.returncode)\\n\\nQUALITY_PY\\n\"]\n failed [shape=parallelogram, script=\"exit 1\"]\n start -> check\n check -> done [condition=\"outcome=succeeded\"]\n check -> failed\n}\n",
+    "workflow_slug": "source-quality",
+    "source_directory": "/home/matt/.local/state/memba/native-bdd-overnight-20261016/source-check",
+    "labels": {
+      "owner": "thr_ra2ff7hjn2",
+      "kind": "wip-command-quality"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "558f4211bef2f433dc4d3956fb8da884328bb854e2c41feea6c402c0443a2a49",
+    "definition_blob": "8c9a2e8a6edc29fe09726f798acd41b0f6a15e52d71d02ea1b2111b7fd18e9e7",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "trial/bdd-eval-source-20261017",
+      "sha": "4f489b1770d8538827ddb5e2b1bfea8fe14d2ea2",
+      "dirty": "dirty"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M564CEA0YNWV6TEVSKQPMX7Z",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-17T23:50:33.260982225Z",
+  "last_event_at": "2026-10-17T23:50:51.549310154Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "c92ac4fd98d25efd8c080b1bbc28e7ddb32da5498a31167b0043f48d41a1bb6b",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "trial/bdd-eval-source-20261017",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
