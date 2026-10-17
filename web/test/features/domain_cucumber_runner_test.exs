@@ -50,6 +50,114 @@ defmodule Memba.DomainCucumberRunnerTest do
     end
   end
 
+  test "selects one WIP scenario using inherited Gherkin tags" do
+    feature_tagged =
+      Gherkin.Parser.parse("""
+      @wip
+      Feature: Feature-level WIP
+        Scenario: Inherits WIP from its feature
+          Given a feature condition
+      """)
+
+    rule_and_scenario_tagged =
+      Gherkin.Parser.parse("""
+      Feature: WIP selection
+        @wip
+        Rule: Current work
+          Scenario: Inherits WIP from its rule
+            Given a condition
+
+        Rule: Other work
+          @wip
+          Scenario: Carries WIP itself
+            Given another condition
+      """)
+
+    selected =
+      DomainCucumberRunner.wip_scenarios(
+        discovery: %{features: [feature_tagged, rule_and_scenario_tagged]}
+      )
+
+    assert Enum.map(selected, & &1.scenario.name) == [
+             "Inherits WIP from its feature",
+             "Inherits WIP from its rule",
+             "Carries WIP itself"
+           ]
+  end
+
+  test "WIP selection remains limited to current domain scenarios" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: WIP layer selection
+        @wip
+        Scenario: Current domain example
+          Given a condition
+
+        @wip @journey
+        Scenario: Browser journey
+          Given a browser condition
+
+        @wip @todo
+        Scenario: Future domain example
+          Given a future condition
+      """)
+
+    selected = DomainCucumberRunner.wip_scenarios(discovery: %{features: [feature]})
+
+    assert Enum.map(selected, & &1.scenario.name) == ["Current domain example"]
+  end
+
+  test "reports zero and multiple WIP scenarios clearly" do
+    no_wip =
+      Gherkin.Parser.parse("""
+      Feature: No WIP
+        Scenario: Ordinary coverage
+          Given a condition
+      """)
+
+    assert {:error, no_wip_message} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [no_wip]})
+
+    assert no_wip_message =~ "exactly one domain/application scenario tagged @wip"
+    assert no_wip_message =~ "found none"
+
+    two_wip =
+      Gherkin.Parser.parse("""
+      Feature: Too much WIP
+        @wip
+        Scenario: First WIP
+          Given a condition
+
+        @wip
+        Scenario: Second WIP
+          Given another condition
+      """)
+      |> Map.put(:file, "features/too_much_wip.feature")
+
+    assert {:error, multiple_wip_message} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [two_wip]})
+
+    assert multiple_wip_message =~ "found 2"
+    assert multiple_wip_message =~ "First WIP"
+    assert multiple_wip_message =~ "Second WIP"
+  end
+
+  test "WIP is still included in ordinary domain regression selection" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Ordinary coverage
+        @wip
+        Scenario: Current red example
+          Given a condition
+      """)
+
+    assert [%{scenario: %{name: "Current red example"}}] =
+             DomainCucumberRunner.selected_scenarios(discovery: %{features: [feature]})
+
+    assert {:ok, %{scenario: %{name: "Current red example"}}} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+  end
+
   test "discovered domain scenarios contain neither browser nor future tags at any level" do
     selected = DomainCucumberRunner.selected_scenarios()
 

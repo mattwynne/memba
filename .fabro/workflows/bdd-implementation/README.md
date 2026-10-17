@@ -24,11 +24,11 @@ These are notes and command output, not a state machine. Nothing parses the Mark
 
 ## Before a run
 
-Supply `brief` as the path to a committed Markdown file. It names the agreed scenario, its exact acceptance command, intended scope and constraints, and any design/review references. Use the normal managed checkout and pinned Docker image in [workflow.toml](workflow.toml). The setup runs the existing sandbox check and forced browser/network preflight.
+Supply `plan` as the path to the existing iteration plan, which links to relevant ADRs, designs and other context. Mark exactly one domain scenario `@wip` and remove its `@todo` tag before launch. No separate brief or test-command input is needed. Use the normal managed checkout and pinned Docker image in [workflow.toml](workflow.toml). Setup runs the existing sandbox check and forced browser/network preflight.
 
-For a domain example, use the domain ExUnit runner with its exact `scenario_name` filter and `--trace`, not browser Cucumber. Check that one intended scenario actually ran. Missing step definitions are implementation work, not infrastructure failure.
+The navigator starts with `dev test:wip`, expecting one failing scenario. Zero or multiple selected scenarios are errors. A passing scenario also makes that command exit nonzero, with an explicit request to remove `@wip`; the actual test output still says it passed. The navigator removes only that tag and records the ordinary focused command for subsequent refactoring and repairs. Undefined Cucumber steps are implementation work, not infrastructure failure.
 
-The graph limits visits to twelve per node and sets stage timeouts, with no automatic retries. This is not the old shared 600-operation/deadline counter, nor a new allowance to run. Any new rehearsal needs fresh agreed limits. No scenario run is authorised by this README.
+There are no additional workflow time, cost or operation limits, and no automatic retries. Fabro's own defaults still apply. The agreed eval records elapsed time and available cost so we can learn what limits are useful later; it does not inherit the old overnight allowance. See [the repeatable eval process](eval/README.md).
 
 ## What this deliberately does not enforce
 
@@ -36,4 +36,4 @@ Calling the shots, staying in scope, stopping at the predicted acceptance result
 
 The previous controller and its regression fixtures are preserved in the earlier throwaway source commit `c380050bc26e479ddbf0910ebc84ce1c8e51e568` and private rehearsal records, not carried into this example. That version got one scenario green but failed before refactoring and review. Its formatter also encountered an unresolved write-permission error. Removing the controller does not establish that the permission problem is fixed.
 
-This simplified version has not completed a scenario rehearsal. Source checks are not end-to-end workflow proof.
+Source checks are not end-to-end workflow proof. Record each actual rehearsal against the [eval checklist](eval/README.md); keep results locally under the ignored `eval/results/` directory.
