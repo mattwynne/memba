@@ -39,6 +39,18 @@ Rule: A member must have a name
       Then Alice should be told "Enter the name your clubs should see."
       And Alice should be known as "Alice Smith"
 
+Rule: A conflicting stale change must not silently replace a newer name
+
+    @iteration-068 @wip
+    Scenario: Alice's older edit requires confirmation of the newer name
+      Given Alice began changing their name when it was "Alice Smith"
+      And Alice has since changed their name to "Alice Jones"
+      When Alice submits the older change to "Alice Brown"
+      Then the change should be rejected because their name changed elsewhere
+      And Alice should be known as "Alice Jones"
+      When Alice confirms replacing "Alice Jones" with "Alice Brown"
+      Then Alice should be known as "Alice Brown"
+
 Rule: A member's photo stands in for their initials
 
     @iteration-069 @todo

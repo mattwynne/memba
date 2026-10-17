@@ -20,6 +20,36 @@ defmodule Memba.DomainCucumberRunner do
     end)
   end
 
+  def wip_scenarios(opts \\ []) do
+    opts
+    |> selected_scenarios()
+    |> Enum.filter(fn selected_scenario ->
+      "wip" in inherited_tags(selected_scenario)
+    end)
+  end
+
+  def one_wip_scenario(opts \\ []) do
+    case wip_scenarios(opts) do
+      [selected_scenario] ->
+        {:ok, selected_scenario}
+
+      [] ->
+        {:error, "Expected exactly one domain/application scenario tagged @wip, but found none."}
+
+      selected_scenarios ->
+        descriptions =
+          Enum.map_join(selected_scenarios, "\n", fn %{feature: feature, scenario: scenario} ->
+            "  - #{feature.file}: #{scenario.name}"
+          end)
+
+        count = length(selected_scenarios)
+
+        {:error,
+         "Expected exactly one domain/application scenario tagged @wip, " <>
+           "but found #{count}:\n#{descriptions}"}
+    end
+  end
+
   def run_scenario(
         %{feature: feature, scenario: scenario} = selected_scenario,
         step_registry,
@@ -160,6 +190,14 @@ defmodule Memba.DomainCucumberRunner do
   defp excluded?(scenario_tags, excluded_tags) do
     normalized_tags = Enum.map(scenario_tags, &String.trim_leading(&1, "@"))
     Enum.any?(excluded_tags, &(&1 in normalized_tags))
+  end
+
+  defp inherited_tags(%{feature: feature, scenario: scenario} = selected_scenario) do
+    selected_scenario
+    |> scenario_tags()
+    |> Kernel.++(feature.tags)
+    |> Kernel.++(scenario.tags)
+    |> Enum.map(&String.trim_leading(&1, "@"))
   end
 
   defp feature_scenarios(feature) do
