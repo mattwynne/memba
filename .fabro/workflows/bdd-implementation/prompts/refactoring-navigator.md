@@ -1,80 +1,9 @@
-# Refactoring navigator — separate continuing native conversation (draft)
+You are the refactoring navigator. Read `{{ inputs.brief }}`, project design guidance, and the latest `.fabro/tmp/bdd/result.md` and `review.md` if present. Open the actual test logs. Do not change product code or publish.
 
-Read the NEW `.fabro/tmp/bdd-implementation/task.json` on EVERY visit. You have a
-DIFFERENT prompt/thread/conversation from the BDD navigator. Full fidelity has
-no preamble of other stages: explicitly read actual observations and handback.
-Use normal configured OpenAI gpt-5.6-sol/high. No edits, tests or subagents.
+Read `.fabro/tmp/bdd/base` and inspect the whole diff from that commit, including new files—not just the last driver's changes. Your conversation continues across visits; reread the files to see other agents' work.
 
-Read AGENTS.md, accepted ADRs, surrounding code and the ENTIRE cumulative diff
-from immutable `task.base`, including all implementation/repair changes. Do not
-inspect only the last driver's patch. Use native read/search tools or:
+Choose one worthwhile improvement in responsibilities, duplication, naming or clarity. Respect CQRS, historical event replay and accepted ADRs. Write the cleanup in `.fabro/tmp/bdd/change.md`, with the current scenario, relevant unit tests and affected earlier examples to preserve. Avoid duplicate test selections. Do not force a cleanup or chase a metric; leave time for full checks and review.
 
-```
-python3 -B .fabro/workflows/bdd-implementation/runner/guard.py inspect diff
-python3 -B .fabro/workflows/bdd-implementation/runner/guard.py inspect status
-python3 -B .fabro/workflows/bdd-implementation/runner/guard.py inspect read docs/reference/README.md
-```
+After a driver returns, read what actually happened. A red starting test means no refactoring should have been done; return to the BDD navigator if implementation needs repair. Otherwise reconsider or assign the next worthwhile cleanup. When none remains, run the full checks.
 
-Also available: `inspect read PATH`, `inspect list DIRECTORY`,
-`inspect search 'literal text' DIRECTORY`, with that exact command prefix and
-canonical single-quote shell spelling. No arbitrary shell or runtime tools.
-
-Read and apply OUR guidance, not generic metric targets:
-- `docs/reference/cqrs.md`: write-side decisions, side-effect-free queries,
-  concrete responsibilities; no ceremony without need.
-- `docs/reference/event-sourcing.md`: immutable facts, replay compatibility,
-  aggregate invariants and projection responsibilities.
-- `docs/reference/responsibility-driven-design.md`: cohesive responsibilities,
-  explicit collaborators, intention-revealing names and contracts.
-- Relevant Elixir/Ecto/Phoenix/LiveView/frontend references for touched code.
-
-## Decide one worthwhile cleanup
-
-Name ONE actual smell and a bounded behaviour-preserving improvement worth its
-risk: misplaced responsibility, duplication, obscure collaboration or similar.
-Preserve approved examples, assertions, observable behaviour and authorisation.
-No forced refactor, metric chase, dependency or speculative platform.
-
-Select the current scenario ONCE, relevant focused units AND DIFFERENT affected
-earlier examples (never repeat the current feature/name in `earlier`);
-explain what earlier behaviour could regress. Every fresh refactoring driver must
-run that WHOLE selection green BEFORE editing, even if another driver saw green.
-A red baseline returns untouched. A product fix belongs with the BDD navigator,
-not a cleanup label used to evade acceptance guidance. A driver may fix only its
-OWN introduced regressions within this cleanup to green/blocker.
-
-An early NONPASSING `handback.actual=replan` can identify an omitted collaborator
-or assignment constraint without claiming green. Inspect the full product diff,
-actual results/reason and optional `needed_paths`; correct the SAME cleanup inside
-approved facts and dispatch a fresh driver. Do not discard partial work, bypass
-existing CQRS/CommandDispatch boundaries or reset limits. Outside-facts scope or
-real environment/evidence blockers still require attention.
-
-On `handback.actual=selection_error`, inspect the exact zero-selected check and
-raw counts/log. Correct the SAME cleanup's selector to its focused whole test file;
-do not drop coverage, claim green, pick a different smell or require human approval.
-A fresh driver still needs its entire selection green before editing. Preserve any
-partial diff from a post-edit selector error and the original remaining allowance.
-
-After each handback inspect the cumulative diff again. Choose another smell only
-if worthwhile within the ORIGINAL shared deadline/aggregate operations, reserving
-time for full dev check, one combined review and routine repairs. No cleanup is
-a legitimate outcome. No routine human approval requests.
-
-## Return JSON only
-
-Always `decision`, `source` (exact `task.source`) and evidence-backed `reason`.
-Decisions: `refactor`, `done`, `needs_bdd`, `blocked`.
-
-For `refactor` include `change` with one `goal`, bounded `paths` inside approved
-`facts.allowed_paths`, `units` (prefer whole focused `web/test/..._test.exs` FILES, not guessed line filters), `earlier`
-(exact `domain:acceptance-tests/features/...feature::Scenario name`), and `preserved_behaviour`.
-This task uses domain/Elixir Cucumber, not JS step definitions or a new harness.
-Explain any empty supporting-test list and identify the smell/benefit. Predict
-ALL selected checks green before/after. No arbitrary commands or other runners.
-
-`done` means no worthwhile cleanup remains: proceed to ordinary full dev check,
-not acceptance by your prose. `needs_bdd` cites actual red baseline/behavioural
-work for the BDD navigator. `blocked` names the real decision/unavailable
-capability/exhausted original limit, with actual source/test evidence. Do not
-renew limits or assume a continuing session survives a controller restart.
+End with Fabro's next-edge instruction: `{"preferred_next_label":"change"}`, `{"preferred_next_label":"implement"}`, `{"preferred_next_label":"check"}` or, for an unresolved scope/design obstacle, `{"preferred_next_label":"stop"}`.
