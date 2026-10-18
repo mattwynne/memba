@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -103,6 +104,60 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
                person_id: person_id,
                normalized_email: "alice@work.example"
              )
+  end
+
+  test "dispatches a prepared conditional self-rename and reads it back through the projection" do
+    person_id = Memba.ID.generate(:person)
+    actor = %{person_id: person_id}
+
+    assert {:ok, create} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Smith",
+               email: "alice@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create, consistency: :strong)
+
+    assert {:ok, rename} =
+             PersonCommands.prepare_rename(actor, %{
+               name: " Alice   Jones ",
+               expected_name: "Alice Smith"
+             })
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [%PersonRenamed{person_id: ^person_id, name: "Alice Jones"}]
+            }} =
+             CommandDispatch.dispatch(rename,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{name: "Alice Jones", email: "alice@example.com"} =
+             PersonQueries.get_person(person_id)
+
+    assert {:ok, identical} =
+             PersonCommands.prepare_rename(actor, %{
+               name: "Alice Jones",
+               expected_name: "Alice Smith"
+             })
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             CommandDispatch.dispatch(identical,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok, stale} =
+             PersonCommands.prepare_rename(actor, %{
+               name: "Alice Brown",
+               expected_name: "Alice Smith"
+             })
+
+    assert {:error, {:name_changed, "Alice Jones"}} =
+             CommandDispatch.dispatch(stale, consistency: :strong)
   end
 
   test "rejects globally duplicate normalized email addresses before dispatch" do

@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.RemovePersonEmailAddress
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.Events.PersonEmailAddressAdded
@@ -15,6 +16,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.Events.PersonMerged
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.Person
 
   describe "execute/2 CreatePerson" do
@@ -383,6 +385,133 @@ defmodule Memba.Membership.PersonTest do
     end
   end
 
+  describe "execute/2 RenamePerson" do
+    test "normalizes a valid name and emits a JSON-encodable event" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      assert %PersonRenamed{person_id: ^person_id, name: "Robin O’Connor"} =
+               event =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: " \t Robin  \n O’Connor \u00A0",
+                 expected_name: " Alice "
+               })
+
+      assert Jason.decode!(Jason.encode!(event)) == %{
+               "person_id" => person_id,
+               "name" => "Robin O’Connor"
+             }
+    end
+
+    test "rejects blank names and enforces the 100-grapheme boundary" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      for invalid_name <- ["", " \t\n ", String.duplicate("é", 101)] do
+        assert {:error, :invalid_name} =
+                 Person.execute(person, %RenamePerson{
+                   person_id: person_id,
+                   name: invalid_name,
+                   expected_name: "Alice"
+                 })
+      end
+
+      name_at_limit = String.duplicate("é", 100)
+
+      assert %PersonRenamed{name: ^name_at_limit} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: name_at_limit,
+                 expected_name: "Alice"
+               })
+    end
+
+    test "returns authoritative current name for a stale edit and emits no event for an identical target" do
+      person_id = Memba.ID.generate(:person)
+      person = %Person{created_person(person_id) | name: " Alice   Jones "}
+
+      assert {:error, {:name_changed, "Alice Jones"}} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Brown",
+                 expected_name: "Alice Smith"
+               })
+
+      assert [] =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: " Alice \t Jones ",
+                 expected_name: "an older baseline"
+               })
+    end
+
+    test "confirmation remains conditional and a second intervening change conflicts again" do
+      person_id = Memba.ID.generate(:person)
+      smith = created_person(person_id)
+
+      jones_event =
+        Person.execute(smith, %RenamePerson{
+          person_id: person_id,
+          name: "Alice Jones",
+          expected_name: "Alice"
+        })
+
+      jones = Person.apply(smith, jones_event)
+
+      assert {:error, {:name_changed, "Alice Jones"}} =
+               Person.execute(jones, %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Brown",
+                 expected_name: "Alice"
+               })
+
+      assert %PersonRenamed{name: "Alice Brown"} =
+               Person.execute(jones, %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Brown",
+                 expected_name: "Alice Jones"
+               })
+
+      green_event =
+        Person.execute(jones, %RenamePerson{
+          person_id: person_id,
+          name: "Alice Green",
+          expected_name: "Alice Jones"
+        })
+
+      green = Person.apply(jones, green_event)
+
+      assert {:error, {:name_changed, "Alice Green"}} =
+               Person.execute(green, %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Brown",
+                 expected_name: "Alice Jones"
+               })
+    end
+
+    test "rejects missing people, malformed identities, and mismatched aggregate targets" do
+      person_id = Memba.ID.generate(:person)
+
+      command = %RenamePerson{
+        person_id: person_id,
+        name: "Alice Jones",
+        expected_name: "Alice"
+      }
+
+      assert {:error, :person_not_created} = Person.execute(%Person{}, command)
+
+      assert {:error, :invalid_person_id} =
+               Person.execute(created_person(person_id), %{command | person_id: "invalid"})
+
+      assert {:error, :invalid_person_id} =
+               Person.execute(created_person(person_id), %{
+                 command
+                 | person_id: Memba.ID.generate(:person)
+               })
+    end
+  end
+
   test "apply/2 records the created person identity, name, and email" do
     person_id = Memba.ID.generate(:person)
     legacy_verified_at = ~U[1970-01-01 00:00:00Z]
@@ -443,6 +572,42 @@ defmodule Memba.Membership.PersonTest do
                person_id: person_id,
                email_addresses: email_addresses,
                primary_email: "alice@work.example"
+             })
+  end
+
+  test "old PersonCreated history replays and PersonRenamed changes only the name" do
+    person_id = Memba.ID.generate(:person)
+
+    replayed =
+      Enum.reduce(
+        [
+          %PersonCreated{
+            person_id: person_id,
+            name: "Historical Alice",
+            email: "alice@example.com"
+          }
+        ],
+        %Person{},
+        &Person.apply(&2, &1)
+      )
+
+    renamed =
+      Person.apply(replayed, %PersonRenamed{
+        person_id: person_id,
+        name: "Alice Jones"
+      })
+
+    assert renamed.name == "Alice Jones"
+    assert renamed.person_id == replayed.person_id
+    assert renamed.email == replayed.email
+    assert renamed.email_addresses == replayed.email_addresses
+    assert renamed.merged_source_person_ids == replayed.merged_source_person_ids
+
+    assert %PersonRenamed{name: "Alice Brown"} =
+             Person.execute(renamed, %RenamePerson{
+               person_id: person_id,
+               name: "Alice Brown",
+               expected_name: "Alice Jones"
              })
   end
 

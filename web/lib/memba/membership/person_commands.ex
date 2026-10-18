@@ -5,6 +5,8 @@ defmodule Memba.Membership.PersonCommands do
   """
 
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
+  alias Memba.ID
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.PersonEmailAddressCommands
 
@@ -20,6 +22,28 @@ defmodule Memba.Membership.PersonCommands do
       end
     end
   end
+
+  @doc """
+  Prepares a self-rename from trusted actor context and editable attributes.
+
+  The target is always derived from the actor. A submitted target is accepted
+  only when it identifies that same person.
+  """
+  def prepare_rename(actor, attrs) when is_map(actor) and is_map(attrs) do
+    with {:ok, person_id} <- authorized_actor_person_id(actor),
+         :ok <- authorize_rename_target(attrs, person_id),
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
+      {:ok,
+       %RenamePerson{
+         person_id: person_id,
+         name: name,
+         expected_name: expected_name
+       }}
+    end
+  end
+
+  def prepare_rename(_actor, _attrs), do: {:error, :unauthorized}
 
   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
     with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
@@ -46,6 +70,29 @@ defmodule Memba.Membership.PersonCommands do
         with {:ok, email} <- fetch_required(attrs, :email) do
           {:ok, %{email: email}}
         end
+    end
+  end
+
+  defp authorized_actor_person_id(actor) do
+    with {:ok, person_id} <- fetch_optional(actor, :person_id),
+         {:ok, person_id} <- ID.cast(:person, person_id) do
+      {:ok, person_id}
+    else
+      _missing_or_invalid -> {:error, :unauthorized}
+    end
+  end
+
+  defp authorize_rename_target(attrs, actor_person_id) do
+    supplied_targets =
+      for key <- [:person_id, "person_id"],
+          {:ok, target} <- [Map.fetch(attrs, key)] do
+        target
+      end
+
+    if Enum.all?(supplied_targets, &(&1 == actor_person_id)) do
+      :ok
+    else
+      {:error, :unauthorized}
     end
   end
 
