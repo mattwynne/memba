@@ -46,6 +46,10 @@ bin/dev fabro code-review <branch> docs/iterations/NNN-topic/plan.md <base-sha>
 
 Neither implementation nor review opens a pull request. Their `workflow.toml` files should not contain a `[run.pull_request]` block.
 
+## Implementing one scenario
+
+[`bdd-scenario-implementation`](bdd-scenario-implementation/README.md) is a separate, opt-in workflow for implementing one agreed domain scenario and passing `dev check`. It does not include refactoring, review or publication, and does not change `fabro deliver`.
+
 ## Managed clone contract
 
 The implementation and review workflows rely on Fabro's managed clone and automatic checkpoints. Do not add explicit per-task commit nodes, set `[run].working_dir`, or disable `[run.clone]`: Fabro needs to infer the local repository, clone the current source branch into `/repos/mattwynne/memba`, link it at `/workspace/memba`, and create a pushed `fabro/run/<run-id>` branch for checkpoints after each node.

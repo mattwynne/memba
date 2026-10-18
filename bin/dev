@@ -913,6 +913,20 @@ _dev_test() {
   (cd "$repo_root/web" && local_test_email_env mix test "$@")
 }
 
+dev_test_wip() {
+  if [ "$#" -ne 0 ]; then
+    echo "Usage: $0 test:wip" >&2
+    return 2
+  fi
+
+  if (export MEMBA_WIP_TEST=1; dev_test test/features/domain_cucumber_wip_test.exs --trace); then
+    echo "This scenario now passes. Remove its @wip tag." >&2
+    return 1
+  else
+    return $?
+  fi
+}
+
 check_tracked_repo_file_writability() {
   python3 - "$repo_root" <<'PY'
 import grp
@@ -2218,6 +2232,11 @@ case "${1:-}" in
   test)
     shift
     dev_test "$@"
+    exit
+    ;;
+  test:wip)
+    shift
+    dev_test_wip "$@"
     exit
     ;;
 esac
