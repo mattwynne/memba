@@ -91,6 +91,28 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     )
   end
 
+  step "the change should be rejected because their name changed elsewhere", context do
+    assert [{_person_name, edit}] =
+             context
+             |> Map.fetch!(:member_profile_name_edits)
+             |> Map.to_list()
+
+    assert %{
+             authoritative_current_name: authoritative_current_name,
+             dispatch_result: dispatch_result,
+             draft_name: draft_name,
+             expected_name: expected_name
+           } = edit
+
+    assert {:error, {:name_changed, ^authoritative_current_name}} = dispatch_result
+    assert is_binary(authoritative_current_name)
+    assert String.trim(authoritative_current_name) != ""
+    assert is_binary(expected_name)
+    assert is_binary(draft_name)
+
+    context
+  end
+
   defp email_for(context, person_name) do
     normalized_name =
       person_name
