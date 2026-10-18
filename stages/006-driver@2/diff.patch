@@ -1,0 +1,580 @@
+diff --git a/web/lib/memba/membership/command_dispatch.ex b/web/lib/memba/membership/command_dispatch.ex
+index a587eb7..7e41cce 100644
+--- a/web/lib/memba/membership/command_dispatch.ex
++++ b/web/lib/memba/membership/command_dispatch.ex
+@@ -35,6 +35,7 @@ defmodule Memba.Membership.CommandDispatch do
+     RemovePersonEmailAddress,
+     MakePersonEmailAddressPrimary,
+     MergePerson,
++    RenamePerson,
+     VerifyPersonEmailAddress,
+     CreatePerson,
+     CreateClub,
+@@ -89,6 +90,7 @@ defmodule Memba.Membership.CommandDispatch do
+   def dispatch(%RemovePersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
+   def dispatch(%MakePersonEmailAddressPrimary{} = command, opts), do: raw_dispatch(command, opts)
+   def dispatch(%MergePerson{} = command, opts), do: raw_dispatch(command, opts)
++  def dispatch(%RenamePerson{} = command, opts), do: raw_dispatch(command, opts)
+   def dispatch(%VerifyPersonEmailAddress{} = command, opts), do: raw_dispatch(command, opts)
+ 
+   def dispatch(%CreateClub{} = command, opts), do: raw_dispatch(command, opts)
+diff --git a/web/lib/memba/membership/commands/rename_person.ex b/web/lib/memba/membership/commands/rename_person.ex
+new file mode 100644
+index 0000000..60df063
+--- /dev/null
++++ b/web/lib/memba/membership/commands/rename_person.ex
+@@ -0,0 +1,11 @@
++defmodule Memba.Membership.Commands.RenamePerson do
++  @moduledoc """
++  Command for a Person to conditionally change their own name.
++
++  `expected_name` is the name from which the edit began. The Person aggregate
++  compares it with its authoritative current name before recording a change.
++  """
++
++  @enforce_keys [:person_id, :name, :expected_name]
++  defstruct [:person_id, :name, :expected_name]
++end
+diff --git a/web/lib/memba/membership/events/person_renamed.ex b/web/lib/memba/membership/events/person_renamed.ex
+new file mode 100644
+index 0000000..9439374
+--- /dev/null
++++ b/web/lib/memba/membership/events/person_renamed.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.PersonRenamed do
++  @moduledoc """
++  Event raised when a Person has changed their name.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:person_id, :name]
++  defstruct [:person_id, :name]
++end
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+index 70c0601..ac434e2 100644
+--- a/web/lib/memba/membership/person.ex
++++ b/web/lib/memba/membership/person.ex
+@@ -10,6 +10,7 @@ defmodule Memba.Membership.Person do
+   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+   alias Memba.Membership.Commands.MergePerson
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
++  alias Memba.Membership.Commands.RenamePerson
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.VerifyPersonEmailAddress
+   alias Memba.Membership.EmailAddresses
+@@ -20,6 +21,7 @@ defmodule Memba.Membership.Person do
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
++  alias Memba.Membership.Events.PersonRenamed
+ 
+   @behaviour Aggregate
+   @legacy_verified_at ~U[1970-01-01 00:00:00Z]
+@@ -55,6 +57,20 @@ defmodule Memba.Membership.Person do
+ 
+   def execute(%__MODULE__{}, %CreatePerson{}), do: {:error, :already_created}
+ 
++  @impl Aggregate
++  def execute(%__MODULE__{person_id: nil}, %RenamePerson{}) do
++    {:error, :person_not_created}
++  end
++
++  def execute(%__MODULE__{} = person, %RenamePerson{} = command) do
++    with :ok <- validate_person_id(command.person_id),
++         :ok <- validate_matching_person_id(person, command),
++         {:ok, requested_name} <- normalize_requested_name(command.name),
++         {:ok, current_name} <- normalize_comparison_name(person.name) do
++      rename(person, command, requested_name, current_name)
++    end
++  end
++
+   @impl Aggregate
+   def execute(%__MODULE__{person_id: nil}, %ReplacePersonEmailAddresses{}) do
+     {:error, :person_not_created}
+@@ -195,6 +211,10 @@ defmodule Memba.Membership.Person do
+     }
+   end
+ 
++  def apply(%__MODULE__{} = person, %PersonRenamed{} = event) do
++    %__MODULE__{person | name: event.name}
++  end
++
+   def apply(%__MODULE__{} = person, %PersonEmailAddressesReplaced{} = event) do
+     %__MODULE__{
+       person
+@@ -294,6 +314,43 @@ defmodule Memba.Membership.Person do
+ 
+   defp normalize_name(_name), do: {:error, :invalid_name}
+ 
++  defp normalize_requested_name(name) do
++    with {:ok, normalized_name} <- normalize_comparison_name(name),
++         true <- String.length(normalized_name) <= 100 do
++      {:ok, normalized_name}
++    else
++      _other -> {:error, :invalid_name}
++    end
++  end
++
++  defp normalize_comparison_name(name) when is_binary(name) do
++    case name |> String.split() |> Enum.join(" ") do
++      "" -> {:error, :invalid_name}
++      normalized_name -> {:ok, normalized_name}
++    end
++  end
++
++  defp normalize_comparison_name(_name), do: {:error, :invalid_name}
++
++  defp rename(_person, _command, requested_name, current_name)
++       when requested_name == current_name,
++       do: []
++
++  defp rename(person, command, requested_name, current_name) do
++    with {:ok, expected_name} <- normalize_comparison_name(command.expected_name),
++         :ok <- require_expected_name(expected_name, current_name, person.name) do
++      %PersonRenamed{person_id: command.person_id, name: requested_name}
++    end
++  end
++
++  defp require_expected_name(expected_name, current_name, _authoritative_name)
++       when expected_name == current_name,
++       do: :ok
++
++  defp require_expected_name(_expected_name, _current_name, authoritative_name) do
++    {:error, {:name_changed, authoritative_name}}
++  end
++
+   defp create_email_addresses(%CreatePerson{email_addresses: nil} = command) do
+     with {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do
+       {:ok, [%{email: email, normalized_email: email, is_primary: true}]}
+diff --git a/web/lib/memba/membership/person_commands.ex b/web/lib/memba/membership/person_commands.ex
+index 958e959..dde38ea 100644
+--- a/web/lib/memba/membership/person_commands.ex
++++ b/web/lib/memba/membership/person_commands.ex
+@@ -1,10 +1,13 @@
+ defmodule Memba.Membership.PersonCommands do
+   @moduledoc """
+-  Prepare CreatePerson commands without dispatching them. The projected email
+-  ownership check is a preflight; the Person aggregate still validates creation.
++  Prepare Person commands without dispatching them. The projected email
++  ownership check is a create preflight; the Person aggregate still validates
++  creation and conditional renames.
+   """
+ 
++  alias Memba.ID
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.RenamePerson
+   alias Memba.Membership.EmailAddresses
+   alias Memba.Membership.PersonEmailAddressCommands
+ 
+@@ -21,6 +24,20 @@ defmodule Memba.Membership.PersonCommands do
+     end
+   end
+ 
++  def prepare_rename(actor_context, attrs) when is_map(actor_context) and is_map(attrs) do
++    with {:ok, actor_person_id} <- authenticated_person_id(actor_context),
++         :ok <- authorize_rename_target(attrs, actor_person_id),
++         {:ok, name} <- fetch_required(attrs, :name),
++         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
++      {:ok,
++       %RenamePerson{
++         person_id: actor_person_id,
++         name: name,
++         expected_name: expected_name
++       }}
++    end
++  end
++
+   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
+     with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
+       {:ok, [%{normalized_email: normalized_email}]}
+@@ -49,6 +66,28 @@ defmodule Memba.Membership.PersonCommands do
+     end
+   end
+ 
++  defp authenticated_person_id(actor_context) do
++    with {:ok, person_id} <- fetch_optional(actor_context, :person_id),
++         {:ok, person_id} <- ID.cast(:person, person_id) do
++      {:ok, person_id}
++    else
++      _other -> {:error, :unauthorized}
++    end
++  end
++
++  defp authorize_rename_target(attrs, actor_person_id) do
++    requested_targets =
++      [:person_id, "person_id"]
++      |> Enum.filter(&Map.has_key?(attrs, &1))
++      |> Enum.map(&Map.fetch!(attrs, &1))
++
++    if Enum.all?(requested_targets, &(&1 == actor_person_id)) do
++      :ok
++    else
++      {:error, :unauthorized}
++    end
++  end
++
+   defp fetch_required(attrs, key) do
+     case fetch_optional(attrs, key) do
+       {:ok, value} -> {:ok, value}
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index 90a0037..118a7b2 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -38,6 +38,7 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
++  alias Memba.Membership.Commands.RenamePerson
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.ResendClubMemberInvitation
+   alias Memba.Membership.Commands.UpdateClub
+@@ -69,6 +70,7 @@ defmodule Memba.Membership.Router do
+   dispatch(RemoveClubMember, to: Club)
+   dispatch(RemoveClubRoleFromMember, to: Club)
+   dispatch(RemovePersonEmailAddress, to: Person)
++  dispatch(RenamePerson, to: Person)
+   dispatch(ReplacePersonEmailAddresses, to: Person)
+   dispatch(ResendClubMemberInvitation, to: ClubInvitation)
+   dispatch(UpdateClub, to: Club)
+diff --git a/web/test/features/step_definitions/member_profile_steps.exs b/web/test/features/step_definitions/member_profile_steps.exs
+index e33d389..adb63a9 100644
+--- a/web/test/features/step_definitions/member_profile_steps.exs
++++ b/web/test/features/step_definitions/member_profile_steps.exs
+@@ -29,6 +29,30 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+     })
+   end
+ 
++  step "{word} has since changed their name to {string}",
++       %{args: [person_name, newer_name]} = context do
++    %{person_id: person_id} =
++      context
++      |> Map.fetch!(:people)
++      |> Map.fetch!(person_name)
++
++    %{expected_name: expected_name} =
++      context
++      |> Map.fetch!(:member_profile_name_edits)
++      |> Map.fetch!(person_name)
++
++    assert :ok =
++             (with {:ok, command} <-
++                     PersonCommands.prepare_rename(
++                       %{person_id: person_id},
++                       %{name: newer_name, expected_name: expected_name}
++                     ) do
++                CommandDispatch.dispatch(command)
++              end)
++
++    context
++  end
++
+   defp email_for(context, person_name) do
+     normalized_name =
+       person_name
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 43b5fee..1ad7aff 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -26,6 +26,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Commands.RemoveClubMember
+   alias Memba.Membership.Commands.RemoveClubRoleFromMember
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
++  alias Memba.Membership.Commands.RenamePerson
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.ResendClubMemberInvitation
+   alias Memba.Membership.Commands.UpdateClub
+@@ -121,6 +122,7 @@ defmodule Memba.Membership.AppTest do
+         RemoveClubMember,
+         RemoveClubRoleFromMember,
+         RemovePersonEmailAddress,
++        RenamePerson,
+         ReplacePersonEmailAddresses,
+         ResendClubMemberInvitation,
+         UpdateClub,
+diff --git a/web/test/memba/membership/person_command_dispatch_test.exs b/web/test/memba/membership/person_command_dispatch_test.exs
+index eee556f..bab9bd3 100644
+--- a/web/test/memba/membership/person_command_dispatch_test.exs
++++ b/web/test/memba/membership/person_command_dispatch_test.exs
+@@ -3,8 +3,10 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+ 
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.CommandDispatch
++  alias Memba.Membership.Events.PersonRenamed
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
++  alias Memba.Membership.Person
+   alias Memba.Membership.PersonCommands
+   alias Memba.Membership.PersonQueries
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+@@ -139,4 +141,39 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+     assert is_nil(PersonQueries.get_person(duplicate_person_id))
+     assert is_nil(PersonQueries.get_person(duplicate_alternate_person_id))
+   end
++
++  test "dispatches a prepared conditional rename while preserving the Person's other state" do
++    person_id = Memba.ID.generate(:person)
++
++    assert {:ok, create_command} =
++             PersonCommands.prepare_create(%{
++               person_id: person_id,
++               name: "Alice Smith",
++               email: "alice@example.com"
++             })
++
++    assert :ok = CommandDispatch.dispatch(create_command, consistency: :strong)
++
++    assert {:ok, rename_command} =
++             PersonCommands.prepare_rename(
++               %{person_id: person_id},
++               %{name: " Alice   Jones ", expected_name: "Alice Smith"}
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [%PersonRenamed{person_id: ^person_id, name: "Alice Jones"}],
++              aggregate_state: %Person{
++                person_id: ^person_id,
++                name: "Alice Jones",
++                email: "alice@example.com",
++                email_addresses: email_addresses,
++                merged_source_person_ids: []
++              }
++            }} =
++             CommandDispatch.dispatch(rename_command, returning: :execution_result)
++
++    assert [%{normalized_email: "alice@example.com", is_primary: true}] = email_addresses
++  end
+ end
+diff --git a/web/test/memba/membership/person_commands_test.exs b/web/test/memba/membership/person_commands_test.exs
+index 7bc48ae..5ed0993 100644
+--- a/web/test/memba/membership/person_commands_test.exs
++++ b/web/test/memba/membership/person_commands_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonCommandsTest do
+ 
+   alias Memba.Membership.PersonQueries
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.RenamePerson
+ 
+   test "prepares a legacy email command without dispatching or changing its input" do
+     person_id = Memba.ID.generate(:person)
+@@ -86,4 +87,70 @@ defmodule Memba.Membership.PersonCommandsTest do
+ 
+     assert is_nil(PersonQueries.get_person(attrs.person_id))
+   end
++
++  describe "prepare_rename/2" do
++    test "derives the target from the trusted actor and accepts atom or string editable keys" do
++      person_id = Memba.ID.generate(:person)
++      actor = %{"person_id" => person_id}
++
++      assert {:ok,
++              %RenamePerson{
++                person_id: ^person_id,
++                name: "Alice Jones",
++                expected_name: "Alice Smith"
++              }} =
++               PersonCommands.prepare_rename(actor, %{
++                 name: "Alice Jones",
++                 expected_name: "Alice Smith"
++               })
++
++      assert {:ok,
++              %RenamePerson{
++                person_id: ^person_id,
++                name: "Alice Brown",
++                expected_name: "Alice Smith"
++              }} =
++               PersonCommands.prepare_rename(actor, %{
++                 "person_id" => person_id,
++                 "name" => "Alice Brown",
++                 "expected_name" => "Alice Smith"
++               })
++    end
++
++    test "requires an authenticated actor and editable name attributes" do
++      person_id = Memba.ID.generate(:person)
++
++      assert {:error, :unauthorized} =
++               PersonCommands.prepare_rename(%{}, %{
++                 name: "Alice Jones",
++                 expected_name: "Alice"
++               })
++
++      assert {:error, {:missing_required_attribute, :expected_name}} =
++               PersonCommands.prepare_rename(%{person_id: person_id}, %{name: "Alice Jones"})
++    end
++
++    test "rejects a different requested target before preparing even a no-op command" do
++      actor_person_id = Memba.ID.generate(:person)
++      requested_person_id = Memba.ID.generate(:person)
++
++      attrs = %{
++        person_id: requested_person_id,
++        name: "Alice",
++        expected_name: "Alice"
++      }
++
++      assert {:error, :unauthorized} =
++               PersonCommands.prepare_rename(%{person_id: actor_person_id}, attrs)
++
++      assert {:error, :unauthorized} =
++               PersonCommands.prepare_rename(
++                 %{person_id: actor_person_id},
++                 Map.merge(attrs, %{
++                   "person_id" => requested_person_id,
++                   person_id: actor_person_id
++                 })
++               )
++    end
++  end
+ end
+diff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs
+index e19c3db..afddbeb 100644
+--- a/web/test/memba/membership/person_test.exs
++++ b/web/test/memba/membership/person_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonTest do
+   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+   alias Memba.Membership.Commands.MergePerson
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
++  alias Memba.Membership.Commands.RenamePerson
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.VerifyPersonEmailAddress
+   alias Memba.Membership.Events.PersonEmailAddressAdded
+@@ -15,6 +16,7 @@ defmodule Memba.Membership.PersonTest do
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+   alias Memba.Membership.Events.PersonMerged
++  alias Memba.Membership.Events.PersonRenamed
+   alias Memba.Membership.Person
+ 
+   describe "execute/2 CreatePerson" do
+@@ -96,6 +98,17 @@ defmodule Memba.Membership.PersonTest do
+                })
+     end
+ 
++    test "preserves historical creation normalization behavior" do
++      person_id = Memba.ID.generate(:person)
++
++      assert %PersonCreated{name: "Alice   Smith"} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: person_id,
++                 name: " Alice   Smith ",
++                 email: "alice@example.com"
++               })
++    end
++
+     test "rejects blank or malformed email addresses" do
+       assert {:error, :invalid_email} =
+                Person.execute(%Person{}, %CreatePerson{
+@@ -166,6 +179,110 @@ defmodule Memba.Membership.PersonTest do
+     end
+   end
+ 
++  describe "execute/2 RenamePerson" do
++    test "normalizes a matching conditional rename and applies only the name" do
++      person_id = Memba.ID.generate(:person)
++      person = created_person(person_id)
++
++      command = %RenamePerson{
++        person_id: person_id,
++        name: "  Alice \t Jones  ",
++        expected_name: " Alice "
++      }
++
++      assert %PersonRenamed{person_id: ^person_id, name: "Alice Jones"} =
++               event = Person.execute(person, command)
++
++      assert %Person{
++               person_id: ^person_id,
++               name: "Alice Jones",
++               email: "alice@example.com",
++               email_addresses: email_addresses,
++               merged_source_person_ids: []
++             } = Person.apply(person, event)
++
++      assert email_addresses == person.email_addresses
++    end
++
++    test "rejects a stale expected name with the authoritative current name" do
++      person_id = Memba.ID.generate(:person)
++      person = %{created_person(person_id) | name: "Alice Jones"}
++
++      assert {:error, {:name_changed, "Alice Jones"}} =
++               Person.execute(person, %RenamePerson{
++                 person_id: person_id,
++                 name: "Alice Brown",
++                 expected_name: "Alice Smith"
++               })
++    end
++
++    test "treats an identical normalized target as an eventless no-op despite an older baseline" do
++      person_id = Memba.ID.generate(:person)
++      person = %{created_person(person_id) | name: "Alice Jones"}
++
++      assert [] =
++               Person.execute(person, %RenamePerson{
++                 person_id: person_id,
++                 name: "  Alice   Jones ",
++                 expected_name: "Alice Smith"
++               })
++    end
++
++    test "rejects blank and over-100-grapheme targets" do
++      person_id = Memba.ID.generate(:person)
++      person = created_person(person_id)
++
++      for invalid_name <- [" \t\n ", String.duplicate("é", 101)] do
++        assert {:error, :invalid_name} =
++                 Person.execute(person, %RenamePerson{
++                   person_id: person_id,
++                   name: invalid_name,
++                   expected_name: "Alice"
++                 })
++      end
++    end
++
++    test "accepts 100 graphemes, non-Latin scripts, punctuation, and single-word names" do
++      person_id = Memba.ID.generate(:person)
++      person = created_person(person_id)
++
++      accepted_names = [
++        String.duplicate("é", 100),
++        "李 小龍",
++        "O’Connor-Smith",
++        "Madonna"
++      ]
++
++      for name <- accepted_names do
++        assert %PersonRenamed{person_id: ^person_id, name: ^name} =
++                 Person.execute(person, %RenamePerson{
++                   person_id: person_id,
++                   name: name,
++                   expected_name: "Alice"
++                 })
++      end
++    end
++
++    test "rejects a rename before creation or for a mismatched Person" do
++      person_id = Memba.ID.generate(:person)
++      other_person_id = Memba.ID.generate(:person)
++
++      assert {:error, :person_not_created} =
++               Person.execute(%Person{}, %RenamePerson{
++                 person_id: person_id,
++                 name: "Alice Jones",
++                 expected_name: "Alice"
++               })
++
++      assert {:error, :invalid_person_id} =
++               Person.execute(created_person(person_id), %RenamePerson{
++                 person_id: other_person_id,
++                 name: "Alice Jones",
++                 expected_name: "Alice"
++               })
++    end
++  end
++
+   describe "execute/2 ReplacePersonEmailAddresses" do
+     test "preserves verification state for existing addresses and makes newly introduced addresses pending" do
+       person_id = Memba.ID.generate(:person)
