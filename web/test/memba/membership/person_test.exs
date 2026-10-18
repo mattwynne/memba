@@ -226,6 +226,22 @@ defmodule Memba.Membership.PersonTest do
                  name: "  Alice   Jones ",
                  expected_name: "Alice Smith"
                })
+
+      historical_name = String.duplicate("é", 101)
+
+      historical_person =
+        Person.apply(%Person{}, %PersonCreated{
+          person_id: person_id,
+          name: historical_name,
+          email: "alice@example.com"
+        })
+
+      assert [] =
+               Person.execute(historical_person, %RenamePerson{
+                 person_id: person_id,
+                 name: "  #{historical_name}  ",
+                 expected_name: "Alice Smith"
+               })
     end
 
     test "rejects blank and over-100-grapheme targets" do
