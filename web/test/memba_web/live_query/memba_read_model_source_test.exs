@@ -27,7 +27,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     PersonEmailAddressRemoved,
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
-    PersonPrimaryEmailAddressChanged
+    PersonPrimaryEmailAddressChanged,
+    PersonRenamed
   }
 
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -1000,6 +1001,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         person_id: "person-1",
         name: "Alice",
         email: "alice@example.com"
+      },
+      %PersonRenamed{
+        person_id: "person-1",
+        name: "Alice Jones"
       },
       %PersonEmailAddressAdded{
         person_id: "person-1",

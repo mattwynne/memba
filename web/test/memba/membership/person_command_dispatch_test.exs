@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -45,6 +46,74 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
              is_primary: true,
              verified_at: %DateTime{}
            } = Repo.get_by(PersonEmailAddress, person_id: person_id)
+  end
+
+  test "a stale rename preserves the newer projection until conditionally confirmed" do
+    person_id = Memba.ID.generate(:person)
+    actor = %{person_id: person_id}
+
+    assert {:ok, create} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Smith",
+               email: "alice@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create, consistency: :strong)
+    assert :ok = Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
+
+    assert {:ok, rename_to_jones} =
+             PersonCommands.prepare_rename(actor, %{
+               person_id: person_id,
+               name: "Alice Jones",
+               expected_name: "Alice Smith"
+             })
+
+    assert {:ok,
+            %ExecutionResult{
+              events: [%PersonRenamed{name: "Alice Jones"} = renamed_event]
+            }} =
+             CommandDispatch.dispatch(rename_to_jones,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert_receive {:read_model_changed,
+                    %{
+                      projector: Memba.Membership.Projectors.Person,
+                      source_event: ^renamed_event
+                    }}
+
+    assert {:ok, stale_rename} =
+             PersonCommands.prepare_rename(actor, %{
+               person_id: person_id,
+               name: "Alice Brown",
+               expected_name: "Alice Smith"
+             })
+
+    assert {:error, {:name_changed, "Alice Jones"}} =
+             CommandDispatch.dispatch(stale_rename, consistency: :strong)
+
+    assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
+
+    assert {:ok, confirmed_rename} =
+             PersonCommands.prepare_rename(actor, %{
+               person_id: person_id,
+               name: "Alice Brown",
+               expected_name: "Alice Jones"
+             })
+
+    assert :ok = CommandDispatch.dispatch(confirmed_rename, consistency: :strong)
+    assert %PersonProjection{name: "Alice Brown"} = PersonQueries.get_person(person_id)
+
+    projection_positions =
+      event_sourced_projection_positions([Memba.Membership.Projectors.Person])
+
+    Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
+    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
+    await_event_sourced_projection_positions!(projection_positions)
+
+    assert %PersonProjection{name: "Alice Brown"} = PersonQueries.get_person(person_id)
   end
 
   test "accepts an email-address set for new staff create flows" do

@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonCommandsTest do
 
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
 
   test "prepares a legacy email command without dispatching or changing its input" do
     person_id = Memba.ID.generate(:person)
@@ -85,5 +86,46 @@ defmodule Memba.Membership.PersonCommandsTest do
              )
 
     assert is_nil(PersonQueries.get_person(attrs.person_id))
+  end
+
+  describe "prepare_rename/2" do
+    test "prepares a self-targeted rename without dispatching it" do
+      person_id = Memba.ID.generate(:person)
+      actor = %{person_id: person_id}
+      attrs = %{"person_id" => person_id, "name" => " Alice Jones ", "expected_name" => "Alice"}
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: " Alice Jones ",
+                expected_name: "Alice"
+              }} = PersonCommands.prepare_rename(actor, attrs)
+
+      assert is_nil(PersonQueries.get_person(person_id))
+    end
+
+    test "rejects malformed actors and any other target before dispatch" do
+      actor_person_id = Memba.ID.generate(:person)
+      other_person_id = Memba.ID.generate(:person)
+
+      for {actor, attrs} <- [
+            {%{}, %{person_id: actor_person_id, name: "Alice", expected_name: "Alice"}},
+            {%{"person_id" => actor_person_id},
+             %{person_id: actor_person_id, name: "Alice", expected_name: "Alice"}},
+            {%{person_id: "not-a-person-id"},
+             %{person_id: "not-a-person-id", name: "Alice", expected_name: "Alice"}},
+            {%{person_id: actor_person_id},
+             %{person_id: "not-a-person-id", name: "Alice", expected_name: "Alice"}},
+            {%{person_id: actor_person_id},
+             %{person_id: other_person_id, name: "Alice", expected_name: "Alice"}},
+            {%{person_id: actor_person_id},
+             %{person_id: other_person_id, name: "Alice Brown", expected_name: "Alice Jones"}}
+          ] do
+        assert {:error, :unauthorized} = PersonCommands.prepare_rename(actor, attrs)
+      end
+
+      assert is_nil(PersonQueries.get_person(actor_person_id))
+      assert is_nil(PersonQueries.get_person(other_person_id))
+    end
   end
 end

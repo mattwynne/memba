@@ -31,7 +31,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     PersonEmailAddressRemoved,
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
-    PersonPrimaryEmailAddressChanged
+    PersonPrimaryEmailAddressChanged,
+    PersonRenamed
   }
 
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -72,7 +73,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
     PersonPrimaryEmailAddressChanged,
-    PersonEmailAddressRemoved
+    PersonEmailAddressRemoved,
+    PersonRenamed
   ]
 
   @delivery_change_events [

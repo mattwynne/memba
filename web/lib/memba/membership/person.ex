@@ -10,6 +10,7 @@ defmodule Memba.Membership.Person do
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.RemovePersonEmailAddress
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.EmailAddresses
@@ -20,6 +21,7 @@ defmodule Memba.Membership.Person do
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+  alias Memba.Membership.Events.PersonRenamed
 
   @behaviour Aggregate
   @legacy_verified_at ~U[1970-01-01 00:00:00Z]
@@ -54,6 +56,30 @@ defmodule Memba.Membership.Person do
   end
 
   def execute(%__MODULE__{}, %CreatePerson{}), do: {:error, :already_created}
+
+  @impl Aggregate
+  def execute(%__MODULE__{person_id: nil}, %RenamePerson{}) do
+    {:error, :person_not_created}
+  end
+
+  def execute(%__MODULE__{} = person, %RenamePerson{} = command) do
+    with :ok <- validate_person_id(command.person_id),
+         :ok <- validate_matching_person_id(person, command),
+         {:ok, name} <- normalize_requested_name(command.name),
+         {:ok, expected_name} <- normalize_comparable_name(command.expected_name),
+         {:ok, current_name} <- normalize_comparable_name(person.name) do
+      cond do
+        name == current_name ->
+          []
+
+        expected_name != current_name ->
+          {:error, {:name_changed, person.name}}
+
+        true ->
+          %PersonRenamed{person_id: command.person_id, name: name}
+      end
+    end
+  end
 
   @impl Aggregate
   def execute(%__MODULE__{person_id: nil}, %ReplacePersonEmailAddresses{}) do
@@ -195,6 +221,10 @@ defmodule Memba.Membership.Person do
     }
   end
 
+  def apply(%__MODULE__{} = person, %PersonRenamed{} = event) do
+    %__MODULE__{person | name: event.name}
+  end
+
   def apply(%__MODULE__{} = person, %PersonEmailAddressesReplaced{} = event) do
     %__MODULE__{
       person
@@ -293,6 +323,26 @@ defmodule Memba.Membership.Person do
   end
 
   defp normalize_name(_name), do: {:error, :invalid_name}
+
+  defp normalize_requested_name(name) do
+    with {:ok, normalized_name} <- normalize_comparable_name(name),
+         :ok <- validate_name_length(normalized_name) do
+      {:ok, normalized_name}
+    end
+  end
+
+  defp normalize_comparable_name(name) when is_binary(name) do
+    case name |> String.split() |> Enum.join(" ") do
+      "" -> {:error, :invalid_name}
+      normalized_name -> {:ok, normalized_name}
+    end
+  end
+
+  defp normalize_comparable_name(_name), do: {:error, :invalid_name}
+
+  defp validate_name_length(name) do
+    if String.length(name) <= 100, do: :ok, else: {:error, :name_too_long}
+  end
 
   defp create_email_addresses(%CreatePerson{email_addresses: nil} = command) do
     with {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do

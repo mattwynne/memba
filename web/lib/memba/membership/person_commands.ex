@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonCommands do
   """
 
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.PersonEmailAddressCommands
 
@@ -20,6 +21,27 @@ defmodule Memba.Membership.PersonCommands do
       end
     end
   end
+
+  @doc """
+  Prepares a self-service rename using trusted actor context separately from
+  editable attributes.
+  """
+  def prepare_rename(%{person_id: actor_person_id}, attrs) when is_map(attrs) do
+    with :ok <- validate_actor_person_id(actor_person_id),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         :ok <- authorize_self(actor_person_id, person_id),
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
+      {:ok,
+       %RenamePerson{
+         person_id: actor_person_id,
+         name: name,
+         expected_name: expected_name
+       }}
+    end
+  end
+
+  def prepare_rename(_actor_context, _attrs), do: {:error, :unauthorized}
 
   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
     with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
@@ -48,6 +70,16 @@ defmodule Memba.Membership.PersonCommands do
         end
     end
   end
+
+  defp validate_actor_person_id(person_id) do
+    case Memba.ID.cast(:person, person_id) do
+      {:ok, ^person_id} -> :ok
+      _other -> {:error, :unauthorized}
+    end
+  end
+
+  defp authorize_self(person_id, person_id), do: :ok
+  defp authorize_self(_actor_person_id, _target_person_id), do: {:error, :unauthorized}
 
   defp fetch_required(attrs, key) do
     case fetch_optional(attrs, key) do
