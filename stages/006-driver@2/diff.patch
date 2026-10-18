@@ -1,0 +1,78 @@
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+index 6265409..9830e32 100644
+--- a/web/lib/memba/membership/person.ex
++++ b/web/lib/memba/membership/person.ex
+@@ -65,7 +65,7 @@ defmodule Memba.Membership.Person do
+   def execute(%__MODULE__{} = person, %RenamePerson{} = command) do
+     with :ok <- validate_person_id(command.person_id),
+          :ok <- validate_matching_person_id(person, command),
+-         {:ok, requested_name} <- normalize_rename_name(command.name),
++         {:ok, requested_name} <- normalize_comparable_name(command.name),
+          {:ok, current_name} <- normalize_comparable_name(person.name) do
+       decide_rename(person, command, requested_name, current_name)
+     end
+@@ -314,15 +314,6 @@ defmodule Memba.Membership.Person do
+ 
+   defp normalize_name(_name), do: {:error, :invalid_name}
+ 
+-  defp normalize_rename_name(name) do
+-    with {:ok, normalized_name} <- normalize_comparable_name(name),
+-         true <- String.length(normalized_name) <= 100 do
+-      {:ok, normalized_name}
+-    else
+-      _blank_or_too_long -> {:error, :invalid_name}
+-    end
+-  end
+-
+   defp normalize_comparable_name(name) when is_binary(name) do
+     case ~r/[\s\p{Z}]+/u |> Regex.replace(name, " ") |> String.trim() do
+       "" -> {:error, :invalid_name}
+@@ -335,12 +326,17 @@ defmodule Memba.Membership.Person do
+   defp decide_rename(_person, _command, requested_name, requested_name), do: []
+ 
+   defp decide_rename(person, command, requested_name, current_name) do
+-    with {:ok, expected_name} <- normalize_comparable_name(command.expected_name),
++    with :ok <- validate_rename_name(requested_name),
++         {:ok, expected_name} <- normalize_comparable_name(command.expected_name),
+          :ok <- compare_expected_name(expected_name, current_name) do
+       %PersonRenamed{person_id: person.person_id, name: requested_name}
+     end
+   end
+ 
++  defp validate_rename_name(name) do
++    if String.length(name) <= 100, do: :ok, else: {:error, :invalid_name}
++  end
++
+   defp compare_expected_name(current_name, current_name), do: :ok
+ 
+   defp compare_expected_name(_expected_name, current_name),
+diff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs
+index 4f8ee5f..5de4fd7 100644
+--- a/web/test/memba/membership/person_test.exs
++++ b/web/test/memba/membership/person_test.exs
+@@ -446,6 +446,25 @@ defmodule Memba.Membership.PersonTest do
+                })
+     end
+ 
++    test "allows an unchanged historical name longer than the current limit" do
++      person_id = Memba.ID.generate(:person)
++      historical_name = String.duplicate("é", 101)
++
++      person =
++        Person.apply(%Person{}, %PersonCreated{
++          person_id: person_id,
++          name: historical_name,
++          email: "alice@example.com"
++        })
++
++      assert [] =
++               Person.execute(person, %RenamePerson{
++                 person_id: person_id,
++                 name: " #{historical_name} ",
++                 expected_name: "A stale historical name"
++               })
++    end
++
+     test "confirmation remains conditional and a second intervening change conflicts again" do
+       person_id = Memba.ID.generate(:person)
+       smith = created_person(person_id)
