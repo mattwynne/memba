@@ -224,7 +224,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-10-18T19:38:26.823387599Z",
-  "last_event_at": "2026-10-18T19:47:37.800767404Z",
+  "last_event_at": "2026-10-18T19:47:42.024494303Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -263,9 +263,9 @@
       "diff": {}
     },
     {
-      "seq": 0,
+      "seq": 33,
       "checkpoint": {
-        "timestamp": "2026-10-18T19:47:37.808607721Z",
+        "timestamp": "2026-10-18T19:47:42.024326445Z",
         "current_node": "check",
         "completed_nodes": [
           "start",
@@ -273,22 +273,26 @@
         ],
         "node_retries": {},
         "context_values": {
-          "outcome": "succeeded",
+          "internal.fidelity": "compact",
+          "internal.retry_count.check": 0,
           "internal.run_id": "01M588BBVZVJE2QYVEVSZVS5JF",
           "command.output": "blob://sha256/27e156da833a4e41b125fa34a71db04446daca6e3cc2945032ab29361c62c32b",
-          "internal.node_visit_count": 1,
-          "current_node": "check",
-          "internal.fidelity": "compact",
-          "failure_signature": "",
-          "internal.thread_id": "start",
-          "graph.goal": "",
-          "internal.retry_count.start": 0,
-          "internal.work_dir": "/workspace/memba",
-          "thread.start.current_node": "check",
           "failure_class": "",
-          "internal.retry_count.check": 0
+          "internal.work_dir": "/workspace/memba",
+          "current_node": "check",
+          "outcome": "succeeded",
+          "internal.node_visit_count": 1,
+          "internal.thread_id": "start",
+          "thread.start.current_node": "check",
+          "failure_signature": "",
+          "graph.goal": "",
+          "internal.retry_count.start": 0
         },
         "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
           "check": {
             "status": "succeeded",
             "context_updates": {
@@ -302,22 +306,67 @@
               "tool_time_ms": 548624,
               "active_time_ms": 548624
             }
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
           }
         },
         "next_node_id": "done",
+        "git_commit_sha": "b2fa3683d00d04487578bc1f7c637a77871307ee",
         "node_visits": {
           "check": 1,
           "start": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-10-18T19:47:42.047743266Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 555207,
+      "inference_time_ms": 0,
+      "tool_time_ms": 548624,
+      "active_time_ms": 548624
+    },
+    "final_git_commit_sha": "b2fa3683d00d04487578bc1f7c637a77871307ee",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "check",
+        "stage_label": "check",
+        "timing": {
+          "wall_time_ms": 548646,
+          "inference_time_ms": 0,
+          "tool_time_ms": 548624,
+          "active_time_ms": 548624
+        },
+        "retries": 0
+      }
+    ],
+    "total_retries": 0,
+    "diff": {
+      "summary": {
+        "files_changed": 0,
+        "additions": 0,
+        "deletions": 0
+      }
+    }
+  },
   "sandbox": {
     "kind": "ready",
     "plan": {
@@ -348,7 +397,12 @@
       "first_event_seq": 22,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: python3 -B - <<'QUALITY_PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = '0c2496b4d02c100d4b517cdceedec6984a723fc3'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-scenario-implementation/eval', '-p', 'test_*.py'], check=True)\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode)\n\nQUALITY_PY\n",
+        "failure_reason": null,
+        "timestamp": "2026-10-18T19:47:37.803843800Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -372,6 +426,12 @@
       "started_at": "2026-10-18T19:38:29.065202742Z",
       "handler": "command",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 548646,
+        "inference_time_ms": 0,
+        "tool_time_ms": 548624,
+        "active_time_ms": 548624
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -381,7 +441,43 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
+    },
+    "done@1": {
+      "first_event_seq": 36,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-10-18T19:47:42.024494303Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-10-18T19:47:42.024426993Z",
+      "handler": "exit",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
     },
     "start@1": {
       "first_event_seq": 18,
