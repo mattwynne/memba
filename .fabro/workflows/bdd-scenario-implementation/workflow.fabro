@@ -1,5 +1,5 @@
-digraph BddImplementation {
-    graph [goal="Implement one agreed scenario; check and review it, but do not publish",
+digraph BddScenarioImplementation {
+    graph [goal="Implement one agreed scenario and pass the checks; do not publish",
         default_max_retries=0,
         model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"]
     node [shape=box, backend="api"]
@@ -11,30 +11,17 @@ digraph BddImplementation {
 
     navigator [prompt="@prompts/bdd-navigator.md", fidelity="full", thread_id="bdd-navigator"]
     driver [prompt="@prompts/bdd-driver.md", fidelity="truncate"]
-    refactor [prompt="@prompts/refactoring-navigator.md", fidelity="full", thread_id="refactoring-navigator"]
-    cleanup [prompt="@prompts/refactoring-driver.md", fidelity="truncate"]
     check [shape=parallelogram, script="bin/dev check > .fabro/tmp/bdd/check.log 2>&1; result=$?; cat .fabro/tmp/bdd/check.log; exit \"$result\""]
-    review [prompt="@prompts/review.md", fidelity="truncate"]
 
     start -> setup
     setup -> navigator [condition="outcome=succeeded"]
     setup -> stop
     navigator -> driver [condition="outcome=succeeded && preferred_label=change"]
-    navigator -> refactor [condition="outcome=succeeded && preferred_label=refactor"]
     navigator -> check [condition="outcome=succeeded && preferred_label=check"]
     navigator -> stop
     driver -> navigator [condition="outcome=succeeded"]
     driver -> stop
-    refactor -> cleanup [condition="outcome=succeeded && preferred_label=change"]
-    refactor -> navigator [condition="outcome=succeeded && preferred_label=implement"]
-    refactor -> check [condition="outcome=succeeded && preferred_label=check"]
-    refactor -> stop
-    cleanup -> refactor [condition="outcome=succeeded"]
-    cleanup -> stop
-    check -> review [condition="outcome=succeeded"]
+    check -> done [condition="outcome=succeeded"]
     check -> navigator [condition="outcome=failed"]
     check -> stop
-    review -> done [condition="outcome=succeeded && preferred_label=done"]
-    review -> navigator [condition="outcome=succeeded && preferred_label=fix"]
-    review -> stop
 }

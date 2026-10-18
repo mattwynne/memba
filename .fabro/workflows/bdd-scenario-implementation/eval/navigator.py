@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 
 WORKFLOW = Path(__file__).resolve().parent.parent
-CASE = WORKFLOW / "eval/cases/after-review-repairs.md"
+CASE = WORKFLOW / "eval/cases/scenario-passes.md"
 
 
 def wilson(successes, total):
@@ -51,7 +51,7 @@ def prepare(out, runs, prompt):
         + "\n".join(edges) + "\n}\n"
     )
     manifest = {
-        "runs": runs, "expected_label": "check", "case": "after-review-repairs",
+        "runs": runs, "expected_label": "check", "case": "scenario-passes",
         "prompt_sha256": hashlib.sha256(navigator.encode()).hexdigest(),
         "case_sha256": hashlib.sha256(case.encode()).hexdigest(),
         "source_head": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),

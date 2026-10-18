@@ -9,6 +9,17 @@ import navigator
 
 
 class NavigatorEvalTest(unittest.TestCase):
+    def test_workflow_finishes_after_checks_without_refactoring_or_review(self):
+        graph = (navigator.WORKFLOW / "workflow.fabro").read_text()
+        self.assertIn('digraph BddScenarioImplementation', graph)
+        self.assertIn('navigator -> check [condition="outcome=succeeded && preferred_label=check"]', graph)
+        self.assertIn('check -> done [condition="outcome=succeeded"]', graph)
+        self.assertIn('check -> navigator [condition="outcome=failed"]', graph)
+        self.assertNotIn('refactor', graph)
+        self.assertNotIn('review', graph)
+        self.assertEqual({p.name for p in (navigator.WORKFLOW / 'prompts').glob('*.md')},
+                         {'bdd-navigator.md', 'bdd-driver.md'})
+
     def test_wilson_interval(self):
         self.assertIsNone(navigator.wilson(0, 0))
         self.assertAlmostEqual(navigator.wilson(0, 20)[1], 0.161125158, places=8)

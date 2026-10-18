@@ -13,7 +13,7 @@
 In a new throwaway worktree at the historical base, bring only these files from the frozen workflow/test-tooling commit:
 
 ```text
-.fabro/workflows/bdd-implementation/
+.fabro/workflows/bdd-scenario-implementation/
 bin/dev
 web/test/support/domain_cucumber_runner.ex
 web/test/features/domain_cucumber_wip_test.exs
@@ -27,7 +27,7 @@ Restore `docs/iterations/068-member-name-editing/` from the approved-plan commit
 Commit that prepared source and make its throwaway branch available through the normal remote. All three runs start from this **same commit**, not a previous run branch. Launch from that branch:
 
 ```sh
-fabro run .fabro/workflows/bdd-implementation/workflow.toml \
+fabro run .fabro/workflows/bdd-scenario-implementation/workflow.toml \
   --server https://fabro.home.wynne.family \
   -I plan=docs/iterations/068-member-name-editing/plan.md \
   --no-upgrade-check --json --detach
@@ -48,6 +48,6 @@ The final behaviour is:
 
 Verify actual Membership preparation/dispatch, aggregate rules, events, projection and query—not a test-side name store. Preserve self-only authority, normalized current-name comparison and historical event replay as described in the plan. Supporting unit tests should cover relevant edge cases; equivalent correct Elixir is acceptable, byte-for-byte reproduction of an old patch is not the goal.
 
-After the example passes, `dev test:wip` still exits nonzero and asks to remove the tag. The navigator removes only `@wip`; subsequent ordinary focused tests, refactoring checks and the full gate must execute the real scenario normally. A fresh review must finish before the workflow is done.
+After the example passes, `dev test:wip` still exits nonzero and asks to remove the tag. The navigator removes only `@wip`; the ordinary focused command and final full check must execute the real scenario normally. The workflow finishes when the full check passes. It does not run refactoring or review.
 
-Apply the [shared checklist](../README.md). This exercise does not by itself prove UI/copy review, every recovery path, novel feature discovery or whole-iteration delivery.
+Apply the [shared checklist](../README.md). This exercise does not prove refactoring, review, every recovery path, novel feature discovery or whole-iteration delivery.
