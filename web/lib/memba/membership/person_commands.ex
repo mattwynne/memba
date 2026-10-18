@@ -1,7 +1,10 @@
 defmodule Memba.Membership.PersonCommands do
   @moduledoc """
-  Prepare CreatePerson commands without dispatching them. The projected email
-  ownership check is a preflight; the Person aggregate still validates creation.
+  Prepares Person commands without dispatching them.
+
+  Rename preparation enforces the trusted-actor/self-target application boundary.
+  For creation, the projected email ownership check is a preflight; the Person
+  aggregate still validates creation.
   """
 
   alias Memba.Membership.Commands.CreatePerson
