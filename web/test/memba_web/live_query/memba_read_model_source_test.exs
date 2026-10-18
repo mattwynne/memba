@@ -27,7 +27,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     PersonEmailAddressRemoved,
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
-    PersonPrimaryEmailAddressChanged
+    PersonPrimaryEmailAddressChanged,
+    PersonRenamed
   }
 
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -994,7 +995,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     end
   end
 
-  test "covers every Person projector event family with exact Person and email scope" do
+  test "covers every Person projector event family with exact scopes" do
     events = [
       %PersonCreated{
         person_id: "person-1",
@@ -1033,6 +1034,12 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       Memba.Membership.Projectors.Person,
       events,
       [{:person, "person-1"}, {:person_emails, "person-1"}]
+    )
+
+    assert_invalidations(
+      Memba.Membership.Projectors.Person,
+      %PersonRenamed{person_id: "person-1", name: "Alice Jones"},
+      [{:person, "person-1"}]
     )
   end
 

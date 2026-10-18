@@ -31,7 +31,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     PersonEmailAddressRemoved,
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
-    PersonPrimaryEmailAddressChanged
+    PersonPrimaryEmailAddressChanged,
+    PersonRenamed
   }
 
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -202,6 +203,12 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
 
   defp classify_membership_projector(event),
     do: contract_violation(@membership_projector, event, :unsupported_projector_event)
+
+  defp classify_person_projector(%PersonRenamed{} = event) do
+    with_required(@person_projector, event, [:person_id], fn %{person_id: person_id} ->
+      [{:person, person_id}]
+    end)
+  end
 
   defp classify_person_projector(event) do
     if event_module(event) in @person_events do
