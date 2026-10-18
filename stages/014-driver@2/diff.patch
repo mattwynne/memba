@@ -1,0 +1,86 @@
+diff --git a/web/test/memba/membership/person_command_dispatch_test.exs b/web/test/memba/membership/person_command_dispatch_test.exs
+index 3f21651..ce6b16f 100644
+--- a/web/test/memba/membership/person_command_dispatch_test.exs
++++ b/web/test/memba/membership/person_command_dispatch_test.exs
+@@ -2,6 +2,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+   use Memba.EventSourcedCase, async: false
+ 
+   alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership.Commands.RenamePerson
+   alias Memba.Membership.CommandDispatch
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+@@ -195,6 +196,57 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+     assert %PersonProjection{name: "Alice Brown"} = PersonQueries.get_person(person_id)
+   end
+ 
++  test "serializes simultaneous renames from the same baseline" do
++    person_id = create_person!("Alice Smith")
++
++    assert {:ok,
++            %RenamePerson{
++              name: "Alice Jones",
++              expected_name: "Alice Smith"
++            } = jones_command} =
++             PersonCommands.prepare_rename(
++               %{person_id: person_id},
++               %{name: "Alice Jones", expected_name: "Alice Smith"}
++             )
++
++    assert {:ok,
++            %RenamePerson{
++              name: "Alice Brown",
++              expected_name: "Alice Smith"
++            } = brown_command} =
++             PersonCommands.prepare_rename(
++               %{person_id: person_id},
++               %{name: "Alice Brown", expected_name: "Alice Smith"}
++             )
++
++    task_supervisor = start_supervised!({Task.Supervisor, []})
++    test_pid = self()
++
++    jones_task =
++      dispatch_when_released(task_supervisor, test_pid, "Alice Jones", jones_command)
++
++    brown_task =
++      dispatch_when_released(task_supervisor, test_pid, "Alice Brown", brown_command)
++
++    assert_receive {:rename_dispatch_ready, jones_pid, "Alice Jones"}
++    assert_receive {:rename_dispatch_ready, brown_pid, "Alice Brown"}
++    assert jones_pid == jones_task.pid
++    assert brown_pid == brown_task.pid
++
++    send(jones_task.pid, :dispatch)
++    send(brown_task.pid, :dispatch)
++
++    results = [Task.await(jones_task), Task.await(brown_task)]
++
++    assert [{winning_name, :ok}] =
++             Enum.filter(results, fn {_requested_name, result} -> result == :ok end)
++
++    assert [{_losing_name, {:error, {:name_conflict, ^winning_name}}}] =
++             Enum.reject(results, fn {_requested_name, result} -> result == :ok end)
++
++    assert %PersonProjection{name: ^winning_name} = PersonQueries.get_person(person_id)
++  end
++
+   defp create_person!(name) do
+     person_id = Memba.ID.generate(:person)
+ 
+@@ -218,4 +270,15 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+       CommandDispatch.dispatch(command, consistency: :strong)
+     end
+   end
++
++  defp dispatch_when_released(task_supervisor, test_pid, requested_name, command) do
++    Task.Supervisor.async_nolink(task_supervisor, fn ->
++      send(test_pid, {:rename_dispatch_ready, self(), requested_name})
++
++      receive do
++        :dispatch ->
++          {requested_name, CommandDispatch.dispatch(command, consistency: :strong)}
++      end
++    end)
++  end
+ end
