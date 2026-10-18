@@ -3,8 +3,10 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.CommandDispatch
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Person
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -138,5 +140,40 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
 
     assert is_nil(PersonQueries.get_person(duplicate_person_id))
     assert is_nil(PersonQueries.get_person(duplicate_alternate_person_id))
+  end
+
+  test "dispatches a prepared conditional rename while preserving the Person's other state" do
+    person_id = Memba.ID.generate(:person)
+
+    assert {:ok, create_command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Smith",
+               email: "alice@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create_command, consistency: :strong)
+
+    assert {:ok, rename_command} =
+             PersonCommands.prepare_rename(
+               %{person_id: person_id},
+               %{name: " Alice   Jones ", expected_name: "Alice Smith"}
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [%PersonRenamed{person_id: ^person_id, name: "Alice Jones"}],
+              aggregate_state: %Person{
+                person_id: ^person_id,
+                name: "Alice Jones",
+                email: "alice@example.com",
+                email_addresses: email_addresses,
+                merged_source_person_ids: []
+              }
+            }} =
+             CommandDispatch.dispatch(rename_command, returning: :execution_result)
+
+    assert [%{normalized_email: "alice@example.com", is_primary: true}] = email_addresses
   end
 end

@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonCommandsTest do
 
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
 
   test "prepares a legacy email command without dispatching or changing its input" do
     person_id = Memba.ID.generate(:person)
@@ -85,5 +86,71 @@ defmodule Memba.Membership.PersonCommandsTest do
              )
 
     assert is_nil(PersonQueries.get_person(attrs.person_id))
+  end
+
+  describe "prepare_rename/2" do
+    test "derives the target from the trusted actor and accepts atom or string editable keys" do
+      person_id = Memba.ID.generate(:person)
+      actor = %{"person_id" => person_id}
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: "Alice Jones",
+                expected_name: "Alice Smith"
+              }} =
+               PersonCommands.prepare_rename(actor, %{
+                 name: "Alice Jones",
+                 expected_name: "Alice Smith"
+               })
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: "Alice Brown",
+                expected_name: "Alice Smith"
+              }} =
+               PersonCommands.prepare_rename(actor, %{
+                 "person_id" => person_id,
+                 "name" => "Alice Brown",
+                 "expected_name" => "Alice Smith"
+               })
+    end
+
+    test "requires an authenticated actor and editable name attributes" do
+      person_id = Memba.ID.generate(:person)
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(%{}, %{
+                 name: "Alice Jones",
+                 expected_name: "Alice"
+               })
+
+      assert {:error, {:missing_required_attribute, :expected_name}} =
+               PersonCommands.prepare_rename(%{person_id: person_id}, %{name: "Alice Jones"})
+    end
+
+    test "rejects a different requested target before preparing even a no-op command" do
+      actor_person_id = Memba.ID.generate(:person)
+      requested_person_id = Memba.ID.generate(:person)
+
+      attrs = %{
+        person_id: requested_person_id,
+        name: "Alice",
+        expected_name: "Alice"
+      }
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(%{person_id: actor_person_id}, attrs)
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(
+                 %{person_id: actor_person_id},
+                 Map.merge(attrs, %{
+                   "person_id" => requested_person_id,
+                   person_id: actor_person_id
+                 })
+               )
+    end
   end
 end

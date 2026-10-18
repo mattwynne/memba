@@ -29,6 +29,30 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     })
   end
 
+  step "{word} has since changed their name to {string}",
+       %{args: [person_name, newer_name]} = context do
+    %{person_id: person_id} =
+      context
+      |> Map.fetch!(:people)
+      |> Map.fetch!(person_name)
+
+    %{expected_name: expected_name} =
+      context
+      |> Map.fetch!(:member_profile_name_edits)
+      |> Map.fetch!(person_name)
+
+    assert :ok =
+             (with {:ok, command} <-
+                     PersonCommands.prepare_rename(
+                       %{person_id: person_id},
+                       %{name: newer_name, expected_name: expected_name}
+                     ) do
+                CommandDispatch.dispatch(command)
+              end)
+
+    context
+  end
+
   defp email_for(context, person_name) do
     normalized_name =
       person_name

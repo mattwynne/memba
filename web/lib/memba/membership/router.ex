@@ -38,6 +38,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
@@ -69,6 +70,7 @@ defmodule Memba.Membership.Router do
   dispatch(RemoveClubMember, to: Club)
   dispatch(RemoveClubRoleFromMember, to: Club)
   dispatch(RemovePersonEmailAddress, to: Person)
+  dispatch(RenamePerson, to: Person)
   dispatch(ReplacePersonEmailAddresses, to: Person)
   dispatch(ResendClubMemberInvitation, to: ClubInvitation)
   dispatch(UpdateClub, to: Club)

@@ -1,10 +1,13 @@
 defmodule Memba.Membership.PersonCommands do
   @moduledoc """
-  Prepare CreatePerson commands without dispatching them. The projected email
-  ownership check is a preflight; the Person aggregate still validates creation.
+  Prepare Person commands without dispatching them. The projected email
+  ownership check is a create preflight; the Person aggregate still validates
+  creation and conditional renames.
   """
 
+  alias Memba.ID
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.PersonEmailAddressCommands
 
@@ -18,6 +21,20 @@ defmodule Memba.Membership.PersonCommands do
            :ok <- PersonEmailAddressCommands.prevent_duplicate(person_id, email_addresses) do
         {:ok, command}
       end
+    end
+  end
+
+  def prepare_rename(actor_context, attrs) when is_map(actor_context) and is_map(attrs) do
+    with {:ok, actor_person_id} <- authenticated_person_id(actor_context),
+         :ok <- authorize_rename_target(attrs, actor_person_id),
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
+      {:ok,
+       %RenamePerson{
+         person_id: actor_person_id,
+         name: name,
+         expected_name: expected_name
+       }}
     end
   end
 
@@ -46,6 +63,28 @@ defmodule Memba.Membership.PersonCommands do
         with {:ok, email} <- fetch_required(attrs, :email) do
           {:ok, %{email: email}}
         end
+    end
+  end
+
+  defp authenticated_person_id(actor_context) do
+    with {:ok, person_id} <- fetch_optional(actor_context, :person_id),
+         {:ok, person_id} <- ID.cast(:person, person_id) do
+      {:ok, person_id}
+    else
+      _other -> {:error, :unauthorized}
+    end
+  end
+
+  defp authorize_rename_target(attrs, actor_person_id) do
+    requested_targets =
+      [:person_id, "person_id"]
+      |> Enum.filter(&Map.has_key?(attrs, &1))
+      |> Enum.map(&Map.fetch!(attrs, &1))
+
+    if Enum.all?(requested_targets, &(&1 == actor_person_id)) do
+      :ok
+    else
+      {:error, :unauthorized}
     end
   end
 

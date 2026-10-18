@@ -26,6 +26,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
@@ -121,6 +122,7 @@ defmodule Memba.Membership.AppTest do
         RemoveClubMember,
         RemoveClubRoleFromMember,
         RemovePersonEmailAddress,
+        RenamePerson,
         ReplacePersonEmailAddresses,
         ResendClubMemberInvitation,
         UpdateClub,
