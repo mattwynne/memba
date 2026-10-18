@@ -5,9 +5,13 @@ defmodule Memba.Membership.PersonProjectionTest do
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.MergePerson
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+  alias Memba.Membership.Events.PersonRenamed
+  alias Memba.Membership.Projectors.Person, as: PersonProjector
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.ReadModelChanges
 
   test "CreatePerson is projected into the public Membership person query API" do
     person_id = Memba.ID.generate(:person)
@@ -94,6 +98,67 @@ defmodule Memba.Membership.PersonProjectionTest do
                is_primary: false
              }
            ] = email_addresses_for(person_id)
+  end
+
+  test "PersonRenamed updates only the historical Person projection and publishes its commit" do
+    person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             App.dispatch(
+               %CreatePerson{
+                 person_id: person_id,
+                 name: "Alice Smith",
+                 email: "alice@example.com"
+               },
+               consistency: :strong
+             )
+
+    original_person = PersonQueries.get_person(person_id)
+    original_email_addresses = email_addresses_for(person_id)
+
+    Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+
+    assert :ok =
+             App.dispatch(
+               %RenamePerson{
+                 person_id: person_id,
+                 name: " Alice   Jones ",
+                 expected_name: "Alice Smith"
+               },
+               consistency: :strong
+             )
+
+    assert %PersonProjection{
+             person_id: ^person_id,
+             name: "Alice Jones",
+             email: "alice@example.com",
+             merged_into_person_id: nil
+           } = renamed_person = PersonQueries.get_person(person_id)
+
+    assert renamed_person ==
+             %{original_person | name: "Alice Jones", updated_at: renamed_person.updated_at}
+
+    assert DateTime.compare(renamed_person.updated_at, original_person.updated_at) == :gt
+    assert email_addresses_for(person_id) == original_email_addresses
+
+    assert_receive {:read_model_changed,
+                    %{
+                      projector: PersonProjector,
+                      source_event: %PersonRenamed{
+                        person_id: ^person_id,
+                        name: "Alice Jones"
+                      }
+                    }}
+
+    assert {:error, {:name_changed, "Alice Jones"}} =
+             App.dispatch(%RenamePerson{
+               person_id: person_id,
+               name: "Alice Brown",
+               expected_name: "Alice Smith"
+             })
+
+    assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
+    assert email_addresses_for(person_id) == original_email_addresses
   end
 
   test "ReplacePersonEmailAddresses atomically replaces rows and updates denormalized primary email" do

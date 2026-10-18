@@ -5,6 +5,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
 
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonCommands
+  alias Memba.Membership.PersonQueries
 
   step "{word} began changing their name when it was {string}",
        %{args: [person_name, current_name]} = context do
@@ -47,7 +48,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
                        %{person_id: person_id},
                        %{name: newer_name, expected_name: expected_name}
                      ) do
-                CommandDispatch.dispatch(command)
+                CommandDispatch.dispatch(command, consistency: :strong)
               end)
 
     context
@@ -109,6 +110,18 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     assert String.trim(authoritative_current_name) != ""
     assert is_binary(expected_name)
     assert is_binary(draft_name)
+
+    context
+  end
+
+  step "{word} should be known as {string}",
+       %{args: [person_name, expected_name]} = context do
+    %{person_id: person_id} =
+      context
+      |> Map.fetch!(:people)
+      |> Map.fetch!(person_name)
+
+    assert %{name: ^expected_name} = PersonQueries.get_person(person_id)
 
     context
   end
