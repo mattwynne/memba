@@ -236,6 +236,27 @@ defmodule Memba.Membership.PersonTest do
                })
     end
 
+    test "an already-current historical name over the new limit succeeds without an event" do
+      person_id = Memba.ID.generate(:person)
+      first_name = String.duplicate("a", 51)
+      last_name = String.duplicate("b", 50)
+      legacy_name = "#{first_name} #{last_name}"
+
+      person =
+        Person.apply(%Person{}, %PersonCreated{
+          person_id: person_id,
+          name: legacy_name,
+          email: "alice@example.com"
+        })
+
+      assert [] =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: " \t#{first_name}   #{last_name}\n",
+                 expected_name: "an older baseline"
+               })
+    end
+
     test "enforces rename name boundaries after normalization" do
       person_id = Memba.ID.generate(:person)
       person = created_person(person_id)

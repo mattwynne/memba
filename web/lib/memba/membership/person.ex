@@ -65,18 +65,19 @@ defmodule Memba.Membership.Person do
   def execute(%__MODULE__{} = person, %RenamePerson{} = command) do
     with :ok <- validate_person_id(command.person_id),
          :ok <- validate_matching_person_id(person, command),
-         {:ok, name} <- normalize_requested_name(command.name),
+         {:ok, name} <- normalize_comparable_name(command.name),
          {:ok, expected_name} <- normalize_comparable_name(command.expected_name),
          {:ok, current_name} <- normalize_comparable_name(person.name) do
-      cond do
-        name == current_name ->
-          []
-
-        expected_name != current_name ->
-          {:error, {:name_changed, person.name}}
-
-        true ->
-          %PersonRenamed{person_id: command.person_id, name: name}
+      if name == current_name do
+        []
+      else
+        with :ok <- validate_name_length(name) do
+          if expected_name == current_name do
+            %PersonRenamed{person_id: command.person_id, name: name}
+          else
+            {:error, {:name_changed, person.name}}
+          end
+        end
       end
     end
   end
@@ -323,13 +324,6 @@ defmodule Memba.Membership.Person do
   end
 
   defp normalize_name(_name), do: {:error, :invalid_name}
-
-  defp normalize_requested_name(name) do
-    with {:ok, normalized_name} <- normalize_comparable_name(name),
-         :ok <- validate_name_length(normalized_name) do
-      {:ok, normalized_name}
-    end
-  end
 
   defp normalize_comparable_name(name) when is_binary(name) do
     case name |> String.split() |> Enum.join(" ") do
