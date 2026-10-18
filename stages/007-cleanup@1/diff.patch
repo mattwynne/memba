@@ -1,0 +1,35 @@
+diff --git a/web/lib/memba_web/live_query/memba_read_model_source.ex b/web/lib/memba_web/live_query/memba_read_model_source.ex
+index 7bc274f..9a8329e 100644
+--- a/web/lib/memba_web/live_query/memba_read_model_source.ex
++++ b/web/lib/memba_web/live_query/memba_read_model_source.ex
+@@ -67,7 +67,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   @member_delivery_projector Memba.Messaging.Projectors.MemberEmailDelivery
+   @staff_delivery_projector Memba.Messaging.Projectors.MembaStaffEmailDelivery
+ 
+-  @person_events [
++  @person_and_email_invalidation_events [
+     PersonCreated,
+     PersonEmailAddressAdded,
+     PersonEmailAddressVerified,
+@@ -211,7 +211,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
+   end
+ 
+   defp classify_person_projector(event) do
+-    if event_module(event) in @person_events do
++    if event_module(event) in @person_and_email_invalidation_events do
+       with_required(@person_projector, event, [:person_id], fn %{person_id: person_id} ->
+         [{:person, person_id}, {:person_emails, person_id}]
+       end)
+diff --git a/web/test/memba_web/live_query/memba_read_model_source_test.exs b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+index f2b2198..add6b1a 100644
+--- a/web/test/memba_web/live_query/memba_read_model_source_test.exs
++++ b/web/test/memba_web/live_query/memba_read_model_source_test.exs
+@@ -1010,7 +1010,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
+     end
+   end
+ 
+-  test "covers every Person projector event family with exact Person and email scope" do
++  test "covers every event in the Person-and-email invalidation family with exact scope" do
+     events = [
+       %PersonCreated{
+         person_id: "person-1",
