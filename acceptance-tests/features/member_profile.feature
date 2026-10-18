@@ -41,7 +41,7 @@ Rule: A member must have a name
 
 Rule: A conflicting stale change must not silently replace a newer name
 
-    @iteration-068 @wip
+    @iteration-068
     Scenario: Alice's older edit requires confirmation of the newer name
       Given Alice began changing their name when it was "Alice Smith"
       And Alice has since changed their name to "Alice Jones"
