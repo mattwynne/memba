@@ -220,14 +220,108 @@
     }
   },
   "web_url": "https://fabro.home.wynne.family/runs/01M57WY4TJ3D322NT0DXAYT0NG",
-  "start": null,
-  "status": {
-    "kind": "starting"
+  "start": {
+    "start_time": "2026-10-18T16:18:57.864853347Z",
+    "run_branch": "fabro/run/01M57WY4TJ3D322NT0DXAYT0NG",
+    "base_sha": "7388b78a40e48cc1781ac7a2f2e68c059eaa18e4"
   },
-  "status_updated_at": "2026-10-18T16:18:53.597513640Z",
-  "last_event_at": "2026-10-18T16:18:57.348457149Z",
+  "status": {
+    "kind": "running"
+  },
+  "status_updated_at": "2026-10-18T16:18:57.864888191Z",
+  "last_event_at": "2026-10-18T16:27:59.446362340Z",
   "pending_control": null,
-  "checkpoints": [],
+  "checkpoints": [
+    {
+      "seq": 20,
+      "checkpoint": {
+        "timestamp": "2026-10-18T16:19:00.053790119Z",
+        "current_node": "start",
+        "completed_nodes": [
+          "start"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.work_dir": "/workspace/memba",
+          "failure_signature": "",
+          "outcome": "succeeded",
+          "failure_class": "",
+          "current_node": "start",
+          "graph.goal": "",
+          "internal.thread_id": null,
+          "internal.fidelity": "compact",
+          "internal.run_id": "01M57WY4TJ3D322NT0DXAYT0NG",
+          "internal.retry_count.start": 0,
+          "internal.node_visit_count": 1
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "check",
+        "node_visits": {
+          "start": 1
+        }
+      },
+      "diff": {}
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-10-18T16:27:59.519134373Z",
+        "current_node": "check",
+        "completed_nodes": [
+          "start",
+          "check"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.thread_id": "start",
+          "graph.goal": "",
+          "thread.start.current_node": "check",
+          "internal.node_visit_count": 1,
+          "outcome": "succeeded",
+          "failure_class": "",
+          "internal.retry_count.check": 0,
+          "current_node": "check",
+          "internal.run_id": "01M57WY4TJ3D322NT0DXAYT0NG",
+          "internal.fidelity": "compact",
+          "internal.retry_count.start": 0,
+          "internal.work_dir": "/workspace/memba",
+          "failure_signature": "",
+          "command.output": "blob://sha256/d2fd77b8afa71a6e3815ea730974a6b2603a32b12583888dda2e4cdf8b6d1297"
+        },
+        "node_outcomes": {
+          "check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d2fd77b8afa71a6e3815ea730974a6b2603a32b12583888dda2e4cdf8b6d1297"
+            },
+            "notes": "Script completed: python3 -B - <<'QUALITY_PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = '7388b78a40e48cc1781ac7a2f2e68c059eaa18e4'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-implementation/eval', '-p', 'test_*.py'], check=True)\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode)\n\nQUALITY_PY\n",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 539383,
+              "active_time_ms": 539383
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "done",
+        "node_visits": {
+          "start": 1,
+          "check": 1
+        }
+      },
+      "diff": {}
+    }
+  ],
   "conclusion": null,
   "sandbox": {
     "kind": "ready",
@@ -254,5 +348,81 @@
   "pull_request": null,
   "superseded_by": null,
   "pending_interviews": {},
-  "stages": {}
+  "stages": {
+    "check@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "python3 -B - <<'QUALITY_PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = '7388b78a40e48cc1781ac7a2f2e68c059eaa18e4'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-implementation/eval', '-p', 'test_*.py'], check=True)\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode)\n\nQUALITY_PY\n",
+        "command": "exec 2>&1\npython3 -B - <<'QUALITY_PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = '7388b78a40e48cc1781ac7a2f2e68c059eaa18e4'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-implementation/eval', '-p', 'test_*.py'], check=True)\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode)\n\nQUALITY_PY\n",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/d2fd77b8afa71a6e3815ea730974a6b2603a32b12583888dda2e4cdf8b6d1297",
+        "exit_code": 0,
+        "duration_ms": 539383,
+        "termination": "exited",
+        "output_bytes": 59703,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 59703,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-10-18T16:19:00.055815928Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
+    },
+    "start@1": {
+      "first_event_seq": 17,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-10-18T16:19:00.053649949Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-10-18T16:18:59.997521617Z",
+      "handler": "start",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    }
+  }
 }
