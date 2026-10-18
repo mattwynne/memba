@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
@@ -15,6 +16,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.Events.PersonMerged
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.Person
 
   describe "execute/2 CreatePerson" do
@@ -444,6 +446,142 @@ defmodule Memba.Membership.PersonTest do
                email_addresses: email_addresses,
                primary_email: "alice@work.example"
              })
+  end
+
+  describe "execute/2 RenamePerson" do
+    test "rejects an uncreated Person and a mismatched Person identity" do
+      person_id = Memba.ID.generate(:person)
+
+      command = %RenamePerson{
+        person_id: person_id,
+        name: "Alice Jones",
+        expected_name: "Alice"
+      }
+
+      assert {:error, :person_not_created} = Person.execute(%Person{}, command)
+
+      assert {:error, :invalid_person_id} =
+               Person.execute(
+                 created_person(Memba.ID.generate(:person)),
+                 command
+               )
+    end
+
+    test "renames replayed historical state and normalizes requested and expected whitespace" do
+      person_id = Memba.ID.generate(:person)
+
+      person =
+        Person.apply(%Person{}, %PersonCreated{
+          person_id: person_id,
+          name: "Alice   Smith",
+          email: "alice@example.com"
+        })
+
+      assert %PersonRenamed{person_id: ^person_id, name: "Alice Jones"} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: "\t Alice \n  Jones  ",
+                 expected_name: " Alice \n Smith "
+               })
+    end
+
+    test "rejects blank names and enforces the 100-grapheme boundary only for new names" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+      hundred_graphemes = String.duplicate("界", 100)
+      hundred_and_one_graphemes = hundred_graphemes <> "界"
+
+      for blank <- ["", " \t\n "] do
+        assert {:error, :invalid_name} =
+                 Person.execute(person, %RenamePerson{
+                   person_id: person_id,
+                   name: blank,
+                   expected_name: "Alice"
+                 })
+      end
+
+      assert %PersonRenamed{name: ^hundred_graphemes} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: hundred_graphemes,
+                 expected_name: "Alice"
+               })
+
+      assert {:error, :name_too_long} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: hundred_and_one_graphemes,
+                 expected_name: "Alice"
+               })
+    end
+
+    test "accepts non-Latin, punctuation, accents, and single-word names" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      for name <- ["山田 太郎", "D'Arcy-Smith!", "Élodie", "Prince"] do
+        assert %PersonRenamed{name: ^name} =
+                 Person.execute(person, %RenamePerson{
+                   person_id: person_id,
+                   name: name,
+                   expected_name: "Alice"
+                 })
+      end
+    end
+
+    test "rejects a stale baseline with the authoritative current name" do
+      person_id = Memba.ID.generate(:person)
+      person = %{created_person(person_id) | name: "Alice Jones"}
+
+      assert {:error, {:name_conflict, "Alice Jones"}} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Brown",
+                 expected_name: "Alice Smith"
+               })
+    end
+
+    test "an identical target is eventless before stale and historical length checks" do
+      person_id = Memba.ID.generate(:person)
+      historical_name = String.duplicate("界", 101)
+      person = %{created_person(person_id) | name: historical_name}
+
+      assert [] =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: "  #{historical_name}  ",
+                 expected_name: "stale baseline"
+               })
+
+      assert {:error, :name_too_long} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: historical_name <> "a",
+                 expected_name: historical_name
+               })
+    end
+  end
+
+  test "apply/2 PersonRenamed changes only the name" do
+    person_id = Memba.ID.generate(:person)
+    source_person_id = Memba.ID.generate(:person)
+
+    person = %{
+      created_person(person_id)
+      | merged_source_person_ids: [source_person_id]
+    }
+
+    renamed =
+      Person.apply(person, %PersonRenamed{
+        person_id: person_id,
+        name: "Alice Jones"
+      })
+
+    assert renamed.name == "Alice Jones"
+    assert renamed.person_id == person.person_id
+    assert renamed.email == person.email
+    assert renamed.email_addresses == person.email_addresses
+    assert renamed.merged_source_person_ids == person.merged_source_person_ids
   end
 
   describe "execute/2 MergePerson" do

@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -138,5 +139,83 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
 
     assert is_nil(PersonQueries.get_person(duplicate_person_id))
     assert is_nil(PersonQueries.get_person(duplicate_alternate_person_id))
+  end
+
+  test "routes a prepared rename and projects its normalized event" do
+    person_id = create_person!("Alice Smith")
+
+    assert {:ok, command} =
+             PersonCommands.prepare_rename(
+               %{person_id: person_id},
+               %{name: " Alice   Jones ", expected_name: "Alice Smith"}
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [%PersonRenamed{person_id: ^person_id, name: "Alice Jones"}]
+            }} =
+             CommandDispatch.dispatch(command,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
+  end
+
+  test "an identical target dispatches without an event" do
+    person_id = create_person!("Alice Smith")
+
+    assert {:ok, command} =
+             PersonCommands.prepare_rename(
+               %{person_id: person_id},
+               %{name: " Alice   Smith ", expected_name: "stale baseline"}
+             )
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             CommandDispatch.dispatch(command,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{name: "Alice Smith"} = PersonQueries.get_person(person_id)
+  end
+
+  test "protects a newer name and conditionally confirms its replacement" do
+    person_id = create_person!("Alice Smith")
+
+    assert :ok = rename_person(person_id, "Alice Jones", "Alice Smith")
+
+    assert {:error, {:name_conflict, "Alice Jones"}} =
+             rename_person(person_id, "Alice Brown", "Alice Smith")
+
+    assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
+
+    assert :ok = rename_person(person_id, "Alice Brown", "Alice Jones")
+    assert %PersonProjection{name: "Alice Brown"} = PersonQueries.get_person(person_id)
+  end
+
+  defp create_person!(name) do
+    person_id = Memba.ID.generate(:person)
+
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: name,
+               email: "#{person_id}@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+    person_id
+  end
+
+  defp rename_person(person_id, name, expected_name) do
+    with {:ok, command} <-
+           PersonCommands.prepare_rename(
+             %{person_id: person_id},
+             %{name: name, expected_name: expected_name}
+           ) do
+      CommandDispatch.dispatch(command, consistency: :strong)
+    end
   end
 end

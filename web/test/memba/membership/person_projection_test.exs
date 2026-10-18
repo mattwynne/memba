@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.MergePerson
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -143,6 +144,47 @@ defmodule Memba.Membership.PersonProjectionTest do
                is_primary: true
              }
            ] = email_addresses_for(person_id)
+  end
+
+  test "PersonRenamed updates only the projected name" do
+    person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             App.dispatch(
+               %CreatePerson{
+                 person_id: person_id,
+                 name: "Alice Smith",
+                 email_addresses: [
+                   %{email: "alice@example.com", is_primary: true},
+                   %{email: "alice@work.example", is_primary: false}
+                 ]
+               },
+               consistency: :strong
+             )
+
+    before_person = PersonQueries.get_person(person_id)
+    before_addresses = email_addresses_for(person_id)
+
+    assert :ok =
+             App.dispatch(
+               %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Jones",
+                 expected_name: "Alice Smith"
+               },
+               consistency: :strong
+             )
+
+    assert %PersonProjection{
+             person_id: ^person_id,
+             name: "Alice Jones",
+             email: "alice@example.com",
+             merged_into_person_id: nil
+           } = PersonQueries.get_person(person_id)
+
+    assert before_person.email == "alice@example.com"
+    assert before_person.merged_into_person_id == nil
+    assert email_addresses_for(person_id) == before_addresses
   end
 
   test "PersonMerged moves email ownership and hides the source from active people" do

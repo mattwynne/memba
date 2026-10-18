@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonCommandsTest do
 
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
 
   test "prepares a legacy email command without dispatching or changing its input" do
     person_id = Memba.ID.generate(:person)
@@ -85,5 +86,68 @@ defmodule Memba.Membership.PersonCommandsTest do
              )
 
     assert is_nil(PersonQueries.get_person(attrs.person_id))
+  end
+
+  describe "prepare_rename/2" do
+    test "derives the target from trusted actor context and preserves raw editable values" do
+      person_id = Memba.ID.generate(:person)
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: " Alice   Jones ",
+                expected_name: " Alice Smith "
+              }} =
+               PersonCommands.prepare_rename(
+                 %{person_id: person_id},
+                 %{"name" => " Alice   Jones ", "expected_name" => " Alice Smith "}
+               )
+
+      assert {:ok, %RenamePerson{person_id: ^person_id}} =
+               PersonCommands.prepare_rename(
+                 %{person_id: person_id},
+                 %{
+                   person_id: person_id,
+                   name: "Alice Jones",
+                   expected_name: "Alice Smith"
+                 }
+               )
+    end
+
+    test "rejects forged targets for ordinary, no-op, and confirmation-shaped attempts" do
+      actor_person_id = Memba.ID.generate(:person)
+      forged_person_id = Memba.ID.generate(:person)
+
+      attempts = [
+        %{name: "Alice Jones", expected_name: "Alice Smith"},
+        %{name: "Alice Smith", expected_name: "stale baseline"},
+        %{name: "Alice Brown", expected_name: "Alice Jones"}
+      ]
+
+      for attrs <- attempts do
+        assert {:error, :unauthorized} =
+                 PersonCommands.prepare_rename(
+                   %{person_id: actor_person_id},
+                   Map.put(attrs, :person_id, forged_person_id)
+                 )
+      end
+    end
+
+    test "requires a valid trusted actor and both editable fields" do
+      person_id = Memba.ID.generate(:person)
+      actor = %{person_id: person_id}
+
+      assert {:error, :invalid_actor} =
+               PersonCommands.prepare_rename(%{}, %{
+                 name: "Alice Jones",
+                 expected_name: "Alice"
+               })
+
+      assert {:error, {:missing_required_attribute, :name}} =
+               PersonCommands.prepare_rename(actor, %{expected_name: "Alice"})
+
+      assert {:error, {:missing_required_attribute, :expected_name}} =
+               PersonCommands.prepare_rename(actor, %{name: "Alice Jones"})
+    end
   end
 end

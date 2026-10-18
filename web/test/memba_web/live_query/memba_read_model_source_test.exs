@@ -27,7 +27,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     PersonEmailAddressRemoved,
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
-    PersonPrimaryEmailAddressChanged
+    PersonPrimaryEmailAddressChanged,
+    PersonRenamed
   }
 
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -155,6 +156,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
 
     assert Source.matches?(source, {:person, "person-1"}, {:person, "person-1"})
     refute Source.matches?(source, {:person, "person-2"}, {:person, "person-1"})
+  end
+
+  test "classifies a Person rename only for the exact represented Person" do
+    source = MembaReadModelSource.new()
+    event = %PersonRenamed{person_id: "person-1", name: "Alice Jones"}
+
+    assert_invalidations(
+      Memba.Membership.Projectors.Person,
+      event,
+      [{:person, "person-1"}]
+    )
+
+    assert Source.matches?(source, {:person, "person-1"}, {:person, "person-1"})
+    refute Source.matches?(source, {:person, "person-2"}, {:person, "person-1"})
+    refute Source.matches?(source, {:person_emails, "person-1"}, {:person, "person-1"})
   end
 
   test "keeps represented role badges distinct from current-actor permissions" do
