@@ -1,0 +1,615 @@
+{
+  "title": "Implement one agreed scenario; check and review it, but do not publish",
+  "spec": {
+    "run_id": "01M57Y8PZS00BPHM6ZWFZDRCAE",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Implement one agreed scenario; check and review it, but do not publish"
+        },
+        "working_dir": null,
+        "metadata": {
+          "eval-run": "1",
+          "eval-batch": "2026-10-18-v2"
+        },
+        "inputs": {
+          "plan": "docs/iterations/068-member-name-editing/plan.md"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.6-sol",
+          "fallbacks": {
+            "gpt-5.6-sol": []
+          },
+          "controls": {
+            "reasoning_effort": "high",
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp/**",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/bdd/**"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "BddImplementation",
+      "nodes": {
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "backend": {
+              "String": "api"
+            }
+          }
+        },
+        "setup": {
+          "id": "setup",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "mkdir -p .fabro/tmp/bdd && git rev-parse HEAD > .fabro/tmp/bdd/base && bin/dev sandbox-check && bin/dev responsive-check --force"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "driver": {
+          "id": "driver",
+          "attrs": {
+            "fidelity": {
+              "String": "truncate"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "prompt": {
+              "String": "You are a fresh driver. Read `docs/iterations/068-member-name-editing/plan.md`, its relevant links, project guidance and `.fabro/tmp/bdd/change.md`. Work on that one planned change, not the rest of the iteration. Do not publish or weaken agreed examples.\n\nUse the navigator's observed starting result if code, scenario and setup are unchanged. Otherwise predict and rerun the test before editing; return without edits if the result differs from your expectation.\n\nYou may use unit-test red/green cycles within this change. Predict the result and reason before each test command. Run ordinary commands and save their actual output and exit status in distinct logs under `.fabro/tmp/bdd/`. Check that the intended tests actually executed. Format changes and run supporting tests before the final acceptance observation.\n\nWhile the scenario is tagged, run `dev test:wip`. Its nonzero exit can mean either a real failure or a passing scenario whose tag must be removed: read the test output. Stop immediately at the navigator's predicted next failure or actual green result. An unexpected acceptance result also means return. The same known failure permits continuing this change only. Leave tag removal to the navigator. For later repairs use the ordinary focused command in the assignment.\n\nAlways write `.fabro/tmp/bdd/result.md` with what changed, commands and actual results, log paths, and anything to reconsider. An incomplete change or incorrect assignment can always return. No special verdict or success declaration is needed."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "stop": {
+          "id": "stop",
+          "attrs": {
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "echo 'Stopped with work preserved; see the last result.' >&2; exit 1"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "navigator": {
+          "id": "navigator",
+          "attrs": {
+            "backend": {
+              "String": "api"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `docs/iterations/068-member-name-editing/plan.md` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nWhen review repairs are complete and their focused tests pass, choose the full check directly.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}`, `{\"preferred_next_label\":\"check\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result."
+            },
+            "shape": {
+              "String": "box"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "thread_id": {
+              "String": "bdd-navigator"
+            }
+          }
+        },
+        "check": {
+          "id": "check",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "bin/dev check > .fabro/tmp/bdd/check.log 2>&1; result=$?; cat .fabro/tmp/bdd/check.log; exit \"$result\""
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "done": {
+          "id": "done",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "Msquare"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "refactor": {
+          "id": "refactor",
+          "attrs": {
+            "fidelity": {
+              "String": "full"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "thread_id": {
+              "String": "refactoring-navigator"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "prompt": {
+              "String": "You are the refactoring navigator. Read `docs/iterations/068-member-name-editing/plan.md`, its relevant links, project design guidance, and `.fabro/tmp/bdd/change.md`, `result.md` and `review.md` if present. Open the actual test logs. Do not change product code or publish.\n\nRead `.fabro/tmp/bdd/base` and inspect the whole diff from that commit, including new files—not just the last driver's changes. Your conversation continues across visits; reread the files to see other agents' work.\n\nChoose one worthwhile improvement in responsibilities, duplication, naming or clarity. Respect CQRS, historical event replay and accepted ADRs. Write the cleanup in `.fabro/tmp/bdd/change.md`, with the same now-untagged scenario's ordinary focused command, relevant unit tests and affected earlier examples to preserve. Retain that scenario identity in each assignment; do not use `dev test:wip` as a green refactoring check. Avoid duplicate test selections. Do not force a cleanup or chase a metric; leave time for full checks and review.\n\nAfter a driver returns, read what actually happened. A red starting test means no refactoring should have been done; return to the BDD navigator if implementation needs repair. Otherwise reconsider or assign the next worthwhile cleanup. When none remains, run the full checks.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"implement\"}`, `{\"preferred_next_label\":\"check\"}` or, for an unresolved scope/design obstacle, `{\"preferred_next_label\":\"stop\"}`."
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "review": {
+          "id": "review",
+          "attrs": {
+            "prompt": {
+              "String": "Review the whole change in fresh context. Read `docs/iterations/068-member-name-editing/plan.md`, its relevant links, project guidance, `.fabro/tmp/bdd/base` and the actual full-check output in `.fabro/tmp/bdd/check.log`. Inspect the code and cumulative diff from that base, including new files. Review the one selected scenario and its supporting changes, not delivery of the entire iteration. Its original `@wip` tag should be removed after passing; no agreed assertion or unrelated pending tag should be weakened. Do not rely on the implementation conversation or edit product code.\n\nMake one review covering the applicable lenses: architecture and accepted ADRs; code design, readability and idiomatic Elixir; the agreed behaviour; UX where visible behaviour changes; and copy where wording changes, using `.pi/skills/talking-to-humans/SKILL.md`. Use real evidence. If necessary visual or behavioural evidence is missing, say so rather than assuming it passed.\n\nWrite one combined finding list to `.fabro/tmp/bdd/review.md`, with concrete locations, consequences and suggested repairs. On a later review, check the whole current change again and remove findings that are resolved. Do not publish.\n\nEnd with `{\"preferred_next_label\":\"fix\"}` for actionable findings, `{\"preferred_next_label\":\"done\"}` when none remain, or `{\"preferred_next_label\":\"stop\"}` when a genuine unresolved decision prevents review."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "cleanup": {
+          "id": "cleanup",
+          "attrs": {
+            "shape": {
+              "String": "box"
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "prompt": {
+              "String": "You are a fresh refactoring driver. Read `docs/iterations/068-member-name-editing/plan.md`, its relevant links, project guidance and `.fabro/tmp/bdd/change.md`. Preserve behaviour and work on that one cleanup. Do not publish or weaken tests.\n\nRun the assigned ordinary scenario command (not `dev test:wip`), supporting units and affected earlier examples before editing; predict green. If any are red, missing or not selected, return without edits.\n\nMake the cleanup, format it and rerun those tests. Predict before running commands. You may repair regressions caused by your own cleanup within its scope; return to the navigator if the assignment needs changing. Finish when the relevant tests are green again.\n\nSave actual command output and exit status in distinct logs under `.fabro/tmp/bdd/`. Write `.fabro/tmp/bdd/result.md` with what changed, the commands and results, log paths, and any unresolved problem. Incomplete work can always return; no special verdict is needed."
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "setup",
+          "attrs": {}
+        },
+        {
+          "from": "setup",
+          "to": "navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "setup",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "navigator",
+          "to": "driver",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=change"
+            }
+          }
+        },
+        {
+          "from": "navigator",
+          "to": "refactor",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=refactor"
+            }
+          }
+        },
+        {
+          "from": "navigator",
+          "to": "check",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=check"
+            }
+          }
+        },
+        {
+          "from": "navigator",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "driver",
+          "to": "navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "driver",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "refactor",
+          "to": "cleanup",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=change"
+            }
+          }
+        },
+        {
+          "from": "refactor",
+          "to": "navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=implement"
+            }
+          }
+        },
+        {
+          "from": "refactor",
+          "to": "check",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=check"
+            }
+          }
+        },
+        {
+          "from": "refactor",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "cleanup",
+          "to": "refactor",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "cleanup",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "check",
+          "to": "review",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "check",
+          "to": "navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=failed"
+            }
+          }
+        },
+        {
+          "from": "check",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "review",
+          "to": "done",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=done"
+            }
+          }
+        },
+        {
+          "from": "review",
+          "to": "navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=fix"
+            }
+          }
+        },
+        {
+          "from": "review",
+          "to": "stop",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": "Implement one agreed scenario; check and review it, but do not publish"
+        },
+        "model_stylesheet": {
+          "String": "* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"
+        },
+        "default_max_retries": {
+          "Integer": 0
+        }
+      }
+    },
+    "graph_source": "digraph BddImplementation {\n    graph [goal=\"Implement one agreed scenario; check and review it, but do not publish\",\n        default_max_retries=0,\n        model_stylesheet=\"* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\"]\n    node [shape=box, backend=\"api\"]\n\n    start [shape=Mdiamond]\n    done [shape=Msquare]\n    stop [shape=parallelogram, script=\"echo 'Stopped with work preserved; see the last result.' >&2; exit 1\"]\n    setup [shape=parallelogram, script=\"mkdir -p .fabro/tmp/bdd && git rev-parse HEAD > .fabro/tmp/bdd/base && bin/dev sandbox-check && bin/dev responsive-check --force\"]\n\n    navigator [prompt=\"@prompts/bdd-navigator.md\", fidelity=\"full\", thread_id=\"bdd-navigator\"]\n    driver [prompt=\"@prompts/bdd-driver.md\", fidelity=\"truncate\"]\n    refactor [prompt=\"@prompts/refactoring-navigator.md\", fidelity=\"full\", thread_id=\"refactoring-navigator\"]\n    cleanup [prompt=\"@prompts/refactoring-driver.md\", fidelity=\"truncate\"]\n    check [shape=parallelogram, script=\"bin/dev check > .fabro/tmp/bdd/check.log 2>&1; result=$?; cat .fabro/tmp/bdd/check.log; exit \\\"$result\\\"\"]\n    review [prompt=\"@prompts/review.md\", fidelity=\"truncate\"]\n\n    start -> setup\n    setup -> navigator [condition=\"outcome=succeeded\"]\n    setup -> stop\n    navigator -> driver [condition=\"outcome=succeeded && preferred_label=change\"]\n    navigator -> refactor [condition=\"outcome=succeeded && preferred_label=refactor\"]\n    navigator -> check [condition=\"outcome=succeeded && preferred_label=check\"]\n    navigator -> stop\n    driver -> navigator [condition=\"outcome=succeeded\"]\n    driver -> stop\n    refactor -> cleanup [condition=\"outcome=succeeded && preferred_label=change\"]\n    refactor -> navigator [condition=\"outcome=succeeded && preferred_label=implement\"]\n    refactor -> check [condition=\"outcome=succeeded && preferred_label=check\"]\n    refactor -> stop\n    cleanup -> refactor [condition=\"outcome=succeeded\"]\n    cleanup -> stop\n    check -> review [condition=\"outcome=succeeded\"]\n    check -> navigator [condition=\"outcome=failed\"]\n    check -> stop\n    review -> done [condition=\"outcome=succeeded && preferred_label=done\"]\n    review -> navigator [condition=\"outcome=succeeded && preferred_label=fix\"]\n    review -> stop\n}\n",
+    "workflow_slug": "bdd-implementation",
+    "source_directory": "/home/matt/.local/state/memba/bdd-eval-v2-20261018/name-change",
+    "labels": {
+      "eval-batch": "2026-10-18-v2",
+      "eval-run": "1"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "ce82a0ea4551b6efa60cebaafe50ce00bf3cfdfb5f102fb3f4b5b787838cd6f7",
+    "definition_blob": "129f2bad8c621249fc115d8bb095d18370bf25157260f618cdbd2584e5fa9734",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "trial/bdd-eval-direct-checks-20261018",
+      "sha": "06a98036807207f3cbe31bd39b48de4ae78980c0",
+      "dirty": "clean"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M57Y8PZS00BPHM6ZWFZDRCAE",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-18T16:42:08.446138768Z",
+  "last_event_at": "2026-10-18T16:42:12.663941803Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "772132279f8f74082fc7d980deaf70f3505bc61b8b2fb9fbb716e669b2b32e97",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "trial/bdd-eval-direct-checks-20261018",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
