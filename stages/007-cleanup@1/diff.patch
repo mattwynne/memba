@@ -1,0 +1,162 @@
+diff --git a/web/lib/memba/membership/person_commands.ex b/web/lib/memba/membership/person_commands.ex
+index 0ba5c33..50391f4 100644
+--- a/web/lib/memba/membership/person_commands.ex
++++ b/web/lib/memba/membership/person_commands.ex
+@@ -1,7 +1,10 @@
+ defmodule Memba.Membership.PersonCommands do
+   @moduledoc """
+-  Prepare CreatePerson commands without dispatching them. The projected email
+-  ownership check is a preflight; the Person aggregate still validates creation.
++  Prepares Person commands without dispatching them.
++
++  Creation includes a projected email ownership preflight; the Person aggregate
++  still validates creation. Self-service rename preparation authorizes the
++  trusted actor to target their own Person before constructing the command.
+   """
+ 
+   alias Memba.Membership.Commands.CreatePerson
+@@ -24,24 +27,25 @@ defmodule Memba.Membership.PersonCommands do
+ 
+   @doc """
+   Prepares a self-service rename using trusted actor context separately from
+-  editable attributes.
++  the target Person identity and editable attributes.
+   """
+-  def prepare_rename(%{person_id: actor_person_id}, attrs) when is_map(attrs) do
++  def prepare_rename(%{person_id: actor_person_id}, target_person_id, editable_attrs)
++      when is_map(editable_attrs) do
+     with :ok <- validate_actor_person_id(actor_person_id),
+-         {:ok, person_id} <- fetch_required(attrs, :person_id),
+-         :ok <- authorize_self(actor_person_id, person_id),
+-         {:ok, name} <- fetch_required(attrs, :name),
+-         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
++         :ok <- authorize_self(actor_person_id, target_person_id),
++         {:ok, name} <- fetch_required(editable_attrs, :name),
++         {:ok, expected_name} <- fetch_required(editable_attrs, :expected_name) do
+       {:ok,
+        %RenamePerson{
+-         person_id: actor_person_id,
++         person_id: target_person_id,
+          name: name,
+          expected_name: expected_name
+        }}
+     end
+   end
+ 
+-  def prepare_rename(_actor_context, _attrs), do: {:error, :unauthorized}
++  def prepare_rename(_actor_context, _target_person_id, _editable_attrs),
++    do: {:error, :unauthorized}
+ 
+   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
+     with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
+diff --git a/web/test/features/step_definitions/member_profile_steps.exs b/web/test/features/step_definitions/member_profile_steps.exs
+index 8971ee3..7f7b497 100644
+--- a/web/test/features/step_definitions/member_profile_steps.exs
++++ b/web/test/features/step_definitions/member_profile_steps.exs
+@@ -58,8 +58,8 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+     with {:ok, command} <-
+            PersonCommands.prepare_rename(
+              %{person_id: context.alice_person_id},
++             context.alice_person_id,
+              %{
+-               person_id: context.alice_person_id,
+                name: name,
+                expected_name: expected_name
+              }
+diff --git a/web/test/memba/membership/person_command_dispatch_test.exs b/web/test/memba/membership/person_command_dispatch_test.exs
+index 54f4463..367b977 100644
+--- a/web/test/memba/membership/person_command_dispatch_test.exs
++++ b/web/test/memba/membership/person_command_dispatch_test.exs
+@@ -63,8 +63,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+     assert :ok = Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
+ 
+     assert {:ok, rename_to_jones} =
+-             PersonCommands.prepare_rename(actor, %{
+-               person_id: person_id,
++             PersonCommands.prepare_rename(actor, person_id, %{
+                name: "Alice Jones",
+                expected_name: "Alice Smith"
+              })
+@@ -85,8 +84,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+                     }}
+ 
+     assert {:ok, stale_rename} =
+-             PersonCommands.prepare_rename(actor, %{
+-               person_id: person_id,
++             PersonCommands.prepare_rename(actor, person_id, %{
+                name: "Alice Brown",
+                expected_name: "Alice Smith"
+              })
+@@ -97,8 +95,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
+     assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
+ 
+     assert {:ok, confirmed_rename} =
+-             PersonCommands.prepare_rename(actor, %{
+-               person_id: person_id,
++             PersonCommands.prepare_rename(actor, person_id, %{
+                name: "Alice Brown",
+                expected_name: "Alice Jones"
+              })
+diff --git a/web/test/memba/membership/person_commands_test.exs b/web/test/memba/membership/person_commands_test.exs
+index ae8e5a1..6ba0bbd 100644
+--- a/web/test/memba/membership/person_commands_test.exs
++++ b/web/test/memba/membership/person_commands_test.exs
+@@ -88,18 +88,18 @@ defmodule Memba.Membership.PersonCommandsTest do
+     assert is_nil(PersonQueries.get_person(attrs.person_id))
+   end
+ 
+-  describe "prepare_rename/2" do
++  describe "prepare_rename/3" do
+     test "prepares a self-targeted rename without dispatching it" do
+       person_id = Memba.ID.generate(:person)
+       actor = %{person_id: person_id}
+-      attrs = %{"person_id" => person_id, "name" => " Alice Jones ", "expected_name" => "Alice"}
++      editable_attrs = %{"name" => " Alice Jones ", "expected_name" => "Alice"}
+ 
+       assert {:ok,
+               %RenamePerson{
+                 person_id: ^person_id,
+                 name: " Alice Jones ",
+                 expected_name: "Alice"
+-              }} = PersonCommands.prepare_rename(actor, attrs)
++              }} = PersonCommands.prepare_rename(actor, person_id, editable_attrs)
+ 
+       assert is_nil(PersonQueries.get_person(person_id))
+     end
+@@ -108,20 +108,23 @@ defmodule Memba.Membership.PersonCommandsTest do
+       actor_person_id = Memba.ID.generate(:person)
+       other_person_id = Memba.ID.generate(:person)
+ 
+-      for {actor, attrs} <- [
+-            {%{}, %{person_id: actor_person_id, name: "Alice", expected_name: "Alice"}},
+-            {%{"person_id" => actor_person_id},
+-             %{person_id: actor_person_id, name: "Alice", expected_name: "Alice"}},
+-            {%{person_id: "not-a-person-id"},
+-             %{person_id: "not-a-person-id", name: "Alice", expected_name: "Alice"}},
+-            {%{person_id: actor_person_id},
+-             %{person_id: "not-a-person-id", name: "Alice", expected_name: "Alice"}},
+-            {%{person_id: actor_person_id},
+-             %{person_id: other_person_id, name: "Alice", expected_name: "Alice"}},
+-            {%{person_id: actor_person_id},
+-             %{person_id: other_person_id, name: "Alice Brown", expected_name: "Alice Jones"}}
++      for {actor, target_person_id, editable_attrs} <- [
++            {%{}, actor_person_id, %{name: "Alice", expected_name: "Alice"}},
++            {%{"person_id" => actor_person_id}, actor_person_id,
++             %{name: "Alice", expected_name: "Alice"}},
++            {%{person_id: "not-a-person-id"}, "not-a-person-id",
++             %{name: "Alice", expected_name: "Alice"}},
++            {%{person_id: actor_person_id}, "not-a-person-id",
++             %{name: "Alice", expected_name: "Alice"}},
++            {%{person_id: actor_person_id}, other_person_id,
++             %{name: "Alice", expected_name: "Alice"}},
++            {%{person_id: actor_person_id}, other_person_id,
++             %{name: "Alice Jones", expected_name: "Alice"}},
++            {%{person_id: actor_person_id}, other_person_id,
++             %{name: "Alice Brown", expected_name: "Alice Jones"}}
+           ] do
+-        assert {:error, :unauthorized} = PersonCommands.prepare_rename(actor, attrs)
++        assert {:error, :unauthorized} =
++                 PersonCommands.prepare_rename(actor, target_person_id, editable_attrs)
+       end
+ 
+       assert is_nil(PersonQueries.get_person(actor_person_id))
