@@ -1,0 +1,729 @@
+{
+  "title": "Choose the navigator handoff",
+  "spec": {
+    "run_id": "01M56Y1BBCWGBJY6R380HP3XFX",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "navigator.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Choose the navigator handoff"
+        },
+        "working_dir": null,
+        "metadata": {
+          "navigator-eval": "navigator-baseline-20261018"
+        },
+        "inputs": {
+          "plan": "the iteration plan supplied below"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.6-sol",
+          "fallbacks": {
+            "gpt-5.6-sol": []
+          },
+          "controls": {
+            "reasoning_effort": "high",
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp/**",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/bdd/**"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "NavigatorUnitEval",
+      "nodes": {
+        "trial_9": {
+          "id": "trial_9",
+          "attrs": {
+            "backend": {
+              "String": "api"
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_10": {
+          "id": "trial_10",
+          "attrs": {
+            "label": {
+              "String": "Navigator"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_8": {
+          "id": "trial_8",
+          "attrs": {
+            "label": {
+              "String": "Navigator"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "backend": {
+              "String": "api"
+            }
+          }
+        },
+        "trial_7": {
+          "id": "trial_7",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            }
+          }
+        },
+        "trial_12": {
+          "id": "trial_12",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_6": {
+          "id": "trial_6",
+          "attrs": {
+            "fidelity": {
+              "String": "full"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "label": {
+              "String": "Navigator"
+            }
+          }
+        },
+        "trial_5": {
+          "id": "trial_5",
+          "attrs": {
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "label": {
+              "String": "Navigator"
+            }
+          }
+        },
+        "trial_15": {
+          "id": "trial_15",
+          "attrs": {
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "label": {
+              "String": "Navigator"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        },
+        "done": {
+          "id": "done",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "trial_17": {
+          "id": "trial_17",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_13": {
+          "id": "trial_13",
+          "attrs": {
+            "label": {
+              "String": "Navigator"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_16": {
+          "id": "trial_16",
+          "attrs": {
+            "label": {
+              "String": "Navigator"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "tab"
+            }
+          }
+        },
+        "trial_18": {
+          "id": "trial_18",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_20": {
+          "id": "trial_20",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "backend": {
+              "String": "api"
+            }
+          }
+        },
+        "trial_14": {
+          "id": "trial_14",
+          "attrs": {
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "label": {
+              "String": "Navigator"
+            }
+          }
+        },
+        "trial_4": {
+          "id": "trial_4",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_11": {
+          "id": "trial_11",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "backend": {
+              "String": "api"
+            }
+          }
+        },
+        "trial_2": {
+          "id": "trial_2",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_3": {
+          "id": "trial_3",
+          "attrs": {
+            "backend": {
+              "String": "api"
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "fidelity": {
+              "String": "full"
+            }
+          }
+        },
+        "trial_19": {
+          "id": "trial_19",
+          "attrs": {
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "label": {
+              "String": "Navigator"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "shape": {
+              "String": "tab"
+            }
+          }
+        },
+        "trial_1": {
+          "id": "trial_1",
+          "attrs": {
+            "label": {
+              "String": "Navigator"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "prompt": {
+              "String": "You are the navigator. Read the iteration plan at `the iteration plan supplied below` and follow its links to relevant ADRs, designs and project guidance. Work on the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nOn your first visit, inspect the code, predict the initial failure, then run `dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.\n\nOn every visit, read the code and the latest `result.md`, `check.log` and `review.md` in that directory if present. Open the actual test logs. Your conversation continues, but other agents' work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant supporting tests, the observed starting result and the acceptance result you predict next, including the reason for a failure. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Record its name and ordinary focused test command in `change.md` so refactoring can keep running that same scenario without the WIP tag. Keep all assertions and iteration tags.\n\nFull-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}`, `{\"preferred_next_label\":\"refactor\"}` or `{\"preferred_next_label\":\"stop\"}`. This chooses who works next; it is not a test result.\n\n\n---\n\n# Resumed navigator visit: review repairs completed\n\nThis is a later visit, not the first visit. The following are the observations supplied by your collaborators and the filesystem for this decision. They are fixed inputs; no tools are available in this unit exercise. Decide your next handoff, without doing implementation or running tests yourself.\n\n## Iteration plan (relevant scope)\n\nImplement only “Alice's older edit requires confirmation of the newer name”. Alice began editing Smith, another edit saved Jones, and her older request for Brown must be rejected. Explicit confirmation against Jones may then save Brown. Preserve self-authority, historical event replay and the accepted assertions. Do not implement other pending examples or publish.\n\n## Work completed before the review\n\nThe selected domain scenario became green. You removed only its `@wip` tag and recorded the ordinary focused test command. No pending examples or assertions changed. The refactoring navigator finished its assessment and deferred an optional cosmetic cleanup; there is no outstanding cleanup assignment.\n\nA full `dev check` passed before review: 19 package tests, 1,839 application tests, seven browser journeys / 113 steps.\n\n## review.md — findings from that review\n\n1. `PersonRenamed` needs identity-scoped live-query invalidation.\n2. Submitting an unchanged historical name longer than 100 graphemes should remain an eventless no-op. A genuinely different overlength name must still be rejected.\n\n## result.md — latest driver handbacks\n\nBoth findings have now been repaired in separate changes. Each new regression test was observed red before its repair and green afterward. The first repair added exact Person-only invalidation. The second fixed the historical unchanged-name case without relaxing validation for new names.\n\nLatest focused outputs on the repaired code:\n\n```text\nPerson aggregate suite: 25 tests, 0 failures; exit 0\nLive-query adapter suite: 46 tests, 0 failures; exit 0\nSelected ordinary domain scenario: 1 executed, 0 failures; exit 0\n```\n\nThe feature still has its iteration tag and no `@wip`. There is no remaining driver assignment, review finding or known cleanup to address.\n\n## check.log\n\nThe recorded full check is from before these two repairs. There has not yet been a full check or fresh review on the repaired code."
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "trial_1",
+          "attrs": {}
+        },
+        {
+          "from": "trial_1",
+          "to": "trial_2",
+          "attrs": {}
+        },
+        {
+          "from": "trial_2",
+          "to": "trial_3",
+          "attrs": {}
+        },
+        {
+          "from": "trial_3",
+          "to": "trial_4",
+          "attrs": {}
+        },
+        {
+          "from": "trial_4",
+          "to": "trial_5",
+          "attrs": {}
+        },
+        {
+          "from": "trial_5",
+          "to": "trial_6",
+          "attrs": {}
+        },
+        {
+          "from": "trial_6",
+          "to": "trial_7",
+          "attrs": {}
+        },
+        {
+          "from": "trial_7",
+          "to": "trial_8",
+          "attrs": {}
+        },
+        {
+          "from": "trial_8",
+          "to": "trial_9",
+          "attrs": {}
+        },
+        {
+          "from": "trial_9",
+          "to": "trial_10",
+          "attrs": {}
+        },
+        {
+          "from": "trial_10",
+          "to": "trial_11",
+          "attrs": {}
+        },
+        {
+          "from": "trial_11",
+          "to": "trial_12",
+          "attrs": {}
+        },
+        {
+          "from": "trial_12",
+          "to": "trial_13",
+          "attrs": {}
+        },
+        {
+          "from": "trial_13",
+          "to": "trial_14",
+          "attrs": {}
+        },
+        {
+          "from": "trial_14",
+          "to": "trial_15",
+          "attrs": {}
+        },
+        {
+          "from": "trial_15",
+          "to": "trial_16",
+          "attrs": {}
+        },
+        {
+          "from": "trial_16",
+          "to": "trial_17",
+          "attrs": {}
+        },
+        {
+          "from": "trial_17",
+          "to": "trial_18",
+          "attrs": {}
+        },
+        {
+          "from": "trial_18",
+          "to": "trial_19",
+          "attrs": {}
+        },
+        {
+          "from": "trial_19",
+          "to": "trial_20",
+          "attrs": {}
+        },
+        {
+          "from": "trial_20",
+          "to": "done",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "default_max_retries": {
+          "Integer": 0
+        },
+        "goal": {
+          "String": "Choose the navigator handoff"
+        }
+      }
+    },
+    "graph_source": "digraph NavigatorUnitEval {\n  graph [goal=\"Choose the navigator handoff\", default_max_retries=0]\n  start [shape=Mdiamond]\n  done [shape=Msquare]\n  node [shape=tab, backend=\"api\", fidelity=\"full\", prompt=\"@prompt.md\"]\n  trial_1 [label=\"Navigator\"]\n  trial_2 [label=\"Navigator\"]\n  trial_3 [label=\"Navigator\"]\n  trial_4 [label=\"Navigator\"]\n  trial_5 [label=\"Navigator\"]\n  trial_6 [label=\"Navigator\"]\n  trial_7 [label=\"Navigator\"]\n  trial_8 [label=\"Navigator\"]\n  trial_9 [label=\"Navigator\"]\n  trial_10 [label=\"Navigator\"]\n  trial_11 [label=\"Navigator\"]\n  trial_12 [label=\"Navigator\"]\n  trial_13 [label=\"Navigator\"]\n  trial_14 [label=\"Navigator\"]\n  trial_15 [label=\"Navigator\"]\n  trial_16 [label=\"Navigator\"]\n  trial_17 [label=\"Navigator\"]\n  trial_18 [label=\"Navigator\"]\n  trial_19 [label=\"Navigator\"]\n  trial_20 [label=\"Navigator\"]\n  start -> trial_1\n  trial_1 -> trial_2\n  trial_2 -> trial_3\n  trial_3 -> trial_4\n  trial_4 -> trial_5\n  trial_5 -> trial_6\n  trial_6 -> trial_7\n  trial_7 -> trial_8\n  trial_8 -> trial_9\n  trial_9 -> trial_10\n  trial_10 -> trial_11\n  trial_11 -> trial_12\n  trial_12 -> trial_13\n  trial_13 -> trial_14\n  trial_14 -> trial_15\n  trial_15 -> trial_16\n  trial_16 -> trial_17\n  trial_17 -> trial_18\n  trial_18 -> trial_19\n  trial_19 -> trial_20\n  trial_20 -> done\n}\n",
+    "workflow_slug": "navigator",
+    "source_directory": "/home/matt/.local/state/memba/native-bdd-overnight-20261016/source-check",
+    "labels": {
+      "navigator-eval": "navigator-baseline-20261018"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "088da8cf194df543d475bc7b74a03fb28ed280b5fc510ee9368ea297c60d254e",
+    "definition_blob": "f85d1c18fb784fa3f1781882001d1ca85ad8b1ec5e3e133a60cb4b6895faa432",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "trial/navigator-unit-eval-20261018",
+      "sha": "77daf79bc045899d1dbcdc9826688efcb819d763",
+      "dirty": "dirty"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M56Y1BBCWGBJY6R380HP3XFX",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-18T07:18:52.826492980Z",
+  "last_event_at": "2026-10-18T07:18:57.221451979Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "1db9a4a56780e57df860c75b2ec168af20bf9cd9a5510d6a952bf409d8349a2a",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "trial/navigator-unit-eval-20261018",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
