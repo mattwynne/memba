@@ -50,7 +50,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   step "Alice confirms replacing {string} with {string}",
        %{args: [expected_name, name]} = context do
     assert expected_name == context.conflicting_name
-    assert :ok = rename(context, name, expected_name)
+    assert :ok = rename(context, name, context.conflicting_name)
     context
   end
 
@@ -59,10 +59,8 @@ defmodule Memba.Cucumber.MemberProfileSteps do
            PersonCommands.prepare_rename(
              %{person_id: context.alice_person_id},
              context.alice_person_id,
-             %{
-               name: name,
-               expected_name: expected_name
-             }
+             expected_name,
+             %{name: name}
            ) do
       CommandDispatch.dispatch(command, consistency: :strong)
     end

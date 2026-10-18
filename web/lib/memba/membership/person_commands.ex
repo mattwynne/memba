@@ -27,14 +27,19 @@ defmodule Memba.Membership.PersonCommands do
 
   @doc """
   Prepares a self-service rename using trusted actor context separately from
-  the target Person identity and editable attributes.
+  the target Person identity, server-held expected name, and editable
+  attributes.
   """
-  def prepare_rename(%{person_id: actor_person_id}, target_person_id, editable_attrs)
+  def prepare_rename(
+        %{person_id: actor_person_id},
+        target_person_id,
+        expected_name,
+        editable_attrs
+      )
       when is_map(editable_attrs) do
     with :ok <- validate_actor_person_id(actor_person_id),
          :ok <- authorize_self(actor_person_id, target_person_id),
-         {:ok, name} <- fetch_required(editable_attrs, :name),
-         {:ok, expected_name} <- fetch_required(editable_attrs, :expected_name) do
+         {:ok, name} <- fetch_required(editable_attrs, :name) do
       {:ok,
        %RenamePerson{
          person_id: target_person_id,
@@ -44,7 +49,7 @@ defmodule Memba.Membership.PersonCommands do
     end
   end
 
-  def prepare_rename(_actor_context, _target_person_id, _editable_attrs),
+  def prepare_rename(_actor_context, _target_person_id, _expected_name, _editable_attrs),
     do: {:error, :unauthorized}
 
   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do

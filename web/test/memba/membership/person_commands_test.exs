@@ -88,43 +88,60 @@ defmodule Memba.Membership.PersonCommandsTest do
     assert is_nil(PersonQueries.get_person(attrs.person_id))
   end
 
-  describe "prepare_rename/3" do
+  describe "prepare_rename/4" do
     test "prepares a self-targeted rename without dispatching it" do
       person_id = Memba.ID.generate(:person)
       actor = %{person_id: person_id}
-      editable_attrs = %{"name" => " Alice Jones ", "expected_name" => "Alice"}
+      editable_attrs = %{"name" => " Alice Jones "}
 
       assert {:ok,
               %RenamePerson{
                 person_id: ^person_id,
                 name: " Alice Jones ",
                 expected_name: "Alice"
-              }} = PersonCommands.prepare_rename(actor, person_id, editable_attrs)
+              }} = PersonCommands.prepare_rename(actor, person_id, "Alice", editable_attrs)
 
       assert is_nil(PersonQueries.get_person(person_id))
+    end
+
+    test "uses the server-held expected name instead of posted data" do
+      person_id = Memba.ID.generate(:person)
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: "Alice Brown",
+                expected_name: "Alice Smith"
+              }} =
+               PersonCommands.prepare_rename(
+                 %{person_id: person_id},
+                 person_id,
+                 "Alice Smith",
+                 %{"name" => "Alice Brown", "expected_name" => "Alice Jones"}
+               )
     end
 
     test "rejects malformed actors and any other target before dispatch" do
       actor_person_id = Memba.ID.generate(:person)
       other_person_id = Memba.ID.generate(:person)
 
-      for {actor, target_person_id, editable_attrs} <- [
-            {%{}, actor_person_id, %{name: "Alice", expected_name: "Alice"}},
-            {%{"person_id" => actor_person_id}, actor_person_id,
-             %{name: "Alice", expected_name: "Alice"}},
-            {%{person_id: "not-a-person-id"}, "not-a-person-id",
-             %{name: "Alice", expected_name: "Alice"}},
-            {%{person_id: actor_person_id}, "not-a-person-id",
-             %{name: "Alice", expected_name: "Alice"}},
-            {%{person_id: actor_person_id}, other_person_id,
-             %{name: "Alice", expected_name: "Alice"}},
-            {%{person_id: actor_person_id}, other_person_id,
-             %{name: "Alice Jones", expected_name: "Alice"}},
-            {%{person_id: actor_person_id}, other_person_id,
-             %{name: "Alice Brown", expected_name: "Alice Jones"}}
+      for {actor, target_person_id, expected_name, editable_attrs} <- [
+            {%{}, actor_person_id, "Alice", %{name: "Alice"}},
+            {%{"person_id" => actor_person_id}, actor_person_id, "Alice", %{name: "Alice"}},
+            {%{person_id: "not-a-person-id"}, "not-a-person-id", "Alice", %{name: "Alice"}},
+            {%{person_id: actor_person_id}, "not-a-person-id", "Alice", %{name: "Alice"}},
+            {%{person_id: actor_person_id}, other_person_id, "Alice", %{name: "Alice"}},
+            {%{person_id: actor_person_id}, other_person_id, "Alice", %{name: "Alice Jones"}},
+            {%{person_id: actor_person_id}, other_person_id, "Alice Jones",
+             %{name: "Alice Brown"}}
           ] do
         assert {:error, :unauthorized} =
-                 PersonCommands.prepare_rename(actor, target_person_id, editable_attrs)
+                 PersonCommands.prepare_rename(
+                   actor,
+                   target_person_id,
+                   expected_name,
+                   editable_attrs
+                 )
       end
 
       assert is_nil(PersonQueries.get_person(actor_person_id))
