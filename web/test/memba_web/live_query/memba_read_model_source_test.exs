@@ -1010,7 +1010,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     end
   end
 
-  test "covers every Person projector event family with exact Person and email scope" do
+  test "covers every event in the Person-and-email invalidation family with exact scope" do
     events = [
       %PersonCreated{
         person_id: "person-1",
