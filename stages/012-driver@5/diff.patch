@@ -1,0 +1,154 @@
+diff --git a/web/lib/memba/membership/projectors/person.ex b/web/lib/memba/membership/projectors/person.ex
+index 6e26419..07f28f8 100644
+--- a/web/lib/memba/membership/projectors/person.ex
++++ b/web/lib/memba/membership/projectors/person.ex
+@@ -16,6 +16,7 @@ defmodule Memba.Membership.Projectors.Person do
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
++  alias Memba.Membership.Events.PersonRenamed
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+   alias Memba.Membership.Projections.PersonEmailAddress
+   alias Memba.Membership.EmailAddressVerificationToken
+@@ -30,6 +31,15 @@ defmodule Memba.Membership.Projectors.Person do
+     |> upsert_legacy_primary_email_address(event)
+   end)
+ 
++  project(%PersonRenamed{} = event, fn multi ->
++    Ecto.Multi.update_all(
++      multi,
++      :membership_person_renamed,
++      person_query(event.person_id),
++      set: [name: event.name, updated_at: DateTime.utc_now()]
++    )
++  end)
++
+   project(%PersonEmailAddressesReplaced{} = event, fn multi ->
+     multi
+     |> Ecto.Multi.update_all(
+diff --git a/web/test/features/step_definitions/member_profile_steps.exs b/web/test/features/step_definitions/member_profile_steps.exs
+index cae35dd..a423310 100644
+--- a/web/test/features/step_definitions/member_profile_steps.exs
++++ b/web/test/features/step_definitions/member_profile_steps.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+ 
+   alias Memba.Membership.CommandDispatch
+   alias Memba.Membership.PersonCommands
++  alias Memba.Membership.PersonQueries
+ 
+   step "{word} began changing their name when it was {string}",
+        %{args: [person_name, current_name]} = context do
+@@ -47,7 +48,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+                        %{person_id: person_id},
+                        %{name: newer_name, expected_name: expected_name}
+                      ) do
+-                CommandDispatch.dispatch(command)
++                CommandDispatch.dispatch(command, consistency: :strong)
+               end)
+ 
+     context
+@@ -113,6 +114,18 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+     context
+   end
+ 
++  step "{word} should be known as {string}",
++       %{args: [person_name, expected_name]} = context do
++    %{person_id: person_id} =
++      context
++      |> Map.fetch!(:people)
++      |> Map.fetch!(person_name)
++
++    assert %{name: ^expected_name} = PersonQueries.get_person(person_id)
++
++    context
++  end
++
+   defp email_for(context, person_name) do
+     normalized_name =
+       person_name
+diff --git a/web/test/memba/membership/person_projection_test.exs b/web/test/memba/membership/person_projection_test.exs
+index 0d16e69..366f0e4 100644
+--- a/web/test/memba/membership/person_projection_test.exs
++++ b/web/test/memba/membership/person_projection_test.exs
+@@ -5,9 +5,13 @@ defmodule Memba.Membership.PersonProjectionTest do
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.MergePerson
++  alias Memba.Membership.Commands.RenamePerson
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
++  alias Memba.Membership.Events.PersonRenamed
++  alias Memba.Membership.Projectors.Person, as: PersonProjector
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+   alias Memba.Membership.Projections.PersonEmailAddress
++  alias Memba.ReadModelChanges
+ 
+   test "CreatePerson is projected into the public Membership person query API" do
+     person_id = Memba.ID.generate(:person)
+@@ -96,6 +100,67 @@ defmodule Memba.Membership.PersonProjectionTest do
+            ] = email_addresses_for(person_id)
+   end
+ 
++  test "PersonRenamed updates only the historical Person projection and publishes its commit" do
++    person_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{
++                 person_id: person_id,
++                 name: "Alice Smith",
++                 email: "alice@example.com"
++               },
++               consistency: :strong
++             )
++
++    original_person = PersonQueries.get_person(person_id)
++    original_email_addresses = email_addresses_for(person_id)
++
++    Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
++
++    assert :ok =
++             App.dispatch(
++               %RenamePerson{
++                 person_id: person_id,
++                 name: " Alice   Jones ",
++                 expected_name: "Alice Smith"
++               },
++               consistency: :strong
++             )
++
++    assert %PersonProjection{
++             person_id: ^person_id,
++             name: "Alice Jones",
++             email: "alice@example.com",
++             merged_into_person_id: nil
++           } = renamed_person = PersonQueries.get_person(person_id)
++
++    assert renamed_person ==
++             %{original_person | name: "Alice Jones", updated_at: renamed_person.updated_at}
++
++    assert DateTime.compare(renamed_person.updated_at, original_person.updated_at) == :gt
++    assert email_addresses_for(person_id) == original_email_addresses
++
++    assert_receive {:read_model_changed,
++                    %{
++                      projector: PersonProjector,
++                      source_event: %PersonRenamed{
++                        person_id: ^person_id,
++                        name: "Alice Jones"
++                      }
++                    }}
++
++    assert {:error, {:name_changed, "Alice Jones"}} =
++             App.dispatch(%RenamePerson{
++               person_id: person_id,
++               name: "Alice Brown",
++               expected_name: "Alice Smith"
++             })
++
++    assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
++    assert email_addresses_for(person_id) == original_email_addresses
++  end
++
+   test "ReplacePersonEmailAddresses atomically replaces rows and updates denormalized primary email" do
+     person_id = Memba.ID.generate(:person)
+ 
