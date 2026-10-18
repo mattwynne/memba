@@ -65,7 +65,7 @@ defmodule Memba.Membership.Person do
   def execute(%__MODULE__{} = person, %RenamePerson{} = command) do
     with :ok <- validate_person_id(command.person_id),
          :ok <- validate_matching_person_id(person, command),
-         {:ok, requested_name} <- normalize_rename_name(command.name),
+         {:ok, requested_name} <- normalize_comparable_name(command.name),
          {:ok, current_name} <- normalize_comparable_name(person.name) do
       decide_rename(person, command, requested_name, current_name)
     end
@@ -314,15 +314,6 @@ defmodule Memba.Membership.Person do
 
   defp normalize_name(_name), do: {:error, :invalid_name}
 
-  defp normalize_rename_name(name) do
-    with {:ok, normalized_name} <- normalize_comparable_name(name),
-         true <- String.length(normalized_name) <= 100 do
-      {:ok, normalized_name}
-    else
-      _blank_or_too_long -> {:error, :invalid_name}
-    end
-  end
-
   defp normalize_comparable_name(name) when is_binary(name) do
     case ~r/[\s\p{Z}]+/u |> Regex.replace(name, " ") |> String.trim() do
       "" -> {:error, :invalid_name}
@@ -335,10 +326,15 @@ defmodule Memba.Membership.Person do
   defp decide_rename(_person, _command, requested_name, requested_name), do: []
 
   defp decide_rename(person, command, requested_name, current_name) do
-    with {:ok, expected_name} <- normalize_comparable_name(command.expected_name),
+    with :ok <- validate_rename_name(requested_name),
+         {:ok, expected_name} <- normalize_comparable_name(command.expected_name),
          :ok <- compare_expected_name(expected_name, current_name) do
       %PersonRenamed{person_id: person.person_id, name: requested_name}
     end
+  end
+
+  defp validate_rename_name(name) do
+    if String.length(name) <= 100, do: :ok, else: {:error, :invalid_name}
   end
 
   defp compare_expected_name(current_name, current_name), do: :ok

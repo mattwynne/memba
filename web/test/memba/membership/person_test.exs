@@ -446,6 +446,25 @@ defmodule Memba.Membership.PersonTest do
                })
     end
 
+    test "allows an unchanged historical name longer than the current limit" do
+      person_id = Memba.ID.generate(:person)
+      historical_name = String.duplicate("é", 101)
+
+      person =
+        Person.apply(%Person{}, %PersonCreated{
+          person_id: person_id,
+          name: historical_name,
+          email: "alice@example.com"
+        })
+
+      assert [] =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: " #{historical_name} ",
+                 expected_name: "A stale historical name"
+               })
+    end
+
     test "confirmation remains conditional and a second intervening change conflicts again" do
       person_id = Memba.ID.generate(:person)
       smith = created_person(person_id)
