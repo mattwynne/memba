@@ -1,8 +1,39 @@
 # A repeatable workflow eval
 
-One fixed exercise, one checklist, one result sheet. No eval runner or model-based judge.
+A complete-workflow exercise and a small navigator decision eval. Neither uses a model-based judge or changes the production workflow's control flow.
 
-## Run it
+## Navigator unit eval: after review repairs
+
+[The fixed case](cases/after-review-repairs.md) supplies the state just before the failed handoff in run `01M56FPDS23ZHB8G3J2YK9RWS6`: repairs finished, focused tests green, previous full check stale. Its source is navigator visit12 / driver visit8. The case is a distilled set of observations, not the entire historical conversation.
+
+**Required decision: `preferred_next_label: check`.** Stopping, choosing another coding assignment, referring back to refactoring, or omitting a route fails. This specifies the new direct-to-checks behaviour we want; the current prompt does not offer that choice. This is not an estimate of the old end-to-end stop rate. The expected answer lives in the scorer, not in the case sent to the model.
+
+From the repository root, with normal Fabro authentication:
+
+```sh
+python3 .fabro/workflows/bdd-implementation/eval/navigator.py run \
+  --runs 20 --out .fabro/workflows/bdd-implementation/eval/results/navigator-before
+```
+
+Choose the sample size **before** running. The command snapshots the current production navigator prompt, case and production model/environment configuration, then makes that many sequential, independent native Fabro prompt calls. It uses the same model and high reasoning setting, but no tools, drivers, checks or reviewers. Full fidelity suppresses earlier trials' preambles; prompt nodes have no shared conversation. Normal managed Docker lifecycle stops the sandbox on termination.
+
+Change the navigator only after observing the baseline, then use the same sample size and case with a new output directory (for example `navigator-after`). `--prompt PATH` can test a candidate prompt without editing the production prompt. Do not change the case between versions or replace unfavourable trials. Compare both success rates and their uncertainty; a small difference is not proof of improvement.
+
+The report shows successes / observed responses, a **95% Wilson confidence interval**, and missing/error responses separately. These intervals describe this fixed decision case, not reliability across other situations; they assume independent samples. Infrastructure failures are not silently dropped: their requested trial slots remain visible and make the batch incomplete. No automatic repair, retry or replacement of a trial. The process exits nonzero unless every requested trial passes; that is useful red/green feedback, not a statistical guarantee. Fabro's batch status alone is **not** the grade.
+
+Raw prompts, responses, native extracted route labels, launch ID and statistics remain in the ignored output directory. Recompute a report without model calls:
+
+```sh
+python3 .fabro/workflows/bdd-implementation/eval/navigator.py report \
+  .fabro/workflows/bdd-implementation/eval/results/navigator-before
+python3 -B -m unittest discover -s .fabro/workflows/bdd-implementation/eval -p 'test_*.py'
+```
+
+An interrupted runner does not cancel or relaunch its native run. Inspect the saved `launch.json` and finish retrieving its dump before reporting; never start a replacement for an unknown launch acknowledgement. Existing output directories are refused. The dump must be at `<output>/dump/` for `report`.
+
+This eval measures the navigator's **decision given supplied evidence**. It does not test tool use, long conversation memory, actual `dev check` execution, or graph wiring. Those still need the complete-workflow exercise below. Adding this eval does not add a “blocked” branch or change production routing.
+
+## Complete-workflow exercise
 
 1. Prepare [the name-change case](cases/name-change.md). Record its exact prepared Git commit, workflow/test-tooling commit, model and Docker image.
 2. Freeze those versions for a batch of **three independent runs**. Start every run from that same prepared source in a fresh normal Fabro environment, never a previous run's implementation.

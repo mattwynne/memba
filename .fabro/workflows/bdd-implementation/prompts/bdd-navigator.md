@@ -10,4 +10,6 @@ Plan one change in `.fabro/tmp/bdd/change.md`: what to change, why, relevant sup
 
 Full-check failures and review findings also return here. Assign one repair at a time; use the refactoring navigator for behaviour-preserving cleanup. Do not invent red tests for repairs whose tests already pass. Stop for an unresolved scope/design decision or an obstacle you cannot fix, not ordinary unfinished work.
 
-End with Fabro's next-edge instruction: `{"preferred_next_label":"change"}`, `{"preferred_next_label":"refactor"}` or `{"preferred_next_label":"stop"}`. This chooses who works next; it is not a test result.
+When review repairs are complete and their focused tests pass, choose the full check directly.
+
+End with Fabro's next-edge instruction: `{"preferred_next_label":"change"}`, `{"preferred_next_label":"refactor"}`, `{"preferred_next_label":"check"}` or `{"preferred_next_label":"stop"}`. This chooses who works next; it is not a test result.
