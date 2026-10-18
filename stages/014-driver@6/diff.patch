@@ -1,0 +1,46 @@
+diff --git a/web/test/features/step_definitions/member_profile_steps.exs b/web/test/features/step_definitions/member_profile_steps.exs
+index a423310..6479d84 100644
+--- a/web/test/features/step_definitions/member_profile_steps.exs
++++ b/web/test/features/step_definitions/member_profile_steps.exs
+@@ -114,6 +114,41 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+     context
+   end
+ 
++  step "{word} confirms replacing {string} with {string}",
++       %{args: [person_name, displayed_current_name, replacement_name]} = context do
++    %{person_id: person_id} =
++      context
++      |> Map.fetch!(:people)
++      |> Map.fetch!(person_name)
++
++    edit =
++      context
++      |> Map.fetch!(:member_profile_name_edits)
++      |> Map.fetch!(person_name)
++
++    assert ^displayed_current_name = edit.authoritative_current_name
++    assert ^replacement_name = edit.draft_name
++
++    assert {:ok, command} =
++             PersonCommands.prepare_rename(
++               %{person_id: person_id},
++               %{
++                 name: edit.draft_name,
++                 expected_name: edit.authoritative_current_name
++               }
++             )
++
++    confirmation_dispatch_result =
++      CommandDispatch.dispatch(command, consistency: :strong)
++
++    update_context_map(
++      context,
++      :member_profile_name_edits,
++      person_name,
++      Map.put(edit, :confirmation_dispatch_result, confirmation_dispatch_result)
++    )
++  end
++
+   step "{word} should be known as {string}",
+        %{args: [person_name, expected_name]} = context do
+     %{person_id: person_id} =
