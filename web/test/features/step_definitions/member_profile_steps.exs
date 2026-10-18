@@ -53,6 +53,44 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context
   end
 
+  step "{word} submits the older change to {string}",
+       %{args: [person_name, draft_name]} = context do
+    %{person_id: person_id} =
+      context
+      |> Map.fetch!(:people)
+      |> Map.fetch!(person_name)
+
+    edit =
+      context
+      |> Map.fetch!(:member_profile_name_edits)
+      |> Map.fetch!(person_name)
+
+    assert {:ok, command} =
+             PersonCommands.prepare_rename(
+               %{person_id: person_id},
+               %{name: draft_name, expected_name: edit.expected_name}
+             )
+
+    dispatch_result = CommandDispatch.dispatch(command)
+
+    authoritative_current_name =
+      case dispatch_result do
+        {:error, {:name_changed, current_name}} -> current_name
+        _other -> nil
+      end
+
+    update_context_map(
+      context,
+      :member_profile_name_edits,
+      person_name,
+      Map.merge(edit, %{
+        draft_name: draft_name,
+        authoritative_current_name: authoritative_current_name,
+        dispatch_result: dispatch_result
+      })
+    )
+  end
+
   defp email_for(context, person_name) do
     normalized_name =
       person_name

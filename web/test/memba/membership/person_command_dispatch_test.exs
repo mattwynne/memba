@@ -176,4 +176,35 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
 
     assert [%{normalized_email: "alice@example.com", is_primary: true}] = email_addresses
   end
+
+  test "returns the authoritative current name when dispatching a stale conditional rename" do
+    person_id = Memba.ID.generate(:person)
+    actor_context = %{person_id: person_id}
+
+    assert {:ok, create_command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Smith",
+               email: "alice@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create_command, consistency: :strong)
+
+    assert {:ok, winning_command} =
+             PersonCommands.prepare_rename(
+               actor_context,
+               %{name: "Alice Jones", expected_name: "Alice Smith"}
+             )
+
+    assert :ok = CommandDispatch.dispatch(winning_command)
+
+    assert {:ok, stale_command} =
+             PersonCommands.prepare_rename(
+               actor_context,
+               %{name: "Alice Brown", expected_name: "Alice Smith"}
+             )
+
+    assert {:error, {:name_changed, "Alice Jones"}} =
+             CommandDispatch.dispatch(stale_command)
+  end
 end
