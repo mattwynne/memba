@@ -58,8 +58,8 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     with {:ok, command} <-
            PersonCommands.prepare_rename(
              %{person_id: context.alice_person_id},
+             context.alice_person_id,
              %{
-               person_id: context.alice_person_id,
                name: name,
                expected_name: expected_name
              }

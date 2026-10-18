@@ -63,8 +63,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
     assert :ok = Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
 
     assert {:ok, rename_to_jones} =
-             PersonCommands.prepare_rename(actor, %{
-               person_id: person_id,
+             PersonCommands.prepare_rename(actor, person_id, %{
                name: "Alice Jones",
                expected_name: "Alice Smith"
              })
@@ -85,8 +84,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
                     }}
 
     assert {:ok, stale_rename} =
-             PersonCommands.prepare_rename(actor, %{
-               person_id: person_id,
+             PersonCommands.prepare_rename(actor, person_id, %{
                name: "Alice Brown",
                expected_name: "Alice Smith"
              })
@@ -97,8 +95,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
     assert %PersonProjection{name: "Alice Jones"} = PersonQueries.get_person(person_id)
 
     assert {:ok, confirmed_rename} =
-             PersonCommands.prepare_rename(actor, %{
-               person_id: person_id,
+             PersonCommands.prepare_rename(actor, person_id, %{
                name: "Alice Brown",
                expected_name: "Alice Jones"
              })

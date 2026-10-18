@@ -1,7 +1,10 @@
 defmodule Memba.Membership.PersonCommands do
   @moduledoc """
-  Prepare CreatePerson commands without dispatching them. The projected email
-  ownership check is a preflight; the Person aggregate still validates creation.
+  Prepares Person commands without dispatching them.
+
+  Creation includes a projected email ownership preflight; the Person aggregate
+  still validates creation. Self-service rename preparation authorizes the
+  trusted actor to target their own Person before constructing the command.
   """
 
   alias Memba.Membership.Commands.CreatePerson
@@ -24,24 +27,25 @@ defmodule Memba.Membership.PersonCommands do
 
   @doc """
   Prepares a self-service rename using trusted actor context separately from
-  editable attributes.
+  the target Person identity and editable attributes.
   """
-  def prepare_rename(%{person_id: actor_person_id}, attrs) when is_map(attrs) do
+  def prepare_rename(%{person_id: actor_person_id}, target_person_id, editable_attrs)
+      when is_map(editable_attrs) do
     with :ok <- validate_actor_person_id(actor_person_id),
-         {:ok, person_id} <- fetch_required(attrs, :person_id),
-         :ok <- authorize_self(actor_person_id, person_id),
-         {:ok, name} <- fetch_required(attrs, :name),
-         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
+         :ok <- authorize_self(actor_person_id, target_person_id),
+         {:ok, name} <- fetch_required(editable_attrs, :name),
+         {:ok, expected_name} <- fetch_required(editable_attrs, :expected_name) do
       {:ok,
        %RenamePerson{
-         person_id: actor_person_id,
+         person_id: target_person_id,
          name: name,
          expected_name: expected_name
        }}
     end
   end
 
-  def prepare_rename(_actor_context, _attrs), do: {:error, :unauthorized}
+  def prepare_rename(_actor_context, _target_person_id, _editable_attrs),
+    do: {:error, :unauthorized}
 
   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
     with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
