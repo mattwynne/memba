@@ -1,0 +1,267 @@
+{
+  "title": "Untitled run",
+  "spec": {
+    "run_id": "01M58Z6P0EVTJ0VFYGJTW0NZSY",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "quality.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": null,
+        "working_dir": null,
+        "metadata": {
+          "purpose": "bdd-plan-source-quality-2"
+        },
+        "inputs": {},
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-5",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**",
+            ".fabro/blobs",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/source-quality/*.json",
+            ".fabro/tmp/source-quality/*.log"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "SourceQuality",
+      "nodes": {
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        },
+        "check": {
+          "id": "check",
+          "attrs": {
+            "script": {
+              "String": "python3 - <<'PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = 'f21989066278325f378858653c2be45971b5e512'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-scenario-implementation/eval', '-p', 'test_*.py'], check=True)\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nextra = subprocess.run(['devenv', 'shell', '--', 'node', '--test', '.fabro/workflows/bdd-plan-implementation/eval/test_eval.cjs'])\n(out / 'eval-tests.json').write_text(json.dumps({'exit': extra.returncode}) + '\\n')\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode or extra.returncode)\n\nPY\n"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 1800,
+                "nanos": 0
+              }
+            }
+          }
+        },
+        "done": {
+          "id": "done",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "stop": {
+          "id": "stop",
+          "attrs": {
+            "script": {
+              "String": "exit 1"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "check",
+          "attrs": {}
+        },
+        {
+          "from": "check",
+          "to": "done",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "check",
+          "to": "stop",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": ""
+        },
+        "default_max_retries": {
+          "Integer": 0
+        }
+      }
+    },
+    "graph_source": "digraph SourceQuality {\n graph [default_max_retries=0]\n start [shape=Mdiamond]\n done [shape=Msquare]\n check [shape=parallelogram, timeout=\"30m\", script=\"python3 - <<'PY'\\nimport hashlib\\nimport io\\nimport json\\nimport os\\nfrom pathlib import Path\\nimport stat\\nimport subprocess\\nimport sys\\n\\nout = Path('.fabro/tmp/source-quality')\\nout.mkdir(parents=True, exist_ok=True)\\nexpected = 'f21989066278325f378858653c2be45971b5e512'\\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\\\n')\\n\\ndef git(*args):\\n    return subprocess.check_output(['git', *args])\\n\\ndef verify(label):\\n    head = git('rev-parse', 'HEAD').decode().strip()\\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\\n    assert head == expected, ('wrong HEAD', head, expected)\\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\\n    entries = []\\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\\\0'):\\n        if row:\\n            meta, path = row.split(b'\\\\t', 1)\\n            mode, kind, blob = meta.split()\\n            assert kind == b'blob', ('unsupported tracked entry', path)\\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\\\n'.join(blob for _, blob, _ in entries) + b'\\\\n')\\n    stream = io.BytesIO(raw)\\n    digest = hashlib.sha256()\\n    for mode, blob, name in entries:\\n        header = stream.readline().split()\\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\\n        body = stream.read(int(header[2]))\\n        assert stream.read(1) == b'\\\\n'\\n        path = Path(name)\\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\\n        digest.update(os.fsencode(name) + b'\\\\0' + mode.encode() + b'\\\\0' + body)\\n    assert stream.read() == b''\\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\\n    assert result['index_tree'] == tree\\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\\\n')\\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\\n    return result\\n\\nbefore = verify('before')\\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-scenario-implementation/eval', '-p', 'test_*.py'], check=True)\\nresult = subprocess.run(['bin/dev', 'check'])\\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\\\n')\\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\\nextra = subprocess.run(['devenv', 'shell', '--', 'node', '--test', '.fabro/workflows/bdd-plan-implementation/eval/test_eval.cjs'])\\n(out / 'eval-tests.json').write_text(json.dumps({'exit': extra.returncode}) + '\\\\n')\\nafter = verify('after')\\nassert before == after, 'source metadata changed during check'\\nsys.exit(result.returncode or extra.returncode)\\n\\nPY\\n\"]\n stop [shape=parallelogram, script=\"exit 1\"]\n start -> check\n check -> done [condition=\"outcome=succeeded\"]\n check -> stop\n}\n",
+    "workflow_slug": "quality",
+    "source_directory": "/home/matt/.local/state/memba/bdd-plan-eval-20261019/source",
+    "labels": {
+      "purpose": "bdd-plan-source-quality-2"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "65149dcb0a6074f08ec7517ef1cb31293945add29762023a86bc84257cc1fbd6",
+    "definition_blob": "74c6e5e7edce49e007ba37ae21e1be973a511dd014657c70a2d90df4b53f9337",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "trial/bdd-plan-source-20261019",
+      "sha": "f21989066278325f378858653c2be45971b5e512",
+      "dirty": "dirty"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M58Z6P0EVTJ0VFYGJTW0NZSY",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-19T02:17:44.945361509Z",
+  "last_event_at": "2026-10-19T02:18:03.108452007Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "b0926cc7786b6e2a1e58d99c89354f85b8aa321227f94200c4a94c94378bee46",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "trial/bdd-plan-source-20261019",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
