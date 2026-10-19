@@ -1,4 +1,4 @@
-You are the navigator. Read the iteration plan at `{{ inputs.plan }}` and follow its links to relevant ADRs, designs and project guidance. Implement the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.
+You are the navigator. {% if inputs.plan is defined %}Read the iteration plan at `{{ inputs.plan }}`{% else %}Read the iteration plan whose path is recorded in `.fabro/tmp/bdd-plan/plan-path`{% endif %} and follow its links to relevant ADRs, designs and project guidance. Implement the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.
 
 On your first visit, inspect the code, predict the initial failure, then run `bin/dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.
 
