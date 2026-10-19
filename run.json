@@ -232,7 +232,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-10-19T02:06:44.179391907Z",
-  "last_event_at": "2026-10-19T02:16:48.856187203Z",
+  "last_event_at": "2026-10-19T02:16:53.272143373Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -272,9 +272,9 @@
       "diff": {}
     },
     {
-      "seq": 0,
+      "seq": 31,
       "checkpoint": {
-        "timestamp": "2026-10-19T02:16:48.869767645Z",
+        "timestamp": "2026-10-19T02:16:53.023153941Z",
         "current_node": "check",
         "completed_nodes": [
           "start",
@@ -282,20 +282,20 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.work_dir": "/workspace/memba",
+          "failure_class": "transient_infra",
+          "internal.fidelity": "compact",
+          "outcome": "failed",
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01M58YJBFRDQA6DVKNXCC8S2SX",
           "graph.goal": "",
+          "internal.work_dir": "/workspace/memba",
+          "failure_signature": "check|transient_infra|script timed out after 600000ms: python3 - <<'py' import hashlib import io import json import os from pathlib import path import stat import subprocess import sys out = path('.fabro/tmp/source-quality') out.mkdir(parents=true,exist_ok=true)",
+          "internal.thread_id": "start",
           "internal.retry_count.check": 0,
           "graph.default_max_retries": "0",
-          "internal.thread_id": "start",
-          "internal.run_id": "01M58YJBFRDQA6DVKNXCC8S2SX",
-          "outcome": "failed",
           "thread.start.current_node": "check",
-          "internal.fidelity": "compact",
-          "internal.retry_count.start": 0,
-          "failure_class": "transient_infra",
-          "failure_signature": "check|transient_infra|script timed out after 600000ms: python3 - <<'py' import hashlib import io import json import os from pathlib import path import stat import subprocess import sys out = path('.fabro/tmp/source-quality') out.mkdir(parents=true,exist_ok=true)",
           "current_node": "check",
-          "internal.node_visit_count": 1
+          "internal.retry_count.start": 0
         },
         "node_outcomes": {
           "start": {
@@ -312,7 +312,83 @@
           }
         },
         "next_node_id": "stop",
+        "git_commit_sha": "cdec2ad6103619ab32d0e978b789d2f3c70f5cb9",
         "node_visits": {
+          "check": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-10-19T02:16:53.275857170Z",
+        "current_node": "stop",
+        "completed_nodes": [
+          "start",
+          "check",
+          "stop"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.work_dir": "/workspace/memba",
+          "graph.goal": "",
+          "internal.retry_count.check": 0,
+          "thread.check.current_node": "stop",
+          "graph.default_max_retries": "0",
+          "internal.thread_id": "check",
+          "internal.run_id": "01M58YJBFRDQA6DVKNXCC8S2SX",
+          "outcome": "failed",
+          "internal.retry_count.stop": 0,
+          "thread.start.current_node": "check",
+          "internal.fidelity": "compact",
+          "internal.retry_count.start": 0,
+          "failure_class": "deterministic",
+          "failure_signature": "stop|deterministic|script failed with exit code: <n>",
+          "current_node": "stop",
+          "command.output": "blob://sha256/12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+          "internal.node_visit_count": 1
+        },
+        "node_outcomes": {
+          "check": {
+            "status": "failed",
+            "failure": {
+              "message": "Script timed out after 600000ms: python3 - <<'PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = 'f21989066278325f378858653c2be45971b5e512'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-scenario-implementation/eval', '-p', 'test_*.py'], check=True)\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nextra = subprocess.run(['devenv', 'shell', '--', 'node', '--test', '.fabro/workflows/bdd-plan-implementation/eval/test_eval.cjs'])\n(out / 'eval-tests.json').write_text(json.dumps({'exit': extra.returncode}) + '\\n')\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode or extra.returncode)\n\nPY\n\n\n## output\n be able to read it nor receive its email :: 1680ms\n[acceptance 2026-10-19T02:16:32.825Z] scenario teardown start: Bob posts September agenda, Alice finds it, and Dan cannot read it status=PASSED\n[acceptance 2026-10-19T02:16:32.867Z] scenario finish: Bob posts September agenda, Alice finds it, and Dan cannot read it status=PASSED duration=13334ms\n\n@journey @iteration-066\nFeature: Asking for Board membership from its page # features/journeys/custom_group_access_request.feature:2\n\n  @journey @iteration-066\n  Scenario: Eve asks and Dan adds her from the request email # features/journeys/custom_group_access_request.feature:4\n[acceptance 2026-10-19T02:16:32.868Z] scenario start: Eve asks and Dan adds her from the request email\n[acceptance 2026-10-19T02:16:32.909Z] scenario reset app state: Eve asks and Dan adds her from the request email\n    Given KMC is a club\n    And Alice and Dan are its club admins\n[acceptance 2026-10-19T02:16:35.470Z] slow step: Eve asks and Dan adds her from the request email :: Alice and Dan are its club admins :: 2123ms\n    And Eve is its ordinary active club member\n[acceptance 2026-10-19T02:16:36.485Z] slow step: Eve asks and Dan adds her from the request email :: Eve is its ordinary active club member :: 1014ms\n    And Alice is the only member of its group Board\n[acceptance 2026-10-19T02:16:37.542Z] slow step: Eve asks and Dan adds her from the request email :: Alice is the only member of its group Board :: 1056ms\n    When Eve opens Board\n    Then Eve should be offered Request access without a message composer\n    And Eve should see neither Board conversations nor its membership list\n    When Eve requests access to Board\n    Then Eve should see \"Your request has been sent.\"\n    But Eve should still not belong to Board\n    When Dan opens \"Add Eve to Board\" from the request email\n    Then Dan should be offered the action to add Eve to Board\n    But Eve should still not belong to Board\n    When Dan confirms adding Eve to Board\n    Then Eve should receive a welcome email with a link to Board\n    When Eve opens Board from her welcome email\n    Then Eve should have access to Board's conversations\n    But Eve should still have no access to the Admin request conversation\n[acceptance 2026-10-19T02:16:40.712Z] scenario teardown start: Eve asks and Dan adds her from the request email status=PASSED\n[acceptance 2026-10-19T02:16:40.736Z] scenario finish: Eve asks and Dan adds her from the request email status=PASSED duration=7868ms\n\n@journey @iteration-066\nFeature: Finding and joining a newly created Board # features/journeys/custom_group_admission.feature:2\n\n  Creating a private group does not make it readable to every club member.\n  A club admin can admit someone without joining the group themselves.\n\n  @journey @iteration-066\n  Scenario: Eve returns to Board after Dan admits her # features/journeys/custom_group_admission.feature:6\n[acceptance 2026-10-19T02:16:40.743Z] scenario start: Eve returns to Board after Dan admits her\n[acceptance 2026-10-19T02:16:40.782Z] scenario reset app state: Eve returns to Board after Dan admits her\n    Given Kootenay Mountaineering Club has club email slug \"kmc\"\n    And Alice and Dan are its club admins\n[acceptance 2026-10-19T02:16:43.270Z] slow step: Eve returns to Board after Dan admits her :: Alice and Dan are its club admins :: 2047ms\n    And Bob and Eve are its ordinary active club members\n[acceptance 2026-10-19T02:16:45.319Z] slow step: Eve returns to Board after Dan admits her :: Bob and Eve are its ordinary active club members :: 2049ms\n    When Alice creates the custom group \"Board\" in Kootenay Mountaineering Club\n[acceptance 2026-10-19T02:16:46.678Z] slow step: Eve returns to Board after Dan admits her :: Alice creates the custom group \"Board\" in Kootenay Mountaineering Club :: 1359ms\n    Then Alice should be its only member\n    And Dan should not belong to Board\n    When Eve selects the Board group\n    Then Eve should see Board's name and be offered Request access\n    But Eve should see neither Board conversations nor its membership list\n    When Dan adds Eve to Board\n",
+              "category": "transient_infra"
+            },
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "stop": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 169,
+              "active_time_ms": 169
+            }
+          }
+        },
+        "node_visits": {
+          "stop": 1,
           "start": 1,
           "check": 1
         }
@@ -347,6 +423,45 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "stop@1": {
+      "first_event_seq": 34,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "exit 1",
+        "command": "exec 2>&1\nexit 1",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+        "exit_code": 1,
+        "duration_ms": 169,
+        "termination": "exited",
+        "output_bytes": 0,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 0,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-10-19T02:16:53.025853205Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
+    },
     "start@1": {
       "first_event_seq": 18,
       "prompt": null,
@@ -387,7 +502,12 @@
       "first_event_seq": 22,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "failed",
+        "notes": null,
+        "failure_reason": "Script timed out after 600000ms: python3 - <<'PY'\nimport hashlib\nimport io\nimport json\nimport os\nfrom pathlib import Path\nimport stat\nimport subprocess\nimport sys\n\nout = Path('.fabro/tmp/source-quality')\nout.mkdir(parents=True, exist_ok=True)\nexpected = 'f21989066278325f378858653c2be45971b5e512'\n(out / 'owner.json').write_text(json.dumps({'source': expected, 'purpose': 'source-quality-observation'}) + '\\n')\n\ndef git(*args):\n    return subprocess.check_output(['git', *args])\n\ndef verify(label):\n    head = git('rev-parse', 'HEAD').decode().strip()\n    tree = git('rev-parse', 'HEAD^{tree}').decode().strip()\n    assert head == expected, ('wrong HEAD', head, expected)\n    assert not git('diff', '--binary') and not git('diff', '--cached', '--binary'), 'tracked diff changed'\n    entries = []\n    for row in git('ls-tree', '-r', '-z', '--full-tree', head).split(b'\\0'):\n        if row:\n            meta, path = row.split(b'\\t', 1)\n            mode, kind, blob = meta.split()\n            assert kind == b'blob', ('unsupported tracked entry', path)\n            entries.append((mode.decode(), blob, os.fsdecode(path)))\n    raw = subprocess.check_output(['git', 'cat-file', '--batch'], input=b'\\n'.join(blob for _, blob, _ in entries) + b'\\n')\n    stream = io.BytesIO(raw)\n    digest = hashlib.sha256()\n    for mode, blob, name in entries:\n        header = stream.readline().split()\n        assert len(header) == 3 and header[0] == blob and header[1] == b'blob', header\n        body = stream.read(int(header[2]))\n        assert stream.read(1) == b'\\n'\n        path = Path(name)\n        assert path.is_symlink() or stat.S_ISREG(path.stat().st_mode), ('unexpected file kind', name)\n        actual_mode = '120000' if path.is_symlink() else '100755' if path.stat().st_mode & 0o111 else '100644'\n        actual = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()\n        assert actual == body and actual_mode == mode, ('tracked bytes/mode differ', name)\n        digest.update(os.fsencode(name) + b'\\0' + mode.encode() + b'\\0' + body)\n    assert stream.read() == b''\n    result = {'head': head, 'tree': tree, 'index_tree': git('write-tree').decode().strip(), 'files': len(entries), 'actual_bytes_modes_sha256': digest.hexdigest(), 'status': git('status', '--porcelain').decode()}\n    assert result['index_tree'] == tree\n    (out / (label + '.json')).write_text(json.dumps(result, indent=2) + '\\n')\n    print('SOURCE_VERIFIED ' + json.dumps(result), flush=True)\n    return result\n\nbefore = verify('before')\nsubprocess.run(['python3', '-B', '-m', 'unittest', 'discover', '-s', '.fabro/workflows/bdd-scenario-implementation/eval', '-p', 'test_*.py'], check=True)\nresult = subprocess.run(['bin/dev', 'check'])\n(out / 'exit.json').write_text(json.dumps({'command': ['bin/dev', 'check'], 'exit': result.returncode, 'source': expected}) + '\\n')\nprint('DEV_CHECK_EXIT ' + str(result.returncode), flush=True)\nextra = subprocess.run(['devenv', 'shell', '--', 'node', '--test', '.fabro/workflows/bdd-plan-implementation/eval/test_eval.cjs'])\n(out / 'eval-tests.json').write_text(json.dumps({'exit': extra.returncode}) + '\\n')\nafter = verify('after')\nassert before == after, 'source metadata changed during check'\nsys.exit(result.returncode or extra.returncode)\n\nPY\n\n\n## output\n be able to read it nor receive its email :: 1680ms\n[acceptance 2026-10-19T02:16:32.825Z] scenario teardown start: Bob posts September agenda, Alice finds it, and Dan cannot read it status=PASSED\n[acceptance 2026-10-19T02:16:32.867Z] scenario finish: Bob posts September agenda, Alice finds it, and Dan cannot read it status=PASSED duration=13334ms\n\n@journey @iteration-066\nFeature: Asking for Board membership from its page # features/journeys/custom_group_access_request.feature:2\n\n  @journey @iteration-066\n  Scenario: Eve asks and Dan adds her from the request email # features/journeys/custom_group_access_request.feature:4\n[acceptance 2026-10-19T02:16:32.868Z] scenario start: Eve asks and Dan adds her from the request email\n[acceptance 2026-10-19T02:16:32.909Z] scenario reset app state: Eve asks and Dan adds her from the request email\n    Given KMC is a club\n    And Alice and Dan are its club admins\n[acceptance 2026-10-19T02:16:35.470Z] slow step: Eve asks and Dan adds her from the request email :: Alice and Dan are its club admins :: 2123ms\n    And Eve is its ordinary active club member\n[acceptance 2026-10-19T02:16:36.485Z] slow step: Eve asks and Dan adds her from the request email :: Eve is its ordinary active club member :: 1014ms\n    And Alice is the only member of its group Board\n[acceptance 2026-10-19T02:16:37.542Z] slow step: Eve asks and Dan adds her from the request email :: Alice is the only member of its group Board :: 1056ms\n    When Eve opens Board\n    Then Eve should be offered Request access without a message composer\n    And Eve should see neither Board conversations nor its membership list\n    When Eve requests access to Board\n    Then Eve should see \"Your request has been sent.\"\n    But Eve should still not belong to Board\n    When Dan opens \"Add Eve to Board\" from the request email\n    Then Dan should be offered the action to add Eve to Board\n    But Eve should still not belong to Board\n    When Dan confirms adding Eve to Board\n    Then Eve should receive a welcome email with a link to Board\n    When Eve opens Board from her welcome email\n    Then Eve should have access to Board's conversations\n    But Eve should still have no access to the Admin request conversation\n[acceptance 2026-10-19T02:16:40.712Z] scenario teardown start: Eve asks and Dan adds her from the request email status=PASSED\n[acceptance 2026-10-19T02:16:40.736Z] scenario finish: Eve asks and Dan adds her from the request email status=PASSED duration=7868ms\n\n@journey @iteration-066\nFeature: Finding and joining a newly created Board # features/journeys/custom_group_admission.feature:2\n\n  Creating a private group does not make it readable to every club member.\n  A club admin can admit someone without joining the group themselves.\n\n  @journey @iteration-066\n  Scenario: Eve returns to Board after Dan admits her # features/journeys/custom_group_admission.feature:6\n[acceptance 2026-10-19T02:16:40.743Z] scenario start: Eve returns to Board after Dan admits her\n[acceptance 2026-10-19T02:16:40.782Z] scenario reset app state: Eve returns to Board after Dan admits her\n    Given Kootenay Mountaineering Club has club email slug \"kmc\"\n    And Alice and Dan are its club admins\n[acceptance 2026-10-19T02:16:43.270Z] slow step: Eve returns to Board after Dan admits her :: Alice and Dan are its club admins :: 2047ms\n    And Bob and Eve are its ordinary active club members\n[acceptance 2026-10-19T02:16:45.319Z] slow step: Eve returns to Board after Dan admits her :: Bob and Eve are its ordinary active club members :: 2049ms\n    When Alice creates the custom group \"Board\" in Kootenay Mountaineering Club\n[acceptance 2026-10-19T02:16:46.678Z] slow step: Eve returns to Board after Dan admits her :: Alice creates the custom group \"Board\" in Kootenay Mountaineering Club :: 1359ms\n    Then Alice should be its only member\n    And Dan should not belong to Board\n    When Eve selects the Board group\n    Then Eve should see Board's name and be offered Request access\n    But Eve should see neither Board conversations nor its membership list\n    When Dan adds Eve to Board\n",
+        "timestamp": "2026-10-19T02:16:48.867427139Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -410,6 +530,12 @@
       "started_at": "2026-10-19T02:06:46.457979863Z",
       "handler": "command",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 602259,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -419,7 +545,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "failed"
     }
   }
 }
