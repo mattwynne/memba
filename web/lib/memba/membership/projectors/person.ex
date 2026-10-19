@@ -11,6 +11,7 @@ defmodule Memba.Membership.Projectors.Person do
 
   alias Memba.Membership.Events.PersonEmailAddressAdded
   alias Memba.Membership.Events.PersonMerged
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.Events.PersonEmailAddressRemoved
   alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
@@ -28,6 +29,15 @@ defmodule Memba.Membership.Projectors.Person do
       email: event.email
     })
     |> upsert_legacy_primary_email_address(event)
+  end)
+
+  project(%PersonRenamed{} = event, fn multi ->
+    Ecto.Multi.update_all(
+      multi,
+      :membership_person_renamed,
+      person_query(event.person_id),
+      set: [name: event.name, updated_at: DateTime.utc_now()]
+    )
   end)
 
   project(%PersonEmailAddressesReplaced{} = event, fn multi ->

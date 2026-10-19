@@ -31,6 +31,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
     PersonEmailAddressRemoved,
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
+    PersonRenamed,
     PersonPrimaryEmailAddressChanged
   }
 
@@ -66,7 +67,7 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   @member_delivery_projector Memba.Messaging.Projectors.MemberEmailDelivery
   @staff_delivery_projector Memba.Messaging.Projectors.MembaStaffEmailDelivery
 
-  @person_events [
+  @person_and_email_invalidation_events [
     PersonCreated,
     PersonEmailAddressAdded,
     PersonEmailAddressVerified,
@@ -203,8 +204,14 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSource do
   defp classify_membership_projector(event),
     do: contract_violation(@membership_projector, event, :unsupported_projector_event)
 
+  defp classify_person_projector(%PersonRenamed{} = event) do
+    with_required(@person_projector, event, [:person_id], fn %{person_id: person_id} ->
+      [{:person, person_id}]
+    end)
+  end
+
   defp classify_person_projector(event) do
-    if event_module(event) in @person_events do
+    if event_module(event) in @person_and_email_invalidation_events do
       with_required(@person_projector, event, [:person_id], fn %{person_id: person_id} ->
         [{:person, person_id}, {:person_emails, person_id}]
       end)
