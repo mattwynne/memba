@@ -1,0 +1,427 @@
+{
+  "title": "Implement the planned domain scenarios, one at a time; do not publish",
+  "spec": {
+    "run_id": "01M58Z7AFPYM8A5JS4R0HT2EPN",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "parent.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Implement the planned domain scenarios, one at a time; do not publish"
+        },
+        "working_dir": null,
+        "metadata": {
+          "trial": "1",
+          "plan-eval": "2026-10-19-v1"
+        },
+        "inputs": {
+          "plan": "docs/iterations/068-member-name-editing/plan.md"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.6-sol",
+          "fallbacks": {
+            "gpt-5.6-sol": []
+          },
+          "controls": {
+            "reasoning_effort": "high",
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp/**",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/bdd-plan/**",
+            ".fabro/tmp/bdd/**"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "BddPlanImplementation",
+      "nodes": {
+        "observe": {
+          "id": "observe",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "set -eu; mkdir -p .fabro/tmp/bdd-plan/eval; cp acceptance-tests/features/member_profile.feature .fabro/tmp/bdd-plan/eval/final.feature; git diff \"$(cat .fabro/tmp/bdd-plan/base)\" -- web/lib > .fabro/tmp/bdd-plan/eval/code.patch; git diff --name-only \"$(cat .fabro/tmp/bdd-plan/base)\" > .fabro/tmp/bdd-plan/eval/changed-paths"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "scenario": {
+          "id": "scenario",
+          "attrs": {
+            "stack.child_workflow": {
+              "String": "../../double.fabro"
+            },
+            "shape": {
+              "String": "house"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "setup": {
+          "id": "setup",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "mkdir -p .fabro/tmp/bdd-plan && git rev-parse HEAD > .fabro/tmp/bdd-plan/base"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "navigator": {
+          "id": "navigator",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "thread_id": {
+              "String": "bdd-plan-navigator"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "prompt": {
+              "String": "You are the plan navigator. Read the plan at `docs/iterations/068-member-name-editing/plan.md`, all relevant linked ADRs, designs and project guidance, the agreed domain scenarios and the current implementation. Coordinate implementation; do not implement product code, run application tests, refactor, review, publish or delegate to other agents yourself. The scenario child owns implementation and checks.\n\nThe planning commit leaves the plan's scenarios tagged `@todo`. Work only on the domain scenarios agreed in this plan. Leave browser journeys and other iterations' scenarios alone. Completing this workflow does not mean those other jobs or the whole iteration are released.\n\nChoose the next scenario by what it adds to the implementation, not its position in a file. Prefer a small useful foundation that later scenarios can build on, then add constraints and complexity. Explain the choice using the plan, ADRs and existing code. Reconsider the next choice after every child finishes; do not prescribe the whole order in advance.\n\nKeep ordinary notes in `.fabro/tmp/bdd-plan/progress.md`: scope, completed scenarios, current choice and why it is next. Record the exact iteration-plan path in `.fabro/tmp/bdd-plan/plan-path` for the child. On returning from a child, read its result and actual saved logs if needed, and inspect the updated feature tags and implementation. Keep completed work. A successful child removes its scenario's WIP tag; do not reactivate it.\n\nFor the next pending scenario, remove only its `@todo` tag and add `@wip`. There must be exactly one WIP domain scenario. Preserve every scenario's wording, assertions and other tags; don't remove any other scenario's todo tag. Save the previous `.fabro/tmp/bdd/` notes under `.fabro/tmp/bdd-plan/` before clearing that scratch directory for the next child, so it cannot mistake old evidence for its new assignment.\n\nChoose `implement` only after preparing that single scenario. Choose `done` only when all agreed domain scenarios have completed, no in-scope todo remains and no WIP remains. Do not mark the iteration merged or claim review or publication.\n\nEnd with `{\"preferred_next_label\":\"implement\"}` to call the scenario child, or `{\"preferred_next_label\":\"done\"}` to finish."
+            },
+            "backend": {
+              "String": "api"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "stop": {
+          "id": "stop",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "echo 'Plan implementation stopped; work is preserved.' >&2; exit 1"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "done": {
+          "id": "done",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "setup",
+          "attrs": {}
+        },
+        {
+          "from": "setup",
+          "to": "navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "setup",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "navigator",
+          "to": "scenario",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=implement"
+            }
+          }
+        },
+        {
+          "from": "navigator",
+          "to": "observe",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=done"
+            }
+          }
+        },
+        {
+          "from": "navigator",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "scenario",
+          "to": "navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "scenario",
+          "to": "stop",
+          "attrs": {}
+        },
+        {
+          "from": "observe",
+          "to": "done",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "observe",
+          "to": "stop",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "default_max_retries": {
+          "Integer": 0
+        },
+        "goal": {
+          "String": "Implement the planned domain scenarios, one at a time; do not publish"
+        },
+        "model_stylesheet": {
+          "String": "* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"
+        }
+      }
+    },
+    "graph_source": "digraph BddPlanImplementation {\n    graph [goal=\"Implement the planned domain scenarios, one at a time; do not publish\",\n        default_max_retries=0,\n        model_stylesheet=\"* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\"]\n    start [shape=Mdiamond]\n    done [shape=Msquare]\n    stop [shape=parallelogram, script=\"echo 'Plan implementation stopped; work is preserved.' >&2; exit 1\"]\n    setup [shape=parallelogram, script=\"mkdir -p .fabro/tmp/bdd-plan && git rev-parse HEAD > .fabro/tmp/bdd-plan/base\"]\n    navigator [shape=box, backend=\"api\", fidelity=\"full\", thread_id=\"bdd-plan-navigator\", prompt=\"@../../../prompts/navigator.md\"]\n    scenario [shape=house, stack.child_workflow=\"../../double.fabro\"]\n\n    start -> setup\n    setup -> navigator [condition=\"outcome=succeeded\"]\n    setup -> stop\n    navigator -> scenario [condition=\"outcome=succeeded && preferred_label=implement\"]\n    navigator -> observe [condition=\"outcome=succeeded && preferred_label=done\"]\n    navigator -> stop\n    scenario -> navigator [condition=\"outcome=succeeded\"]\n    scenario -> stop\n    observe [shape=parallelogram, script=\"set -eu; mkdir -p .fabro/tmp/bdd-plan/eval; cp acceptance-tests/features/member_profile.feature .fabro/tmp/bdd-plan/eval/final.feature; git diff \\\"$(cat .fabro/tmp/bdd-plan/base)\\\" -- web/lib > .fabro/tmp/bdd-plan/eval/code.patch; git diff --name-only \\\"$(cat .fabro/tmp/bdd-plan/base)\\\" > .fabro/tmp/bdd-plan/eval/changed-paths\"]\n    observe -> done [condition=\"outcome=succeeded\"]\n    observe -> stop\n}\n",
+    "workflow_slug": "parent",
+    "source_directory": "/home/matt/.local/state/memba/bdd-plan-eval-20261019/fixture",
+    "labels": {
+      "plan-eval": "2026-10-19-v1",
+      "trial": "1"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "551c1cab1783feced8d3eb750628efb4e0f22ff052f41546850b744aeae6af28",
+    "definition_blob": "16bc3e800887762c8ed86d9479c78d7ae628ff56dbe99744dec3c6f0c8cdf603",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "trial/bdd-plan-fixture-20261019",
+      "sha": "a6a159fdfc2f26ed7a44560c1755d86540d59501",
+      "dirty": "clean"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M58Z7AFPYM8A5JS4R0HT2EPN",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-19T02:18:05.901288988Z",
+  "last_event_at": "2026-10-19T02:18:10.216681818Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "f6b0d12ebe1169246898522001ed4135b106df09ca3e6ab79a698b54f137ca6b",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "trial/bdd-plan-fixture-20261019",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
