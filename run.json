@@ -1,0 +1,249 @@
+{
+  "title": "Measure one isolated native upload ownership transition, no model",
+  "spec": {
+    "run_id": "01M5AZAN7WZXBSQPVW2JK0Q8G4",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "probe.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Measure one isolated native upload ownership transition, no model"
+        },
+        "working_dir": null,
+        "metadata": {
+          "owner": "thr_d8fzixghwj",
+          "purpose": "native-upload-baseline"
+        },
+        "inputs": {},
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-5",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**",
+            ".fabro/blobs",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "NativeUploadProbe",
+      "nodes": {
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "probe": {
+          "id": "probe",
+          "attrs": {
+            "label": {
+              "String": "Single bounded native upload probe"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 180,
+                "nanos": 0
+              }
+            },
+            "script": {
+              "String": "set -u; d=/tmp/fabro-native-upload-probe-d8fzixghwj; mkdir -p \"$d\"; p=\"$d/file.txt\"; printf 'command-created\\n' > \"$p\" || exit 41; echo 'BEFORE'; id; printf 'pwd=%s git_head=%s\\n' \"$PWD\" \"$(git rev-parse HEAD)\"; stat -c 'uid=%u gid=%g mode=%a path=%n' \"$p\"; printf 'ready\\n' > \"$d/ready\"; i=0; while [ ! -e \"$d/release\" ] && [ \"$i\" -lt 120 ]; do sleep 1; i=$((i+1)); done; if [ ! -e \"$d/release\" ]; then echo 'RELEASE_TIMEOUT'; exit 78; fi; echo 'AFTER_UPLOAD'; stat -c 'uid=%u gid=%g mode=%a path=%n' \"$p\"; printf 'append-attempt\\n' >> \"$p\"; a=$?; printf 'APPEND_EXIT=%s\\n' \"$a\"; printf 'overwrite-attempt\\n' > \"$p\"; w=$?; printf 'OVERWRITE_EXIT=%s\\n' \"$w\"; stat -c 'final_uid=%u final_gid=%g final_mode=%a path=%n' \"$p\"; printf 'final_content='; head -c 80 \"$p\"; printf '\\n'; if [ \"$a\" -ne 0 ] || [ \"$w\" -ne 0 ]; then exit 42; fi"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "probe",
+          "attrs": {}
+        },
+        {
+          "from": "probe",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": "Measure one isolated native upload ownership transition, no model"
+        }
+      }
+    },
+    "graph_source": "digraph NativeUploadProbe {\n  graph [goal=\"Measure Docker sandbox file ownership after native upload\"]\n  start [shape=Mdiamond]\n  probe [shape=parallelogram, label=\"Single bounded native upload probe\", timeout=\"180s\", script=\"set -u; d=/tmp/fabro-native-upload-probe-d8fzixghwj; mkdir -p \\\"$d\\\"; p=\\\"$d/file.txt\\\"; printf 'command-created\\\\n' > \\\"$p\\\" || exit 41; echo 'BEFORE'; id; printf 'pwd=%s git_head=%s\\\\n' \\\"$PWD\\\" \\\"$(git rev-parse HEAD)\\\"; stat -c 'uid=%u gid=%g mode=%a path=%n' \\\"$p\\\"; printf 'ready\\\\n' > \\\"$d/ready\\\"; i=0; while [ ! -e \\\"$d/release\\\" ] && [ \\\"$i\\\" -lt 120 ]; do sleep 1; i=$((i+1)); done; if [ ! -e \\\"$d/release\\\" ]; then echo 'RELEASE_TIMEOUT'; exit 78; fi; echo 'AFTER_UPLOAD'; stat -c 'uid=%u gid=%g mode=%a path=%n' \\\"$p\\\"; printf 'append-attempt\\\\n' >> \\\"$p\\\"; a=$?; printf 'APPEND_EXIT=%s\\\\n' \\\"$a\\\"; printf 'overwrite-attempt\\\\n' > \\\"$p\\\"; w=$?; printf 'OVERWRITE_EXIT=%s\\\\n' \\\"$w\\\"; stat -c 'final_uid=%u final_gid=%g final_mode=%a path=%n' \\\"$p\\\"; printf 'final_content='; head -c 80 \\\"$p\\\"; printf '\\\\n'; if [ \\\"$a\\\" -ne 0 ] || [ \\\"$w\\\" -ne 0 ]; then exit 42; fi\"]\n  exit [shape=Msquare]\n  start -> probe -> exit\n}\n",
+    "workflow_slug": "probe",
+    "source_directory": "/home/matt/.local/state/memba/fabro-native-parent-fixes-20261019/probe-source",
+    "labels": {
+      "purpose": "native-upload-baseline",
+      "owner": "thr_d8fzixghwj"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "a23947eb1de1d6f736c4b76b81a70eb58ac3f970d6de2ede6c443f4182a9d4da",
+    "definition_blob": "6b5db5f0f074e2931c18a7948949869f4e5b03cad63cd1251389a7bc7a1cda75",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "trial/bdd-plan-simple-source-20261019",
+      "sha": "7eab46740f2fa26d62405efdf4e433eeea5851cf",
+      "dirty": "dirty"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M5AZAN7WZXBSQPVW2JK0Q8G4",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-19T20:58:24.074422202Z",
+  "last_event_at": "2026-10-19T20:58:27.968216920Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "293d0bda5bf4867da0becafccaa04347ec9cb0d7160e6fcdac631d0f35a053ce",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "trial/bdd-plan-simple-source-20261019",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}

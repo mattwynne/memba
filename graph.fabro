@@ -1,0 +1,7 @@
+digraph NativeUploadProbe {
+  graph [goal="Measure Docker sandbox file ownership after native upload"]
+  start [shape=Mdiamond]
+  probe [shape=parallelogram, label="Single bounded native upload probe", timeout="180s", script="set -u; d=/tmp/fabro-native-upload-probe-d8fzixghwj; mkdir -p \"$d\"; p=\"$d/file.txt\"; printf 'command-created\\n' > \"$p\" || exit 41; echo 'BEFORE'; id; printf 'pwd=%s git_head=%s\\n' \"$PWD\" \"$(git rev-parse HEAD)\"; stat -c 'uid=%u gid=%g mode=%a path=%n' \"$p\"; printf 'ready\\n' > \"$d/ready\"; i=0; while [ ! -e \"$d/release\" ] && [ \"$i\" -lt 120 ]; do sleep 1; i=$((i+1)); done; if [ ! -e \"$d/release\" ]; then echo 'RELEASE_TIMEOUT'; exit 78; fi; echo 'AFTER_UPLOAD'; stat -c 'uid=%u gid=%g mode=%a path=%n' \"$p\"; printf 'append-attempt\\n' >> \"$p\"; a=$?; printf 'APPEND_EXIT=%s\\n' \"$a\"; printf 'overwrite-attempt\\n' > \"$p\"; w=$?; printf 'OVERWRITE_EXIT=%s\\n' \"$w\"; stat -c 'final_uid=%u final_gid=%g final_mode=%a path=%n' \"$p\"; printf 'final_content='; head -c 80 \"$p\"; printf '\\n'; if [ \"$a\" -ne 0 ] || [ \"$w\" -ne 0 ]; then exit 42; fi"]
+  exit [shape=Msquare]
+  start -> probe -> exit
+}
