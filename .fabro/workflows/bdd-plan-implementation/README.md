@@ -17,9 +17,9 @@ not change `fabro deliver`.
   capability graph for shell writes around a native Fabro import.
 - The single-scenario graph has the stock-import exit boundary and shell-write
   prompt guidance tested in source commit `e9fe14759093dcd87447bdc1e192174f68b2f5e5`.
-- The parent and imported scenario navigator now share one literal full-fidelity
-  `bdd-navigator` thread for the whole plan. Drivers remain truncate-fidelity and
-  fresh for each assignment.
+- The imported implementation navigator uses one literal full-fidelity
+  `bdd-navigator` thread across scenarios. Drivers remain truncate-fidelity and
+  fresh for each assignment. The outer choice stage is a separate identity.
 - Before the next scenario starts, the graph moves the complete prior
   `.fabro/tmp/bdd/` directory to the next numbered directory under
   `.fabro/tmp/bdd-plan/scenarios/`, then recreates empty scenario scratch. The
@@ -51,15 +51,20 @@ See [`eval/README.md`](eval/README.md) for the retained evidence boundaries.
 
 ## Boundary behavior and remaining integration decisions
 
-The continuing navigator must re-read the current commit, selected declaration,
-code and setup for every scenario. Earlier work may inform its reasoning, but
-old predictions and test output are not proof after the source, scenario or
-setup changes. Each driver assignment is self-contained and fresh.
+The continuing implementation navigator must re-read the current commit,
+selected declaration, code and setup for every scenario. Earlier work may inform
+its reasoning, but old predictions and test output are not proof after the
+source, scenario or setup changes. Each driver assignment is self-contained and
+fresh.
 
 This boundary delta deliberately does not wire the pending checker, tested
 commit-only selector prompt or public `dev bdd pick` command into the graph. The
 tested selector prompt remains byte-identical. Parent integration must connect
-those pieces and preserve the graph variables they provide.
+those pieces and preserve the graph variables they provide. The existing outer
+`navigator` node and its `bdd-plan-navigator` thread are temporary historical
+drafts. `bdd-connect` must replace that choice stage with the tested read-only
+selector, give it only the current commit in a fresh session on every choice,
+and never share the implementation navigator's `bdd-navigator` thread or history.
 
 Two public-tooling decisions also remain outside this change:
 
