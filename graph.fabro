@@ -1,0 +1,22 @@
+digraph BddPlanImplementation {
+    graph [goal="Implement the planned domain scenarios, one at a time; do not publish",
+        default_max_retries=0,
+        model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"]
+    start [shape=Mdiamond]
+    done [shape=Msquare]
+    stop [shape=parallelogram, script="echo 'Plan implementation stopped; work is preserved.' >&2; exit 1"]
+    setup [shape=parallelogram, script="mkdir -p .fabro/tmp/bdd-plan && git rev-parse HEAD > .fabro/tmp/bdd-plan/base"]
+    navigator [shape=box, backend="api", fidelity="full", thread_id="bdd-plan-navigator", prompt="@navigator.md"]
+    scenario [import="double.fabro"]
+
+    start -> setup
+    setup -> navigator [condition="outcome=succeeded"]
+    setup -> stop
+    navigator -> scenario [condition="outcome=succeeded && preferred_label=implement"]
+    navigator -> observe [condition="outcome=succeeded && preferred_label=done"]
+    navigator -> stop
+    scenario -> navigator
+    observe [shape=parallelogram, script="set -eu; mkdir -p .fabro/tmp/bdd-plan/eval; cp acceptance-tests/features/member_profile.feature .fabro/tmp/bdd-plan/eval/final.feature; git diff \"$(cat .fabro/tmp/bdd-plan/base)\" > .fabro/tmp/bdd-plan/eval/final.patch"]
+    observe -> done [condition="outcome=succeeded"]
+    observe -> stop
+}
