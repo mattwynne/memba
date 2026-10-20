@@ -76,7 +76,6 @@ defmodule Memba.Membership.Person do
         true -> %Memba.Membership.Events.PersonRenamed{person_id: person.person_id, name: name}
       end
     end
-    end
   end
 
   @impl Aggregate
