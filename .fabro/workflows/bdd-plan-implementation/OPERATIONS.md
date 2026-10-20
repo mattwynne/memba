@@ -79,12 +79,14 @@ declaration, and then `pick --from COMMIT` activates it. The scenario workflow
 uses a fresh driver for each assignment. One implementation navigator
 conversation continues across the whole plan.
 
-The graph owns focused checks and the full checks. A failed check returns the
-same scenario for repair; a successful full check ends that one scenario and
-produces the updated checkpoint commit. The pending check then runs against that
-commit before a fresh selector chooses again. A scenario may already be green:
-record that result and do not invent a failure or unnecessary code change.
-Passing the standalone CLI checks does not prove this coordination loop.
+The navigator and fresh drivers run focused tests as ordinary commands. After
+the scenario passes, the graph runs the full `bin/dev check`. A failed focused
+or full check returns the same scenario for repair; a successful full check ends
+that one scenario and produces the updated checkpoint commit. The pending check
+then runs against that commit before a fresh selector chooses again. A scenario
+may already be green: record that result and do not invent a failure or
+unnecessary code change. Passing the standalone CLI checks does not prove this
+coordination loop.
 
 Keep the launch acknowledgement and run ID. If the command returns without a
 clear acknowledgement, inspect the workflow in Fabro's run UI and with
@@ -151,19 +153,12 @@ git diff BASE_COMMIT..fabro/run/RUN_ID
 ```
 
 Choose a checkpoint only after checking its source diff, scenario tag, test
-evidence and next node. Prefer `fork` when the old run must remain untouched.
-`rewind` replaces and archives a terminal source run, so use it only when that
-is the intended disposition. Both commands create a new run that still needs an
-explicit resume:
+evidence and next node. Preserve the run branch commit, metadata, artifacts and
+logs. Do not run mutating `fork`, `rewind`, `resume`, or sandbox commands from
+this draft. The recovery operation must be agreed and verified to allocate a
+fresh owned run and environment, never restart the stopped sandbox.
 
-```bash
-fabro fork RUN_ID NODE@VISIT
-# or: fabro rewind RUN_ID NODE@VISIT
-fabro resume NEW_RUN_ID
-```
-
-Before using these mutation commands, confirm their exact behaviour against the
-assembled workflow and preserved-sandbox policy. Never treat a checkpoint,
-partial test log, or green scenario alone as a completed full check. If recovery
-changes the source commit, rerun `dev bdd pending NEW_COMMIT` and let the normal
-selector-and-pick boundary validate the next scenario.
+Never treat a checkpoint, partial test log, or green scenario alone as a
+completed full check. Once fresh-run recovery and its launch syntax have been
+verified, rerun `dev bdd pending NEW_COMMIT` on the recovered committed source
+and let the normal selector-and-pick boundary validate the next scenario.
