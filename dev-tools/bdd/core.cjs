@@ -40,20 +40,33 @@ function resolveCommit(root, commit = "HEAD") {
 }
 
 function iterationRows(source) {
+  source = sourceText(source);
   const rows = [];
+  let inIterationTable = false;
   for (const line of source.split("\n")) {
-    if (!line.startsWith("|") || !line.includes("[plan](")) continue;
+    if (!inIterationTable) {
+      if (/^\|\s*#\s*\|.*\bStatus\b.*\bPlan\b.*\|\s*$/.test(line)) inIterationTable = true;
+      continue;
+    }
+    if (!line.startsWith("|")) break;
     const cells = line.trim().slice(1, -1).split("|").map(cell => cell.trim());
+    if (cells.every(cell => /^-+$/.test(cell))) continue;
     const link = cells[4]?.match(/\[plan\]\(([^)]+)\)/);
-    if (!/^\d+$/.test(cells[0]) || !cells[2] || !link) {
+    if (cells.length < 5 || !/^\d+$/.test(cells[0]) || !cells[2] || !link) {
       throw new Error(`Invalid iteration row: ${line}`);
+    }
+    const linkedPlan = link[1];
+    const plan = path.posix.normalize(path.posix.join("docs/iterations", linkedPlan));
+    if (path.posix.isAbsolute(linkedPlan) || linkedPlan.includes("\\") ||
+        !plan.startsWith("docs/iterations/") || plan === "docs/iterations") {
+      throw new Error(`Invalid iteration row: plan path must stay within docs/iterations: ${line}`);
     }
     const number = Number(cells[0]);
     if (rows.some(row => row.number === number)) throw new Error(`Duplicate iteration ${cells[0]}`);
     rows.push({
       number,
       status: cells[2].toLowerCase(),
-      plan: path.posix.join("docs/iterations", link[1])
+      plan
     });
   }
   if (!rows.length) throw new Error("No iterations found in docs/iterations/README.md");
@@ -62,6 +75,10 @@ function iterationRows(source) {
 
 function tagNames(tags) {
   return (tags || []).map(tag => tag.name);
+}
+
+function sourceText(source) {
+  return Buffer.isBuffer(source) ? source.toString("utf8") : source;
 }
 
 function unique(values) {
@@ -74,12 +91,31 @@ function iterationNumbers(tags) {
     .map(tag => Number(tag.slice("@iteration-".length))));
 }
 
+function validateIterationTags(item) {
+  const candidates = item.tags.filter(tag => tag === "@iteration" || tag.startsWith("@iteration-"));
+  const malformed = candidates.filter(tag => !/^@iteration-\d+$/.test(tag));
+  if (malformed.length) {
+    throw new Error(`${label(item)}: malformed iteration tag: ${malformed.join(" ")}`);
+  }
+  const spellings = unique(candidates);
+  const numbers = iterationNumbers(candidates);
+  if (numbers.length === 1 && spellings.length > 1) {
+    throw new Error(`${label(item)}: conflicting iteration tag spellings: ${spellings.join(" ")}`);
+  }
+  return numbers;
+}
+
+function validateLocalTodo(declaration) {
+  const count = declaration.localTags.filter(tag => tag === "@todo").length;
+  if (count > 1) throw new Error(`${label(declaration)}: expected exactly one local @todo, got ${count}`);
+}
+
 function parseFeature(source, file) {
   let id = 0;
   const parser = new Parser(new AstBuilder(() => String(id++)), new GherkinClassicTokenMatcher());
   let document;
   try {
-    document = parser.parse(source);
+    document = parser.parse(sourceText(source));
   } catch (error) {
     throw new Error(`${file}: ${error.message}`);
   }
@@ -160,7 +196,7 @@ function choiceDescription(item) {
 }
 
 function validateOwnership(item, rows) {
-  const numbers = iterationNumbers(item.tags);
+  const numbers = validateIterationTags(item);
   if (numbers.length !== 1) {
     throw new Error(`${label(item)}: expected one iteration tag, got ${item.tags.join(" ")}`);
   }
@@ -176,6 +212,9 @@ function inspectSnapshot(indexSource, features) {
   const rows = iterationRows(indexSource);
   const parsed = features.map(({file, source}) => ({file, source, ...parseFeature(source, file)}));
   const executions = parsed.flatMap(feature => feature.executions);
+  for (const declaration of parsed.flatMap(feature => feature.declarations)) {
+    validateLocalTodo(declaration);
+  }
   const unfinished = executions.filter(item => item.tags.includes("@todo") || item.tags.includes("@wip"));
 
   for (const item of unfinished) validateOwnership(item, rows);
@@ -195,7 +234,6 @@ function inspectSnapshot(indexSource, features) {
   for (const parsedFeature of parsed) {
     for (const declaration of parsedFeature.declarations) {
       if (!declaration.localTags.includes("@todo")) continue;
-      if (!iterationNumbers(declaration.tags).includes(activeNumber)) continue;
 
       if (declaration.inheritedTags.includes("@todo")) {
         throw new Error(`${label(declaration)}: local @todo conflicts with inherited @todo`);
@@ -204,6 +242,19 @@ function inspectSnapshot(indexSource, features) {
           declaration.examples.some(examples => examples.localTags.includes("@todo"))) {
         throw new Error(`${label(declaration)}: nested local @todo conflicts with outline @todo`);
       }
+
+      const affected = declaration.declaration === "Scenario Outline" && declaration.examples.length
+        ? declaration.examples
+        : [declaration];
+      const affectedIterations = unique(affected.map(item => item.iteration));
+      if (declaration.declaration === "Scenario Outline" &&
+          !declaration.tags.includes("@journey") && affected.some(item => item.tags.includes("@journey"))) {
+        throw new Error(`${label(declaration)}: outline affects ineligible journey Examples`);
+      }
+      if (declaration.declaration === "Scenario Outline" && affectedIterations.length > 1) {
+        throw new Error(`${label(declaration)}: outline spans multiple iterations: ${affectedIterations.join(", ")}`);
+      }
+      if (!affectedIterations.includes(activeNumber)) continue;
       choices.push(declaration);
     }
   }
@@ -236,7 +287,7 @@ function committedFeatureFiles(root, sha) {
 }
 
 function readCommitted(root, sha, file) {
-  return runGit(root, ["show", `${sha}:${file}`]);
+  return runGit(root, ["show", `${sha}:${file}`], {encoding: "buffer"});
 }
 
 function fromCommit(commit = "HEAD", cwd = process.cwd()) {
@@ -253,8 +304,10 @@ function fromCommit(commit = "HEAD", cwd = process.cwd()) {
   return {commit: sha, active_iteration: activeIteration, ...report};
 }
 
-function assertClean(root) {
-  const status = runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+function assertClean(root, ignoredFile) {
+  const args = ["status", "--porcelain=v1", "-z", "--untracked-files=all"];
+  if (ignoredFile) args.push("--", ".", `:(exclude,top)${ignoredFile}`);
+  const status = runGit(root, args);
   if (status.length) throw new Error("worktree must be completely clean before picking BDD work");
 }
 
@@ -270,28 +323,101 @@ function parseReference(reference) {
   return {feature, line: Number(match[2])};
 }
 
-function replaceLocalTodo(root, declaration) {
+function tagByteOffset(source, todo) {
+  let lineStart = 0;
+  for (let line = 1; line < todo.location.line; line += 1) {
+    const newline = source.indexOf(0x0a, lineStart);
+    if (newline === -1) throw new Error(`local @todo line ${todo.location.line} is stale`);
+    lineStart = newline + 1;
+  }
+  const lineEnd = source.indexOf(0x0a, lineStart);
+  const lineBytes = source.subarray(lineStart, lineEnd === -1 ? source.length : lineEnd);
+  const line = lineBytes.toString("utf8");
+  const prefix = [...line].slice(0, todo.location.column - 1).join("");
+  return lineStart + Buffer.byteLength(prefix, "utf8");
+}
+
+function sameIdentity(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function sameObservedFile(left, right) {
+  return sameIdentity(left, right) && left.mode === right.mode && left.size === right.size &&
+    left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
+}
+
+function staleRepositoryError(feature) {
+  return new Error(`repository changed while pick was validating; refusing to overwrite ${feature}`);
+}
+
+function verifyTarget(target, feature, expectedSource, initialStat) {
+  const pathBefore = fs.lstatSync(target, {bigint: true});
+  if (!pathBefore.isFile() || !sameIdentity(pathBefore, initialStat)) throw staleRepositoryError(feature);
+  const noFollow = fs.constants.O_NOFOLLOW || 0;
+  const descriptor = fs.openSync(target, fs.constants.O_RDONLY | noFollow);
+  let actual;
+  let before;
+  let after;
+  try {
+    before = fs.fstatSync(descriptor, {bigint: true});
+    if (!sameIdentity(before, pathBefore)) throw staleRepositoryError(feature);
+    actual = fs.readFileSync(descriptor);
+    after = fs.fstatSync(descriptor, {bigint: true});
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  const pathAfter = fs.lstatSync(target, {bigint: true});
+  if (!sameObservedFile(before, after) || !sameObservedFile(after, pathAfter) || !actual.equals(expectedSource)) {
+    throw staleRepositoryError(feature);
+  }
+}
+
+function replaceLocalTodo(root, declaration, validatedSource, expectedHead) {
   const todo = declaration.tagNodes.find(tag => tag.name === "@todo");
   if (!todo) throw new Error(`${label(declaration)}: does not have its own local @todo`);
   const target = path.join(root, declaration.feature);
-  const source = fs.readFileSync(target, "utf8");
-  const lines = source.split(/(?<=\n)/);
-  const prior = lines.slice(0, todo.location.line - 1).join("");
-  const line = lines[todo.location.line - 1] || "";
-  const columnIndex = [...line].slice(0, todo.location.column - 1).join("").length;
-  const offset = prior.length + columnIndex;
-  if (source.slice(offset, offset + 5) !== "@todo") {
+  const initialStat = fs.lstatSync(target, {bigint: true});
+  if (!initialStat.isFile()) throw staleRepositoryError(declaration.feature);
+  const offset = tagByteOffset(validatedSource, todo);
+  if (!validatedSource.subarray(offset, offset + 5).equals(Buffer.from("@todo"))) {
     throw new Error(`${declaration.feature}:${todo.location.line}: local @todo location is stale`);
   }
-  const updated = source.slice(0, offset) + "@wip" + source.slice(offset + 5);
-  const mode = fs.statSync(target).mode;
+  const updated = Buffer.concat([
+    validatedSource.subarray(0, offset),
+    Buffer.from("@wip"),
+    validatedSource.subarray(offset + 5)
+  ]);
+  const mode = Number(initialStat.mode & 0o7777n);
   const temporary = path.join(path.dirname(target), `.${path.basename(target)}.bdd-pick-${process.pid}`);
+  let created = false;
+  let descriptor;
   try {
-    fs.writeFileSync(temporary, updated, {flag: "wx", mode});
+    if (resolveCommit(root, "HEAD") !== expectedHead) throw staleRepositoryError(declaration.feature);
+    try {
+      assertClean(root);
+    } catch (error) {
+      throw staleRepositoryError(declaration.feature);
+    }
+    descriptor = fs.openSync(temporary, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, mode);
+    created = true;
+    fs.writeFileSync(descriptor, updated);
+    fs.fchmodSync(descriptor, mode);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    verifyTarget(target, declaration.feature, validatedSource, initialStat);
+    if (resolveCommit(root, "HEAD") !== expectedHead) throw staleRepositoryError(declaration.feature);
+    try {
+      assertClean(root, path.relative(root, temporary).split(path.sep).join("/"));
+    } catch (error) {
+      throw staleRepositoryError(declaration.feature);
+    }
     fs.renameSync(temporary, target);
   } finally {
-    try { fs.unlinkSync(temporary); } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    if (created) {
+      try { fs.unlinkSync(temporary); } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
     }
   }
 }
@@ -317,6 +443,7 @@ function pick(reference, from, cwd = process.cwd()) {
     throw new Error(`${locator.feature}:${locator.line}: no Scenario, Scenario Outline, or Examples declaration at this line`);
   }
   const preliminarySelection = matches[0];
+  validateLocalTodo(preliminarySelection);
   if (!preliminarySelection.localTags.includes("@todo")) {
     throw new Error(`${label(preliminarySelection)}: does not have its own local @todo`);
   }
@@ -339,7 +466,7 @@ function pick(reference, from, cwd = process.cwd()) {
   }
   if (!inspected.choices.includes(selected)) throw new Error(`${label(selected)}: selection is not eligible for pick`);
 
-  replaceLocalTodo(root, selected);
+  replaceLocalTodo(root, selected, selectedSource, head);
   return choiceDescription(selected);
 }
 

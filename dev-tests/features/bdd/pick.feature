@@ -242,3 +242,184 @@ Feature: Pick pending BDD work
       Then the command fails
       And stderr includes "example.feature"
       And no file bytes changed
+
+  Rule: A whole-outline pick must be eligible for every Examples group
+
+    Scenario: An outline cannot activate nested journey examples
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Profile formats
+          @todo
+          Scenario Outline: Import a profile photo
+            Given a <format> photo
+            @journey
+            Examples: Browser import
+              | format |
+              | png    |
+        """
+      When I pick the declaration "Scenario Outline: Import a profile photo"
+      Then the command fails
+      And stderr includes "outline affects ineligible journey Examples"
+      And no file bytes changed
+
+    Scenario: An outline cannot span active and future iteration ownership
+      Given a committed project with this feature:
+        """
+        Feature: Profile formats
+          @todo
+          Scenario Outline: Import a profile photo
+            Given a <format> photo
+            @iteration-068
+            Examples: Current formats
+              | format |
+              | jpg    |
+            @iteration-069
+            Examples: Future formats
+              | format |
+              | png    |
+        """
+      When I pick the declaration "Scenario Outline: Import a profile photo"
+      Then the command fails
+      And stderr includes "outline spans multiple iterations"
+      And no file bytes changed
+
+  Rule: Tags and repository bytes remain unambiguous
+
+    Scenario: Duplicate local TODO tags are rejected
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @todo @fast @todo
+          Scenario: Add a profile photo
+            Given something
+        """
+      When I pick the declaration "Scenario: Add a profile photo"
+      Then the command fails
+      And stderr includes "exactly one local @todo"
+      And no file bytes changed
+
+    Scenario: Aliased iteration spellings are rejected as conflicting ownership
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @iteration-68 @todo
+          Scenario: Add a profile photo
+            Given something
+        """
+      When I pick the declaration "Scenario: Add a profile photo"
+      Then the command fails
+      And stderr includes "conflicting iteration tag spellings"
+      And no file bytes changed
+
+    Scenario: Repeated inherited spelling for the same owner remains valid
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @iteration-068
+          Rule: Photos
+            @todo
+            Scenario: Add a profile photo
+              Given something
+        """
+      When I pick the declaration "Scenario: Add a profile photo"
+      Then the command succeeds
+      And the feature contains "    @wip\n    Scenario: Add a profile photo"
+
+    Scenario: Invalid comment bytes, executable mode and an astral tag survive pick
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @😀 @todo @fast
+          Scenario: Add a profile photo
+            Given something
+        """
+      And the feature has invalid comment bytes and mode "0751"
+      When I pick the declaration "Scenario: Add a profile photo"
+      Then the command succeeds
+      And only the TODO tag bytes changed and mode remains "0751"
+      And the feature contains "  @😀 @wip @fast"
+
+  Rule: Mutation refuses stale state and owns only its temporary file
+
+    Scenario Outline: A concurrent feature replacement is preserved
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @todo
+          Scenario: Add a profile photo
+            Given original state
+        """
+      And I remember the commit as "snapshot A"
+      And a concurrent <kind> replaces the feature during pick with:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @todo
+          Scenario: Add a profile photo
+            Given concurrent state
+        """
+      When I pick "Scenario: Add a profile photo" from commit "snapshot A" during the concurrent change
+      Then the command fails
+      And stderr includes "repository changed while pick was validating"
+      And the concurrent feature is preserved
+      And no owned pick temporary file remains
+
+      Examples:
+        | kind       |
+        | edit       |
+        | commit     |
+
+    Scenario: An unowned colliding temporary file is never deleted
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @todo
+          Scenario: Add a profile photo
+            Given something
+        """
+      And a colliding ignored pick temporary file will be created by the CLI process
+      When I pick the declaration through the PID-collision shell "Scenario: Add a profile photo"
+      Then the command fails
+      And stderr includes "EEXIST"
+      And the unowned collision sentinel remains unchanged
+      And no file bytes changed
+
+  Rule: Help is available without starting application infrastructure
+
+    Scenario Outline: Every BDD command provides successful help
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Complete work
+          Scenario: Complete example
+            Given something
+        """
+      When I run "<command>"
+      Then the command succeeds
+      And stdout includes "<usage>"
+
+      Examples:
+        | command                | usage                  |
+        | dev bdd --help         | Usage: dev bdd         |
+        | dev bdd pending -h     | dev bdd pending        |
+        | dev bdd pick --help    | dev bdd pick           |
+
+    Scenario: Root help discovers the BDD command
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Complete work
+          Scenario: Complete example
+            Given something
+        """
+      And argc is available from the managed development profile
+      When I run "dev --help"
+      Then the command succeeds
+      And command output includes "bdd"

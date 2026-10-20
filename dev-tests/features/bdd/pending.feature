@@ -175,3 +175,52 @@ Feature: Find pending BDD work
       When I run "dev bdd pending --upload-pack=malicious --json"
       Then the command exits with status 2
       And stderr includes "Usage: dev bdd pending"
+
+    Scenario: A malformed iteration data row cannot hide another active status
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Complete work
+          Scenario: Complete example
+            Given something
+        """
+      And the iteration index is replaced and committed with:
+        """
+        | # | Date | Status | Title | Plan |
+        | --- | --- | --- | --- | --- |
+        | 068 | today | implementing | Current | [plan](068-current/plan.md) |
+        | 069 | today | implementing | Hidden active row | not a plan link |
+        """
+      When I run "dev bdd pending --json"
+      Then the command fails without stdout
+      And stderr includes "Invalid iteration row"
+
+    Scenario: An iteration plan cannot escape the iterations directory
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Complete work
+          Scenario: Complete example
+            Given something
+        """
+      And the iteration index is replaced and committed with:
+        """
+        | # | Date | Status | Title | Plan |
+        | --- | --- | --- | --- | --- |
+        | 068 | today | implementing | Current | [plan](../../outside.md) |
+        """
+      When I run "dev bdd pending --json"
+      Then the command fails without stdout
+      And stderr includes "plan path must stay within docs/iterations"
+
+    Scenario: Malformed ownership is not hidden by one valid iteration tag
+      Given a committed project with this feature:
+        """
+        @iteration-068 @iteration-nope @todo
+        Feature: Invalid ownership
+          Scenario: Pending work
+            Given something
+        """
+      When I run "dev bdd pending --json"
+      Then the command fails without stdout
+      And stderr includes "malformed iteration tag"

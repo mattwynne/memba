@@ -58,7 +58,12 @@ function runDev(world, args) {
   world.result = spawnSync(dev, args, {
     cwd: world.root,
     encoding: "utf8",
-    env: {...process.env, MEMBA_DEVENV_SHELL: "1", DEVENV_ROOT: sourceRoot}
+    env: {
+      ...process.env,
+      MEMBA_DEVENV_SHELL: "1",
+      DEVENV_ROOT: sourceRoot,
+      ...world.commandEnv
+    }
   });
 }
 
@@ -100,6 +105,73 @@ Given("the iteration index is committed with active iteration count {int}", func
   if (count === 2) index = index.replace("| needs-revision |", "| implementing |");
   put(this.root, "docs/iterations/README.md", index);
   commit(this, "Change active iterations");
+});
+
+Given("the iteration index is replaced and committed with:", function (source) {
+  put(this.root, "docs/iterations/README.md", expand(source) + "\n");
+  commit(this, "Replace iteration index");
+});
+
+Given("the feature has invalid comment bytes and mode {string}", function (mode) {
+  const existing = fs.readFileSync(this.featurePath);
+  const bytes = Buffer.concat([Buffer.from("# invalid comment "), Buffer.from([0xff, 0xfe]), Buffer.from("\n"), existing]);
+  fs.writeFileSync(this.featurePath, bytes);
+  fs.chmodSync(this.featurePath, Number.parseInt(mode, 8));
+  commit(this, "Add byte and mode fixture");
+});
+
+Given("a concurrent {word} replaces the feature during pick with:", function (kind, source) {
+  const preload = path.join(this.toolsRoot, "race-preload.cjs");
+  const raceSource = expand(source) + "\n";
+  fs.writeFileSync(preload, `
+const fs = require("node:fs");
+const {execFileSync} = require("node:child_process");
+const path = require("node:path");
+const originalReadFileSync = fs.readFileSync;
+let fired = false;
+fs.readFileSync = function(target, ...args) {
+  const result = originalReadFileSync.call(this, target, ...args);
+  if (fired) return result;
+  let matches = false;
+  try {
+    if (typeof target === "number") {
+      const targetStat = fs.statSync(process.env.BDD_RACE_TARGET, {bigint: true});
+      const descriptorStat = fs.fstatSync(target, {bigint: true});
+      matches = targetStat.dev === descriptorStat.dev && targetStat.ino === descriptorStat.ino;
+    } else {
+      matches = path.resolve(String(target)) === path.resolve(process.env.BDD_RACE_TARGET);
+    }
+  } catch (_) {}
+  if (!matches) return result;
+  fired = true;
+  fs.writeFileSync(process.env.BDD_RACE_TARGET, Buffer.from(process.env.BDD_RACE_CONTENT, "base64"));
+  if (process.env.BDD_RACE_KIND === "commit") {
+    execFileSync(process.env.BDD_REAL_GIT, ["add", "acceptance-tests/features/example.feature"], {cwd: process.env.BDD_RACE_ROOT});
+    execFileSync(process.env.BDD_REAL_GIT, ["-c", "user.name=Race", "-c", "user.email=race@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "Concurrent commit"], {cwd: process.env.BDD_RACE_ROOT});
+  }
+  return result;
+};
+`);
+  this.concurrentFeatureBytes = Buffer.from(raceSource);
+  this.commandEnv = {
+    NODE_OPTIONS: `--require=${preload}`,
+    BDD_RACE_TARGET: this.featurePath,
+    BDD_RACE_CONTENT: this.concurrentFeatureBytes.toString("base64"),
+    BDD_RACE_KIND: kind,
+    BDD_RACE_ROOT: this.root,
+    BDD_REAL_GIT: execFileSync("sh", ["-c", "command -v git"], {encoding: "utf8"}).trim()
+  };
+});
+
+Given("a colliding ignored pick temporary file will be created by the CLI process", function () {
+  fs.appendFileSync(path.join(this.root, ".git/info/exclude"), "\nacceptance-tests/features/.example.feature.bdd-pick-*\n");
+  this.pidCollision = true;
+});
+
+Given("argc is available from the managed development profile", function () {
+  const profileBin = "/home/matt/memba/.devenv/profile/bin";
+  assert.equal(fs.existsSync(path.join(profileBin, "argc")), true, "managed argc is unavailable");
+  this.commandEnv.PATH = `${profileBin}:${process.env.PATH || ""}`;
 });
 
 Given("the worktree has an unrelated {word} change", function (kind) {
@@ -148,6 +220,32 @@ When("I pick {string} from commit {string}", function (declaration, name) {
   runDev(this, ["bdd", "pick", `acceptance-tests/features/example.feature:${line}`, "--from", sha]);
 });
 
+When("I pick {string} from commit {string} during the concurrent change", function (declaration, name) {
+  const line = lineContaining(this, declaration);
+  this.before = snapshot(this);
+  runDev(this, ["bdd", "pick", `acceptance-tests/features/example.feature:${line}`, "--from", this.commits.get(name)]);
+});
+
+When("I pick the declaration through the PID-collision shell {string}", function (declaration) {
+  const line = lineContaining(this, declaration);
+  this.before = snapshot(this);
+  const script = `sentinel="acceptance-tests/features/.example.feature.bdd-pick-$$"; printf 'unowned sentinel\\n' > "$sentinel"; exec "$DEV_COMMAND" bdd pick "$PICK_REFERENCE"`;
+  this.result = spawnSync("bash", ["-c", script], {
+    cwd: this.root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      MEMBA_DEVENV_SHELL: "1",
+      DEVENV_ROOT: sourceRoot,
+      DEV_COMMAND: dev,
+      PICK_REFERENCE: `acceptance-tests/features/example.feature:${line}`
+    }
+  });
+  this.sentinelPaths = fs.readdirSync(path.dirname(this.featurePath))
+    .filter(name => name.startsWith(".example.feature.bdd-pick-"))
+    .map(name => path.join(path.dirname(this.featurePath), name));
+});
+
 Then("the command succeeds", function () {
   assert.equal(this.result.status, 0, this.result.stderr || this.result.stdout);
 });
@@ -175,6 +273,10 @@ Then("stdout does not include {string}", function (text) {
 
 Then("stderr includes {string}", function (text) {
   assert.match(this.result.stderr, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+Then("command output includes {string}", function (text) {
+  assert.match(this.result.stdout + this.result.stderr, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 Then("the JSON report names the committed HEAD", function () {
@@ -229,4 +331,29 @@ Then("the feature does not contain {string}", function (text) {
 
 Then("no file bytes changed", function () {
   assert.deepEqual(snapshot(this), this.before);
+});
+
+Then("the concurrent feature is preserved", function () {
+  assert.deepEqual(fs.readFileSync(this.featurePath), this.concurrentFeatureBytes);
+});
+
+Then("no owned pick temporary file remains", function () {
+  const remaining = fs.readdirSync(path.dirname(this.featurePath))
+    .filter(name => name.startsWith(".example.feature.bdd-pick-"));
+  assert.deepEqual(remaining, []);
+});
+
+Then("the unowned collision sentinel remains unchanged", function () {
+  assert.equal(this.sentinelPaths.length, 1);
+  assert.equal(fs.readFileSync(this.sentinelPaths[0], "utf8"), "unowned sentinel\n");
+});
+
+Then("only the TODO tag bytes changed and mode remains {string}", function (mode) {
+  const before = Buffer.from(this.before.find(([name]) => name === "acceptance-tests/features/example.feature")[1], "base64");
+  const expected = Buffer.from(before);
+  const offset = expected.indexOf(Buffer.from("@todo"));
+  assert.notEqual(offset, -1);
+  const replaced = Buffer.concat([expected.subarray(0, offset), Buffer.from("@wip"), expected.subarray(offset + 5)]);
+  assert.deepEqual(fs.readFileSync(this.featurePath), replaced);
+  assert.equal(fs.statSync(this.featurePath).mode & 0o7777, Number.parseInt(mode, 8));
 });
