@@ -72,7 +72,7 @@ def run(args):
 
     def cli(folder, name, *command, check=False):
         with (folder / name).open('w') as stdout, (folder / (name + '.stderr')).open('w') as stderr:
-            result = subprocess.run(['fabro', '--no-upgrade-check', *command, '--server', args.server],
+            result = subprocess.run(['fabro', '--no-upgrade-check', *command, *([] if command[0] == 'validate' else ['--server', args.server])],
                                     cwd=root, stdout=stdout, stderr=stderr)
         (folder / (name + '.exit')).write_text(str(result.returncode) + '\n')
         if check:
