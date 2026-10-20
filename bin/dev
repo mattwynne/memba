@@ -6,6 +6,13 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 default_postgres_port_value=15432
 
+# BDD repository tooling is intentionally available without starting the app,
+# Postgres, or a nested devenv shell.
+if [ "${1:-}" = "bdd" ]; then
+  shift
+  exec node "$repo_root/dev-tools/bdd/cli.cjs" "$@"
+fi
+
 devenv_context_unset_args=(
   -u DEVENV_DOTFILE
   -u DEVENV_PROFILE
@@ -768,7 +775,12 @@ precommit() {
 
 _precommit() {
   package_mix test || return $?
-  (cd "$repo_root/web" && local_test_email_env mix precommit)
+  (cd "$repo_root/web" && local_test_email_env mix precommit) || return $?
+  (
+    cd "$repo_root/dev-tests"
+    NODE_PATH="$repo_root/acceptance-tests/node_modules" \
+      "$repo_root/acceptance-tests/node_modules/.bin/cucumber-js" --config cucumber.js
+  )
 }
 
 # @cmd Install local development and test dependencies
