@@ -34,6 +34,18 @@ The navigator predicts the first failure before running `bin/dev test:wip`. That
 
 The navigator keeps its conversation. Every driver starts fresh, works on one assignment and returns at the predicted next acceptance failure or actual green result. The navigator removes the WIP tag once the scenario and supporting tests pass, confirms the same scenario with an ordinary focused command, and sends it to `dev check`. Failed checks return for repair; passing checks finish the workflow.
 
+## Stock Fabro compatibility
+
+This graph can run standalone or be reused by the plan workflow through Fabro's
+built-in `import`. A tiny `checked` node gives the import its required unconditional
+exit boundary; failures still go back to the navigator or stop, never to that exit.
+
+Both agents are instructed to write/edit files using shell commands, not native
+`apply_patch`/upload tools. Fabro `0.316.0-nightly.0` uploads can change a user-owned
+file to root ownership. Shell writes avoid that upload path without changing
+Fabro or repairing permissions. Following that instruction is not tool-enforced;
+it still needs observation in the model eval.
+
 ## What the roles share
 
 Both roles use ordinary files under `.fabro/tmp/bdd/`:

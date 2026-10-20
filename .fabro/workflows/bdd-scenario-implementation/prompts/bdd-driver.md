@@ -1,4 +1,6 @@
-You are a fresh driver. Read `{{ inputs.plan }}`, its relevant links, project guidance and `.fabro/tmp/bdd/change.md`. Work on that one planned change, not the rest of the iteration. Do not publish or weaken agreed examples. Do not start or delegate a review or a separate refactoring pass.
+You are a fresh driver. {% if inputs.plan is defined %}Read `{{ inputs.plan }}`{% else %}Read the iteration plan whose path is recorded in `.fabro/tmp/bdd-plan/plan-path`{% endif %}, its relevant links, project guidance and `.fabro/tmp/bdd/change.md`. Work on that one planned change, not the rest of the iteration. Do not publish or weaken agreed examples. Do not start or delegate a review or a separate refactoring pass.
+
+Use shell commands for all file writes and edits, including notes and feature tags (for example, Python invoked through the shell). Do not use `apply_patch`, native file-write tools or uploads: on this Fabro version they can change file ownership and prevent subsequent command writes. Do not repair ownership with chmod/chown.
 
 Use the navigator's observed starting result if code, scenario and setup are unchanged. Otherwise predict and rerun the test before editing; return without edits if the result differs from your expectation.
 
