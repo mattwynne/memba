@@ -1,9 +1,8 @@
 # Operating the BDD plan implementation workflow
 
-> **Draft:** the workflow is not assembled or proven yet. The checked-in graph
-> still uses the old navigator and plan input. Do not launch it from this guide.
-> Confirm the final launch command, stop procedure, artifact paths and recovery
-> steps against the assembled graph and one real rehearsal first.
+> **Assembled, not runtime-proven:** ordinary tests cover the deterministic
+> mechanics and graph boundaries, but the exact source still needs its managed
+> gate and a separately approved rehearsal. Do not launch without that approval.
 
 This opt-in workflow implements the domain scenarios in one active plan. It does
 not implement journeys, refactor or review the result, publish it, or mark the
@@ -36,7 +35,7 @@ future iteration are allowed but are not choices for the active plan.
 
 Current limitation: if the active work is TODO only through an inherited tag,
 `pending` finds no locally pickable declaration and fails closed. Add no
-workaround to the runbook; resolve this policy in the assembled workflow.
+workaround to the runbook; this needs a separate policy decision.
 
 ## Useful human commands
 
@@ -68,14 +67,24 @@ Current limitation: picking a multi-row Outline or Examples block works, but
 `dev test:wip` currently rejects the multiple expanded rows. Resolve that before
 claiming the loop works for general plans.
 
-## Eventually start the workflow
+## Start the workflow after approval
 
-**Launch command: to be confirmed after assembly and rehearsal.** Do not reuse
-the current README command or invent input flags.
+The stock-native launch command is:
 
-The assembled loop should first run the deterministic pending check. A separate
-fresh, read-only selector receives only the updated commit, chooses one eligible
-declaration, and then `pick --from COMMIT` activates it. The scenario workflow
+```bash
+fabro run .fabro/workflows/bdd-plan-implementation/workflow.toml
+```
+
+Do not add an input flag. The checked-in run input is the literal Git reference
+`HEAD`; the selector receives only that commit reference in its canonical task
+body. Every selector visit is truncate-fidelity with no thread ID or output
+schema. Stock adds its minimal goal/run-ID preamble, so this is not the same
+invocation as the earlier isolated full-fidelity literal-SHA selector trials.
+
+The assembled loop first runs the deterministic public pending check. A separate
+fresh, read-only selector inspects the current committed tree, chooses one
+eligible declaration, and then deterministic validation captures the current
+full SHA and calls `pick --from CURRENT_SHA`. The scenario workflow
 uses a fresh driver for each assignment. One implementation navigator
 conversation continues across the whole plan.
 
@@ -90,7 +99,7 @@ coordination loop.
 
 Keep the launch acknowledgement and run ID. If the command returns without a
 clear acknowledgement, inspect the workflow in Fabro's run UI and with
-`fabro inspect bdd-plan-implementation --no-upgrade-check`. Never launch a
+`fabro inspect RUN_ID --no-upgrade-check`. Never launch a
 duplicate while the first run may exist.
 
 ## Find choices and results
@@ -112,11 +121,14 @@ stage artifacts can be copied to an empty private directory when needed:
 fabro artifact cp RUN_ID DESTINATION --tree --no-upgrade-check
 ```
 
-The assembled workflow is expected to archive each previous scenario's scratch
-notes, logs and base under `.fabro/tmp/bdd-plan/scenarios/` before clearing
-`.fabro/tmp/bdd/`. Confirm the exact final layout after the boundary changes are
-integrated. These files explain a scenario handoff; Fabro's events, artifacts,
-checkpoints and run branch remain the durable run record.
+The workflow archives each previous scenario's entire scratch directory under
+`.fabro/tmp/bdd-plan/scenarios/<n>/` before creating fresh `.fabro/tmp/bdd/`.
+This retains partial or complete bases, results, check logs and arbitrary logs;
+the final scenario remains in active scratch. Current pending state is in
+`.fabro/tmp/bdd-plan/pending.json`, preselection Git identities are in
+`selection.json`, and successful reasons accumulate in
+`selection-notes.jsonl`. Fabro's events, artifacts, checkpoints and run branch
+remain the durable run record.
 
 Treat copied artifacts and logs as private. Do not paste credentials, origin
 URLs containing credentials, tokens, or environment dumps into issues or
@@ -155,8 +167,8 @@ git diff BASE_COMMIT..fabro/run/RUN_ID
 Choose a checkpoint only after checking its source diff, scenario tag, test
 evidence and next node. Preserve the run branch commit, metadata, artifacts and
 logs. Do not run mutating `fork`, `rewind`, `resume`, or sandbox commands from
-this draft. The recovery operation must be agreed and verified to allocate a
-fresh owned run and environment, never restart the stopped sandbox.
+this unproven procedure. The recovery operation must be agreed and verified to
+allocate a fresh owned run and environment, never restart the stopped sandbox.
 
 Never treat a checkpoint, partial test log, or green scenario alone as a
 completed full check. Once fresh-run recovery and its launch syntax have been
