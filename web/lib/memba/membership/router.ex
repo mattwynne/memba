@@ -58,6 +58,7 @@ defmodule Memba.Membership.Router do
   dispatch(CreateCustomGroup, to: Club)
   dispatch(CreateGroup, to: Club)
   dispatch(CreatePerson, to: Person)
+  dispatch(Memba.Membership.Commands.RenamePerson, to: Person)
   dispatch(DefineClubRole, to: Club)
   dispatch(GrantClubRolePermission, to: Club)
   dispatch(InviteClubMember, to: ClubInvitation)
