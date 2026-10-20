@@ -3,7 +3,7 @@ Feature: Member profile
 
 Rule: A Person must have a valid name
 
-    @iteration-068 @todo
+    @iteration-068
     Scenario: Alice cannot replace their name with whitespace
       Given Alice is known as "Alice Smith"
       When Alice tries to change their name to "   "

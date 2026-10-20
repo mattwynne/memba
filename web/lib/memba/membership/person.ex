@@ -65,18 +65,17 @@ defmodule Memba.Membership.Person do
 
     with :ok <- validate_person_id(command.person_id),
          :ok <- validate_matching_person_id(person, command),
-         true <- is_binary(command.name) do
-      name = normalize.(command.name)
+         {:ok, raw_name} <- normalize_name(command.name) do
+      name = normalize.(raw_name)
       current = normalize.(person.name)
 
-      if name == current do
-        []
-      else
-        %Memba.Membership.Events.PersonRenamed{person_id: person.person_id, name: name}
+      cond do
+        name == "" -> {:error, :invalid_name}
+        String.length(name) > 100 -> {:error, :name_too_long}
+        name == current -> []
+        true -> %Memba.Membership.Events.PersonRenamed{person_id: person.person_id, name: name}
       end
-    else
-      false -> {:error, :invalid_name}
-      error -> error
+    end
     end
   end
 
