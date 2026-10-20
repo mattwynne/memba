@@ -57,7 +57,8 @@ def prepare(out, runs):
     graph += '\n'.join(f' {node} [shape=box, backend="api", fidelity="full", thread_id="{node}", prompt="@prompt.md"]' for node in nodes)
     graph += '\n' + '\n'.join(f' {a} -> {b}' for a, b in zip(['start'] + nodes, nodes + ['done'])) + '\n}\n'
     (out / 'workflow.fabro').write_text(graph)
-    config = (HERE.parents[1] / 'workflow.toml').read_text().replace('plan = ""', f'commit = "{case["commit"]}"')
+    config = (HERE.parents[1] / 'workflow.toml').read_text().replace(
+        'commit = "HEAD"', f'commit = "{case["commit"]}"')
     (out / 'workflow.toml').write_text(config)
     manifest = {'requested': runs, 'case': case,
                 'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest(),
