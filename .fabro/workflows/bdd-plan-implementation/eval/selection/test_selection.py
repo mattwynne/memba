@@ -16,8 +16,12 @@ class CommitSelectionTest(unittest.TestCase):
             reply = {key: case[key] for key in ['plan', 'feature']}
             reply.update(scenario=scenario, reason='Establish the missing successful path.')
             self.assertTrue(selection.assess(json.dumps(reply), case)['passed'])
-        reply['scenario'] = "Alice's corrected name appears across clubs and on earlier contributions"
-        self.assertFalse(selection.assess(json.dumps(reply), case)['passed'])
+        for completed in [
+            "Alice's corrected name appears across clubs and on earlier contributions",
+            'Alice cannot replace their name with whitespace',
+        ]:
+            reply['scenario'] = completed
+            self.assertFalse(selection.assess(json.dumps(reply), case)['passed'])
         reply['scenario'] = case['acceptable_first'][0]
         reply['plan'] = 'another/plan.md'
         self.assertFalse(selection.assess(json.dumps(reply), case)['passed'])
@@ -49,7 +53,7 @@ class CommitSelectionTest(unittest.TestCase):
             case = selection.prepare(out, 4)
             answer = {key: case[key] for key in ['plan', 'feature']}
             answer.update(scenario=case['acceptable_first'][0], reason='Missing rename path.')
-            for i, scenario in [(1, case['acceptable_first'][0]), (2, 'wrong scenario'), (3, case['acceptable_first'][1])]:
+            for i, scenario in [(1, case['acceptable_first'][0]), (2, 'wrong scenario'), (3, case['acceptable_first'][0])]:
                 stage = out / f'dump/stages/00{i}-trial_{i}@1'
                 stage.mkdir(parents=True)
                 (stage / 'response.md').write_text(json.dumps({**answer, 'scenario': scenario}))

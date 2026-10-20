@@ -37,6 +37,18 @@ implementation commit is exercised; no/multiple active plans remain untested.
 The case is not production implementation or evidence that the synthetic omissions
 are safe to deploy.
 
+The third fixed case continues from that synthetic fixture. Only the historical
+rename-name normalization, blank rejection and 100-grapheme limit are restored;
+the Person creation invariant is unchanged. Cross-club/history and whitespace
+validation are now executable, while the stale-edit domain example remains
+`@todo` and fails its original conflict assertion when separately exercised.
+Both already-completed examples are unacceptable choices, as are photo (069),
+the browser journey and other iterations. The sole acceptable next scenario
+is the stale-edit example. The source plan's historical background still says
+there is no rename command, and 070 retains its legacy `implementation` header;
+actual code and the documented active-index convention govern this fixed case.
+This does not test an all-done/no-pending response or generic plan ambiguity.
+
 Twenty sequential fresh agent sessions read the same immutable commit in one
 normal managed Docker run. Distinct thread IDs and full fidelity prevent
 conversation reuse/preambles across trials. Each is instructed to use Git reads
