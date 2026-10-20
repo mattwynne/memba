@@ -217,10 +217,13 @@ Given("a colliding ignored pick temporary file will be created by the CLI proces
   this.pidCollision = true;
 });
 
-Given("argc is available from the managed development profile", function () {
-  const profileBin = "/home/matt/memba/.devenv/profile/bin";
-  assert.equal(fs.existsSync(path.join(profileBin, "argc")), true, "managed argc is unavailable");
-  this.commandEnv.PATH = `${profileBin}:${process.env.PATH || ""}`;
+Given("argc is available on the declared runtime PATH", function () {
+  const environment = {...process.env, ...this.commandEnv};
+  const resolved = spawnSync("sh", ["-c", "command -v argc"], {encoding: "utf8", env: environment});
+  assert.equal(resolved.status, 0, "argc is unavailable on the declared runtime PATH");
+  const executable = resolved.stdout.trim();
+  assert.notEqual(executable, "", "command -v argc returned no executable");
+  fs.accessSync(executable, fs.constants.X_OK);
 });
 
 Given("the worktree has an unrelated {word} change", function (kind) {
