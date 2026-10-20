@@ -39,7 +39,7 @@ Rule: A conflicting stale change must not silently replace a newer name
 
 Rule: A member's photo stands in for their initials
 
-    @iteration-069 @todo
+    @iteration-070 @todo
     Scenario: Alice adds a photo
       Given Alice is a member of Kootenay Mountaineering Club
       And Bob is a member of Kootenay Mountaineering Club
@@ -48,14 +48,14 @@ Rule: A member's photo stands in for their initials
       Then Alice should see their photo in Account settings
       And Bob should see Alice's photo in the Kootenay Mountaineering Club member list
 
-    @iteration-069 @todo
+    @iteration-070 @todo
     Scenario: Alice replaces her photo with a newer one
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has the photo "alice-on-the-summit.jpg"
       When Alice adds the photo "alice-in-the-canoe.jpg"
       Then Alice's photo should be "alice-in-the-canoe.jpg"
 
-    @iteration-069 @todo
+    @iteration-070 @todo
     Scenario: Alice removes her photo and goes back to her initials
       Given Alice is a member of Kootenay Mountaineering Club
       And Bob is a member of Kootenay Mountaineering Club
@@ -66,7 +66,7 @@ Rule: A member's photo stands in for their initials
 
 Rule: Only images Memba can display are accepted as photos
 
-    @iteration-069 @todo
+    @iteration-070 @todo
     Scenario: Alice picks a document instead of a photo
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has no photo
@@ -74,7 +74,7 @@ Rule: Only images Memba can display are accepted as photos
       Then Alice should be told "That file isn't an image we can use. Choose a JPG, PNG, GIF or WebP."
       And Alice should see their initials in Account settings
 
-    @iteration-069 @todo
+    @iteration-070 @todo
     Scenario: Alice picks a photo far too big to handle
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has no photo
@@ -84,7 +84,7 @@ Rule: Only images Memba can display are accepted as photos
 
 Rule: A failed upload leaves the member's existing photo in place
 
-    @iteration-069 @todo
+    @iteration-070 @todo
     Scenario: Alice's upload fails part way through
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has the photo "alice-on-the-summit.jpg"

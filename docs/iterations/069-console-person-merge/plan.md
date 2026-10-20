@@ -1,7 +1,11 @@
 # Merge uncomplicated duplicate people from the console
 
 Date: 2026-10-13
-Status: implementation
+Status: merged
+
+Delivered in `5645fb62d50892b763f419f4b08e5d22b9a0e4bd` and deployed on
+2026-10-13. Originally numbered 070; renumbered to 069 after delivery so the
+pending profile-photo iteration is 070.
 
 ## Goal
 

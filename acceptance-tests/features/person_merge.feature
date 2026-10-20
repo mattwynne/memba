@@ -3,7 +3,7 @@ Feature: Merge duplicate people
 
 Rule: Verified addresses follow the surviving person
 
-    @iteration-070
+    @iteration-069
     Scenario: Staff merges a duplicate person's verified address
       Given Alice has the primary email "alice@example.com"
       And Alicia has the primary email "alice@work.example"
@@ -15,7 +15,7 @@ Rule: Verified addresses follow the surviving person
 
 Rule: Duplicate club access is collapsed without changing the survivor
 
-    @iteration-070
+    @iteration-069
     Scenario: Both people already belong to the same club
       Given Alice is a member of Kootenay Mountaineering Club
       And Alicia is an ordinary member of Kootenay Mountaineering Club
@@ -25,7 +25,7 @@ Rule: Duplicate club access is collapsed without changing the survivor
 
 Rule: A merge never silently loses a club membership
 
-    @iteration-070
+    @iteration-069
     Scenario: Only the duplicate belongs to a club
       Given Alice has the primary email "alice@example.com"
       And Alicia has the primary email "alice@work.example"

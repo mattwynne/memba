@@ -14,7 +14,7 @@ The status alone does not establish or claim production verification.
 The approved scope, designs, model decisions and planning evidence below are retained as history.
 Statements about then-current repository gaps or pending implementation describe the planning
 baseline, not the completed candidate. The three 068 domain examples and Profile editing browser
-journey are now executable; all six deferred 069 photo scenarios remain unchanged. The historical
+journey are now executable; all six deferred 070 photo scenarios retain their behaviour. The historical
 unattended attempt is not resumed or relabelled as delivered.
 
 ## Goal
@@ -86,7 +86,7 @@ Current repository evidence:
 
 - Automatic refresh of already-open Memba staff views, including streams: Matt explicitly declined it.
   No staff migration or stream adapter is required.
-- Photos (069); per-club names; other profile fields; renaming other people; club renaming.
+- Photos (070); per-club names; other profile fields; renaming other people; club renaming.
 - Notifications about name changes; audit/history UI; rate limits; merging people.
 - Rewriting already-sent email bodies or historical message events.
 - Workflow kaizen changes, healer experiments, and `experiment/unattended-delivery-skeleton`.
@@ -103,7 +103,7 @@ records formulation history, not a competing specification.
 
 - `acceptance-tests/features/member_profile.feature`: consolidate the existing three rename success
   examples into one cross-club/history example; retain one invalid-name example; add one stale-save
-  domain example. Preserve all 069 photo scenarios byte-for-byte.
+  domain example. Preserve all 070 photo scenarios byte-for-byte except the separately approved iteration-tag renumbering.
 - `acceptance-tests/features/journeys/member_profile.feature` (new): one Profile editing journey
   covers Save, menu/initials, and the untouched second connected form. The untouched-form example
   is UI behaviour, so prove it here and with LiveView tests, not by inventing a domain form model.
@@ -118,13 +118,13 @@ records formulation history, not a competing specification.
 Feature files are now formulated in those exact paths, with future scenarios tagged `@todo` in
  their intended runners. Three domain examples and one browser journey express the four agreed
 subjects; the stale example includes explicit confirmation. Exact language review remains part of
-planning completion. All 069 photo examples remain unchanged.
+planning completion. All 070 photo examples retain their behaviour; their iteration tags were subsequently renumbered.
 
 ## Allowed acceptance feature changes
 
 Implementation may remove `@todo` only from delivered 068 examples in the two files above and add
 step support in their intended layers. Preserve iteration provenance and agreed outcomes. Do not
-edit 069 scenarios or weaken existing settings coverage to make checks pass. Material changes to
+edit 070 scenario behaviour or weaken existing settings coverage to make checks pass. Material changes to
 rules/examples return to Matt, rather than being invented during delivery.
 
 ## Designs
@@ -376,7 +376,7 @@ non-durable: this iteration does not promise recovery of a lost broadcast to an 
 
 - Historical author name maps may be limited to active members; prove the intended display rather
   than assuming 067 already handles the new event or every author dependency.
-- Preserve pending 069 scenarios and the final combined name/photo design.
+- Preserve pending 070 scenario behaviour and the final combined name/photo design.
 - Do not impose new validation retrospectively on existing Person creation/history.
 - A name can match another Person's name; this is not an identity merge or a new impersonation policy.
 

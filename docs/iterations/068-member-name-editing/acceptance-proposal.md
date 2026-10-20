@@ -4,7 +4,8 @@ Status: complete. Actual feature files are authoritative; this note records cove
 
 Matt approved four example subjects and one Profile editing journey, extending an existing journey
 if present. Inspection found no existing Profile editing journey. Preserve the iteration-053
-Account settings entry example and all iteration-069 photo scenarios unchanged.
+Account settings entry example and all profile-photo scenario behaviour unchanged
+(now iteration-070 after the separately approved renumbering).
 
 ## Actual files
 

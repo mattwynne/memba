@@ -1,7 +1,10 @@
 # Members set their own profile photo
 
 Date: 2026-08-13
-Status: needs-revision — renumbered; review after 068 replanning
+Status: needs-revision — review against delivered 068 name editing and 069 Person merge
+
+Renumbered from 069 to 070 on 2026-10-13 to follow the delivered console Person
+merge. This is a numbering change, not renewed approval or validation.
 
 ## Review decision: public profile photos
 
@@ -99,7 +102,7 @@ stakeholder-readable terms.
 
 Scenarios go in
 [`acceptance-tests/features/member_profile.feature`](../../../acceptance-tests/features/member_profile.feature),
-shared with iteration 068, tagged `@iteration-069 @todo`:
+shared with iteration 068, tagged `@iteration-070 @todo`:
 
 Rule: A member's photo stands in for their initials
 
@@ -127,9 +130,9 @@ Both runners exclude `@todo` scenarios: browser selects `@journey and not @todo`
 ## Allowed acceptance feature changes
 
 - `acceptance-tests/features/member_profile.feature`: implementation may remove the temporary
-  `@todo` tags on the seven `@iteration-069` scenarios and add domain steps for the rules.
+  `@todo` tags on the seven `@iteration-070` scenarios and add domain steps for the rules.
   Any needed browser proof belongs in a dedicated `@journey` feature, not a duplicate of each rule.
-  These are this slice's acceptance criteria; preserve their `@iteration-069` tags and behaviour.
+  These are this slice's acceptance criteria; preserve their `@iteration-070` tags and behaviour.
   The `@iteration-068` scenarios in the same file must be left untouched. In particular,
   the signed-out-visitor scenario is a privacy constraint, not a nice-to-have.
 
@@ -140,7 +143,7 @@ Designed and pushed:
 → cloud `templates/account-settings/account-settings.html`. Render-verified headlessly at 1320px
 (no console/network errors, no horizontal overflow, all states present) before pushing.
 
-The template covers the final Profile tab across iterations 068 and 069. This iteration builds the
+The template covers the final Profile tab across iterations 068 and 070. This iteration builds the
 photo half.
 
 Prototype review clarification: the avatar menu, its global-bar placement, and the Account settings
@@ -268,7 +271,7 @@ Decided during planning:
     a photo, and ETag/conditional-request behaviour.
 13. Add LiveView tests for the empty, set, uploading, rejected, failed, and removed states, plus live
     refresh.
-14. Implement the `@iteration-069` acceptance scenarios and remove their `@todo` tags.
+14. Implement the `@iteration-070` acceptance scenarios and remove their `@todo` tags.
 15. Run `dev check` and fix all issues.
 
 ## Open Technical Decisions
@@ -317,7 +320,7 @@ the precedent that matters most.
   - remove restores initials;
   - an open settings page refreshes after a change elsewhere.
 - Acceptance tests:
-  - the seven `@iteration-069` scenarios in `member_profile.feature`, with the temporary
+  - the seven `@iteration-070` scenarios in `member_profile.feature`, with the temporary
     `@todo` tags removed.
 - Manual demo:
   1. Sign in as a club member with no photo; confirm initials in the global bar and member list.
