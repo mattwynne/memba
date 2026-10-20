@@ -454,7 +454,7 @@ Feature: Pick pending BDD work
           Scenario: Complete example
             Given something
         """
-      And argc is available from the managed development profile
+      And argc is available on the declared runtime PATH
       When I run "dev --help"
       Then the command succeeds
       And command output includes "bdd"
