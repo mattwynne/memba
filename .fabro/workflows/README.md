@@ -50,6 +50,14 @@ Neither implementation nor review opens a pull request. Their `workflow.toml` fi
 
 [`bdd-scenario-implementation`](bdd-scenario-implementation/README.md) is a separate, opt-in workflow for implementing one agreed domain scenario and passing `dev check`. It does not include refactoring, review or publication, and does not change `fabro deliver`.
 
+## Implementing a plan's domain scenarios
+
+[`bdd-plan-implementation`](bdd-plan-implementation/README.md) collects the tested
+parts of a proposed multi-scenario workflow. Its checked-in parent graph is an old
+navigator draft, not an assembled or proven loop. The reusable selector, pending
+work checker, stock-import capability case and their limits are documented with
+the draft. This remains separate from `fabro deliver`.
+
 ## Managed clone contract
 
 The implementation and review workflows rely on Fabro's managed clone and automatic checkpoints. Do not add explicit per-task commit nodes, set `[run].working_dir`, or disable `[run.clone]`: Fabro needs to infer the local repository, clone the current source branch into `/repos/mattwynne/memba`, link it at `/workspace/memba`, and create a pushed `fabro/run/<run-id>` branch for checkpoints after each node.
