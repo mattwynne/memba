@@ -1,11 +1,31 @@
 #!/usr/bin/env node
 const {fromCommit, pick} = require("./core.cjs");
 
-function usage(message) {
+function usage(message, status = 2) {
+  if (message) console.error(message);
+  const output = status === 0 ? console.log : console.error;
+  output("Usage: dev bdd <command>");
+  output("");
+  output("Commands:");
+  output("  pending [COMMIT] [--json]");
+  output("  pick FEATURE:EXACT_DECLARATION_LINE [--from COMMIT]");
+  process.exitCode = status;
+}
+
+function pendingHelp() {
+  console.log("Usage: dev bdd pending [COMMIT] [--json]");
+  console.log("Report pickable domain work and pending journeys from an immutable Git snapshot.");
+}
+
+function pendingUsage(message) {
   if (message) console.error(message);
   console.error("Usage: dev bdd pending [COMMIT] [--json]");
-  console.error("       dev bdd pick FEATURE:EXACT_DECLARATION_LINE [--from COMMIT]");
   process.exitCode = 2;
+}
+
+function pickHelp() {
+  console.log("Usage: dev bdd pick FEATURE:EXACT_DECLARATION_LINE [--from COMMIT]");
+  console.log("Replace one eligible declaration's local @todo with @wip in a clean worktree.");
 }
 
 function parsePending(args) {
@@ -47,15 +67,18 @@ function printHuman(report) {
 
 function main(args) {
   const command = args.shift();
+  if (command === "-h" || command === "--help") return usage(undefined, 0);
   if (command === "pending") {
+    if (args.includes("-h") || args.includes("--help")) return pendingHelp();
     const options = parsePending(args);
-    if (!options) return usage("Invalid pending arguments.");
+    if (!options) return pendingUsage("Invalid pending arguments.");
     const report = fromCommit(options.commit);
     if (options.json) console.log(JSON.stringify(report));
     else printHuman(report);
     return;
   }
   if (command === "pick") {
+    if (args.includes("-h") || args.includes("--help")) return pickHelp();
     const options = parsePick(args);
     if (!options) return usage("Invalid pick arguments.");
     const selected = pick(options.reference, options.from);
