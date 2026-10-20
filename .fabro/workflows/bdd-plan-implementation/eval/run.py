@@ -20,17 +20,23 @@ def read_json(file):
         return {}
 
 
+def valid_grade(exit_code, verdict):
+    return exit_code in (0, 1) and verdict.get('passed') is (exit_code == 0)
+
+
 def report(out):
     manifest = read_json(out / 'manifest.json')
     trials = []
     for trial in sorted(out.glob('trial-*')):
         launch, wait, grade = [read_json(trial / name) for name in ('launch.json', 'wait.json', 'grade.json')]
-        trials.append({'trial': trial.name, 'run_id': launch.get('run_id'), 'status': wait.get('status', 'unknown'),
-                       'passed': wait.get('status') == 'succeeded' and grade.get('passed', False),
+        run_id = launch.get('run_id')
+        trials.append({'trial': trial.name, 'run_id': run_id, 'status': wait.get('status', 'unknown'),
+                       'passed': bool(run_id) and wait.get('status') == 'succeeded' and grade.get('passed', False),
                        'grade': grade or {'error': 'Not graded; inspect saved receipts'}})
-    finished = sum(t['status'] in TERMINAL for t in trials)
+    acknowledged = sum(bool(t['run_id']) for t in trials)
+    finished = sum(bool(t['run_id']) and t['status'] in TERMINAL for t in trials)
     passed = sum(t['passed'] for t in trials)
-    summary = {**manifest, 'attempted': len(trials), 'finished': finished, 'passed': passed,
+    summary = {**manifest, 'attempted': len(trials), 'acknowledged': acknowledged, 'finished': finished, 'passed': passed,
                'not_run': manifest['requested'] - len(trials), 'wilson_95': wilson(passed, finished), 'trials': trials}
     (out / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(f"{passed}/{finished} finished trials passed; {summary['not_run']} not run; evidence: {out}", flush=True)
@@ -96,8 +102,12 @@ def run(args):
             final = list((trial / 'artifacts/observe').rglob('final.feature'))
             if len(final) == 1 and not events and not artifacts:
                 with (trial / 'grade.json').open('w') as stdout, (trial / 'grade.stderr').open('w') as stderr:
-                    subprocess.run(['node', str(HERE / 'grade.cjs'), str(final[0].parent), str(trial / 'events.jsonl')],
-                                   cwd=HERE.parents[3], stdout=stdout, stderr=stderr)
+                    result = subprocess.run(['node', str(HERE / 'grade.cjs'), str(final[0].parent), str(trial / 'events.jsonl')],
+                                            cwd=HERE.parents[3], stdout=stdout, stderr=stderr)
+                (trial / 'grade.exit').write_text(str(result.returncode) + '\n')
+                verdict = read_json(trial / 'grade.json')
+                if not valid_grade(result.returncode, verdict):
+                    raise RuntimeError(f'{run_id}: grader collection error; inspect saved receipts, do not continue')
             if events or artifacts or len(final) != 1 or read_json(trial / 'wait.json')['status'] != 'succeeded':
                 break  # Infrastructure failures need inspection, not nineteen more identical failures.
     finally:

@@ -9,7 +9,8 @@ scenario implementation. There are three pieces:
   final Git diff. No per-child feature copies, code hashes or file inventories.
 - `run.py`: launch fresh runs, collect native events and the final artifacts,
   then report every attempted run with a 95% Wilson interval. Receipts are the
-  record; a failed export cannot erase a known terminal result. `--report`
+  record; attempted directories, acknowledged run IDs and known terminal results are
+reported separately. A failed export cannot erase a known terminal result. `--report`
   recomputes the summary without launching anything. No `fabro dump` dependency.
 
 ## Historical case and approved criteria
@@ -59,7 +60,7 @@ python3 -B .fabro/workflows/bdd-plan-implementation/eval/run.py \
 ```
 
 Trials are sequential, each in fresh managed Docker. Wrong graded choices remain
-in the sample; infrastructure/collection failures stop for inspection, without
+in the sample; grader parsing/I/O errors and infrastructure/collection failures stop for inspection, without
 repair or replacement. Unknown launch acknowledgements never trigger a relaunch.
 Keep native events, artifacts and failures. Audit actual tool use/cost and verify
 owned sandboxes stopped. Real-scenario import wiring is inspected, not separately tested.

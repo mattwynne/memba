@@ -32,11 +32,30 @@ class EvalInfrastructureTest(unittest.TestCase):
             (trial / 'wait.json').write_text('{"status": "failed"}')
             (trial / 'artifacts.log.stderr').write_text('Export unavailable')
             summary = runner.report(out)
-            self.assertEqual((summary['attempted'], summary['finished'], summary['not_run']), (1, 1, 19))
+            self.assertEqual((summary['attempted'], summary['acknowledged'], summary['finished'], summary['not_run']), (1, 1, 1, 19))
             self.assertEqual(summary['trials'][0]['status'], 'failed')
             (trial / 'wait.json').write_text('interrupted output')
             self.assertEqual(runner.report(out)['finished'], 0)
             self.assertEqual(runner.report(out)['not_run'], 19)
+
+    def test_grader_errors_stop_but_objective_failures_continue(self):
+        self.assertTrue(runner.valid_grade(0, {'passed': True}))
+        self.assertTrue(runner.valid_grade(1, {'passed': False, 'error': 'wrong first choice'}))
+        for code, verdict in [(2, {}), (1, {}), (0, {}), (1, {'passed': True}), (0, {'passed': False})]:
+            self.assertFalse(runner.valid_grade(code, verdict))
+
+    def test_unknown_launch_acknowledgement_is_attempted_but_not_launched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / 'manifest.json').write_text('{"requested": 20}')
+            trial = out / 'trial-01'
+            trial.mkdir()
+            (trial / 'launch.json').write_text('incomplete acknowledgement')
+            (trial / 'wait.json').write_text('{"status":"succeeded"}')
+            summary = runner.report(out)
+            self.assertEqual((summary['attempted'], summary['acknowledged'], summary['finished'], summary['not_run']),
+                             (1, 0, 0, 19))
+            self.assertFalse(summary['trials'][0]['passed'])
 
     def test_prepared_result_is_bundled_but_absent_from_the_clone(self):
         with tempfile.TemporaryDirectory() as tmp:

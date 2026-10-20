@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {execFileSync} = require('node:child_process');
+const {execFileSync, spawnSync} = require('node:child_process');
 const {parse, scenarios, complete, featurePath} = require('./double.cjs');
 const {grade} = require('./grade.cjs');
 const initial = fs.readFileSync(path.join(__dirname, 'cases/member_profile.feature'), 'utf8');
@@ -47,6 +47,20 @@ test('either successful rename first; all four remaining permutations accepted',
 test('file order (whitespace first) and early completion still fail', t => {
   assert.throws(() => check(evidence(t, [blank, stale, foundation])), /successful rename/);
   assert.throws(() => check(evidence(t, [foundation])), /imported workflow/);
+});
+test('CLI distinguishes graded assertion failures from malformed evidence', t => {
+  const dir = evidence(t);
+  const cli = () => spawnSync('node', [path.join(__dirname, 'grade.cjs'), dir, path.join(dir, 'events.jsonl')], {encoding: 'utf8'});
+  fs.writeFileSync(path.join(dir, 'events.jsonl'), '{}\n');
+  assert.equal(cli().status, 1);
+  assert.equal(JSON.parse(cli().stdout).passed, false);
+  fs.writeFileSync(path.join(dir, 'events.jsonl'), 'not json\n');
+  const malformed = cli();
+  assert.equal(malformed.status, 2);
+  assert.match(malformed.stderr, /SyntaxError/);
+  assert.equal(malformed.stdout, '');
+  fs.rmSync(path.join(dir, 'final.feature'));
+  assert.equal(cli().status, 2);
 });
 test('child records alone cannot substitute for imported workflow completion', t => {
   const dir = evidence(t);

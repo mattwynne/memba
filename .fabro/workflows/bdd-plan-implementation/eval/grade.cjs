@@ -47,5 +47,13 @@ function grade(dir, eventsFile) {
 module.exports = {grade};
 if (require.main === module) {
   try { console.log(JSON.stringify(grade(process.argv[2], process.argv[3]))); }
-  catch (error) { console.log(JSON.stringify({passed: false, error: error.message})); process.exitCode = 1; }
+  catch (error) {
+    if (error instanceof assert.AssertionError) {
+      console.log(JSON.stringify({passed: false, error: error.message}));
+      process.exitCode = 1;
+    } else {
+      console.error(error);
+      process.exitCode = 2; // Parsing or I/O failure is not a graded objective failure.
+    }
+  }
 }
