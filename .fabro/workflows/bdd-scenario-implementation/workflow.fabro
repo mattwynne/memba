@@ -1,0 +1,29 @@
+digraph BddScenarioImplementation {
+    graph [goal="Implement one agreed scenario and pass the checks; do not publish",
+        default_max_retries=0,
+        model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"]
+    node [shape=box, backend="api"]
+
+    start [shape=Mdiamond]
+    done [shape=Msquare]
+    stop [shape=parallelogram, script="echo 'Stopped with work preserved; see the last result.' >&2; exit 1"]
+    setup [shape=parallelogram, script="mkdir -p .fabro/tmp/bdd && git rev-parse HEAD > .fabro/tmp/bdd/base && bin/dev sandbox-check && bin/dev responsive-check --force"]
+
+    navigator [prompt="@prompts/bdd-navigator.md", fidelity="full", thread_id="bdd-navigator"]
+    driver [prompt="@prompts/bdd-driver.md", fidelity="truncate"]
+    checked [shape=parallelogram, script="true"]
+    check [shape=parallelogram, script="bin/dev check > .fabro/tmp/bdd/check.log 2>&1; result=$?; cat .fabro/tmp/bdd/check.log; exit \"$result\""]
+
+    start -> setup
+    setup -> navigator [condition="outcome=succeeded"]
+    setup -> stop
+    navigator -> driver [condition="outcome=succeeded && preferred_label=change"]
+    navigator -> check [condition="outcome=succeeded && preferred_label=check"]
+    navigator -> stop
+    driver -> navigator [condition="outcome=succeeded"]
+    driver -> stop
+    check -> checked [condition="outcome=succeeded"]
+    checked -> done
+    check -> navigator [condition="outcome=failed"]
+    check -> stop
+}
