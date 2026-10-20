@@ -1,8 +1,8 @@
 defmodule Memba.Cucumber.MemberProfileSteps do
   use Cucumber.StepDefinition
   import ExUnit.Assertions
-  alias Memba.Membership
   alias Memba.Membership.{CommandDispatch, PersonCommands, ClubCommands, AddMember}
+  alias Memba.Membership.{PersonQueries, ClubGroupQueries}
   alias Memba.Messaging
 
   step "Alice is a member of Rockies Cycling Co-op", context do
@@ -90,7 +90,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   step ~r/^Alice should be known as "([^"]+)" in (.+)$/, %{args: [name, club_name]} = context do
     member =
       Enum.find(
-        Membership.list_active_members_of_club(context.clubs[club_name]),
+        ClubGroupQueries.list_active_members_of_club(context.clubs[club_name]),
         &(&1.id == person(context).person_id)
       )
 
@@ -171,7 +171,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context
   end
 
-  defp person(context), do: Membership.get_person(context.people["Alice"].person_id)
+  defp person(context), do: PersonQueries.get_person(context.people["Alice"].person_id)
 
   defp rename(context, name, expected) do
     id = person(context).person_id
@@ -214,7 +214,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     {:ok, detail} =
       MembaWeb.MemberMessageDetail.load(
         %{"club_id" => message.club_id, "message_id" => message_id},
-        [Membership.get_club(message.club_id)],
+        [ClubGroupQueries.get_club(message.club_id)],
         %{email: person(context).email}
       )
 
