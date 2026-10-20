@@ -1,93 +1,76 @@
-# Plan-level BDD workflow baseline
+# Plan-level BDD workflow
 
-This directory collects reusable, separately tested parts for a future workflow
-that implements a plan's domain scenarios one at a time. It is opt-in and does
-not change `fabro deliver`.
+This opt-in native Fabro workflow implements an active plan's domain scenarios
+one at a time. Its source graph and deterministic mechanics are assembled and
+covered by ordinary tests, but the complete graph has not yet had its managed
+source gate or a live model rehearsal. It does not change `fabro deliver`.
 
-## What is reusable now
+## Assembled loop
 
-- [`pending.cjs`](pending.cjs) deterministically reads an immutable commit,
-  validates iteration ownership and status, and reports pending domain scenarios
-  and journeys. Its ordinary tests are in [`eval/test_pending.cjs`](eval/test_pending.cjs).
-  It is standalone and is not wired into the graph.
-- [`eval/selection/`](eval/selection/README.md) contains the tested read-only
-  commit-only selector prompt and harness. Three fixed host cases are retained
-  separately; the synthetic fixture implementations are not copied here.
-- [`eval/cases/stock-fabro/`](eval/cases/stock-fabro/) is a small model-free
-  capability graph for shell writes around a native Fabro import.
-- The single-scenario graph has the stock-import exit boundary and shell-write
-  prompt guidance tested in source commit `e9fe14759093dcd87447bdc1e192174f68b2f5e5`.
-- The imported implementation navigator uses one literal full-fidelity
-  `bdd-navigator` thread across scenarios. Drivers remain truncate-fidelity and
-  fresh for each assignment. The outer choice stage is a separate identity.
-- Before the next scenario starts, the graph moves the complete prior
+- `node dev-tools/bdd/workflow.cjs inspect` calls the public
+  `bin/dev bdd pending HEAD --json` command, records the resolved full SHA and
+  complete root-tree OID, and routes either to a fresh selector or domain-loop
+  completion. Journeys remain in the saved report and never mark an iteration
+  merged.
+- [`eval/selection/`](eval/selection/README.md) contains the retained canonical
+  commit-only selector prompt and fixed cases. Every loop visit uses
+  `fidelity="truncate"`, no thread ID and no output schema. Stock Fabro adds its
+  minimal goal/run-ID preamble; the canonical task body remains unchanged and
+  receives only the literal run input `HEAD`.
+- Native `response.selector` is passed by `stdin_source` to deterministic
+  validation. That command captures the current full SHA, requires a clean
+  worktree and the same complete tree, reruns public `pending` at that SHA,
+  resolves exactly one eligible declaration, then calls public
+  `bin/dev bdd pick REF --from CURRENT_SHA` in the same command node. Empty
+  checkpoint commits are tolerated only because the tree is unchanged; the
+  tree never replaces the exact `--from` SHA guard.
+- The real single-scenario graph is imported with stock Fabro. Its implementation
+  navigator uses the one literal full-fidelity `bdd-navigator` thread across the
+  whole plan. Each driver remains truncate-fidelity and fresh. The selector is
+  separate and receives no pending report, plan path, scenario list or
+  implementation conversation.
+- Before another scenario starts, the graph moves the complete prior
   `.fabro/tmp/bdd/` directory to the next numbered directory under
-  `.fabro/tmp/bdd-plan/scenarios/`, then recreates empty scenario scratch. The
-  last scenario remains in the active scratch directory when the plan finishes.
-- The scenario's graph-owned full check has a native 1800-second timeout. A
-  failed check returns to the continuing navigator; success still crosses the
-  conditional `check -> checked` edge and unconditional imported exit boundary.
+  `.fabro/tmp/bdd-plan/scenarios/`, then creates fresh scratch. Partial and
+  complete notes, bases, results, check logs and arbitrary logs are retained.
+  A symlinked scratch path fails clearly rather than reusing old evidence. The
+  final scenario remains in active scratch when the domain loop finishes.
+- The imported graph owns the 1800-second full `bin/dev check`. Failure returns
+  to the continuing navigator. Success crosses its conditional `check ->
+  checked` edge and unconditional imported exit boundary before outer inspection
+  repeats on the new commit.
 
-## What is still a draft
+## Evidence boundary
 
-[`workflow.fabro`](workflow.fabro), [`workflow.toml`](workflow.toml), and
-[`prompts/navigator.md`](prompts/navigator.md) are the historical stock-import
-baseline. They are retained for the later assembly task, but they are **not a
-working or proven controller**. In particular, this draft:
+The graph owns inspect/select/pick/import/repeat routing and uses stock command
+outputs, routing output schemas, raw response stdin and imports. Ordinary tests
+cover two loop visits, updated HEAD binding, tree staleness, strict choice
+validation, clean guards, completion/errors/journeys, failed-node routing,
+scratch preservation and symlink rejection. The retained stock capability case
+only proves import and shell-write mechanics.
 
-- does not call the deterministic pending checker;
-- uses an old navigator prompt rather than the tested commit-only selector;
-- lets that navigator edit tags instead of calling the agreed `dev bdd pick`
-  command;
-- has no complete loop, implementation, coordination, or all-done proof.
+This is not evidence that a model will coordinate the whole loop correctly. Do
+not claim runtime proof until the exact assembled commit passes its managed gate
+and a separately approved rehearsal. The earlier 20/20 fixed selector cases used
+isolated full-fidelity calls with literal SHAs; they do not prove this
+HEAD/truncate loop.
 
-Do not run this parent graph as a supported workflow until those pieces are
-assembled and validated. The pending helper is also expected to move into the
-`dev bdd pending` toolkit command; avoid creating a second public interface here.
+The loop is limited to domain scenarios. Browser journeys, refactoring, review,
+publication and marking an iteration merged are outside it. See
+[`eval/README.md`](eval/README.md) for retained evidence boundaries and
+[`OPERATIONS.md`](OPERATIONS.md) for the guarded operating procedure.
 
-The eventual workflow remains limited to domain scenarios. Browser journeys,
-refactoring, review, publication, and marking an iteration merged are outside it.
-See [`eval/README.md`](eval/README.md) for the retained evidence boundaries.
+## Known limits
 
-## Boundary behavior and remaining integration decisions
+- Active inherited-only TODO work without a locally pickable declaration fails
+  closed. This workflow does not add policy for it.
+- `test:wip` counts expanded rows and rejects a selected multi-row Outline or
+  Examples group. This workflow does not claim generic Outline coverage.
+- Selector JSON has only plan, feature, scenario and reason. Multiple eligible
+  Examples groups with the same names fail as ambiguous; the workflow does not
+  guess or add hidden selector fields.
 
-The continuing implementation navigator must re-read the current commit,
-selected declaration, code and setup for every scenario. Earlier work may inform
-its reasoning, but old predictions and test output are not proof after the
-source, scenario or setup changes. Each driver assignment is self-contained and
-fresh.
-
-This boundary delta deliberately does not wire the pending checker, tested
-commit-only selector prompt or public `dev bdd pick` command into the graph. The
-tested selector prompt remains byte-identical. Parent integration must connect
-those pieces and preserve the graph variables they provide. The existing outer
-`navigator` node and its `bdd-plan-navigator` thread are temporary historical
-drafts. `bdd-connect` must replace that choice stage with the tested read-only
-selector, give it only the current commit in a fresh session on every choice,
-and never share the implementation navigator's `bdd-navigator` thread or history.
-
-Two public-tooling decisions also remain outside this change:
-
-- The current pending policy refuses inherited-only active TODO declarations.
-  This workflow boundary does not change that policy flag.
-- `test:wip` counts expanded example rows rather than selected declarations. For
-  example, one tagged outline with two rows is currently counted as two WIP
-  scenarios and rejected:
-
-  ```gherkin
-  @wip
-  Scenario Outline: invite a <role>
-    Given a <role> invite
-
-  Examples:
-    | role   |
-    | owner  |
-    | member |
-  ```
-
-  This workflow does not claim that Outline/Examples case is compatible or
-  modify the public command.
-
-The pure boundary tests in [`eval/test_boundaries.py`](eval/test_boundaries.py)
-check source structure and prompt contracts only. They are not a Fabro execution,
-model evaluation or source-quality/full-workflow proof.
+The pure boundary tests are in [`eval/test_boundaries.py`](eval/test_boundaries.py).
+The deterministic mechanics tests are in
+[`dev-tools/bdd/test-workflow.cjs`](../../../dev-tools/bdd/test-workflow.cjs).
+They are not a Fabro execution, model evaluation or managed source-quality gate.

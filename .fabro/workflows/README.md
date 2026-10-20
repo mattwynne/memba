@@ -52,11 +52,11 @@ Neither implementation nor review opens a pull request. Their `workflow.toml` fi
 
 ## Implementing a plan's domain scenarios
 
-[`bdd-plan-implementation`](bdd-plan-implementation/README.md) collects the tested
-parts of a proposed multi-scenario workflow. Its checked-in parent graph is an old
-navigator draft, not an assembled or proven loop. The reusable selector, pending
-work checker, stock-import capability case and their limits are documented with
-the draft. This remains separate from `fabro deliver`.
+[`bdd-plan-implementation`](bdd-plan-implementation/README.md) is an assembled
+opt-in native graph for selecting and implementing domain scenarios one at a
+time. Its deterministic mechanics have ordinary coverage, but the exact graph
+has not yet had a managed source gate or live model rehearsal. This remains
+separate from `fabro deliver`.
 
 ## Managed clone contract
 
