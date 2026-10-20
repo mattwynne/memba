@@ -3,7 +3,8 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   import ExUnit.Assertions
   alias Memba.Membership.{CommandDispatch, PersonCommands, ClubCommands, AddMember}
   alias Memba.Membership.{PersonQueries, ClubGroupQueries}
-  alias Memba.Messaging
+  alias Memba.Messaging.{MessageQueries, SendClubMessage, PostMemberMessageReply}
+  alias Memba.Messaging.CommandDispatch, as: MessagingDispatch
 
   step "Alice is a member of Rockies Cycling Co-op", context do
     club_id = Memba.ID.generate(:club)
@@ -68,16 +69,15 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context = start_conversation(context, "Rockies Cycling Co-op", subject)
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.post_message_reply(
-               %{
-                 message_id: message_id,
-                 conversation_id: context.profile_messages[subject],
-                 sender_id: person(context).person_id,
-                 body: "An earlier reply."
-               },
-               consistency: :strong
-             )
+    {:ok, command} =
+      PostMemberMessageReply.prepare(%{
+        message_id: message_id,
+        conversation_id: context.profile_messages[subject],
+        sender_id: person(context).person_id,
+        body: "An earlier reply."
+      })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     Map.put(context, :profile_reply, message_id)
   end
@@ -189,17 +189,16 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   defp start_conversation(context, club_name, subject) do
     message_id = Memba.ID.generate(:message)
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: context.clubs[club_name],
-                 sender_id: person(context).person_id,
-                 subject: subject,
-                 body: "An earlier conversation."
-               },
-               consistency: :strong
-             )
+    {:ok, command} =
+      SendClubMessage.prepare(%{
+        message_id: message_id,
+        club_id: context.clubs[club_name],
+        sender_id: person(context).person_id,
+        subject: subject,
+        body: "An earlier conversation."
+      })
+
+    assert {:ok, :ok} = MessagingDispatch.dispatch(command, consistency: :strong)
 
     Map.put(
       context,
@@ -209,7 +208,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   end
 
   defp detail(context, message_id) do
-    message = Messaging.get_message(message_id)
+    message = MessageQueries.get_message(message_id)
 
     {:ok, detail} =
       MembaWeb.MemberMessageDetail.load(

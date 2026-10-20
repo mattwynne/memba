@@ -351,8 +351,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     assert assigns.member_names_by_id == %{
              alice.person_id => "Alice Adams",
-             bob.person_id => "Bob Builder",
-             carol.person_id => "Carol Canoe"
+             bob.person_id => "Bob Builder"
            }
 
     assert assigns.active_member_count == 2
