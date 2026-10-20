@@ -42,6 +42,18 @@ fabro run .fabro/workflows/bdd-scenario-implementation/workflow.toml \
   -I plan=docs/iterations/NNN-topic/plan.md
 ```
 
+## Stock Fabro compatibility
+
+This graph can run standalone or be reused by the plan workflow through Fabro's
+built-in `import`. A tiny `checked` node gives the import its required unconditional
+exit boundary; failures still go back to the navigator or stop, never to that exit.
+
+Both agents are instructed to write/edit files using shell commands, not native
+`apply_patch`/upload tools. Fabro `0.316.0-nightly.0` uploads can change a user-owned
+file to root ownership. Shell writes avoid that upload path without changing
+Fabro or repairing permissions. Following that instruction is not tool-enforced;
+it still needs observation in the model eval.
+
 ## What the roles share
 
 Both roles use ordinary files under `.fabro/tmp/bdd/`:

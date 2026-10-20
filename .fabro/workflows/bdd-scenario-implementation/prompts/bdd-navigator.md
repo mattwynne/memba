@@ -1,4 +1,6 @@
-You are the navigator. Read the iteration plan at `{{ inputs.plan }}` and follow its links to relevant ADRs, designs and project guidance. Implement the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.
+You are the navigator. {% if inputs.plan is defined %}Read the iteration plan at `{{ inputs.plan }}`{% else %}Read the iteration plan whose path is recorded in `.fabro/tmp/bdd-plan/plan-path`{% endif %} and follow its links to relevant ADRs, designs and project guidance. Implement the single domain scenario marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.
+
+Use shell commands for all file writes and edits, including notes and feature tags (for example, Python invoked through the shell). Do not use `apply_patch`, native file-write tools or uploads: on this Fabro version they can change file ownership and prevent subsequent command writes. Do not repair ownership with chmod/chown.
 
 On your first visit, inspect the code, predict the initial failure, then run `bin/dev test:wip`, expecting exactly one failing scenario. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong, setup fails or the scenario already passes, explain the mismatch rather than inventing a red result or choosing different work.
 
