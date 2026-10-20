@@ -391,6 +391,41 @@ Feature: Pick pending BDD work
       And the unowned collision sentinel remains unchanged
       And no file bytes changed
 
+    Scenario: An unrelated concurrent commit changes HEAD without changing the selected feature
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @todo
+          Scenario: Add a profile photo
+            Given original state
+        """
+      And I remember the commit as "snapshot A"
+      And a concurrent unrelated commit occurs during pick
+      When I pick "Scenario: Add a profile photo" from commit "snapshot A" during the concurrent change
+      Then the command fails
+      And stderr includes "repository changed while pick was validating"
+      And the selected feature remains unchanged
+      And HEAD no longer names commit "snapshot A"
+      And no owned pick temporary file remains
+
+    Scenario: A partial owned temporary write is cleaned up without changing the target
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Member profiles
+          @todo
+          Scenario: Add a profile photo
+            Given original state
+        """
+      And the owned temporary write will fail after writing some bytes
+      When I pick the declaration "Scenario: Add a profile photo"
+      Then the command fails
+      And stderr includes "injected partial owned-temp write failure"
+      And the owned temporary descriptor was closed
+      And the selected feature remains unchanged
+      And no owned pick temporary file remains
+
   Rule: Help is available without starting application infrastructure
 
     Scenario Outline: Every BDD command provides successful help
