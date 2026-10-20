@@ -8,21 +8,34 @@ It returns a plan path, feature path, exact scenario name and short reason.
 It must not edit files, run application tests or delegate. These are prompt
 instructions; audit actual tool use and Git changes, not just the final answer.
 
-## First fixed case
+## Fixed cases
 
 `case.json` is host-side grading data, never sent to the agent or included in its
-fixture checkout. The fixture starts from historical preimplementation code and
-approved 068 planning files. Plan and index both say `implementing`, making it
-the single active plan. Domain scenario wording/assertions/tags are preserved;
-whitespace validation is first in file. Other iterations and the browser
-journey remain pending. No completed rename implementation or eval answers are
-copied into that commit.
+fixture checkout. The completed first case, source `3f30c0ad` / fixture `a481d142`,
+tested choosing a useful foundation from the approved 068 plan before implementation.
+It selected the cross-club/history rename in 20/20 independent sessions. Its original
+case and evidence remain in `eval/results/commit-selection-20261020/`; this case
+replaces the host-only `case.json` for the next batch without changing `prompt.md`.
 
-Predeclared pass set: find the actual active plan and feature, then select either
-successful rename example first, not whitespace validation. The reason must be
-present but is not model-judged. This is the previously agreed foundation-before-
-validation criterion. Zero/multiple active-plan discovery is in the prompt, but
-only the unique-active-plan case is exercised by this first batch.
+The next case deliberately uses a **synthetic partial fixture**, not a historical
+checkpoint. Starting from the clean first fixture, it imports the historical rename
+path from `444ee7d72`, adapts stale historical step APIs to current query/dispatch
+modules, and leaves *rename-only* blank/length and stale-baseline enforcement out.
+Existing Person creation validation is unchanged. The cross-club/history domain
+example is executable and passes. Both remaining 068 domain examples retain their
+original wording, assertions and `@todo`, and have been run separately in normal
+managed Docker with tags included: they fail at their behavioural assertions after
+all setup/action steps pass. Photo (069), browser journey and unrelated iterations
+remain untouched. The 068 plan/index occupy the one documented active WIP slot;
+an inherited old 070 header still says `implementation`, outside the index's active
+status vocabulary. This fixture does not prove clean arbitrary plan headers.
+
+Both pending constraints are acceptable choices. This case measures exclusion of
+done/out-of-scope work, **not** preference between those constraints. The reason
+must be present but is not model-judged. Only this unique-active-plan, partial-
+implementation commit is exercised; no/multiple active plans remain untested.
+The case is not production implementation or evidence that the synthetic omissions
+are safe to deploy.
 
 Twenty sequential fresh agent sessions read the same immutable commit in one
 normal managed Docker run. Distinct thread IDs and full fidelity prevent

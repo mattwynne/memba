@@ -16,7 +16,7 @@ class CommitSelectionTest(unittest.TestCase):
             reply = {key: case[key] for key in ['plan', 'feature']}
             reply.update(scenario=scenario, reason='Establish the missing successful path.')
             self.assertTrue(selection.assess(json.dumps(reply), case)['passed'])
-        reply['scenario'] = 'Alice cannot replace their name with whitespace'
+        reply['scenario'] = "Alice's corrected name appears across clubs and on earlier contributions"
         self.assertFalse(selection.assess(json.dumps(reply), case)['passed'])
         reply['scenario'] = case['acceptable_first'][0]
         reply['plan'] = 'another/plan.md'
