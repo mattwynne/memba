@@ -53,6 +53,55 @@ function lineContaining(world, text, occurrence = 1) {
   return index + 1;
 }
 
+function configureRace(world, kind, raceSource = "") {
+  const preload = path.join(world.toolsRoot, "race-preload.cjs");
+  fs.writeFileSync(preload, `
+const fs = require("node:fs");
+const {execFileSync} = require("node:child_process");
+const path = require("node:path");
+const originalReadFileSync = fs.readFileSync;
+let fired = false;
+fs.readFileSync = function(target, ...args) {
+  const result = originalReadFileSync.call(this, target, ...args);
+  if (fired) return result;
+  let matches = false;
+  try {
+    if (typeof target === "number") {
+      const targetStat = fs.statSync(process.env.BDD_RACE_TARGET, {bigint: true});
+      const descriptorStat = fs.fstatSync(target, {bigint: true});
+      matches = targetStat.dev === descriptorStat.dev && targetStat.ino === descriptorStat.ino;
+    } else {
+      matches = path.resolve(String(target)) === path.resolve(process.env.BDD_RACE_TARGET);
+    }
+  } catch (_) {}
+  if (!matches) return result;
+  fired = true;
+  if (process.env.BDD_RACE_KIND === "unrelated-commit") {
+    fs.writeFileSync(path.join(process.env.BDD_RACE_ROOT, "concurrent-unrelated.txt"), "concurrent commit\\n");
+    execFileSync(process.env.BDD_REAL_GIT, ["add", "concurrent-unrelated.txt"], {cwd: process.env.BDD_RACE_ROOT});
+  } else {
+    fs.writeFileSync(process.env.BDD_RACE_TARGET, Buffer.from(process.env.BDD_RACE_CONTENT, "base64"));
+    if (process.env.BDD_RACE_KIND === "commit") {
+      execFileSync(process.env.BDD_REAL_GIT, ["add", "acceptance-tests/features/example.feature"], {cwd: process.env.BDD_RACE_ROOT});
+    }
+  }
+  if (process.env.BDD_RACE_KIND === "commit" || process.env.BDD_RACE_KIND === "unrelated-commit") {
+    execFileSync(process.env.BDD_REAL_GIT, ["-c", "user.name=Race", "-c", "user.email=race@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "Concurrent commit"], {cwd: process.env.BDD_RACE_ROOT});
+  }
+  return result;
+};
+`);
+  world.concurrentFeatureBytes = raceSource ? Buffer.from(raceSource) : undefined;
+  world.commandEnv = {
+    NODE_OPTIONS: `--require=${preload}`,
+    BDD_RACE_TARGET: world.featurePath,
+    BDD_RACE_CONTENT: world.concurrentFeatureBytes?.toString("base64") || "",
+    BDD_RACE_KIND: kind,
+    BDD_RACE_ROOT: world.root,
+    BDD_REAL_GIT: execFileSync("sh", ["-c", "command -v git"], {encoding: "utf8"}).trim()
+  };
+}
+
 function runDev(world, args) {
   world.before = snapshot(world);
   world.result = spawnSync(dev, args, {
@@ -121,45 +170,45 @@ Given("the feature has invalid comment bytes and mode {string}", function (mode)
 });
 
 Given("a concurrent {word} replaces the feature during pick with:", function (kind, source) {
-  const preload = path.join(this.toolsRoot, "race-preload.cjs");
   const raceSource = expand(source) + "\n";
+  configureRace(this, kind, raceSource);
+});
+
+Given("a concurrent unrelated commit occurs during pick", function () {
+  configureRace(this, "unrelated-commit");
+});
+
+Given("the owned temporary write will fail after writing some bytes", function () {
+  const preload = path.join(this.toolsRoot, "partial-write-preload.cjs");
+  this.closedMarker = path.join(this.toolsRoot, "owned-temp-closed");
   fs.writeFileSync(preload, `
 const fs = require("node:fs");
-const {execFileSync} = require("node:child_process");
-const path = require("node:path");
-const originalReadFileSync = fs.readFileSync;
-let fired = false;
-fs.readFileSync = function(target, ...args) {
-  const result = originalReadFileSync.call(this, target, ...args);
-  if (fired) return result;
-  let matches = false;
-  try {
-    if (typeof target === "number") {
-      const targetStat = fs.statSync(process.env.BDD_RACE_TARGET, {bigint: true});
-      const descriptorStat = fs.fstatSync(target, {bigint: true});
-      matches = targetStat.dev === descriptorStat.dev && targetStat.ino === descriptorStat.ino;
-    } else {
-      matches = path.resolve(String(target)) === path.resolve(process.env.BDD_RACE_TARGET);
-    }
-  } catch (_) {}
-  if (!matches) return result;
-  fired = true;
-  fs.writeFileSync(process.env.BDD_RACE_TARGET, Buffer.from(process.env.BDD_RACE_CONTENT, "base64"));
-  if (process.env.BDD_RACE_KIND === "commit") {
-    execFileSync(process.env.BDD_REAL_GIT, ["add", "acceptance-tests/features/example.feature"], {cwd: process.env.BDD_RACE_ROOT});
-    execFileSync(process.env.BDD_REAL_GIT, ["-c", "user.name=Race", "-c", "user.email=race@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "Concurrent commit"], {cwd: process.env.BDD_RACE_ROOT});
-  }
+const originalOpenSync = fs.openSync;
+const originalWriteFileSync = fs.writeFileSync;
+const originalCloseSync = fs.closeSync;
+let ownedDescriptor;
+fs.openSync = function(target, ...args) {
+  const descriptor = originalOpenSync.call(this, target, ...args);
+  if (typeof target === "string" && target.includes(".bdd-pick-")) ownedDescriptor = descriptor;
+  return descriptor;
+};
+fs.writeFileSync = function(target, data, ...args) {
+  if (target !== ownedDescriptor) return originalWriteFileSync.call(this, target, data, ...args);
+  const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  originalWriteFileSync.call(this, target, bytes.subarray(0, Math.max(1, Math.floor(bytes.length / 2))));
+  const error = new Error("injected partial owned-temp write failure");
+  error.code = "EIO";
+  throw error;
+};
+fs.closeSync = function(target) {
+  const result = originalCloseSync.call(this, target);
+  if (target === ownedDescriptor) originalWriteFileSync(process.env.BDD_CLOSE_MARKER, "closed\\n");
   return result;
 };
 `);
-  this.concurrentFeatureBytes = Buffer.from(raceSource);
   this.commandEnv = {
     NODE_OPTIONS: `--require=${preload}`,
-    BDD_RACE_TARGET: this.featurePath,
-    BDD_RACE_CONTENT: this.concurrentFeatureBytes.toString("base64"),
-    BDD_RACE_KIND: kind,
-    BDD_RACE_ROOT: this.root,
-    BDD_REAL_GIT: execFileSync("sh", ["-c", "command -v git"], {encoding: "utf8"}).trim()
+    BDD_CLOSE_MARKER: this.closedMarker
   };
 });
 
@@ -335,6 +384,19 @@ Then("no file bytes changed", function () {
 
 Then("the concurrent feature is preserved", function () {
   assert.deepEqual(fs.readFileSync(this.featurePath), this.concurrentFeatureBytes);
+});
+
+Then("the selected feature remains unchanged", function () {
+  const before = Buffer.from(this.before.find(([name]) => name === "acceptance-tests/features/example.feature")[1], "base64");
+  assert.deepEqual(fs.readFileSync(this.featurePath), before);
+});
+
+Then("HEAD no longer names commit {string}", function (name) {
+  assert.notEqual(git(this, "rev-parse", "HEAD"), this.commits.get(name));
+});
+
+Then("the owned temporary descriptor was closed", function () {
+  assert.equal(fs.readFileSync(this.closedMarker, "utf8"), "closed\n");
 });
 
 Then("no owned pick temporary file remains", function () {
