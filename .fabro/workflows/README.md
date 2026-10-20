@@ -55,6 +55,14 @@ Fabro 0.389 requires callers to select a catalog environment explicitly. Launch
 this workflow with `--environment memba-dev`; the same rule applies to any new
 Memba wrapper or evaluation that calls `fabro run` directly.
 
+## Implementing a plan's domain scenarios
+
+[`bdd-plan-implementation`](bdd-plan-implementation/README.md) collects the tested
+parts of a proposed multi-scenario workflow. Its checked-in parent graph is an old
+navigator draft, not an assembled or proven loop. The reusable selector, pending
+work checker, stock-import capability case and their limits are documented with
+the draft. This remains separate from `fabro deliver`.
+
 ## Managed clone contract
 
 The implementation and review workflows rely on Fabro's managed clone and automatic checkpoints. Do not add explicit per-task commit nodes, set `[run].working_dir`, or disable `[run.clone]`: Fabro needs to infer the local repository, clone the current source branch into `/repos/mattwynne/memba`, link it at `/workspace/memba`, and create a pushed `fabro/run/<run-id>` branch for checkpoints after each node.
