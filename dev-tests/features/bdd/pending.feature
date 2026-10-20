@@ -101,6 +101,30 @@ Feature: Find pending BDD work
         | Examples         | Import a profile photo |
       And pending declaration references match their source lines
 
+    Scenario Outline: The plan link target is independent of its human-readable label
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Complete work
+          Scenario: Complete example
+            Given something
+        """
+      And the iteration index is replaced and committed with:
+        """
+        | # | Date | Status | Title | Plan |
+        | --- | --- | --- | --- | --- |
+        | 065 | 2026-09-27 | merged | Browser journeys distinct from domain rule examples | [delivery log](065-browser-journeys-and-domain-examples/plan.md) — `features/journeys/`, domain features, conditional responsive checks |
+        | 068 | today | implementing | Current | [<label>](068-current/plan.md) |
+        """
+      When I run "dev bdd pending --json"
+      Then the command succeeds
+      And stdout includes "docs/iterations/068-current/plan.md"
+
+      Examples:
+        | label               |
+        | delivery log        |
+        | implementation plan |
+
   Rule: Invalid project snapshots never look complete
 
     Scenario Outline: Invalid lifecycle state is rejected
@@ -212,6 +236,24 @@ Feature: Find pending BDD work
       When I run "dev bdd pending --json"
       Then the command fails without stdout
       And stderr includes "plan path must stay within docs/iterations"
+
+    Scenario: Multiple links in a Plan cell are rejected as ambiguous
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Complete work
+          Scenario: Complete example
+            Given something
+        """
+      And the iteration index is replaced and committed with:
+        """
+        | # | Date | Status | Title | Plan |
+        | --- | --- | --- | --- | --- |
+        | 068 | today | implementing | Current | [plan](068-current/plan.md) or [delivery log](068-other/plan.md) |
+        """
+      When I run "dev bdd pending --json"
+      Then the command fails without stdout
+      And stderr includes "ambiguous plan references"
 
     Scenario: Malformed ownership is not hidden by one valid iteration tag
       Given a committed project with this feature:

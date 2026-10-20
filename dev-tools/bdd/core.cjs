@@ -51,11 +51,14 @@ function iterationRows(source) {
     if (!line.startsWith("|")) break;
     const cells = line.trim().slice(1, -1).split("|").map(cell => cell.trim());
     if (cells.every(cell => /^-+$/.test(cell))) continue;
-    const link = cells[4]?.match(/\[plan\]\(([^)]+)\)/);
-    if (cells.length < 5 || !/^\d+$/.test(cells[0]) || !cells[2] || !link) {
+    const planLinks = [...(cells[4] || "").matchAll(/\[[^\]]+\]\(([^)]+)\)/g)];
+    if (cells.length < 5 || !/^\d+$/.test(cells[0]) || !cells[2] || !planLinks.length) {
       throw new Error(`Invalid iteration row: ${line}`);
     }
-    const linkedPlan = link[1];
+    if (planLinks.length > 1) {
+      throw new Error(`Invalid iteration row: ambiguous plan references: ${line}`);
+    }
+    const linkedPlan = planLinks[0][1];
     const plan = path.posix.normalize(path.posix.join("docs/iterations", linkedPlan));
     if (path.posix.isAbsolute(linkedPlan) || linkedPlan.includes("\\") ||
         !plan.startsWith("docs/iterations/") || plan === "docs/iterations") {
