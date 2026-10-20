@@ -4,19 +4,28 @@ digraph BddPlanImplementation {
         model_stylesheet="* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"]
     start [shape=Mdiamond]
     done [shape=Msquare]
-    stop [shape=parallelogram, script="echo 'Plan implementation stopped; work is preserved.' >&2; exit 1"]
-    setup [shape=parallelogram, script="mkdir -p .fabro/tmp/bdd-plan && git rev-parse HEAD > .fabro/tmp/bdd-plan/base"]
-    navigator [shape=box, backend="api", fidelity="full", thread_id="bdd-plan-navigator", prompt="@prompts/navigator.md"]
-    prepare_scenario [shape=parallelogram, script="set -eu; scratch=.fabro/tmp/bdd; archive_root=.fabro/tmp/bdd-plan/scenarios; mkdir -p $archive_root; if test -e $scratch && ! test -d $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd is not a directory.' >&2; exit 1; fi; if test -d $scratch && find $scratch -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then sequence=1; while test -e $archive_root/$sequence; do sequence=$((sequence + 1)); done; mv .fabro/tmp/bdd $archive_root/$sequence; fi; mkdir -p .fabro/tmp/bdd"]
+    failed_stop [shape=parallelogram, script="echo 'BDD plan implementation stopped; inspect the preceding failed node. Work and ignored scratch are preserved.' >&2; exit 1"]
+
+    setup [shape=parallelogram, output_schema="routing", script="node dev-tools/bdd/workflow.cjs setup"]
+    inspect [shape=parallelogram, output_schema="routing", script="node dev-tools/bdd/workflow.cjs inspect"]
+    selector [shape=box, backend="api", fidelity="truncate", prompt="@eval/selection/prompt.md"]
+    validate_pick [shape=parallelogram, stdin_source="response.selector", output_schema="routing", script="node dev-tools/bdd/workflow.cjs pick"]
+    prepare_scenario [shape=parallelogram, script="set -eu; scratch=.fabro/tmp/bdd; archive_root=.fabro/tmp/bdd-plan/scenarios; mkdir -p $archive_root; if test -L $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd must not be a symbolic link.' >&2; exit 1; fi; if test -e $scratch && ! test -d $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd is not a directory.' >&2; exit 1; fi; if test -d $scratch && find $scratch -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then sequence=1; while test -e $archive_root/$sequence; do sequence=$((sequence + 1)); done; mv $scratch $archive_root/$sequence; fi; mkdir -p $scratch"]
     scenario [import="../bdd-scenario-implementation/workflow.fabro"]
+    domain_loop_done [shape=parallelogram, script="echo 'Domain scenario loop complete; pending journeys remain recorded in .fabro/tmp/bdd-plan/pending.json.'"]
 
     start -> setup
-    setup -> navigator [condition="outcome=succeeded"]
-    setup -> stop
-    navigator -> prepare_scenario [condition="outcome=succeeded && preferred_label=implement"]
-    navigator -> done [condition="outcome=succeeded && preferred_label=done"]
-    navigator -> stop
+    setup -> inspect [condition="outcome=succeeded && preferred_label=inspect"]
+    setup -> failed_stop
+    inspect -> selector [condition="outcome=succeeded && preferred_label=choose"]
+    inspect -> domain_loop_done [condition="outcome=succeeded && preferred_label=done"]
+    inspect -> failed_stop
+    selector -> validate_pick [condition="outcome=succeeded"]
+    selector -> failed_stop
+    validate_pick -> prepare_scenario [condition="outcome=succeeded && preferred_label=implement"]
+    validate_pick -> failed_stop
     prepare_scenario -> scenario [condition="outcome=succeeded"]
-    prepare_scenario -> stop
-    scenario -> navigator
+    prepare_scenario -> failed_stop
+    scenario -> inspect
+    domain_loop_done -> done
 }
