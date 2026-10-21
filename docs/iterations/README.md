@@ -79,6 +79,7 @@ historical plans, specify current behaviour.
 | 068 | 2026-08-13 | merged | Members change their own name | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
 | 069 | 2026-10-13 | merged | Merge uncomplicated duplicate people from the console | [plan](069-console-person-merge/plan.md) — `person_merge.feature` |
 | 070 | 2026-08-13 | needs-revision | Members set their own profile photo (renumbered; dependency review pending) | [plan](070-member-profile-photo/plan.md) — `member_profile.feature` |
+| 999 | 2026-10-21 | implementing | Synthetic native BDD handshake | [plan](999-native-bdd-handshake/plan.md) |
 
 The former 065–067 plans were shifted to 066–068 to make room for the
 browser-suite work recorded at 065. The re-planned 066 replaced its earlier
