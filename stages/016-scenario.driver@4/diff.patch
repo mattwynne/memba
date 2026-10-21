@@ -1,0 +1,63 @@
+diff --git a/web/test/features/step_definitions/member_profile_steps.exs b/web/test/features/step_definitions/member_profile_steps.exs
+index 12635c4..2355512 100644
+--- a/web/test/features/step_definitions/member_profile_steps.exs
++++ b/web/test/features/step_definitions/member_profile_steps.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+ 
+   import ExUnit.Assertions
+ 
++  alias Memba.Membership.ClubGroupQueries
+   alias Memba.Membership.CommandDispatch
+   alias Memba.Membership.PersonCommands
+   alias Memba.Membership.PersonQueries
+@@ -26,4 +27,50 @@ defmodule Memba.Cucumber.MemberProfileSteps do
+ 
+     context
+   end
++
++  step "{word} changes their name to {string}",
++       %{args: [person_label, requested_name]} = context do
++    %{person_id: person_id} = person_from_context!(context, person_label)
++    person = PersonQueries.get_person(person_id)
++
++    assert {:ok, command} =
++             PersonCommands.prepare_rename(person, %{
++               name: requested_name,
++               expected_name: person.name
++             })
++
++    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
++    assert %{person_id: ^person_id, name: ^requested_name} = PersonQueries.get_person(person_id)
++
++    context
++  end
++
++  step "{word} should be known as {string} in Kootenay Mountaineering Club",
++       %{args: [person_label, expected_name]} = context do
++    assert_club_member_name(context, person_label, expected_name, "Kootenay Mountaineering Club")
++  end
++
++  step "{word} should be known as {string} in Rockies Cycling Co-op",
++       %{args: [person_label, expected_name]} = context do
++    assert_club_member_name(context, person_label, expected_name, "Rockies Cycling Co-op")
++  end
++
++  defp assert_club_member_name(context, person_label, expected_name, club_name) do
++    %{person_id: person_id} = person_from_context!(context, person_label)
++    club_id = context |> Map.get(:clubs, %{}) |> Map.fetch!(club_name)
++
++    assert %{id: ^person_id, name: ^expected_name} =
++             Enum.find(
++               ClubGroupQueries.list_active_members_of_club(club_id),
++               &(&1.id == person_id)
++             )
++
++    context
++  end
++
++  defp person_from_context!(context, person_label) do
++    context
++    |> Map.get(:people, %{})
++    |> Map.fetch!(person_label)
++  end
+ end
