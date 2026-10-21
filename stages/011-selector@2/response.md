@@ -1,0 +1,1 @@
+{"plan":"docs/iterations/999-native-bdd-handshake/plan.md","feature":"acceptance-tests/features/native_bdd_handshake.feature","scenario":"Synthetic constraint choice","reason":"scripted model-free choice for native bookkeeping handshake"}
