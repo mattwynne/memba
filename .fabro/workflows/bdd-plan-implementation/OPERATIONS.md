@@ -80,6 +80,20 @@ Do not add an input flag. The checked-in run input is the literal Git reference
 body. Every selector visit is truncate-fidelity with no thread ID or output
 schema. Stock adds its minimal goal/run-ID preamble, so this is not the same
 invocation as the earlier isolated full-fidelity literal-SHA selector trials.
+The setup command receives the input through stock command-script substitution
+and rejects anything other than exact `HEAD`, so a CLI override stops before
+dependency installation or selector execution.
+
+After that guard, the graph runs this declared bootstrap exactly once:
+
+```bash
+npm ci --prefix acceptance-tests --no-audit
+```
+
+It installs the committed acceptance-test dependencies needed by public
+`dev bdd pending` in a fresh managed clone. It does not start the application or
+run tests. `/.fabro/tmp/` and `/.fabro/blobs/` are narrow tracked ignore entries;
+setup verifies them and does not modify `.git/info/exclude`.
 
 The assembled loop first runs the deterministic public pending check. A separate
 fresh, read-only selector inspects the current committed tree, chooses one
