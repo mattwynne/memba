@@ -4,7 +4,7 @@ Feature: Synthetic native BDD handshake
   Scenario: Synthetic foundation choice
     Given bookkeeping only
 
-  @iteration-999 @todo
+  @iteration-999 @wip
   Scenario: Synthetic constraint choice
     Given bookkeeping only
 
