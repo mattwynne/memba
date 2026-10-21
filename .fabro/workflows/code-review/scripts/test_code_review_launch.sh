@@ -88,6 +88,7 @@ run_case() {
     exit 1
   }
   grep -Fq -- '--detach' "$FAKE_FABRO_ARGS"
+  grep -Fq -- '--environment memba-dev' "$FAKE_FABRO_ARGS"
   grep -Fq -- "-I candidate_sha=$candidate" "$FAKE_FABRO_ARGS"
   [ ! -e "$workdir/worktrees/memba-code-review-code-review-tmp-main-"* ] || {
     echo "$name: asynchronous launch leaked its temporary worktree" >&2

@@ -28,6 +28,7 @@ Commit that prepared source and make its throwaway branch available through the 
 
 ```sh
 fabro run .fabro/workflows/bdd-scenario-implementation/workflow.toml \
+  --environment memba-dev \
   --server https://fabro.home.wynne.family \
   -I plan=docs/iterations/068-member-name-editing/plan.md \
   --no-upgrade-check --json --detach

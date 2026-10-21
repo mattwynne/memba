@@ -34,6 +34,14 @@ The navigator predicts the first failure before running `bin/dev test:wip`. That
 
 The navigator keeps its conversation. Every driver starts fresh, works on one assignment and returns at the predicted next acceptance failure or actual green result. The navigator removes the WIP tag once the scenario and supporting tests pass, confirms the same scenario with an ordinary focused command, and sends it to `dev check`. Failed checks return for repair; passing checks finish the workflow.
 
+Launch with the server catalog entry explicitly selected:
+
+```bash
+fabro run .fabro/workflows/bdd-scenario-implementation/workflow.toml \
+  --environment memba-dev \
+  -I plan=docs/iterations/NNN-topic/plan.md
+```
+
 ## What the roles share
 
 Both roles use ordinary files under `.fabro/tmp/bdd/`:

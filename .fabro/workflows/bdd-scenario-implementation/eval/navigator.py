@@ -104,6 +104,7 @@ def run(args):
     # One launch only. Unknown acknowledgement, interruption or error is retained;
     # never replace it with another launch. The saved run ID supports later inspection.
     launch = json.loads(cli("launch", "run", str(out / "workflow.toml"), "--detach", "--json",
+                            "--environment", "memba-dev",
                             "--label", f"navigator-eval={out.name}"))
     run_id = launch["run_id"]
     print(f"Run {run_id}; {args.runs} predeclared trials. Evidence: {out}", flush=True)

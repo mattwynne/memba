@@ -21,6 +21,31 @@ FABRO = Path(os.environ.get("FABRO_BIN") or shutil.which("fabro") or "fabro").re
 TOKEN = "fabro_dev_" + "b" * 64
 
 
+def normalize_event(record: dict) -> dict | None:
+    """Expose the stable event/node pair from legacy or Petri envelopes."""
+    event = record.get("event")
+    node_id = record.get("node_id")
+    if not isinstance(event, str):
+        item = record.get("item")
+        if not isinstance(item, dict):
+            return None
+        stored = item.get("record")
+        derived = item.get("derived")
+        if isinstance(stored, dict) and isinstance(stored.get("body"), dict):
+            event = stored["body"].get("event")
+        if not isinstance(event, str) and isinstance(derived, dict):
+            event = derived.get("event")
+        subject = item.get("subject")
+        if isinstance(subject, dict) and isinstance(subject.get("node"), dict):
+            node_id = subject["node"].get("name")
+    if not isinstance(event, str):
+        return None
+    normalized = dict(record)
+    normalized["event"] = "stage.started" if event == "step.started" else event
+    normalized["node_id"] = node_id
+    return normalized
+
+
 class CodeReviewRuntime(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -107,7 +132,7 @@ provider='local'
             [environments.local]
             provider='local'
             [run.clone]
-            enabled=false
+            enabled=true
             [run.run_branch]
             enabled=false
             push=false
@@ -116,8 +141,6 @@ provider='local'
             push=false
             [run.pull_request]
             enabled=false
-            [run]
-            working_dir='{fixture}'
         """).strip() + "\n")
         subprocess.run(["git", "init", "-q"], cwd=fixture, check=True)
         subprocess.run(["git", "config", "user.name", "Runtime"], cwd=fixture, check=True)
@@ -172,7 +195,8 @@ provider='local'
         ])
 
     def launch(self, fixture: Path, auto: bool = True, detach: bool = False) -> tuple[subprocess.CompletedProcess, str]:
-        args = [str(FABRO), "--no-upgrade-check", "run", "--server", str(self.tmp / "fabro.sock"), str(fixture / "workflow.toml")]
+        args = [str(FABRO), "--no-upgrade-check", "run", "--server", str(self.tmp / "fabro.sock"),
+                "--environment", "local", "--preserve-sandbox", str(fixture / "workflow.toml")]
         if auto:
             args.append("--auto-approve")
         if auto or detach:
@@ -188,13 +212,27 @@ provider='local'
             cwd=fixture, env=self.env, text=True, capture_output=True, timeout=45)
         combined = subprocess.CompletedProcess(
             args, waited.returncode, submitted.stdout + waited.stdout, submitted.stderr + waited.stderr)
+        self.sync_sandbox(run_id, fixture)
         return combined, run_id
+
+    def sync_sandbox(self, run_id: str, fixture: Path) -> None:
+        downloaded = fixture.parent / f"{fixture.name}-sandbox"
+        subprocess.run(
+            [str(FABRO), "--no-upgrade-check", "sandbox", "cp", "--recursive",
+             "--server", str(self.tmp / "fabro.sock"), f"{run_id}:.", str(downloaded)],
+            env=self.env, check=True, text=True, capture_output=True, timeout=30)
+        shutil.copytree(downloaded, fixture, dirs_exist_ok=True)
 
     def events(self, run_id: str) -> list[dict]:
         done = subprocess.run(
             [str(FABRO), "--no-upgrade-check", "events", "--server", str(self.tmp / "fabro.sock"), run_id, "--json"],
             env=self.env, text=True, capture_output=True, timeout=20, check=True)
-        records = [json.loads(line) for line in done.stdout.splitlines() if line.strip()]
+        records = [
+            normalized
+            for line in done.stdout.splitlines()
+            if line.strip()
+            if (normalized := normalize_event(json.loads(line))) is not None
+        ]
         self.assertFalse(any(r["event"].startswith("agent.llm") for r in records))
         return records
 
@@ -278,6 +316,7 @@ provider='local'
                 break
             time.sleep(.2)
         self.assertIn("consequential_gate", stages)
+        self.sync_sandbox(run_id, fixture)
         observations = self.read_observations(fixture, done.stdout + done.stderr, run_id)
         self.assertEqual(
             [(item["review_disposition"], item["human_paused"]) for item in observations],

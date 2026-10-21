@@ -33,7 +33,7 @@ git diff --cached --quiet -- "$WORKFLOW" "$ROOT/workflow.fabro" "$0" || \
   fail "spike inputs have staged but uncommitted changes; commit and push them before running"
 
 echo "== Fabro fan-in evidence spike =="
-output="$(fabro run "$WORKFLOW" --label "kind=fan-in-evidence-spike" --no-upgrade-check -d 2>&1)"
+output="$(fabro run "$WORKFLOW" --environment local --label "kind=fan-in-evidence-spike" --no-upgrade-check -d 2>&1)"
 echo "$output"
 run_id="$(printf '%s\n' "$output" | grep -Eo '[0-9A-Z]{26}' | head -1 || true)"
 [[ -n "$run_id" ]] || fail "could not parse Fabro run ID"

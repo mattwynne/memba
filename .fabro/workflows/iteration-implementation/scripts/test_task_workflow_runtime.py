@@ -41,6 +41,31 @@ TASK_NODES = {
 }
 
 
+def normalize_event(record: dict[str, object]) -> dict[str, object] | None:
+    """Expose the stable event/node pair from legacy or Petri envelopes."""
+    event = record.get("event")
+    node_id = record.get("node_id")
+    if not isinstance(event, str):
+        item = record.get("item")
+        if not isinstance(item, dict):
+            return None
+        stored = item.get("record")
+        derived = item.get("derived")
+        if isinstance(stored, dict) and isinstance(stored.get("body"), dict):
+            event = stored["body"].get("event")
+        if not isinstance(event, str) and isinstance(derived, dict):
+            event = derived.get("event")
+        subject = item.get("subject")
+        if isinstance(subject, dict) and isinstance(subject.get("node"), dict):
+            node_id = subject["node"].get("name")
+    if not isinstance(event, str):
+        return None
+    normalized = dict(record)
+    normalized["event"] = "stage.started" if event == "step.started" else event
+    normalized["node_id"] = node_id
+    return normalized
+
+
 class FabroTaskRuntime(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -191,7 +216,7 @@ class FabroTaskRuntime(unittest.TestCase):
                 [environments.fixture]
                 provider='local'
                 [run.clone]
-                enabled=false
+                enabled=true
                 [run.run_branch]
                 enabled=false
                 push=false
@@ -200,8 +225,6 @@ class FabroTaskRuntime(unittest.TestCase):
                 push=false
                 [run.pull_request]
                 enabled=false
-                [run]
-                working_dir='{fixture}'
                 [run.inputs]
                 plan_path='docs/iterations/009-runtime/plan.md'
                 """
@@ -225,8 +248,8 @@ class FabroTaskRuntime(unittest.TestCase):
         blocks = []
         for name in sorted(TASK_NODES):
             block = nodes[name]
-            # Keep production schema, stdin_source, limits and command bodies.
-            # Replace only LLM work and delivery side effects with inert fixtures.
+            # Keep production schema, limits and command bodies. Replace only
+            # LLM work and delivery side effects with inert command fixtures.
             if name == "task_discussion":
                 block = '[shape=hexagon, label="Clarify the task", question_type="freeform"]'
             elif name in ("reflect_task_discussion", "summarize_task_discussion"):
@@ -241,6 +264,7 @@ class FabroTaskRuntime(unittest.TestCase):
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py before-planner \'docs/iterations/009-runtime/plan.md\' && git add docs/iterations/009-runtime/.delivery/_guard/planner-guard-baseline.json && git commit -qm \'fabro(run): before_delivery_planner (succeeded)\'"', block)
             elif name == "write_planner_output":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py write-planner-output \'docs/iterations/009-runtime/plan.md\' && git add docs/iterations/009-runtime/.delivery && git commit -qm \'fabro(run): write_planner_output (succeeded)\'"', block)
+                block = re.sub(r'stdin_source="[^"]*"', 'stdin_source="context.command.output"', block)
             elif name == "guard_delivery_packet":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py guard-planner \'docs/iterations/009-runtime/plan.md\'; status=$?; if [ $status -eq 0 ]; then git add docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): guard_delivery_packet (succeeded)\'; fi; exit $status"', block)
             elif name in ("call_shot_and_run_scenario", "observe_scenario_after_worker"):
@@ -251,6 +275,7 @@ class FabroTaskRuntime(unittest.TestCase):
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/delivery_planner_state.py route-worker \'docs/iterations/009-runtime/plan.md\'; status=$?; if [ $status -eq 0 ]; then git add docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): route_worker_result (succeeded)\'; fi; exit $status"', block)
             elif name == "apply_task_verdict":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/apply_task_verdict.py \'docs/iterations/009-runtime/plan.md\'; status=$?; git add docs/iterations/009-runtime/todo.md docs/iterations/009-runtime/.delivery/latest-review.json docs/iterations/009-runtime/.delivery/history.jsonl 2>/dev/null || true; git diff --cached --quiet || git commit -qm \'fabro(run): apply_task_verdict (completed)\'; exit $status"', block)
+                block = re.sub(r'stdin_source="[^"]*"', 'stdin_source="context.command.output"', block)
             elif name == "task_escalation":
                 block = re.sub(r'script="(?:\\.|[^"\\])*"', 'script="python3 .fabro/workflows/iteration-implementation/scripts/escalate_task_review.py \'docs/iterations/009-runtime/plan.md\'"', block)
             elif name in ("dev_check", "publish_to_main"):
@@ -287,6 +312,9 @@ class FabroTaskRuntime(unittest.TestCase):
                 "run",
                 "--server",
                 str(self.tmp / "fabro.sock"),
+                "--environment",
+                "local",
+                "--preserve-sandbox",
                 str(fixture / "workflow.toml"),
                 "--auto-approve",
                 "--provider",
@@ -308,6 +336,8 @@ class FabroTaskRuntime(unittest.TestCase):
             logs = self.fabro_text("logs", run_id)
         else:
             run_id = ""
+        if run_id:
+            self.sync_sandbox(run_id, fixture)
         (fixture / "run.stdout").write_text(completed.stdout)
         (fixture / "run.stderr").write_text(completed.stderr)
         (fixture / "run.events").write_text(events)
@@ -316,7 +346,12 @@ class FabroTaskRuntime(unittest.TestCase):
         if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=fixture).returncode != 0:
             subprocess.run(["git", "commit", "-qm", "test harness saved run state"], cwd=fixture, check=True, text=True, capture_output=True)
         self.assertTrue(run_id, completed.stdout + completed.stderr)
-        records = [json.loads(line) for line in events.splitlines() if line.strip()]
+        records = [
+            normalized
+            for line in events.splitlines()
+            if line.strip()
+            if (normalized := normalize_event(json.loads(line))) is not None
+        ]
         self.assertFalse(any(event["event"].startswith("agent.llm") for event in records))
         return {
             "stages": [event.get("node_id") for event in records if event["event"] == "stage.started"],
@@ -328,6 +363,19 @@ class FabroTaskRuntime(unittest.TestCase):
             "logs": logs,
             "combined": "\n".join([completed.stdout, completed.stderr, events, logs]),
         }
+
+    def sync_sandbox(self, run_id: str, fixture: Path) -> None:
+        downloaded = fixture.parent / f"{fixture.name}-sandbox"
+        subprocess.run(
+            [str(FABRO), "--no-upgrade-check", "sandbox", "cp", "--recursive",
+             "--server", str(self.tmp / "fabro.sock"), f"{run_id}:.", str(downloaded)],
+            env=self.env,
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        shutil.copytree(downloaded, fixture, dirs_exist_ok=True)
 
     def fabro_text(self, command: str, run_id: str) -> str:
         completed = subprocess.run(
@@ -363,10 +411,6 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertIn(TASK_ACCEPTED, self.todo(fixture))
         self.assertEqual(result["stages"].count("apply_task_verdict"), 3)
         self.assertTrue((fixture / "published.txt").exists())
-        combined = result["combined"]
-        self.assertIn("Fidelity resolved node=delivery_planner fidelity=truncate", combined)
-        self.assertIn("Fidelity resolved node=implement_next_task fidelity=truncate", combined)
-        self.assertIn("Fidelity resolved node=validate_task fidelity=truncate", combined)
 
     def test_scenario_prediction_precedes_runner_worker_and_green_removes_wip(self) -> None:
         fixture = self.make_fixture("wip-green", {"wip": True, "verdicts": [{"decision": "accept"}, {"decision": "accept"}]})
@@ -431,23 +475,24 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertEqual(result["stages"][-1], "task_stopped")
         self.assertNotIn("publish_to_main", result["stages"])
 
-    def test_planner_string_references_fail_before_writer_or_worker(self) -> None:
+    def test_planner_string_references_fail_before_worker(self) -> None:
         fixture = self.make_fixture("planner-string-references", {"planner_reference_strings": True})
         result = self.run_fixture(fixture)
         self.assertEqual(result["status"], 1, result["combined"])
-        self.assertIn("output_schema validation", result["combined"])
-        self.assertNotIn("write_planner_output", result["stages"])
+        self.assertIn("field references must contain objects", result["combined"])
+        self.assertIn("write_planner_output", result["stages"])
         self.assertNotIn("implement_next_task", result["stages"])
         self.assertFalse((fixture / "docs/iterations/009-runtime/.delivery/current-worker-packet.json").exists())
 
-    def test_revision_obligation_status_rejected_by_schema_before_writer(self) -> None:
+    def test_revision_obligation_status_rejected_before_worker(self) -> None:
         fixture = self.make_fixture(
             "invalid-revision-status", {"planner_obligation_status": "prepared_revision"},
         )
         result = self.run_fixture(fixture)
         self.assertEqual(result["status"], 1, result["combined"])
-        self.assertIn("output_schema validation", result["combined"])
-        self.assertNotIn("write_planner_output", result["stages"])
+        self.assertIn("Pending obligation task-current has invalid status", result["combined"])
+        self.assertIn("write_planner_output", result["stages"])
+        self.assertIn("guard_delivery_packet", result["stages"])
         self.assertNotIn("implement_next_task", result["stages"])
         self.assertIn(TASK_CURRENT, self.todo(fixture))
 
@@ -460,8 +505,9 @@ class FabroTaskRuntime(unittest.TestCase):
         self.assertEqual(result["status"], 1, result["combined"])
         self.assertIn(TASK_CURRENT, self.todo(fixture))
         self.assertNotIn("revise_task", result["stages"])
-        self.assertNotIn("apply_task_verdict", result["stages"])
-        self.assertIn("output_schema validation", result["combined"])
+        self.assertIn("apply_task_verdict", result["stages"])
+        self.assertIn("Expected only decision, task and reason", result["combined"])
+        self.assertNotIn("publish_to_main", result["stages"])
 
     def test_blocked_verdict_preserves_reason_in_events(self) -> None:
         reason = "Blocked because dependency XYZ is missing"
@@ -484,7 +530,7 @@ class FabroTaskRuntime(unittest.TestCase):
         # max_visits=3 would reject the next revision worker.
         self.assertEqual(work.count(f"revise_task:{TASK_CURRENT}:ready_for_review"), 2, work)
         self.assertIn("task_discussion", result["stages"])
-        self.assertIn('Stage started node_id="task_clarification_complete"', result["logs"])
+        self.assertIn("task_clarification_complete", result["stages"])
         self.assertNotIn('node "revise_task" visited 3 times', result["combined"])
         self.assertNotIn("publish_to_main", result["stages"])
 

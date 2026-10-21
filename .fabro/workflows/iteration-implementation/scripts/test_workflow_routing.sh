@@ -22,7 +22,7 @@ assert_not_contains() {
   fi
 }
 
-# Fabro 0.316 allows a failed command node to route onward if the graph handles
+# Fabro 0.389 allows a failed command node to route onward if the graph handles
 # that outcome. The implementation workflow's positive success contract is that
 # the implementation is actually published to main; failure-message nodes are not
 # goal gates because skipped goal gates fail too.

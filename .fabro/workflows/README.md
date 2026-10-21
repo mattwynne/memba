@@ -28,6 +28,7 @@ Plan validation can run ahead of implementation, even while another iteration is
 bin/dev fabro validate-plan docs/iterations/NNN-topic/plan.md
 # equivalent to:
 fabro run .fabro/workflows/plan-validation/workflow.toml \
+  --environment memba-dev \
   -I plan_path=docs/iterations/NNN-topic/plan.md \
   --auto-approve
 ```
@@ -37,10 +38,10 @@ Starting implementation remains ordered single-piece-flow. `bin/dev fabro delive
 Manual split-phase escape hatches remain available:
 
 ```bash
-fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
+fabro run .fabro/workflows/plan-validation/workflow.toml --environment memba-dev -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
 .fabro/workflows/scripts/iteration_status.py check-predecessors docs/iterations/NNN-topic/plan.md
 .fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/NNN-topic/plan.md
-fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+fabro run .fabro/workflows/iteration-implementation/workflow.toml --environment memba-dev -I plan_path=docs/iterations/NNN-topic/plan.md
 bin/dev fabro code-review <branch> docs/iterations/NNN-topic/plan.md <base-sha>
 ```
 
@@ -49,6 +50,10 @@ Neither implementation nor review opens a pull request. Their `workflow.toml` fi
 ## Implementing one scenario
 
 [`bdd-scenario-implementation`](bdd-scenario-implementation/README.md) is a separate, opt-in workflow for implementing one agreed domain scenario and passing `dev check`. It does not include refactoring, review or publication, and does not change `fabro deliver`.
+
+Fabro 0.389 requires callers to select a catalog environment explicitly. Launch
+this workflow with `--environment memba-dev`; the same rule applies to any new
+Memba wrapper or evaluation that calls `fabro run` directly.
 
 ## Managed clone contract
 
@@ -68,13 +73,13 @@ The implementation task loop is planner-owned:
 
 A Fabro checkpoint saves candidate work; it does not approve it. The worker leaves the selected task unchecked. The independent reviewer returns one structured verdict: `accept`, `revise`, or `blocked`, identifying the exact packet/todo line and its evidence or remaining gaps. Only `apply_task_verdict` checks off accepted work; replaying acceptance cannot check off the next task. The command also records `.delivery/latest-review.json` so the next planner pass can prepare either the next obligation or a bounded repair packet.
 
-Revision keeps useful candidate code but now returns through the delivery planner before another worker attempt. The same pending obligation should stay identifiable; replanning must not reset acceptance or silently promote rejected candidate work. There is no automatic reset or discarded-attempt archive. `revise_task` retains the former reset node's native `max_visits=3` guard across the entire iteration. Fabro 0.316 stops before executing visit three, allowing two revision-worker passes in total—not a fresh allowance per renamed task. Exhausting it stops the run with work preserved. A new run starts a new budget; inspect repeated failures before restarting rather than using restarts to evade the bound.
+Revision keeps useful candidate code but now returns through the delivery planner before another worker attempt. The same pending obligation should stay identifiable; replanning must not reset acceptance or silently promote rejected candidate work. There is no automatic reset or discarded-attempt archive. `revise_task` retains the former reset node's native `max_visits=3` guard across the entire iteration. Fabro 0.389 stops before executing visit three, allowing two revision-worker passes in total—not a fresh allowance per renamed task. Exhausting it stops the run with work preserved. A new run starts a new budget; inspect repeated failures before restarting rather than using restarts to evade the bound.
 
-Fabro 0.316 supports custom output schemas and passes their parsed output to deterministic commands through `stdin_source`; this is used for both the planner handoff and the reviewer verdict. The command performs the check-off and emits routing JSON; the reviewer cannot set the workflow outcome through its verdict. Missing, malformed, stale or mismatched planner/worker/review artifacts stop the task loop without advancing the todo. The shared `task_stopped` fallback has no outgoing edge: it fails without reaching normal exit and the unrelated publish goal-gate check. The original failure and review feedback remain in the preceding stage output, durable `.delivery/` artifacts and Fabro metadata.
+Fabro 0.389 supports custom output schemas and passes agent output to deterministic commands through `stdin_source`; this is used for both the planner handoff and the reviewer verdict. Memba's deterministic commands validate the complete domain schemas again before writing artifacts or changing the todo, so malformed planner or verdict payloads fail closed even when command fixtures supply output directly. The command performs the check-off and emits routing JSON; the reviewer cannot set the workflow outcome through its verdict. Missing, malformed, stale or mismatched planner/worker/review artifacts stop the task loop without advancing the todo. The shared `task_stopped` fallback has no outgoing edge: it fails without reaching normal exit and the unrelated publish goal-gate check. The original failure and review feedback remain in the preceding stage output, durable `.delivery/` artifacts and Fabro metadata.
 
 Task-loop model stages use minimal Fabro preamble fidelity and load explicit `.delivery/` artifacts instead of carrying repeated historical `summary:high` context as their main input. The planner packet should include the relevant facts, source references, constraints and focused validation for one bounded task; it should not ask the worker to reconstruct broad prior run history.
 
-To exercise this boundary, run `bash .fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh`. With Fabro installed, also run `python3 .fabro/workflows/iteration-implementation/scripts/test_task_workflow_runtime.py`: it uses an isolated local server and temporary repositories, replacing agents and publication with scripted fixtures. It tests native schema validation, worker replan routing, restart, minimal-fidelity routing and visit limits without contacting the production server or making model calls.
+To exercise this boundary, run `bash .fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh`. With Fabro installed, also run `python3 .fabro/workflows/iteration-implementation/scripts/test_task_workflow_runtime.py`: it uses an isolated local server and temporary repositories, replacing agents and publication with scripted fixtures. It tests the deterministic schema guards, worker replan routing, restart, minimal-fidelity routing and visit limits without contacting the production server or making model calls.
 
 ## Delivery contract
 
@@ -107,7 +112,7 @@ Resume from the failed run's pushed Fabro run branch, using a new `fabro run` wi
 ```bash
 git fetch origin fabro/run/<failed-run-id>
 git switch -c resume/<failed-run-id> --track origin/fabro/run/<failed-run-id>
-fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+fabro run .fabro/workflows/iteration-implementation/workflow.toml --environment memba-dev -I plan_path=docs/iterations/NNN-topic/plan.md
 ```
 
 The new Fabro run uses the checked-out branch as its source branch, so it sees durable Fabro checkpoint commits and the iteration `todo.md` from the failed run while using the latest local workflow definition.

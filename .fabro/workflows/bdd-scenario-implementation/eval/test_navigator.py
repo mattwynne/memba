@@ -1,4 +1,5 @@
 import contextlib
+import inspect
 import io
 import json
 from pathlib import Path
@@ -9,6 +10,10 @@ import navigator
 
 
 class NavigatorEvalTest(unittest.TestCase):
+    def test_launch_selects_the_memba_environment_catalog_entry(self):
+        source = inspect.getsource(navigator.run)
+        self.assertIn('"--environment", "memba-dev"', source)
+
     def test_workflow_finishes_after_checks_without_refactoring_or_review(self):
         graph = (navigator.WORKFLOW / "workflow.fabro").read_text()
         self.assertIn('digraph BddScenarioImplementation', graph)

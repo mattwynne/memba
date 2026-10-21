@@ -100,6 +100,22 @@ assert environment["image"]["docker"] == receipt["reference"], (
 PY
 }
 
+require_explicit_cli_environment_selection() {
+  python3 - "$REPO_ROOT/bin/dev" <<'PY'
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text()
+launches = (
+    "command fabro run .fabro/workflows/plan-validation/workflow.toml \\\n    --environment memba-dev",
+    "command fabro run .fabro/workflows/iteration-implementation/workflow.toml \\\n      --environment memba-dev",
+    'command fabro run "$repo_root/.fabro/workflows/code-review/workflow.toml" \\\n      --environment memba-dev',
+)
+for launch in launches:
+    assert launch in source, f"Fabro 0.389 launch must select memba-dev explicitly: {launch}"
+PY
+}
+
 require_fabro_visible_inputs() {
   cd "$REPO_ROOT"
 
@@ -136,6 +152,7 @@ run_eval() {
   output="$(
     cd "$REPO_ROOT" && \
       fabro run "$WORKFLOW" \
+        --environment memba-dev \
         -I "plan_path=$plan_path" \
         -I "publish=false" \
         --label "kind=plan-validation-eval" \
@@ -181,6 +198,7 @@ require_parallel_fan_in
 require_publish_attestation_contract
 python3 "$REPO_ROOT/.fabro/workflows/scripts/test_fabro_dev_image_pin.py"
 require_publish_environment
+require_explicit_cli_environment_selection
 
 # Offline regression checks must not start paid reviews or publish anything.
 if [[ "${1:-}" == "--static" ]]; then
