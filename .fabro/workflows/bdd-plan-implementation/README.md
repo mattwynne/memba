@@ -74,8 +74,9 @@ publication and marking an iteration merged are outside it. See
 
 - Active inherited-only TODO work without a locally pickable declaration fails
   closed. This workflow does not add policy for it.
-- `test:wip` counts expanded rows and rejects a selected multi-row Outline or
-  Examples group. This workflow does not claim generic Outline coverage.
+- The updated `test:wip` runner treats one declaration as one selection and
+  generates separate tests for all its eligible rows. Managed CLI verification
+  and general Outline coverage are still pending.
 - Selector JSON has only plan, feature, scenario and reason. Multiple eligible
   Examples groups with the same names fail as ambiguous; the workflow does not
   guess or add hidden selector fields.
