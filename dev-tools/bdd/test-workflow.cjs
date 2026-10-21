@@ -225,6 +225,76 @@ test("atomic writes never truncate or remove a pre-existing temporary path", t =
   assert.equal(fs.readFileSync(target, "utf8"), "replacement\n");
 });
 
+test("workflow scratch parent symlinks never redirect snapshots outside the repository", t => {
+  const root = repository(t);
+  const victim = fs.mkdtempSync(path.join(os.tmpdir(), "bdd-parent-victim-"));
+  t.after(() => fs.rmSync(victim, {recursive: true, force: true}));
+  fs.mkdirSync(path.join(root, ".fabro/tmp"), {recursive: true});
+  fs.symlinkSync(victim, path.join(root, ".fabro/tmp/bdd-plan"), "dir");
+
+  const setupResult = run(root, "setup");
+  assert.notEqual(setupResult.status, 0);
+  assert.match(setupResult.stderr, /symbolic link|safe directory/i);
+  assert.deepEqual(fs.readdirSync(victim), []);
+});
+
+test("each owned scratch directory component rejects symlinks and non-directories", t => {
+  for (const kind of ["symlink", "file"])
+  for (const components of [[".fabro"], [".fabro", "tmp"], [".fabro", "tmp", "bdd-plan"]]) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "bdd-component-root-"));
+    const victim = fs.mkdtempSync(path.join(os.tmpdir(), "bdd-component-victim-"));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    t.after(() => fs.rmSync(victim, {recursive: true, force: true}));
+    const parent = path.join(root, ...components.slice(0, -1));
+    fs.mkdirSync(parent, {recursive: true});
+    const unsafe = path.join(parent, components.at(-1));
+    if (kind === "symlink") fs.symlinkSync(victim, unsafe, "dir");
+    else fs.writeFileSync(unsafe, "not a directory\n");
+
+    assert.throws(() => workflowModule.ensureSafeScratchDirectory(root), /symbolic link|not a directory/);
+    assert.deepEqual(fs.readdirSync(victim), []);
+  }
+});
+
+test("selection notes symlinks fail before public pick and preserve victim bytes", t => {
+  const root = repository(t);
+  succeeds(run(root, "setup"));
+  succeeds(run(root, "inspect"));
+  const feature = path.join(root, "acceptance-tests/features/example.feature");
+  const beforeFeature = fs.readFileSync(feature, "utf8");
+  const victimDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "bdd-notes-victim-"));
+  t.after(() => fs.rmSync(victimDirectory, {recursive: true, force: true}));
+  const victim = path.join(victimDirectory, "notes");
+  fs.writeFileSync(victim, "owned elsewhere\n");
+  fs.symlinkSync(victim, path.join(root, ".fabro/tmp/bdd-plan/selection-notes.jsonl"));
+
+  const result = run(root, "pick", response("Foundation"));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /selection notes.*regular file|symbolic link/i);
+  assert.equal(fs.readFileSync(victim, "utf8"), "owned elsewhere\n");
+  assert.equal(fs.readFileSync(feature, "utf8"), beforeFeature);
+});
+
+test("preselection snapshot symlinks fail before public pick", t => {
+  const root = repository(t);
+  succeeds(run(root, "setup"));
+  succeeds(run(root, "inspect"));
+  const feature = path.join(root, "acceptance-tests/features/example.feature");
+  const beforeFeature = fs.readFileSync(feature, "utf8");
+  const snapshot = path.join(root, ".fabro/tmp/bdd-plan/selection.json");
+  const victimDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "bdd-snapshot-victim-"));
+  t.after(() => fs.rmSync(victimDirectory, {recursive: true, force: true}));
+  const victim = path.join(victimDirectory, "selection.json");
+  fs.copyFileSync(snapshot, victim);
+  fs.unlinkSync(snapshot);
+  fs.symlinkSync(victim, snapshot);
+
+  const result = run(root, "pick", response("Foundation"));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /preselection snapshot.*regular file|symbolic link/i);
+  assert.equal(fs.readFileSync(feature, "utf8"), beforeFeature);
+});
+
 test("public BDD status vocabulary stays aligned with the lifecycle helper", t => {
   const root = repository(t);
   const publicStatuses = JSON.parse(execFileSync("node", ["-e",
