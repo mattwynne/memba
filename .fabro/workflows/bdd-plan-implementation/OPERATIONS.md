@@ -176,8 +176,21 @@ stop the workflow.
 
 After cancellation or failure, preserve the run and its sandbox evidence. Do
 not restart a stopped sandbox and do not use `fabro rm`. Inspect status, recent
-events and logs before deciding what to recover. Archive a terminal run only
-after its evidence has been reviewed:
+events and logs before deciding what to recover.
+
+**On stock 0.389, `fabro sandbox cp` starts a stopped container and leaves it
+running.** It is not a passive read. Do not use it after a terminal run under
+the no-restart rule. Prefer stored run artifacts. If they are incomplete, an
+operator can use a passive raw Docker filesystem archive/copy from the exact
+owned stopped container, without attaching, starting or executing it.
+
+Check the actual Docker host, `fabro` (`192.168.1.201`), not the HTTP service
+hostname: `fabro.home.wynne.family` reaches the proxy on `192.168.1.200`.
+Confirm the exact container ID, `petri.run` label and image, and retain three
+fresh matching stopped-state observations after evidence retrieval. An empty
+query on the proxy's Docker daemon is not proof that a run container is absent.
+
+Archive a terminal run only after its evidence has been reviewed:
 
 ```bash
 fabro archive RUN_ID --no-upgrade-check
