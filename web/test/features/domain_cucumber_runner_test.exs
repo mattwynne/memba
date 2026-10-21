@@ -142,6 +142,203 @@ defmodule Memba.DomainCucumberRunnerTest do
     assert multiple_wip_message =~ "Second WIP"
   end
 
+  test "one WIP outline is one declaration containing all of its expanded rows" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Outline WIP selection
+        @wip
+        Scenario Outline: Selected outline for <value>
+          Given the value <value>
+
+          Examples:
+            | value  |
+            | first  |
+            | second |
+      """)
+
+    assert {:ok, selected_rows} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert Enum.map(selected_rows, & &1.scenario.name) == [
+             "Selected outline for first",
+             "Selected outline for second"
+           ]
+  end
+
+  test "one locally WIP Examples declaration contains all and only its expanded rows" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Examples WIP selection
+        Scenario Outline: Outline with independently selectable examples for <value>
+          Given the value <value>
+
+          @wip
+          Examples: selected declaration
+            | value  |
+            | first  |
+            | second |
+
+          Examples: ordinary regression declaration
+            | value |
+            | third |
+      """)
+
+    assert {:ok, selected_rows} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert Enum.map(selected_rows, & &1.scenario.name) == [
+             "Outline with independently selectable examples for first",
+             "Outline with independently selectable examples for second"
+           ]
+  end
+
+  test "outline-level WIP remains one declaration across separate Examples blocks" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Inherited outline WIP
+        @wip
+        Scenario Outline: One selected outline for <value>
+          Given the value <value>
+
+          Examples: first group
+            | value |
+            | first |
+
+          Examples: second group
+            | value  |
+            | second |
+      """)
+
+    assert {:ok, selected_rows} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert Enum.map(selected_rows, & &1.scenario.name) == [
+             "One selected outline for first",
+             "One selected outline for second"
+           ]
+  end
+
+  test "separately WIP Examples blocks are separate declarations even on one outline" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Multiple selected Examples declarations
+        Scenario Outline: Same outline for <value>
+          Given the value <value>
+
+          @wip
+          Examples: first selected declaration
+            | value       |
+            | first       |
+            | first-again |
+
+          @wip
+          Examples: second selected declaration
+            | value  |
+            | second |
+      """)
+      |> Map.put(:file, "features/multiple_examples_wip.feature")
+
+    assert {:error, message} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert message =~ "found 2"
+  end
+
+  test "identical rows in one WIP declaration remain separate executions" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Repeated WIP rows
+        @wip
+        Scenario Outline: Repeated value <value>
+          Given the value <value>
+
+          Examples:
+            | value |
+            | same  |
+            | same  |
+      """)
+
+    assert {:ok, selected_rows} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert Enum.map(selected_rows, & &1.scenario.name) == [
+             "Repeated value same",
+             "Repeated value same"
+           ]
+  end
+
+  test "inherited feature WIP counts logical scenarios and outlines, not expanded rows" do
+    feature =
+      Gherkin.Parser.parse("""
+      @wip
+      Feature: Multiple inherited WIP declarations
+        Scenario Outline: First declaration for <value>
+          Given the value <value>
+
+          Examples:
+            | value  |
+            | first  |
+            | second |
+
+        Scenario: Second declaration
+          Given another condition
+      """)
+      |> Map.put(:file, "features/inherited_multiple_wip.feature")
+
+    assert {:error, message} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert message =~ "found 2"
+  end
+
+  test "inherited rule WIP counts logical scenarios and outlines, not expanded rows" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Rule-level WIP selection
+        @wip
+        Rule: Multiple inherited WIP declarations
+          Scenario Outline: First declaration for <value>
+            Given the value <value>
+
+            Examples:
+              | value  |
+              | first  |
+              | second |
+
+          Scenario: Second declaration
+            Given another condition
+      """)
+      |> Map.put(:file, "features/inherited_rule_multiple_wip.feature")
+
+    assert {:error, message} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert message =~ "found 2"
+  end
+
+  test "a WIP Examples declaration excluded by the normal tag filter is not eligible" do
+    feature =
+      Gherkin.Parser.parse("""
+      Feature: Filtered Examples WIP
+        Scenario Outline: Filtered outline for <value>
+          Given the value <value>
+
+          @wip @todo
+          Examples: future declaration
+            | value |
+            | later |
+
+          Examples: current ordinary regression declaration
+            | value |
+            | now   |
+      """)
+
+    assert {:error, message} =
+             DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
+
+    assert message =~ "found none"
+  end
+
   test "WIP is still included in ordinary domain regression selection" do
     feature =
       Gherkin.Parser.parse("""
@@ -154,7 +351,7 @@ defmodule Memba.DomainCucumberRunnerTest do
     assert [%{scenario: %{name: "Current red example"}}] =
              DomainCucumberRunner.selected_scenarios(discovery: %{features: [feature]})
 
-    assert {:ok, %{scenario: %{name: "Current red example"}}} =
+    assert {:ok, [%{scenario: %{name: "Current red example"}}]} =
              DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
   end
 
