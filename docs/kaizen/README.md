@@ -68,7 +68,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 | 2026-06-23 | [Problem: bin/dev fabro deliver stream timeout leaves remote run state ambiguous](2026-06-23-fabro-deliver-stream-timeout-ambiguous.md) | Closed | — |
 | 2026-06-23 | [Problem: Fabro focused tests can use stale PGHOST and fail despite Postgres being ready](2026-06-23-fabro-focused-tests-stale-pghost.md) | Closed | — |
 | 2026-06-23 | [Problem: Fabro read-guard can block routine todo.md check-off late in a task](2026-06-23-fabro-read-guard-todo-checkoff-friction.md) | Closed | — |
-| 2026-06-23 | [Problem: Fabro sandbox files can be root-owned and block formatting](2026-06-23-fabro-sandbox-root-owned-files-block-format.md) | Closed | — |
+| 2026-06-23 | [Problem: Fabro sandbox files can be root-owned and block formatting](2026-06-23-fabro-sandbox-root-owned-files-block-format.md) | Open | — |
 | 2026-06-18 | [Problem: Domain architecture guidance was implicit and not visible enough to reviewers](2026-06-18-domain-pattern-reference-guidance.md) | Closed | — |
 | 2026-06-09 | [Problem: Iteration review accepted despite failing to record code-health findings](2026-06-09-iteration-review-code-health-recording-failure.md) | Closed | — |
 | 2026-06-06 | [Problem: implementation workflow left completed iteration marked implementing](2026-06-06-implementation-workflow-does-not-mark-merged.md) | Closed | — |

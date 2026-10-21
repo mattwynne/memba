@@ -104,3 +104,37 @@ Validation:
 Remaining follow-up:
 
 - The repository-side guard fails early and clearly, but the provider-level cause still needs to be fixed in Fabro if root-owned checkout/checkpoint files recur.
+
+### Additional observation: 2026-10-21
+
+The provider-level defect recurred on stock Fabro `0.316.0-nightly.0` during the
+first real plan replay, run `01M5E6ZE4B4J1PG6391VFND4KW`. The foundation stage
+and its full check passed, but the next import-setup stage reached
+`bin/dev sandbox-check` with 15 tracked files owned by numeric UID/GID `0:0`
+and mode `0644`. The run failed after 55 minutes and `$39.961203`, after 20
+native patch calls (nine navigation changes and eleven driver changes). The
+preserved failed run and container remain evidence; they were not restarted or
+removed.
+
+Source tracing established the write path rather than attributing this to agent
+behaviour: the built-in GPT-5.6 system prompt directs the agent to use the
+native `apply_patch` tool; Fabro routes that through Pebble's `write_file` into
+the Docker sandbox driver; the `0.316` driver uploaded a tar entry without the
+sandbox user's UID/GID, so Docker created root-owned files. Shell-only role
+wording could not reliably prevent the native tool call and would not repair
+the ownership boundary.
+
+The corrective action is to upgrade both the CLI and server to published stock
+Fabro `v0.389.0-nightly.0` (source commit
+`5c90ad2e0c6662207a952afb303422e3388425d2`). That release pins sandbox-driver
+`4b35158b591337a9ac17295ca53158f9e8ce4029`, whose Docker filesystem looks up
+the container user's numeric UID/GID and writes them into file and directory
+tar headers. Memba retains the early `sandbox-check` detector; it is a guard,
+not the provider fix.
+
+Validation for closure must use a normal managed Docker run on the upgraded
+stock server. The same non-root agent must add a file through the native editor,
+update an existing file, and then rewrite both through an ordinary shell
+command. Evidence must record numeric ownership and modes after each boundary,
+plus the next-stage writability check. Local fake command nodes or bookkeeping
+alone do not close this observation.
