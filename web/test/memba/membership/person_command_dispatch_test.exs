@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -138,5 +139,82 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
 
     assert is_nil(PersonQueries.get_person(duplicate_person_id))
     assert is_nil(PersonQueries.get_person(duplicate_alternate_person_id))
+  end
+
+  test "dispatches one normalized PersonRenamed event and projects only the existing name" do
+    person_id = Memba.ID.generate(:person)
+
+    assert {:ok, create_command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice",
+               email: "alice@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create_command, consistency: :strong)
+
+    person_before = PersonQueries.get_person(person_id)
+
+    assert {:ok, rename_command} =
+             PersonCommands.prepare_rename(person_before, %{
+               name: " \tAlice   Jones\n",
+               expected_name: "Alice"
+             })
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonRenamed{
+                  person_id: ^person_id,
+                  name: "Alice Jones"
+                }
+              ]
+            }} =
+             CommandDispatch.dispatch(rename_command,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{
+             person_id: ^person_id,
+             name: "Alice Jones",
+             email: "alice@example.com",
+             merged_into_person_id: nil
+           } = PersonQueries.get_person(person_id)
+
+    assert %PersonEmailAddress{
+             person_id: ^person_id,
+             normalized_email: "alice@example.com",
+             is_primary: true
+           } = Repo.get_by(PersonEmailAddress, person_id: person_id)
+  end
+
+  test "dispatching an identical normalized target emits no event" do
+    person_id = Memba.ID.generate(:person)
+
+    assert {:ok, create_command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice Smith",
+               email: "alice@example.com"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create_command, consistency: :strong)
+
+    assert {:ok, rename_command} =
+             PersonCommands.prepare_rename(PersonQueries.get_person(person_id), %{
+               name: " Alice   Smith ",
+               expected_name: "stale name"
+             })
+
+    assert {:ok, %ExecutionResult{aggregate_uuid: ^person_id, events: []}} =
+             CommandDispatch.dispatch(rename_command,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %{person_id: ^person_id, name: "Alice Smith", email: "alice@example.com"} =
+             PersonQueries.get_person(person_id)
   end
 end

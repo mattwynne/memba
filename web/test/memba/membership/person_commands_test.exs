@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonCommandsTest do
 
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
 
   test "prepares a legacy email command without dispatching or changing its input" do
     person_id = Memba.ID.generate(:person)
@@ -85,5 +86,64 @@ defmodule Memba.Membership.PersonCommandsTest do
              )
 
     assert is_nil(PersonQueries.get_person(attrs.person_id))
+  end
+
+  describe "prepare_rename/2" do
+    test "derives the target from trusted actor context for atom and string attrs" do
+      person_id = Memba.ID.generate(:person)
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: "Alice Jones",
+                expected_name: "Alice"
+              }} =
+               PersonCommands.prepare_rename(
+                 %{person_id: person_id},
+                 %{name: "Alice Jones", expected_name: "Alice"}
+               )
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: "Alice Smith",
+                expected_name: "Alice Jones"
+              }} =
+               PersonCommands.prepare_rename(
+                 %{"person_id" => person_id},
+                 %{
+                   "person_id" => person_id,
+                   "name" => "Alice Smith",
+                   "expected_name" => "Alice Jones"
+                 }
+               )
+    end
+
+    test "rejects missing or invalid actor identity" do
+      attrs = %{name: "Alice Jones", expected_name: "Alice"}
+
+      assert {:error, :unauthorized} = PersonCommands.prepare_rename(%{}, attrs)
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(%{person_id: "not-a-person-id"}, attrs)
+
+      assert {:error, :unauthorized} = PersonCommands.prepare_rename(nil, attrs)
+    end
+
+    test "rejects a spoofed target before required attrs and no-op-shaped input" do
+      actor_person_id = Memba.ID.generate(:person)
+      other_person_id = Memba.ID.generate(:person)
+      actor = %{person_id: actor_person_id}
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(actor, %{person_id: other_person_id})
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(actor, %{
+                 person_id: other_person_id,
+                 name: "Alice",
+                 expected_name: "Alice"
+               })
+    end
   end
 end

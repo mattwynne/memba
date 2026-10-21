@@ -10,6 +10,7 @@ defmodule Memba.Membership.Person do
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.RemovePersonEmailAddress
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.EmailAddresses
@@ -20,6 +21,7 @@ defmodule Memba.Membership.Person do
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+  alias Memba.Membership.Events.PersonRenamed
 
   @behaviour Aggregate
   @legacy_verified_at ~U[1970-01-01 00:00:00Z]
@@ -54,6 +56,21 @@ defmodule Memba.Membership.Person do
   end
 
   def execute(%__MODULE__{}, %CreatePerson{}), do: {:error, :already_created}
+
+  @impl Aggregate
+  def execute(%__MODULE__{person_id: nil}, %RenamePerson{}) do
+    {:error, :person_not_created}
+  end
+
+  def execute(%__MODULE__{} = person, %RenamePerson{} = command) do
+    with :ok <- validate_person_id(command.person_id),
+         :ok <- validate_matching_person_id(person, command),
+         {:ok, requested_name} <- normalize_rename_name(command.name),
+         {:ok, expected_name} <- normalize_expected_name(command.expected_name),
+         {:ok, current_name} <- normalize_expected_name(person.name) do
+      rename(person.person_id, requested_name, expected_name, current_name)
+    end
+  end
 
   @impl Aggregate
   def execute(%__MODULE__{person_id: nil}, %ReplacePersonEmailAddresses{}) do
@@ -195,6 +212,10 @@ defmodule Memba.Membership.Person do
     }
   end
 
+  def apply(%__MODULE__{} = person, %PersonRenamed{} = event) do
+    %__MODULE__{person | name: event.name}
+  end
+
   def apply(%__MODULE__{} = person, %PersonEmailAddressesReplaced{} = event) do
     %__MODULE__{
       person
@@ -293,6 +314,45 @@ defmodule Memba.Membership.Person do
   end
 
   defp normalize_name(_name), do: {:error, :invalid_name}
+
+  defp normalize_rename_name(name) do
+    with {:ok, normalized_name} <- normalize_rename_whitespace(name),
+         :ok <- validate_rename_name(normalized_name) do
+      {:ok, normalized_name}
+    end
+  end
+
+  defp normalize_expected_name(name) do
+    case normalize_rename_whitespace(name) do
+      {:ok, normalized_name} -> {:ok, normalized_name}
+      {:error, :invalid_name} -> {:error, :invalid_expected_name}
+    end
+  end
+
+  defp normalize_rename_whitespace(name) when is_binary(name) do
+    {:ok,
+     name
+     |> String.replace(~r/[\s\p{Z}]+/u, " ")
+     |> String.trim()}
+  end
+
+  defp normalize_rename_whitespace(_name), do: {:error, :invalid_name}
+
+  defp validate_rename_name(""), do: {:error, :invalid_name}
+
+  defp validate_rename_name(name) do
+    if String.length(name) <= 100, do: :ok, else: {:error, :invalid_name}
+  end
+
+  defp rename(_person_id, requested_name, _expected_name, requested_name), do: []
+
+  defp rename(_person_id, _requested_name, expected_name, current_name)
+       when expected_name != current_name,
+       do: {:error, {:name_conflict, current_name}}
+
+  defp rename(person_id, requested_name, _expected_name, _current_name) do
+    %PersonRenamed{person_id: person_id, name: requested_name}
+  end
 
   defp create_email_addresses(%CreatePerson{email_addresses: nil} = command) do
     with {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do
