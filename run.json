@@ -1,0 +1,754 @@
+{
+  "title": "Implement the planned domain scenarios, one at a time; do not publish",
+  "spec": {
+    "run_id": "01M5E6ZE4B4J1PG6391VFND4KW",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Implement the planned domain scenarios, one at a time; do not publish"
+        },
+        "working_dir": null,
+        "metadata": {
+          "approved-source": "75365d265dc170dd724c9dfe89c573c10492608b",
+          "purpose": "historical068-real-plan-rehearsal-75365d26-trial1"
+        },
+        "inputs": {
+          "commit": "HEAD"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.6-sol",
+          "fallbacks": {
+            "gpt-5.6-sol": []
+          },
+          "controls": {
+            "reasoning_effort": "high",
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp/**",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/bdd-plan/**",
+            ".fabro/tmp/bdd/**"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "BddPlanImplementation",
+      "nodes": {
+        "inspect": {
+          "id": "inspect",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "node dev-tools/bdd/workflow.cjs inspect"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "output_schema": {
+              "String": "routing"
+            }
+          }
+        },
+        "scenario.check": {
+          "id": "scenario.check",
+          "attrs": {
+            "script": {
+              "String": "bin/dev check > .fabro/tmp/bdd/check.log 2>&1; result=$?; cat .fabro/tmp/bdd/check.log; exit \"$result\""
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 1800,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          },
+          "classes": [
+            "scenario"
+          ]
+        },
+        "scenario.navigator": {
+          "id": "scenario.navigator",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "fidelity": {
+              "String": "full"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "thread_id": {
+              "String": "bdd-navigator"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "prompt": {
+              "String": "You are the navigator. Your full-fidelity conversation continues across the whole plan and through every visit in this scenario. Read the iteration plan whose path is recorded in `.fabro/tmp/bdd-plan/plan-path` and follow its links to relevant ADRs, designs and project guidance. Implement the single domain scenario currently marked `@wip`, not the whole iteration. Do not publish or weaken agreed examples.\n\nUse shell commands for all file writes and edits, including notes and feature tags (for example, Python invoked through the shell). Do not use `apply_patch`, native file-write tools or uploads: on this Fabro version they can change file ownership and prevent subsequent command writes. Do not repair ownership with chmod/chown.\n\nOn the first visit for each scenario, re-read the exact selected declaration and tags, `.fabro/tmp/bdd/base`, the current Git commit, relevant code and setup. Predict the initial result, then run `bin/dev test:wip`, which must select exactly one WIP domain declaration. Save the actual output and exit status under `.fabro/tmp/bdd/`. If selection is wrong or setup fails, explain the mismatch. If the scenario already passes, that is valid evidence: do not invent a red result or unnecessary code; follow the tag-removal and ordinary focused-confirmation steps below.\n\nOn every visit, re-read the current WIP selection and relevant code, then read the latest `result.md` and `check.log` in that directory if present. Open the actual test logs. Your conversation continues and may remember useful earlier work, but only evidence for the current scenario, source and setup is current proof. Treat older observations as stale when any of those changed. The driver's work arrives through these files.\n\nPlan one change in `.fabro/tmp/bdd/change.md`: the exact selected scenario, current base, what to change, why, relevant supporting tests, the observed starting result and log, and the acceptance result you predict next, including the reason for a failure. Make every assignment self-contained for a fresh driver and limit it to one assignment. Reuse a starting result only while code, scenario and setup are unchanged. A wrong prediction, bad selector or omitted file is something to reconsider, not a reason to stop the job. Undefined Cucumber steps are ordinary implementation work.\n\n`bin/dev test:wip` deliberately exits nonzero even when its scenario passes: read the actual test output, not just the exit code. Once the scenario and supporting tests pass, remove only its `@wip` tag. Keep all assertions and iteration tags. Record its name and ordinary focused test command in `change.md`, and run that command to confirm the same scenario still passes without the tag. Then choose `check`.\n\nFull-check failures return here. Assign one repair at a time, keeping the same scenario. Once the focused tests pass after the repair, choose `check` again. Do not invent red tests for repairs whose tests already pass. The workflow runs `bin/dev check`; do not duplicate that full run yourself.\n\nThis workflow ends when implementation and checks are complete. Do not start or delegate a review or a separate refactoring pass; those belong in other workflows.\n\nEnd with Fabro's next-edge instruction: `{\"preferred_next_label\":\"change\"}` for one driver assignment, or `{\"preferred_next_label\":\"check\"}` when ready for full checks. This chooses what runs next; it is not a test result."
+            },
+            "shape": {
+              "String": "box"
+            }
+          },
+          "classes": [
+            "scenario"
+          ]
+        },
+        "prepare_scenario": {
+          "id": "prepare_scenario",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "set -eu; scratch=.fabro/tmp/bdd; archive_root=.fabro/tmp/bdd-plan/scenarios; for directory in .fabro .fabro/tmp .fabro/tmp/bdd-plan $archive_root; do if test -L $directory; then echo 'Cannot prepare scenario: archive path component must not be a symbolic link.' >&2; exit 1; fi; if test -e $directory && ! test -d $directory; then echo 'Cannot prepare scenario: archive path component is not a directory.' >&2; exit 1; fi; if ! test -e $directory; then mkdir $directory; fi; done; if test -L $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd must not be a symbolic link.' >&2; exit 1; fi; if test -e $scratch && ! test -d $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd is not a directory.' >&2; exit 1; fi; if test -d $scratch && find $scratch -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then sequence=1; while test -e $archive_root/$sequence || test -L $archive_root/$sequence; do sequence=$((sequence + 1)); done; mv $scratch $archive_root/$sequence; fi; mkdir -p $scratch"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "validate_pick": {
+          "id": "validate_pick",
+          "attrs": {
+            "stdin_source": {
+              "String": "response.selector"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "node dev-tools/bdd/workflow.cjs pick"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "done": {
+          "id": "done",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "scenario.stop": {
+          "id": "scenario.stop",
+          "attrs": {
+            "script": {
+              "String": "echo 'Stopped with work preserved; see the last result.' >&2; exit 1"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          },
+          "classes": [
+            "scenario"
+          ]
+        },
+        "scenario.setup": {
+          "id": "scenario.setup",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "script": {
+              "String": "mkdir -p .fabro/tmp/bdd && git rev-parse HEAD > .fabro/tmp/bdd/base && bin/dev sandbox-check && bin/dev responsive-check --force"
+            }
+          },
+          "classes": [
+            "scenario"
+          ]
+        },
+        "bootstrap": {
+          "id": "bootstrap",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "npm ci --prefix acceptance-tests --no-audit"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "setup": {
+          "id": "setup",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "node dev-tools/bdd/workflow.cjs setup HEAD"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "scenario.driver": {
+          "id": "scenario.driver",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "prompt": {
+              "String": "You are a fresh driver for one assignment. Read the iteration plan whose path is recorded in `.fabro/tmp/bdd-plan/plan-path`, its relevant links, project guidance, `.fabro/tmp/bdd/base` and `.fabro/tmp/bdd/change.md`. Re-read the exact current WIP selection and relevant code. Work on that one planned change, not the rest of the scenario or iteration. Do not publish or weaken agreed examples. Do not start or delegate a review or a separate refactoring pass.\n\nUse shell commands for all file writes and edits, including notes and feature tags (for example, Python invoked through the shell). Do not use `apply_patch`, native file-write tools or uploads: on this Fabro version they can change file ownership and prevent subsequent command writes. Do not repair ownership with chmod/chown.\n\nUse the navigator's observed starting result only if the current source, scenario and setup still match the assignment. Otherwise treat it as stale, predict and rerun the test before editing; return without edits if the result differs from your expectation.\n\nYou may use unit-test red/green cycles within this change. Predict the result and reason before each test command. Run ordinary commands and save their actual output and exit status in distinct logs under `.fabro/tmp/bdd/`. Check that the intended tests actually executed. Format changes and run supporting tests before the final acceptance observation. Leave the full `bin/dev check` run to the workflow's check stage.\n\nWhile the scenario is tagged, run `bin/dev test:wip`. Its nonzero exit can mean either a real failure or a passing scenario whose tag must be removed: read the test output. Stop immediately at the navigator's predicted next failure or actual green result. An unexpected acceptance result also means return. The same known failure permits continuing this change only. Leave tag removal to the navigator. For later repairs use the ordinary focused command in the assignment.\n\nAlways write `.fabro/tmp/bdd/result.md` with what changed, commands and actual results, log paths, and anything to reconsider. An incomplete change or incorrect assignment can always return. No special verdict or success declaration is needed."
+            },
+            "shape": {
+              "String": "box"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "fidelity": {
+              "String": "truncate"
+            }
+          },
+          "classes": [
+            "scenario"
+          ]
+        },
+        "failed_stop": {
+          "id": "failed_stop",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "echo 'BDD plan implementation stopped; inspect the preceding failed node. Work and ignored scratch are preserved.' >&2; exit 1"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "scenario.checked": {
+          "id": "scenario.checked",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "script": {
+              "String": "true"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          },
+          "classes": [
+            "scenario"
+          ]
+        },
+        "selector": {
+          "id": "selector",
+          "attrs": {
+            "backend": {
+              "String": "api"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "prompt": {
+              "String": "At Git commit `HEAD`, choose the next domain scenario to implement.\n\nThe commit is your only task input. Discover the repository's plan/status conventions, find its one active implementation plan, and find the agreed `@todo` domain scenarios belonging to that plan. Read the relevant existing code, linked decisions and guidance at that commit. Do not assume the first plan or scenario you find is the next one. A plan waiting to start is not necessarily the active plan.\n\nChoose a useful foundation that establishes successful behaviour before adding constraints and edge cases, taking account of what the code already implements. Prefer scenarios that let later work build on that foundation; do not merely follow file order. Briefly explain the dependency or implementation gap behind your choice.\n\nWork read-only. Use Git reads against the supplied commit (`git show`, `git ls-tree`, `git grep`) so every observation comes from the same snapshot. Do not edit or check out files, implement anything, run application tests, call other agents, or start workflows. Do not use network searches or external information. If there is no unique active plan, report that problem rather than choosing one arbitrarily.\n\nReturn only JSON: `{\"plan\":\"relative/path/to/plan.md\",\"feature\":\"relative/path/to/scenarios.feature\",\"scenario\":\"exact scenario name\",\"reason\":\"brief explanation\"}`. If the active plan cannot be uniquely identified, return only `{\"error\":\"what you found\"}`."
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "setup",
+          "attrs": {}
+        },
+        {
+          "from": "setup",
+          "to": "bootstrap",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=bootstrap"
+            }
+          }
+        },
+        {
+          "from": "setup",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "bootstrap",
+          "to": "inspect",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "bootstrap",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "inspect",
+          "to": "selector",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=choose"
+            }
+          }
+        },
+        {
+          "from": "inspect",
+          "to": "done",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=done"
+            }
+          }
+        },
+        {
+          "from": "inspect",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "selector",
+          "to": "validate_pick",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "selector",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "validate_pick",
+          "to": "prepare_scenario",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=implement"
+            }
+          }
+        },
+        {
+          "from": "validate_pick",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "prepare_scenario",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "scenario.setup",
+          "to": "scenario.navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "scenario.setup",
+          "to": "scenario.stop",
+          "attrs": {}
+        },
+        {
+          "from": "scenario.navigator",
+          "to": "scenario.driver",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=change"
+            }
+          }
+        },
+        {
+          "from": "scenario.navigator",
+          "to": "scenario.check",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=check"
+            }
+          }
+        },
+        {
+          "from": "scenario.navigator",
+          "to": "scenario.stop",
+          "attrs": {}
+        },
+        {
+          "from": "scenario.driver",
+          "to": "scenario.navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "scenario.driver",
+          "to": "scenario.stop",
+          "attrs": {}
+        },
+        {
+          "from": "scenario.check",
+          "to": "scenario.checked",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "scenario.check",
+          "to": "scenario.navigator",
+          "attrs": {
+            "condition": {
+              "String": "outcome=failed"
+            }
+          }
+        },
+        {
+          "from": "scenario.check",
+          "to": "scenario.stop",
+          "attrs": {}
+        },
+        {
+          "from": "prepare_scenario",
+          "to": "scenario.setup",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "scenario.checked",
+          "to": "inspect",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "default_max_retries": {
+          "Integer": 0
+        },
+        "goal": {
+          "String": "Implement the planned domain scenarios, one at a time; do not publish"
+        },
+        "model_stylesheet": {
+          "String": "* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }"
+        }
+      }
+    },
+    "graph_source": "digraph BddPlanImplementation {\n    graph [goal=\"Implement the planned domain scenarios, one at a time; do not publish\",\n        default_max_retries=0,\n        model_stylesheet=\"* { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\"]\n    start [shape=Mdiamond]\n    done [shape=Msquare]\n    failed_stop [shape=parallelogram, script=\"echo 'BDD plan implementation stopped; inspect the preceding failed node. Work and ignored scratch are preserved.' >&2; exit 1\"]\n\n    setup [shape=parallelogram, output_schema=\"routing\", script=\"node dev-tools/bdd/workflow.cjs setup {{ inputs.commit }}\"]\n    bootstrap [shape=parallelogram, script=\"npm ci --prefix acceptance-tests --no-audit\"]\n    inspect [shape=parallelogram, output_schema=\"routing\", script=\"node dev-tools/bdd/workflow.cjs inspect\"]\n    selector [shape=box, backend=\"api\", fidelity=\"truncate\", prompt=\"@eval/selection/prompt.md\"]\n    validate_pick [shape=parallelogram, stdin_source=\"response.selector\", output_schema=\"routing\", script=\"node dev-tools/bdd/workflow.cjs pick\"]\n    prepare_scenario [shape=parallelogram, script=\"set -eu; scratch=.fabro/tmp/bdd; archive_root=.fabro/tmp/bdd-plan/scenarios; for directory in .fabro .fabro/tmp .fabro/tmp/bdd-plan $archive_root; do if test -L $directory; then echo 'Cannot prepare scenario: archive path component must not be a symbolic link.' >&2; exit 1; fi; if test -e $directory && ! test -d $directory; then echo 'Cannot prepare scenario: archive path component is not a directory.' >&2; exit 1; fi; if ! test -e $directory; then mkdir $directory; fi; done; if test -L $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd must not be a symbolic link.' >&2; exit 1; fi; if test -e $scratch && ! test -d $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd is not a directory.' >&2; exit 1; fi; if test -d $scratch && find $scratch -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then sequence=1; while test -e $archive_root/$sequence || test -L $archive_root/$sequence; do sequence=$((sequence + 1)); done; mv $scratch $archive_root/$sequence; fi; mkdir -p $scratch\"]\n    scenario [import=\"../bdd-scenario-implementation/workflow.fabro\"]\n    start -> setup\n    setup -> bootstrap [condition=\"outcome=succeeded && preferred_label=bootstrap\"]\n    setup -> failed_stop\n    bootstrap -> inspect [condition=\"outcome=succeeded\"]\n    bootstrap -> failed_stop\n    inspect -> selector [condition=\"outcome=succeeded && preferred_label=choose\"]\n    inspect -> done [condition=\"outcome=succeeded && preferred_label=done\"]\n    inspect -> failed_stop\n    selector -> validate_pick [condition=\"outcome=succeeded\"]\n    selector -> failed_stop\n    validate_pick -> prepare_scenario [condition=\"outcome=succeeded && preferred_label=implement\"]\n    validate_pick -> failed_stop\n    prepare_scenario -> scenario [condition=\"outcome=succeeded\"]\n    prepare_scenario -> failed_stop\n    scenario -> inspect\n}\n",
+    "workflow_slug": "bdd-plan-implementation",
+    "source_directory": "/home/matt/.bb/thread-storage/thr_ra2ff7hjn2/implementation/rehearsal/fixture-quality/source",
+    "labels": {
+      "approved-source": "75365d265dc170dd724c9dfe89c573c10492608b",
+      "purpose": "historical068-real-plan-rehearsal-75365d26-trial1"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "2feb308ecfae63ace663aa25209840549e21b09ca812120c238de8bd803fcfab",
+    "definition_blob": "0be9795e237338a2ee7d5f6698898db9f9d00e0348bdac3d9c838d37469a00ef",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "rehearsal/bdd-plan068-tooling-75365d26",
+      "sha": "75365d265dc170dd724c9dfe89c573c10492608b",
+      "dirty": "clean"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M5E6ZE4B4J1PG6391VFND4KW",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-21T03:09:48.267549009Z",
+  "last_event_at": "2026-10-21T03:09:52.075271307Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "2375d352e1634c2885d62309b6dac1bc448cfad46d629e151a8a02e714d6f78e",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "rehearsal/bdd-plan068-tooling-75365d26",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
