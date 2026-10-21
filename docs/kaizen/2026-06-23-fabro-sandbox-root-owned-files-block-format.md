@@ -118,9 +118,11 @@ removed.
 
 Source tracing established the write path rather than attributing this to agent
 behaviour: the built-in GPT-5.6 system prompt directs the agent to use the
-native `apply_patch` tool; Fabro routes that through Pebble's `write_file` into
-the Docker sandbox driver; the `0.316` driver uploaded a tar entry without the
-sandbox user's UID/GID, so Docker created root-owned files. Shell-only role
+native `apply_patch` tool. In Fabro `0.316`, that tool ran through
+`fabro-agent` to `Sandbox.write_file`, whose old Fabro Docker sandbox upload
+wrote a tar entry without the sandbox user's UID/GID; Docker therefore created
+root-owned files. Pebble and `sandbox-driver` are the replacement path in
+Fabro `0.389`, not the path that produced the `0.316` failure. Shell-only role
 wording could not reliably prevent the native tool call and would not repair
 the ownership boundary.
 
@@ -138,3 +140,9 @@ update an existing file, and then rewrite both through an ordinary shell
 command. Evidence must record numeric ownership and modes after each boundary,
 plus the next-stage writability check. Local fake command nodes or bookkeeping
 alone do not close this observation.
+
+The repository compatibility work received a passing host/dev-container
+`bin/dev check` on commit `8a9c4d59d`; that is not managed-Docker source
+qualification or ownership proof. The actual server upgrade, native ownership
+smoke, and exact-commit full gate inside the upgraded managed Docker environment
+remain pending. This note therefore remains Open.
