@@ -63,9 +63,9 @@ refuses when the named commit is no longer `HEAD`.
 input is the feature-and-line reference above; selector JSON and implementation
 paths are not a human interface.
 
-Current limitation: picking a multi-row Outline or Examples block works, but
-`dev test:wip` currently rejects the multiple expanded rows. Resolve that before
-claiming the loop works for general plans.
+For a picked Outline or Examples block, all eligible rows belong to one
+selection and run as separate tests. The updated runner's managed CLI proof is
+still pending; do not treat the new code as validated.
 
 ## Start the workflow after approval
 
