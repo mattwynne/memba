@@ -182,6 +182,34 @@ class ScenarioBoundaryTest(unittest.TestCase):
             self.assertTrue(scratch.is_symlink())
             self.assertEqual((old / "old.log").read_text(), "must not be reused\n")
 
+    def test_prepare_command_rejects_a_symlinked_archive_parent(self):
+        match = re.search(
+            r'prepare_scenario \[shape=parallelogram, script="([^"]+)"\]',
+            self.plan_graph,
+        )
+        self.assertIsNotNone(match)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            victim = root / "archive-victim"
+            victim.mkdir()
+            plan = root / ".fabro/tmp/bdd-plan"
+            plan.mkdir(parents=True)
+            (plan / "scenarios").symlink_to(victim, target_is_directory=True)
+            scratch = root / ".fabro/tmp/bdd"
+            scratch.mkdir()
+            (scratch / "check.log").write_text("must stay here\n")
+
+            result = subprocess.run(
+                ["sh", "-c", match.group(1)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("symbolic link", result.stderr)
+            self.assertEqual(list(victim.iterdir()), [])
+            self.assertEqual((scratch / "check.log").read_text(), "must stay here\n")
+
     def test_full_check_has_native_thirty_minute_allowance_and_supported_exit_boundary(self):
         check = next(line for line in self.scenario_graph.splitlines() if re.match(r"\s*check \[", line))
         self.assertIn('timeout="1800s"', check)
