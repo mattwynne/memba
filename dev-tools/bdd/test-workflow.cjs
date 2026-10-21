@@ -39,7 +39,7 @@ function repository(t, body = scenario("Foundation") + scenario("Constraint")) {
   put(root, "docs/iterations/README.md", `| # | Date | Status | Title | Plan |\n|---|---|---|---|---|\n| 068 | today | implementing | Current | [delivery log](068-current/plan.md) |\n`);
   put(root, "docs/iterations/068-current/plan.md", "# Current plan\n");
   put(root, "acceptance-tests/features/example.feature", `Feature: Example\n${body}`);
-  put(root, ".gitignore", "/.fabro/tmp/\n/.fabro/blobs/\n/acceptance-tests/node_modules/\n");
+  put(root, ".gitignore", "/.fabro/tmp/**\n/.fabro/blobs/**\n/acceptance-tests/node_modules/\n");
   fs.mkdirSync(path.join(root, "bin"), {recursive: true});
   fs.copyFileSync(path.join(sourceRoot, "bin/dev"), path.join(root, "bin/dev"));
   fs.chmodSync(path.join(root, "bin/dev"), 0o755);
@@ -188,6 +188,71 @@ test("setup verifies tracked ignore policy without changing repository metadata"
   assert.equal(fs.readFileSync(exclude, "utf8"), beforeExclude);
   put(root, "outside.txt", "visible\n");
   assert.notEqual(run(root, "inspect").status, 0);
+});
+
+test("stock checkpoint pathspecs exclude ignored runtime files without hiding tracked workflows", t => {
+  const sourceIgnore = fs.readFileSync(path.join(sourceRoot, ".gitignore"), "utf8");
+  const runtimeIgnoreLines = sourceIgnore.split(/\r?\n/).filter(line =>
+    line.startsWith("/.fabro/tmp") || line.startsWith("/.fabro/blobs")
+  );
+  assert.deepEqual(runtimeIgnoreLines, ["/.fabro/tmp/**", "/.fabro/blobs/**"]);
+
+  const builtInExcludes = [
+    ".git", "node_modules", ".pnpm-store", ".npm", "target", ".next",
+    "__pycache__", ".venv", "venv", ".cache", ".tox", ".pytest_cache",
+    ".mypy_cache", "dist"
+  ].map(directory => `**/${directory}/**`);
+  const configs = [
+    ".fabro/workflows/bdd-plan-implementation/workflow.toml",
+    ".fabro/workflows/bdd-scenario-implementation/workflow.toml"
+  ];
+
+  for (const config of configs) {
+    const configText = fs.readFileSync(path.join(sourceRoot, config), "utf8");
+    const match = configText.match(/^exclude_globs = (\[[^\n]+\])$/m);
+    assert.ok(match, `missing checkpoint exclusions in ${config}`);
+    const configuredExcludes = JSON.parse(match[1]);
+    assert.deepEqual(configuredExcludes, [".fabro/tmp/**", ".fabro/blobs/**"]);
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "bdd-checkpoint-pathspec-"));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    git(root, "init", "-q");
+    git(root, "config", "user.name", "Test");
+    git(root, "config", "user.email", "test@example.invalid");
+    put(root, ".gitignore", `${runtimeIgnoreLines.join("\n")}\n`);
+    put(root, "tracked.txt", "base\n");
+    put(root, ".fabro/workflows/example.toml", "base workflow\n");
+    commit(root, "fixture");
+    put(root, "tracked.txt", "changed\n");
+    put(root, ".fabro/workflows/example.toml", "changed workflow\n");
+    put(root, ".fabro/tmp/evidence.log", "runtime\n");
+    put(root, ".fabro/blobs/materialized", "runtime\n");
+
+    const pathspecs = [...builtInExcludes, ...configuredExcludes]
+      .map(pattern => `':(glob,exclude)${pattern}'`)
+      .join(" ");
+    const command = "git -c maintenance.auto=0 -c gc.auto=0 " +
+      "-c commit.gpgsign=false -c tag.gpgsign=false add -A -- . " + pathspecs;
+    const result = spawnSync("/bin/sh", ["-c", command], {cwd: root, encoding: "utf8"});
+    assert.equal(result.status, 0, `${config}: ${result.stderr}`);
+    assert.equal(result.stderr, "");
+    assert.deepEqual(
+      git(root, "diff", "--cached", "--name-only").split("\n"),
+      [".fabro/workflows/example.toml", "tracked.txt"]
+    );
+    assert.equal(git(root, "check-ignore", ".fabro/tmp/evidence.log"), ".fabro/tmp/evidence.log");
+    assert.equal(git(root, "check-ignore", ".fabro/blobs/materialized"), ".fabro/blobs/materialized");
+    assert.notEqual(
+      spawnSync("git", ["check-ignore", "--quiet", "--", ".fabro/tmp"], {cwd: root}).status,
+      0
+    );
+    assert.notEqual(
+      spawnSync("git", ["check-ignore", "--quiet", "--", ".fabro/blobs"], {cwd: root}).status,
+      0
+    );
+    const status = git(root, "status", "--porcelain=v1", "--untracked-files=all");
+    assert.doesNotMatch(status, /\.fabro\/(tmp|blobs)/);
+  }
 });
 
 test("setup refuses a repository without the declared runtime ignores", t => {

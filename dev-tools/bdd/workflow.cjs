@@ -122,11 +122,19 @@ function writeAtomic(target, contents) {
 }
 
 function assertDeclaredScratchIgnored(root) {
-  const declared = new Set(fs.readFileSync(path.join(root, ".gitignore"), "utf8").split(/\r?\n/));
-  const required = ["/.fabro/tmp/", "/.fabro/blobs/"];
-  const missing = required.filter(pattern => !declared.has(pattern));
+  const required = [".fabro/tmp/.bdd-ignore-probe", ".fabro/blobs/.bdd-ignore-probe"];
+  const missing = required.filter(probe => {
+    const result = spawnSync("git", ["check-ignore", "-v", "--no-index", "--", probe], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    if (result.status !== 0) return true;
+    const source = result.stdout.split("\t", 1)[0].split(":", 1)[0];
+    return source !== ".gitignore";
+  });
   if (missing.length) {
-    throw new Error(`repository .gitignore must declare owned runtime paths: ${required.join(" and ")}`);
+    throw new Error(`repository .gitignore must ignore files under owned runtime paths: ${required.join(" and ")}`);
   }
 }
 
