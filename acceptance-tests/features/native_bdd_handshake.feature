@@ -1,6 +1,6 @@
 Feature: Synthetic native BDD handshake
 
-  @iteration-999 @wip
+  @iteration-999
   Scenario: Synthetic foundation choice
     Given bookkeeping only
 
