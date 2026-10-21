@@ -55,19 +55,36 @@ class ScenarioBoundaryTest(unittest.TestCase):
             self.selector_prompt.replace("At Git commit `{{ inputs.commit }}`", "At Git commit `HEAD`"),
         )
 
+    def test_setup_rejects_overridden_binding_with_supported_script_substitution(self):
+        setup = next(line for line in self.plan_graph.splitlines() if re.match(r"\s*setup \[", line))
+        self.assertIn("script=\"node dev-tools/bdd/workflow.cjs setup {{ inputs.commit }}\"", setup)
+        self.assertNotIn("setup '{{ inputs.commit }}'", setup)
+        self.assertNotIn('setup "{{ inputs.commit }}"', setup)
+
+    def test_declared_dependency_bootstrap_runs_once_before_inspection(self):
+        self.assertIn(
+            'bootstrap [shape=parallelogram, script="npm ci --prefix acceptance-tests --no-audit"]',
+            self.plan_graph,
+        )
+        self.assertIn("start -> setup", self.plan_graph)
+        self.assertIn('setup -> bootstrap [condition="outcome=succeeded && preferred_label=bootstrap"]', self.plan_graph)
+        self.assertIn('bootstrap -> inspect [condition="outcome=succeeded"]', self.plan_graph)
+        self.assertIn("bootstrap -> failed_stop", self.plan_graph)
+        self.assertEqual(self.plan_graph.count("-> bootstrap"), 1)
+
     def test_native_routing_owns_inspect_select_pick_import_repeat_and_done(self):
         self.assertIn('inspect [shape=parallelogram, output_schema="routing"', self.plan_graph)
         self.assertIn('validate_pick [shape=parallelogram, stdin_source="response.selector", output_schema="routing"', self.plan_graph)
         self.assertIn('scenario [import="../bdd-scenario-implementation/workflow.fabro"]', self.plan_graph)
         self.assertIn('inspect -> selector [condition="outcome=succeeded && preferred_label=choose"]', self.plan_graph)
-        self.assertIn('inspect -> domain_loop_done [condition="outcome=succeeded && preferred_label=done"]', self.plan_graph)
+        self.assertIn('inspect -> done [condition="outcome=succeeded && preferred_label=done"]', self.plan_graph)
         self.assertIn('validate_pick -> prepare_scenario [condition="outcome=succeeded && preferred_label=implement"]', self.plan_graph)
         self.assertIn("scenario -> inspect", self.plan_graph)
-        self.assertIn("domain_loop_done -> done", self.plan_graph)
         self.assertNotIn("selector -> done", self.plan_graph)
+        self.assertNotIn("domain_loop_done", self.plan_graph)
 
     def test_failed_commands_cannot_reach_normal_done(self):
-        for node in ("setup", "inspect", "selector", "validate_pick", "prepare_scenario"):
+        for node in ("bootstrap", "setup", "inspect", "selector", "validate_pick", "prepare_scenario"):
             self.assertIn(f"{node} -> failed_stop", self.plan_graph)
         self.assertNotRegex(self.plan_graph, r"failed_stop\s*->")
         self.assertEqual(self.plan_graph.count("-> done"), 1)
