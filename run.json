@@ -1,0 +1,490 @@
+{
+  "title": "Model-free native bookkeeping handshake; no product implementation or check result",
+  "spec": {
+    "run_id": "01M5DZXWBC22RSYH5B3222ANCK",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "handshake.workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Model-free native bookkeeping handshake; no product implementation or check result"
+        },
+        "working_dir": null,
+        "metadata": {
+          "purpose": "bdd-native-bookkeeping-handshake-thr-ra2ff7hjn2-9dc0146e7",
+          "approved-source": "9dc0146e7e8a69246eb83fc61ae2737e8663c038"
+        },
+        "inputs": {
+          "commit": "HEAD"
+        },
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-5",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp/**",
+            ".fabro/blobs/**"
+          ],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "docker": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": [
+            ".fabro/tmp/bdd-plan/**",
+            ".fabro/tmp/bdd/**"
+          ]
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "BddNativeHandshake",
+      "nodes": {
+        "validate_pick": {
+          "id": "validate_pick",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "node dev-tools/bdd/workflow.cjs pick"
+            },
+            "stdin_source": {
+              "String": "response.selector"
+            },
+            "output_schema": {
+              "String": "routing"
+            }
+          }
+        },
+        "selector": {
+          "id": "selector",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "script": {
+              "String": "node -e 'const fs=require(\"node:fs\"); const report=JSON.parse(fs.readFileSync(\".fabro/tmp/bdd-plan/pending.json\",\"utf8\")); const snapshot=JSON.parse(fs.readFileSync(\".fabro/tmp/bdd-plan/selection.json\",\"utf8\")); if(report.domain_complete||report.pending.length<1) throw new Error(\"scripted selector expected a pending domain choice\"); const item=report.pending[0]; const choice={plan:report.plan,feature:item.feature,scenario:item.scenario,reason:\"scripted model-free choice for native bookkeeping handshake\"}; fs.writeFileSync(\".fabro/tmp/bdd-plan/selector-input-\"+report.pending.length+\".json\",JSON.stringify({phase:\"selector_input\",commit:snapshot.commit,tree:snapshot.tree,pending_domain:report.pending.length,pending_journeys:report.pending_journeys.length,choice},null,2)+\"\\n\",{flag:\"wx\",mode:384}); process.stdout.write(JSON.stringify({context_updates:{\"response.selector\":JSON.stringify(choice)}}));'"
+            }
+          }
+        },
+        "done": {
+          "id": "done",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "prepare_scenario": {
+          "id": "prepare_scenario",
+          "attrs": {
+            "script": {
+              "String": "set -eu; scratch=.fabro/tmp/bdd; archive_root=.fabro/tmp/bdd-plan/scenarios; for directory in .fabro .fabro/tmp .fabro/tmp/bdd-plan $archive_root; do if test -L $directory; then echo 'Cannot prepare scenario: archive path component must not be a symbolic link.' >&2; exit 1; fi; if test -e $directory && ! test -d $directory; then echo 'Cannot prepare scenario: archive path component is not a directory.' >&2; exit 1; fi; if ! test -e $directory; then mkdir $directory; fi; done; if test -L $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd must not be a symbolic link.' >&2; exit 1; fi; if test -e $scratch && ! test -d $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd is not a directory.' >&2; exit 1; fi; if test -d $scratch && find $scratch -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then sequence=1; while test -e $archive_root/$sequence || test -L $archive_root/$sequence; do sequence=$((sequence + 1)); done; mv $scratch $archive_root/$sequence; fi; mkdir -p $scratch"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "failed_stop": {
+          "id": "failed_stop",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "echo 'Native bookkeeping handshake stopped; inspect the preceding failed node and retained artifacts.' >&2; exit 1"
+            }
+          }
+        },
+        "fixture": {
+          "id": "fixture",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "node -e 'const fs=require(\"node:fs\"); const cp=require(\"node:child_process\"); const base=\"9dc0146e7e8a69246eb83fc61ae2737e8663c038\"; const git=(args)=>cp.execFileSync(\"git\",args,{encoding:\"utf8\"}).trim(); if(git([\"rev-parse\",\"HEAD\"])!==base) throw new Error(\"handshake must start at exact source base \"+base); if(git([\"status\",\"--porcelain=v1\",\"--untracked-files=all\"])) throw new Error(\"handshake source must start clean\"); const index=\"docs/iterations/README.md\"; let text=fs.readFileSync(index,\"utf8\"); const marker=\"\\n\\nThe former 065–067 plans\"; if(!text.includes(marker)) throw new Error(\"iteration insertion marker is missing\"); text=text.replace(marker,\"\\n| 999 | 2026-10-21 | implementing | Synthetic native BDD handshake | [plan](999-native-bdd-handshake/plan.md) |\"+marker); fs.writeFileSync(index,text); fs.mkdirSync(\"docs/iterations/999-native-bdd-handshake\",{recursive:true}); fs.writeFileSync(\"docs/iterations/999-native-bdd-handshake/plan.md\",\"# Synthetic native BDD handshake\\n\\nBookkeeping-only fixture. It claims no application behaviour or passing check.\\n\"); fs.writeFileSync(\"acceptance-tests/features/native_bdd_handshake.feature\",\"Feature: Synthetic native BDD handshake\\n\\n  @iteration-999 @todo\\n  Scenario: Synthetic foundation choice\\n    Given bookkeeping only\\n\\n  @iteration-999 @todo\\n  Scenario: Synthetic constraint choice\\n    Given bookkeeping only\\n\\n  @journey @iteration-999 @todo\\n  Scenario: Synthetic journey remains pending\\n    Given bookkeeping only\\n\"); git([\"add\",index,\"docs/iterations/999-native-bdd-handshake/plan.md\",\"acceptance-tests/features/native_bdd_handshake.feature\"]); git([\"-c\",\"user.name=Native Handshake\",\"-c\",\"user.email=native-handshake@example.invalid\",\"-c\",\"commit.gpgsign=false\",\"commit\",\"-m\",\"test: add synthetic native handshake fixture\"]); fs.mkdirSync(\".fabro/tmp/bdd\",{recursive:true}); fs.writeFileSync(\".fabro/tmp/bdd/preexisting-partial.log\",\"SIMULATED partial scratch before first choice; no check was run.\\n\"); fs.writeFileSync(\".fabro/tmp/bdd/source.json\",JSON.stringify({phase:\"fixture\",source_base:base,commit:git([\"rev-parse\",\"HEAD\"]),tree:git([\"rev-parse\",\"HEAD^{tree}\"]),note:\"Synthetic metadata and feature only; no product code.\"},null,2)+\"\\n\");'"
+            }
+          }
+        },
+        "bootstrap": {
+          "id": "bootstrap",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "npm ci --prefix acceptance-tests --no-audit"
+            }
+          }
+        },
+        "setup": {
+          "id": "setup",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "node dev-tools/bdd/workflow.cjs setup HEAD"
+            },
+            "output_schema": {
+              "String": "routing"
+            }
+          }
+        },
+        "inspect": {
+          "id": "inspect",
+          "attrs": {
+            "output_schema": {
+              "String": "routing"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "node dev-tools/bdd/workflow.cjs inspect"
+            }
+          }
+        },
+        "simulated_finish": {
+          "id": "simulated_finish",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "node -e 'const fs=require(\"node:fs\"); const cp=require(\"node:child_process\"); const git=(args)=>cp.execFileSync(\"git\",args,{encoding:\"utf8\"}).trim(); const feature=\"acceptance-tests/features/native_bdd_handshake.feature\"; const beforeCommit=git([\"rev-parse\",\"HEAD\"]); const beforeTree=git([\"rev-parse\",\"HEAD^{tree}\"]); let text=fs.readFileSync(feature,\"utf8\"); const matches=text.match(/@wip/g)||[]; if(matches.length!==1) throw new Error(\"simulated finish requires exactly one WIP declaration\"); const selected=(text.match(/@iteration-999 @wip\\n  Scenario: ([^\\n]+)/)||[])[1]; if(!selected) throw new Error(\"cannot identify selected synthetic scenario\"); text=text.replace(\"@iteration-999 @wip\",\"@iteration-999\"); fs.writeFileSync(feature,text); fs.mkdirSync(\".fabro/tmp/bdd\",{recursive:true}); fs.writeFileSync(\".fabro/tmp/bdd/base\",beforeCommit+\"\\n\"); fs.writeFileSync(\".fabro/tmp/bdd/change.md\",\"SIMULATED FINISH ONLY for \"+selected+\". No product implementation occurred.\\n\"); fs.writeFileSync(\".fabro/tmp/bdd/result.md\",\"Bookkeeping-only tag transition; no scenario or app check was run.\\n\"); fs.writeFileSync(\".fabro/tmp/bdd/check.log\",\"SIMULATED: intentionally no check execution and no green claim.\\n\"); fs.writeFileSync(\".fabro/tmp/bdd/arbitrary-driver.log\",\"retained arbitrary log for archive proof\\n\"); git([\"add\",feature]); git([\"-c\",\"user.name=Native Handshake\",\"-c\",\"user.email=native-handshake@example.invalid\",\"-c\",\"commit.gpgsign=false\",\"commit\",\"-m\",\"test: simulate completed \"+selected]); fs.writeFileSync(\".fabro/tmp/bdd/mutation.json\",JSON.stringify({phase:\"simulated_finish\",scenario:selected,before_commit:beforeCommit,before_tree:beforeTree,after_commit:git([\"rev-parse\",\"HEAD\"]),after_tree:git([\"rev-parse\",\"HEAD^{tree}\"]),mutation:\"Removed only the selected synthetic @wip tag; no product implementation or check.\"},null,2)+\"\\n\");'"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        },
+        "final_evidence": {
+          "id": "final_evidence",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "node -e 'const fs=require(\"node:fs\"); const cp=require(\"node:child_process\"); const crypto=require(\"node:crypto\"); const base=\"9dc0146e7e8a69246eb83fc61ae2737e8663c038\"; const allowed=[\"docs/iterations/README.md\",\"docs/iterations/999-native-bdd-handshake/plan.md\",\"acceptance-tests/features/native_bdd_handshake.feature\"]; const git=(args,options={})=>cp.execFileSync(\"git\",args,{encoding:\"utf8\",...options}).trim(); const entries=(rev)=>{const raw=cp.execFileSync(\"git\",[\"ls-tree\",\"-rz\",\"-r\",\"--full-tree\",rev],{encoding:\"utf8\"}); return raw.split(\"\\0\").filter(Boolean).map(record=>{const match=/^(\\d+) ([^ ]+) ([0-9a-f]+)\\t([\\s\\S]+)$/.exec(record); if(!match) throw new Error(\"cannot parse tree entry\"); return {mode:match[1],type:match[2],object:match[3],path:match[4]};});}; const map=(items)=>new Map(items.map(item=>[item.path,item])); const baseItems=entries(base); const currentItems=entries(\"HEAD\"); const baseMap=map(baseItems); const currentMap=map(currentItems); const allowedSet=new Set(allowed); for(const path of new Set([...baseMap.keys(),...currentMap.keys()])){if(allowedSet.has(path)) continue; if(JSON.stringify(baseMap.get(path))!==JSON.stringify(currentMap.get(path))) throw new Error(\"unexpected tracked path change: \"+path);} const marker=\"\\n\\nThe former 065–067 plans\"; const baseReadme=cp.execFileSync(\"git\",[\"show\",base+\":docs/iterations/README.md\"],{encoding:\"utf8\"}); if(!baseReadme.includes(marker)) throw new Error(\"base iteration marker is missing\"); const expected=new Map(); const expectedReadme=baseReadme.replace(marker,\"\\n| 999 | 2026-10-21 | implementing | Synthetic native BDD handshake | [plan](999-native-bdd-handshake/plan.md) |\"+marker); const expectedPlan=\"# Synthetic native BDD handshake\\n\\nBookkeeping-only fixture. It claims no application behaviour or passing check.\\n\"; const expectedFeature=\"Feature: Synthetic native BDD handshake\\n\\n  @iteration-999\\n  Scenario: Synthetic foundation choice\\n    Given bookkeeping only\\n\\n  @iteration-999\\n  Scenario: Synthetic constraint choice\\n    Given bookkeeping only\\n\\n  @journey @iteration-999 @todo\\n  Scenario: Synthetic journey remains pending\\n    Given bookkeeping only\\n\"; const blob=(text)=>git([\"hash-object\",\"--stdin\"],{input:text}); expected.set(allowed[0],{mode:baseMap.get(allowed[0]).mode,type:\"blob\",object:blob(expectedReadme),path:allowed[0]}); expected.set(allowed[1],{mode:\"100644\",type:\"blob\",object:blob(expectedPlan),path:allowed[1]}); expected.set(allowed[2],{mode:\"100644\",type:\"blob\",object:blob(expectedFeature),path:allowed[2]}); for(const path of allowed){if(JSON.stringify(currentMap.get(path))!==JSON.stringify(expected.get(path))) throw new Error(\"allowed path bytes or mode differ from frozen expectation: \"+path);} const changed=cp.execFileSync(\"git\",[\"diff\",\"--name-only\",\"-z\",base+\"..HEAD\"],{encoding:\"utf8\"}).split(\"\\0\").filter(Boolean).sort(); if(JSON.stringify(changed)!==JSON.stringify([...allowed].sort())) throw new Error(\"tracked diff path set differs from exact allowlist\"); const status=cp.execFileSync(\"git\",[\"status\",\"--porcelain=v1\",\"-z\",\"--untracked-files=all\"]); if(status.length) throw new Error(\"final worktree contains tracked, staged, or nonignored untracked changes\"); const head=git([\"rev-parse\",\"HEAD\"]); const tree=git([\"rev-parse\",\"HEAD^{tree}\"]); const index=git([\"write-tree\"]); if(index!==tree) throw new Error(\"final index tree differs from HEAD tree\"); const indexRaw=cp.execFileSync(\"git\",[\"ls-files\",\"-s\",\"-z\"],{encoding:\"utf8\"}); const indexItems=indexRaw.split(\"\\0\").filter(Boolean).map(record=>{const match=/^(\\d+) ([0-9a-f]+) (\\d)\\t([\\s\\S]+)$/.exec(record); if(!match||match[3]!==\"0\") throw new Error(\"final index contains an invalid or unmerged entry\"); return {mode:match[1],object:match[2],path:match[4]};}); const expectedIndex=currentItems.map(item=>({mode:item.mode,object:item.object,path:item.path})); if(JSON.stringify(indexItems)!==JSON.stringify(expectedIndex)) throw new Error(\"final index entries differ from HEAD tree\"); const workingMismatches=[]; const workingEntries=currentItems.map(item=>{const result={path:item.path,expected_type:item.type,expected_mode:item.mode,expected_blob:item.object}; const issues=[]; try{const stat=fs.lstatSync(item.path); result.lstat_mode=(stat.mode&4095).toString(8); let bytes; if(stat.isSymbolicLink()){result.actual_type=\"symlink\"; result.normalized_git_mode=\"120000\"; bytes=fs.readlinkSync(item.path,{encoding:\"buffer\"});}else if(stat.isFile()){result.actual_type=\"regular\"; result.normalized_git_mode=(stat.mode&73)?\"100755\":\"100644\"; bytes=fs.readFileSync(item.path);}else{result.actual_type=\"other\"; issues.push(\"working path is neither a regular file nor a symbolic link\");} if(item.type!==\"blob\") issues.push(\"tree entry is not a blob\"); const expectedActualType=item.mode===\"120000\"?\"symlink\":\"regular\"; if(result.actual_type!==expectedActualType) issues.push(\"working file type differs from tree mode\"); if(result.normalized_git_mode!==item.mode) issues.push(\"normalized working mode differs from tree mode\"); if(bytes){result.bytes=bytes.length; result.sha256=crypto.createHash(\"sha256\").update(bytes).digest(\"hex\"); result.blob_oid=crypto.createHash(\"sha1\").update(Buffer.from(\"blob \"+bytes.length+\"\\0\")).update(bytes).digest(\"hex\"); if(result.blob_oid!==item.object) issues.push(\"actual working bytes differ from tree blob\");}}catch(error){issues.push(\"lstat/read failed: \"+error.message);} result.issues=issues; if(issues.length) workingMismatches.push({path:item.path,issues}); return result;}); const commits=git([\"rev-list\",\"--reverse\",base+\"..HEAD\"]).split(/\\n/).filter(Boolean).map(commit=>{const fields=cp.execFileSync(\"git\",[\"show\",\"-s\",\"--format=%H%x00%T%x00%P%x00%s\",commit],{encoding:\"utf8\"}).trimEnd().split(\"\\0\"); return {commit:fields[0],tree:fields[1],parents:fields[2]?fields[2].split(\" \"):[],subject:fields[3]};}); const evidence=\".fabro/tmp/bdd-plan/final-evidence\"; fs.mkdirSync(evidence); const write=(name,value)=>fs.writeFileSync(evidence+\"/\"+name,typeof value===\"string\"?value:JSON.stringify(value,null,2)+\"\\n\",{flag:\"wx\",mode:384}); write(\"original-tracked-fingerprint.json\",{base,tree:git([\"rev-parse\",base+\"^{tree}\"]),entries:baseItems}); write(\"working-tracked-fingerprint.json\",{head,tree,entries:workingEntries,mismatches:workingMismatches}); write(\"working-mismatches.json\",{count:workingMismatches.length,mismatches:workingMismatches}); write(\"git-history.json\",{range:base+\"..\"+head,commits}); write(\"allowed-paths.json\",{allowed,expected:[...expected.values()],actual:allowed.map(path=>currentMap.get(path))}); write(\"allowed-diff.patch\",cp.execFileSync(\"git\",[\"diff\",\"--binary\",base+\"..HEAD\",\"--\",...allowed],{encoding:\"utf8\"})); write(\"summary.json\",{phase:\"final_evidence_before_terminal\",base,head,tree,index,status_porcelain_bytes:status.length,tracked_entries:currentItems.length,changed_paths:changed,working_mismatch_count:workingMismatches.length,verified_original_other_tracked_git_objects_and_modes:true,verified_actual_working_tracked_bytes_types_and_modes:workingMismatches.length===0,verified_frozen_allowed_bytes_and_modes:true,verified_index_matches_head:true,verified_no_nonignored_files:true,expected_later_checkpoint_note:\"A post-collector native empty checkpoint may move only the commit SHA; use native events, never execute in a stopped container.\",allowed_content_sha256:{readme:crypto.createHash(\"sha256\").update(expectedReadme).digest(\"hex\"),plan:crypto.createHash(\"sha256\").update(expectedPlan).digest(\"hex\"),feature:crypto.createHash(\"sha256\").update(expectedFeature).digest(\"hex\")}}); if(workingMismatches.length) throw new Error(\"actual working-tree fingerprint differs from current tree at \"+workingMismatches.length+\" path(s)\"); process.stdout.write(\"Final source evidence captured before terminal shutdown.\\n\");'"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "fixture",
+          "attrs": {}
+        },
+        {
+          "from": "fixture",
+          "to": "setup",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "fixture",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "setup",
+          "to": "bootstrap",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=bootstrap"
+            }
+          }
+        },
+        {
+          "from": "setup",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "bootstrap",
+          "to": "inspect",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "bootstrap",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "inspect",
+          "to": "selector",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=choose"
+            }
+          }
+        },
+        {
+          "from": "inspect",
+          "to": "final_evidence",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=done"
+            }
+          }
+        },
+        {
+          "from": "inspect",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "selector",
+          "to": "validate_pick",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "selector",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "validate_pick",
+          "to": "prepare_scenario",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded && preferred_label=implement"
+            }
+          }
+        },
+        {
+          "from": "validate_pick",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "prepare_scenario",
+          "to": "simulated_finish",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "prepare_scenario",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "simulated_finish",
+          "to": "inspect",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "simulated_finish",
+          "to": "failed_stop",
+          "attrs": {}
+        },
+        {
+          "from": "final_evidence",
+          "to": "done",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "final_evidence",
+          "to": "failed_stop",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": "Model-free native bookkeeping handshake; no product implementation or check result"
+        },
+        "default_max_retries": {
+          "Integer": 0
+        }
+      }
+    },
+    "graph_source": "digraph BddNativeHandshake {\n    graph [goal=\"Model-free native bookkeeping handshake; no product implementation or check result\", default_max_retries=0]\n    start [shape=Mdiamond]\n    done [shape=Msquare]\n    failed_stop [shape=parallelogram, script=\"echo 'Native bookkeeping handshake stopped; inspect the preceding failed node and retained artifacts.' >&2; exit 1\"]\n\n    fixture [shape=parallelogram, script=\"node -e 'const fs=require(\\\"node:fs\\\"); const cp=require(\\\"node:child_process\\\"); const base=\\\"9dc0146e7e8a69246eb83fc61ae2737e8663c038\\\"; const git=(args)=>cp.execFileSync(\\\"git\\\",args,{encoding:\\\"utf8\\\"}).trim(); if(git([\\\"rev-parse\\\",\\\"HEAD\\\"])!==base) throw new Error(\\\"handshake must start at exact source base \\\"+base); if(git([\\\"status\\\",\\\"--porcelain=v1\\\",\\\"--untracked-files=all\\\"])) throw new Error(\\\"handshake source must start clean\\\"); const index=\\\"docs/iterations/README.md\\\"; let text=fs.readFileSync(index,\\\"utf8\\\"); const marker=\\\"\\\\n\\\\nThe former 065–067 plans\\\"; if(!text.includes(marker)) throw new Error(\\\"iteration insertion marker is missing\\\"); text=text.replace(marker,\\\"\\\\n| 999 | 2026-10-21 | implementing | Synthetic native BDD handshake | [plan](999-native-bdd-handshake/plan.md) |\\\"+marker); fs.writeFileSync(index,text); fs.mkdirSync(\\\"docs/iterations/999-native-bdd-handshake\\\",{recursive:true}); fs.writeFileSync(\\\"docs/iterations/999-native-bdd-handshake/plan.md\\\",\\\"# Synthetic native BDD handshake\\\\n\\\\nBookkeeping-only fixture. It claims no application behaviour or passing check.\\\\n\\\"); fs.writeFileSync(\\\"acceptance-tests/features/native_bdd_handshake.feature\\\",\\\"Feature: Synthetic native BDD handshake\\\\n\\\\n  @iteration-999 @todo\\\\n  Scenario: Synthetic foundation choice\\\\n    Given bookkeeping only\\\\n\\\\n  @iteration-999 @todo\\\\n  Scenario: Synthetic constraint choice\\\\n    Given bookkeeping only\\\\n\\\\n  @journey @iteration-999 @todo\\\\n  Scenario: Synthetic journey remains pending\\\\n    Given bookkeeping only\\\\n\\\"); git([\\\"add\\\",index,\\\"docs/iterations/999-native-bdd-handshake/plan.md\\\",\\\"acceptance-tests/features/native_bdd_handshake.feature\\\"]); git([\\\"-c\\\",\\\"user.name=Native Handshake\\\",\\\"-c\\\",\\\"user.email=native-handshake@example.invalid\\\",\\\"-c\\\",\\\"commit.gpgsign=false\\\",\\\"commit\\\",\\\"-m\\\",\\\"test: add synthetic native handshake fixture\\\"]); fs.mkdirSync(\\\".fabro/tmp/bdd\\\",{recursive:true}); fs.writeFileSync(\\\".fabro/tmp/bdd/preexisting-partial.log\\\",\\\"SIMULATED partial scratch before first choice; no check was run.\\\\n\\\"); fs.writeFileSync(\\\".fabro/tmp/bdd/source.json\\\",JSON.stringify({phase:\\\"fixture\\\",source_base:base,commit:git([\\\"rev-parse\\\",\\\"HEAD\\\"]),tree:git([\\\"rev-parse\\\",\\\"HEAD^{tree}\\\"]),note:\\\"Synthetic metadata and feature only; no product code.\\\"},null,2)+\\\"\\\\n\\\");'\"]\n    setup [shape=parallelogram, output_schema=\"routing\", script=\"node dev-tools/bdd/workflow.cjs setup {{ inputs.commit }}\"]\n    bootstrap [shape=parallelogram, script=\"npm ci --prefix acceptance-tests --no-audit\"]\n    inspect [shape=parallelogram, output_schema=\"routing\", script=\"node dev-tools/bdd/workflow.cjs inspect\"]\n    selector [shape=parallelogram, output_schema=\"routing\", script=\"node -e 'const fs=require(\\\"node:fs\\\"); const report=JSON.parse(fs.readFileSync(\\\".fabro/tmp/bdd-plan/pending.json\\\",\\\"utf8\\\")); const snapshot=JSON.parse(fs.readFileSync(\\\".fabro/tmp/bdd-plan/selection.json\\\",\\\"utf8\\\")); if(report.domain_complete||report.pending.length<1) throw new Error(\\\"scripted selector expected a pending domain choice\\\"); const item=report.pending[0]; const choice={plan:report.plan,feature:item.feature,scenario:item.scenario,reason:\\\"scripted model-free choice for native bookkeeping handshake\\\"}; fs.writeFileSync(\\\".fabro/tmp/bdd-plan/selector-input-\\\"+report.pending.length+\\\".json\\\",JSON.stringify({phase:\\\"selector_input\\\",commit:snapshot.commit,tree:snapshot.tree,pending_domain:report.pending.length,pending_journeys:report.pending_journeys.length,choice},null,2)+\\\"\\\\n\\\",{flag:\\\"wx\\\",mode:384}); process.stdout.write(JSON.stringify({context_updates:{\\\"response.selector\\\":JSON.stringify(choice)}}));'\"]\n    validate_pick [shape=parallelogram, stdin_source=\"response.selector\", output_schema=\"routing\", script=\"node dev-tools/bdd/workflow.cjs pick\"]\n    prepare_scenario [shape=parallelogram, script=\"set -eu; scratch=.fabro/tmp/bdd; archive_root=.fabro/tmp/bdd-plan/scenarios; for directory in .fabro .fabro/tmp .fabro/tmp/bdd-plan $archive_root; do if test -L $directory; then echo 'Cannot prepare scenario: archive path component must not be a symbolic link.' >&2; exit 1; fi; if test -e $directory && ! test -d $directory; then echo 'Cannot prepare scenario: archive path component is not a directory.' >&2; exit 1; fi; if ! test -e $directory; then mkdir $directory; fi; done; if test -L $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd must not be a symbolic link.' >&2; exit 1; fi; if test -e $scratch && ! test -d $scratch; then echo 'Cannot prepare scenario: .fabro/tmp/bdd is not a directory.' >&2; exit 1; fi; if test -d $scratch && find $scratch -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then sequence=1; while test -e $archive_root/$sequence || test -L $archive_root/$sequence; do sequence=$((sequence + 1)); done; mv $scratch $archive_root/$sequence; fi; mkdir -p $scratch\"]\n    simulated_finish [shape=parallelogram, script=\"node -e 'const fs=require(\\\"node:fs\\\"); const cp=require(\\\"node:child_process\\\"); const git=(args)=>cp.execFileSync(\\\"git\\\",args,{encoding:\\\"utf8\\\"}).trim(); const feature=\\\"acceptance-tests/features/native_bdd_handshake.feature\\\"; const beforeCommit=git([\\\"rev-parse\\\",\\\"HEAD\\\"]); const beforeTree=git([\\\"rev-parse\\\",\\\"HEAD^{tree}\\\"]); let text=fs.readFileSync(feature,\\\"utf8\\\"); const matches=text.match(/@wip/g)||[]; if(matches.length!==1) throw new Error(\\\"simulated finish requires exactly one WIP declaration\\\"); const selected=(text.match(/@iteration-999 @wip\\\\n  Scenario: ([^\\\\n]+)/)||[])[1]; if(!selected) throw new Error(\\\"cannot identify selected synthetic scenario\\\"); text=text.replace(\\\"@iteration-999 @wip\\\",\\\"@iteration-999\\\"); fs.writeFileSync(feature,text); fs.mkdirSync(\\\".fabro/tmp/bdd\\\",{recursive:true}); fs.writeFileSync(\\\".fabro/tmp/bdd/base\\\",beforeCommit+\\\"\\\\n\\\"); fs.writeFileSync(\\\".fabro/tmp/bdd/change.md\\\",\\\"SIMULATED FINISH ONLY for \\\"+selected+\\\". No product implementation occurred.\\\\n\\\"); fs.writeFileSync(\\\".fabro/tmp/bdd/result.md\\\",\\\"Bookkeeping-only tag transition; no scenario or app check was run.\\\\n\\\"); fs.writeFileSync(\\\".fabro/tmp/bdd/check.log\\\",\\\"SIMULATED: intentionally no check execution and no green claim.\\\\n\\\"); fs.writeFileSync(\\\".fabro/tmp/bdd/arbitrary-driver.log\\\",\\\"retained arbitrary log for archive proof\\\\n\\\"); git([\\\"add\\\",feature]); git([\\\"-c\\\",\\\"user.name=Native Handshake\\\",\\\"-c\\\",\\\"user.email=native-handshake@example.invalid\\\",\\\"-c\\\",\\\"commit.gpgsign=false\\\",\\\"commit\\\",\\\"-m\\\",\\\"test: simulate completed \\\"+selected]); fs.writeFileSync(\\\".fabro/tmp/bdd/mutation.json\\\",JSON.stringify({phase:\\\"simulated_finish\\\",scenario:selected,before_commit:beforeCommit,before_tree:beforeTree,after_commit:git([\\\"rev-parse\\\",\\\"HEAD\\\"]),after_tree:git([\\\"rev-parse\\\",\\\"HEAD^{tree}\\\"]),mutation:\\\"Removed only the selected synthetic @wip tag; no product implementation or check.\\\"},null,2)+\\\"\\\\n\\\");'\"]\n    final_evidence [shape=parallelogram, script=\"node -e 'const fs=require(\\\"node:fs\\\"); const cp=require(\\\"node:child_process\\\"); const crypto=require(\\\"node:crypto\\\"); const base=\\\"9dc0146e7e8a69246eb83fc61ae2737e8663c038\\\"; const allowed=[\\\"docs/iterations/README.md\\\",\\\"docs/iterations/999-native-bdd-handshake/plan.md\\\",\\\"acceptance-tests/features/native_bdd_handshake.feature\\\"]; const git=(args,options={})=>cp.execFileSync(\\\"git\\\",args,{encoding:\\\"utf8\\\",...options}).trim(); const entries=(rev)=>{const raw=cp.execFileSync(\\\"git\\\",[\\\"ls-tree\\\",\\\"-rz\\\",\\\"-r\\\",\\\"--full-tree\\\",rev],{encoding:\\\"utf8\\\"}); return raw.split(\\\"\\\\0\\\").filter(Boolean).map(record=>{const match=/^(\\\\d+) ([^ ]+) ([0-9a-f]+)\\\\t([\\\\s\\\\S]+)$/.exec(record); if(!match) throw new Error(\\\"cannot parse tree entry\\\"); return {mode:match[1],type:match[2],object:match[3],path:match[4]};});}; const map=(items)=>new Map(items.map(item=>[item.path,item])); const baseItems=entries(base); const currentItems=entries(\\\"HEAD\\\"); const baseMap=map(baseItems); const currentMap=map(currentItems); const allowedSet=new Set(allowed); for(const path of new Set([...baseMap.keys(),...currentMap.keys()])){if(allowedSet.has(path)) continue; if(JSON.stringify(baseMap.get(path))!==JSON.stringify(currentMap.get(path))) throw new Error(\\\"unexpected tracked path change: \\\"+path);} const marker=\\\"\\\\n\\\\nThe former 065–067 plans\\\"; const baseReadme=cp.execFileSync(\\\"git\\\",[\\\"show\\\",base+\\\":docs/iterations/README.md\\\"],{encoding:\\\"utf8\\\"}); if(!baseReadme.includes(marker)) throw new Error(\\\"base iteration marker is missing\\\"); const expected=new Map(); const expectedReadme=baseReadme.replace(marker,\\\"\\\\n| 999 | 2026-10-21 | implementing | Synthetic native BDD handshake | [plan](999-native-bdd-handshake/plan.md) |\\\"+marker); const expectedPlan=\\\"# Synthetic native BDD handshake\\\\n\\\\nBookkeeping-only fixture. It claims no application behaviour or passing check.\\\\n\\\"; const expectedFeature=\\\"Feature: Synthetic native BDD handshake\\\\n\\\\n  @iteration-999\\\\n  Scenario: Synthetic foundation choice\\\\n    Given bookkeeping only\\\\n\\\\n  @iteration-999\\\\n  Scenario: Synthetic constraint choice\\\\n    Given bookkeeping only\\\\n\\\\n  @journey @iteration-999 @todo\\\\n  Scenario: Synthetic journey remains pending\\\\n    Given bookkeeping only\\\\n\\\"; const blob=(text)=>git([\\\"hash-object\\\",\\\"--stdin\\\"],{input:text}); expected.set(allowed[0],{mode:baseMap.get(allowed[0]).mode,type:\\\"blob\\\",object:blob(expectedReadme),path:allowed[0]}); expected.set(allowed[1],{mode:\\\"100644\\\",type:\\\"blob\\\",object:blob(expectedPlan),path:allowed[1]}); expected.set(allowed[2],{mode:\\\"100644\\\",type:\\\"blob\\\",object:blob(expectedFeature),path:allowed[2]}); for(const path of allowed){if(JSON.stringify(currentMap.get(path))!==JSON.stringify(expected.get(path))) throw new Error(\\\"allowed path bytes or mode differ from frozen expectation: \\\"+path);} const changed=cp.execFileSync(\\\"git\\\",[\\\"diff\\\",\\\"--name-only\\\",\\\"-z\\\",base+\\\"..HEAD\\\"],{encoding:\\\"utf8\\\"}).split(\\\"\\\\0\\\").filter(Boolean).sort(); if(JSON.stringify(changed)!==JSON.stringify([...allowed].sort())) throw new Error(\\\"tracked diff path set differs from exact allowlist\\\"); const status=cp.execFileSync(\\\"git\\\",[\\\"status\\\",\\\"--porcelain=v1\\\",\\\"-z\\\",\\\"--untracked-files=all\\\"]); if(status.length) throw new Error(\\\"final worktree contains tracked, staged, or nonignored untracked changes\\\"); const head=git([\\\"rev-parse\\\",\\\"HEAD\\\"]); const tree=git([\\\"rev-parse\\\",\\\"HEAD^{tree}\\\"]); const index=git([\\\"write-tree\\\"]); if(index!==tree) throw new Error(\\\"final index tree differs from HEAD tree\\\"); const indexRaw=cp.execFileSync(\\\"git\\\",[\\\"ls-files\\\",\\\"-s\\\",\\\"-z\\\"],{encoding:\\\"utf8\\\"}); const indexItems=indexRaw.split(\\\"\\\\0\\\").filter(Boolean).map(record=>{const match=/^(\\\\d+) ([0-9a-f]+) (\\\\d)\\\\t([\\\\s\\\\S]+)$/.exec(record); if(!match||match[3]!==\\\"0\\\") throw new Error(\\\"final index contains an invalid or unmerged entry\\\"); return {mode:match[1],object:match[2],path:match[4]};}); const expectedIndex=currentItems.map(item=>({mode:item.mode,object:item.object,path:item.path})); if(JSON.stringify(indexItems)!==JSON.stringify(expectedIndex)) throw new Error(\\\"final index entries differ from HEAD tree\\\"); const workingMismatches=[]; const workingEntries=currentItems.map(item=>{const result={path:item.path,expected_type:item.type,expected_mode:item.mode,expected_blob:item.object}; const issues=[]; try{const stat=fs.lstatSync(item.path); result.lstat_mode=(stat.mode&4095).toString(8); let bytes; if(stat.isSymbolicLink()){result.actual_type=\\\"symlink\\\"; result.normalized_git_mode=\\\"120000\\\"; bytes=fs.readlinkSync(item.path,{encoding:\\\"buffer\\\"});}else if(stat.isFile()){result.actual_type=\\\"regular\\\"; result.normalized_git_mode=(stat.mode&73)?\\\"100755\\\":\\\"100644\\\"; bytes=fs.readFileSync(item.path);}else{result.actual_type=\\\"other\\\"; issues.push(\\\"working path is neither a regular file nor a symbolic link\\\");} if(item.type!==\\\"blob\\\") issues.push(\\\"tree entry is not a blob\\\"); const expectedActualType=item.mode===\\\"120000\\\"?\\\"symlink\\\":\\\"regular\\\"; if(result.actual_type!==expectedActualType) issues.push(\\\"working file type differs from tree mode\\\"); if(result.normalized_git_mode!==item.mode) issues.push(\\\"normalized working mode differs from tree mode\\\"); if(bytes){result.bytes=bytes.length; result.sha256=crypto.createHash(\\\"sha256\\\").update(bytes).digest(\\\"hex\\\"); result.blob_oid=crypto.createHash(\\\"sha1\\\").update(Buffer.from(\\\"blob \\\"+bytes.length+\\\"\\\\0\\\")).update(bytes).digest(\\\"hex\\\"); if(result.blob_oid!==item.object) issues.push(\\\"actual working bytes differ from tree blob\\\");}}catch(error){issues.push(\\\"lstat/read failed: \\\"+error.message);} result.issues=issues; if(issues.length) workingMismatches.push({path:item.path,issues}); return result;}); const commits=git([\\\"rev-list\\\",\\\"--reverse\\\",base+\\\"..HEAD\\\"]).split(/\\\\n/).filter(Boolean).map(commit=>{const fields=cp.execFileSync(\\\"git\\\",[\\\"show\\\",\\\"-s\\\",\\\"--format=%H%x00%T%x00%P%x00%s\\\",commit],{encoding:\\\"utf8\\\"}).trimEnd().split(\\\"\\\\0\\\"); return {commit:fields[0],tree:fields[1],parents:fields[2]?fields[2].split(\\\" \\\"):[],subject:fields[3]};}); const evidence=\\\".fabro/tmp/bdd-plan/final-evidence\\\"; fs.mkdirSync(evidence); const write=(name,value)=>fs.writeFileSync(evidence+\\\"/\\\"+name,typeof value===\\\"string\\\"?value:JSON.stringify(value,null,2)+\\\"\\\\n\\\",{flag:\\\"wx\\\",mode:384}); write(\\\"original-tracked-fingerprint.json\\\",{base,tree:git([\\\"rev-parse\\\",base+\\\"^{tree}\\\"]),entries:baseItems}); write(\\\"working-tracked-fingerprint.json\\\",{head,tree,entries:workingEntries,mismatches:workingMismatches}); write(\\\"working-mismatches.json\\\",{count:workingMismatches.length,mismatches:workingMismatches}); write(\\\"git-history.json\\\",{range:base+\\\"..\\\"+head,commits}); write(\\\"allowed-paths.json\\\",{allowed,expected:[...expected.values()],actual:allowed.map(path=>currentMap.get(path))}); write(\\\"allowed-diff.patch\\\",cp.execFileSync(\\\"git\\\",[\\\"diff\\\",\\\"--binary\\\",base+\\\"..HEAD\\\",\\\"--\\\",...allowed],{encoding:\\\"utf8\\\"})); write(\\\"summary.json\\\",{phase:\\\"final_evidence_before_terminal\\\",base,head,tree,index,status_porcelain_bytes:status.length,tracked_entries:currentItems.length,changed_paths:changed,working_mismatch_count:workingMismatches.length,verified_original_other_tracked_git_objects_and_modes:true,verified_actual_working_tracked_bytes_types_and_modes:workingMismatches.length===0,verified_frozen_allowed_bytes_and_modes:true,verified_index_matches_head:true,verified_no_nonignored_files:true,expected_later_checkpoint_note:\\\"A post-collector native empty checkpoint may move only the commit SHA; use native events, never execute in a stopped container.\\\",allowed_content_sha256:{readme:crypto.createHash(\\\"sha256\\\").update(expectedReadme).digest(\\\"hex\\\"),plan:crypto.createHash(\\\"sha256\\\").update(expectedPlan).digest(\\\"hex\\\"),feature:crypto.createHash(\\\"sha256\\\").update(expectedFeature).digest(\\\"hex\\\")}}); if(workingMismatches.length) throw new Error(\\\"actual working-tree fingerprint differs from current tree at \\\"+workingMismatches.length+\\\" path(s)\\\"); process.stdout.write(\\\"Final source evidence captured before terminal shutdown.\\\\n\\\");'\"]\n\n    start -> fixture\n    fixture -> setup [condition=\"outcome=succeeded\"]\n    fixture -> failed_stop\n    setup -> bootstrap [condition=\"outcome=succeeded && preferred_label=bootstrap\"]\n    setup -> failed_stop\n    bootstrap -> inspect [condition=\"outcome=succeeded\"]\n    bootstrap -> failed_stop\n    inspect -> selector [condition=\"outcome=succeeded && preferred_label=choose\"]\n    inspect -> final_evidence [condition=\"outcome=succeeded && preferred_label=done\"]\n    inspect -> failed_stop\n    selector -> validate_pick [condition=\"outcome=succeeded\"]\n    selector -> failed_stop\n    validate_pick -> prepare_scenario [condition=\"outcome=succeeded && preferred_label=implement\"]\n    validate_pick -> failed_stop\n    prepare_scenario -> simulated_finish [condition=\"outcome=succeeded\"]\n    prepare_scenario -> failed_stop\n    simulated_finish -> inspect [condition=\"outcome=succeeded\"]\n    simulated_finish -> failed_stop\n    final_evidence -> done [condition=\"outcome=succeeded\"]\n    final_evidence -> failed_stop\n}\n",
+    "workflow_slug": "handshake.workflow",
+    "source_directory": "/home/matt/.bb/thread-storage/thr_ra2ff7hjn2/implementation/native-mechanics/source",
+    "labels": {
+      "purpose": "bdd-native-bookkeeping-handshake-thr-ra2ff7hjn2-9dc0146e7",
+      "approved-source": "9dc0146e7e8a69246eb83fc61ae2737e8663c038"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "4f912ab7bc32b62ee862d924b1eab1659028565338de4af364f41938bd0ccd0f",
+    "definition_blob": "24df2c0f8417527a36d71fc2ddf3b7b8d9e5a99c2dd3bc48c2aab2878fa0e53d",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "integration/bdd-real-use-20261020",
+      "sha": "9dc0146e7e8a69246eb83fc61ae2737e8663c038",
+      "dirty": "clean"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M5DZXWBC22RSYH5B3222ANCK",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-10-21T01:06:37.254924445Z",
+  "last_event_at": "2026-10-21T01:06:40.951880788Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "ghcr.io/mattwynne/memba-fabro-dev:sha-577b5c4a52d775c44c5474e999ab146cb528813d-run-38351057278-1",
+      "runtime": {
+        "id": "100affa734e89c9fa5487de7bbe3e8a6aa941f49154e90002a88733274a8029f",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "integration/bdd-real-use-20261020",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
