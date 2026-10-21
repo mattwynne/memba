@@ -7,6 +7,10 @@ source gate or a live model rehearsal. It does not change `fabro deliver`.
 
 ## Assembled loop
 
+- Setup rejects any run-input override whose value is not exactly `HEAD`, then
+  the graph runs the repository's ordinary `npm ci --prefix acceptance-tests
+  --no-audit` once before inspection. This supplies the Gherkin parser in a
+  fresh managed clone without starting the app or running tests.
 - `node dev-tools/bdd/workflow.cjs inspect` calls the public
   `bin/dev bdd pending HEAD --json` command, records the resolved full SHA and
   complete root-tree OID, and routes either to a fresh selector or domain-loop
@@ -16,9 +20,12 @@ source gate or a live model rehearsal. It does not change `fabro deliver`.
   commit-only selector prompt and fixed cases. Every loop visit uses
   `fidelity="truncate"`, no thread ID and no output schema. Stock Fabro adds its
   minimal goal/run-ID preamble; the canonical task body remains unchanged and
-  receives only the literal run input `HEAD`.
+  receives only the literal run input `HEAD`. Pinned stock Fabro shell-quotes
+  the unquoted command-script substitution as one argument, allowing setup to
+  reject a CLI override before the selector runs.
 - Native `response.selector` is passed by `stdin_source` to deterministic
-  validation. That command captures the current full SHA, requires a clean
+  validation. A valid selector `error` response stops with its reason. A choice
+  command captures the current full SHA, requires a clean
   worktree and the same complete tree, reruns public `pending` at that SHA,
   resolves exactly one eligible declaration, then calls public
   `bin/dev bdd pick REF --from CURRENT_SHA` in the same command node. Empty
@@ -35,6 +42,9 @@ source gate or a live model rehearsal. It does not change `fabro deliver`.
   complete notes, bases, results, check logs and arbitrary logs are retained.
   A symlinked scratch path fails clearly rather than reusing old evidence. The
   final scenario remains in active scratch when the domain loop finishes.
+- The tracked root `.gitignore` narrowly owns `/.fabro/tmp/` and
+  `/.fabro/blobs/`. Setup verifies those exact declarations and never changes
+  `.git/info/exclude`, so public clean-state checks do not hide other files.
 - The imported graph owns the 1800-second full `bin/dev check`. Failure returns
   to the continuing navigator. Success crosses its conditional `check ->
   checked` edge and unconditional imported exit boundary before outer inspection
