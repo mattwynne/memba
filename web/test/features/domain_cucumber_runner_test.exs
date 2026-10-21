@@ -155,14 +155,19 @@ defmodule Memba.DomainCucumberRunnerTest do
             | first  |
             | second |
       """)
+      |> Map.put(:file, "test/fixtures/domain_cucumber/outline_wip.feature")
 
     assert {:ok, selected_rows} =
              DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
 
+    assert length(selected_rows) == 2
+
     assert Enum.map(selected_rows, & &1.scenario.name) == [
-             "Selected outline for first",
-             "Selected outline for second"
+             "Selected outline for <value> (row 1)",
+             "Selected outline for <value> (row 2)"
            ]
+
+    assert scenario_step_texts(selected_rows) == ["the value first", "the value second"]
   end
 
   test "one locally WIP Examples declaration contains all and only its expanded rows" do
@@ -182,14 +187,21 @@ defmodule Memba.DomainCucumberRunnerTest do
             | value |
             | third |
       """)
+      |> Map.put(:file, "test/fixtures/domain_cucumber/examples_wip.feature")
 
     assert {:ok, selected_rows} =
              DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
 
+    assert length(selected_rows) == 2
+
     assert Enum.map(selected_rows, & &1.scenario.name) == [
-             "Outline with independently selectable examples for first",
-             "Outline with independently selectable examples for second"
+             "Outline with independently selectable examples for <value> " <>
+               "(selected declaration: row 1)",
+             "Outline with independently selectable examples for <value> " <>
+               "(selected declaration: row 2)"
            ]
+
+    assert scenario_step_texts(selected_rows) == ["the value first", "the value second"]
   end
 
   test "outline-level WIP remains one declaration across separate Examples blocks" do
@@ -208,14 +220,19 @@ defmodule Memba.DomainCucumberRunnerTest do
             | value  |
             | second |
       """)
+      |> Map.put(:file, "test/fixtures/domain_cucumber/inherited_outline_wip.feature")
 
     assert {:ok, selected_rows} =
              DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
 
+    assert length(selected_rows) == 2
+
     assert Enum.map(selected_rows, & &1.scenario.name) == [
-             "One selected outline for first",
-             "One selected outline for second"
+             "One selected outline for <value> (first group: row 1)",
+             "One selected outline for <value> (second group: row 1)"
            ]
+
+    assert scenario_step_texts(selected_rows) == ["the value first", "the value second"]
   end
 
   test "separately WIP Examples blocks are separate declarations even on one outline" do
@@ -257,14 +274,19 @@ defmodule Memba.DomainCucumberRunnerTest do
             | same  |
             | same  |
       """)
+      |> Map.put(:file, "test/fixtures/domain_cucumber/repeated_wip_rows.feature")
 
     assert {:ok, selected_rows} =
              DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
 
+    assert length(selected_rows) == 2
+
     assert Enum.map(selected_rows, & &1.scenario.name) == [
-             "Repeated value same",
-             "Repeated value same"
+             "Repeated value <value> (row 1)",
+             "Repeated value <value> (row 2)"
            ]
+
+    assert scenario_step_texts(selected_rows) == ["the value same", "the value same"]
   end
 
   test "inherited feature WIP counts logical scenarios and outlines, not expanded rows" do
@@ -332,6 +354,7 @@ defmodule Memba.DomainCucumberRunnerTest do
             | value |
             | now   |
       """)
+      |> Map.put(:file, "test/fixtures/domain_cucumber/filtered_examples_wip.feature")
 
     assert {:error, message} =
              DomainCucumberRunner.one_wip_scenario(discovery: %{features: [feature]})
@@ -368,5 +391,9 @@ defmodule Memba.DomainCucumberRunnerTest do
       assert Enum.all?(tags, &(&1 not in ["@journey", "@todo"])),
              "Expected #{feature.name} / #{scenario.name} to be a domain example; got #{inspect(tags)}"
     end)
+  end
+
+  defp scenario_step_texts(selected_rows) do
+    Enum.map(selected_rows, fn %{scenario: %{steps: [step | _]}} -> step.text end)
   end
 end
