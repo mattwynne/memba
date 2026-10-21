@@ -6,6 +6,13 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 default_postgres_port_value=15432
 
+# BDD repository tooling is intentionally available without starting the app,
+# Postgres, or a nested devenv shell.
+if [ "${1:-}" = "bdd" ]; then
+  shift
+  exec node "$repo_root/dev-tools/bdd/cli.cjs" "$@"
+fi
+
 devenv_context_unset_args=(
   -u DEVENV_DOTFILE
   -u DEVENV_PROFILE
@@ -768,7 +775,12 @@ precommit() {
 
 _precommit() {
   package_mix test || return $?
-  (cd "$repo_root/web" && local_test_email_env mix precommit)
+  (cd "$repo_root/web" && local_test_email_env mix precommit) || return $?
+  (
+    cd "$repo_root/dev-tests"
+    NODE_PATH="$repo_root/acceptance-tests/node_modules" \
+      "$repo_root/acceptance-tests/node_modules/.bin/cucumber-js" --config cucumber.js
+  )
 }
 
 # @cmd Install local development and test dependencies
@@ -911,6 +923,20 @@ _dev_test() {
   start_postgres
   _setup
   (cd "$repo_root/web" && local_test_email_env mix test "$@")
+}
+
+dev_test_wip() {
+  if [ "$#" -ne 0 ]; then
+    echo "Usage: $0 test:wip" >&2
+    return 2
+  fi
+
+  if (export MEMBA_WIP_TEST=1; dev_test test/features/domain_cucumber_wip_test.exs --trace); then
+    echo "This scenario now passes. Remove its @wip tag." >&2
+    return 1
+  else
+    return $?
+  fi
 }
 
 check_tracked_repo_file_writability() {
@@ -1292,6 +1318,12 @@ smoke_test() {
   export MEMBA_SMOKE_POLL_TIMEOUT_MS="${MEMBA_SMOKE_POLL_TIMEOUT_MS:-800000}"
 
   (cd "$repo_root/smoke-tests" && npm test -- "$@")
+}
+
+# @cmd Inspect or activate pending BDD declarations without starting the app
+# @arg args~ Arguments for `pending` or `pick`
+bdd() {
+  node "$repo_root/dev-tools/bdd/cli.cjs" "$@"
 }
 
 # @cmd Manage iteration lifecycle status
@@ -2218,6 +2250,11 @@ case "${1:-}" in
   test)
     shift
     dev_test "$@"
+    exit
+    ;;
+  test:wip)
+    shift
+    dev_test_wip "$@"
     exit
     ;;
 esac
