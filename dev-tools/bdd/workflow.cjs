@@ -33,23 +33,35 @@ function scratchPaths(root) {
 function writeAtomic(target, contents) {
   fs.mkdirSync(path.dirname(target), {recursive: true});
   const temporary = `${target}.tmp-${process.pid}`;
+  let created = false;
+  let descriptor;
   try {
-    fs.writeFileSync(temporary, contents);
+    descriptor = fs.openSync(
+      temporary,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL,
+      0o600
+    );
+    created = true;
+    fs.writeFileSync(descriptor, contents);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
     fs.renameSync(temporary, target);
   } finally {
-    try { fs.unlinkSync(temporary); } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    if (created) {
+      try { fs.unlinkSync(temporary); } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
     }
   }
 }
 
-function ensureScratchIgnored(root) {
-  const excludeName = runGit(root, ["rev-parse", "--git-path", "info/exclude"]);
-  const exclude = path.isAbsolute(excludeName) ? excludeName : path.join(root, excludeName);
-  fs.mkdirSync(path.dirname(exclude), {recursive: true});
-  const current = fs.existsSync(exclude) ? fs.readFileSync(exclude, "utf8") : "";
-  if (!current.split(/\r?\n/).includes("/.fabro/tmp/")) {
-    fs.appendFileSync(exclude, `${current && !current.endsWith("\n") ? "\n" : ""}/.fabro/tmp/\n`);
+function assertDeclaredScratchIgnored(root) {
+  const declared = new Set(fs.readFileSync(path.join(root, ".gitignore"), "utf8").split(/\r?\n/));
+  const required = ["/.fabro/tmp/", "/.fabro/blobs/"];
+  const missing = required.filter(pattern => !declared.has(pattern));
+  if (missing.length) {
+    throw new Error(`repository .gitignore must declare owned runtime paths: ${required.join(" and ")}`);
   }
 }
 
@@ -82,16 +94,19 @@ function readJson(target, label) {
   return value;
 }
 
-function setup(root) {
-  ensureScratchIgnored(root);
+function setup(root, binding) {
+  if (binding !== "HEAD") {
+    throw new Error(`selector commit input must be exactly HEAD, got ${JSON.stringify(binding)}`);
+  }
+  assertDeclaredScratchIgnored(root);
   assertClean(root);
   fs.mkdirSync(scratchPaths(root).directory, {recursive: true});
-  console.log(JSON.stringify({preferred_next_label: "inspect"}));
+  console.log(JSON.stringify({preferred_next_label: "bootstrap"}));
 }
 
 function inspect(root) {
   const files = scratchPaths(root);
-  ensureScratchIgnored(root);
+  assertDeclaredScratchIgnored(root);
   assertClean(root);
   try { fs.unlinkSync(files.selection); } catch (error) {
     if (error.code !== "ENOENT") throw error;
@@ -132,16 +147,25 @@ function selectorResponse(source) {
   const actual = Object.keys(value).sort();
   const writtenKeys = [...source.matchAll(/"((?:\\.|[^"\\])*)"\s*:/g)]
     .map(match => JSON.parse(`"${match[1]}"`));
-  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
-    throw new Error(`selector response must contain exactly ${expected.join(", ")}`);
-  }
   if (writtenKeys.length !== actual.length || new Set(writtenKeys).size !== writtenKeys.length) {
     throw new Error("selector response contains duplicate or nested fields");
   }
-  for (const field of expected) {
+  if (actual.length === 1 && actual[0] === "error") {
+    if (typeof value.error !== "string" || !value.error.trim()) {
+      throw new Error("selector response error must be a non-empty string");
+    }
+    return value;
+  }
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw new Error(`selector response must contain exactly ${expected.join(", ")}, or error`);
+  }
+  for (const field of ["feature", "plan", "scenario"]) {
     if (typeof value[field] !== "string" || !value[field].trim() || value[field] !== value[field].trim()) {
       throw new Error(`selector response ${field} must be a non-empty exact string`);
     }
+  }
+  if (typeof value.reason !== "string" || !value.reason.trim()) {
+    throw new Error("selector response reason must be a non-empty string");
   }
   return value;
 }
@@ -149,6 +173,9 @@ function selectorResponse(source) {
 function pick(root, source) {
   const files = scratchPaths(root);
   const answer = selectorResponse(source);
+  if (Object.hasOwn(answer, "error")) {
+    throw new Error(`selector reported error: ${answer.error.trim()}`);
+  }
   const snapshot = readJson(files.selection, "preselection snapshot");
   if (!/^[0-9a-f]{40}$/.test(snapshot.commit) || !/^[0-9a-f]{40}$/.test(snapshot.tree)) {
     throw new Error("preselection snapshot has invalid Git object identities");
@@ -195,11 +222,10 @@ function pick(root, source) {
 
 function main(args, stdin = fs.readFileSync(0, "utf8")) {
   const root = repositoryRoot();
-  if (args.length !== 1) throw new Error("Usage: workflow.cjs setup|inspect|pick");
-  if (args[0] === "setup") return setup(root);
-  if (args[0] === "inspect") return inspect(root);
-  if (args[0] === "pick") return pick(root, stdin);
-  throw new Error("Usage: workflow.cjs setup|inspect|pick");
+  if (args[0] === "setup" && args.length === 2) return setup(root, args[1]);
+  if (args[0] === "inspect" && args.length === 1) return inspect(root);
+  if (args[0] === "pick" && args.length === 1) return pick(root, stdin);
+  throw new Error("Usage: workflow.cjs setup HEAD | inspect | pick");
 }
 
 if (require.main === module) {
@@ -211,4 +237,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = {inspect, pick, selectorResponse, setup};
+module.exports = {inspect, pick, selectorResponse, setup, writeAtomic};

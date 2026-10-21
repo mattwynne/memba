@@ -50,6 +50,21 @@ Feature: Find pending BDD work
       And stdout includes "acceptance-tests/features/example.feature:4"
       And stdout does not include "Iteration merged"
 
+    Scenario: Future-only TODO is allowed while the current domain loop is complete
+      Given a committed project with this feature:
+        """
+        @iteration-069
+        Feature: Future work
+          @todo
+          Scenario: Wait for the future iteration
+            Given a later plan
+        """
+      When I run "dev bdd pending --json"
+      Then the command succeeds
+      And stdout includes "\"domain_complete\":true"
+      And stdout includes "\"pending\":[]"
+      And stdout does not include "Wait for the future iteration"
+
     Scenario: A requested commit is resolved without reading a newer HEAD
       Given a committed project with this feature:
         """
@@ -218,6 +233,25 @@ Feature: Find pending BDD work
       When I run "dev bdd pending --json"
       Then the command fails without stdout
       And stderr includes "Invalid iteration row"
+
+    Scenario: A duplicate iteration index row is rejected
+      Given a committed project with this feature:
+        """
+        @iteration-068
+        Feature: Complete work
+          Scenario: Complete example
+            Given something
+        """
+      And the iteration index is replaced and committed with:
+        """
+        | # | Date | Status | Title | Plan |
+        | --- | --- | --- | --- | --- |
+        | 068 | today | implementing | Current | [plan](068-current/plan.md) |
+        | 068 | today | ready | Duplicate | [plan](068-current/plan.md) |
+        """
+      When I run "dev bdd pending --json"
+      Then the command fails without stdout
+      And stderr includes "Duplicate iteration 068"
 
     Scenario: An iteration plan cannot escape the iterations directory
       Given a committed project with this feature:
