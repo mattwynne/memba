@@ -1,8 +1,9 @@
 # Operating the BDD plan implementation workflow
 
-> **Assembled, not runtime-proven:** ordinary tests cover the deterministic
-> mechanics and graph boundaries, but the exact source still needs its managed
-> gate and a separately approved rehearsal. Do not launch without that approval.
+> **Upgraded runtime not yet qualified:** this source targets matching Fabro
+> 0.389 CLI and server versions. Require the real native editing/ownership smoke,
+> exact-source managed Docker gate and rehearsal approval before a business run.
+> Passing 0.316 checks or a workstation test run does not meet those conditions.
 
 This opt-in workflow implements the domain scenarios in one active plan. It does
 not implement journeys, refactor or review the result, publish it, or mark the
@@ -64,16 +65,27 @@ input is the feature-and-line reference above; selector JSON and implementation
 paths are not a human interface.
 
 For a picked Outline or Examples block, all eligible rows belong to one
-selection and run as separate tests. The updated runner's managed CLI proof is
-still pending; do not treat the new code as validated.
+selection and run as separate tests. Managed CLI proof exists for the earlier
+0.316 source; the rebased code still requires an exact-source managed gate.
 
 ## Start the workflow after approval
 
-The stock-native launch command is:
+Check the installed client and actual target server first:
 
 ```bash
-fabro run .fabro/workflows/bdd-plan-implementation/workflow.toml
+fabro --no-upgrade-check version --server https://fabro.home.wynne.family --json
 ```
+
+Both must be the qualified 0.389 version; an upgraded local CLI alone is not a
+server upgrade. Then use the stock-native entry with the catalog selected:
+
+```bash
+fabro run .fabro/workflows/bdd-plan-implementation/workflow.toml --environment memba-dev
+```
+
+The TOML points to `../bdd-plan-implementation.fabro`, whose imports and prompt
+files are descendants of the same graph directory. Do not copy the graph into
+this directory: 0.389's sibling-import prompt lookup then fails validation.
 
 Do not add an input flag. The checked-in run input is the literal Git reference
 `HEAD`; the selector receives only that commit reference in its canonical task
@@ -134,6 +146,11 @@ stage artifacts can be copied to an empty private directory when needed:
 ```bash
 fabro artifact cp RUN_ID DESTINATION --tree --no-upgrade-check
 ```
+
+Fabro 0.389 keeps durable execution state and CAS payloads rather than creating
+new `fabro/meta/` branches. Confirm the upgraded server's artifact/workspace
+export behavior before treating a copied directory as a complete snapshot; the
+new release's static validator does not establish runtime capture behavior.
 
 The workflow archives each previous scenario's entire scratch directory under
 `.fabro/tmp/bdd-plan/scenarios/<n>/` before creating fresh `.fabro/tmp/bdd/`.

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / 'bdd-scenario-implementation/eval'))
@@ -57,7 +58,9 @@ def prepare(out, runs):
     graph += '\n'.join(f' {node} [shape=box, backend="api", fidelity="full", thread_id="{node}", prompt="@prompt.md"]' for node in nodes)
     graph += '\n' + '\n'.join(f' {a} -> {b}' for a, b in zip(['start'] + nodes, nodes + ['done'])) + '\n}\n'
     (out / 'workflow.fabro').write_text(graph)
-    config = (HERE.parents[1] / 'workflow.toml').read_text().replace(
+    source_config = (HERE.parents[1] / 'workflow.toml').read_text()
+    source_graph = tomllib.loads(source_config)['workflow']['graph']
+    config = source_config.replace(f'graph = "{source_graph}"', 'graph = "workflow.fabro"', 1).replace(
         'commit = "HEAD"', f'commit = "{case["commit"]}"')
     (out / 'workflow.toml').write_text(config)
     manifest = {'requested': runs, 'case': case,
@@ -89,7 +92,7 @@ def run(args):
         return (out / name).read_text()
 
     cli('validation.log', 'validate', str(out / 'workflow.toml'))
-    launch = json.loads(cli('launch.json', 'run', str(out / 'workflow.toml'), '--detach', '--json',
+    launch = json.loads(cli('launch.json', 'run', str(out / 'workflow.toml'), "--environment", "memba-dev", '--detach', '--json',
                             '--label', f'commit-selection={out.name}'))
     run_id = launch['run_id']  # Unknown acknowledgement stops; never launch again.
     print(f'{run_id}: {args.runs} fresh decisions; only task input is commit {head}', flush=True)
