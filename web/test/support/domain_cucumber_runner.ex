@@ -3,6 +3,7 @@ defmodule Memba.DomainCucumberRunner do
 
   alias Cucumber.Discovery.DiscoveryResult
   alias Cucumber.Runtime
+  alias Gherkin.{Scenario, ScenarioOutline}
 
   def selected_scenarios(opts \\ []) do
     discovery = Keyword.get_lazy(opts, :discovery, &discover/0)
@@ -29,20 +30,24 @@ defmodule Memba.DomainCucumberRunner do
   end
 
   def one_wip_scenario(opts \\ []) do
-    case wip_scenarios(opts) do
-      [selected_scenario] ->
-        {:ok, selected_scenario}
+    discovery = Keyword.get_lazy(opts, :discovery, &discover/0)
+    tag_expression = Keyword.get_lazy(opts, :tag_expression, &configured_tag_expression/0)
+    excluded_tags = excluded_tags(tag_expression)
+
+    declaration_units =
+      Enum.flat_map(discovery.features, &wip_declaration_units(&1, excluded_tags))
+
+    case declaration_units do
+      [%{rows: selected_rows}] ->
+        {:ok, selected_rows}
 
       [] ->
         {:error, "Expected exactly one domain/application scenario tagged @wip, but found none."}
 
-      selected_scenarios ->
-        descriptions =
-          Enum.map_join(selected_scenarios, "\n", fn %{feature: feature, scenario: scenario} ->
-            "  - #{feature.file}: #{scenario.name}"
-          end)
+      declaration_units ->
+        descriptions = Enum.map_join(declaration_units, "\n", &declaration_description/1)
 
-        count = length(selected_scenarios)
+        count = length(declaration_units)
 
         {:error,
          "Expected exactly one domain/application scenario tagged @wip, " <>
@@ -198,6 +203,88 @@ defmodule Memba.DomainCucumberRunner do
     |> Kernel.++(feature.tags)
     |> Kernel.++(scenario.tags)
     |> Enum.map(&String.trim_leading(&1, "@"))
+  end
+
+  defp wip_declaration_units(feature, excluded_tags) do
+    top_level_units = declaration_units(feature.scenarios, feature, nil, excluded_tags)
+
+    rule_units =
+      feature
+      |> Map.get(:rules, [])
+      |> Enum.flat_map(fn rule ->
+        declaration_units(rule.scenarios, feature, rule, excluded_tags)
+      end)
+
+    top_level_units ++ rule_units
+  end
+
+  defp declaration_units(scenarios, feature, rule, excluded_tags) do
+    Enum.flat_map(scenarios, fn
+      %Scenario{} = scenario ->
+        tags = declaration_tags(feature, rule, scenario)
+
+        if tagged?(tags, "wip") do
+          declaration_unit(feature, rule, scenario, [scenario], excluded_tags)
+        else
+          []
+        end
+
+      %ScenarioOutline{} = outline ->
+        outline_tags = declaration_tags(feature, rule, outline)
+
+        if tagged?(outline_tags, "wip") do
+          declaration_unit(feature, rule, outline, [outline], excluded_tags)
+        else
+          outline.examples
+          |> Enum.filter(&tagged?(&1.tags, "wip"))
+          |> Enum.flat_map(fn examples ->
+            selected_outline = %{outline | examples: [examples]}
+            declaration_unit(feature, rule, examples, [selected_outline], excluded_tags)
+          end)
+        end
+    end)
+  end
+
+  defp declaration_unit(feature, rule, declaration, scenarios, excluded_tags) do
+    rows = eligible_rows(feature, rule, scenarios, excluded_tags)
+
+    case rows do
+      [] -> []
+      rows -> [%{feature: feature, declaration: declaration, rows: rows}]
+    end
+  end
+
+  defp declaration_description(%{
+         feature: feature,
+         rows: [%{scenario: scenario} | _remaining_rows]
+       }) do
+    "  - #{feature.file}: #{scenario.name}"
+  end
+
+  defp eligible_rows(feature, rule, scenarios, excluded_tags) do
+    scenarios
+    |> Cucumber.Compiler.expand_all_scenarios()
+    |> Enum.map(&selected_scenario(feature, rule, &1))
+    |> Enum.reject(fn %{scenario: scenario} = selected_scenario ->
+      selected_scenario
+      |> scenario_tags()
+      |> Kernel.++(feature.tags)
+      |> Kernel.++(scenario.tags)
+      |> excluded?(excluded_tags)
+    end)
+  end
+
+  defp selected_scenario(feature, nil, scenario), do: %{feature: feature, scenario: scenario}
+
+  defp selected_scenario(feature, rule, scenario),
+    do: %{feature: feature, rule: rule, scenario: scenario}
+
+  defp declaration_tags(feature, rule, declaration) do
+    feature.tags ++ Map.get(rule || %{}, :tags, []) ++ declaration.tags
+  end
+
+  defp tagged?(tags, tag) do
+    Enum.any?(tags, &(String.trim_leading(&1, "@") == tag))
   end
 
   defp feature_scenarios(feature) do
