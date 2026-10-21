@@ -21,6 +21,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.ReconcileLegacyAdminHistory
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.RemoveCustomGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveClubMember
@@ -116,6 +117,7 @@ defmodule Memba.Membership.AppTest do
         MakePersonEmailAddressPrimary,
         MergePerson,
         ReconcileLegacyAdminHistory,
+        RenamePerson,
         RemoveCustomGroupMember,
         RemoveGroupMember,
         RemoveClubMember,
