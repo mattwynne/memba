@@ -146,3 +146,52 @@ The repository compatibility work received a passing host/dev-container
 qualification or ownership proof. The actual server upgrade, native ownership
 smoke, and exact-commit full gate inside the upgraded managed Docker environment
 remain pending. This note therefore remains Open.
+
+### Closure: 2026-10-21
+
+The provider-level countermeasure is now deployed and proved. The local default
+CLI and `https://fabro.home.wynne.family` both run published stock Fabro
+`0.389.0-nightly.0` from source `5c90ad2e0c6662207a952afb303422e3388425d2`.
+The server-managed `memba-dev` environment selects immutable image
+`sha-84bdc8e6f02e34bd573b35ebc2102319fc5bd9da-run-39652594216-1`
+(registry digest
+`sha256:b90ad573ba887187fce061e0f60afd314505dbb208582280b30464c27afa0fcd`).
+That image adds the stock sandbox driver's required `setsid` executable; it does
+not patch or replace Fabro.
+
+Observed waste was one 55-minute, `$39.961203` failed implementation attempt,
+plus operational diagnosis and two zero-inference smoke starts blocked first by
+the nested-LXC AppArmor state and then by the missing `setsid` image capability.
+The root cause remains the `0.316` upload path described above: native
+`apply_patch` reached `Sandbox.write_file`, and the old Docker tar upload omitted
+the non-root owner. The countermeasure is the stock `0.389` Pebble/
+`sandbox-driver` write path with numeric owner propagation, backed by the
+repository's existing early writability detector and a CI-published image that
+provides the stock driver's process wrapper.
+
+Run `01M5FVR60359GCV5KWG7VPPAK5` supplied the required native proof on clean
+Memba commit `cf936dfe71209b7a8c082d3921ebd4d634092085`. An
+`openai/gpt-5.6-sol` agent at high reasoning, with an explicitly empty fallback
+chain, used native `apply_patch` to add the probe. A following ordinary command
+observed UID/GID `1000:1000`, mode `0644`, and appended successfully. A second
+independent native agent updated that same file; the final ordinary command
+again observed `1000:1000`, mode `0644`, and appended successfully. The run
+completed with zero retries and preserved the four expected lines.
+
+The exact source was also qualified by an unmodified `./bin/dev check` in the
+same managed Docker environment. Attempt `01M5FVYW1X56VWXP7QSTN5J9F3`
+reported 1,860 application tests with one transient EventStore/Postgres queue
+timeout and stopped before browser acceptance. The unchanged clean rerun
+`01M5FWGQEY4KQ7RV3V5PH09VG3` passed 19 package tests, 1,860 application tests,
+16 responsive-detector tests, and eight browser scenarios/121 steps. Its
+responsive browser subset correctly skipped because the committed upgrade diff
+contained no relevant style or layout changes. Both managed attempts recorded
+the same clean target SHA and immutable image; no test, concurrency, or quality
+gate was weakened between them.
+
+The original failure, the failed `0.316` replay, both blocked `0.389` smoke
+starts, the successful smoke, and both full-gate attempts remain preserved for
+audit. No historical run was removed or restarted. This note is **Closed**:
+the provider boundary is upgraded, the native add/update and ordinary rewrite
+contract is proved, and the exact executable candidate passed the full managed
+quality gate.
