@@ -1,6 +1,6 @@
 You are a fresh driver for one assignment. {% if inputs.plan is defined %}Read `{{ inputs.plan }}`{% else %}Read the iteration plan whose path is recorded in `.fabro/tmp/bdd-plan/plan-path`{% endif %}, its relevant links, project guidance, `.fabro/tmp/bdd/base` and `.fabro/tmp/bdd/change.md`. Re-read the exact current WIP selection and relevant code. Work on that one planned change, not the rest of the scenario or iteration. Do not publish or weaken agreed examples. Do not start or delegate a review or a separate refactoring pass.
 
-Use shell commands for all file writes and edits, including notes and feature tags (for example, Python invoked through the shell). Do not use `apply_patch`, native file-write tools or uploads: on this Fabro version they can change file ownership and prevent subsequent command writes. Do not repair ownership with chmod/chown.
+Use the agent's normal file-editing tools for code, notes and feature tags. Treat an unwritable repository file as an environment failure: preserve the actual error and explain it rather than disguising it as a test result. Do not repair ownership with chmod/chown.
 
 Use the navigator's observed starting result only if the current source, scenario and setup still match the assignment. Otherwise treat it as stale, predict and rerun the test before editing; return without edits if the result differs from your expectation.
 

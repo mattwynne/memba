@@ -50,11 +50,17 @@ This graph can run standalone or be reused by the plan workflow through Fabro's
 built-in `import`. A tiny `checked` node gives the import its required unconditional
 exit boundary; failures still go back to the navigator or stop, never to that exit.
 
-Both agents are instructed to write/edit files using shell commands, not native
-`apply_patch`/upload tools. Fabro `0.316.0-nightly.0` uploads can change a user-owned
-file to root ownership. Shell writes avoid that upload path without changing
-Fabro or repairing permissions. Following that instruction is not tool-enforced;
-it still needs observation in the model eval.
+This branch targets matching Fabro `0.389.0-nightly.0` CLI and server versions.
+Both agents use their normal editing tools; the old shell-only workaround
+contradicted Fabro's built-in system instructions and did not prevent root-owned
+files in the historical 0.316 rehearsal. See the
+[ownership kaizen](../../../docs/kaizen/2026-06-23-fabro-sandbox-root-owned-files-block-format.md).
+
+The newer stock Docker driver assigns uploads the container user's UID/GID.
+Source inspection is not deployment proof: verify a real native add/update and
+ordinary-user rewrite on the actual server before a business rehearsal. Do not
+repair a failed sandbox with chmod/chown or describe old-version results as
+qualification of the upgraded workflow.
 
 ## What the roles share
 

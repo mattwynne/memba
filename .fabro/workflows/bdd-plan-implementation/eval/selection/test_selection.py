@@ -1,4 +1,5 @@
 import importlib.util
+import inspect
 import json
 from pathlib import Path
 import tempfile
@@ -10,6 +11,9 @@ spec.loader.exec_module(selection)
 
 
 class CommitSelectionTest(unittest.TestCase):
+    def test_launch_selects_the_memba_environment_catalog_entry(self):
+        self.assertIn('"--environment", "memba-dev"', inspect.getsource(selection.run))
+
     def test_objective_choices_without_judging_explanation(self):
         case = json.loads((selection.HERE / 'case.json').read_text())
         for scenario in case['acceptable_first']:
@@ -30,6 +34,7 @@ class CommitSelectionTest(unittest.TestCase):
             case = selection.prepare(out, 20)
             config = (out / 'workflow.toml').read_text()
             self.assertIn(f'commit = "{case["commit"]}"', config)
+            self.assertIn('graph = "workflow.fabro"', config)
             self.assertNotIn('plan = ', config)
             graph = (out / 'workflow.fabro').read_text()
             for i in range(1, 21):

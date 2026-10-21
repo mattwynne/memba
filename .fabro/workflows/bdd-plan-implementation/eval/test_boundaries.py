@@ -1,5 +1,6 @@
 import hashlib
 import re
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,8 +20,9 @@ def node_thread(graph, node):
 
 class ScenarioBoundaryTest(unittest.TestCase):
     def setUp(self):
-        self.plan_graph = (PLAN / "workflow.fabro").read_text()
         self.plan_config = tomllib.loads((PLAN / "workflow.toml").read_text())
+        self.plan_graph_path = (PLAN / self.plan_config["workflow"]["graph"]).resolve()
+        self.plan_graph = self.plan_graph_path.read_text()
         self.scenario_graph = (SCENARIO / "workflow.fabro").read_text()
         self.selector_prompt = (PLAN / "eval/selection/prompt.md").read_text()
         self.plan_readme = (PLAN / "README.md").read_text()
@@ -34,7 +36,8 @@ class ScenarioBoundaryTest(unittest.TestCase):
         self.assertIn('driver [prompt="@prompts/bdd-driver.md", fidelity="truncate"]', self.scenario_graph)
         selector = next(line for line in self.plan_graph.splitlines() if re.match(r"\s*selector \[", line))
         self.assertIn('fidelity="truncate"', selector)
-        self.assertIn('prompt="@eval/selection/prompt.md"', selector)
+        self.assertIn('prompt="@bdd-plan-implementation/eval/selection/prompt.md"', selector)
+        self.assertEqual(self.plan_graph_path.parent, SCENARIO.parent)
         self.assertNotIn("thread_id=", selector)
         self.assertNotIn("output_schema=", selector)
         self.assertNotIn("thread_id=", next(
@@ -75,7 +78,7 @@ class ScenarioBoundaryTest(unittest.TestCase):
     def test_native_routing_owns_inspect_select_pick_import_repeat_and_done(self):
         self.assertIn('inspect [shape=parallelogram, output_schema="routing"', self.plan_graph)
         self.assertIn('validate_pick [shape=parallelogram, stdin_source="response.selector", output_schema="routing"', self.plan_graph)
-        self.assertIn('scenario [import="../bdd-scenario-implementation/workflow.fabro"]', self.plan_graph)
+        self.assertIn('scenario [import="bdd-scenario-implementation/workflow.fabro"]', self.plan_graph)
         self.assertIn('inspect -> selector [condition="outcome=succeeded && preferred_label=choose"]', self.plan_graph)
         self.assertIn('inspect -> done [condition="outcome=succeeded && preferred_label=done"]', self.plan_graph)
         self.assertIn('validate_pick -> prepare_scenario [condition="outcome=succeeded && preferred_label=implement"]', self.plan_graph)
@@ -216,6 +219,26 @@ class ScenarioBoundaryTest(unittest.TestCase):
         self.assertIn('check -> checked [condition="outcome=succeeded"]', self.scenario_graph)
         self.assertIn("checked -> done", self.scenario_graph)
         self.assertIn('check -> navigator [condition="outcome=failed"]', self.scenario_graph)
+
+    @unittest.skipUnless(shutil.which("fabro"), "Fabro CLI is not installed")
+    def test_real_parent_import_resolves_both_reusable_role_prompt_files(self):
+        source_root = PLAN.parents[2]
+        result = subprocess.run(
+            ["fabro", "--no-upgrade-check", "validate",
+             str((PLAN / "workflow.toml").relative_to(source_root))],
+            cwd=source_root,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Validation: OK", result.stdout + result.stderr)
+
+    def test_role_editing_guidance_does_not_contradict_the_native_editor(self):
+        for prompt in (self.scenario_prompt, self.driver_prompt):
+            self.assertIn("normal file-editing tools", prompt)
+            self.assertNotIn("Use shell commands for all file writes", prompt)
+            self.assertNotIn("Do not use `apply_patch`", prompt)
+            self.assertIn("Do not repair ownership with chmod/chown", prompt)
 
     def test_prompts_distinguish_memory_from_current_evidence(self):
         self.assertIn("commit", self.selector_prompt)
