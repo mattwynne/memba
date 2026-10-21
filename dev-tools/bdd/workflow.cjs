@@ -30,6 +30,71 @@ function scratchPaths(root) {
   };
 }
 
+function ensureSafeScratchDirectory(root) {
+  let current = root;
+  for (const component of [".fabro", "tmp", "bdd-plan"]) {
+    current = path.join(current, component);
+    let stat;
+    try {
+      stat = fs.lstatSync(current);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      fs.mkdirSync(current, {mode: 0o700});
+      stat = fs.lstatSync(current);
+    }
+    if (stat.isSymbolicLink()) {
+      throw new Error(`workflow scratch component is a symbolic link: ${path.relative(root, current)}`);
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(`workflow scratch component is not a directory: ${path.relative(root, current)}`);
+    }
+  }
+  return current;
+}
+
+function assertRegularFileIfPresent(target, label) {
+  let stat;
+  try {
+    stat = fs.lstatSync(target);
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error(`${label} must be a regular file, not a symbolic link or other file type`);
+  }
+}
+
+function assertRegularFile(target, label) {
+  let stat;
+  try {
+    stat = fs.lstatSync(target);
+  } catch (error) {
+    if (error.code === "ENOENT") throw new Error(`${label} is missing`);
+    throw error;
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error(`${label} must be a regular file, not a symbolic link or other file type`);
+  }
+}
+
+function appendRegularFile(target, contents, label) {
+  const noFollow = fs.constants.O_NOFOLLOW;
+  if (typeof noFollow !== "number") throw new Error("safe no-follow append is unavailable");
+  let descriptor;
+  try {
+    descriptor = fs.openSync(
+      target,
+      fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | noFollow,
+      0o600
+    );
+    if (!fs.fstatSync(descriptor).isFile()) throw new Error(`${label} must be a regular file`);
+    fs.writeFileSync(descriptor, contents);
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
 function writeAtomic(target, contents) {
   fs.mkdirSync(path.dirname(target), {recursive: true});
   const temporary = `${target}.tmp-${process.pid}`;
@@ -100,7 +165,7 @@ function setup(root, binding) {
   }
   assertDeclaredScratchIgnored(root);
   assertClean(root);
-  fs.mkdirSync(scratchPaths(root).directory, {recursive: true});
+  ensureSafeScratchDirectory(root);
   console.log(JSON.stringify({preferred_next_label: "bootstrap"}));
 }
 
@@ -108,6 +173,7 @@ function inspect(root) {
   const files = scratchPaths(root);
   assertDeclaredScratchIgnored(root);
   assertClean(root);
+  ensureSafeScratchDirectory(root);
   try { fs.unlinkSync(files.selection); } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
@@ -176,6 +242,9 @@ function pick(root, source) {
   if (Object.hasOwn(answer, "error")) {
     throw new Error(`selector reported error: ${answer.error.trim()}`);
   }
+  ensureSafeScratchDirectory(root);
+  assertRegularFileIfPresent(files.notes, "selection notes");
+  assertRegularFile(files.selection, "preselection snapshot");
   const snapshot = readJson(files.selection, "preselection snapshot");
   if (!/^[0-9a-f]{40}$/.test(snapshot.commit) || !/^[0-9a-f]{40}$/.test(snapshot.tree)) {
     throw new Error("preselection snapshot has invalid Git object identities");
@@ -203,9 +272,11 @@ function pick(root, source) {
   }
 
   const choice = matches[0];
+  ensureSafeScratchDirectory(root);
+  assertRegularFileIfPresent(files.notes, "selection notes");
   publicBdd(root, ["pick", choice.reference, "--from", commit]);
   writeAtomic(files.plan, report.plan + "\n");
-  fs.appendFileSync(files.notes, JSON.stringify({
+  appendRegularFile(files.notes, JSON.stringify({
     commit,
     tree,
     plan: report.plan,
@@ -215,7 +286,7 @@ function pick(root, source) {
     line: choice.line,
     reference: choice.reference,
     reason: answer.reason
-  }) + "\n");
+  }) + "\n", "selection notes");
   console.error(`Selected ${choice.reference} at ${commit}: ${answer.reason}`);
   console.log(JSON.stringify({preferred_next_label: "implement"}));
 }
@@ -237,4 +308,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = {inspect, pick, selectorResponse, setup, writeAtomic};
+module.exports = {appendRegularFile, ensureSafeScratchDirectory, inspect, pick, selectorResponse, setup, writeAtomic};
