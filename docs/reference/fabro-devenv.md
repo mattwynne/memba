@@ -60,7 +60,7 @@ devenv container run fabro-dev
 
 Fabro expects common tools such as `git` to be available on `PATH` inside the generated container. The default `devenv` container root supplies a `/bin` with shell/coreutils, but packages in the top-level `packages` list are not automatically linked into `/bin`.
 
-In this project, we make bare-shell workflow tools available to Fabro by adding an explicit container layer. This includes `nix`, which runtime `devenv shell` realization needs, `python3`, which iteration finalization scripts invoke directly, and `diffutils`, which supplies `cmp` for before/after evidence comparisons. These tools must work outside `bin/dev`'s `devenv shell` boundary.
+In this project, we make bare-shell workflow tools available to Fabro by adding an explicit container layer. This includes `nix`, which runtime `devenv shell` realization needs, `python3`, which iteration finalization scripts invoke directly, `diffutils`, which supplies `cmp` for before/after evidence comparisons, and `util-linux`, which supplies the `setsid` process wrapper required by Fabro 0.389's stock Docker sandbox driver. These tools must work outside `bin/dev`'s `devenv shell` boundary.
 
 `/bin/git` in the Fabro image is a wrapper that adds two sandbox-init accommodations before delegating to the real Git binary:
 
@@ -88,7 +88,7 @@ in
         copyToRoot = [
           (pkgs.buildEnv {
             name = "memba-fabro-dev-root";
-            paths = [ fabroGit ];
+            paths = [ fabroGit pkgs.util-linux ];
             pathsToLink = [ "/bin" ];
           })
           fabroWritableDirs
@@ -148,7 +148,7 @@ A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-d
 For manual host verification, set `IMAGE` to the full reference from a successful CI receipt (never `latest` or an arbitrary source SHA), then run:
 
 ```sh
-docker run --rm --entrypoint /bin/sh "$IMAGE" -lc 'command -v git && git --version && command -v nix && nix --version && command -v python3 && python3 --version && command -v cmp && cmp --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
+docker run --rm --entrypoint /bin/sh "$IMAGE" -lc 'command -v git && git --version && command -v nix && nix --version && command -v python3 && python3 --version && command -v setsid && setsid /bin/true && command -v cmp && cmp --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
 ```
 
 Expected shape:
@@ -160,4 +160,5 @@ git version ...
 nix ...
 /bin/python3
 Python ...
+/bin/setsid
 ```

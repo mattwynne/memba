@@ -44,6 +44,7 @@ w = Path('.github/workflows/fabro-dev-image.yml').read_text()
 assert 'cancel-in-progress: false' in w
 assert 'fabro-dev-image.sh build' in w and 'fabro-dev-image.sh copy' in w
 assert ':latest' not in w
+assert 'command -v setsid' in w and 'setsid /bin/true' in w
 assert w.index('fabro-dev-image.sh copy') < w.index('skopeo inspect') < w.index('actions/upload-artifact@v4')
 assert 'always()' not in w, 'failed jobs must not issue publication receipts'
 PY

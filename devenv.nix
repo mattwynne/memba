@@ -239,6 +239,7 @@ in
               ngrok
               nix
               tini
+              util-linux
               which
               (hiPrio fabroDevenv)
               (hiPrio fabroGit)
