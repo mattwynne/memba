@@ -13,7 +13,7 @@
 In a new throwaway worktree at the historical base, bring only these files from the frozen workflow/test-tooling commit:
 
 ```text
-.fabro/workflows/bdd-scenario-implementation/
+.fabro/workflows/bdd-plan-implementation/scenario/
 bin/dev
 web/test/support/domain_cucumber_runner.ex
 web/test/features/domain_cucumber_wip_test.exs
@@ -27,7 +27,7 @@ Restore `docs/iterations/068-member-name-editing/` from the approved-plan commit
 Commit that prepared source and make its throwaway branch available through the normal remote. All three runs start from this **same commit**, not a previous run branch. Launch from that branch:
 
 ```sh
-fabro run .fabro/workflows/bdd-scenario-implementation/workflow.toml \
+fabro run .fabro/workflows/bdd-plan-implementation/scenario/workflow.toml \
   --environment memba-dev \
   --server https://fabro.home.wynne.family \
   -I plan=docs/iterations/068-member-name-editing/plan.md \

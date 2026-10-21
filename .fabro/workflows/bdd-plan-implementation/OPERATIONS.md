@@ -83,9 +83,10 @@ server upgrade. Then use the stock-native entry with the catalog selected:
 fabro run .fabro/workflows/bdd-plan-implementation/workflow.toml --environment memba-dev
 ```
 
-The TOML points to `../bdd-plan-implementation.fabro`, whose imports and prompt
-files are descendants of the same graph directory. Do not copy the graph into
-this directory: 0.389's sibling-import prompt lookup then fails validation.
+The TOML and `workflow.fabro` are siblings. The imported scenario package and
+all prompt files are descendants of that directory, as required by stock
+0.389's package collector. Keep the nested package canonical; do not copy its
+graph or prompts elsewhere.
 
 Do not add an input flag. The checked-in run input is the literal Git reference
 `HEAD`; the selector receives only that commit reference in its canonical task

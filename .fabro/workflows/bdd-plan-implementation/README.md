@@ -35,11 +35,11 @@ files root-owned. That failed run is not upgraded-runtime proof.
   `bin/dev bdd pick REF --from CURRENT_SHA` in the same command node. Empty
   checkpoint commits are tolerated only because the tree is unchanged; the
   tree never replaces the exact `--from` SHA guard.
-- The parent DOT graph is [../bdd-plan-implementation.fabro](../bdd-plan-implementation.fabro),
-  beside both workflow directories. This keeps imported prompt references below
-  the graph's directory: the 0.389 compiler rejects the sibling-import prompt
-  paths used by the previous layout. The public `workflow.toml` entry stays in
-  this directory, and both standalone role prompt files remain shared.
+- The parent DOT graph is [workflow.fabro](workflow.fabro), beside its public
+  `workflow.toml`. The reusable scenario package is nested under
+  [`scenario/`](scenario/README.md), so every imported graph and prompt remains
+  below the parent graph's directory. This satisfies stock 0.389's package
+  collector while keeping one canonical copy of each graph and prompt.
 - The real single-scenario graph is imported with stock Fabro. Its implementation
   navigator uses the one literal full-fidelity `bdd-navigator` thread across the
   whole plan. Each driver remains truncate-fidelity and fresh. The selector is

@@ -9,7 +9,7 @@ import sys
 import tomllib
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / 'bdd-scenario-implementation/eval'))
+sys.path.insert(0, str(HERE.parents[1] / 'scenario/eval'))
 from navigator import wilson
 
 

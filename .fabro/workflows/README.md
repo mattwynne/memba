@@ -49,7 +49,7 @@ Neither implementation nor review opens a pull request. Their `workflow.toml` fi
 
 ## Implementing one scenario
 
-[`bdd-scenario-implementation`](bdd-scenario-implementation/README.md) is a separate, opt-in workflow for implementing one agreed domain scenario and passing `dev check`. It does not include refactoring, review or publication, and does not change `fabro deliver`.
+[`bdd-plan-implementation/scenario`](bdd-plan-implementation/scenario/README.md) is a separate, opt-in workflow for implementing one agreed domain scenario and passing `dev check`. It does not include refactoring, review or publication, and does not change `fabro deliver`.
 
 Fabro 0.389 requires callers to select a catalog environment explicitly. Launch
 this workflow with `--environment memba-dev`; the same rule applies to any new

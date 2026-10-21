@@ -204,7 +204,7 @@ test("stock checkpoint pathspecs exclude ignored runtime files without hiding tr
   ].map(directory => `**/${directory}/**`);
   const configs = [
     ".fabro/workflows/bdd-plan-implementation/workflow.toml",
-    ".fabro/workflows/bdd-scenario-implementation/workflow.toml"
+    ".fabro/workflows/bdd-plan-implementation/scenario/workflow.toml"
   ];
 
   for (const config of configs) {

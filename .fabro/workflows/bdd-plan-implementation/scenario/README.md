@@ -1,6 +1,6 @@
 # Implement one BDD scenario
 
-`bdd-scenario-implementation` implements one agreed domain scenario. It does not refactor or review the finished work, publish code, or change `fabro deliver`.
+The nested `scenario` package implements one agreed domain scenario. It does not refactor or review the finished work, publish code, or change `fabro deliver`.
 
 ```text
 Predict and run the starting scenario
@@ -39,7 +39,7 @@ An already-covered selected scenario may start green. That is valid evidence, no
 Launch with the server catalog entry explicitly selected:
 
 ```bash
-fabro run .fabro/workflows/bdd-scenario-implementation/workflow.toml \
+fabro run .fabro/workflows/bdd-plan-implementation/scenario/workflow.toml \
   --environment memba-dev \
   -I plan=docs/iterations/NNN-topic/plan.md
 ```
@@ -54,7 +54,7 @@ This branch targets matching Fabro `0.389.0-nightly.0` CLI and server versions.
 Both agents use their normal editing tools; the old shell-only workaround
 contradicted Fabro's built-in system instructions and did not prevent root-owned
 files in the historical 0.316 rehearsal. See the
-[ownership kaizen](../../../docs/kaizen/2026-06-23-fabro-sandbox-root-owned-files-block-format.md).
+[ownership kaizen](../../../../docs/kaizen/2026-06-23-fabro-sandbox-root-owned-files-block-format.md).
 
 The newer stock Docker driver assigns uploads the container user's UID/GID.
 Source inspection is not deployment proof: verify a real native add/update and

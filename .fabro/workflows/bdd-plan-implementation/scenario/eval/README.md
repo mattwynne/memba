@@ -20,8 +20,8 @@ We want the navigator to choose `check`. More coding, refactoring, review, stopp
 From the repository root, with Fabro signed in:
 
 ```sh
-python3 .fabro/workflows/bdd-scenario-implementation/eval/navigator.py run \
-  --runs 20 --out .fabro/workflows/bdd-scenario-implementation/eval/results/scenario-before
+python3 .fabro/workflows/bdd-plan-implementation/scenario/eval/navigator.py run \
+  --runs 20 --out .fabro/workflows/bdd-plan-implementation/scenario/eval/results/scenario-before
 ```
 
 Choose the number of trials before starting. This asks the navigator the same question 20 times, one at a time. Each trial starts fresh and cannot see earlier answers. It uses the workflow's model and reasoning settings, but no tools, drivers or test commands.
@@ -41,8 +41,8 @@ The command exits with an error unless every requested trial passes. That makes 
 To read saved results again without model calls:
 
 ```sh
-python3 .fabro/workflows/bdd-scenario-implementation/eval/navigator.py report \
-  .fabro/workflows/bdd-scenario-implementation/eval/results/scenario-before
+python3 .fabro/workflows/bdd-plan-implementation/scenario/eval/navigator.py report \
+  .fabro/workflows/bdd-plan-implementation/scenario/eval/results/scenario-before
 ```
 
 If you interrupt the command, Fabro may still be running. Check the run ID in `launch.json` before starting anything else. The report needs the downloaded Fabro records in `<output>/dump/`. If a launch didn't return a clear answer, find out whether it started rather than launching a replacement.
@@ -50,7 +50,7 @@ If you interrupt the command, Fabro may still be running. Check the run ID in `l
 To test the runner, scoring and workflow connections without model calls:
 
 ```sh
-python3 -B -m unittest discover -s .fabro/workflows/bdd-scenario-implementation/eval -p 'test_*.py'
+python3 -B -m unittest discover -s .fabro/workflows/bdd-plan-implementation/scenario/eval -p 'test_*.py'
 ```
 
 This unit eval checks a decision given supplied information. It doesn't test gathering that information, remembering a long conversation, or actually implementing the scenario and running the checks.

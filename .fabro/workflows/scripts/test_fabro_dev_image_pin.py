@@ -15,8 +15,11 @@ assert receipt["version"] == (
 )
 assert receipt["reference"] == "ghcr.io/mattwynne/memba-fabro-dev:" + receipt["version"]
 assert re.fullmatch(r"sha256:[0-9a-f]{64}", receipt["digest"])
+workflow_root = root / ".fabro/workflows"
+configs = sorted(workflow_root.glob("*/workflow.toml"))
+configs.append(workflow_root / "bdd-plan-implementation/scenario/workflow.toml")
 checked = []
-for path in sorted((root / ".fabro/workflows").glob("*/workflow.toml")):
+for path in configs:
     config = tomllib.loads(path.read_text())
     for environment in config.get("environments", {}).values():
         image = environment.get("image", {}).get("docker", "")
