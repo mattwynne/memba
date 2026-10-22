@@ -11,6 +11,26 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   alias MembaWeb.MemberMessageDetailQuery
 
   step "{word} is known as {string}", %{args: [person_name, requested_name]} = context do
+    ensure_person_known_as(context, person_name, requested_name)
+  end
+
+  step "{word} began changing their name when it was {string}",
+       %{args: [person_name, baseline_name]} = context do
+    context = ensure_person_known_as(context, person_name, baseline_name)
+    person = fetch_person!(context, person_name)
+
+    assert %{name: projected_name} = PersonQueries.get_person(person.person_id)
+    assert projected_name == normalize_name(baseline_name)
+
+    name_edit_baselines =
+      context
+      |> Map.get(:name_edit_baselines, %{})
+      |> Map.put(person_name, projected_name)
+
+    Map.put(context, :name_edit_baselines, name_edit_baselines)
+  end
+
+  defp ensure_person_known_as(context, person_name, requested_name) do
     case get_in(context, [:people, person_name]) do
       nil ->
         create_person(context, person_name, requested_name)
