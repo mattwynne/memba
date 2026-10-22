@@ -59,6 +59,17 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context
   end
 
+  step "{word} should be known as {string}",
+       %{args: [person_name, expected_name]} = context do
+    person = fetch_person!(context, person_name)
+    person_id = person.person_id
+
+    assert %{person_id: ^person_id, name: ^expected_name} =
+             PersonQueries.get_person(person_id)
+
+    context
+  end
+
   step ~r/^(\w+) should be known as "([^"]+)" in (.+)$/,
        %{args: [person_name, expected_name, club_name]} = context do
     person = fetch_person!(context, person_name)
