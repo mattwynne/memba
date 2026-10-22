@@ -76,6 +76,13 @@ defmodule Memba.Cucumber.MessagingSteps do
     )
   end
 
+  step "{word} replied to the conversation {string} in Rockies Cycling Co-op",
+       %{args: [sender_name, subject]} = context do
+    context
+    |> send_message_to_club_members(sender_name, subject, "Rockies Cycling Co-op")
+    |> post_reply_to_message(sender_name, subject, "#{subject} reply.")
+  end
+
   step "{word} replies {string} to {string}", %{args: [sender_name, body, subject]} = context do
     post_reply_to_message(context, sender_name, subject, body)
   end
