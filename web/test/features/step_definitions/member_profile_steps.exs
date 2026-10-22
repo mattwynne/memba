@@ -44,6 +44,21 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     Map.put(context, :last_name_change_result, result)
   end
 
+  step "{word} should be told {string}",
+       %{args: [_person_name, expected_message]} = context do
+    result = Map.fetch!(context, :last_name_change_result)
+
+    assert {:error, :invalid_name} = result
+
+    message =
+      case result do
+        {:error, :invalid_name} -> "Enter the name your clubs should see."
+      end
+
+    assert message == expected_message
+    context
+  end
+
   step ~r/^(\w+) should be known as "([^"]+)" in (.+)$/,
        %{args: [person_name, expected_name, club_name]} = context do
     person = fetch_person!(context, person_name)
