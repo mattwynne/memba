@@ -3,11 +3,12 @@
 This opt-in native Fabro workflow implements an active plan's domain scenarios
 one at a time. It does not change `fabro deliver`.
 
-This branch targets Fabro `0.389.0-nightly.0` and has been rebased onto the
-repository's upgrade changes. Its managed Docker gate and upgraded-server
-rehearsal remain required. Earlier 0.316 source/mechanics checks passed, but the
-whole-plan AI rehearsal stopped after its first scenario when native edits left
-files root-owned. That failed run is not upgraded-runtime proof.
+On stock Fabro `0.389.0-nightly.0`, one historical rehearsal completed all three
+domain scenarios with graph-owned full checks and no manual repair. The
+rebased source and historical fixture passed their managed Docker gates.
+However, the first selector also read Git history, so the strict HEAD-tree-only
+constraint was not met. See the [result and limits](REHEARSAL.md).
+This is not a reliability estimate or approval to deploy the historical result.
 
 ## Assembled loop
 
@@ -74,11 +75,12 @@ validation, clean guards, completion/errors/journeys, failed-node routing,
 scratch preservation and symlink rejection. The retained stock capability case
 only proves import and shell-write mechanics.
 
-This is not evidence that a model will coordinate the whole loop correctly. Do
-not claim runtime proof until the exact assembled commit passes its managed gate
-and a separately approved rehearsal. The earlier 20/20 fixed selector cases used
-isolated full-fidelity calls with literal SHAs; they do not prove this
-HEAD/truncate loop.
+The retained stock 0.389 rehearsal demonstrates one complete functional
+HEAD/truncate loop, including one navigator conversation across all three
+scenarios, fresh selectors/drivers and graph-directed check repair. It does not
+prove strict snapshot-only selector compliance or general reliability. The
+earlier 20/20 fixed selector cases used isolated full-fidelity calls with literal
+SHAs and remain a different experiment.
 
 The loop is limited to domain scenarios. Browser journeys, refactoring, review,
 publication and marking an iteration merged are outside it. See
@@ -87,12 +89,15 @@ publication and marking an iteration merged are outside it. See
 
 ## Known limits
 
+- The first selector in the successful functional rehearsal made read-only Git
+  history queries outside the current HEAD tree. Strict snapshot-only selection
+  remains an unmet constraint; the canonical prompt was not changed to hide it.
 - Active inherited-only TODO work without a locally pickable declaration fails
   closed. This workflow does not add policy for it.
 - The updated `test:wip` runner treats one declaration as one selection and
-  generates separate tests for all its eligible rows. The original source had
-  managed CLI verification on 0.316; the rebased source still needs its exact
-  managed gate. That earlier proof does not establish the new runtime.
+  generates separate tests for all its eligible rows. The rebased source passed
+  its exact managed gate on stock 0.389; earlier standalone row-selection CLI
+  proof belongs to 0.316 and is not relabelled as a new-runtime experiment.
 - Fabro 0.389 reports a built-in maximum of 500 firings for otherwise unlimited
   loop nodes. This workflow adds no arbitrary cost, duration or visit cap.
   Native warnings and any automatic context compaction must remain in evidence.

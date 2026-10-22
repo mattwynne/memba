@@ -1,9 +1,10 @@
 # Operating the BDD plan implementation workflow
 
-> **Upgraded runtime not yet qualified:** this source targets matching Fabro
-> 0.389 CLI and server versions. Require the real native editing/ownership smoke,
-> exact-source managed Docker gate and rehearsal approval before a business run.
-> Passing 0.316 checks or a workstation test run does not meet those conditions.
+> **One functional historical run has passed on stock 0.389.** Managed source
+> checks and native editing ownership were verified. Strict HEAD-tree-only
+> selection was not met: the first selector also read Git history. See the
+> [result and limits](REHEARSAL.md).
+> This is not general reliability proof or approval for a current product run.
 
 This opt-in workflow implements the domain scenarios in one active plan. It does
 not implement journeys, refactor or review the result, publish it, or mark the
@@ -65,8 +66,9 @@ input is the feature-and-line reference above; selector JSON and implementation
 paths are not a human interface.
 
 For a picked Outline or Examples block, all eligible rows belong to one
-selection and run as separate tests. Managed CLI proof exists for the earlier
-0.316 source; the rebased code still requires an exact-source managed gate.
+selection and run as separate tests. The rebased code passed its exact-source
+managed gate on 0.389; earlier standalone CLI row-selection proof remains scoped
+to 0.316.
 
 ## Start the workflow after approval
 
@@ -190,6 +192,12 @@ hostname: `fabro.home.wynne.family` reaches the proxy on `192.168.1.200`.
 Confirm the exact container ID, `petri.run` label and image, and retain three
 fresh matching stopped-state observations after evidence retrieval. An empty
 query on the proxy's Docker daemon is not proof that a run container is absent.
+
+Do not print raw Docker exec events, command arguments, Actor attributes or
+process environments: Git transport authentication can appear in that metadata.
+Filter to lifecycle start/stop/die/kill events and allowlist only time, action
+and container ID before diagnostic output reaches a tool transcript. Sanitising
+a saved file afterward does not erase an already exposed credential.
 
 Archive a terminal run only after its evidence has been reviewed:
 
