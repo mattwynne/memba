@@ -103,6 +103,39 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     Map.put(context, :name_conflict_snapshot, conflict_snapshot)
   end
 
+  step "{word} confirms replacing {string} with {string}",
+       %{args: [person_name, current_name, requested_name]} = context do
+    person = fetch_person!(context, person_name)
+    conflict_snapshot = Map.fetch!(context, :name_conflict_snapshot)
+
+    assert %{
+             person_id: snapshot_person_id,
+             current_name: snapshot_current_name,
+             requested_name: snapshot_requested_name
+           } = conflict_snapshot
+
+    assert person.person_id == snapshot_person_id
+    assert current_name == snapshot_current_name
+    assert requested_name == snapshot_requested_name
+
+    assert {:ok, command} =
+             PersonCommands.prepare_rename(
+               %{email: person.email},
+               %{
+                 person_id: person.person_id,
+                 name: requested_name,
+                 expected_name: snapshot_current_name
+               }
+             )
+
+    result = CommandDispatch.dispatch(command, consistency: :strong)
+    assert :ok = result
+
+    context
+    |> Map.put(:last_name_change_result, result)
+    |> Map.delete(:name_conflict_snapshot)
+  end
+
   defp ensure_person_known_as(context, person_name, requested_name) do
     case get_in(context, [:people, person_name]) do
       nil ->
