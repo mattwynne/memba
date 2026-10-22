@@ -7,6 +7,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
+  alias MembaWeb.MemberDashboardQuery
 
   step "{word} is known as {string}", %{args: [person_name, requested_name]} = context do
     rename_person!(context, person_name, requested_name)
@@ -29,6 +30,22 @@ defmodule Memba.Cucumber.MemberProfileSteps do
                ClubGroupQueries.list_active_members_of_club(club_id),
                &(&1.id == person.person_id)
              )
+
+    context
+  end
+
+  step ~r/^(\w+)'s earlier conversation "([^"]+)" should show "([^"]+)" as its author$/,
+       %{args: [person_name, subject, expected_name]} = context do
+    person = fetch_person!(context, person_name)
+    message = context |> Map.fetch!(:messages) |> Map.fetch!(subject)
+
+    assert {:ok, dashboard} =
+             MemberDashboardQuery.load(message.club_id, person.email, nil)
+
+    person_id = person.person_id
+
+    assert %{originator_id: ^person_id, originator_name: ^expected_name} =
+             Enum.find(dashboard.message_rows, &(&1.message_id == message.message_id))
 
     context
   end
