@@ -77,6 +77,32 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     |> Map.put(:last_name_change_result, result)
   end
 
+  step "the change should be rejected because their name changed elsewhere", context do
+    attempt = Map.fetch!(context, :last_name_change_attempt)
+    result = Map.fetch!(context, :last_name_change_result)
+
+    assert {:error, {:name_conflict, current_name}} = result
+
+    assert %{
+             person_id: person_id,
+             requested_name: requested_name,
+             submitted_baseline: submitted_baseline,
+             result: ^result
+           } = attempt
+
+    refute current_name == normalize_name(submitted_baseline)
+    refute current_name == normalize_name(requested_name)
+
+    conflict_snapshot = %{
+      person_id: person_id,
+      requested_name: requested_name,
+      submitted_baseline: submitted_baseline,
+      current_name: current_name
+    }
+
+    Map.put(context, :name_conflict_snapshot, conflict_snapshot)
+  end
+
   defp ensure_person_known_as(context, person_name, requested_name) do
     case get_in(context, [:people, person_name]) do
       nil ->
