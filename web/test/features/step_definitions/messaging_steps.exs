@@ -66,6 +66,16 @@ defmodule Memba.Cucumber.MessagingSteps do
     |> dispatch_and_clear_background_message_deliveries()
   end
 
+  step "{word} started the conversation {string} in Kootenay Mountaineering Club",
+       %{args: [sender_name, subject]} = context do
+    send_message_to_club_members(
+      context,
+      sender_name,
+      subject,
+      "Kootenay Mountaineering Club"
+    )
+  end
+
   step "{word} replies {string} to {string}", %{args: [sender_name, body, subject]} = context do
     post_reply_to_message(context, sender_name, subject, body)
   end
