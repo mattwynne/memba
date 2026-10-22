@@ -8,20 +8,36 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   alias Memba.Membership.PersonQueries
 
   step "{word} is known as {string}", %{args: [person_name, requested_name]} = context do
+    rename_person!(context, person_name, requested_name)
+    context
+  end
+
+  step "{word} changes their name to {string}",
+       %{args: [person_name, requested_name]} = context do
+    rename_person!(context, person_name, requested_name)
+    context
+  end
+
+  defp rename_person!(context, person_name, requested_name) do
     person = fetch_person!(context, person_name)
-    projected_person = PersonQueries.get_person(person.person_id)
+    expected_name = PersonQueries.get_person(person.person_id).name
 
     assert {:ok, command} =
              PersonCommands.prepare_rename(
                %{email: person.email},
-               %{name: requested_name, expected_name: projected_person.name}
+               %{name: requested_name, expected_name: expected_name}
              )
 
     assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
 
-    assert %{name: ^requested_name} = PersonQueries.get_person(person.person_id)
+    assert %{name: projected_name} = PersonQueries.get_person(person.person_id)
+    assert projected_name == normalize_name(requested_name)
+  end
 
-    context
+  defp normalize_name(name) do
+    name
+    |> String.trim()
+    |> String.replace(~r/\s+/u, " ")
   end
 
   defp fetch_person!(context, person_name) do
