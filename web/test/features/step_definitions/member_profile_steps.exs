@@ -30,6 +30,19 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     Map.put(context, :name_edit_baselines, name_edit_baselines)
   end
 
+  step "{word} has since changed their name to {string}",
+       %{args: [person_name, requested_name]} = context do
+    baseline =
+      context
+      |> Map.fetch!(:name_edit_baselines)
+      |> Map.fetch!(person_name)
+
+    rename_person!(context, person_name, requested_name)
+
+    assert get_in(context, [:name_edit_baselines, person_name]) == baseline
+    context
+  end
+
   defp ensure_person_known_as(context, person_name, requested_name) do
     case get_in(context, [:people, person_name]) do
       nil ->
