@@ -3,6 +3,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
 
   import ExUnit.Assertions
 
+  alias Memba.Membership.ClubGroupQueries
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
@@ -15,6 +16,20 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   step "{word} changes their name to {string}",
        %{args: [person_name, requested_name]} = context do
     rename_person!(context, person_name, requested_name)
+    context
+  end
+
+  step ~r/^(\w+) should be known as "([^"]+)" in (.+)$/,
+       %{args: [person_name, expected_name, club_name]} = context do
+    person = fetch_person!(context, person_name)
+    club_id = fetch_club_id!(context, club_name)
+
+    assert %{name: ^expected_name} =
+             Enum.find(
+               ClubGroupQueries.list_active_members_of_club(club_id),
+               &(&1.id == person.person_id)
+             )
+
     context
   end
 
@@ -47,6 +62,16 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     |> case do
       {:ok, person} -> person
       :error -> flunk("Expected #{inspect(person_name)} to be present in :people")
+    end
+  end
+
+  defp fetch_club_id!(context, club_name) do
+    context
+    |> Map.get(:clubs, %{})
+    |> Map.fetch(club_name)
+    |> case do
+      {:ok, club_id} -> club_id
+      :error -> flunk("Expected #{inspect(club_name)} to be present in :clubs")
     end
   end
 end
