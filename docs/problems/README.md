@@ -4,6 +4,7 @@ Captured product problems and their current resolution status.
 
 | Observed | Problem | Status | Matched iteration / evidence |
 | --- | --- | --- | --- |
+| 2026-10-21 | [New members cannot be invited directly to a group](2026-10-21-cannot-invite-new-member-directly-to-group.md) | Unresolved | Invitations are only available through Everyone, not the intended group. No iteration assigned. |
 | 2026-10-21 | [Club members cannot see pending invitations](2026-10-21-club-members-cannot-see-pending-invitations.md) | Unresolved | Member visibility, distinct from Staff and Membership Admin invitation management. No iteration assigned. |
 | 2026-10-13 | [People cannot ask Memba to erase personal data](2026-10-13-personal-data-erasure-missing.md) | Unresolved | [Iteration 070](../iterations/070-console-person-merge/plan.md) deliberately preserves historical identity shells; erasure needs a separate data inventory, retention policy, and processor-aware workflow. |
 | 2026-09-12 | [Custom groups need renaming](2026-09-12-custom-groups-cannot-be-renamed.md) | Deferred | Captured during the original 061–065 group planning (request access is now 066); no delivery iteration assigned. |
