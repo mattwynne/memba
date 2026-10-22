@@ -15,6 +15,7 @@ Use `Review due` only for the agreed review date of an active experiment. Use `�
 
 | First observed | Kaizen note | Status | Review due |
 | --- | --- | --- | --- |
+| 2026-10-21 | [Problem: Host provisioning restarted Docker and stopped an unrelated Fabro run container](2026-10-21-host-provisioning-restart-stopped-unrelated-container.md) | Open | — |
 | 2026-10-13 | [Problem: Successful dev checks log projector sandbox ownership errors](2026-10-13-successful-dev-check-logs-projector-ownership-errors.md) | Open | — |
 | 2026-10-05 | [Problem: Invitation LiveView test intermittently times out waiting for process termination](2026-10-05-invitation-liveview-monitor-timeout.md) | Open | — |
 | 2026-10-03 | [Problem: adapter review churn required repeated human gates](2026-10-03-adapter-review-churn-required-repeated-human-gates.md) | Open | — |

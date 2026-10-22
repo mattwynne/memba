@@ -180,8 +180,10 @@ completed with zero retries and preserved the four expected lines.
 
 The exact source was also qualified by an unmodified `./bin/dev check` in the
 same managed Docker environment. Attempt `01M5FVYW1X56VWXP7QSTN5J9F3`
-reported 1,860 application tests with one transient EventStore/Postgres queue
-timeout and stopped before browser acceptance. The unchanged clean rerun
+reported 1,860 application tests with one EventStore/Postgres connection-pool
+queue timeout and stopped before browser acceptance. The underlying cause was
+not fully investigated, so this is not classified as a transient flake. The
+unchanged clean fresh attempt
 `01M5FWGQEY4KQ7RV3V5PH09VG3` passed 19 package tests, 1,860 application tests,
 16 responsive-detector tests, and eight browser scenarios/121 steps. Its
 responsive browser subset correctly skipped because the committed upgrade diff
