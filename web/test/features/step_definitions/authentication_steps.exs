@@ -25,6 +25,10 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     ensure_member(context, person_name, "Kootenay Mountaineering Club")
   end
 
+  step "Alice is a member of Rockies Cycling Co-op", context do
+    ensure_member(context, "Alice", "Rockies Cycling Co-op")
+  end
+
   step "Alice is a member of Nelson Paddling Club", context do
     ensure_member(context, "Alice", "Nelson Paddling Club")
   end
