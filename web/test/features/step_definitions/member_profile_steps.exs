@@ -11,8 +11,14 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   alias MembaWeb.MemberMessageDetailQuery
 
   step "{word} is known as {string}", %{args: [person_name, requested_name]} = context do
-    rename_person!(context, person_name, requested_name)
-    context
+    case get_in(context, [:people, person_name]) do
+      nil ->
+        create_person(context, person_name, requested_name)
+
+      _person ->
+        rename_person!(context, person_name, requested_name)
+        context
+    end
   end
 
   step "{word} changes their name to {string}",
@@ -99,6 +105,45 @@ defmodule Memba.Cucumber.MemberProfileSteps do
 
     assert %{name: projected_name} = PersonQueries.get_person(person.person_id)
     assert projected_name == normalize_name(requested_name)
+  end
+
+  defp create_person(context, person_name, requested_name) do
+    person_id = Memba.ID.generate(:person)
+    email = scenario_email(context, person_name)
+
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: requested_name,
+               email: email
+             })
+
+    assert :ok = CommandDispatch.dispatch(command, consistency: :strong)
+    assert %{person_id: ^person_id, name: ^requested_name} = PersonQueries.get_person(person_id)
+
+    people =
+      context
+      |> Map.get(:people, %{})
+      |> Map.put(person_name, %{person_id: person_id, email: email})
+
+    Map.put(context, :people, people)
+  end
+
+  defp scenario_email(context, person_name) do
+    local_part =
+      person_name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, ".")
+      |> String.trim(".")
+
+    suffix =
+      context
+      |> Map.get(:scenario_name, "scenario")
+      |> :erlang.phash2(1_000_000)
+      |> Integer.to_string(36)
+      |> String.downcase()
+
+    "#{local_part}-#{suffix}@example.test"
   end
 
   defp normalize_name(name) do
