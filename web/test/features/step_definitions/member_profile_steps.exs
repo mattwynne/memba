@@ -43,6 +43,40 @@ defmodule Memba.Cucumber.MemberProfileSteps do
     context
   end
 
+  step "{word} submits the older change to {string}",
+       %{args: [person_name, requested_name]} = context do
+    person = fetch_person!(context, person_name)
+
+    submitted_baseline =
+      context
+      |> Map.fetch!(:name_edit_baselines)
+      |> Map.fetch!(person_name)
+
+    result =
+      with {:ok, command} <-
+             PersonCommands.prepare_rename(
+               %{email: person.email},
+               %{
+                 person_id: person.person_id,
+                 name: requested_name,
+                 expected_name: submitted_baseline
+               }
+             ) do
+        CommandDispatch.dispatch(command, consistency: :strong)
+      end
+
+    attempt = %{
+      person_id: person.person_id,
+      requested_name: requested_name,
+      submitted_baseline: submitted_baseline,
+      result: result
+    }
+
+    context
+    |> Map.put(:last_name_change_attempt, attempt)
+    |> Map.put(:last_name_change_result, result)
+  end
+
   defp ensure_person_known_as(context, person_name, requested_name) do
     case get_in(context, [:people, person_name]) do
       nil ->
