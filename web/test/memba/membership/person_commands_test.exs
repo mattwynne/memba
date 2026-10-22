@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonCommandsTest do
 
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
 
   test "prepares a legacy email command without dispatching or changing its input" do
     person_id = Memba.ID.generate(:person)
@@ -85,5 +86,76 @@ defmodule Memba.Membership.PersonCommandsTest do
              )
 
     assert is_nil(PersonQueries.get_person(attrs.person_id))
+  end
+
+  describe "prepare_rename/2" do
+    test "resolves the actor separately and prepares without dispatching" do
+      person_id = create_person!("Alice", "alice@example.com")
+      attrs = %{"name" => " Alice Jones ", "expected_name" => "Alice"}
+
+      assert {:ok,
+              %RenamePerson{
+                person_id: ^person_id,
+                name: " Alice Jones ",
+                expected_name: "Alice"
+              }} = PersonCommands.prepare_rename(%{email: "alice@example.com"}, attrs)
+
+      assert %{name: "Alice"} = PersonQueries.get_person(person_id)
+    end
+
+    test "does not treat editable actor attributes as authority" do
+      person_id = create_person!("Alice", "alice@example.com")
+      spoofed_person_id = Memba.ID.generate(:person)
+
+      assert {:ok, %RenamePerson{person_id: ^person_id}} =
+               PersonCommands.prepare_rename(
+                 %{email: "alice@example.com"},
+                 %{
+                   name: "Alice Jones",
+                   expected_name: "Alice",
+                   actor_person_id: spoofed_person_id
+                 }
+               )
+    end
+
+    test "rejects missing or invalid actor context" do
+      attrs = %{name: "Alice Jones", expected_name: "Alice"}
+
+      assert {:error, :unauthorized} = PersonCommands.prepare_rename(%{}, attrs)
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(%{email: "unknown@example.com"}, attrs)
+
+      assert {:error, :unauthorized} = PersonCommands.prepare_rename(nil, attrs)
+    end
+
+    test "rejects another Person target before preparation, including an attempted no-op" do
+      _actor_id = create_person!("Alice", "alice@example.com")
+      other_person_id = create_person!("Bob", "bob@example.com")
+
+      assert {:error, :unauthorized} =
+               PersonCommands.prepare_rename(
+                 %{email: "alice@example.com"},
+                 %{
+                   person_id: other_person_id,
+                   name: "Bob",
+                   expected_name: "Bob"
+                 }
+               )
+    end
+  end
+
+  defp create_person!(name, email) do
+    person_id = Memba.ID.generate(:person)
+
+    assert {:ok, command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: name,
+               email: email
+             })
+
+    assert :ok = MembershipCommandDispatch.dispatch(command, consistency: :strong)
+    person_id
   end
 end

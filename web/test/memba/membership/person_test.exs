@@ -6,6 +6,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.MergePerson
   alias Memba.Membership.Commands.RemovePersonEmailAddress
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.Events.PersonEmailAddressAdded
@@ -15,6 +16,7 @@ defmodule Memba.Membership.PersonTest do
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.Events.PersonMerged
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.Person
 
   describe "execute/2 CreatePerson" do
@@ -161,6 +163,150 @@ defmodule Memba.Membership.PersonTest do
                Person.execute(person, %CreatePerson{
                  person_id: person_id,
                  name: "Alice",
+                 email: "alice@example.com"
+               })
+    end
+  end
+
+  describe "execute/2 RenamePerson" do
+    test "normalizes surrounding and internal whitespace, then applies only the name" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      assert %PersonRenamed{
+               person_id: ^person_id,
+               name: "Alice María 山田"
+             } =
+               event =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: " \t Alice \n María　山田 \r ",
+                 expected_name: "  Alice  "
+               })
+
+      assert %Person{name: "Alice María 山田"} = renamed = Person.apply(person, event)
+      assert renamed.person_id == person.person_id
+      assert renamed.email == person.email
+      assert renamed.email_addresses == person.email_addresses
+      assert renamed.merged_source_person_ids == person.merged_source_person_ids
+    end
+
+    test "accepts the 100-grapheme boundary and rejects 101 graphemes" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+      one_hundred = String.duplicate("é", 100)
+      one_hundred_and_one = one_hundred <> "é"
+
+      assert %PersonRenamed{name: ^one_hundred} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: one_hundred,
+                 expected_name: "Alice"
+               })
+
+      assert {:error, :invalid_name} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: one_hundred_and_one,
+                 expected_name: "Alice"
+               })
+    end
+
+    test "accepts punctuation, non-Latin scripts, accents, and single-word names" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      for accepted_name <- ["O'Connor-Smith", "山田太郎", "Élodie", "Prince"] do
+        assert %PersonRenamed{name: ^accepted_name} =
+                 Person.execute(person, %RenamePerson{
+                   person_id: person_id,
+                   name: accepted_name,
+                   expected_name: "Alice"
+                 })
+      end
+    end
+
+    test "rejects blank names and stale baselines with the authoritative current name" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      assert {:error, :invalid_name} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: " \t\n ",
+                 expected_name: "Alice"
+               })
+
+      assert {:error, {:name_conflict, "Alice"}} =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Jones",
+                 expected_name: "Alice Smith"
+               })
+    end
+
+    test "uses normalized value comparison for changes away and back" do
+      person_id = Memba.ID.generate(:person)
+      original = created_person(person_id)
+
+      first_event =
+        Person.execute(original, %RenamePerson{
+          person_id: person_id,
+          name: "Alice Jones",
+          expected_name: "Alice"
+        })
+
+      changed = Person.apply(original, first_event)
+
+      second_event =
+        Person.execute(changed, %RenamePerson{
+          person_id: person_id,
+          name: " Alice ",
+          expected_name: " Alice   Jones "
+        })
+
+      assert %PersonRenamed{name: "Alice"} = second_event
+      assert %Person{name: "Alice"} = Person.apply(changed, second_event)
+    end
+
+    test "an identical normalized target is an eventless success despite a stale baseline" do
+      person_id = Memba.ID.generate(:person)
+      person = created_person(person_id)
+
+      assert [] =
+               Person.execute(person, %RenamePerson{
+                 person_id: person_id,
+                 name: " \t Alice \n ",
+                 expected_name: "A much older name"
+               })
+    end
+
+    test "rejects rename before creation and a mismatched aggregate identity" do
+      person_id = Memba.ID.generate(:person)
+
+      assert {:error, :person_not_created} =
+               Person.execute(%Person{}, %RenamePerson{
+                 person_id: person_id,
+                 name: "Alice Jones",
+                 expected_name: "Alice"
+               })
+
+      assert {:error, :invalid_person_id} =
+               Person.execute(created_person(person_id), %RenamePerson{
+                 person_id: Memba.ID.generate(:person),
+                 name: "Alice Jones",
+                 expected_name: "Alice"
+               })
+    end
+
+    test "does not apply rename validation retrospectively to PersonCreated history" do
+      person_id = Memba.ID.generate(:person)
+      legacy_name = String.duplicate("A", 101) <> "  Legacy"
+
+      assert %PersonCreated{name: ^legacy_name} =
+               Person.execute(%Person{}, %CreatePerson{
+                 person_id: person_id,
+                 name: legacy_name,
                  email: "alice@example.com"
                })
     end

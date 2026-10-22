@@ -1,12 +1,17 @@
 defmodule Memba.Membership.PersonCommands do
   @moduledoc """
-  Prepare CreatePerson commands without dispatching them. The projected email
-  ownership check is a preflight; the Person aggregate still validates creation.
+  Prepare Person commands without dispatching them.
+
+  Creation's projected email ownership check is a preflight; the Person
+  aggregate still validates creation. Self-service rename resolves its target
+  from trusted actor context rather than editable attributes.
   """
 
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RenamePerson
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.PersonEmailAddressCommands
+  alias Memba.Membership.PersonQueries
 
   def prepare_create(attrs) when is_map(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
@@ -20,6 +25,27 @@ defmodule Memba.Membership.PersonCommands do
       end
     end
   end
+
+  def prepare_rename(actor_context, attrs) when is_map(actor_context) and is_map(attrs) do
+    with {:ok, actor_email} <- fetch_required(actor_context, :email),
+         %{person_id: person_id} <-
+           PersonQueries.get_verified_person_by_email(actor_email) || {:error, :unauthorized},
+         :ok <- authorize_rename_target(attrs, person_id),
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, expected_name} <- fetch_required(attrs, :expected_name) do
+      {:ok,
+       %RenamePerson{
+         person_id: person_id,
+         name: name,
+         expected_name: expected_name
+       }}
+    else
+      {:error, {:missing_required_attribute, :email}} -> {:error, :unauthorized}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+    end
+  end
+
+  def prepare_rename(_actor_context, _attrs), do: {:error, :unauthorized}
 
   defp normalize_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
     with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
@@ -46,6 +72,14 @@ defmodule Memba.Membership.PersonCommands do
         with {:ok, email} <- fetch_required(attrs, :email) do
           {:ok, %{email: email}}
         end
+    end
+  end
+
+  defp authorize_rename_target(attrs, actor_person_id) do
+    case fetch_optional(attrs, :person_id) do
+      {:ok, ^actor_person_id} -> :ok
+      {:ok, _other_person_id} -> {:error, :unauthorized}
+      :error -> :ok
     end
   end
 

@@ -27,7 +27,8 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
     PersonEmailAddressRemoved,
     PersonEmailAddressVerified,
     PersonEmailAddressesReplaced,
-    PersonPrimaryEmailAddressChanged
+    PersonPrimaryEmailAddressChanged,
+    PersonRenamed
   }
 
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -1026,6 +1027,10 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
         person_id: "person-1",
         email: "alice+old@example.com",
         normalized_email: "alice+old@example.com"
+      },
+      %PersonRenamed{
+        person_id: "person-1",
+        name: "Alice Jones"
       }
     ]
 
@@ -1034,6 +1039,21 @@ defmodule MembaWeb.LiveQuery.MembaReadModelSourceTest do
       events,
       [{:person, "person-1"}, {:person_emails, "person-1"}]
     )
+  end
+
+  test "PersonRenamed invalidates only the represented Person scopes" do
+    source = MembaReadModelSource.new()
+
+    assert {:ok, [{:person, "person-1"}, {:person_emails, "person-1"}]} =
+             Source.classify(
+               source,
+               notification(
+                 Memba.Membership.Projectors.Person,
+                 %PersonRenamed{person_id: "person-1", name: "Alice Jones"}
+               )
+             )
+
+    refute Source.matches?(source, {:person, "person-2"}, {:person, "person-1"})
   end
 
   test "covers Group and GroupMembership entry and exit event families" do

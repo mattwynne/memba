@@ -5,6 +5,7 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
   alias Memba.Membership.CommandDispatch
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonRenamed
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -103,6 +104,52 @@ defmodule Memba.Membership.PersonCommandDispatchTest do
                person_id: person_id,
                normalized_email: "alice@work.example"
              )
+  end
+
+  test "dispatches a self-authorized rename and projects only its normalized name" do
+    person_id = Memba.ID.generate(:person)
+
+    assert {:ok, create_command} =
+             PersonCommands.prepare_create(%{
+               person_id: person_id,
+               name: "Alice   Legacy",
+               email: "Alice@Example.COM"
+             })
+
+    assert :ok = CommandDispatch.dispatch(create_command, consistency: :strong)
+
+    before_rename = PersonQueries.get_person(person_id)
+    before_addresses = PersonQueries.list_person_email_addresses(person_id)
+
+    assert {:ok, rename_command} =
+             PersonCommands.prepare_rename(
+               %{email: "alice@example.com"},
+               %{name: "  Alice \t Jones  ", expected_name: before_rename.name}
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonRenamed{
+                  person_id: ^person_id,
+                  name: "Alice Jones"
+                }
+              ]
+            }} =
+             CommandDispatch.dispatch(rename_command,
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{
+             person_id: ^person_id,
+             name: "Alice Jones",
+             email: "alice@example.com",
+             merged_into_person_id: nil
+           } = PersonQueries.get_person(person_id)
+
+    assert PersonQueries.list_person_email_addresses(person_id) == before_addresses
   end
 
   test "rejects globally duplicate normalized email addresses before dispatch" do
