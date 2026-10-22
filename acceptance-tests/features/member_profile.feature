@@ -24,7 +24,7 @@ Rule: A conflicting stale change must not silently replace a newer name
 
 Rule: A Person's current name follows them across clubs and past contributions
 
-    @iteration-068 @wip
+    @iteration-068
     Scenario: Alice's corrected name appears across clubs and on earlier contributions
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice is a member of Rockies Cycling Co-op
