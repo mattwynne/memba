@@ -780,7 +780,9 @@ _precommit() {
     cd "$repo_root/dev-tests"
     NODE_PATH="$repo_root/acceptance-tests/node_modules" \
       "$repo_root/acceptance-tests/node_modules/.bin/cucumber-js" --config cucumber.js
-  )
+  ) || return $?
+  NODE_PATH="$repo_root/acceptance-tests/node_modules" \
+    node --test "$repo_root/dev-tools/bdd/test-delivery.cjs"
 }
 
 # @cmd Install local development and test dependencies
@@ -1402,7 +1404,7 @@ Usage: $0 fabro <command> [args]
 
 Commands:
   validate-plan <plan_path>
-  deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]
+  deliver <plan_path> [--domain-only] [--wait|--no-wait] [--poll-interval seconds]
   code-review <branch> <plan_path> [base_ref_or_base_sha]
   review <branch> <plan_path> [base_ref_or_base_sha]  (deprecated alias)
   pull-todo <run_id> [plan_path] [destination]
@@ -1767,16 +1769,18 @@ _fabro_restore_status_after_failed_implementation() {
 _fabro_deliver() {
   local plan_path="${1:-}"
   if [ "$plan_path" = "-h" ] || [ "$plan_path" = "--help" ]; then
-    echo "Usage: $0 fabro deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]" >&2
+    echo "Usage: $0 fabro deliver <plan_path> [--domain-only] [--wait|--no-wait] [--poll-interval seconds]" >&2
     exit 0
   fi
   if [ $# -gt 0 ]; then
     shift
   fi
   local wait_for_wip=1
+  local domain_only=0
   local poll_interval=60
   while [ $# -gt 0 ]; do
     case "$1" in
+      --domain-only) domain_only=1; shift ;;
       --wait) wait_for_wip=1; shift ;;
       --no-wait) wait_for_wip=0; shift ;;
       --poll-interval)
@@ -1788,14 +1792,14 @@ _fabro_deliver() {
         shift 2
         ;;
       -h|--help|"")
-        echo "Usage: $0 fabro deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]" >&2
+        echo "Usage: $0 fabro deliver <plan_path> [--domain-only] [--wait|--no-wait] [--poll-interval seconds]" >&2
         exit 0
         ;;
       *) echo "Unknown deliver option: $1" >&2; exit 2 ;;
     esac
   done
   if [ -z "$plan_path" ]; then
-    echo "Usage: $0 fabro deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]" >&2
+    echo "Usage: $0 fabro deliver <plan_path> [--domain-only] [--wait|--no-wait] [--poll-interval seconds]" >&2
     exit 2
   fi
   case "$plan_path" in
@@ -1827,6 +1831,10 @@ _fabro_deliver() {
   fi
 
   git -C "$repo_root" pull --ff-only origin main
+  if [ "$domain_only" -eq 1 ]; then
+    _fabro_require_tool node
+    _fabro_assert_domain_source
+  fi
 
   local plan_status
   plan_status=$(_fabro_plan_status "$plan_path")
@@ -1865,6 +1873,10 @@ _fabro_deliver() {
     "$0" iteration check-clear "$plan_path" --allow-same-iteration
   fi
 
+  if [ "$domain_only" -eq 1 ]; then
+    _fabro_assert_domain_source
+  fi
+
   local previous_plan_status="$plan_status"
 
   echo "== Reserving implementation WIP slot =="
@@ -1885,6 +1897,25 @@ _fabro_deliver() {
   local base_sha
   base_sha=$(git -C "$repo_root" rev-parse origin/main^{commit})
   echo "Review base SHA: $base_sha"
+
+  if [ "$domain_only" -eq 1 ]; then
+    # A competing main update after reservation must not select another source
+    # or roll back metadata against somebody else's commit.
+    _fabro_assert_domain_source
+    # Bind the public pending report to the selected plan before creating a run.
+    # A failed admission is known to be unlaunched, unlike a lost CLI acknowledgement.
+    local pending_report
+    if ! pending_report=$("$0" bdd pending HEAD --json) ||
+      ! jq -e --arg plan "$plan_path" --arg sha "$base_sha" \
+        '.plan == $plan and .commit == $sha and (.pending | length > 0)' \
+        <<< "$pending_report" >/dev/null; then
+      echo "Domain admission failed: the selected plan must have eligible pending domain declarations at the published source SHA." >&2
+      _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
+      return 1
+    fi
+    _fabro_launch_domain "$plan_path"
+    return $?
+  fi
 
   echo "== Starting implementation workflow =="
   local implementation_output implementation_create_status implementation_run_id implementation_status_kind implementation_status_class
@@ -1965,6 +1996,39 @@ _fabro_deliver() {
     echo "Delivery remains successful. Retry with: $0 fabro code-review origin/main $plan_path $base_sha" >&2
   fi
   return 0
+}
+
+_fabro_assert_domain_source() {
+  if [ "$(git -C "$repo_root" branch --show-current)" != "main" ] ||
+    [ -n "$(git -C "$repo_root" status --porcelain --untracked-files=all)" ] ||
+    [ "$(git -C "$repo_root" rev-parse HEAD)" != "$(git -C "$repo_root" rev-parse origin/main)" ]; then
+    echo "Domain implementation requires clean main and HEAD to equal origin/main; publish/review local commits separately." >&2
+    exit 1
+  fi
+}
+
+_fabro_launch_domain() {
+  local plan_path="$1"
+  local output run_id create_status=0
+  echo "== Starting domain-only implementation; no review, merge or product publication =="
+  output=$(cd "$repo_root" && command fabro run .fabro/workflows/bdd-plan-implementation/workflow.toml \
+    --environment memba-dev \
+    -I commit=HEAD \
+    --no-upgrade-check --detach --json) || create_status=$?
+  printf '%s\n' "$output"
+  run_id=$(jq -er '.run_id | select(type == "string" and test("^[0-9A-HJKMNP-TV-Z]{26}$"))' \
+    <<< "$output" 2>/dev/null) || run_id=""
+  if [ "$create_status" -ne 0 ] || [ -z "$run_id" ]; then
+    echo "Domain launch acknowledgement is uncertain. Preserve the implementing reservation; inspect Fabro before retrying or changing lifecycle state." >&2
+    if [ -n "$run_id" ]; then
+      _fabro_print_implementation_recovery_commands "$run_id" "$plan_path" 60
+    fi
+    return 1
+  fi
+  echo "Domain implementation run ID: $run_id"
+  echo "Launched detached; this is not evidence that implementation has passed."
+  echo "The iteration remains implementing. Review the final checkpoint and any remaining journeys/UI/technical work before separately approving merge or delivery."
+  echo "Monitor with: fabro wait $run_id --no-upgrade-check"
 }
 
 _fabro_review_worktree=""

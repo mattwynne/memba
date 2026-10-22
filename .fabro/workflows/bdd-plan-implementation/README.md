@@ -1,7 +1,9 @@
 # Plan-level BDD workflow
 
 This opt-in native Fabro workflow implements an active plan's domain scenarios
-one at a time. It does not change `fabro deliver`.
+one at a time. The delivery skill recommends it for suitable small, agreed
+domain-focused work through `bin/dev fabro deliver <plan> --domain-only`.
+Ordinary delivery without that flag is unchanged.
 
 On stock Fabro `0.389.0-nightly.0`, one historical rehearsal completed all three
 domain scenarios with graph-owned full checks and no manual repair. The
@@ -62,7 +64,14 @@ This is not a reliability estimate or approval to deploy the historical result.
 
 ## Evidence boundary
 
-Launch the public entry with the environment explicitly selected:
+For a real ready/validated iteration, use `bin/dev fabro deliver <plan>
+--domain-only` after explicit approval. The helper owns validation, predecessor
+and WIP checks, source/plan admission and lifecycle reservation; the graph
+leaves the product candidate for review and separate merge approval. It does
+not complete pending journeys or other plan obligations.
+
+For an explicitly approved fixture or split-phase operation that already meets
+those prerequisites, launch the public entry with the environment selected:
 
 ```bash
 fabro run .fabro/workflows/bdd-plan-implementation/workflow.toml --environment memba-dev

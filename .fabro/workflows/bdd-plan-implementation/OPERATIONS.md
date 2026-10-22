@@ -8,16 +8,22 @@
 
 This opt-in workflow implements the domain scenarios in one active plan. It does
 not implement journeys, refactor or review the result, publish it, or mark the
-iteration merged. The normal `fabro deliver` command is unchanged.
+iteration merged. Use `bin/dev fabro deliver <plan> --domain-only` for the guarded
+real-plan route after approval. Ordinary delivery without that flag is unchanged.
 
 ## Prepare the committed plan and TODOs
 
-Start with one committed active plan and committed acceptance features. Give
+For a real iteration, start with a published ready/validated plan and committed
+acceptance features. The delivery helper owns validation and reserves the
+implementing status; do not mark it active by hand to bypass those checks.
+For an already approved split-phase fixture, require one committed active plan.
+Give
 each in-scope domain `Scenario`, `Scenario Outline`, or `Examples` declaration
 its own `@todo`. Keep journeys separate; outstanding journeys do not keep the
 domain loop running.
 
-Check the exact commit the workflow will use:
+Once the plan is active (or when inspecting an approved active fixture), check
+the exact commit the workflow will use:
 
 ```bash
 dev bdd pending HEAD
@@ -79,7 +85,22 @@ fabro --no-upgrade-check version --server https://fabro.home.wynne.family --json
 ```
 
 Both must be the qualified 0.389 version; an upgraded local CLI alone is not a
-server upgrade. Then use the stock-native entry with the catalog selected:
+server upgrade. For a real ready/validated iteration, show the exact plan and
+mode to Matt, explain remaining obligations and obtain launch approval, then use:
+
+```bash
+bin/dev fabro deliver docs/iterations/NNN-topic/plan.md --domain-only
+```
+
+The helper requires clean published main, validates ready plans, checks
+predecessors and WIP, commits/pushes the implementing reservation, and binds
+public pending output to the requested plan and source SHA. It launches detached
+with explicit `memba-dev` and literal `HEAD`, without product publication or
+post-merge review. A run ID is launch acknowledgement, not a passing result.
+Uncertain acknowledgement preserves the reservation: inspect before retrying.
+
+Only an explicitly approved fixture or split-phase operation that already meets
+those prerequisites should use the stock-native entry directly:
 
 ```bash
 fabro run .fabro/workflows/bdd-plan-implementation/workflow.toml --environment memba-dev
@@ -90,8 +111,9 @@ all prompt files are descendants of that directory, as required by stock
 0.389's package collector. Keep the nested package canonical; do not copy its
 graph or prompts elsewhere.
 
-Do not add an input flag. The checked-in run input is the literal Git reference
-`HEAD`; the selector receives only that commit reference in its canonical task
+Do not substitute a SHA or another reference for the run input. Both the
+checked-in input and the helper's explicit `-I commit=HEAD` use the literal Git
+reference `HEAD`; the selector receives only that reference in its canonical task
 body. Every selector visit is truncate-fidelity with no thread ID or output
 schema. Stock adds its minimal goal/run-ID preamble, so this is not the same
 invocation as the earlier isolated full-fidelity literal-SHA selector trials.

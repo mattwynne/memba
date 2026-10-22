@@ -3,21 +3,21 @@
 Fabro iteration delivery is launched from one user-controlled shell entry point:
 
 ```bash
-bin/dev fabro deliver docs/iterations/NNN-topic/plan.md [--wait|--no-wait] [--poll-interval seconds]
+bin/dev fabro deliver docs/iterations/NNN-topic/plan.md [--domain-only] [--wait|--no-wait] [--poll-interval seconds]
 ```
 
 The helper runs the real workflows directly from the CLI, so approval stays at the user-run command boundary instead of inside worker-created child runs:
 
 1. `plan-validation` validates the plan at `plan_path` with `--auto-approve` only when the plan status is `ready`. A plan already marked `validated` reuses that result and skips validation. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
 2. `bin/dev` checks that all earlier-numbered iterations are `merged`, then waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the predecessor and WIP checks pass, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
-3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, marks the iteration `merged`, and pushes that commit directly to `main`. A blocked verdict or the third revision verdict pauses at a Slack freeform discussion before Fabro's iteration-wide revision visit limit. This is for either business examples or architectural/technical constraints, not an automatic scope change. The discussion stops without accepting the task or publishing; recovery from the preserved checkpoint is a separate decision. Implementation launches must not use `--auto-approve`.
-4. `code-review` is launched detached after that publication. One focused OpenAI reviewer classifies the merged diff as clean, bounded heal, durable non-urgent record, or consequential human judgement. It is a healer, not a delivery gate: failures and unanswered human gates remain on the review run and never rewrite successful implementation delivery. A bounded code/config/test heal gets one pass and an exact-state `dev check` before a separate commit; a docs-only code-health record is published without an unnecessary full gate.
+3. Without `--domain-only`, `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, marks the iteration `merged`, and pushes that commit directly to `main`. A blocked verdict or the third revision verdict pauses at a Slack freeform discussion before Fabro's iteration-wide revision visit limit. This is for either business examples or architectural/technical constraints, not an automatic scope change. The discussion stops without accepting the task or publishing; recovery from the preserved checkpoint is a separate decision. Implementation launches must not use `--auto-approve`.
+4. Without `--domain-only`, `code-review` is launched detached after that publication. One focused OpenAI reviewer classifies the merged diff as clean, bounded heal, durable non-urgent record, or consequential human judgement. It is a healer, not a delivery gate: failures and unanswered human gates remain on the review run and never rewrite successful implementation delivery. A bounded code/config/test heal gets one pass and an exact-state `dev check` before a separate commit; a docs-only code-health record is published without an unnecessary full gate.
 
 Canonical commands:
 
 ```bash
 bin/dev fabro validate-plan docs/iterations/NNN-topic/plan.md
-bin/dev fabro deliver docs/iterations/NNN-topic/plan.md [--wait|--no-wait] [--poll-interval seconds]
+bin/dev fabro deliver docs/iterations/NNN-topic/plan.md [--domain-only] [--wait|--no-wait] [--poll-interval seconds]
 bin/dev fabro code-review <branch> docs/iterations/NNN-topic/plan.md [base_ref_or_base_sha]
 bin/dev fabro clean-branches [--force]
 ```
@@ -57,11 +57,33 @@ Memba wrapper or evaluation that calls `fabro run` directly.
 
 ## Implementing a plan's domain scenarios
 
-[`bdd-plan-implementation`](bdd-plan-implementation/README.md) is an assembled
-opt-in native graph for selecting and implementing domain scenarios one at a
-time. Its deterministic mechanics have ordinary coverage, but the exact graph
-has not yet had a managed source gate or live model rehearsal. This remains
-separate from `fabro deliver`.
+[`bdd-plan-implementation`](bdd-plan-implementation/README.md) selects and
+implements domain declarations one at a time. The rebased source passed managed
+Docker checks, and one historical three-scenario rehearsal completed without
+manual repair. See [the result and its limits](bdd-plan-implementation/REHEARSAL.md).
+
+The `iteration-delivery` skill recommends this route for suitable small,
+clearly agreed domain-focused work, and asks approval of:
+
+```bash
+bin/dev fabro deliver docs/iterations/NNN-topic/plan.md --domain-only
+```
+
+This option reuses the helper's validation, predecessor and WIP reservation
+checks. It additionally requires clean published main and checks public
+`bdd pending HEAD --json` against the requested plan and source SHA before
+starting the canonical graph with explicit `memba-dev` and literal `HEAD`.
+A known pre-launch admission failure releases its own reservation; uncertain
+launch acknowledgement preserves it and requires inspection, never an automatic
+retry. The launch returns a detached run ID, not a passing implementation result.
+
+Unlike ordinary delivery, this mode does **not** run the legacy implementation
+or post-merge review workflows, merge product code, deploy or mark the iteration
+merged. Lifecycle reservation metadata is still committed/pushed to main by the
+helper. The final candidate, checks and any remaining journeys/UI/technical work
+must be reviewed before separate merge/delivery approval. An explicit domain
+phase of a larger plan needs agreement about those remaining obligations.
+Without the flag, the existing full delivery behavior is unchanged.
 
 ## Managed clone contract
 

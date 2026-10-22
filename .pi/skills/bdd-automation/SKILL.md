@@ -42,6 +42,10 @@ Express the responsibility and significant example values in the readable check;
 
 When summarizing an automation approach, name its rule examples, browser risks (if any), proving boundaries, pending coverage and deliberate omissions. Ask the person responsible for the scenarios when a coverage trade-off or new product interaction is material.
 
+## Memba implementation handoff
+
+When asked to implement an approved iteration rather than design its automation, hand off to [`iteration-delivery`](../iteration-delivery/SKILL.md). It recommends the plan-level BDD loop for suitable small domain-focused work and asks for approval of `bin/dev fabro deliver <plan> --domain-only`. That guarded route selects and implements one declaration at a time with graph-owned full checks; it leaves a candidate for review, not a merged or delivered iteration. Browser journeys and other remaining obligations stay explicit. Technical/refactoring or UI-led plans may need full delivery instead. This automation skill does not grant launch approval, choose new product rules, or bypass plan validation and ordering/WIP controls.
+
 ## Sources
 
 These sources ground the guidance; the references hold attribution and evidence limits rather than prescribing every choice above.

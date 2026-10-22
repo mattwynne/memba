@@ -42,7 +42,7 @@ The selected specialist returns either:
 - a question or decision for Matt; or
 - a precise planning, publication, or optional-validation blocker.
 
-For a published ready or validated plan, invoke `iteration-delivery`. That skill owns the single explicit launch decision and the Fabro command. Planning, publication, or validation-only success does not imply launch approval.
+For a published ready or validated plan, invoke `iteration-delivery` with the agreed domain features and any remaining UI/journey/technical obligations. That skill recommends the plan-level BDD loop (`deliver --domain-only`) for suitable small domain-focused work, or the existing full delivery path for other agreed work. It explains the selected scope and owns the single explicit launch decision and guarded Fabro command. A domain-only run leaves a candidate for review; it is not full delivery or merge approval. Do not choose or launch the graph in this router. Planning, publication, or validation-only success does not imply launch approval.
 
 ## Process Flow
 
@@ -59,7 +59,7 @@ digraph iteration_planning {
   technical [label="technical-iteration-planning"];
   result [shape=diamond, label="Published ready or\nvalidated plan?"];
   blocked [label="Return question or blocker to Matt"];
-  delivery [label="iteration-delivery\nasks: validate and, if it passes, implement?"];
+  delivery [label="iteration-delivery\nrecommends domain-only or full delivery\nexplains scope and asks approval"];
   stop [shape=doublecircle, label="Stop, validation-only, or implement\nonly with explicit approval"];
 
   start -> context -> intake -> classify;
