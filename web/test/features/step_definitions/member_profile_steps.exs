@@ -8,6 +8,7 @@ defmodule Memba.Cucumber.MemberProfileSteps do
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias MembaWeb.MemberDashboardQuery
+  alias MembaWeb.MemberMessageDetailQuery
 
   step "{word} is known as {string}", %{args: [person_name, requested_name]} = context do
     rename_person!(context, person_name, requested_name)
@@ -46,6 +47,40 @@ defmodule Memba.Cucumber.MemberProfileSteps do
 
     assert %{originator_id: ^person_id, originator_name: ^expected_name} =
              Enum.find(dashboard.message_rows, &(&1.message_id == message.message_id))
+
+    context
+  end
+
+  step ~r/^(\w+)'s earlier reply to "([^"]+)" should show "([^"]+)" as its author$/,
+       %{args: [person_name, subject, expected_name]} = context do
+    person = fetch_person!(context, person_name)
+    root_message = context |> Map.fetch!(:messages) |> Map.fetch!(subject)
+    reply = Map.fetch!(context, :last_reply)
+    person_id = person.person_id
+    club_id = root_message.club_id
+    root_message_id = root_message.message_id
+
+    assert %{
+             club_id: ^club_id,
+             conversation_id: ^root_message_id,
+             sender_id: ^person_id,
+             subject: ^subject
+           } = reply
+
+    assert {:ok, detail} =
+             MemberMessageDetailQuery.load(club_id, root_message_id, person.email)
+
+    reply_message_id = reply.message_id
+
+    assert %{
+             kind: :reply,
+             message: %{message_id: ^reply_message_id, sender_id: ^person_id},
+             sender_name: ^expected_name
+           } =
+             Enum.find(
+               detail.conversation_entries,
+               &(&1.message.message_id == reply_message_id)
+             )
 
     context
   end
