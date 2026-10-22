@@ -32,7 +32,7 @@ An open LiveView reflects relevant committed projection changes without each pag
 
 ### Out of scope
 
-- Name editing (renumbered iteration 068) and profile photos (070); neither PersonRenamed nor photo events are introduced here.
+- Name editing (renumbered iteration 068) and profile photos (subsequently returned to the [problem backlog](../../problems/2026-10-22-members-cannot-set-profile-photos.md)); neither PersonRenamed nor photo events are introduced here.
 - Controllers, static pages, email rendering, and non-LiveView consumers; redesigning or merging underlying projection schemas; event-sourcing or Commanded replacement.
 - One dedicated process per query, global shared result cache, generic SQL predicate introspection, patching individual fields from events, durable PubSub delivery, or publication to Hex.
 - Automatically treating a transient input or command form as a projection-backed query result.

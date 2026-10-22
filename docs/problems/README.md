@@ -4,6 +4,7 @@ Captured product problems and their current resolution status.
 
 | Observed | Problem | Status | Matched iteration / evidence |
 | --- | --- | --- | --- |
+| 2026-10-22 | [Members cannot set their own profile photo](2026-10-22-members-cannot-set-profile-photos.md) | Unresolved | Returned from the former iteration 070 to the problem backlog; public-photo decision and draft examples retained, no iteration assigned. |
 | 2026-10-21 | [New members cannot be invited directly to a group](2026-10-21-cannot-invite-new-member-directly-to-group.md) | Unresolved | Invitations are only available through Everyone, not the intended group. No iteration assigned. |
 | 2026-10-21 | [Club members cannot see pending invitations](2026-10-21-club-members-cannot-see-pending-invitations.md) | Unresolved | Member visibility, distinct from Staff and Membership Admin invitation management. No iteration assigned. |
 | 2026-10-13 | [People cannot ask Memba to erase personal data](2026-10-13-personal-data-erasure-missing.md) | Unresolved | [Iteration 070](../iterations/070-console-person-merge/plan.md) deliberately preserves historical identity shells; erasure needs a separate data inventory, retention policy, and processor-aware workflow. |

@@ -78,7 +78,6 @@ historical plans, specify current behaviour.
 | 067 | 2026-09-28 | merged | Live projection queries for open club-member pages | [plan](067-live-projection-queries/plan.md) — `live_club_member_list.feature` |
 | 068 | 2026-08-13 | merged | Members change their own name | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
 | 069 | 2026-10-13 | merged | Merge uncomplicated duplicate people from the console | [plan](069-console-person-merge/plan.md) — `person_merge.feature` |
-| 070 | 2026-08-13 | needs-revision | Members set their own profile photo (renumbered; dependency review pending) | [plan](070-member-profile-photo/plan.md) — `member_profile.feature` |
 
 The former 065–067 plans were shifted to 066–068 to make room for the
 browser-suite work recorded at 065. The re-planned 066 replaced its earlier
@@ -90,7 +89,10 @@ On 2026-10-13, delivered console Person merge moved from 070 to 069, and the
 unimplemented profile-photo plan moved from 069 to 070. This keeps delivered
 iterations together before the pending photo work. Scenario tags and current
 plan references follow the new numbers; historical delivery receipts retain
-those used at the time.
+those used at the time. On 2026-10-22, Matt moved the unimplemented photo work
+back to the [problem backlog](../problems/2026-10-22-members-cannot-set-profile-photos.md).
+Its former 070 allocation is no longer in the iteration queue; the earlier draft
+and six examples are retained with the problem, not in the acceptance suite.
 
 Status notes:
 
@@ -126,5 +128,5 @@ Shared acceptance feature files used across these iterations (tag descriptions b
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
 - [`live_club_member_list.feature`](../../acceptance-tests/features/live_club_member_list.feature) (`@iteration-067` executable example for an already-open club member list updating automatically).
-- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (068 self-service name domain examples are executable, alongside the focused [`member_profile` browser journey](../../acceptance-tests/features/journeys/member_profile.feature). All six `@iteration-070 @todo` photo examples remain deferred; only their iteration tags changed during renumbering.)
+- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (068 self-service name domain examples are executable, alongside the focused [`member_profile` browser journey](../../acceptance-tests/features/journeys/member_profile.feature). Photo work is back in the [problem backlog](../problems/2026-10-22-members-cannot-set-profile-photos.md), with its six draft examples retained there rather than in this acceptance feature.)
 - [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (058 introduced selected-group scope and composition; 061 added discovery and restricted surfaces. 065 intentionally removed remembered restoration; the explicit group URL remains. the superseded 066 affordance-only `@todo` example was replaced by the focused request feature and browser journey. Existing Board privacy/placeholder assertions remain executable until delivery changes the UI.)

@@ -14,7 +14,10 @@ The status alone does not establish or claim production verification.
 The approved scope, designs, model decisions and planning evidence below are retained as history.
 Statements about then-current repository gaps or pending implementation describe the planning
 baseline, not the completed candidate. The three 068 domain examples and Profile editing browser
-journey are now executable; all six deferred 070 photo scenarios retain their behaviour. The historical
+journey are now executable. On 2026-10-22 Matt returned photo work to the
+[problem backlog](../../problems/2026-10-22-members-cannot-set-profile-photos.md); its six draft examples
+retain their rule/step wording there, outside the acceptance suite. References to 070 photo
+scenarios below record the earlier planning boundary, not pending delivery work. The historical
 unattended attempt is not resumed or relabelled as delivered.
 
 ## Goal

@@ -4,8 +4,9 @@ Date: 2026-10-13
 Status: merged
 
 Delivered in `5645fb62d50892b763f419f4b08e5d22b9a0e4bd` and deployed on
-2026-10-13. Originally numbered 070; renumbered to 069 after delivery so the
-pending profile-photo iteration is 070.
+2026-10-13. Originally numbered 070; renumbered to 069 after delivery when the
+photo proposal moved to 070. On 2026-10-22 Matt returned photo work to the
+[problem backlog](../../problems/2026-10-22-members-cannot-set-profile-photos.md), with no iteration assigned.
 
 ## Goal
 

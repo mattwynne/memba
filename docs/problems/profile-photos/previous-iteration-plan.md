@@ -1,7 +1,9 @@
-# Members set their own profile photo
+# Previous iteration draft: members set their own profile photo
 
 Date: 2026-08-13
-Status: needs-revision — review against delivered 068 name editing and 069 Person merge
+Status: Historical draft — returned to the problem backlog on 2026-10-22
+
+Matt asked to remove this work from the iteration queue. The [current problem record](../2026-10-22-members-cannot-set-profile-photos.md) is authoritative for its backlog status and the confirmed public-photo decision. No iteration is assigned. This document preserves earlier design and implementation planning, not an approved checklist, acceptance contract, or permission to deliver. The old iteration numbers and signed-in-only rules below are historical; the latter were superseded by the public-photo decision.
 
 Renumbered from 069 to 070 on 2026-10-13 to follow the delivered console Person
 merge. This is a numbering change, not renewed approval or validation.
@@ -29,7 +31,7 @@ member rows, conversation avatar-stacks, message authors, and the design system'
 
 That makes this iteration the first upload pipeline in the codebase, which is why it is a separate
 slice from iteration 068's name editing rather than bundled with it (see
-[068](../068-member-name-editing/plan.md)). Iteration 068 should ship first; this iteration assumes
+[068](../../iterations/068-member-name-editing/plan.md)). Iteration 068 should ship first; this iteration assumes
 the Profile tab already has its editable-field structure.
 
 Initials are not replaced as a pattern. They remain the fallback for every member without a photo,
@@ -37,14 +39,14 @@ which is most members on day one.
 
 ## Related Problems
 
-- [`docs/problems/2026-06-23-interface-too-fancy-for-simple-app-use.md`](../../problems/2026-06-23-interface-too-fancy-for-simple-app-use.md):
+- [The interface feels too visually fancy](../2026-06-23-interface-too-fancy-for-simple-app-use.md):
   **neither resolved nor worsened, but relevant.** Real member photos make lists scannable in a way
   initials do not, which pulls toward the app-like feel that note asks for. It also adds visual
   weight. Keep the treatment plain: a circle, no shadows, no hover flourishes.
-- [`docs/problems/2026-06-08-club-onboarding-details-not-collected.md`](../../problems/2026-06-08-club-onboarding-details-not-collected.md):
+- [Club onboarding details are not collected](../2026-06-08-club-onboarding-details-not-collected.md):
   **left unresolved.** A photo is optional and self-service; this is not the reusable required-details
   mechanism that note calls for, and must not be mistaken for it.
-- [`docs/problems/2026-06-06-staff-merge-people.md`](../../problems/2026-06-06-staff-merge-people.md):
+- [Staff need to merge people](../2026-06-06-staff-merge-people.md):
   **left unresolved, with a new wrinkle.** Merging duplicate people will eventually have to decide
   which photo survives. Not this iteration's problem, but worth knowing it now exists.
 

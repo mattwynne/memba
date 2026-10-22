@@ -71,10 +71,11 @@ behaviour. The feature files, LiveView, and current tests define what ships.
   [058](../058-generic-group-scoped-club-home/plan.md), and
   [061](../061-discover-club-groups/plan.md); the later Everyone/default choice
   supersedes remembered restoration only, not URL-addressable group access.
-- The undelivered [066 request-access](../066-request-group-access/plan.md),
-  [068 name-editing](../068-member-name-editing/plan.md), and
-  [070 photo](../070-member-profile-photo/plan.md) plans retain their own
-  future scenarios and are not implemented by this delivery.
+- At this delivery, the [066 request-access](../066-request-group-access/plan.md),
+  [068 name-editing](../068-member-name-editing/plan.md), and photo proposals
+  retained their own future scenarios and were not implemented here. Photo work
+  subsequently returned to the [problem backlog](../../problems/2026-10-22-members-cannot-set-profile-photos.md)
+  on 2026-10-22; its draft examples are kept there, not in the acceptance suite.
 - Application, navigation, and responsive-check edits were staged alongside
   the browser-suite cut. Do not infer their validation from an old gate after
   any subsequent changes; run `dev check` on the final staged or committed

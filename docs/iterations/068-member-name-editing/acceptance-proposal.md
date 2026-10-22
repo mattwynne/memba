@@ -5,7 +5,10 @@ Status: complete. Actual feature files are authoritative; this note records cove
 Matt approved four example subjects and one Profile editing journey, extending an existing journey
 if present. Inspection found no existing Profile editing journey. Preserve the iteration-053
 Account settings entry example and all profile-photo scenario behaviour unchanged
-(now iteration-070 after the separately approved renumbering).
+(later tagged iteration-070 after the separately approved renumbering). On 2026-10-22 Matt
+returned photo work to the [problem backlog](../../problems/2026-10-22-members-cannot-set-profile-photos.md);
+the six photo examples now live with that problem, outside the acceptance suite, with their
+rule, scenario and step wording preserved. The allocation below records the delivered name work.
 
 ## Actual files
 
