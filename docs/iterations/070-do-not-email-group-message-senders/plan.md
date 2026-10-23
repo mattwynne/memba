@@ -1,7 +1,7 @@
 # Do not email new group messages to their senders
 
 Date: 2026-10-23
-Status: ready
+Status: validated
 
 ## Goal
 
