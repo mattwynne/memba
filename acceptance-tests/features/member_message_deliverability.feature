@@ -10,15 +10,16 @@ Feature: Member message deliverability
     And Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club
     And Pat is a member of Nelson Paddling Club
 
-Rule: Any member can send a message to every active member of their club
+Rule: A new group message is not emailed to its sender
 
+    @iteration-070 @todo
     Scenario: Alice sends a club message
       When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
-      And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
-      And Alice should not see Pat in the addressed members
-      And Alice should see every addressed member's status as "Sending"
-      And each addressed member should receive an email from Alice via Memba
+      And Alice should see the message was addressed to Bob, Carol, and Dana
+      And Bob, Carol, and Dana should each receive an email from Alice via Memba
+      But Alice should not receive an email for her own message
+      And Alice should not see a delivery status for herself
 
 Rule: Club-message emails identify the club in the subject
 
