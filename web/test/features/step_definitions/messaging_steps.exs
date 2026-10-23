@@ -495,6 +495,24 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
+  step "{word} should not see a delivery status for herself",
+       %{args: [viewer_name]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+
+    viewer_id = person_id_from_context!(context, viewer_name)
+
+    assert context.sent_message.sender_id == viewer_id
+
+    assert is_nil(
+             DeliveryQueries.get_member_email_delivery(
+               context.sent_message.message_id,
+               viewer_id
+             )
+           )
+
+    context
+  end
+
   step "{word} Memba staff email delivery status should be {string}",
        %{args: [recipient_name, expected_status]} = context do
     deliverability = memba_staff_email_delivery_for!(context, recipient_name)
