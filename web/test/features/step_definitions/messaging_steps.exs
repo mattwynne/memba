@@ -579,6 +579,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     |> assert_each_delivery_sent_through_provider(sender_name: sender_name)
   end
 
+  step "{word} should not receive an email for her own message",
+       %{args: [sender_name]} = context do
+    assert_root_message_email_not_delivered_to_sender(context, sender_name)
+  end
+
   step "each addressed member should receive an email with the subject {string}",
        %{args: [expected_subject]} = context do
     dispatch_pending_email_deliveries()
@@ -995,6 +1000,23 @@ defmodule Memba.Cucumber.MessagingSteps do
 
     refute Enum.any?(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
              request.message_id == reply.message_id and request.recipient_id == sender_id
+           end)
+
+    context
+  end
+
+  defp assert_root_message_email_not_delivered_to_sender(context, sender_name) do
+    message_id = context.sent_message.message_id
+    sender_id = person_id_from_context!(context, sender_name)
+
+    refute Enum.any?(DeliveryQueries.list_recipient_deliveries(message_id), fn delivery ->
+             delivery.recipient_id == sender_id
+           end)
+
+    dispatch_pending_email_deliveries()
+
+    refute Enum.any?(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
+             request.message_id == message_id and request.recipient_id == sender_id
            end)
 
     context
