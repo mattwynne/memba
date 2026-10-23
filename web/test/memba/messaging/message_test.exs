@@ -23,7 +23,7 @@ defmodule Memba.Messaging.MessageTest do
   alias Memba.Messaging.Recipient
 
   describe "execute/2 SendMessage" do
-    test "emits MessageSent, the audience group write grant, and one EmailDeliveryCreated per resolved recipient" do
+    test "omits the root sender by person identity when creating email deliveries" do
       message_id = Memba.ID.generate(:message)
       club_id = Memba.ID.generate(:club)
       sender_id = Memba.ID.generate(:person)
@@ -44,7 +44,7 @@ defmodule Memba.Messaging.MessageTest do
             delivery_id: alice_delivery_id,
             person_id: sender_id,
             name: " Alice Sender ",
-            email: " Alice@Example.COM "
+            email: " Alice.Alternate@Example.COM "
           },
           %Recipient{
             delivery_id: bob_delivery_id,
@@ -63,7 +63,8 @@ defmodule Memba.Messaging.MessageTest do
                  conversation_id: ^message_id,
                  reply_to_message_id: nil,
                  subject: "Trail day",
-                 body: "Meet at 9am."
+                 body: "Meet at 9am.",
+                 sender_follows_conversation: true
                },
                %ConversationAccessGrantedToGroup{
                  conversation_id: ^message_id,
@@ -73,19 +74,32 @@ defmodule Memba.Messaging.MessageTest do
                },
                %EmailDeliveryCreated{
                  message_id: ^message_id,
-                 delivery_id: ^alice_delivery_id,
-                 recipient_id: ^sender_id,
-                 recipient_name: "Alice Sender",
-                 recipient_email: "alice@example.com"
-               },
-               %EmailDeliveryCreated{
-                 message_id: ^message_id,
                  delivery_id: ^bob_delivery_id,
                  recipient_id: ^bob_id,
                  recipient_name: "Bob Recipient",
                  recipient_email: "bob@example.com"
                }
              ] = Message.execute(%Message{}, command)
+    end
+
+    test "keeps a sole root sender following while creating no email delivery" do
+      command = valid_send_message()
+
+      assert [
+               %MessageSent{
+                 message_id: message_id,
+                 conversation_id: message_id,
+                 sender_follows_conversation: true
+               },
+               %ConversationAccessGrantedToGroup{
+                 conversation_id: message_id,
+                 group_id: group_id,
+                 access_level: "write"
+               }
+             ] = Message.execute(%Message{}, command)
+
+      assert message_id == command.message_id
+      assert group_id == command.audience_group_id
     end
 
     test "rejects missing or malformed UUIDs" do

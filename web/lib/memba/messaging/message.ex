@@ -324,9 +324,23 @@ defmodule Memba.Messaging.Message do
           reply_to_message_id,
           audience_group_id
         ) ++
-        Enum.map(recipients, &email_delivery_created(command.message_id, &1))
+        (recipients
+         |> delivery_recipients(command, conversation_id, reply_to_message_id)
+         |> Enum.map(&email_delivery_created(command.message_id, &1)))
     end
   end
+
+  defp delivery_recipients(
+         recipients,
+         %SendMessage{message_id: message_id, sender_id: sender_id},
+         message_id,
+         nil
+       ) do
+    Enum.reject(recipients, &(&1.person_id == sender_id))
+  end
+
+  defp delivery_recipients(recipients, _command, _conversation_id, _reply_to_message_id),
+    do: recipients
 
   defp normalize_conversation_reference(message_id, conversation_id, reply_to_message_id) do
     conversation_id = conversation_id || ConversationReference.root_conversation_id(message_id)

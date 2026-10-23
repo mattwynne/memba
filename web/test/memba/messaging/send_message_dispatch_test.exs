@@ -48,7 +48,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^message_id,
-              aggregate_version: 4,
+              aggregate_version: 3,
               events: [
                 %MessageSent{
                   message_id: ^message_id,
@@ -62,13 +62,6 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
                   club_id: ^club_id,
                   group_id: ^group_id,
                   access_level: "write"
-                },
-                %EmailDeliveryCreated{
-                  message_id: ^message_id,
-                  delivery_id: ^alice_delivery_id,
-                  recipient_id: ^sender_id,
-                  recipient_name: "Alice Sender",
-                  recipient_email: "alice@example.com"
                 },
                 %EmailDeliveryCreated{
                   message_id: ^message_id,
@@ -87,8 +80,8 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
               }
             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
 
-    assert MapSet.equal?(email_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
-    assert MapSet.equal?(recipient_ids, MapSet.new([sender_id, bob_id]))
+    assert MapSet.equal?(email_delivery_ids, MapSet.new([bob_delivery_id]))
+    assert MapSet.equal?(recipient_ids, MapSet.new([bob_id]))
 
     assert ConversationGroupAccessQueries.group_has_conversation_access?(
              message_id,
@@ -110,8 +103,8 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
              recipient_ids: persisted_recipient_ids
            } = App.aggregate_state(Message, message_id)
 
-    assert MapSet.equal?(persisted_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
-    assert MapSet.equal?(persisted_recipient_ids, MapSet.new([sender_id, bob_id]))
+    assert MapSet.equal?(persisted_delivery_ids, MapSet.new([bob_delivery_id]))
+    assert MapSet.equal?(persisted_recipient_ids, MapSet.new([bob_id]))
   end
 
   test "Messaging app rejects a duplicate SendMessage for the same aggregate identity" do
@@ -142,7 +135,13 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
       recipients: []
     }
 
-    [recipient_command] = with_sender_recipient(command)
+    recipient_command = %Recipient{
+      delivery_id: Memba.ID.generate(:delivery),
+      person_id: Memba.ID.generate(:person),
+      name: "Bob Recipient",
+      email: "bob@example.com"
+    }
+
     delivery_id = recipient_command.delivery_id
     command = %SendMessage{command | recipients: [recipient_command]}
     message_id = command.message_id
