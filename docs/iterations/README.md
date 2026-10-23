@@ -78,7 +78,7 @@ historical plans, specify current behaviour.
 | 067 | 2026-09-28 | merged | Live projection queries for open club-member pages | [plan](067-live-projection-queries/plan.md) — `live_club_member_list.feature` |
 | 068 | 2026-08-13 | merged | Members change their own name | [plan](068-member-name-editing/plan.md) — `member_profile.feature` |
 | 069 | 2026-10-13 | merged | Merge uncomplicated duplicate people from the console | [plan](069-console-person-merge/plan.md) — `person_merge.feature` |
-| 070 | 2026-10-23 | validated | Do not email new group messages to their senders | [plan](070-do-not-email-group-message-senders/plan.md) — `member_message_deliverability.feature`; coherence updates allowed during delivery in existing group-conversation features/journey |
+| 070 | 2026-10-23 | implementing | Do not email new group messages to their senders | [plan](070-do-not-email-group-message-senders/plan.md) — `member_message_deliverability.feature`; coherence updates allowed during delivery in existing group-conversation features/journey |
 
 The former 065–067 plans were shifted to 066–068 to make room for the
 browser-suite work recorded at 065. The re-planned 066 replaced its earlier
