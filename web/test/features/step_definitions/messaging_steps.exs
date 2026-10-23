@@ -572,6 +572,13 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert_each_delivery_sent_through_provider(context, sender_name: "Alice")
   end
 
+  step ~r/^(.+) should each receive an email from (\w+) via Memba$/,
+       %{args: [recipient_names_text, sender_name]} = context do
+    context
+    |> assert_last_message_addressed_to(parse_person_list(recipient_names_text))
+    |> assert_each_delivery_sent_through_provider(sender_name: sender_name)
+  end
+
   step "each addressed member should receive an email with the subject {string}",
        %{args: [expected_subject]} = context do
     dispatch_pending_email_deliveries()
