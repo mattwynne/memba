@@ -440,10 +440,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     |> Map.put(:current_club_home_conversations, conversations)
   end
 
-  step "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
-       %{args: [viewer_name]} = context do
+  step ~r/^(\w+) should see the message was addressed to (.+)$/,
+       %{args: [viewer_name, recipient_names_text]} = context do
     assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
-    assert_last_message_addressed_to(context, ["Alice", "Bob", "Carol", "Dana"])
+
+    assert_last_message_addressed_to(context, parse_person_list(recipient_names_text))
   end
 
   step "{word} should not see {word} in the addressed members",
