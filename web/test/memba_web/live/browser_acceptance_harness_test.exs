@@ -58,8 +58,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> refute_has("[data-testid='message-row']")
     |> create_person("Alice")
     |> assert_has("#people [data-testid='person-row'][data-person-name='Alice']")
+    |> create_person("Bob")
+    |> assert_has("#people [data-testid='person-row'][data-person-name='Bob']")
     |> add_member("Alice")
     |> assert_has("#members [data-testid='member-row'][data-member-name='Alice']")
+    |> add_member("Bob")
+    |> assert_has("#members [data-testid='member-row'][data-member-name='Bob']")
     |> project_club_message("Alice", "Trip planning night", "Bring route ideas.")
     |> click_link("Open global Messages")
     |> assert_path("/admin/messages")
@@ -74,17 +78,22 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_has("#back-to-club-link[href^='/admin/clubs/']")
     |> assert_has("#addressed-recipients[aria-label='Addressed recipients']")
     |> assert_has(
+      "#addressed-recipients [data-testid='addressed-recipient'][data-recipient-name='Bob']"
+    )
+    |> refute_has(
       "#addressed-recipients [data-testid='addressed-recipient'][data-recipient-name='Alice']"
     )
     |> assert_has("#delivery-records[aria-label='Email deliveries']")
-    |> assert_has(
+    |> assert_has("#delivery-records [data-testid='delivery-record'][data-recipient-name='Bob']")
+    |> refute_has(
       "#delivery-records [data-testid='delivery-record'][data-recipient-name='Alice']"
     )
     |> assert_has(
       "#delivery-records [data-testid='delivery-status'][data-delivery-status='pending']"
     )
     |> assert_has("#member-receipts[aria-label='Member email delivery statuses']")
-    |> assert_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Alice']")
+    |> assert_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Bob']")
+    |> refute_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Alice']")
     |> assert_has("#member-receipts [data-testid='receipt-status'][data-receipt-status='sent']")
   end
 
