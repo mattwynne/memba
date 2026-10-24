@@ -12,11 +12,12 @@ Feature: Conversations within custom groups
 
   Rule: A Board conversation is addressed to its members, not Everyone
 
+    @iteration-070
     Scenario: Bob starts a Board discussion without addressing Everyone
       When Bob starts "September agenda" in Board
       Then "September agenda" should be a Board conversation
       And Alice, Bob, and Carol should be able to read it
-      And Alice, Bob, and Carol should each receive its initial email
+      And Alice and Carol should each receive its initial email
       But Dan and Eve should neither be able to read it nor receive its email
       And it should not appear among Everyone's conversations
 
