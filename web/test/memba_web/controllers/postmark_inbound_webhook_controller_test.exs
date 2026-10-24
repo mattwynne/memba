@@ -444,11 +444,30 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     assert %{"status" => "accepted"} = json_response(conn, 202)
     assert Fake.deliveries() == []
 
-    assert [%{status: "sent"}, %{status: "sent"}] =
-             EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    dispatched_deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+    assert [
+             %{
+               recipient_id: bob_id,
+               recipient_address: "bob@example.com",
+               status: "sent"
+             }
+           ] = dispatched_deliveries
+
+    assert bob_id == bob.person_id
+    refute Enum.any?(dispatched_deliveries, &(&1.recipient_id == alice.person_id))
 
     first_deliveries = Fake.deliveries()
-    assert length(first_deliveries) == 2
+
+    assert [
+             %{
+               recipient_id: ^bob_id,
+               recipient_name: "Bob Example",
+               recipient_address: "bob@example.com"
+             }
+           ] = first_deliveries
+
+    refute Enum.any?(first_deliveries, &(&1.recipient_id == alice.person_id))
 
     retry_payload =
       valid_payload(%{
