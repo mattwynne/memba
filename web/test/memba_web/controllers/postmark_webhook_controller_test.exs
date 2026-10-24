@@ -87,7 +87,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
   test "maps realistic Postmark delivery events with outbound metadata", %{
     conn: conn
   } do
-    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+    %{message_id: message_id, recipients: [_sender, bob]} =
+      message = send_message_to(["Sender", "Bob"])
 
     conn =
       post_postmark_event(conn, realistic_postmark_payload(:delivered, message, bob))
