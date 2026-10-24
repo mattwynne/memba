@@ -1275,8 +1275,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   test "accepted inbound email uses normalized plain text and ignores HTML" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
 
     add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
 
     assert {:ok, %{message_id: message_id}} =
              InboundClubEmail.receive(
@@ -1304,16 +1306,36 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert %{body: "Bring route ideas.\n\nMeet at 7."} = MessageQueries.get_message(message_id)
 
-    assert [%{status: "pending"}] = DeliveryQueries.list_recipient_deliveries(message_id)
+    pending_deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+
+    assert [
+             %{recipient_id: bob_id, recipient_address: "bob@example.com", status: "pending"}
+           ] = pending_deliveries
+
+    assert bob_id == bob.person_id
+    refute Enum.any?(pending_deliveries, &(&1.recipient_id == alice.person_id))
     assert Fake.deliveries() == []
 
-    assert [%{status: "sent"}] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    dispatched_deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+    assert [
+             %{recipient_id: ^bob_id, recipient_address: "bob@example.com", status: "sent"}
+           ] = dispatched_deliveries
+
+    refute Enum.any?(dispatched_deliveries, &(&1.recipient_id == alice.person_id))
+
+    provider_requests = Fake.deliveries()
 
     assert [
              %EmailDeliveryRequest{
+               message_id: ^message_id,
+               recipient_id: ^bob_id,
+               recipient_address: "bob@example.com",
                body: "Bring route ideas.\n\nMeet at 7."
              }
-           ] = Fake.deliveries()
+           ] = provider_requests
+
+    refute Enum.any?(provider_requests, &(&1.recipient_id == alice.person_id))
   end
 
   test "accepted inbound email from an alternate sender address posts as the person" do
