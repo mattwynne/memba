@@ -78,22 +78,54 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              body: "Bring route ideas."
            } = MessageQueries.get_message(message_id)
 
+    recipient_deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+
     assert [
              %{
-               recipient_id: ^alice_id,
-               recipient_address: "alice@example.com",
+               delivery_id: bob_delivery_id,
+               message_id: ^message_id,
+               recipient_id: bob_id,
+               recipient_address: "bob@example.com",
                status: "pending"
-             },
-             %{recipient_id: bob_id, recipient_address: "bob@example.com", status: "pending"}
-           ] = DeliveryQueries.list_recipient_deliveries(message_id)
+             }
+           ] = recipient_deliveries
 
     assert bob_id == bob.person_id
+    refute Enum.any?(recipient_deliveries, &(&1.recipient_id == alice.person_id))
     assert Fake.deliveries() == []
 
-    assert [%{status: "sent"}, %{status: "sent"}] =
-             EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    dispatched_deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-    assert length(Fake.deliveries()) == 2
+    assert [
+             %{
+               delivery_id: ^bob_delivery_id,
+               message_id: ^message_id,
+               recipient_id: ^bob_id,
+               recipient_address: "bob@example.com",
+               status: "sent"
+             }
+           ] = dispatched_deliveries
+
+    refute Enum.any?(dispatched_deliveries, &(&1.recipient_id == alice.person_id))
+
+    provider_requests = Fake.deliveries()
+
+    assert [
+             %{
+               message_id: ^message_id,
+               club_id: ^kmc_id,
+               delivery_id: ^bob_delivery_id,
+               recipient_id: ^bob_id,
+               recipient_name: "Bob Example",
+               recipient_address: "bob@example.com",
+               sender_name: "Alice Example",
+               sender_address: "alice@example.com",
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             }
+           ] = provider_requests
+
+    refute Enum.any?(provider_requests, &(&1.recipient_id == alice.person_id))
   end
 
   test "accepts Postmark inbound email from an alternate sender address", %{conn: conn} do
