@@ -462,14 +462,23 @@ defmodule Memba.DevSeeds do
           )
         end
 
+        recipient_statuses = seeded_recipient_statuses(club, message)
+
         await_seeded_message!(club, message)
-        await_message_deliveries!(club, message)
-        report_delivery_statuses!(message)
-        await_message_delivery_statuses!(message)
+        await_message_deliveries!(message, recipient_statuses)
+        report_delivery_statuses!(message, recipient_statuses)
+        await_message_delivery_statuses!(message, recipient_statuses)
       end)
     end)
 
     await_seeded_messages!(clubs)
+  end
+
+  defp seeded_recipient_statuses(club, message) do
+    club.members
+    |> Enum.zip(message.statuses)
+    |> Enum.reject(fn {member, _status} -> member.person_id == message.sender_id end)
+    |> Enum.map(fn {_member, status} -> status end)
   end
 
   defp seed_conversation_replies(clubs) do
@@ -558,10 +567,10 @@ defmodule Memba.DevSeeds do
     end)
   end
 
-  defp report_delivery_statuses!(message) do
+  defp report_delivery_statuses!(message, recipient_statuses) do
     message.message_id
     |> DeliveryQueries.list_recipient_deliveries()
-    |> Enum.zip(message.statuses)
+    |> Enum.zip(recipient_statuses)
     |> Enum.each(fn {delivery, status} ->
       report_delivery_status!(message.message_id, delivery.delivery_id, status)
     end)
@@ -798,8 +807,8 @@ defmodule Memba.DevSeeds do
     )
   end
 
-  defp await_message_deliveries!(club, message) do
-    expected_count = length(club.members)
+  defp await_message_deliveries!(message, recipient_statuses) do
+    expected_count = length(recipient_statuses)
 
     await_read_model!(
       "recipient deliveries for #{message.subject} to be queryable via Messaging.list_recipient_deliveries/1",
@@ -811,11 +820,11 @@ defmodule Memba.DevSeeds do
     )
   end
 
-  defp await_message_delivery_statuses!(message) do
-    expected_operator_status_counts = Enum.frequencies(message.statuses)
+  defp await_message_delivery_statuses!(message, recipient_statuses) do
+    expected_operator_status_counts = Enum.frequencies(recipient_statuses)
 
     expected_member_status_counts =
-      message.statuses
+      recipient_statuses
       |> Enum.map(fn
         "delayed" -> "delivery problem"
         "bounced" -> "delivery problem"
