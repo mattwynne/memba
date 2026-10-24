@@ -850,11 +850,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     add_member!(kmc.club_id, alice.person_id)
     add_member!(kmc.club_id, bob.person_id)
     add_member!(npc.club_id, alice.person_id)
+    add_member!(npc.club_id, bob.person_id)
 
     npc_root_message_id =
       send_club_message!(
         club_id: npc.club_id,
-        sender_id: alice.person_id,
+        sender_id: bob.person_id,
         subject: "Paddle planning",
         body: "Bring PFDs."
       )
@@ -898,17 +899,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert [
              %{
                message_id: ^kmc_message_id,
-               recipient_id: ^alice_id,
-               status: "pending"
-             },
-             %{
-               message_id: ^kmc_message_id,
                recipient_id: bob_id,
                status: "pending"
              }
            ] = DeliveryQueries.list_recipient_deliveries(kmc_message_id)
 
     assert bob_id == bob.person_id
+    assert is_nil(DeliveryQueries.get_member_email_delivery(kmc_message_id, alice.person_id))
   end
 
   test "recognized reply headers do not bypass current-member authorization" do
