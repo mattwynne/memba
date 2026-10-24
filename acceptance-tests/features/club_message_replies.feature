@@ -110,9 +110,10 @@ Feature: Club message replies (conversations)
       And Pat should receive a rejection email explaining the message was not posted
       And Pat should be told how to contact support
 
-    @iteration-042
+    @iteration-042 @iteration-070
     Scenario: Reply headers from another club do not create a cross-club reply
-      Given Pat sent the message "Paddle planning" to Nelson Paddling Club members
+      Given Alice is a member of Nelson Paddling Club
+      And Pat sent the message "Paddle planning" to Nelson Paddling Club members
       When Alice emails "Re: Paddle planning" to everyone@kmc.clubs.memba.io with reply headers from "Paddle planning"
       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
