@@ -131,7 +131,10 @@ defmodule MembaWeb.ResendWebhookControllerTest do
   end
 
   test "maps Resend events with tag maps", %{conn: conn} do
-    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+    %{message_id: message_id, recipients: [sender, bob]} =
+      message = send_message_to(["Synthetic Sender", "Bob"])
+
+    refute DeliveryQueries.get_member_email_delivery(message_id, sender.person_id)
 
     payload =
       :delivered
