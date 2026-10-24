@@ -8,15 +8,15 @@ defmodule Memba.Messaging.StatusReportApiTest do
 
   test "public status reporting APIs dispatch delivery status commands" do
     message_id = Memba.ID.generate(:message)
-    recipients = recipients(["Alice", "Bob", "Carol", "Dana"])
-    [alice, bob, carol, dana] = recipients
+    recipients = recipients(["Sender", "Alice", "Bob", "Carol", "Dana"])
+    [sender, alice, bob, carol, dana] = recipients
 
     assert :ok =
              App.dispatch(
                %SendMessage{
                  message_id: message_id,
                  club_id: Memba.ID.generate(:club),
-                 sender_id: alice.person_id,
+                 sender_id: sender.person_id,
                  subject: "Trip planning night",
                  body: "Bring route ideas.",
                  recipients: recipients
