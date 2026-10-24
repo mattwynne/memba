@@ -92,7 +92,7 @@ defmodule MembaWeb.ResendWebhookControllerTest do
   end
 
   test "accepts duplicate delivery reports but rejects a conflicting reason", %{conn: conn} do
-    %{recipients: [bob]} = message = send_message_to(["Bob"])
+    %{recipients: [_sender, bob]} = message = send_message_to(["Alice", "Bob"])
     payload = realistic_resend_payload(:delayed, message, bob, reason: "temporary outage")
 
     assert %{"status" => "accepted"} =
