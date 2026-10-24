@@ -65,11 +65,11 @@ Rule: Members are told when a club message is not sent
 
 Rule: Active members can send new club messages by email
 
-    @iteration-042
+    @iteration-042 @iteration-070
     Scenario: Alice emails the KMC everyone address
       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
-      And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
+      And Alice should see the message was addressed to Bob, Carol, and Dana
       And Alice should not see Pat in the addressed members
       And each addressed member should receive an email from Alice via Memba
 
