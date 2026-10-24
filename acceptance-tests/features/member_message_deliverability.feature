@@ -12,7 +12,7 @@ Feature: Member message deliverability
 
 Rule: A new group message is not emailed to its sender
 
-    @iteration-070 @wip
+    @iteration-070
     Scenario: Alice sends a club message
       When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
