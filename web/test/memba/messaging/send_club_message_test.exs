@@ -1163,9 +1163,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
     create_club(club_id, "Kootenay Mountaineering Club")
 
     alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
     add_member(club_id, alice.person_id)
+    add_member(club_id, bob.person_id)
 
     message_id = Memba.ID.generate(:message)
+    alice_id = alice.person_id
+    bob_id = bob.person_id
 
     assert {:ok, %ExecutionResult{}} =
              (with {:ok, command} <-
@@ -1184,8 +1188,19 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 dispatch_result
               end)
 
-    assert [%EmailDeliveryProjection{message_id: ^message_id, status: "pending"}] =
-             pending_deliveries_for_message(message_id)
+    pending_deliveries = pending_deliveries_for_message(message_id)
+
+    assert [
+             %EmailDeliveryProjection{
+               message_id: ^message_id,
+               recipient_id: ^bob_id,
+               recipient_name: "Bob",
+               recipient_address: "bob@example.com",
+               status: "pending"
+             }
+           ] = pending_deliveries
+
+    refute Enum.any?(pending_deliveries, &(&1.recipient_id == alice_id))
 
     assert Fake.deliveries() == []
   end
