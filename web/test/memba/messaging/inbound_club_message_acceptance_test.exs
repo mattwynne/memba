@@ -139,22 +139,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              body: "Bring route ideas."
            } = MessageQueries.get_message(message_id)
 
+    pending_deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+
+    refute Enum.any?(pending_deliveries, &(&1.recipient_id == alice_id))
+
     assert [
-             %{
-               delivery_id: alice_delivery_id,
-               message_id: ^message_id,
-               recipient_id: ^alice_id,
-               recipient_name: "Alice Example",
-               recipient_address: "alice@example.com",
-               channel: "email",
-               status: "pending",
-               attempt_count: 0,
-               latest_error: nil,
-               latest_detail: nil,
-               last_dispatch_attempted_at: nil,
-               sent_at: nil,
-               failed_at: nil
-             },
              %{
                delivery_id: bob_delivery_id,
                message_id: ^message_id,
@@ -170,29 +159,24 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                sent_at: nil,
                failed_at: nil
              }
-           ] = DeliveryQueries.list_recipient_deliveries(message_id)
+           ] = pending_deliveries
 
     assert bob_id == bob.person_id
     assert Fake.deliveries() == []
 
-    assert [
-             %{delivery_id: ^alice_delivery_id, status: "sent", sent_at: %DateTime{}},
-             %{delivery_id: ^bob_delivery_id, status: "sent", sent_at: %DateTime{}}
-           ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    dispatched_deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+    refute Enum.any?(dispatched_deliveries, &(&1.recipient_id == alice_id))
 
     assert [
-             %EmailDeliveryRequest{
-               message_id: ^message_id,
-               club_id: ^kmc_id,
-               recipient_id: ^alice_id,
-               recipient_name: "Alice Example",
-               recipient_address: "alice@example.com",
-               sender_name: "Alice Example",
-               sender_address: "alice@example.com",
-               channel: :email,
-               subject: "Trip planning night",
-               body: "Bring route ideas."
-             },
+             %{delivery_id: ^bob_delivery_id, status: "sent", sent_at: %DateTime{}}
+           ] = dispatched_deliveries
+
+    provider_requests = Fake.deliveries()
+
+    refute Enum.any?(provider_requests, &(&1.recipient_id == alice_id))
+
+    assert [
              %EmailDeliveryRequest{
                message_id: ^message_id,
                club_id: ^kmc_id,
@@ -205,9 +189,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                subject: "Trip planning night",
                body: "Bring route ideas."
              }
-           ] = Fake.deliveries()
+           ] = provider_requests
 
-    delivered_recipient_ids = Enum.map(Fake.deliveries(), & &1.recipient_id)
+    delivered_recipient_ids = Enum.map(provider_requests, & &1.recipient_id)
     refute dana.person_id in delivered_recipient_ids
     refute pat.person_id in delivered_recipient_ids
 
