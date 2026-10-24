@@ -113,7 +113,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
             {:ok,
              %ExecutionResult{
                aggregate_uuid: ^message_id,
-               aggregate_version: 5,
+               aggregate_version: 4,
                events: [
                  %MessageSent{
                    message_id: ^message_id,
@@ -142,12 +142,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [
              %EmailDeliveryCreated{
                message_id: ^message_id,
-               recipient_id: alice_id,
-               recipient_name: "Alice",
-               recipient_email: "alice@example.com"
-             },
-             %EmailDeliveryCreated{
-               message_id: ^message_id,
                recipient_id: bob_id,
                recipient_name: "Bob",
                recipient_email: "bob@example.com"
@@ -160,9 +154,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
              }
            ] = delivery_events
 
-    assert [alice_id, bob_id, carol_id] == [alice.person_id, bob.person_id, carol.person_id]
-    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
-    refute pat.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    assert [bob_id, carol_id] == [bob.person_id, carol.person_id]
+
+    delivery_recipient_ids = Enum.map(delivery_events, & &1.recipient_id)
+
+    refute alice.person_id in delivery_recipient_ids
+    refute dana.person_id in delivery_recipient_ids
+    refute pat.person_id in delivery_recipient_ids
 
     delivery_ids = Enum.map(delivery_events, & &1.delivery_id)
 
@@ -171,16 +169,9 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Fake.deliveries() == []
 
+    pending_deliveries = pending_deliveries_for_message(message_id)
+
     assert [
-             %EmailDeliveryProjection{
-               message_id: ^message_id,
-               delivery_id: alice_delivery_id,
-               recipient_id: ^alice_id,
-               recipient_name: "Alice",
-               recipient_address: "alice@example.com",
-               channel: "email",
-               status: "pending"
-             },
              %EmailDeliveryProjection{
                message_id: ^message_id,
                delivery_id: bob_delivery_id,
@@ -199,10 +190,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
                channel: "email",
                status: "pending"
              }
-           ] =
-             pending_deliveries_for_message(message_id)
+           ] = pending_deliveries
 
-    assert [alice_delivery_id, bob_delivery_id, carol_delivery_id] == delivery_ids
+    refute Enum.any?(pending_deliveries, &(&1.recipient_id == alice.person_id))
+    assert [bob_delivery_id, carol_delivery_id] == delivery_ids
   end
 
   test "resolves recipients from the selected audience group and grants it write access" do
