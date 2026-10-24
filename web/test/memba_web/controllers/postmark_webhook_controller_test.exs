@@ -106,8 +106,11 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
   test "maps realistic Postmark delayed, bounced, and spam complaint events with reasons", %{
     conn: conn
   } do
-    %{message_id: message_id, recipients: [bob, carol, dana]} =
-      message = send_message_to(["Bob", "Carol", "Dana"])
+    %{message_id: message_id, recipients: [sender, bob, carol, dana]} =
+      message = send_message_to(["Synthetic Sender", "Bob", "Carol", "Dana"])
+
+    refute DeliveryQueries.get_member_email_delivery(message_id, sender.person_id)
+    refute DeliveryQueries.get_memba_staff_email_delivery(message_id, sender.person_id)
 
     conn =
       post_postmark_event(
