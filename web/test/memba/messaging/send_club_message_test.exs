@@ -386,16 +386,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 dispatch_result
               end)
 
+    pending_deliveries = pending_deliveries_for_message(private_message_id)
+
     assert [
-             %EmailDeliveryProjection{recipient_id: alice_id},
              %EmailDeliveryProjection{
                delivery_id: carol_delivery_id,
                recipient_id: carol_id,
                status: "pending"
              }
-           ] = pending_deliveries_for_message(private_message_id)
+           ] = pending_deliveries
 
-    assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
+    assert carol_id == carol.person_id
+    refute Enum.any?(pending_deliveries, &(&1.recipient_id == alice.person_id))
 
     assert :ok =
              (with {:ok, command} <-
@@ -451,7 +453,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute Repo.get(MessageProjection, departed_reply_id)
 
     assert [
-             %EmailDeliveryProjection{recipient_id: ^alice_id, status: "sent"},
              %EmailDeliveryProjection{
                delivery_id: ^carol_delivery_id,
                recipient_id: ^carol_id,
@@ -461,8 +462,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              }
            ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-    assert Enum.sort(Enum.map(Fake.deliveries(), & &1.recipient_id)) ==
-             Enum.sort([alice_id, carol_id])
+    assert Enum.map(Fake.deliveries(), & &1.recipient_id) == [carol_id]
 
     later_message_id = Memba.ID.generate(:message)
 
@@ -484,7 +484,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 dispatch_result
               end)
 
-    assert Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^alice_id}, &1))
+    refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{}, &1))
     refute Enum.any?(later_events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
   end
 
