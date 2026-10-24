@@ -10,20 +10,20 @@ defmodule MembaWeb.DeliveriesLiveTest do
   } do
     %{
       subject: first_subject,
-      recipients: [first_recipient]
+      recipients: [_first_sender, first_recipient]
     } =
       send_projected_message(
         subject: "Spring snowpack update",
-        recipients: ["Alice"]
+        recipients: ["First Sender", "Alice"]
       )
 
     %{
       subject: second_subject,
-      recipients: [second_recipient]
+      recipients: [_second_sender, second_recipient]
     } =
       send_projected_message(
         subject: "Trail work party",
-        recipients: ["Bob"]
+        recipients: ["Second Sender", "Bob"]
       )
 
     first_reason = "recipient server is temporarily unavailable"
