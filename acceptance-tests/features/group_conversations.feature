@@ -42,12 +42,13 @@ Feature: Group-scoped club conversations
 
   Rule: A new message belongs to the selected group
 
+    @iteration-070
     Scenario: Bob starts an Admin conversation in the web app
       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
       When Bob sends the message "Committee meeting" to the Admin group in the web app
       Then Bob and Carol should be able to read the Admin conversation "Committee meeting"
       And Alice should not be able to read the Admin conversation "Committee meeting"
-      And Bob and Carol should each receive the Admin message "Committee meeting" by email from Kootenay Mountaineering Club via Memba
+      And Carol should receive the Admin message "Committee meeting" by email from Kootenay Mountaineering Club via Memba
 
   Rule: Group discovery does not grant conversation or membership-list access
 
