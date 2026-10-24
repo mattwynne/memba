@@ -25,13 +25,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
 
     assert [
              %MemberEmailDeliveryProjection{
-               delivery_id: ^alice_delivery_id,
-               message_id: ^message_id,
-               recipient_id: ^alice_person_id,
-               recipient_name: "Alice",
-               status: "sent"
-             },
-             %MemberEmailDeliveryProjection{
                delivery_id: ^bob_delivery_id,
                message_id: ^message_id,
                recipient_id: ^bob_person_id,
@@ -39,6 +32,10 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
                status: "sent"
              }
            ] = DeliveryQueries.list_member_email_deliverys(message_id)
+
+    assert is_nil(DeliveryQueries.get_member_email_delivery(alice_delivery_id))
+
+    assert is_nil(DeliveryQueries.get_member_email_delivery(message_id, alice_person_id))
 
     assert %MemberEmailDeliveryProjection{
              delivery_id: ^bob_delivery_id,
@@ -104,7 +101,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
       |> Map.new(&{&1.recipient_name, &1.status})
 
     assert receipts_by_recipient == %{
-             "Alice" => "sent",
              "Bob" => "delivered",
              "Carol" => "delivery problem",
              "Dana" => "delivery problem",
