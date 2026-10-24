@@ -25,25 +25,37 @@ defmodule Memba.DevSeedsRepliesTest do
     assert %{person_id: "per_5ca11e2f-5ca1-5ca1-5ca1-5ca11e2f5ca1"} =
              PersonQueries.get_person_by_email("gallery-staff@memba.io")
 
+    alice_id = "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    benji_id = "per_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    carmen_id = "per_cccccccc-cccc-cccc-cccc-cccccccccccc"
+    drew_id = "per_dddddddd-dddd-dddd-dddd-dddddddddddd"
     first_message = "msg_30000000-0000-0000-0000-000000000001"
-    assert length(DeliveryQueries.list_recipient_deliveries(first_message)) == 4
+
+    recipient_ids =
+      first_message
+      |> DeliveryQueries.list_recipient_deliveries()
+      |> Enum.map(& &1.recipient_id)
+
+    assert length(recipient_ids) == 3
+    refute alice_id in recipient_ids
+    assert MapSet.new(recipient_ids) == MapSet.new([benji_id, carmen_id, drew_id])
 
     assert DeliveryQueries.list_operator_email_deliveries(first_message)
            |> Enum.frequencies_by(& &1.status) ==
-             %{"delivered" => 1, "bounced" => 1, "sent" => 1, "delayed" => 1}
+             %{"bounced" => 1, "sent" => 1, "delayed" => 1}
 
     assert DeliveryQueries.list_member_email_deliverys(first_message)
            |> Enum.frequencies_by(& &1.status) ==
-             %{"delivered" => 1, "delivery problem" => 2, "sent" => 1}
+             %{"delivery problem" => 2, "sent" => 1}
 
     assert MembershipQueries.active_member_of_club?(
              club_id,
-             "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+             alice_id
            )
 
     assert Authorization.has_permission?(
              club_id,
-             "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+             alice_id,
              "club.manage_members"
            )
   end
