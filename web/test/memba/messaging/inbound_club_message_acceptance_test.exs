@@ -1147,16 +1147,35 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert {:ok, %{message_id: message_id}} =
              InboundClubEmail.receive(inbound_attrs, consistency: :strong)
 
-    assert [%{status: "pending"}, %{status: "pending"}] =
-             DeliveryQueries.list_recipient_deliveries(message_id)
+    pending_deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
 
+    assert [
+             %{recipient_id: bob_id, recipient_address: "bob@example.com", status: "pending"}
+           ] = pending_deliveries
+
+    assert bob_id == bob.person_id
+    refute Enum.any?(pending_deliveries, &(&1.recipient_id == alice.person_id))
     assert Fake.deliveries() == []
 
-    assert [%{status: "sent"}, %{status: "sent"}] =
-             EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    dispatched_deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+    assert [
+             %{recipient_id: ^bob_id, recipient_address: "bob@example.com", status: "sent"}
+           ] = dispatched_deliveries
+
+    refute Enum.any?(dispatched_deliveries, &(&1.recipient_id == alice.person_id))
 
     first_deliveries = Fake.deliveries()
-    assert length(first_deliveries) == 2
+
+    assert [
+             %EmailDeliveryRequest{
+               message_id: ^message_id,
+               recipient_id: ^bob_id,
+               recipient_address: "bob@example.com"
+             }
+           ] = first_deliveries
+
+    refute Enum.any?(first_deliveries, &(&1.recipient_id == alice.person_id))
 
     assert {:ok,
             %{
