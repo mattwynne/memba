@@ -117,22 +117,23 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              body: "Bring route ideas."
            } = MessageQueries.get_message(message_id)
 
+    recipient_deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+
     assert [
-             %{
-               recipient_id: ^alice_id,
-               recipient_address: "alice@example.com",
-               status: "pending"
-             },
              %{recipient_id: bob_id, recipient_address: "bob@example.com", status: "pending"}
-           ] = DeliveryQueries.list_recipient_deliveries(message_id)
+           ] = recipient_deliveries
 
     assert bob_id == bob.person_id
+    refute Enum.any?(recipient_deliveries, &(&1.recipient_id == alice.person_id))
     assert Fake.deliveries() == []
 
-    assert [%{status: "sent"}, %{status: "sent"}] =
+    assert [%{status: "sent"}] =
              EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-    assert length(Fake.deliveries()) == 2
+    provider_requests = Fake.deliveries()
+
+    assert [%{recipient_id: ^bob_id, recipient_address: "bob@example.com"}] = provider_requests
+    refute Enum.any?(provider_requests, &(&1.recipient_id == alice.person_id))
   end
 
   test "handles provider retries without duplicate accepted messages or outbound deliveries", %{
