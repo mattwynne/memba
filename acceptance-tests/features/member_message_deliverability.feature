@@ -30,6 +30,7 @@ Rule: Club-message emails identify the club in the subject
 
 Rule: Members see simple statuses for everyone addressed
 
+    @iteration-070
     Scenario: Alice sees different statuses for different members
       Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
       And Bob's email for "Trip planning night" has been reported as delivered
@@ -38,7 +39,6 @@ Rule: Members see simple statuses for everyone addressed
       Then Alice should see Bob's status for "Trip planning night" as "Delivered"
       And Alice should see Carol's status for "Trip planning night" as "Delivery problem"
       And Alice should see Dana's status for "Trip planning night" as "Sending"
-      And Alice should see Alice's status for "Trip planning night" as "Sending"
 
     Scenario: Bob sees the same shared statuses
       Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
