@@ -186,7 +186,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
       |> Enum.map(& &1.recipient_id)
       |> Enum.sort()
 
-    assert recipient_ids == Enum.sort([alice.person_id, bob.person_id])
+    assert recipient_ids == [bob.person_id]
+    refute alice.person_id in recipient_ids
     refute carol.person_id in recipient_ids
 
     assert [%{message_id: message_id}] =
