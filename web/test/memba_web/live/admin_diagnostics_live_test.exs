@@ -91,8 +91,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
        %{
          conn: conn
        } do
-    %{message_id: message_id, recipients: [recipient]} =
-      send_projected_message_with_recipients(["Carol"], subject: "Trail work party")
+    %{message_id: message_id, recipients: [_sender, recipient]} =
+      send_projected_message_with_recipients(["Sender", "Carol"], subject: "Trail work party")
 
     reason = "recipient marked the message as spam"
 
