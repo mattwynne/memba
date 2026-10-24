@@ -90,11 +90,11 @@ Rule: Active club members can start a private Admin conversation by email
       And Alice should not receive the Admin message "Committee meeting" by email
       And Alice and Bob should not see the Admin message "Committee meeting" in the Kootenay Mountaineering Club web app
 
-    @iteration-057
+    @iteration-057 @iteration-070
     Scenario: Bob emails the KMC Admin address as an Admin member
       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
       When Bob emails "Committee meeting" to admin@kmc.clubs.memba.io
-      Then Bob and Carol should each receive the Admin message "Committee meeting" by email from Kootenay Mountaineering Club via Memba
+      Then Carol should receive the Admin message "Committee meeting" by email from Kootenay Mountaineering Club via Memba
       And Alice should not receive the Admin message "Committee meeting" by email
 
     @iteration-057

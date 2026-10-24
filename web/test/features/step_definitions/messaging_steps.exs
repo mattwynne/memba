@@ -631,7 +631,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert_no_admin_message(context, "Kootenay Mountaineering Club", subject)
   end
 
-  step ~r/^(.+) should each receive the Admin message "([^"]+)" by email from (.+) via Memba$/,
+  step ~r/^(.+) should (?:each )?receive the Admin message "([^"]+)" by email from (.+) via Memba$/,
        %{args: [recipient_names_text, subject, club_name]} = context do
     assert_admin_message_delivered_to_members(
       context,
