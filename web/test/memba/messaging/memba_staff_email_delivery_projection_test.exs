@@ -65,7 +65,9 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
     %{message_id: message_id, recipients: recipients} =
       send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin"])
 
-    [_alice, bob, carol, dana, erin] = recipients
+    [alice, bob, carol, dana, erin] = recipients
+    alice_delivery_id = alice.delivery_id
+    alice_person_id = alice.person_id
 
     assert :ok =
              App.dispatch(
@@ -111,8 +113,10 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
       |> DeliveryQueries.list_operator_email_deliveries()
       |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
 
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery(alice_delivery_id))
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery(message_id, alice_person_id))
+
     assert email_deliveries_by_recipient == %{
-             "Alice" => {"sent", nil},
              "Bob" => {"delivered", nil},
              "Carol" => {"delayed", "recipient server is temporarily unavailable"},
              "Dana" => {"bounced", "mailbox does not exist"},
