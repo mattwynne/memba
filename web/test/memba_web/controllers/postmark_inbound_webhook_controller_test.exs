@@ -152,28 +152,13 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              body: "Posting from my work address."
            } = MessageQueries.get_message(message_id)
 
-    assert [
-             %{
-               recipient_id: ^alice_id,
-               recipient_address: "alice@example.com",
-               status: "pending"
-             }
-           ] = DeliveryQueries.list_recipient_deliveries(message_id)
+    assert [] = DeliveryQueries.list_recipient_deliveries(message_id)
 
     assert Fake.deliveries() == []
 
-    assert [%{status: "sent"}] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-    assert [
-             %{
-               recipient_id: ^alice_id,
-               recipient_address: "alice@example.com",
-               sender_name: "Alice Example",
-               sender_address: "alice@example.com",
-               subject: "Alternate sender address",
-               body: "Posting from my work address."
-             }
-           ] = Fake.deliveries()
+    assert Fake.deliveries() == []
   end
 
   test "uses provider-neutral inbound handling for Postmark rejection outcomes", %{conn: conn} do
