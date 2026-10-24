@@ -34,9 +34,9 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
 
     assert response =~ "Trip planning night"
     assert response =~ "Bring route ideas."
-    assert response =~ alice.email
+    refute response =~ alice.email
     assert response =~ bob.email
-    assert response =~ alice.delivery_id
+    refute response =~ alice.delivery_id
     assert response =~ bob.delivery_id
 
     assert_selector_exists(html, "#admin-layout[data-surface='admin']")
@@ -50,6 +50,12 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     assert_selector_exists(html, "#delivery-records[aria-label='Email deliveries']")
     assert_selector_exists(html, "#member-receipts-card")
     assert_selector_exists(html, "#member-receipts[aria-label='Member email delivery statuses']")
+
+    refute html
+           |> LazyHTML.query(
+             "#delivery-records [data-testid='delivery-record'][data-recipient-name='Alice']"
+           )
+           |> Enum.any?()
 
     assert_selector_exists(
       html,
