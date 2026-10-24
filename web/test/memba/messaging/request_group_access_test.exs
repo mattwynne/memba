@@ -312,9 +312,11 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
   end
 
   test "preserves ordinary recipient access and follow behavior when the requester is already an Admin" do
-    %{club: club, board_id: board_id, alice: alice} = setup_requestable_group()
+    %{club: club, board_id: board_id, alice: alice, dan: dan} = setup_requestable_group()
     message_id = Memba.ID.generate(:message)
     admin_group_id = SystemGroups.admin_group_id(club.club_id)
+    alice_id = alice.person_id
+    dan_id = dan.person_id
 
     assert {:ok,
             %ExecutionResult{
@@ -332,14 +334,12 @@ defmodule Memba.Messaging.RequestGroupAccessTest do
                consistency: :strong
              )
 
-    assert sender_id == alice.person_id
+    assert sender_id == alice_id
+    assert [%EmailDeliveryCreated{recipient_id: ^dan_id}] = delivery_events
 
-    assert Enum.any?(
+    refute Enum.any?(
              delivery_events,
-             &match?(
-               %EmailDeliveryCreated{recipient_id: recipient_id} when recipient_id == sender_id,
-               &1
-             )
+             &match?(%EmailDeliveryCreated{recipient_id: ^alice_id}, &1)
            )
 
     assert ConversationGroupAccessQueries.member_has_conversation_access?(
