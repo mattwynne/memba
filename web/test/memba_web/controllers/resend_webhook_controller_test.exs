@@ -169,7 +169,12 @@ defmodule MembaWeb.ResendWebhookControllerTest do
 
   test "accepts signed Resend webhooks when a signing secret is configured", %{conn: conn} do
     configure_resend_webhook_signing_secret()
-    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+
+    %{message_id: message_id, recipients: [sender, bob]} =
+      message = send_message_to(["Synthetic Sender", "Bob"])
+
+    refute DeliveryQueries.get_member_email_delivery(message_id, sender.person_id)
+
     payload = realistic_resend_payload(:delivered, message, bob)
 
     conn = post_signed_resend_event(conn, payload)
