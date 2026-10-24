@@ -63,23 +63,9 @@ defmodule Memba.Messaging.MessageProjectionTest do
              body: "Bring route ideas."
            } = MessageQueries.get_message(message_id)
 
+    recipient_deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+
     assert [
-             %EmailDeliveryProjection{
-               delivery_id: ^alice_delivery_id,
-               message_id: ^message_id,
-               outbound_message_id: alice_outbound_message_id,
-               recipient_id: ^sender_id,
-               recipient_name: "Alice",
-               recipient_address: "alice@example.com",
-               channel: "email",
-               status: "pending",
-               attempt_count: 0,
-               latest_error: nil,
-               latest_detail: nil,
-               last_dispatch_attempted_at: nil,
-               sent_at: nil,
-               failed_at: nil
-             },
              %EmailDeliveryProjection{
                delivery_id: ^bob_delivery_id,
                message_id: ^message_id,
@@ -96,20 +82,26 @@ defmodule Memba.Messaging.MessageProjectionTest do
                sent_at: nil,
                failed_at: nil
              }
-           ] = DeliveryQueries.list_recipient_deliveries(message_id)
+           ] = recipient_deliveries
 
-    assert alice_outbound_message_id ==
-             OutboundMessageID.for_delivery(alice_delivery_id, message_id)
+    refute Enum.any?(recipient_deliveries, &(&1.recipient_id == sender_id))
+
+    alice_outbound_message_id =
+      OutboundMessageID.for_delivery(alice_delivery_id, message_id)
 
     assert bob_outbound_message_id == OutboundMessageID.for_delivery(bob_delivery_id, message_id)
 
+    assert is_nil(DeliveryQueries.get_email_delivery(alice_delivery_id))
+
+    assert is_nil(MessageSourceQueries.get_outbound_message_reference(alice_outbound_message_id))
+
     assert %{
-             outbound_message_id: ^alice_outbound_message_id,
-             delivery_id: ^alice_delivery_id,
+             outbound_message_id: ^bob_outbound_message_id,
+             delivery_id: ^bob_delivery_id,
              message_id: ^message_id,
              conversation_id: ^message_id,
              club_id: ^club_id
-           } = MessageSourceQueries.get_outbound_message_reference(alice_outbound_message_id)
+           } = MessageSourceQueries.get_outbound_message_reference(bob_outbound_message_id)
 
     assert %{
              outbound_message_id: ^bob_outbound_message_id,
