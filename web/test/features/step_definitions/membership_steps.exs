@@ -78,6 +78,10 @@ defmodule Memba.Cucumber.MembershipSteps do
     add_members(context, ["Pat"], "Nelson Paddling Club")
   end
 
+  step "Alice is also a member of Nelson Paddling Club", context do
+    add_members(context, ["Alice"], "Nelson Paddling Club")
+  end
+
   step ~r/^(\w+) has the roles (.+) and (.+) in (.+)$/,
        %{args: [person_name, first_role_name, second_role_name, club_name]} = context do
     assign_roles(context, person_name, [first_role_name, second_role_name], club_name)
