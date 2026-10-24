@@ -1321,6 +1321,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
     alice = create_person(name: "Alice", email: "alice@example.com")
     add_member(club_id, alice.person_id)
 
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    add_member(club_id, bob.person_id)
+    bob_id = bob.person_id
+
     message_id = Memba.ID.generate(:message)
 
     assert :ok =
@@ -1337,7 +1341,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 dispatch_result
               end)
 
-    assert [%EmailDeliveryProjection{status: "pending"}] =
+    assert [
+             %EmailDeliveryProjection{
+               recipient_id: ^bob_id,
+               recipient_name: "Bob",
+               status: "pending"
+             }
+           ] =
              pending_deliveries_for_message(message_id)
 
     assert Fake.deliveries() == []
@@ -1347,7 +1357,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
     Memba.EventSourcedCase.rebuild_event_sourced_projections!()
     Memba.ProjectionBarrier.await!(@email_delivery_replay_projectors, checkpoint: checkpoint)
 
-    assert [%EmailDeliveryProjection{status: "pending"}] =
+    assert [
+             %EmailDeliveryProjection{
+               recipient_id: ^bob_id,
+               recipient_name: "Bob",
+               status: "pending"
+             }
+           ] =
              pending_deliveries_for_message(message_id)
 
     assert Fake.deliveries() == []
