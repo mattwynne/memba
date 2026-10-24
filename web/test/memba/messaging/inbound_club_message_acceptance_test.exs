@@ -1066,8 +1066,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
 
     add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
 
     assert {:ok, %{message_id: message_id, club_id: kmc_id, sender_id: alice_id}} =
              InboundClubEmail.receive(
@@ -1099,29 +1101,39 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert claimed_delivery_id == delivery_id
 
+    deliveries = DeliveryQueries.list_recipient_deliveries(message_id)
+
+    refute Enum.any?(deliveries, &(&1.recipient_id == alice_id))
+
     assert [
              %{
                delivery_id: ^delivery_id,
-               recipient_id: ^alice_id,
-               recipient_address: "alice@example.com",
+               recipient_id: recipient_id,
+               recipient_address: "bob@example.com",
                status: "sent",
                sent_at: %DateTime{}
              }
-           ] = DeliveryQueries.list_recipient_deliveries(message_id)
+           ] = deliveries
+
+    assert recipient_id == bob.person_id
+
+    provider_requests = Fake.deliveries()
+
+    refute Enum.any?(provider_requests, &(&1.recipient_id == alice_id))
 
     assert [
              %EmailDeliveryRequest{
                message_id: ^message_id,
                club_id: ^kmc_id,
                delivery_id: ^delivery_id,
-               recipient_id: ^alice_id,
-               recipient_address: "alice@example.com",
+               recipient_id: ^recipient_id,
+               recipient_address: "bob@example.com",
                sender_name: "Alice Example",
                sender_address: "alice@example.com",
                subject: "Dispatch me asynchronously",
                body: "This should be handed off by the dispatcher nudge."
              }
-           ] = Fake.deliveries()
+           ] = provider_requests
   end
 
   test "duplicate provider message ids return accepted without creating duplicate messages or outbound deliveries" do
