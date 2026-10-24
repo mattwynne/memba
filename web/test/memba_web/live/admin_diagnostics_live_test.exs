@@ -136,8 +136,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
   end
 
   test "Memba staff diagnostics show exact async dispatch status and latest error", %{conn: conn} do
-    %{message_id: message_id, recipients: [recipient]} =
-      send_projected_message_with_recipients(["Dana"], subject: "Dispatch diagnostics")
+    %{message_id: message_id, recipients: [_sender, recipient]} =
+      send_projected_message_with_recipients(["Sender", "Dana"], subject: "Dispatch diagnostics")
 
     dispatch_detail = "{:postmark_delivery_error, :unavailable}"
 
