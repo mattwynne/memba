@@ -2084,8 +2084,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(MessageSent)
-    assert 2 == count_events(EmailDeliveryCreated)
+    assert 1 == count_events(EmailDeliveryCreated)
     assert 0 == count_events(InboundClubEmailAccepted)
+
+    deliveries_before_retry = DeliveryQueries.list_recipient_deliveries(message_id)
+
+    assert [%{message_id: ^message_id, recipient_id: bob_id}] = deliveries_before_retry
+    assert bob_id == bob.person_id
+    assert is_nil(DeliveryQueries.get_member_email_delivery(message_id, alice.person_id))
 
     assert :ok =
              MembershipApp.dispatch(
@@ -2115,10 +2121,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert sender_id == alice.person_id
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(MessageSent)
-    assert 2 == count_events(EmailDeliveryCreated)
+    assert 1 == count_events(EmailDeliveryCreated)
     assert 1 == count_events(InboundClubEmailAccepted)
     assert 0 == count_events(InboundClubEmailRejected)
     assert [%{message_id: ^message_id}] = MessageQueries.list_messages_for_club(kmc.club_id)
+
+    assert [%{message_id: ^message_id, recipient_id: ^bob_id}] =
+             DeliveryQueries.list_recipient_deliveries(message_id)
+
+    assert is_nil(DeliveryQueries.get_member_email_delivery(message_id, alice.person_id))
     refute_receive {:email, %Swoosh.Email{}}
   end
 
