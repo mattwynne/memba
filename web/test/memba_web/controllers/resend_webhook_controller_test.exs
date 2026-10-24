@@ -117,7 +117,7 @@ defmodule MembaWeb.ResendWebhookControllerTest do
   end
 
   test "rejects a delayed report without a reason", %{conn: conn} do
-    %{recipients: [bob]} = message = send_message_to(["Bob"])
+    %{recipients: [_sender, bob]} = message = send_message_to(["Alice", "Bob"])
 
     payload =
       :delayed
