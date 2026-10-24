@@ -417,7 +417,8 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
       }
     )
 
-    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}},
+                   1_000
   end
 
   test "fresh manage-members loss leaves an already-open private surface", %{conn: conn} do
