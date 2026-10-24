@@ -11,10 +11,11 @@ Feature: A member's club conversation crosses the website and email boundary
     And Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club
     And Pat is a member of Nelson Paddling Club
 
+  @iteration-070
   Scenario: Alice sends on the website, Bob replies there, and an inbound club email appears
     When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
     Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
-    And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
+    And Alice should see the message was addressed to Bob, Carol, and Dana
     And Alice should not see Pat in the addressed members
     And Alice should see every addressed member's status as "Sending"
     When Bob's email for "Trip planning night" is reported as delivered
@@ -31,5 +32,5 @@ Feature: A member's club conversation crosses the website and email boundary
     Then Carol should not be following the conversation for "Trip planning night"
     When Alice emails "Gear swap shelf" to everyone@kmc.clubs.memba.io
     Then Alice should see the message "Gear swap shelf" in Kootenay Mountaineering Club
-    And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
+    And Alice should see the message was addressed to Bob, Carol, and Dana
     And Alice should not see Pat in the addressed members
