@@ -9,7 +9,11 @@ defmodule MembaWeb.ResendWebhookControllerTest do
   import Plug.Conn
 
   test "maps realistic Resend delivery events with outbound tags", %{conn: conn} do
-    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+    %{message_id: message_id, recipients: [sender, bob]} =
+      message = send_message_to(["Synthetic Sender", "Bob"])
+
+    refute DeliveryQueries.get_member_email_delivery(message_id, sender.person_id)
+    refute DeliveryQueries.get_memba_staff_email_delivery(message_id, sender.person_id)
 
     conn = post_resend_event(conn, realistic_resend_payload(:delivered, message, bob))
 
