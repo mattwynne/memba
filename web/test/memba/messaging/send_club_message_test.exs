@@ -1236,6 +1236,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
     club_id = Memba.ID.generate(:club)
     alice = create_person(name: "Alice", email: "alice@example.com")
     add_member(club_id, alice.person_id)
+    alice_id = alice.person_id
+
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    add_member(club_id, bob.person_id)
+    bob_id = bob.person_id
 
     message_id = Memba.ID.generate(:message)
 
@@ -1256,8 +1261,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
     assert Fake.deliveries() == []
 
-    assert [%EmailDeliveryProjection{status: "pending"}] =
-             pending_deliveries_for_message(message_id)
+    deliveries = pending_deliveries_for_message(message_id)
+
+    assert [
+             %EmailDeliveryProjection{
+               recipient_id: ^bob_id,
+               recipient_name: "Bob",
+               recipient_address: "bob@example.com",
+               status: "pending"
+             }
+           ] = deliveries
+
+    refute Enum.any?(deliveries, &(&1.recipient_id == alice_id))
   end
 
   test "failed delivery is not handed off again by pending dispatch" do
