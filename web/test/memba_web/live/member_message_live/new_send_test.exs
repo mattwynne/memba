@@ -534,19 +534,18 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert [message] = MessageQueries.list_messages_for_club(club_id)
 
-    assert [
-             %{recipient_id: alice_recipient_id, status: "sent"},
-             %{recipient_id: bob_recipient_id, status: "sent"}
-           ] = DeliveryQueries.list_member_email_deliverys(message.message_id)
+    member_deliveries = DeliveryQueries.list_member_email_deliverys(message.message_id)
 
-    assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
+    assert [%{recipient_id: bob_recipient_id, status: "sent"}] = member_deliveries
+    refute Enum.any?(member_deliveries, &(&1.recipient_id == alice.person_id))
+    assert bob_recipient_id == bob.person_id
 
     delivery_statuses =
       message.message_id
       |> DeliveryQueries.list_recipient_deliveries()
       |> Enum.map(& &1.status)
 
-    assert length(delivery_statuses) == 2
+    assert length(delivery_statuses) == 1
     assert Enum.all?(delivery_statuses, &(&1 in ["pending", "dispatching", "failed"]))
 
     assert Fake.deliveries() == []
