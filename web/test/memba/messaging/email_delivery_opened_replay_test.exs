@@ -20,13 +20,14 @@ defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
     message_id = Memba.ID.generate(:message)
     club_id = Memba.ID.generate(:club)
     sender_id = Memba.ID.generate(:person)
+    recipient_id = Memba.ID.generate(:person)
     delivery_id = Memba.ID.generate(:delivery)
 
     recipient = %Recipient{
       delivery_id: delivery_id,
-      person_id: sender_id,
-      name: "Alice Sender",
-      email: "alice@example.com"
+      person_id: recipient_id,
+      name: "Bob Recipient",
+      email: "bob@example.com"
     }
 
     assert {:ok, %ExecutionResult{aggregate_version: aggregate_version}} =
@@ -43,13 +44,13 @@ defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
                consistency: :strong
              )
 
-    assert_delivery_read_models_sent(message_id, sender_id, delivery_id)
+    assert_delivery_read_models_sent(message_id, recipient_id, delivery_id)
 
     append_historic_opened_event!(message_id, aggregate_version, delivery_id)
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
     Memba.ProjectionBarrier.await!(@delivery_projectors, checkpoint: checkpoint)
 
-    assert_delivery_read_models_sent(message_id, sender_id, delivery_id)
+    assert_delivery_read_models_sent(message_id, recipient_id, delivery_id)
 
     Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
 
@@ -62,7 +63,7 @@ defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
     Memba.EventSourcedCase.rebuild_event_sourced_projections!()
     Memba.ProjectionBarrier.await!(@delivery_projectors, checkpoint: checkpoint)
 
-    assert_delivery_read_models_sent(message_id, sender_id, delivery_id)
+    assert_delivery_read_models_sent(message_id, recipient_id, delivery_id)
   end
 
   defp append_historic_opened_event!(message_id, aggregate_version, delivery_id) do
