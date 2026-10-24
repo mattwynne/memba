@@ -1095,7 +1095,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^message_id,
-              aggregate_version: 4,
+              aggregate_version: 3,
               events: [
                 %MessageSent{
                   message_id: ^message_id,
@@ -1109,12 +1109,6 @@ defmodule Memba.Messaging.SendClubMessageTest do
                   club_id: ^club_id,
                   group_id: ^everyone_group_id,
                   access_level: "write"
-                },
-                %EmailDeliveryCreated{
-                  message_id: ^message_id,
-                  recipient_id: ^alice_id,
-                  recipient_name: "Alice",
-                  recipient_email: "alice@example.com"
                 },
                 %EmailDeliveryCreated{
                   message_id: ^message_id,
@@ -1140,26 +1134,20 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 dispatch_result
               end)
 
+    pending_deliveries = pending_deliveries_for_message(message_id)
+
     assert [
-             %EmailDeliveryProjection{
-               recipient_id: ^alice_id,
-               recipient_name: "Alice",
-               recipient_address: "alice@example.com",
-               status: "pending"
-             },
              %EmailDeliveryProjection{
                recipient_id: ^bob_id,
                recipient_name: "Bob",
                recipient_address: "bob@work.example",
                status: "pending"
              }
-           ] = pending_deliveries_for_message(message_id)
+           ] = pending_deliveries
 
-    recipient_addresses =
-      message_id
-      |> pending_deliveries_for_message()
-      |> Enum.map(& &1.recipient_address)
+    recipient_addresses = Enum.map(pending_deliveries, & &1.recipient_address)
 
+    refute "alice@example.com" in recipient_addresses
     refute "alice@work.example" in recipient_addresses
     refute "bob@example.com" in recipient_addresses
     assert Fake.deliveries() == []
