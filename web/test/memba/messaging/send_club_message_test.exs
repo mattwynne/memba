@@ -319,7 +319,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
             {:ok,
              %ExecutionResult{
                aggregate_uuid: ^message_id,
-               aggregate_version: 4,
+               aggregate_version: 3,
                events: [
                  %MessageSent{message_id: ^message_id},
                  %ConversationAccessGrantedToGroup{
@@ -338,13 +338,20 @@ defmodule Memba.Messaging.SendClubMessageTest do
              )
 
     assert [
-             %EmailDeliveryCreated{recipient_id: alice_id},
-             %EmailDeliveryCreated{recipient_id: bob_id}
+             %EmailDeliveryCreated{
+               recipient_id: bob_id,
+               recipient_name: "Bob",
+               recipient_email: "bob@example.com"
+             }
            ] = delivery_events
 
-    assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
-    refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
-    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    assert bob_id == bob.person_id
+
+    delivery_recipient_ids = Enum.map(delivery_events, & &1.recipient_id)
+
+    refute alice.person_id in delivery_recipient_ids
+    refute carol.person_id in delivery_recipient_ids
+    refute dana.person_id in delivery_recipient_ids
 
     assert ConversationGroupAccessQueries.group_has_conversation_access?(
              message_id,
