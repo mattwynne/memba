@@ -29,9 +29,11 @@ Feature: Conversations within custom groups
       And Eve should receive the existing message-not-posted rejection email
       And no email delivery should be created for "Could you fund new ropes?"
 
-    Scenario: Bob receives the ordinary recipient copy of his own Board email
+    @iteration-070
+    Scenario: Bob does not receive his own Board email
       When Bob emails "September agenda" to board@kmc.clubs.memba.io
-      Then Alice, Bob, and Carol should each receive its initial email
+      Then Alice and Carol should each receive its initial email
+      But Bob should not receive his own initial email
       And Bob should be following "September agenda"
 
     Scenario Outline: Someone outside the active club membership cannot email Board

@@ -76,6 +76,12 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
     assert_initial_recipients(context, last_subject!(context), parse_person_list(person_names))
   end
 
+  step ~r/^(\w+) should not receive (?:his|her|their) own initial email$/,
+       %{args: [person_name]} = context do
+    refute_recipient(context, last_subject!(context), person_name)
+    context
+  end
+
   step ~r/^(.+) should neither be able to read it nor receive its email$/,
        %{args: [person_names]} = context do
     subject = last_subject!(context)
