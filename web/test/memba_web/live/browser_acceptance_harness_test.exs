@@ -156,7 +156,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
       |> visit("/admin/messages/#{message_id}")
       |> assert_path("/admin/messages/*")
       |> assert_has("#message-show", "Trip planning night")
-      |> assert_member_email_delivery("Alice", "sent")
+      |> refute_has("#member-receipts [data-recipient-name='Alice']")
 
     assert :ok =
              report_email_delivery_delivered(%{
@@ -193,7 +193,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
 
     assert_eventually(fn ->
       session
-      |> assert_member_email_delivery("Alice", "sent")
+      |> refute_has("#member-receipts [data-recipient-name='Alice']")
       |> assert_member_email_delivery("Bob", "delivered")
       |> assert_member_email_delivery("Carol", "delivery problem")
       |> assert_member_email_delivery("Dana", "delivery problem")
