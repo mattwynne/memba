@@ -174,11 +174,11 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
   end
 
   test "Memba staff email delivery overview query lists deliveries across messages newest event first" do
-    %{message_id: first_message_id, recipients: [alice]} =
-      send_message_with_recipients(["Alice"], subject: "Spring snowpack update")
+    %{message_id: first_message_id, recipients: [_first_sender, alice]} =
+      send_message_with_recipients(["First Sender", "Alice"], subject: "Spring snowpack update")
 
-    %{message_id: second_message_id, recipients: [bob]} =
-      send_message_with_recipients(["Bob"], subject: "Trail work party")
+    %{message_id: second_message_id, recipients: [_second_sender, bob]} =
+      send_message_with_recipients(["Second Sender", "Bob"], subject: "Trail work party")
 
     assert :ok =
              App.dispatch(
