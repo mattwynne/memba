@@ -87,11 +87,11 @@ defmodule MembaWeb.DeliveriesLiveTest do
   test "operator deliveries refresh live after status reports", %{conn: conn} do
     %{
       subject: subject,
-      recipients: [recipient]
+      recipients: [sender, recipient]
     } =
       send_projected_message(
         subject: "Trail work party",
-        recipients: ["Bob"]
+        recipients: ["Sender", "Bob"]
       )
 
     session =
@@ -99,6 +99,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
       |> sign_in_staff()
       |> visit("/admin/deliveries")
       |> assert_path("/admin/deliveries")
+      |> refute_has("[data-test-id='delivery-row-#{sender.delivery_id}']")
       |> assert_delivery_row(recipient.delivery_id, [
         subject,
         recipient.name,
