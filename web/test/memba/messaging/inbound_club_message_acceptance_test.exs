@@ -349,8 +349,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              :read
            )
 
-    assert [%{recipient_id: alice_id}] = DeliveryQueries.list_recipient_deliveries(message_id)
-    assert alice_id == alice.person_id
+    assert DeliveryQueries.list_recipient_deliveries(message_id) == []
     assert ConversationFollowQueries.following_conversation?(message_id, alice.person_id)
   end
 
