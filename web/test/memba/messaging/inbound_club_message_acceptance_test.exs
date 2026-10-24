@@ -2246,9 +2246,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert 1 == count_events(InboundEmailReceived)
     assert 1 == count_events(MessageSent)
-    assert 1 == count_events(EmailDeliveryCreated)
+    assert 0 == count_events(EmailDeliveryCreated)
     assert 1 == count_events(InboundClubEmailAccepted)
     assert [%{message_id: ^message_id}] = MessageQueries.list_messages_for_club(kmc.club_id)
+    assert [] == DeliveryQueries.list_recipient_deliveries(message_id)
   end
 
   test "concurrent rejected provider retries send exactly one rejection email" do
