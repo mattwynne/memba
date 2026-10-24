@@ -449,7 +449,8 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
       }
     )
 
-    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}}
+    assert_receive {:DOWN, ^monitor, :process, _pid, {%MembaWeb.ForbiddenError{}, _stacktrace}},
+                   1_000
   end
 
   test "routed GET requires the current club member to have club.manage_members", %{conn: conn} do
