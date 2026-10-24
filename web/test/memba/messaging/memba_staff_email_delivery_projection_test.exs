@@ -25,16 +25,6 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
 
     assert [
              %MembaStaffEmailDeliveryProjection{
-               delivery_id: ^alice_delivery_id,
-               message_id: ^message_id,
-               recipient_id: ^alice_person_id,
-               recipient_name: "Alice",
-               recipient_address: "alice@example.test",
-               channel: "email",
-               status: "sent",
-               reason: nil
-             },
-             %MembaStaffEmailDeliveryProjection{
                delivery_id: ^bob_delivery_id,
                message_id: ^message_id,
                recipient_id: ^bob_person_id,
@@ -45,6 +35,9 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
                reason: nil
              }
            ] = DeliveryQueries.list_operator_email_deliveries(message_id)
+
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery(alice_delivery_id))
+    assert is_nil(DeliveryQueries.get_memba_staff_email_delivery(message_id, alice_person_id))
 
     assert %MembaStaffEmailDeliveryProjection{
              delivery_id: ^bob_delivery_id,
