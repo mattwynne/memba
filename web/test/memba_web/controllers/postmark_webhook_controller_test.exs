@@ -181,7 +181,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
   end
 
   test "accepts duplicate delivery reports but rejects a conflicting status", %{conn: conn} do
-    %{recipients: [bob]} = message = send_message_to(["Bob"])
+    %{recipients: [_sender, bob]} = message = send_message_to(["Sender", "Bob"])
     payload = realistic_postmark_payload(:delivered, message, bob)
 
     assert %{"status" => "accepted"} =
