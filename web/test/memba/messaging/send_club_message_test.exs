@@ -867,11 +867,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 dispatch_result
               end)
 
-    recipient_ids =
-      for %EmailDeliveryCreated{recipient_id: recipient_id} <- events, do: recipient_id
+    alice_id = alice.person_id
+    carol_id = carol.person_id
 
-    assert alice.person_id in recipient_ids
-    refute carol.person_id in recipient_ids
+    refute Enum.any?(events, &match?(%EmailDeliveryCreated{recipient_id: ^alice_id}, &1))
+    refute Enum.any?(events, &match?(%EmailDeliveryCreated{recipient_id: ^carol_id}, &1))
+    refute Enum.any?(events, &match?(%EmailDeliveryCreated{}, &1))
 
     restart_projector!(membership_projector_child_id)
     restart_projector!(group_membership_projector_child_id)
