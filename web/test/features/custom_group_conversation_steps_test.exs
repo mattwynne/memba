@@ -9,6 +9,7 @@ defmodule Memba.CustomGroupConversationStepsTest do
                       |> Enum.filter(&(Path.basename(&1.feature.file) == @feature_basename))
 
   for %{scenario: scenario} = selected_scenario <- @selected_scenarios do
+    @tag scenario_name: scenario.name
     test "domain step definitions execute #{scenario.name}" do
       discovery = DomainCucumberRunner.discover()
 
