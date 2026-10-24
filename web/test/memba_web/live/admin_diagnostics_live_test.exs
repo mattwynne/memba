@@ -240,8 +240,10 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
   test "exhausted handoffs and confirmed duplicates have explicit staff attention signals", %{
     conn: conn
   } do
-    %{message_id: message_id, recipients: [exhausted, duplicate]} =
-      send_projected_message_with_recipients(["Dana", "Eli"])
+    %{message_id: message_id, recipients: [sender, exhausted, duplicate]} =
+      send_projected_message_with_recipients(["Sender", "Dana", "Eli"])
+
+    refute Repo.get(EmailDeliveryProjection, sender.delivery_id)
 
     exhausted.delivery_id
     |> failed_delivery_changeset(%{
