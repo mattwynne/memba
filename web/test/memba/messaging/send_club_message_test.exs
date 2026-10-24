@@ -1296,6 +1296,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     alice = create_person(name: "Alice", email: "alice@example.com")
     add_member(club_id, alice.person_id)
+    alice_id = alice.person_id
+
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    add_member(club_id, bob.person_id)
+    bob_id = bob.person_id
 
     message_id = Memba.ID.generate(:message)
 
@@ -1313,7 +1318,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
                 dispatch_result
               end)
 
-    assert [delivery] = pending_deliveries_for_message(message_id)
+    deliveries = pending_deliveries_for_message(message_id)
+
+    assert [
+             %EmailDeliveryProjection{
+               recipient_id: ^bob_id,
+               recipient_name: "Bob",
+               recipient_address: "bob@example.com",
+               status: "pending"
+             } = delivery
+           ] = deliveries
+
+    refute Enum.any?(deliveries, &(&1.recipient_id == alice_id))
     assert count_events(MessageSent) == 1
     assert count_events(EmailDeliveryCreated) == 1
 
@@ -1332,7 +1348,14 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
-    assert %EmailDeliveryProjection{status: "failed", attempt_count: 1} =
+    assert %EmailDeliveryProjection{
+             recipient_id: ^bob_id,
+             status: "failed",
+             attempt_count: 1,
+             latest_error: "unavailable",
+             latest_detail: ":unavailable",
+             failed_at: ^failed_at
+           } =
              Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
 
     assert count_events(MessageSent) == 1
