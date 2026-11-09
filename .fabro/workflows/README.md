@@ -89,7 +89,11 @@ Without the flag, the existing full delivery behavior is unchanged.
 
 The implementation and review workflows rely on Fabro's managed clone and automatic checkpoints. Do not add explicit per-task commit nodes, set `[run].working_dir`, or disable `[run.clone]`: Fabro needs to infer the local repository, clone the current source branch into `/repos/mattwynne/memba`, link it at `/workspace/memba`, and create a pushed `fabro/run/<run-id>` branch for checkpoints after each node.
 
-Prepare steps should reference files through `/workspace/memba/...` or run from the inferred repository checkout. If preflight reports `Git: unknown` or `No clone source present`, repository detection has been broken; remove any explicit `working_dir` override before running implementation or review work.
+Setup command nodes should reference files through `/workspace/memba/...` or run from the inferred repository checkout. If preflight reports `Git: unknown` or `No clone source present`, repository detection has been broken; remove any explicit `working_dir` override before running implementation or review work.
+
+For Fabro 0.408, implementation and code review each run their existing preparation script in `setup_mix`, immediately after `start`, rather than the removed `run.prepare` setting. Each preserves literal argv, the selected environment and managed checkout, the old five-minute command timeout, and stop-on-failure/no-retry behaviour. Downstream graph source and model selectors are unchanged. Ordinary stage hooks now apply to setup too; neither workflow currently defines hooks. Review any server/user/project hook overlays separately before rollout.
+
+Run `python3 .fabro/workflows/scripts/test_setup_command_migration.py` for the offline migration contracts (no workflow or model execution). Parser acceptance is not full semantic compatibility or rollout approval: 0.408's offline validator reports ignored interview/checkpoint/resource controls in these workflows, and ignored artifact/integration controls in the BDD workflows. These potentially significant behaviour changes require a separate engine/client migration review, not removal or suppression here. Reconcile registered workflow versions and managed checkouts, coordinate server/workers/the sole Mac client upgrade, and verify provider readiness separately. The installed 0.316 CLI does not establish 0.408 acceptance; old saved admissions are not equivalent to new submissions of retired source.
 
 ## Planner-owned task preparation, acceptance and revision
 
