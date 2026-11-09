@@ -9,6 +9,20 @@ No control declarations, model selectors, prompts, graphs, backends or approval
 policies were changed to silence these warnings. The separate `run.prepare`
 migration remains necessary and unchanged.
 
+## Owner choices recorded (2026-11-09)
+
+Matt accepted the existing shared server-global Slack channel for this upgrade;
+per-workflow routing is not a prerequisite. Verify the effective shared destination
+before reopening submissions, while preserving human approval and authored intent.
+
+Matt also accepted the existing Proxmox container-wide resource limits for this
+upgrade. The individual Docker sandbox CPU/memory declarations remain unenforced;
+upstream per-sandbox enforcement is not an upgrade prerequisite. Retain the
+intent declarations without claiming enforcement or changing backends.
+
+These decisions accept unchanged behavior, not weaker approval or credential
+controls. They authorize neither live maintenance nor workflow/model execution.
+
 ## Immutable references and check boundary
 
 | Component | Old | Target |
@@ -112,12 +126,11 @@ Do not add auto-approval or replace a human gate to address delivery warnings.
 
 This is not a newly introduced regression, and a warning alone does not establish
 whether the server is already configured correctly. A workflow cannot safely
-establish a shared server's destination. The owner choices are to use the existing
-server-global channel after separately verifying it matches the required
-destination, or require upstream per-workflow routing if distinct destinations
-are necessary. No server configuration or live delivery was inspected here.
-Keep declarations until that choice is explicit; do not put Slack credentials in
-workflow environments or custom hooks as a workaround.
+establish a shared server's destination. The owner choices were shared routing
+versus requiring upstream per-workflow routing; Matt selected shared routing as
+recorded above. No server configuration or live delivery was inspected here.
+Retain declarations as intent and verify the effective shared destination; do
+not put Slack credentials in workflow environments or custom hooks as a workaround.
 
 ### Docker resource limits: pre-existing wiring gap, owner choice
 
@@ -136,10 +149,10 @@ The driver itself supports CPU/memory limits:
 Fabro/Petri wiring, not the authored values. The environment documentation's
 Docker limit table is not proof of that wiring.
 
-Keep the limits declared and do not claim they are enforced. Owner choices are to
-accept the unchanged baseline explicitly, or require upstream wiring/enforcement
-before using these workflows. This finding is not automatically a new prerequisite
-for upgrading: it is an existing policy gap requiring an explicit owner choice.
+Keep the limits declared and do not claim they are enforced. Matt accepted the
+unchanged baseline with Proxmox container-wide limits, as recorded above; upstream
+per-sandbox wiring/enforcement is not a prerequisite for this upgrade. This is a
+pre-existing intent gap, not a newly introduced regression.
 Changing to Daytona, privileged container manipulation or shell `ulimit` would
 change backend/security or constrain only some processes, not preserve the
 intended whole-container limits. None is an approved equivalent here.
@@ -187,7 +200,8 @@ without it the provenance class is explicitly skipped, not claimed tested.
 The setup migration's separate offline contract test remains unchanged. No
 workflow-source controls need deletion or renaming based on these diagnostics.
 This comparison establishes no new regressions in the investigated controls, not
-full runtime compatibility or rollout readiness. Shared Slack destination and
-Docker resource enforcement remain owner choices, not silently accepted behavior.
-Registered bundles, managed checkout, exact client/server coordination, external
-hooks and provider readiness still require their separate review/authorization.
+full runtime compatibility or rollout readiness. The shared Slack destination and
+container-wide-only Docker resource baseline are explicitly accepted above, not
+silently assumed. Registered bundles, managed checkout, exact client/server
+coordination, external hooks and provider readiness still require their separate
+review/authorization.
