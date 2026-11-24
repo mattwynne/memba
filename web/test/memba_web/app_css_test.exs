@@ -12,6 +12,25 @@ defmodule MembaWeb.AppCssTest do
     assert destination == Path.expand("../../../styles.css", "/app/web/assets/css")
   end
 
+  test "production image uses the checksum-pinned Tailwind executable" do
+    dockerfile = File.read!(@dockerfile_path)
+
+    assert dockerfile =~
+             "--checksum=sha256:cabeef049cdeab61a5fa6b65ea28a3e8e53b8a85e58883947868c730fc48bdec"
+
+    assert dockerfile =~
+             "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.4/tailwindcss-linux-x64"
+
+    assert dockerfile =~ "ENV MIX_TAILWIND_PATH=/usr/local/bin/tailwindcss"
+
+    {tailwind_path_position, _} =
+      :binary.match(dockerfile, "ENV MIX_TAILWIND_PATH=/usr/local/bin/tailwindcss")
+
+    {asset_build_position, _} = :binary.match(dockerfile, "RUN mix assets.deploy")
+
+    assert tailwind_path_position < asset_build_position
+  end
+
   test "app css imports the design-system stylesheet that defines the club-home section tab and panel rules" do
     # .section-tabs*/.section-panel live only in styles.css now (app.css @imports it,
     # Tailwind inlines it at build time) — see .design-sync/NOTES.md, 2026-07-14.

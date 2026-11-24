@@ -11,6 +11,15 @@ FROM ${BUILDER_IMAGE} AS builder
 
 ARG MEMBA_GIT_SHA
 
+# Keep this version aligned with web/config/config.exs. The checksum is published
+# in Tailwind's v4.2.4 sha256sums.txt release asset.
+ADD --chmod=0755 \
+    --checksum=sha256:cabeef049cdeab61a5fa6b65ea28a3e8e53b8a85e58883947868c730fc48bdec \
+    https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.4/tailwindcss-linux-x64 \
+    /usr/local/bin/tailwindcss
+
+ENV MIX_TAILWIND_PATH=/usr/local/bin/tailwindcss
+
 RUN apt-get update -y && apt-get install -y build-essential git \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
