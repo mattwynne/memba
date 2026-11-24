@@ -10,6 +10,7 @@ defmodule MembaWeb.Endpoint do
                      store: :cookie,
                      key: "_memba_key",
                      signing_salt: "9ayol9zC",
+                     max_age: 90 * 24 * 60 * 60,
                      same_site: "Lax"
                    ] ++
                      if(is_binary(@session_cookie_domain),

@@ -436,6 +436,8 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert redirected_to(conn) == ~p"/admin/clubs"
       assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
+      assert %{"_memba_key" => %{max_age: max_age}} = get_resp_cookies(conn)
+      assert max_age == 90 * 24 * 60 * 60
       assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
     end
 
