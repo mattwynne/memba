@@ -2,16 +2,16 @@ defmodule MembaWeb.PublicClubPageLive do
   use MembaWeb, :live_view
 
   alias Memba.Membership.ClubGroupQueries
-  alias MembaWeb.ClubSite
+  alias MembaWeb.{ClubSite, IdentityAuth}
 
   @impl Phoenix.LiveView
-  def mount(_params, %{"club_id" => club_id}, socket) do
+  def mount(_params, %{"club_id" => club_id} = session, socket) do
     case ClubGroupQueries.get_club(club_id) do
       nil ->
         {:ok, push_navigate(socket, to: ~p"/")}
 
       club ->
-        {:ok, assign(socket, :club, club)}
+        {:ok, assign(socket, club: club, return_to: Map.get(session, "return_to", ~p"/"))}
     end
   end
 
@@ -35,7 +35,7 @@ defmodule MembaWeb.PublicClubPageLive do
               <div class="mt-8 flex flex-col gap-3 sm:flex-row">
                 <.button
                   id="public-club-page-sign-in-link"
-                  href={~p"/auth"}
+                  href={IdentityAuth.with_return_to(~p"/auth", @return_to)}
                   variant="primary"
                   size="lg"
                 >

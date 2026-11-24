@@ -8,7 +8,7 @@ defmodule MembaWeb.AuthLive.SignIn do
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.AuthEmailProgressChanges
   alias Memba.Membership.ClubGroupQueries
-  alias MembaWeb.ClubSite
+  alias MembaWeb.{ClubSite, IdentityAuth}
 
   @neutral_notice "If that email address can sign in to Memba, the sign-in email is on its way."
   @progress_message_pre_send "Preparing your sign-in link…"
@@ -37,6 +37,7 @@ defmodule MembaWeb.AuthLive.SignIn do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
+     |> assign(:return_to, IdentityAuth.safe_return_to(params["return_to"]))
      |> assign(:auth_email_request_id, request_id)
      |> assign_auth_email_progress(request_id)
      |> maybe_subscribe_to_auth_email_progress(request_id)
@@ -76,9 +77,11 @@ defmodule MembaWeb.AuthLive.SignIn do
       |> email_param()
       |> create_request_and_deliver_sign_in_link(
         socket.assigns.auth_callback_base_url,
+        socket.assigns.return_to,
         Map.get(socket.assigns, :sign_in_email_context, %{})
       )
       |> check_email_path()
+      |> IdentityAuth.with_return_to(socket.assigns.return_to)
 
     {:noreply, push_patch(socket, to: check_email_path)}
   end
@@ -98,7 +101,7 @@ defmodule MembaWeb.AuthLive.SignIn do
   @impl Phoenix.LiveView
   def render(%{live_action: :sent} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} return_to={@return_to}>
       <section id="auth-sign-in-sent" class="space-y-8">
         <div class="space-y-4">
           <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sage-600">
@@ -131,7 +134,7 @@ defmodule MembaWeb.AuthLive.SignIn do
 
           <.link
             id="request-another-sign-in-link"
-            patch={~p"/auth"}
+            patch={IdentityAuth.with_return_to(~p"/auth", @return_to)}
             class="mt-6 inline-flex rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:border-sage-600 hover:text-sage-700"
           >
             Ask for another sign-in link
@@ -144,7 +147,7 @@ defmodule MembaWeb.AuthLive.SignIn do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} return_to={@return_to}>
       <section id="auth-sign-in" class="space-y-8">
         <div class="space-y-4">
           <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sage-600">
@@ -286,10 +289,17 @@ defmodule MembaWeb.AuthLive.SignIn do
   defp email_param(%{"auth" => %{"email" => email}}), do: email
   defp email_param(_params), do: nil
 
-  defp create_request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
+  defp create_request_and_deliver_sign_in_link(email, callback_base_url, return_to, email_context) do
     case Accounts.create_auth_email_request() do
       {:ok, request} ->
-        request_and_deliver_sign_in_link(email, callback_base_url, email_context, request)
+        request_and_deliver_sign_in_link(
+          email,
+          callback_base_url,
+          return_to,
+          email_context,
+          request
+        )
+
         {:ok, request.request_id}
 
       {:error, reason} ->
@@ -298,10 +308,23 @@ defmodule MembaWeb.AuthLive.SignIn do
     end
   end
 
-  defp request_and_deliver_sign_in_link(email, callback_base_url, email_context, request) do
+  defp request_and_deliver_sign_in_link(
+         email,
+         callback_base_url,
+         return_to,
+         email_context,
+         request
+       ) do
     case Accounts.request_sign_in_link(email) do
       {:ok, %{email: recipient_email, token: token}} ->
-        deliver_sign_in_link(recipient_email, token, callback_base_url, email_context, request)
+        callback_path = IdentityAuth.with_return_to(~p"/auth/sign-in/#{token}", return_to)
+
+        deliver_sign_in_link(
+          recipient_email,
+          callback_base_url <> callback_path,
+          email_context,
+          request
+        )
 
       {:ok, nil} ->
         :ok
@@ -311,8 +334,7 @@ defmodule MembaWeb.AuthLive.SignIn do
     end
   end
 
-  defp deliver_sign_in_link(recipient_email, token, callback_base_url, email_context, request) do
-    callback_url = callback_base_url <> ~p"/auth/sign-in/#{token}"
+  defp deliver_sign_in_link(recipient_email, callback_url, email_context, request) do
     email_context = Map.put(email_context, :auth_email_request_id, request.request_id)
 
     case AuthEmail.deliver_sign_in_link(recipient_email, callback_url, email_context) do

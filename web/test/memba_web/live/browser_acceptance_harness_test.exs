@@ -97,7 +97,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_path("/admin/clubs/*")
     |> click_link("Open club home page")
     |> assert_has("#public-club-page-page", "Welcome to Kootenay Mountaineering Club")
-    |> assert_has("#public-club-page-sign-in-link[href='/auth']")
+    |> assert_has("#public-club-page-sign-in-link[href='/auth?return_to=%2F']")
     |> refute_has("#member-club-home")
   end
 

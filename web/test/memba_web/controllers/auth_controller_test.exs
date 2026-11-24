@@ -56,6 +56,36 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   describe "auth LiveViews" do
+    test "a staff sign-in from a public page returns to that page even in a fresh session", %{
+      conn: conn
+    } do
+      configure_auth_email()
+      insert_membership_person!(name: "Pat Staff", email: "pat@memba.io")
+
+      origin = "/about?source=example"
+      page = get(conn, origin)
+
+      assert [sign_in_link] =
+               page
+               |> html_response(200)
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query("header a[href^='/auth']")
+               |> LazyHTML.attribute("href")
+
+      {:ok, view, _html} = live(conn, sign_in_link)
+
+      view
+      |> form("#sign-in-link-form", auth: %{email: "pat@memba.io"})
+      |> render_submit()
+
+      assert_received {:email, %Swoosh.Email{text_body: body}}
+      assert [_, callback] = Regex.run(~r{/auth/sign-in/([^\s]+)}, body)
+
+      signed_in = get(build_conn(), "/auth/sign-in/" <> callback)
+      assert redirected_to(signed_in) == origin
+      assert get_session(signed_in, IdentityAuth.identity_session_key()) == "pat@memba.io"
+    end
+
     test "redirects known and unknown emails to the same neutral acknowledgement page", %{
       conn: conn
     } do

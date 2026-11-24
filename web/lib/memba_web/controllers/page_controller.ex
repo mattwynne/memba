@@ -384,7 +384,7 @@ defmodule MembaWeb.PageController do
 
   defp render_public_club_page(conn, club_id) do
     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.PublicClubPageLive,
-      session: %{"club_id" => club_id}
+      session: %{"club_id" => club_id, "return_to" => current_path(conn)}
     )
   end
 

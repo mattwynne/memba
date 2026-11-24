@@ -30,6 +30,24 @@ defmodule MembaWeb.IdentityAuth do
   """
   def return_to_session_key, do: @return_to_session_key
 
+  def with_return_to(path, return_to) do
+    case safe_return_to(return_to) do
+      nil -> path
+      destination -> path <> "?" <> URI.encode_query(%{return_to: destination})
+    end
+  end
+
+  def safe_return_to("/" <> _ = path) do
+    unless String.starts_with?(path, "//") or
+             String.contains?(path, ["\\", "/%09", "/\t", "\r", "\n"]) do
+      path
+    end
+  end
+
+  def safe_return_to(url) do
+    if ClubSite.safe_club_url?(url), do: url
+  end
+
   @doc """
   Return the session key used to preserve the requested staff path while onboarding.
   """

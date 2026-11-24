@@ -96,7 +96,10 @@ defmodule MembaWeb.AuthLive.Onboard do
             type="submit"
             variant="primary"
           >
-            Continue to Memba staff
+            {if(@return_to in [nil, ~p"/admin/clubs"],
+              do: "Continue to Memba staff",
+              else: "Continue"
+            )}
           </.button>
         </.form>
       </section>

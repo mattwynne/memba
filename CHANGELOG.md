@@ -14,4 +14,6 @@
 
 ### Fixed
 
+- Email sign-in links take you back to the public Memba page or club homepage where you started.
+
 - Email notifications for group conversations now direct replies to the group's own address.

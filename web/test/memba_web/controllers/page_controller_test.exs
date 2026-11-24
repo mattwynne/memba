@@ -76,8 +76,8 @@ defmodule MembaWeb.PageControllerTest do
            |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/auth']")
            |> Enum.empty?()
 
-    assert html |> LazyHTML.query("header a[href='/auth']") |> Enum.any?()
-    assert html |> LazyHTML.query("main a[href='/auth']") |> Enum.empty?()
+    assert html |> LazyHTML.query("header a[href='/auth?return_to=%2F']") |> Enum.any?()
+    assert html |> LazyHTML.query("main a[href^='/auth']") |> Enum.empty?()
     assert html |> LazyHTML.query("main a[href='/get-started']") |> Enum.any?()
     assert response =~ "Sign in"
     refute response =~ "Internal Memba staff"
@@ -188,7 +188,7 @@ defmodule MembaWeb.PageControllerTest do
 
     assert html
            |> LazyHTML.query(
-             "a#public-club-page-sign-in-link.btn.btn-primary.btn-lg[href='/auth']"
+             "a#public-club-page-sign-in-link.btn.btn-primary.btn-lg[href='/auth?return_to=%2F']"
            )
            |> Enum.any?()
 

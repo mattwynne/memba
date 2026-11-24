@@ -6,14 +6,16 @@ defmodule MembaWeb.AuthController do
   alias Memba.Accounts
   alias Memba.Membership.PersonEmailVerification
   alias Memba.Membership.PersonQueries
-  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   @invalid_link_notice "That sign-in link is no longer valid. Please ask for a new sign-in link."
 
   def callback(conn, %{"token" => token} = params) do
+    explicit_return_to = IdentityAuth.safe_return_to(params["return_to"])
+
     return_to =
-      Map.get(params, "return_to") || get_session(conn, IdentityAuth.return_to_session_key())
+      explicit_return_to ||
+        IdentityAuth.safe_return_to(get_session(conn, IdentityAuth.return_to_session_key()))
 
     case Accounts.consume_sign_in_token(token) do
       {:ok, %{email: email}} ->
@@ -28,11 +30,11 @@ defmodule MembaWeb.AuthController do
         if signed_in?(conn) do
           redirect(conn, to: ~p"/")
         else
-          reject_sign_in_link(conn, :consumed)
+          reject_sign_in_link(conn, :consumed, explicit_return_to)
         end
 
       {:error, reason} ->
-        reject_sign_in_link(conn, reason)
+        reject_sign_in_link(conn, reason, explicit_return_to)
     end
   end
 
@@ -43,12 +45,12 @@ defmodule MembaWeb.AuthController do
     |> redirect(to: ~p"/")
   end
 
-  defp reject_sign_in_link(conn, reason) do
+  defp reject_sign_in_link(conn, reason, return_to) do
     Logger.warning("Rejected auth sign-in link callback: #{inspect(reason)}")
 
     conn
     |> put_flash(:error, @invalid_link_notice)
-    |> redirect(to: ~p"/auth")
+    |> redirect(to: IdentityAuth.with_return_to(~p"/auth", return_to))
   end
 
   defp signed_in?(conn), do: not is_nil(Map.get(conn.assigns, :current_identity))
@@ -67,22 +69,11 @@ defmodule MembaWeb.AuthController do
     end
   end
 
-  defp safe_return_to(return_to) when is_binary(return_to) do
-    cond do
-      String.starts_with?(return_to, "//") -> nil
-      String.starts_with?(return_to, "/") -> return_to
-      ClubSite.safe_club_url?(return_to) -> return_to
-      true -> nil
-    end
-  end
-
-  defp safe_return_to(_return_to), do: nil
-
   defp path_after_sign_in(email, return_to) do
     cond do
       needs_staff_onboarding?(email) -> ~p"/auth/onboard"
-      Accounts.staff_email?(email) -> safe_return_to(return_to) || ~p"/admin/clubs"
-      true -> safe_return_to(return_to) || ~p"/"
+      Accounts.staff_email?(email) -> return_to || ~p"/admin/clubs"
+      true -> return_to || ~p"/"
     end
   end
 
@@ -100,7 +91,7 @@ defmodule MembaWeb.AuthController do
       put_session(
         conn,
         IdentityAuth.staff_onboarding_return_to_session_key(),
-        safe_return_to(return_to) || ~p"/admin/clubs"
+        return_to || ~p"/admin/clubs"
       )
     else
       conn

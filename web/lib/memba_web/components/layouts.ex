@@ -5,7 +5,7 @@ defmodule MembaWeb.Layouts do
   """
   use MembaWeb, :html
 
-  alias MembaWeb.ClubSite
+  alias MembaWeb.{ClubSite, IdentityAuth}
 
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
@@ -58,6 +58,8 @@ defmodule MembaWeb.Layouts do
   pushed to the right. Used by the public homepage and every public-chrome page
   so visitors never see the navigation change as they move between pages.
   """
+  attr :return_to, :string, default: nil
+
   def site_header(assigns) do
     ~H"""
     <header class="relative z-20 border-b border-line bg-paper/85 backdrop-blur">
@@ -81,7 +83,7 @@ defmodule MembaWeb.Layouts do
 
         <div class="ml-auto flex items-center gap-3">
           <a
-            href={~p"/auth"}
+            href={IdentityAuth.with_return_to(~p"/auth", @return_to)}
             class="hidden rounded-full border border-line-strong bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition duration-200 hover:-translate-y-0.5 hover:bg-white sm:inline-flex"
           >
             Sign in
@@ -113,6 +115,7 @@ defmodule MembaWeb.Layouts do
 
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
+  attr :return_to, :string, default: nil
 
   attr :current_scope, :map,
     default: nil,
@@ -122,7 +125,7 @@ defmodule MembaWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <.site_header />
+    <.site_header return_to={@return_to} />
 
     <main class="px-4 py-16 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-2xl space-y-4">
