@@ -30,13 +30,13 @@ Rule: Anyone with a memba.io email address can sign in as staff
       Given Pat is not a member of any club
       When Pat signs in with "pat@memba.io"
       Then Pat should be signed in as Memba staff
-      And Pat should be on the Memba staff home
+      And Pat should be on the homepage
 
     Scenario: Memba staff who are also club members can use both kinds of access
       Given Pat is a member of Kootenay Mountaineering Club
       When Pat signs in with "pat@memba.io"
       Then Pat should be signed in as Memba staff
-      And Pat should be on the Memba staff home
+      And Pat should be on the homepage
       And Pat should be able to see Kootenay Mountaineering Club in their clubs
 
 Rule: People who are neither club members nor Memba staff cannot sign in
@@ -99,12 +99,12 @@ Rule: Invalid sign-in links cannot be used
 
 Rule: Signing in can continue an interrupted journey
 
-    Scenario: Staff signs in after trying to open the Memba staff area
+    Scenario: Staff returns to the About page after sign-in
       Given Pat is not a member of any club
-      And Pat has tried to open the Memba staff area
+      And Pat started signing in from the About page
       When Pat signs in with "pat@memba.io"
       Then Pat should be signed in as Memba staff
-      And Pat should be on the Memba staff home
+      And Pat should return to the About page
 
 Rule: Signed-in people can sign out
 

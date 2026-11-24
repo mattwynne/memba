@@ -23,7 +23,7 @@ const {
   unfollowConversation
 } = require("../support/member_message");
 const { ensureAdminGroupMembers } = require("../support/membership_administration");
-const { withMemberHarness, withStaffHarness } = require("../support/member_harness");
+const { withMemberHarness } = require("../support/member_harness");
 const serverCommands = require("../support/server_commands");
 
 Given("Kootenay Mountaineering Club is a club", async function () {
@@ -157,14 +157,14 @@ Then(
 When(
   "{word}'s email for {string} is reported as delivered",
   async function (recipientName, subject) {
-    await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "delivered"));
+    await reportRecipientEmailStatus(this, recipientName, subject, "delivered");
   }
 );
 
 When(
   "{word}'s email for {string} is reported as bounced because {string}",
   async function (recipientName, subject, reason) {
-    await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "bounced", { reason }));
+    await reportRecipientEmailStatus(this, recipientName, subject, "bounced", { reason });
   }
 );
 
@@ -315,5 +315,5 @@ async function prepareInboundClubEmailRouting(world, toAddress) {
     return;
   }
 
-  await withStaffHarness(world, (staff) => ensureClubSlugMatchesInboundAddress(staff, kootenayClubName, toAddress));
+  await ensureClubSlugMatchesInboundAddress(world, kootenayClubName, toAddress);
 }

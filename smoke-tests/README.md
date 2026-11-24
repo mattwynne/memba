@@ -1,6 +1,6 @@
 # Production smoke tests
 
-This directory contains Cucumber smoke tests for real production inbound club email wiring. They send real email to Memba through a controlled Fastmail mailbox, poll Fastmail for resulting emails, and use Playwright to check member/staff-visible UI.
+This directory contains Cucumber smoke tests for real production inbound club email wiring. They send real email to Memba through a controlled Fastmail mailbox, poll Fastmail for resulting emails, and use Playwright to check the member UI and staff MCP endpoint.
 
 ## Required production fixture
 
@@ -18,7 +18,7 @@ HTML-only email is intentionally not a production smoke case. Lower-level tests 
 Required:
 
 ```sh
-export MEMBA_SMOKE_STAFF_EMAIL="..."
+export MEMBA_SMOKE_STAFF_MCP_TOKEN="..." # staff MCP bearer token
 export MEMBA_SMOKE_FASTMAIL_PASSWORD="..."      # Fastmail app password for SMTP and IMAP access to test@memba.io
 export MEMBA_SMOKE_UNKNOWN_EMAIL="test+unknown@memba.io" # unregistered Fastmail alias that receives rejection email
 
@@ -39,11 +39,6 @@ export MEMBA_SMOKE_INBOUND_DOMAIN="clubs.memba.io"
 export MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN="clubs.memba.io"
 export MEMBA_SMOKE_MEMBER_EMAIL="test@memba.io"
 export MEMBA_SMOKE_FASTMAIL_USER="test@memba.io"
-
-# If the staff sign-in mailbox is separate from test@memba.io:
-export MEMBA_SMOKE_STAFF_FASTMAIL_USER="..."
-export MEMBA_SMOKE_STAFF_FASTMAIL_PASSWORD="..."
-export MEMBA_SMOKE_STAFF_FASTMAIL_JMAP_TOKEN="..." # optional; otherwise IMAP uses the Fastmail app password
 
 export MEMBA_SMOKE_POSTMARK_INBOUND_MESSAGE_STREAM="..." # optional, if the inbound stream must be filtered explicitly
 

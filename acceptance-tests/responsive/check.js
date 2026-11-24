@@ -12,7 +12,6 @@ const { scenes } = require("../gallery/scenes");
 const repoRoot = path.resolve(__dirname, "../..");
 const outputDir = path.join(repoRoot, "tmp", "responsive-check");
 const memberEmail = "alice@example.com";
-const staffEmail = "gallery-staff@memba.io";
 const overflowTolerancePx = 2;
 
 const viewports = {
@@ -63,10 +62,6 @@ async function signIn(context, baseUrl, auth) {
   if (auth === "member") {
     await postNoContent(context.request, appUrl(baseUrl, "/dev/test-support/sign-in"), {
       email: memberEmail
-    });
-  } else if (auth === "staff") {
-    await postNoContent(context.request, appUrl(baseUrl, "/dev/test-support/sign-in"), {
-      email: staffEmail
     });
   }
 }
@@ -255,47 +250,6 @@ async function assertMemberMessageDelivery(page, label) {
   await assertWithinViewport(page.locator('[data-testid="member-delivery-group"]').first(), `${label} delivery group`, { vertical: false });
 }
 
-async function assertStaffPeopleTable(page, label) {
-  await assertWithinViewport(page.locator("#admin-people-toolbar"), `${label} people toolbar`, { vertical: false });
-  await expect(page.locator('[data-testid="admin-person-row"]').first()).toBeVisible();
-  await assertWithinViewport(page.locator("#admin-people-table-card"), `${label} people table card`, { vertical: false });
-
-  const tableOverflow = await page.evaluate(() => {
-    const table = document.querySelector("#admin-people-table");
-    const scroller = table && table.closest(".overflow-x-auto");
-
-    if (!table || !scroller) {
-      return null;
-    }
-
-    const box = scroller.getBoundingClientRect();
-    const style = getComputedStyle(scroller);
-
-    return {
-      overflowX: style.overflowX,
-      scrollWidth: scroller.scrollWidth,
-      clientWidth: scroller.clientWidth,
-      left: box.left,
-      right: box.right,
-      viewportWidth: document.documentElement.clientWidth
-    };
-  });
-
-  if (!tableOverflow) {
-    throw new Error(`${label} could not find staff table internal scroller`);
-  }
-
-  if (!/auto|scroll/.test(tableOverflow.overflowX)) {
-    throw new Error(`${label} expected staff table internal horizontal scrolling, got ${tableOverflow.overflowX}`);
-  }
-
-  if (tableOverflow.left < -overflowTolerancePx || tableOverflow.right > tableOverflow.viewportWidth + overflowTolerancePx) {
-    throw new Error(
-      `${label} table scroller escapes viewport: left=${tableOverflow.left}, right=${tableOverflow.right}, viewport=${tableOverflow.viewportWidth}`
-    );
-  }
-}
-
 const checks = [
   {
     label: "homepage at 390px",
@@ -334,13 +288,6 @@ const checks = [
     auth: "member",
     assert: (page) => assertMemberMessageDelivery(page, "member message delivery at 390px")
   },
-  {
-    label: "populated staff people table at 390px",
-    sceneId: "staff-people-index",
-    viewport: viewports.phone,
-    auth: "staff",
-    assert: (page) => assertStaffPeopleTable(page, "populated staff people table at 390px")
-  }
 ];
 
 async function runCheckCase(browser, baseUrl, check) {

@@ -4,19 +4,6 @@ const {
   appUrl,
   ensureState
 } = require("./member_message");
-const serverCommands = require("./server_commands");
-
-const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
-async function withStaffHarness(world, action) {
-  await withReusableHarnessWorld(world, "staff", async (harnessWorld) => {
-    if (!harnessWorld.signedInStaff) {
-      await signInStaff(harnessWorld);
-      harnessWorld.signedInStaff = true;
-    }
-
-    await action(harnessWorld);
-  });
-}
 
 async function withMemberHarness(world, memberName, action) {
   await withReusableHarnessWorld(
@@ -148,26 +135,6 @@ function copyHarnessState(world, harnessWorld) {
   }
 }
 
-async function signInStaff(world) {
-  serverCommands.ensurePerson({ personName: "Acceptance Staff", email: staffEmail });
-  await signInDirectly(world, staffEmail, { returnTo: "/admin/clubs" });
-  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
-}
-
-async function completeStaffOnboardingIfNeeded(world) {
-  await world.page.waitForLoadState("networkidle").catch(() => {});
-
-  const nameField = world.page.getByLabel("Your name");
-
-  if (!currentPageUrl(world.page).includes("/auth/onboard") && (await nameField.count()) === 0) {
-    return;
-  }
-
-  await nameField.fill("Acceptance Staff");
-  await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
-  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
-}
-
 async function signInMember(world, memberName) {
   const person = personFromWorld(world, memberName);
   const email = signInEmailForPerson(person);
@@ -281,6 +248,5 @@ module.exports = {
   memberBrowserAction,
   closeHarnesses,
   signInMember,
-  withMemberHarness,
-  withStaffHarness
+  withMemberHarness
 };

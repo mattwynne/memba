@@ -272,7 +272,7 @@ async function signInDirectly(world, personNameOrEmail, options = {}) {
 async function signInAsStaffDirectly(world, personName, options = {}) {
   const email = options.email || staffEmailFor(personName);
   serverCommands.ensurePerson({ personName: options.staffName || personName, email });
-  await signInDirectly(world, email, { email, returnTo: options.returnTo || "/admin/clubs" });
+  await signInDirectly(world, email, { email, returnTo: options.returnTo || "/" });
 }
 
 function emailForDirectSignIn(world, personNameOrEmail) {
@@ -297,11 +297,6 @@ async function expireSignInLink(world, personName) {
   assert.equal(response.status(), 204, `Expected test support expiry route to return 204, got ${response.status()}`);
 }
 
-async function tryOpenStaffOnlyArea(world) {
-  await world.page.goto(appUrl(world.baseUrl, "/admin/clubs"));
-  await playwrightExpect(world.page).toHaveURL(/\/auth$/);
-}
-
 async function assertSignedIn(world, personName) {
   const person = personFromWorld(world, personName);
   await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${signedInEmailFor(world, personName, person)}`);
@@ -313,8 +308,7 @@ async function assertStillSignedIn(world, personName) {
 
 async function assertSignedInAsStaff(world, _personName) {
   await completeStaffOnboardingIfNeeded(world);
-  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
-  await playwrightExpect(world.page.getByRole("link", { name: "Clubs" })).toBeVisible();
+  await playwrightExpect(world.page.locator("#signed-in-home")).toBeVisible();
 }
 
 async function completeStaffOnboardingIfNeeded(world) {
@@ -327,8 +321,8 @@ async function completeStaffOnboardingIfNeeded(world) {
   }
 
   await nameField.fill("Acceptance Staff");
-  await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
-  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
+  await world.page.getByRole("button", { name: "Continue" }).click();
+  await playwrightExpect(world.page.locator("#signed-in-home")).toBeVisible();
 }
 
 async function openClubPage(world, clubName) {
@@ -401,7 +395,7 @@ async function assertNotSignedIn(world) {
 
 async function assertSignedOut(world) {
   await playwrightExpect(world.page).toHaveURL(/\/$/);
-  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toHaveCount(0);
+  await playwrightExpect(world.page.locator("#signed-in-home")).toHaveCount(0);
   await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");
 
   if ((await world.page.locator("#public-club-page-page").count()) > 0) {
@@ -409,11 +403,6 @@ async function assertSignedOut(world) {
   } else {
     await playwrightExpect(world.page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
   }
-}
-
-async function assertOnStaffOnlyHomepage(world) {
-  await playwrightExpect(world.page).toHaveURL(/\/admin\/clubs/);
-  await playwrightExpect(world.page.getByRole("heading", { name: "Clubs", exact: true })).toBeVisible();
 }
 
 async function assertOnHomepage(world) {
@@ -548,7 +537,6 @@ module.exports = {
   assertNoInboxPlacementClaim,
   assertNeutralSignInEmailInstructions,
   assertNotSignedIn,
-  assertOnStaffOnlyHomepage,
   assertReceivesSignInLink,
   assertReceivesSignInEmailWithMembaSprigIcon,
   assertSeesClub,
@@ -578,5 +566,4 @@ module.exports = {
   assertPoweredByMembaInClubFooter,
   assertClubMarketingPage,
   assertOnHomepage,
-  tryOpenStaffOnlyArea
 };

@@ -40,32 +40,33 @@ async function signInWithMagicLink(world, { email, mailbox, label }) {
   await world.page.waitForLoadState("networkidle").catch(() => {});
 }
 
-async function ensureStaffSignedIn(world) {
-  await signInWithMagicLink(world, {
-    email: world.config.staff.email,
-    mailbox: world.mailboxes.staff,
-    label: "smoke staff"
-  });
-
-  const nameField = world.page.getByLabel("Your name");
-  if (await nameField.count()) {
-    await nameField.fill("Smoke Test Staff");
-    await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
-  }
-
-  await world.page.goto(appUrl(world.config, "/admin/clubs"));
-  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible({ timeout: 30000 });
-}
-
 async function assertSmokeClubExists(world) {
-  await world.page.goto(appUrl(world.config, "/admin/clubs"));
-  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible({ timeout: 30000 });
-
-  const clubRow = world.page.locator(
-    `[data-testid="club-row"][data-club-slug="${cssStringValue(world.config.clubSlug)}"]`
-  );
-  await expect(clubRow).toBeVisible();
-  await expect(clubRow).toContainText(world.config.clubName);
+  const { config } = world;
+  let offset = 0;
+  do {
+    const response = await fetch(appUrl(config, "/mcp"), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.staffMcpToken}`,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-11-25"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "list_clubs", arguments: { offset } }
+      })
+    });
+    assert.equal(response.status, 200, "Expected the staff MCP server to accept the smoke token");
+    const { result } = await response.json();
+    assert.ok(result?.structuredContent, "Expected a club list from the staff MCP server");
+    const { items, next_offset } = result.structuredContent;
+    if (items.some((club) => club.name === config.clubName && club.slug === config.clubSlug)) {
+      return;
+    }
+    offset = next_offset;
+  } while (offset !== null);
+  assert.fail(`Expected ${config.clubName} (${config.clubSlug}) in the staff MCP club list`);
 }
 
 async function ensureSmokeMemberSignedIn(world) {
@@ -153,6 +154,5 @@ module.exports = {
   assertMemberDoesNotSeeMessage,
   assertMemberSeesMessage,
   assertSmokeClubExists,
-  ensureSmokeMemberSignedIn,
-  ensureStaffSignedIn
+  ensureSmokeMemberSignedIn
 };

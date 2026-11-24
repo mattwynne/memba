@@ -22,16 +22,7 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirect do
   end
 
   def call(conn, _opts) do
-    cond do
-      staff_path?(conn.request_path) and ClubSite.club_host?(conn.host) ->
-        redirect(conn, root_domain_url())
-
-      club_id_redirect_candidate?(conn) ->
-        redirect_club_id_query(conn)
-
-      true ->
-        conn
-    end
+    if club_id_redirect_candidate?(conn), do: redirect_club_id_query(conn), else: conn
   end
 
   defp redirect(conn, base_url) do
@@ -41,12 +32,8 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirect do
     |> halt()
   end
 
-  defp staff_path?("/admin"), do: true
-  defp staff_path?("/admin/" <> _rest), do: true
-  defp staff_path?(_path), do: false
-
   defp club_id_redirect_candidate?(conn) do
-    not staff_path?(conn.request_path) and not ClubSite.club_host?(conn.host) and
+    conn.path_info != ["mcp"] and not ClubSite.club_host?(conn.host) and
       String.contains?(conn.query_string, "club_id=")
   end
 
@@ -81,47 +68,6 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirect do
     |> case do
       "" -> ClubSite.url(club, path)
       query_string -> ClubSite.url(club, path) <> "?" <> query_string
-    end
-  end
-
-  defp root_domain_url do
-    %URI{
-      scheme: club_site_scheme(),
-      host: root_domain_host(),
-      port: root_domain_port()
-    }
-    |> URI.to_string()
-    |> String.trim_trailing("/")
-  end
-
-  defp root_domain_host do
-    base_domain = ClubSite.base_domain()
-
-    if String.starts_with?(base_domain, "clubs.") do
-      String.replace_prefix(base_domain, "clubs.", "")
-    else
-      base_domain
-    end
-  end
-
-  defp club_site_scheme do
-    :memba
-    |> Application.get_env(:club_site, [])
-    |> Keyword.get(:scheme, "https")
-    |> to_string()
-  end
-
-  defp root_domain_port do
-    configured_port =
-      :memba
-      |> Application.get_env(:club_site, [])
-      |> Keyword.get(:port)
-
-    case {club_site_scheme(), configured_port} do
-      {"http", 80} -> nil
-      {"https", 443} -> nil
-      {_scheme, nil} -> nil
-      {_scheme, port} -> port
     end
   end
 

@@ -9,7 +9,6 @@ const { scenes } = require("./scenes");
 const repoRoot = path.resolve(__dirname, "../..");
 const outputDir = path.join(repoRoot, "tmp", "gallery");
 const memberEmail = "alice@example.com";
-const staffEmail = "gallery-staff@memba.io";
 
 const viewports = [
   { name: "desktop", width: 1280, height: 800 },
@@ -73,12 +72,6 @@ async function signInMember(context, baseUrl) {
   });
 }
 
-async function signInStaff(context, baseUrl) {
-  await postNoContent(context.request, appUrl(baseUrl, "/dev/test-support/sign-in"), {
-    email: staffEmail
-  });
-}
-
 function attachPageErrorChecks(page, label) {
   const errors = [];
 
@@ -101,8 +94,6 @@ async function captureScene(browser, baseUrl, scene, viewport, manifest) {
   try {
     if (scene.auth === "member") {
       await signInMember(context, baseUrl);
-    } else if (scene.auth === "staff") {
-      await signInStaff(context, baseUrl);
     }
 
     const page = await context.newPage();

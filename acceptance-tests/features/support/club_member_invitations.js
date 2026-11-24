@@ -10,7 +10,8 @@ const {
   testMailboxEmails,
   waitForMailboxEmails
 } = require("./member_message");
-const { ensureMember, signInAsStaffDirectly, signInDirectly } = require("./authentication");
+const { callStaffTool, listStaffTools } = require("./staff_mcp");
+const { ensureMember, signInDirectly } = require("./authentication");
 const serverCommands = require("./server_commands");
 
 async function ensureClub(world, clubName) {
@@ -103,8 +104,13 @@ async function tryInviteEmailToClub(world, actorName, email, clubName) {
       attempt.submitted = true;
     }
   } else {
-    await submitStaffInvitation(world, actorName, club, email);
-    attempt.submitted = true;
+    try {
+      await submitStaffInvitation(world, actorName, club, email);
+      attempt.submitted = true;
+    } catch (error) {
+      attempt.rejected = true;
+      attempt.message = error.message;
+    }
   }
 
   world.lastClubMemberInvitationAttempt = attempt;
@@ -276,30 +282,19 @@ async function leaveWithoutEnteringName(world) {
   await world.page.goto(appUrl(world.baseUrl, "/"));
 }
 
-async function openAddClubMemberFlow(world, actorName, clubName) {
-  const club = await ensureClub(world, clubName);
-  await ensureStaffSignedIn(world, actorName);
-
-  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`));
-  await playwrightExpect(world.page.locator("#club-show")).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  await world.page.getByRole("link", { name: "Invite member" }).click();
-  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
-    timeout: projectionTimeoutMs(world)
-  });
+async function openAddClubMemberFlow(world, _actorName, clubName) {
+  await ensureClub(world, clubName);
+  world.staffTools = await listStaffTools(world);
 }
 
 async function assertAskedForEmailOnly(world) {
-  await playwrightExpect(world.page.locator("#club-member-invitation-form")).toBeVisible();
-  await playwrightExpect(world.page.getByLabel("Invitee email address")).toBeVisible();
-  await playwrightExpect(world.page.locator("#person-name-input")).toHaveCount(0);
-  await playwrightExpect(world.page.getByLabel("Person name")).toHaveCount(0);
+  const invite = world.staffTools.find((tool) => tool.name === "invite_club_member");
+  assert.deepEqual(Object.keys(invite.inputSchema.properties).sort(), ["club_id", "email"]);
 }
 
 async function assertCannotCreateDirectActiveMember(world) {
-  await playwrightExpect(world.page.locator("#club-member-invitation-form")).toBeVisible();
-  await playwrightExpect(world.page.getByRole("button", { name: "Add selected person as member" })).toHaveCount(0);
-  await playwrightExpect(world.page.getByRole("button", { name: "Create person" })).toHaveCount(0);
-  await playwrightExpect(world.page.getByLabel("Person to add as member")).toHaveCount(0);
+  const toolNames = world.staffTools.map((tool) => tool.name);
+  assert.ok(!toolNames.includes("add_club_member"));
 }
 
 async function assertAlreadyMemberMessage(world, personName, clubName) {
@@ -308,9 +303,7 @@ async function assertAlreadyMemberMessage(world, personName, clubName) {
   assert.equal(attempt.personName || personName, personName);
   assert.equal(attempt.clubName, clubName);
 
-  await playwrightExpect(
-    world.page.getByText("That email address is already an active member of this club.")
-  ).toBeVisible({ timeout: projectionTimeoutMs(world) });
+  assert.equal(attempt.message, "already_active_member");
 }
 
 async function assertSinglePendingInvitation(world, email, clubName) {
@@ -350,25 +343,9 @@ async function inviteAndAccept(world, personName, email, clubName, fullName) {
   await assertActiveMember(world, personName, clubName);
 }
 
-async function ensureStaffSignedIn(world, actorName) {
-  if (world.staffSignedInAs === actorName) {
-    return;
-  }
-
-  await signInAsStaffDirectly(world, actorName, { email: staffEmailFor(actorName) });
-  world.staffSignedInAs = actorName;
-}
-
-async function submitStaffInvitation(world, actorName, club, email) {
-  await ensureStaffSignedIn(world, actorName);
-
-  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/invitations/new`));
-  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
-    timeout: projectionTimeoutMs(world)
-  });
-
-  await world.page.getByLabel("Invitee email address").fill(email);
-  await world.page.locator("#send-club-member-invitation-button").click();
+async function submitStaffInvitation(world, _actorName, club, email) {
+  const result = await callStaffTool(world, "invite_club_member", { club_id: club.clubId, email });
+  assert.equal(result.email_status, "sent");
 }
 
 async function submitMemberInvitation(world, actorName, club, email) {
@@ -605,10 +582,6 @@ function clubSlugFor(clubName) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 32)
     .replace(/^-+|-+$/g, "");
-}
-
-function staffEmailFor(personName) {
-  return `${String(personName).trim().toLowerCase()}@memba.io`;
 }
 
 function actorHasClubMembership(world, actorName, clubName) {

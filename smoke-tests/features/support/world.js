@@ -27,7 +27,6 @@ Before(async function () {
   this.config = smokeConfig();
   this.mailboxes.member = await connectFastmailMailbox(this.config.member);
   this.mailboxes.unknown = await connectFastmailMailbox(this.config.unknown);
-  this.mailboxes.staff = await connectFastmailMailbox(this.config.staff);
 
   if (PostmarkInboundDiagnostics.configured(this.config)) {
     this.postmark = new PostmarkInboundDiagnostics({

@@ -30,7 +30,7 @@ function smokeConfig() {
   const clubSiteBaseDomain = optionalEnv("MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN", inboundDomain);
   const memberEmail = optionalEnv("MEMBA_SMOKE_MEMBER_EMAIL", "test@memba.io");
   const memberName = optionalEnv("MEMBA_SMOKE_MEMBER_NAME", "Smoke Tester");
-  const staffEmail = requiredEnv("MEMBA_SMOKE_STAFF_EMAIL");
+  const staffMcpToken = requiredEnv("MEMBA_SMOKE_STAFF_MCP_TOKEN");
 
   const fastmailUser = optionalEnv("MEMBA_SMOKE_FASTMAIL_USER", memberEmail);
   const fastmailPassword = requiredEnvAny(["MEMBA_SMOKE_FASTMAIL_PASSWORD", "SMOKE_TEST_EMAIL_PASSWORD"]);
@@ -40,10 +40,6 @@ function smokeConfig() {
   );
 
   const unknownEmail = requiredEnv("MEMBA_SMOKE_UNKNOWN_EMAIL");
-
-  const staffFastmailUser = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_USER", fastmailUser);
-  const staffFastmailPassword = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_PASSWORD", fastmailPassword);
-  const staffJmapToken = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_JMAP_TOKEN", jmapToken);
 
   const postmarkServerToken = optionalEnv(
     "MEMBA_SMOKE_POSTMARK_SERVER_TOKEN",
@@ -74,12 +70,7 @@ function smokeConfig() {
       imapPassword: fastmailPassword,
       jmapToken
     },
-    staff: {
-      email: staffEmail,
-      imapUser: staffFastmailUser,
-      imapPassword: staffFastmailPassword,
-      jmapToken: staffJmapToken
-    },
+    staffMcpToken,
     postmark: {
       serverToken: postmarkServerToken,
       inboundMessageStream: postmarkInboundMessageStream

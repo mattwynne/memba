@@ -43,79 +43,7 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-layout")
   end
 
-  test "admin layout provides the staff operations shell and iteration nav" do
-    assigns = %{flash: %{}}
-
-    html =
-      rendered_to_string(~H"""
-      <Layouts.admin flash={@flash}>
-        <main id="admin-layout-slot">Admin page content</main>
-      </Layouts.admin>
-      """)
-
-    assert_selector(html, "#admin-layout[data-surface='admin']")
-    assert_selector(html, "#admin-sidebar")
-    assert_selector(html, "#admin-content")
-    assert_selector(html, "a[aria-label='Memba staff home'][href='/admin/clubs']")
-    assert_selector(html, "#admin-navigation-group")
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-clubs[data-admin-nav-item='clubs'][href='/admin/clubs']"
-    )
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-people[data-admin-nav-item='people'][href='/admin/people']"
-    )
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-requests[data-admin-nav-item='requests'][href='/admin/requests']"
-    )
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-requests[data-phx-link='redirect'][data-phx-link-state='push']"
-    )
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-people[data-phx-link='redirect'][data-phx-link-state='push']"
-    )
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-messages[data-admin-nav-item='messages'][href='/admin/messages']"
-    )
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-messages[data-phx-link='redirect'][data-phx-link-state='push']"
-    )
-
-    assert_selector(
-      html,
-      "nav[aria-label='Memba staff navigation'] a#admin-nav-deliveries[data-admin-nav-item='deliveries'][href='/admin/deliveries']"
-    )
-
-    assert_selector_count(html, "nav[aria-label='Memba staff navigation'] a", 5)
-    assert_text(html, "nav[aria-label='Memba staff navigation']", "Clubs")
-    assert_text(html, "nav[aria-label='Memba staff navigation']", "Requests")
-    assert_text(html, "nav[aria-label='Memba staff navigation']", "People")
-    assert_text(html, "nav[aria-label='Memba staff navigation']", "Messages")
-    assert_text(html, "nav[aria-label='Memba staff navigation']", "Deliveries")
-    refute_text(html, "nav[aria-label='Memba staff navigation']", "Incoming")
-    refute_text(html, "nav[aria-label='Memba staff navigation']", "Roles")
-    assert_selector(html, "#admin-staff-identity-block")
-    assert_selector(html, "form#admin-sign-out-form[action='/auth'][method='post']")
-    assert_selector(html, "input[name='_method'][value='delete']")
-    assert_selector(html, "button#admin-sign-out-button[type='submit']")
-    assert_selector(html, "#admin-layout-slot")
-    refute_selector(html, "#club-site-layout")
-  end
-
-  test "public, member, and Staff layouts each render one shared connection-state group" do
+  test "public and member layouts each render one shared connection-state group" do
     assigns = %{flash: %{}}
 
     public_html =
@@ -132,17 +60,9 @@ defmodule MembaWeb.LayoutsTest do
       </Layouts.club_site>
       """)
 
-    staff_html =
-      rendered_to_string(~H"""
-      <Layouts.admin flash={@flash}>
-        <section id="staff-connection-status-layout-slot">Staff page content</section>
-      </Layouts.admin>
-      """)
-
     for {html, slot_selector} <- [
           {public_html, "#public-connection-status-layout-slot"},
-          {member_html, "#member-connection-status-layout-slot"},
-          {staff_html, "#staff-connection-status-layout-slot"}
+          {member_html, "#member-connection-status-layout-slot"}
         ] do
       assert_selector_count(html, slot_selector, 1)
       assert_selector_count(html, "#flash-group", 1)

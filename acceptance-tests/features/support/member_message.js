@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 const { expect: playwrightExpect } = require("@playwright/test");
 const serverCommands = require("./server_commands");
+const { callStaffTool } = require("./staff_mcp");
 
 const kootenayClubName = "Kootenay Mountaineering Club";
 const nelsonClubName = "Nelson Paddling Club";
@@ -68,21 +69,6 @@ function defaultClubSlug(clubName) {
     .replace(/^-+|-+$/g, "")
     .slice(0, maxClubSlugLength)
     .replace(/^-+|-+$/g, "");
-}
-
-function clubSlugForOccurrence(clubName, occurrence) {
-  const base = defaultClubSlug(clubName) || "club";
-
-  if (occurrence <= 1) {
-    return base;
-  }
-
-  const suffix = `-${occurrence}`;
-  const trimmedBase = base
-    .slice(0, maxClubSlugLength - suffix.length)
-    .replace(/^-+|-+$/g, "");
-
-  return `${trimmedBase || "club"}${suffix}`;
 }
 
 function postmarkPayloadForStatus({
@@ -496,75 +482,10 @@ async function gotoUnlessCurrent(world, targetUrl, description) {
   await browserInteraction(description, () => world.page.goto(targetUrl));
 }
 
-async function newRowAttributeValue(rows, attributeName, previousValues, description) {
-  const currentValues = await rowAttributeValues(rows, attributeName);
-  const newValues = currentValues.filter((value) => !previousValues.includes(value));
-
-  assert.equal(
-    newValues.length,
-    1,
-    `Expected exactly one new ${description}; previous=${previousValues.join(", ")} current=${currentValues.join(", ")}`
-  );
-
-  return newValues[0];
-}
-
-async function visitClubsIndex(world, { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}) {
-  await browserInteraction("visit /admin/clubs", async () => {
-    const targetUrl = appUrl(world.baseUrl, "/admin/clubs");
-    if (!currentPageMatches(world.page, targetUrl)) {
-      await world.page.goto(targetUrl);
-    }
-    if (expect === playwrightExpect) {
-      await expect(world.page.getByRole("heading", { name: "Clubs", exact: true })).toBeVisible({
-        timeout: timeoutMs
-      });
-    }
-  });
-}
-
-async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
-  ensureState(world);
-
-  const club = world.clubs[clubName];
-  assert.ok(club, `Expected ${clubName} to have been created before opening it`);
-
-  await gotoUnlessCurrent(
-    world,
-    appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`),
-    `visit club page for ${clubName}`
-  );
-  await waitForProjectedVisible(
-    world,
-    world.page.getByRole("heading", { name: clubName }),
-    `club heading for ${clubName}`,
-    { expect, timeoutMs }
-  );
-}
-
-async function openMessage(world, subject, { expect = playwrightExpect, force = false, timeoutMs } = {}) {
-  ensureState(world);
-
+async function openMessage(world, subject) {
   const message = world.messages[subject];
   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
-
-  const targetUrl = appUrl(world.baseUrl, `/admin/messages/${message.messageId}`);
-
-  if (force) {
-    await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () => world.page.goto(targetUrl));
-  } else {
-    await gotoUnlessCurrent(
-      world,
-      targetUrl,
-      `visit message page for ${JSON.stringify(subject)}`
-    );
-  }
-  await waitForProjectedVisible(
-    world,
-    world.page.getByRole("heading", { name: subject }),
-    `message heading for ${JSON.stringify(subject)}`,
-    { expect, timeoutMs }
-  );
+  return callStaffTool(world, "get_message", { message_id: message.messageId });
 }
 
 async function openMemberClubHome(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
@@ -773,86 +694,15 @@ async function assertConversationFollowingState(
   return world;
 }
 
-async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
-  await gotoUnlessCurrent(world, appUrl(world.baseUrl, "/admin/deliveries"), "visit /admin/deliveries");
-  await waitForProjectedVisible(
-    world,
-    world.page.getByRole("heading", { name: "Deliveries", exact: true }),
-    "deliveries overview heading",
-    { expect, timeoutMs }
-  );
-}
-
-async function createClub(world, clubName, { expect = playwrightExpect, slug } = {}) {
+async function updateClubSlug(world, clubName, slug) {
   ensureState(world);
-
-  await visitClubsIndex(world, { expect });
-
-  const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
-  const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
-  const requestedSlug = slug || clubSlugForOccurrence(clubName, previousClubIds.length + 1);
-
-  await browserInteraction(`submit club creation form for ${clubName}`, async () => {
-    await world.page.getByLabel("Club name").fill(clubName);
-    await world.page.getByLabel("Club slug").fill(requestedSlug);
-    await world.page.getByRole("button", { name: "Create club" }).click();
-  });
-  await waitForProjectedCount(
-    world,
-    clubRows,
-    previousClubIds.length + 1,
-    `new club row for ${clubName}`,
-    { expect }
-  );
-
-  const clubId = await newRowAttributeValue(
-    clubRows,
-    "data-club-id",
-    previousClubIds,
-    `club row for ${clubName}`
-  );
-  await waitForProjectedVisible(
-    world,
-    rowByData(world.page, "club-row", "data-club-id", clubId),
-    `projected club row ${clubId}`,
-    { expect }
-  );
-  const clubSlug =
-    (await rowByData(world.page, "club-row", "data-club-id", clubId).getAttribute("data-club-slug")) ||
-    requestedSlug;
-
-  world.clubs[clubName] = { clubId, name: clubName, slug: clubSlug };
-
-  return world;
-}
-
-async function updateClubSlug(world, clubName, slug, { expect = playwrightExpect, timeoutMs } = {}) {
-  ensureState(world);
-
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to have been created before updating its slug`);
 
-  if (club.slug === slug) {
-    return world;
+  if (club.slug !== slug) {
+    await callStaffTool(world, "update_club", { club_id: club.clubId, name: clubName, slug });
+    club.slug = slug;
   }
-
-  await openClub(world, clubName, { expect, timeoutMs });
-
-  await browserInteraction(`update club slug for ${clubName} to ${slug}`, async () => {
-    await world.page.getByLabel("Club slug").fill(slug);
-    await world.page.getByRole("button", { name: "Save club" }).click();
-  });
-
-  await waitForProjectedText(
-    world,
-    world.page.locator("#club-slug-display"),
-    `Slug: ${slug}`,
-    `updated club slug display for ${clubName}`,
-    { expect, timeoutMs }
-  );
-
-  club.slug = slug;
-
   return world;
 }
 
@@ -870,253 +720,7 @@ async function ensureClubSlugMatchesInboundAddress(
   return updateClubSlug(world, clubName, slug, { expect, timeoutMs });
 }
 
-async function createPeople(world, names, { expect = playwrightExpect } = {}) {
-  ensureState(world);
 
-  await openClub(world, kootenayClubName, { expect });
-
-  for (const name of names) {
-    await createPersonOnCurrentClubPage(world, name, kootenayClubName, { expect });
-  }
-
-  return world;
-}
-
-async function createPerson(
-  world,
-  name,
-  clubName = kootenayClubName,
-  { email, emailAddresses, expect = playwrightExpect } = {}
-) {
-  ensureState(world);
-
-  await openClub(world, clubName, { expect });
-  await createPersonOnCurrentClubPage(world, name, clubName, { email, emailAddresses, expect });
-
-  return world;
-}
-
-async function createPersonOnCurrentClubPage(
-  world,
-  name,
-  clubName,
-  { email, emailAddresses, expect = playwrightExpect, timeoutMs } = {}
-) {
-  const club = world.clubs[clubName];
-  assert.ok(club, `Expected ${clubName} to have been created before creating ${name}`);
-  const normalizedEmailAddresses = personEmailAddressSet(name, { email, emailAddresses });
-
-  const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
-  const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
-
-  await browserInteraction(`visit create-person page for ${name}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/people/new`))
-  );
-  await waitForProjectedVisible(
-    world,
-    world.page.getByRole("heading", { name: "New person" }),
-    `new person heading for ${clubName}`,
-    { expect, timeoutMs }
-  );
-  await waitForLiveViewConnected(world, { timeoutMs });
-
-  await browserInteraction(`submit person creation form for ${name}`, async () => {
-    await world.page.getByLabel("Person name").fill(name);
-    await fillPersonEmailAddressRows(world, normalizedEmailAddresses, { expect, timeoutMs });
-    await world.page.getByRole("button", { name: "Create person" }).click();
-  });
-  await waitForProjectedCount(
-    world,
-    personRows,
-    previousPersonIds.length + 1,
-    `new person row for ${name}`,
-    { expect }
-  );
-
-  const personId = await newRowAttributeValue(
-    personRows,
-    "data-person-id",
-    previousPersonIds,
-    `person row for ${name}`
-  );
-  await waitForProjectedVisible(
-    world,
-    rowByData(world.page, "person-row", "data-person-id", personId),
-    `projected person row ${personId}`,
-    { expect }
-  );
-
-  world.people[name] = personState({ emailAddresses: normalizedEmailAddresses, name, personId });
-}
-
-async function updatePersonEmailAddresses(
-  world,
-  name,
-  clubName = kootenayClubName,
-  emailAddresses,
-  { expect = playwrightExpect, timeoutMs } = {}
-) {
-  ensureState(world);
-
-  const club = world.clubs[clubName];
-  assert.ok(club, `Expected ${clubName} to have been created before editing ${name}`);
-
-  const person = world.people[name];
-  assert.ok(person && person.personId, `Expected ${name} to have been created before editing email addresses`);
-
-  const normalizedEmailAddresses = personEmailAddressSet(name, { emailAddresses });
-
-  await browserInteraction(`visit edit-person page for ${name}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/people/${person.personId}/edit`))
-  );
-  await waitForProjectedVisible(
-    world,
-    world.page.getByRole("heading", { name: `Edit ${name}` }),
-    `edit person heading for ${name}`,
-    { expect, timeoutMs }
-  );
-
-  await browserInteraction(`submit person email-address edit form for ${name}`, async () => {
-    await fillPersonEmailAddressRows(world, normalizedEmailAddresses, { expect, timeoutMs });
-    await world.page.getByRole("button", { name: "Save person" }).click();
-  });
-  await waitForProjectedVisible(
-    world,
-    rowByData(world.page, "person-row", "data-person-id", person.personId),
-    `projected edited person row ${person.personId}`,
-    { expect }
-  );
-
-  world.people[name] = personState({
-    emailAddresses: normalizedEmailAddresses,
-    name,
-    personId: person.personId
-  });
-
-  return world;
-}
-
-async function fillPersonEmailAddressRows(
-  world,
-  emailAddresses,
-  { expect = playwrightExpect, timeoutMs } = {}
-) {
-  const existingRows = world.page.locator('[data-testid="person-email-row"]');
-  const existingRowCount = await existingRows.count();
-
-  for (const [index, emailAddress] of emailAddresses.entries()) {
-    if (index >= existingRowCount) {
-      await world.page.getByRole("button", { name: "Add email address" }).click();
-      await waitForProjectedVisible(
-        world,
-        world.page.getByLabel(`Email address ${index}`, { exact: true }),
-        `email address row ${index}`,
-        { expect, timeoutMs }
-      );
-    }
-
-    await world.page.getByLabel(`Email address ${index}`, { exact: true }).fill(emailAddress.email);
-
-    if (emailAddress.isPrimary) {
-      await world.page.locator(`#person-primary-radio-${index}`).click();
-    }
-  }
-}
-
-function personEmailAddressSet(name, { email, emailAddresses } = {}) {
-  const rawEmailAddresses = emailAddresses || [{ email: email || emailFor(name), isPrimary: true }];
-  const normalizedEmailAddresses = rawEmailAddresses.map((emailAddress) => {
-    const normalizedEmail = String(emailAddress.email || "").trim();
-    const isPrimary = Boolean(
-      emailAddress.isPrimary ?? emailAddress.is_primary ?? emailAddress.primary ?? emailAddress["primary?"]
-    );
-
-    assert.ok(normalizedEmail, `Expected ${name} email-address entries to include a non-blank email`);
-
-    return { email: normalizedEmail, isPrimary };
-  });
-
-  assert.equal(
-    normalizedEmailAddresses.filter((emailAddress) => emailAddress.isPrimary).length,
-    1,
-    `Expected exactly one primary email address for ${name}`
-  );
-
-  return normalizedEmailAddresses;
-}
-
-function personState({ emailAddresses, name, personId }) {
-  const primaryEmailAddress = emailAddresses.find((emailAddress) => emailAddress.isPrimary);
-  assert.ok(primaryEmailAddress, `Expected ${name} to have one primary email address`);
-  const alternateEmails = emailAddresses
-    .filter((emailAddress) => !emailAddress.isPrimary)
-    .map((emailAddress) => emailAddress.email);
-
-  return {
-    alternateEmails,
-    email: primaryEmailAddress.email,
-    emailAddresses,
-    name,
-    personId,
-    primaryEmail: primaryEmailAddress.email
-  };
-}
-
-async function addMembers(world, personNames, clubName, { expect = playwrightExpect } = {}) {
-  ensureState(world);
-
-  await openClub(world, clubName, { expect });
-
-  for (const personName of personNames) {
-    await addMemberOnCurrentClubPage(world, personName, clubName, { expect });
-  }
-
-  return world;
-}
-
-async function addMemberOnCurrentClubPage(
-  world,
-  personName,
-  clubName,
-  { expect = playwrightExpect } = {}
-) {
-  const person = world.people[personName];
-  assert.ok(person, `Expected ${personName} to have been created before adding them as a member`);
-
-  const memberRows = rowsByData(world.page, "member-row", "data-member-name", personName);
-  const previousMemberIds = await rowAttributeValues(memberRows, "data-member-id");
-
-  await browserInteraction(`submit add-member form for ${personName} in ${clubName}`, async () => {
-    await world.page.getByLabel("Person to add as member").selectOption(person.personId);
-    await world.page.getByRole("button", { name: "Add selected person as member" }).click();
-  });
-  await waitForProjectedCount(
-    world,
-    memberRows,
-    previousMemberIds.length + 1,
-    `new member row for ${personName} in ${clubName}`,
-    { expect }
-  );
-
-  const memberId = await newRowAttributeValue(
-    memberRows,
-    "data-member-id",
-    previousMemberIds,
-    `member row for ${personName} in ${clubName}`
-  );
-  await waitForProjectedVisible(
-    world,
-    rowByData(world.page, "member-row", "data-member-id", memberId),
-    `projected member row ${memberId}`,
-    { expect }
-  );
-
-  world.memberships[`${clubName}:${personName}`] = {
-    clubName,
-    memberId,
-    personName
-  };
-}
 
 async function sendMemberMessageToKootenayMembers(
   world,
@@ -1507,68 +1111,6 @@ async function assertMemberWasToldToContactSupport(world, { expect = playwrightE
     "member compose receipt link after async acceptance",
     { expect }
   );
-
-  return world;
-}
-
-async function sendMessageToKootenayMembers(
-  world,
-  senderName,
-  subject,
-  { expect = playwrightExpect } = {}
-) {
-  ensureState(world);
-
-  const body = `${subject} details.`;
-
-  await openClub(world, kootenayClubName, { expect });
-
-  const messageRows = rowsByData(world.page, "message-row", "data-message-subject", subject);
-  const previousMessageIds = await rowAttributeValues(messageRows, "data-message-id");
-
-  const sender = world.people[senderName];
-  assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
-
-  const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
-
-  await browserInteraction(`submit message form for ${JSON.stringify(subject)}`, async () => {
-    await world.page.getByLabel("Message sender").selectOption(sender.personId);
-    await world.page.getByLabel("Message subject").fill(subject);
-    await world.page.getByLabel("Message body").fill(body);
-    await world.page.getByRole("button", { name: "Send club message" }).click();
-  });
-  await waitForProjectedCount(
-    world,
-    messageRows,
-    previousMessageIds.length + 1,
-    `new message row for ${JSON.stringify(subject)}`,
-    { expect }
-  );
-
-  const messageId = await newRowAttributeValue(
-    messageRows,
-    "data-message-id",
-    previousMessageIds,
-    `message row for ${subject}`
-  );
-  await waitForProjectedVisible(
-    world,
-    rowByData(world.page, "message-row", "data-message-id", messageId),
-    `projected message row ${messageId}`,
-    { expect }
-  );
-
-  world.messages[subject] = {
-    body,
-    clubId: world.clubs[kootenayClubName].clubId,
-    messageId,
-    senderName,
-    subject
-  };
-  world.localDeliveryFactsBeforeSend = localDeliveryFactsBeforeSend;
-  world.lastMessageSubject = subject;
-
-  await openMessage(world, subject, { expect });
 
   return world;
 }
@@ -2536,137 +2078,6 @@ async function assertMemberMessageNotAddressedTo(
   return world;
 }
 
-async function assertLastMessageAddressedTo(
-  world,
-  expectedNames,
-  { expect = playwrightExpect } = {}
-) {
-  await openMessage(world, world.lastMessageSubject, { expect });
-
-  const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
-  await waitForProjectedCount(
-    world,
-    rows,
-    expectedNames.length,
-    `addressed recipients for ${JSON.stringify(world.lastMessageSubject)}`,
-    { expect }
-  );
-
-  const actualNames = await rowDatasetValues(rows, "recipientName");
-  assertFinalBrowserState(
-    `addressed recipients for ${JSON.stringify(world.lastMessageSubject)}`,
-    () => assert.deepEqual(actualNames, expectedNames)
-  );
-
-  world.addressedMemberNames = expectedNames;
-  world.addressedMemberIds = expectedNames.map((name) => {
-    const person = world.people[name];
-    assert.ok(person, `Expected ${name} to have been created`);
-    return person.personId;
-  });
-
-  return world;
-}
-
-async function assertLastMessageNotAddressedTo(
-  world,
-  excludedName,
-  { expect = playwrightExpect } = {}
-) {
-  await waitForProjectionBarrier(world, ["Memba.Messaging.Projectors.EmailDelivery"]);
-  await openMessage(world, world.lastMessageSubject, { expect });
-
-  const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
-  const actualNames = await rowDatasetValues(rows, "recipientName");
-  assertFinalBrowserState(
-    `addressed recipients should not include ${excludedName}`,
-    () =>
-      assert.ok(
-        !actualNames.includes(excludedName),
-        `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
-      )
-  );
-
-  return world;
-}
-
-async function assertEachAddressedMemberHasSeparateDeliveryRecord(
-  world,
-  { expect = playwrightExpect } = {}
-) {
-  await openMessage(world, world.lastMessageSubject, { expect });
-
-  const expectedIds = world.addressedMemberIds || [];
-  assert.ok(
-    expectedIds.length > 0,
-    "Expected addressed members to be asserted before checking email deliveries"
-  );
-
-  const rows = allRows(world.page, "delivery-records", "delivery-record");
-  await waitForProjectedCount(
-    world,
-    rows,
-    expectedIds.length,
-    `email deliveries for ${JSON.stringify(world.lastMessageSubject)}`,
-    { expect }
-  );
-
-  const recipientIds = await rowDatasetValues(rows, "recipientId");
-  const deliveryIds = await rowDatasetValues(rows, "deliveryId");
-  const recipientNames = await rowDatasetValues(rows, "recipientName");
-
-  assertFinalBrowserState(`delivery recipient IDs for ${JSON.stringify(world.lastMessageSubject)}`, () =>
-    assert.deepEqual(recipientIds, expectedIds)
-  );
-  assertUnique(deliveryIds, "delivery IDs");
-  assertUnique(recipientIds, "recipient IDs");
-
-  const subject = world.lastMessageSubject;
-  world.deliveries[subject] = {};
-
-  recipientNames.forEach((recipientName, index) => {
-    world.deliveries[subject][recipientName] = {
-      deliveryId: deliveryIds[index],
-      recipientId: recipientIds[index],
-      recipientName
-    };
-  });
-
-  return world;
-}
-
-async function assertEachDeliverySentThroughEmailProvider(
-  world,
-  { expect = playwrightExpect } = {}
-) {
-  await openMessage(world, world.lastMessageSubject, { expect });
-
-  const deliveryNames = Object.keys(world.deliveries[world.lastMessageSubject] || {});
-  assert.ok(
-    deliveryNames.length > 0,
-    "Expected email deliveries to be asserted before checking email-provider delivery"
-  );
-
-  for (const recipientName of deliveryNames) {
-    const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
-    await waitForProjectedVisible(
-      world,
-      row.getByText(/^email$/),
-      `email channel for ${recipientName}'s delivery`,
-      { expect }
-    );
-    await waitForProjectedText(
-      world,
-      row.locator("[data-testid=\"delivery-status\"]"),
-      "sent",
-      `sent delivery status for ${recipientName}`,
-      { expect }
-    );
-  }
-
-  return world;
-}
-
 function memberMessageEmailSubjectFor(world, subject) {
   const message = world.messages[subject];
   assert.ok(message, "Expected a message to have been sent before checking the mailbox");
@@ -2969,111 +2380,28 @@ async function assertMemberEmailDeliveryStatusOnCurrentPage(
   return world;
 }
 
-async function assertReceiptStatus(world, recipientName, subject, expectedStatus, { expect = playwrightExpect } = {}) {
-  await openMessage(world, subject, { expect });
-
-  const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
-  await waitForProjectedVisible(
-    world,
-    row,
-    `${recipientName}'s receipt row for ${JSON.stringify(subject)}`,
-    { expect }
-  );
-  await waitForProjectedText(
-    world,
-    row.locator("[data-testid=\"receipt-status\"]"),
-    expectedStatus,
-    `${recipientName}'s status for ${JSON.stringify(subject)}`,
-    { expect }
-  );
-
-  return world;
-}
-
-async function assertOperatorDeliveryStatus(
-  world,
-  recipientName,
-  subject,
-  expectedStatus,
-  { expect = playwrightExpect } = {}
-) {
-  await openDeliveriesOverview(world, { expect });
-
-  const row = operatorDeliveryRow(world, recipientName, subject);
-  await waitForProjectedVisible(
-    world,
-    row,
-    `${recipientName}'s Memba staff email delivery row for ${JSON.stringify(subject)}`,
-    { expect }
-  );
-  await waitForProjectedText(
-    world,
-    row.locator("[data-test-id=\"delivery-status\"]"),
-    expectedStatus,
-    `${recipientName}'s Memba staff email delivery status for ${JSON.stringify(subject)}`,
-    { expect }
-  );
-
+async function assertOperatorDeliveryStatus(world, recipientName, subject, expectedStatus) {
+  const delivery = await operatorDelivery(world, recipientName, subject);
+  assert.equal(delivery.status, expectedStatus);
   world.currentOperatorDelivery = { recipientName, subject };
-
   return world;
 }
 
-async function assertOperatorDeliveryReason(
-  world,
-  recipientName,
-  expectedReason,
-  { expect = playwrightExpect } = {}
-) {
-  ensureState(world);
-
-  const currentDelivery = world.currentOperatorDelivery;
-  assert.ok(
-    currentDelivery,
-    "Expected an Memba staff email delivery status assertion before checking its reason"
-  );
-  assert.equal(
-    currentDelivery.recipientName,
-    recipientName,
-    `Expected current Memba staff email delivery to belong to ${recipientName}`
-  );
-
-  await openDeliveriesOverview(world, { expect });
-
-  const row = operatorDeliveryRow(world, recipientName, currentDelivery.subject);
-  await waitForProjectedVisible(
-    world,
-    row,
-    `${recipientName}'s Memba staff email delivery row for ${JSON.stringify(currentDelivery.subject)}`,
-    { expect }
-  );
-  await waitForProjectedText(
-    world,
-    row.locator("[data-test-id=\"delivery-reason\"]"),
-    expectedReason,
-    `${recipientName}'s Memba staff email delivery reason for ${JSON.stringify(currentDelivery.subject)}`,
-    { expect }
-  );
-
+async function assertOperatorDeliveryReason(world, recipientName, expectedReason) {
+  const current = world.currentOperatorDelivery;
+  assert.equal(current?.recipientName, recipientName);
+  const delivery = await operatorDelivery(world, recipientName, current.subject);
+  assert.equal(delivery.reason, expectedReason);
   return world;
 }
 
-function operatorDeliveryRow(world, recipientName, subject) {
-  ensureState(world);
-
-  const message = world.messages[subject];
-  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
-
-  const recipient = world.people[recipientName];
-  assert.ok(recipient, `Expected ${recipientName} to have been created`);
-
-  return world.page
-    .locator(
-      `[data-test-id^="delivery-row-"][data-message-id=${cssString(
-        message.messageId
-      )}][data-recipient-id=${cssString(recipient.personId)}]`
-    )
-    .last();
+async function operatorDelivery(world, recipientName, subject) {
+  const { items } = await callStaffTool(world, "list_deliveries", {
+    message_id: world.messages[subject].messageId
+  });
+  const delivery = items.find((item) => item.recipient_name === recipientName);
+  assert.ok(delivery, `Expected a delivery for ${recipientName} on ${subject}`);
+  return delivery;
 }
 
 function memberReceiptStatusForEventType(eventType) {
@@ -3121,58 +2449,6 @@ function memberReceiptStatusForLabel(label) {
     default:
       throw new Error(`Unsupported member-facing email delivery label: ${label}`);
   }
-}
-
-async function waitForProjectedReceiptStatus(
-  world,
-  recipientName,
-  subject,
-  expectedStatus,
-  { expect = playwrightExpect } = {}
-) {
-  const timeoutMs = projectionTimeoutMs(world);
-  const deadline = Date.now() + timeoutMs;
-  let lastError = null;
-
-  do {
-    const assertionTimeoutMs = Math.max(1, Math.min(1000, deadline - Date.now()));
-
-    try {
-      await openMessage(world, subject, { expect, force: true, timeoutMs: assertionTimeoutMs });
-
-      const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
-      await waitForProjectedVisible(
-        world,
-        row,
-        `${recipientName}'s projected receipt row for ${JSON.stringify(subject)}`,
-        { expect, timeoutMs: assertionTimeoutMs }
-      );
-      await waitForProjectedText(
-        world,
-        row.locator("[data-testid=\"receipt-status\"]"),
-        expectedStatus,
-        `${recipientName}'s projected status for ${JSON.stringify(subject)}`,
-        { expect, timeoutMs: assertionTimeoutMs }
-      );
-
-      return world;
-    } catch (error) {
-      lastError = error;
-    }
-
-    const remainingMs = deadline - Date.now();
-
-    if (remainingMs > 0) {
-      await delay(Math.min(projectionPollIntervalMs(world), remainingMs));
-    }
-  } while (Date.now() <= deadline);
-
-  throw new Error(
-    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for projected status: ` +
-      `${recipientName}'s receipt for ${JSON.stringify(subject)} should become ${JSON.stringify(
-        expectedStatus
-      )}.\nLast projection error: ${lastError ? errorMessage(lastError) : "(none)"}`
-  );
 }
 
 async function reportRecipientEmailStatus(
@@ -3263,53 +2539,21 @@ function readModelChangeValues(event) {
   );
 }
 
-async function deliveryForRecipient(
-  world,
-  recipientName,
-  subject,
-  { expect = playwrightExpect } = {}
-) {
+async function deliveryForRecipient(world, recipientName, subject) {
   ensureState(world);
+  const { message, dispatch } = await openMessage(world, subject);
+  const delivery = dispatch.items.find((item) => item.recipient_name === recipientName);
+  assert.ok(delivery, `Expected email delivery for ${recipientName} and ${JSON.stringify(subject)}`);
 
-  const message = world.messages[subject];
-  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
-
-  const recipient = world.people[recipientName];
-  assert.ok(recipient, `Expected ${recipientName} to have been created`);
-
-  await openMessage(world, subject, { expect });
-
-  const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
-  await waitForProjectedVisible(
-    world,
-    row,
-    `${recipientName}'s email delivery for ${JSON.stringify(subject)}`,
-    { expect }
-  );
-
-  const deliveryId = await row.getAttribute("data-delivery-id");
-  assert.ok(
-    deliveryId,
-    `Expected email delivery for ${recipientName} and ${JSON.stringify(subject)} to expose data-delivery-id`
-  );
-
-  const recipientId = await row.getAttribute("data-recipient-id");
-
+  const recipient = {
+    deliveryId: delivery.delivery_id,
+    recipientEmail: delivery.recipient_address,
+    recipientId: delivery.recipient_id,
+    recipientName
+  };
   world.deliveries[subject] = world.deliveries[subject] || {};
-  world.deliveries[subject][recipientName] = {
-    deliveryId,
-    recipientEmail: recipient.email,
-    recipientId,
-    recipientName
-  };
-
-  return {
-    deliveryId,
-    messageId: message.messageId,
-    recipientEmail: recipient.email,
-    recipientId,
-    recipientName
-  };
+  world.deliveries[subject][recipientName] = recipient;
+  return { ...recipient, messageId: message.message_id };
 }
 
 async function testLocalDeliveryFacts(_world) {
@@ -3979,18 +3223,7 @@ function normalizeDocString(text) {
   return String(text || "").replace(/\r\n/g, "\n").replace(/\n+$/g, "");
 }
 
-function assertUnique(values, label) {
-  assertFinalBrowserState(`${label} should be unique`, () =>
-    assert.deepEqual(
-      [...new Set(values)],
-      values,
-      `Expected ${label} to be unique; saw ${values.join(", ")}`
-    )
-  );
-}
-
 module.exports = {
-  addMembers,
   appUrl,
   clubSiteUrl,
   clubSlugFor,
@@ -3998,10 +3231,8 @@ module.exports = {
   assertAdminMessageNotDeliveredToMember,
   assertEveryAddressedMemberEmailDeliveryStatus,
   assertEveryAddressedMemberReceiptStatus: assertEveryAddressedMemberEmailDeliveryStatus,
-  assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachAddressedMemberReceivedEmailSubject,
-  assertEachDeliverySentThroughEmailProvider,
   assertClubHomeConversationPreview,
   assertClubHomeConversationCount,
   assertClubHomeConversationLatestReplyFrom,
@@ -4018,8 +3249,6 @@ module.exports = {
   assertInboundRejectionEmailFrom,
   assertInboundRejectionEmailSupportGuidance,
   assertInboundRejectionEmailUsesStandardMembaFooter,
-  assertLastMessageAddressedTo,
-  assertLastMessageNotAddressedTo,
   assertMemberDoesNotSeeAdminMessage,
   assertMemberMessageAddressedTo,
   assertMemberMessageBody,
@@ -4046,10 +3275,6 @@ module.exports = {
   assertReplyEmailNotDeliveredToMembers,
   assertReplyEmailNotDeliveredToAuthor,
   assertStopFollowLinkNotValid,
-  assertReceiptStatus,
-  createClub,
-  createPeople,
-  createPerson,
   cssString,
   currentLiveViewRootIsReady,
   deliveryForRecipient,
@@ -4077,8 +3302,6 @@ module.exports = {
   reportRecipientEmailStatus,
   resendInboundEmailPayload,
   rowAttributeValues,
-  openDeliveriesOverview,
-  openClub,
   openMessage,
   recordAcceptedInboundRootMessage,
   recordMembershipProjectionCheckpoint,
@@ -4087,16 +3310,13 @@ module.exports = {
   sendInboundClubEmailWithReplyHeaders,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
-  sendMessageToKootenayMembers,
   postMemberReply,
   testLocalDeliveryFacts,
   testMailboxEmails,
   trySendBlankMemberMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers,
   updateClubSlug,
-  updatePersonEmailAddresses,
   unfollowConversation,
-  visitClubsIndex,
   waitForLiveViewConnected,
   waitForLocalDeliveryFacts,
   waitForMailboxEmails

@@ -1,128 +1,34 @@
 const assert = require("node:assert/strict");
 const { When, Then } = require("@cucumber/cucumber");
-const { expect: playwrightExpect } = require("@playwright/test");
-const {
-  appUrl,
-  cssString,
-  kootenayClubName,
-  projectionTimeoutMs
-} = require("../support/member_message");
+const { callStaffTool, listStaffTools } = require("../support/staff_mcp");
+const { kootenayClubName } = require("../support/member_message");
 
-const staffPages = {
-  Clubs: { navItem: "clubs", path: "/admin/clubs", pageSelector: "#clubs-index" },
-  People: { navItem: "people", path: "/admin/people", pageSelector: "#admin-people-index" },
-  Messages: { navItem: "messages", path: "/admin/messages", pageSelector: "#admin-messages-index" },
-  Deliveries: { navItem: "deliveries", path: "/admin/deliveries", pageSelector: "#deliveries-overview" }
-};
-
-When("{word} opens the Memba staff area", async function (_staffName) {
-  await openStaffPage(this, staffPages.Clubs);
+When("Pat lists the staff MCP tools", async function () {
+  this.staffTools = await listStaffTools(this);
 });
 
-When("{word} opens the staff Messages page", async function (_staffName) {
-  await openStaffPage(this, staffPages.Messages);
-});
-
-When("{word} opens the message diagnostics for {string}", async function (_staffName, subject) {
-  const row = await messageRow(this, subject);
-  await row.getByRole("link", { name: "Open diagnostics" }).click();
-  await playwrightExpect(this.page).toHaveURL(appUrl(this.baseUrl, `/admin/messages/${messageIdFor(this, subject)}`));
-  await playwrightExpect(this.page.locator("#message-show")).toBeVisible({
-    timeout: projectionTimeoutMs(this)
-  });
-});
-
-When("{word} opens Kootenay Mountaineering Club in the staff area", async function (_staffName) {
-  const club = clubFor(this, kootenayClubName);
-
-  await this.page.goto(appUrl(this.baseUrl, `/admin/clubs/${club.clubId}`));
-  await playwrightExpect(this.page.locator("#club-show")).toBeVisible({
-    timeout: projectionTimeoutMs(this)
-  });
-  await playwrightExpect(this.page.getByRole("heading", { name: kootenayClubName })).toBeVisible();
-});
-
-Then("{word} should be able to navigate to {word}", async function (_staffName, pageName) {
-  const staffPage = staffPageFor(pageName);
-  const link = this.page.locator(
-    `nav[aria-label="Memba staff navigation"] [data-admin-nav-item=${cssString(staffPage.navItem)}]`
-  );
-
-  await playwrightExpect(link).toBeVisible();
-  await playwrightExpect(link).toHaveAttribute("href", staffPage.path);
-
-  await link.click();
-  await playwrightExpect(this.page).toHaveURL(appUrl(this.baseUrl, staffPage.path));
-  await playwrightExpect(this.page.locator(staffPage.pageSelector)).toBeVisible({
-    timeout: projectionTimeoutMs(this)
-  });
-});
-
-Then("{word} should see {string} for Kootenay Mountaineering Club", async function (_staffName, subject) {
-  const row = await messageRow(this, subject);
-
-  await playwrightExpect(row.locator('[data-testid="admin-message-subject"]')).toContainText(subject);
-  await playwrightExpect(row.locator('[data-testid="admin-message-club"]')).toContainText(kootenayClubName);
-});
-
-Then(
-  "{word} should see the staff delivery diagnostics for {string}",
-  async function (_staffName, subject) {
-    await playwrightExpect(this.page.locator("#message-show")).toBeVisible({
-      timeout: projectionTimeoutMs(this)
-    });
-    await playwrightExpect(this.page.getByRole("heading", { name: subject })).toBeVisible();
-    await playwrightExpect(this.page.locator("#addressed-recipients")).toBeVisible();
-    await playwrightExpect(this.page.locator("#delivery-records")).toBeVisible();
-    await playwrightExpect(this.page.locator("#member-receipts")).toBeVisible();
+Then("Pat can list clubs, people, messages, and deliveries", function () {
+  const names = this.staffTools.map((tool) => tool.name);
+  for (const name of ["list_clubs", "list_people", "list_messages", "list_deliveries"]) {
+    assert.ok(names.includes(name), `Expected ${name} in the staff tools`);
   }
-);
+});
 
-Then(
-  "{word} should not be offered a way to send a club message as a member",
-  async function (_staffName) {
-    await playwrightExpect(this.page.locator("#club-show")).toBeVisible();
-    await playwrightExpect(this.page.locator("#new-message-form")).toHaveCount(0);
-    await playwrightExpect(this.page.locator("#message-sender-select")).toHaveCount(0);
-    await playwrightExpect(this.page.locator("#message-subject-input")).toHaveCount(0);
-    await playwrightExpect(this.page.locator("#message-body-input")).toHaveCount(0);
-    await playwrightExpect(this.page.locator("#send-message-button")).toHaveCount(0);
-    await playwrightExpect(this.page.getByRole("button", { name: "Send club message" })).toHaveCount(0);
-    await playwrightExpect(this.page.getByRole("link", { name: "Send club message" })).toHaveCount(0);
-  }
-);
+Then("Pat cannot send club messages as a member", function () {
+  assert.ok(!this.staffTools.some((tool) => /send.*message/.test(tool.name)));
+});
 
-async function openStaffPage(world, staffPage) {
-  await world.page.goto(appUrl(world.baseUrl, staffPage.path));
-  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible({
-    timeout: projectionTimeoutMs(world)
-  });
-  await playwrightExpect(world.page.locator(staffPage.pageSelector)).toBeVisible();
-}
+When("Pat finds {string} in the staff MCP message list", async function (subject) {
+  const { items } = await callStaffTool(this, "list_messages");
+  const message = items.find((item) => item.subject === subject);
+  assert.ok(message, `Expected ${subject} in the staff MCP message list`);
+  assert.equal(message.club_name, kootenayClubName);
+  this.staffMessageId = message.message_id;
+});
 
-function staffPageFor(pageName) {
-  const staffPage = staffPages[pageName];
-  assert.ok(staffPage, `Expected ${pageName} to name a staff operations page`);
-  return staffPage;
-}
-
-function clubFor(world, clubName) {
-  const club = world.clubs && world.clubs[clubName];
-  assert.ok(club && club.clubId, `Expected ${clubName} to be known in the scenario`);
-  return club;
-}
-
-async function messageRow(world, subject) {
-  const row = world.page.locator(
-    `[data-testid="admin-message-row"][data-message-subject=${cssString(subject)}]`
-  );
-
-  await playwrightExpect(row).toHaveCount(1, { timeout: projectionTimeoutMs(world) });
-  return row.first();
-}
-
-function messageIdFor(world, subject) {
-  const message = world.messages && world.messages[subject];
-  assert.ok(message && message.messageId, `Expected message ${JSON.stringify(subject)} to have been sent`);
-  return encodeURIComponent(message.messageId);
-}
+Then("the staff MCP server shows its delivery diagnostics", async function () {
+  const diagnostics = await callStaffTool(this, "get_message", { message_id: this.staffMessageId });
+  assert.equal(diagnostics.message.message_id, this.staffMessageId);
+  assert.ok(diagnostics.dispatch.items.some((item) => item.recipient_name === "Bob"));
+  assert.ok(diagnostics.receipts.items.some((item) => item.recipient_name === "Bob"));
+});

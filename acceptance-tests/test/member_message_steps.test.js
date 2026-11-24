@@ -2,15 +2,10 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
-  addMembers,
   appUrl,
   assertEveryAddressedMemberReceiptStatus,
-  assertEachAddressedMemberHasSeparateDeliveryRecord,
-  assertEachDeliverySentThroughEmailProvider,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailSupportGuidance,
-  assertLastMessageAddressedTo,
-  assertLastMessageNotAddressedTo,
   assertMemberMessageAddressedTo,
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
@@ -19,11 +14,6 @@ const {
   assertNoMemberMessageCreated,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
-  assertOperatorDeliveryReason,
-  assertOperatorDeliveryStatus,
-  assertReceiptStatus,
-  createClub,
-  createPeople,
   clubSlugFor,
   currentLiveViewRootIsReady,
   cssString,
@@ -43,7 +33,6 @@ const {
   resendInboundEmailPayload,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
-  sendMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers
 } = require("../features/support/member_message");
 
@@ -545,178 +534,6 @@ test("member-message route URL and generated emails match the browser app surfac
   assert.equal(cssString('Bob "The Sender"'), '"Bob \\"The Sender\\""');
 });
 
-test("creating a club drives /admin/clubs and stores the generated club id from the UI", async () => {
-  const page = new FakePage();
-  page.rows.clubs.push(rowWithAttrs({
-    "data-club-id": "club-existing-1",
-    "data-club-name": kootenayClubName,
-    "data-club-slug": "kootenay-mountaineering-club"
-  }));
-  const expectations = [];
-  const world = worldWithPage(page);
-
-  await createClub(world, kootenayClubName, { expect: fakeExpect(expectations) });
-
-  assert.deepEqual(page.actions, [
-    ["goto", "http://127.0.0.1:4444/admin/clubs"],
-    ["fill", "Club name", kootenayClubName],
-    ["fill", "Club slug", "kootenay-mountaineering-club-2"],
-    ["click", "button", { name: "Create club" }]
-  ]);
-  assert.deepEqual(world.clubs[kootenayClubName], {
-    clubId: "club-kootenay-mountaineering-club-2",
-    name: kootenayClubName,
-    slug: "kootenay-mountaineering-club-2"
-  });
-  assert.deepEqual(expectations.map((expectation) => expectation[0]), ["count", "visible"]);
-});
-
-test("creating a club accepts and stores an explicit slug for acceptance setup", async () => {
-  const page = new FakePage();
-  const world = worldWithPage(page);
-
-  await createClub(world, kootenayClubName, { expect: fakeExpect([]), slug: "kmc" });
-
-  assert.ok(page.actions.some((action) => action[0] === "fill" && action[1] === "Club slug" && action[2] === "kmc"));
-  assert.deepEqual(world.clubs[kootenayClubName], {
-    clubId: "club-kootenay-mountaineering-club-1",
-    name: kootenayClubName,
-    slug: "kmc"
-  });
-});
-
-test("browser command projection waits use bounded Playwright assertion timeouts", async () => {
-  const page = new FakePage();
-  const expectations = [];
-  const world = worldWithPage(page);
-  world.projectionTimeoutMs = 1234;
-
-  assert.equal(projectionTimeoutMs(world), 1234);
-
-  await createClub(world, kootenayClubName, { expect: fakeExpect(expectations) });
-
-  assert.ok(
-    expectations.some(
-      (expectation) =>
-        expectation[0] === "count" &&
-        expectation[1].includes('data-testid="club-row"') &&
-        expectation[3].timeout === 1234
-    )
-  );
-  assert.ok(
-    expectations.some(
-      (expectation) =>
-        expectation[0] === "visible" &&
-        expectation[1].includes('data-testid="club-row"') &&
-        expectation[2].timeout === 1234
-    )
-  );
-});
-
-test("browser interaction failures are reported separately from projection waits", async () => {
-  const page = new FakePage();
-  page.goto = async (url) => {
-    page.actions.push(["goto", url]);
-    throw new Error("browser context closed");
-  };
-  const world = worldWithPage(page);
-
-  await assert.rejects(
-    () => createClub(world, kootenayClubName, { expect: fakeExpect([]) }),
-    /Browser interaction failed: visit \/admin\/clubs\.\nCause: browser context closed/
-  );
-});
-
-test("creating people and members uses accessible form labels and keeps browser ids in scenario state", async () => {
-  const page = new FakePage();
-  const expectations = [];
-  const world = worldWithPage(page);
-  world.clubs = {
-    [kootenayClubName]: {
-      clubId: "club-1",
-      name: kootenayClubName,
-      slug: "kootenay-mountaineering-club"
-    }
-  };
-
-  await createPeople(world, ["Alice", "Bob"], { expect: fakeExpect(expectations) });
-  await addMembers(world, ["Alice", "Bob"], kootenayClubName, { expect: fakeExpect(expectations) });
-
-  assert.deepEqual(world.people.Alice, {
-    alternateEmails: [],
-    email: "alice@example.test",
-    emailAddresses: [{ email: "alice@example.test", isPrimary: true }],
-    name: "Alice",
-    personId: "person-alice-1",
-    primaryEmail: "alice@example.test"
-  });
-  assert.deepEqual(world.memberships[`${kootenayClubName}:Bob`], {
-    clubName: kootenayClubName,
-    memberId: "member-bob-2",
-    personName: "Bob"
-  });
-  assert.ok(
-    page.actions.some(
-      (action) =>
-        action[0] === "goto" &&
-        action[1] === "http://127.0.0.1:4444/admin/clubs/club-1/people/new"
-    )
-  );
-  assert.ok(
-    page.actions.some(
-      (action) =>
-        action[0] === "fill" && action[1] === "Email address 0" && action[2] === "alice@example.test"
-    )
-  );
-  assert.ok(
-    page.actions.some(
-      (action) =>
-        action[0] === "select" && action[1] === "Person to add as member" && action[2] === "person-alice-1"
-    )
-  );
-  assert.ok(
-    page.actions.some(
-      (action) =>
-        action[0] === "click" &&
-        action[1] === "button" &&
-        action[2].name === "Add selected person as member"
-    )
-  );
-});
-
-test("sending a Kootenay member message drives the club form and opens the real message route", async () => {
-  const page = new FakePage();
-  const expectations = [];
-  const world = worldWithPage(page);
-  world.clubs = {
-    [kootenayClubName]: {
-      clubId: "club-1",
-      name: kootenayClubName,
-      slug: "kootenay-mountaineering-club"
-    }
-  };
-  world.people = { Alice: { personId: "person-alice-1" } };
-
-  await sendMessageToKootenayMembers(world, "Alice", "Trip planning night", {
-    expect: fakeExpect(expectations)
-  });
-
-  assert.deepEqual(world.messages["Trip planning night"], {
-    body: "Trip planning night details.",
-    clubId: "club-1",
-    messageId: "message-trip-planning-night-1",
-    senderName: "Alice",
-    subject: "Trip planning night"
-  });
-  assert.deepEqual(page.actions.slice(-5), [
-    ["select", "Message sender", "person-alice-1"],
-    ["fill", "Message subject", "Trip planning night"],
-    ["fill", "Message body", "Trip planning night details."],
-    ["click", "button", { name: "Send club message" }],
-    ["goto", "http://127.0.0.1:4444/admin/messages/message-trip-planning-night-1"]
-  ]);
-});
-
 test("member compose waits for LiveView connection before form interaction", async () => {
   const page = new FakePage();
   const expectations = [];
@@ -879,76 +696,6 @@ test("member message opening uses the member-facing club subdomain route", async
   assert.deepEqual(page.actions, [
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"]
   ]);
-});
-
-test("message assertions read addressed recipients, delivery records, email channel, and receipts from UI rows", async () => {
-  const page = new FakePage();
-  page.rows.addressedRecipients.push(
-    { dataset: { recipientName: "Alice", recipientId: "person-alice" } },
-    { dataset: { recipientName: "Bob", recipientId: "person-bob" } },
-    { dataset: { recipientName: "Carol", recipientId: "person-carol" } }
-  );
-  page.rows.deliveryRecords.push(
-    {
-      attrs: {
-        "data-delivery-id": "delivery-alice",
-        "data-recipient-id": "person-alice",
-        "data-recipient-name": "Alice",
-        deliveryStatus: "sent"
-      },
-      dataset: { deliveryId: "delivery-alice", recipientId: "person-alice", recipientName: "Alice" }
-    },
-    {
-      attrs: {
-        "data-delivery-id": "delivery-bob",
-        "data-recipient-id": "person-bob",
-        "data-recipient-name": "Bob",
-        deliveryStatus: "sent"
-      },
-      dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
-    },
-    {
-      attrs: {
-        "data-delivery-id": "delivery-carol",
-        "data-recipient-id": "person-carol",
-        "data-recipient-name": "Carol",
-        deliveryStatus: "sent"
-      },
-      dataset: { deliveryId: "delivery-carol", recipientId: "person-carol", recipientName: "Carol" }
-    }
-  );
-  page.rows.memberReceipts.push({
-    attrs: { "data-recipient-name": "Bob", receiptStatus: "sent" },
-    dataset: { recipientName: "Bob" }
-  });
-  const expectations = [];
-  const world = worldWithPage(page);
-  world.projectionBarriers = [];
-  world.lastMessageSubject = "Trip planning night";
-  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
-  world.people = {
-    Alice: { personId: "person-alice" },
-    Bob: { personId: "person-bob" },
-    Carol: { personId: "person-carol" },
-    Pat: { personId: "person-pat" }
-  };
-
-  await assertLastMessageAddressedTo(world, ["Alice", "Bob", "Carol"], {
-    expect: fakeExpect(expectations)
-  });
-  await assertLastMessageNotAddressedTo(world, "Pat", { expect: fakeExpect(expectations) });
-  await assertEachAddressedMemberHasSeparateDeliveryRecord(world, { expect: fakeExpect(expectations) });
-  await assertEachDeliverySentThroughEmailProvider(world, { expect: fakeExpect(expectations) });
-  await assertReceiptStatus(world, "Bob", "Trip planning night", "sent", {
-    expect: fakeExpect(expectations)
-  });
-
-  assert.deepEqual(world.deliveries["Trip planning night"].Bob, {
-    deliveryId: "delivery-bob",
-    recipientId: "person-bob",
-    recipientName: "Bob"
-  });
-  assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
 });
 
 test("member assertions read member-facing delivery detail recipient rows and statuses", async () => {
@@ -1114,92 +861,6 @@ test("member receipt assertions ignore legacy collapsed receipt groups after del
     )
       .length,
     0
-  );
-});
-
-test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
-  const page = new FakePage();
-  page.rows.operatorDeliveries.push(
-    rowWithAttrs({
-      "data-test-id": "delivery-row-delivery-other",
-      "data-message-id": "message-2",
-      "data-recipient-id": "person-bob",
-      "data-recipient-name": "Bob",
-      deliveryReason: "mailbox does not exist",
-      deliveryStatus: "bounced"
-    }),
-    rowWithAttrs({
-      "data-test-id": "delivery-row-delivery-bob",
-      "data-message-id": "message-1",
-      "data-recipient-id": "person-bob",
-      "data-recipient-name": "Bob",
-      deliveryReason: "recipient server is temporarily unavailable",
-      deliveryStatus: "delayed"
-    })
-  );
-  const expectations = [];
-  const world = worldWithPage(page);
-  world.messages = {
-    "Avalanche bulletin": { messageId: "message-2", subject: "Avalanche bulletin" },
-    "Trip planning night": { messageId: "message-1", subject: "Trip planning night" }
-  };
-  world.people = { Bob: { personId: "person-bob" } };
-
-  await assertOperatorDeliveryStatus(world, "Bob", "Trip planning night", "delayed", {
-    expect: fakeExpect(expectations)
-  });
-  await assertOperatorDeliveryReason(world, "Bob", "recipient server is temporarily unavailable", {
-    expect: fakeExpect(expectations)
-  });
-
-  assert.deepEqual(
-    page.actions.filter((action) => action[0] === "goto").map((action) => action[1]),
-    ["http://127.0.0.1:4444/admin/deliveries"]
-  );
-  assert.deepEqual(world.currentOperatorDelivery, {
-    recipientName: "Bob",
-    subject: "Trip planning night"
-  });
-  assert.ok(
-    expectations.some(
-      (expectation) =>
-        expectation[0] === "text" &&
-        expectation[1].includes('data-message-id="message-1"') &&
-        expectation[1].includes('data-test-id="delivery-status"') &&
-        expectation[2] === "delayed"
-    )
-  );
-  assert.ok(
-    expectations.some(
-      (expectation) =>
-        expectation[0] === "text" &&
-        expectation[1].includes('data-message-id="message-1"') &&
-        expectation[1].includes('data-test-id="delivery-reason"') &&
-        expectation[2] === "recipient server is temporarily unavailable"
-    )
-  );
-});
-
-test("final assertion mismatches are reported separately from projection timing", async () => {
-  const page = new FakePage();
-  page.rows.addressedRecipients.push(
-    { dataset: { recipientName: "Alice", recipientId: "person-alice" } },
-    { dataset: { recipientName: "Bob", recipientId: "person-bob" } }
-  );
-  const world = worldWithPage(page);
-  world.lastMessageSubject = "Trip planning night";
-  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
-  world.people = {
-    Alice: { personId: "person-alice" },
-    Bob: { personId: "person-bob" }
-  };
-
-  await assert.rejects(
-    () =>
-      assertLastMessageAddressedTo(world, ["Alice", "Carol"], {
-        expect: fakeExpect([])
-      }),
-    /Assertion mismatch: addressed recipients for "Trip planning night"\.\nCause:/
   );
 });
 
@@ -1455,16 +1116,9 @@ test("member message body assertions use the member-facing message detail", asyn
   );
 });
 
-test("reporting a recipient email status posts to POST /webhooks/postmark using browser-visible ids", async () => {
+test("reporting a recipient email status posts to POST /webhooks/postmark using MCP delivery IDs", async (t) => {
+  mockDeliveryTool(t);
   const page = new FakePage();
-  page.rows.deliveryRecords.push({
-    attrs: {
-      "data-delivery-id": "delivery-bob",
-      "data-recipient-id": "person-bob",
-      "data-recipient-name": "Bob"
-    },
-    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
-  });
   const request = new FakeRequestContext();
   const expectations = [];
   const world = worldWithPage(page);
@@ -1494,23 +1148,12 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using 
     recipientName: "Bob"
   });
   assert.equal(world.reportedDeliveryStatuses["Trip planning night:Bob"].eventType, "delivered");
-  assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
+  assert.deepEqual(expectations, []);
 });
 
-test("reporting a recipient email status waits for committed read-model delivery projections", async () => {
+test("reporting a recipient email status waits for committed read-model delivery projections", async (t) => {
+  mockDeliveryTool(t);
   const page = new FakePage();
-  page.rows.deliveryRecords.push({
-    attrs: {
-      "data-delivery-id": "delivery-bob",
-      "data-recipient-id": "person-bob",
-      "data-recipient-name": "Bob"
-    },
-    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
-  });
-  page.rows.memberReceipts.push({
-    attrs: { "data-recipient-name": "Bob", receiptStatus: "delivered" },
-    dataset: { recipientName: "Bob" }
-  });
   const request = new FakeRequestContext();
   const expectations = [];
   const world = worldWithPage(page);
@@ -1549,31 +1192,9 @@ test("Postmark webhook submission failures report the endpoint and response deta
   );
 });
 
-test("projection timing failures are reported separately from final assertion mismatches", async () => {
+test("delivery lookup reads the delivery id needed for webhook metadata from MCP", async (t) => {
+  mockDeliveryTool(t);
   const page = new FakePage();
-  const world = worldWithPage(page);
-  world.projectionTimeoutMs = 1;
-  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
-
-  await assert.rejects(
-    () =>
-      assertReceiptStatus(world, "Bob", "Trip planning night", "delivered", {
-        expect: flakyReceiptTextExpect([], 100)
-      }),
-    /Projection timing timeout: timed out waiting for projected browser UI:/
-  );
-});
-
-test("delivery lookup reads the delivery id needed for webhook metadata from the message UI", async () => {
-  const page = new FakePage();
-  page.rows.deliveryRecords.push({
-    attrs: {
-      "data-delivery-id": "delivery-bob",
-      "data-recipient-id": "person-bob",
-      "data-recipient-name": "Bob"
-    },
-    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
-  });
   const expectations = [];
   const world = worldWithPage(page);
   world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
@@ -1590,6 +1211,27 @@ test("delivery lookup reads the delivery id needed for webhook metadata from the
     }
   );
 });
+
+function mockDeliveryTool(t) {
+  t.mock.method(globalThis, "fetch", async (url, request) => {
+    assert.equal(url.pathname, "/mcp");
+    const body = JSON.parse(request.body);
+    assert.deepEqual(body.params, { name: "get_message", arguments: { message_id: "message-1" } });
+    return Response.json({
+      result: {
+        structuredContent: {
+          message: { message_id: "message-1" },
+          dispatch: { items: [{
+            delivery_id: "delivery-bob",
+            recipient_address: "bob@example.test",
+            recipient_id: "person-bob",
+            recipient_name: "Bob"
+          }] }
+        }
+      }
+    });
+  });
+}
 
 function deliveryProjectionEvents(deliveryId, memberStatus, staffStatus = memberStatus) {
   return [

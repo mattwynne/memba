@@ -10,6 +10,8 @@
 
 ### Changed
 
+- Staff manage clubs, invitations, onboarding requests, people, and delivery diagnostics through the Memba staff MCP server. The browser staff console has been removed.
+
 - After signing in, you can close and reopen your browser and stay signed in for up to 90 days.
 
 ### Fixed

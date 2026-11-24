@@ -50,23 +50,10 @@ async function assertHomepageSignIn({ page }, { expect = playwrightExpect } = {}
   await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
 }
 
-async function assertHomepageStaffAccess({ page }, { expect = playwrightExpect } = {}) {
-  const staffBar = page.locator("#homepage-staff-bar");
-  await expect(staffBar).toBeVisible();
-  await expect(staffBar.getByText("Memba staff", { exact: true })).toBeVisible();
-
-  const consoleLink = page.locator("a#staff-console-link");
-  await expect(consoleLink).toBeVisible();
-  await expect(consoleLink).toHaveAttribute("href", "/admin/clubs");
-
-  await expect(page.locator("a#admin-home-link")).toHaveCount(0);
-}
-
 module.exports = {
   HOMEPAGE_VOLUNTEERING_PROMISE,
   assertHomepageRequestAccess,
   assertHomepageSignIn,
-  assertHomepageStaffAccess,
   assertMembaHomepage,
   assertNoHomepageVolunteeringPromise,
   assertHomepageVolunteeringPromise,

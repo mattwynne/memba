@@ -72,7 +72,6 @@ defmodule MembaWeb.AuthController do
   defp path_after_sign_in(email, return_to) do
     cond do
       needs_staff_onboarding?(email) -> ~p"/auth/onboard"
-      Accounts.staff_email?(email) -> return_to || ~p"/admin/clubs"
       true -> return_to || ~p"/"
     end
   end
@@ -91,7 +90,7 @@ defmodule MembaWeb.AuthController do
       put_session(
         conn,
         IdentityAuth.staff_onboarding_return_to_session_key(),
-        return_to || ~p"/admin/clubs"
+        return_to || ~p"/"
       )
     else
       conn

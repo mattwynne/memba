@@ -5,8 +5,7 @@ Feature: Production inbound club email smoke tests
 
   Background:
     Given the production smoke configuration is valid
-    And Memba staff can sign in
-    And the smoke club exists
+    And the staff MCP server lists the smoke club
     And the smoke member can sign in
 
   Scenario: Unknown sender is rejected

@@ -1,12 +1,9 @@
 const assert = require("node:assert/strict");
-const { expect: playwrightExpect } = require("@playwright/test");
+const { callStaffTool } = require("./staff_mcp");
 const {
-  appUrl,
   clubSlugFor,
   emailFor,
-  ensureState,
-  projectionTimeoutMs,
-  waitForLiveViewConnected
+  ensureState
 } = require("./member_message");
 const serverCommands = require("./server_commands");
 
@@ -186,23 +183,21 @@ async function removeMemberAsStaff(world, personName, clubName) {
 
   assert.ok(member.membershipId, `Expected ${personName} to be an active member of ${clubName}`);
 
-  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${member.clubId}`));
-  const timeoutMs = projectionTimeoutMs(world);
-
-  await playwrightExpect(world.page.locator("#club-show")).toBeVisible({
-    timeout: timeoutMs
-  });
-  await waitForLiveViewConnected(world, { timeoutMs });
-  await world.page.locator(`#remove-member-button-${member.membershipId}`).click();
-
   world.lastMemberRemovalAttempt = { clubName, personName };
+  try {
+    await callStaffTool(world, "remove_club_member", { membership_id: member.membershipId });
+  } catch (error) {
+    world.lastMemberRemovalAttempt.error = error.message;
+  }
 }
 
-async function assertMemberRemovalBlocked(world, expectedMessage) {
+async function assertMemberRemovalBlocked(world, expectedReason) {
   assert.ok(world.lastMemberRemovalAttempt, "Expected a member removal attempt");
-  await playwrightExpect(world.page.locator("#flash-error")).toContainText(expectedMessage, {
-    timeout: projectionTimeoutMs(world)
-  });
+  const reasons = {
+    "Make another member an Admin before removing this member.": "last_membership_administrator",
+    "An established club must retain an active member.": "last_active_member"
+  };
+  assert.equal(world.lastMemberRemovalAttempt.error, reasons[expectedReason] || expectedReason);
 }
 
 function assertMembershipAdministrator(world, personName, clubName) {

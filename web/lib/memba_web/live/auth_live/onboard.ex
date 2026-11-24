@@ -25,7 +25,7 @@ defmodule MembaWeb.AuthLive.Onboard do
          |> redirect(to: ~p"/")}
 
       staff_person?(email) ->
-        {:ok, redirect(socket, to: return_to || ~p"/admin/clubs")}
+        {:ok, redirect(socket, to: return_to || ~p"/")}
 
       true ->
         {:ok,
@@ -44,7 +44,7 @@ defmodule MembaWeb.AuthLive.Onboard do
         {:noreply,
          socket
          |> put_flash(:info, "Welcome to Memba, #{String.trim(name)}.")
-         |> push_navigate(to: socket.assigns.return_to || ~p"/admin/clubs")}
+         |> push_navigate(to: socket.assigns.return_to || ~p"/")}
 
       {:error, reason} ->
         {:noreply,
@@ -96,10 +96,7 @@ defmodule MembaWeb.AuthLive.Onboard do
             type="submit"
             variant="primary"
           >
-            {if(@return_to in [nil, ~p"/admin/clubs"],
-              do: "Continue to Memba staff",
-              else: "Continue"
-            )}
+            Continue
           </.button>
         </.form>
       </section>

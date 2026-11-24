@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+
+const { createHash, randomBytes } = require("node:crypto");
+const { spawnSync } = require("node:child_process");
+const { parseArgs } = require("node:util");
+
+const secretName = "MEMBA_STAFF_MCP_CREDENTIALS";
+const staffEmail = /^[^@\s]+@memba\.io$/;
+const usage = `Usage: bin/staff-mcp-token [--rotate] EMAIL
+
+Issue a token for an @memba.io address and update the Fly app secret.
+The Fly update restarts Machines. The new token is printed to stdout.
+Use --rotate to replace an existing token for the same address.
+Set MEMBA_FLY_APP to select a Fly app (default: memba).`;
+
+function fly(app, args, input) {
+  const result = spawnSync("flyctl", [...args, "--app", app], {
+    encoding: "utf8",
+    input
+  });
+
+  if (result.error?.code === "ENOENT") {
+    throw new Error("Install flyctl and sign in to Fly.io.");
+  }
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.code || result.signal || `exit ${result.status}`;
+    throw new Error(`flyctl ${args.slice(0, 2).join(" ")} failed for ${app} (${detail}). Check Fly app access and status.`);
+  }
+
+  return result.stdout.trim();
+}
+
+function readSecretMetadata(app) {
+  const metadata = parseJson(fly(app, ["secrets", "list", "--json"]), "Fly secret metadata");
+
+  if (!Array.isArray(metadata) || !metadata.every((entry) =>
+    typeof entry?.name === "string" && typeof entry.digest === "string"
+  )) {
+    throw new Error("Fly returned unexpected secret metadata.");
+  }
+
+  if (metadata.some(({ status }) => status !== "Deployed")) {
+    throw new Error("Resolve staged or partially deployed secrets first. flyctl must report Deployed for each existing secret.");
+  }
+
+  return metadata
+    .map(({ name, digest }) => ({ name, digest }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function readCredentials(app, metadata) {
+  if (!metadata.some(({ name }) => name === secretName)) {
+    return new Map();
+  }
+
+  const raw = fly(app, ["ssh", "console", "--command", `printenv ${secretName}`]);
+  const value = parseJson(raw, secretName);
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${secretName} must be a JSON object mapping staff emails to digests.`);
+  }
+
+  const credentials = new Map();
+  const digests = new Set();
+  for (const [email, digest] of Object.entries(value)) {
+    const normalized = email.trim().toLowerCase();
+    if (!staffEmail.test(normalized) || typeof digest !== "string" ||
+        digest.length !== 64 || !/^[a-f0-9]+$/i.test(digest)) {
+      throw new Error(`${secretName} contains an invalid email or digest.`);
+    }
+
+    if (credentials.has(normalized) || digests.has(digest.toLowerCase())) {
+      throw new Error(`${secretName} contains a duplicate staff email or digest.`);
+    }
+
+    credentials.set(normalized, digest.toLowerCase());
+    digests.add(digest.toLowerCase());
+  }
+
+  return credentials;
+}
+
+function parseJson(raw, label) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`${label} contains invalid JSON.`);
+  }
+}
+
+function main() {
+  const { positionals, values } = parseArgs({
+    allowPositionals: true,
+    options: { help: { type: "boolean", short: "h" }, rotate: { type: "boolean" } }
+  });
+
+  if (values.help) {
+    console.log(usage);
+    return;
+  }
+
+  const email = positionals[0]?.trim().toLowerCase();
+  if (positionals.length !== 1 || !staffEmail.test(email)) {
+    throw new Error(`Supply one @memba.io email address.\n\n${usage}`);
+  }
+
+  const app = process.env.MEMBA_FLY_APP || "memba";
+  const before = readSecretMetadata(app);
+  const credentials = readCredentials(app, before);
+  const hasToken = credentials.has(email);
+
+  if (hasToken && !values.rotate) {
+    throw new Error(`${email} already has a token. Use --rotate to replace it.`);
+  }
+  if (!hasToken && values.rotate) {
+    throw new Error(`${email} has no token to rotate. Run without --rotate to issue one.`);
+  }
+
+  const token = randomBytes(32).toString("hex");
+  credentials.set(email, createHash("sha256").update(token).digest("hex"));
+  // Fly's import parser treats some literal # characters as comments.
+  const mapping = JSON.stringify(Object.fromEntries(credentials)).replaceAll("#", "\\u0023");
+
+  if (JSON.stringify(readSecretMetadata(app)) !== JSON.stringify(before)) {
+    throw new Error("Fly secrets changed while preparing the update. Run the command again.");
+  }
+
+  console.error(`Updating the staff MCP credentials on ${app}. Fly will restart its Machines.`);
+  fly(app, ["secrets", "import"], `${secretName}=${mapping}\n`);
+  console.error(`Copy the token below into the MCP client for ${email}. Store it securely.`);
+  console.log(token);
+}
+
+try {
+  main();
+} catch (error) {
+  console.error(`staff-mcp-token: ${error.message}`);
+  process.exitCode = 1;
+}

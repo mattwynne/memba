@@ -451,12 +451,12 @@ defmodule MembaWeb.AuthControllerTest do
       assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
 
       assert get_session(conn, IdentityAuth.staff_onboarding_return_to_session_key()) ==
-               ~p"/admin/clubs"
+               ~p"/"
 
       assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
     end
 
-    test "staff who already have a person record go straight to the Memba staff area", %{
+    test "staff who already have a person record go to the homepage", %{
       conn: conn
     } do
       insert_membership_person!(name: "Pat Staff", email: "pat@memba.io")
@@ -464,7 +464,7 @@ defmodule MembaWeb.AuthControllerTest do
 
       conn = get(conn, ~p"/auth/sign-in/#{token}")
 
-      assert redirected_to(conn) == ~p"/admin/clubs"
+      assert redirected_to(conn) == ~p"/"
       assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
       assert %{"_memba_key" => %{max_age: max_age}} = get_resp_cookies(conn)
       assert max_age == 90 * 24 * 60 * 60
@@ -486,7 +486,7 @@ defmodule MembaWeb.AuthControllerTest do
 
       conn = get(conn, ~p"/auth/sign-in/#{token}")
 
-      assert redirected_to(conn) == ~p"/admin/clubs"
+      assert redirected_to(conn) == ~p"/"
       assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
     end
 
@@ -496,7 +496,7 @@ defmodule MembaWeb.AuthControllerTest do
       conn =
         build_conn(:get, "/auth/sign-in/#{token}")
         |> init_test_session(%{
-          IdentityAuth.return_to_session_key() => "/admin/clubs?club_id=club-123"
+          IdentityAuth.return_to_session_key() => "/about?source=staff"
         })
         |> get("/auth/sign-in/#{token}")
 
@@ -505,7 +505,7 @@ defmodule MembaWeb.AuthControllerTest do
       assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
 
       assert get_session(conn, IdentityAuth.staff_onboarding_return_to_session_key()) ==
-               "/admin/clubs?club_id=club-123"
+               "/about?source=staff"
     end
 
     test "same-host magic-link flow preserves a private club subdomain return URL", %{conn: conn} do
@@ -696,12 +696,12 @@ defmodule MembaWeb.AuthControllerTest do
         |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
         |> get(~p"/auth/onboard")
 
-      assert redirected_to(conn) == ~p"/admin/clubs"
+      assert redirected_to(conn) == ~p"/"
     end
   end
 
   describe "staff onboarding LiveView" do
-    test "first-time Memba staff can sign in, enter their name, and continue to Staff", %{
+    test "first-time Memba staff can sign in, enter their name, and continue to the homepage", %{
       conn: conn
     } do
       assert {:ok, %{token: token}} = Accounts.request_sign_in_link(" Pat@Memba.IO ")
@@ -711,15 +711,15 @@ defmodule MembaWeb.AuthControllerTest do
       |> assert_path(~p"/auth/onboard")
       |> assert_has("section#staff-onboarding")
       |> fill_in("Your name", with: " Pat Staff ")
-      |> click_button("Continue to Memba staff")
-      |> assert_path(~p"/admin/clubs")
-      |> assert_has("#clubs-index")
+      |> click_button("Continue")
+      |> assert_path(~p"/")
+      |> assert_has("#signed-in-home")
 
       assert %{name: "Pat Staff", email: "pat@memba.io"} =
                PersonQueries.get_person_by_email("pat@memba.io")
     end
 
-    test "creates a person record for first-time staff and redirects to the staff area", %{
+    test "creates a person record for first-time staff and redirects to the homepage", %{
       conn: conn
     } do
       {:ok, view, _html} =
@@ -727,7 +727,7 @@ defmodule MembaWeb.AuthControllerTest do
         |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
         |> live(~p"/auth/onboard")
 
-      assert {:error, {:live_redirect, %{to: "/admin/clubs"}}} =
+      assert {:error, {:live_redirect, %{to: "/"}}} =
                view
                |> form("#staff-onboarding-form", staff: %{name: " Pat Staff "})
                |> render_submit()

@@ -129,13 +129,8 @@ defmodule Memba.Onboarding.NewRequestEmail do
     Note:
     #{request.note}
 
-    Open this request:
-    #{staff_request_url(request)}
+    Review this request with the get_onboarding_request tool in the Memba staff MCP server.
     """
-  end
-
-  defp staff_request_url(%Request{} = request) do
-    MembaWeb.Endpoint.url() <> "/admin/requests/" <> request.request_id
   end
 
   defp render_html_body(text, recipient_email) do

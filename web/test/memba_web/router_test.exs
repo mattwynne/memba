@@ -4,7 +4,12 @@ defmodule MembaWeb.RouterTest do
   @old_harness_paths [
     "/clubs",
     "/clubs/club-123",
-    "/deliveries"
+    "/deliveries",
+    "/admin/clubs",
+    "/admin/people",
+    "/admin/messages",
+    "/admin/deliveries",
+    "/admin/requests"
   ]
 
   @unrouted_group_management_paths [
@@ -14,61 +19,6 @@ defmodule MembaWeb.RouterTest do
     "/admin/clubs/club-123/groups/new",
     "/admin/clubs/club-123/groups/group-123"
   ]
-
-  describe "Memba staff LiveView routes" do
-    test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
-      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
-    end
-
-    test "routes /admin/requests through the staff browser pipeline to the requests index LiveView" do
-      assert_live_route(
-        "/admin/requests",
-        "/admin/requests",
-        MembaWeb.Admin.RequestsLive.Index,
-        %{},
-        :index
-      )
-    end
-
-    test "routes /admin/requests/:request_id through the staff browser pipeline to the requests conversion LiveView" do
-      assert_live_route(
-        "/admin/requests/req_123",
-        "/admin/requests/:request_id",
-        MembaWeb.Admin.RequestsLive.Index,
-        %{"request_id" => "req_123"},
-        :convert
-      )
-    end
-
-    test "routes /admin/clubs/:club_id through the staff browser pipeline to the club show LiveView" do
-      assert_live_route(
-        "/admin/clubs/club-123",
-        "/admin/clubs/:club_id",
-        MembaWeb.Admin.ClubsLive.Show,
-        %{
-          "club_id" => "club-123"
-        }
-      )
-    end
-
-    test "routes /admin/deliveries through the staff browser pipeline to the deliveries index LiveView" do
-      assert_live_route(
-        "/admin/deliveries",
-        "/admin/deliveries",
-        MembaWeb.Admin.DeliveriesLive.Index,
-        %{}
-      )
-    end
-
-    test "routes /admin/messages/:message_id through the staff browser pipeline to the message show LiveView" do
-      assert_live_route(
-        "/admin/messages/message-123",
-        "/admin/messages/:message_id",
-        MembaWeb.Admin.MessagesLive.Show,
-        %{"message_id" => "message-123"}
-      )
-    end
-  end
 
   describe "webhook routes" do
     test "routes Postmark webhook requests through the json api pipeline" do
@@ -252,17 +202,6 @@ defmodule MembaWeb.RouterTest do
         assert :error = Phoenix.Router.route_info(MembaWeb.Router, method, path, "localhost")
       end
     end
-  end
-
-  defp assert_live_route(path, route_pattern, live_view, path_params, live_action \\ nil) do
-    assert %{
-             pipe_through: [:staff_browser],
-             phoenix_live_view: {^live_view, ^live_action, _opts, _live_session},
-             plug: Phoenix.LiveView.Plug,
-             plug_opts: ^live_action,
-             path_params: ^path_params,
-             route: ^route_pattern
-           } = Phoenix.Router.route_info(MembaWeb.Router, "GET", path, "localhost")
   end
 
   defp assert_my_settings_live_route(path, route_pattern, path_params, live_action) do

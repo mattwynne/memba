@@ -344,7 +344,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     context
     |> update_context_map(:people, person_name, %{email: email})
     |> Map.put(:signed_in_identity, %{email: email, staff?: true, active_clubs: []})
-    |> Map.put(:current_page, :staff_only_homepage)
+    |> Map.put(:current_page, :homepage)
   end
 
   step "{word} creates a person named {word} with primary email {string} and alternate email {string}",

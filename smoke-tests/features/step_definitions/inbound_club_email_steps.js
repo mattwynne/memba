@@ -4,8 +4,7 @@ const {
   assertMemberDoesNotSeeMessage,
   assertMemberSeesMessage,
   assertSmokeClubExists,
-  ensureSmokeMemberSignedIn,
-  ensureStaffSignedIn
+  ensureSmokeMemberSignedIn
 } = require("../../lib/browser");
 const { sendEmail } = require("../../lib/smtp");
 
@@ -24,11 +23,7 @@ Given("the production smoke configuration is valid", async function () {
   );
 });
 
-Given("Memba staff can sign in", async function () {
-  await ensureStaffSignedIn(this);
-});
-
-Given("the smoke club exists", async function () {
+Given("the staff MCP server lists the smoke club", async function () {
   await assertSmokeClubExists(this);
 });
 

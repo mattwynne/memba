@@ -224,8 +224,8 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     context
   end
 
-  step "{word} has tried to open the Memba staff area", context do
-    Map.put(context, :return_to, :staff_only_homepage)
+  step "{word} started signing in from the About page", context do
+    Map.put(context, :return_to, :about)
   end
 
   step "{word} should be signed in", %{args: [person_name]} = context do
@@ -280,10 +280,8 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     context
   end
 
-  step "{word} should be on the Memba staff home", context do
-    identity = Map.fetch!(context, :signed_in_identity)
-    assert identity.staff? == true
-    assert Map.get(context, :current_page) == :staff_only_homepage
+  step "{word} should return to the About page", context do
+    assert Map.get(context, :current_page) == :about
     context
   end
 
@@ -499,13 +497,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
       active_clubs: Accounts.list_active_clubs_for_email(email)
     }
 
-    current_page =
-      cond do
-        Map.get(context, :return_to) == :staff_only_homepage -> :staff_only_homepage
-        Map.get(context, :return_to) == :get_started -> :get_started
-        identity.staff? -> :staff_only_homepage
-        true -> :homepage
-      end
+    current_page = Map.get(context, :return_to) || :homepage
 
     context
     |> Map.put(:signed_in_identity, identity)

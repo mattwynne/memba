@@ -10,7 +10,7 @@ defmodule Memba.Cucumber.RequestAccountSteps do
   alias Memba.Membership.PersonCommands
   alias Memba.Membership.PersonQueries
   alias Memba.Onboarding
-  alias Memba.Onboarding.Request
+  alias Memba.Onboarding.{NewRequestEmail, Request}
   alias Memba.Repo
 
   step "{word} is signed in", %{args: [person_name]} = context do
@@ -142,13 +142,15 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     |> Map.put(:last_onboarding_request_club_name, club_name)
   end
 
-  step "{word} follows the staff notification link for {word}'s request",
-       %{args: [_staff_name, person_name]} = context do
-    request = fetch_last_request_for_person!(context, person_name)
+  step "Pat looks up Robin's request in MCP using the notification email", context do
+    request = fetch_last_request_for_person!(context, "Robin")
 
-    context
-    |> Map.put(:current_page, :convert_request)
-    |> Map.put(:converting_request_id, request.request_id)
+    assert :ok = NewRequestEmail.deliver(request)
+    assert_received {:email, %Swoosh.Email{text_body: body}}
+    assert [_, request_id] = Regex.run(~r/^Request ID: (req_\S+)/m, body)
+    assert %Request{} = found_request = Onboarding.get_request(request_id)
+
+    Map.put(context, :reviewed_request, found_request)
   end
 
   step "{word} follows the welcome sign-in link", %{args: [person_name]} = context do
@@ -341,17 +343,10 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     context
   end
 
-  step "{word} should be preparing to convert {word}'s {word} {word} {word} request",
-       %{args: [_staff_name, person_name, club_word_1, club_word_2, club_word_3]} = context do
-    request =
-      fetch_request!(
-        context,
-        person_name,
-        Enum.join([club_word_1, club_word_2, club_word_3], " ")
-      )
-
-    assert Map.get(context, :current_page) == :convert_request
-    assert Map.get(context, :converting_request_id) == request.request_id
+  step "Pat should find Robin's active West Coast Paddlers request", context do
+    request = fetch_request!(context, "Robin", "West Coast Paddlers")
+    assert %Request{status: "active", request_id: request_id} = context.reviewed_request
+    assert request_id == request.request_id
     context
   end
 
@@ -496,21 +491,6 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     request = fetch_request!(context, "Robin", club_name)
     assert request.status in ["converted", "rejected"]
     refute request.request_id in Enum.map(Onboarding.list_active_requests(), & &1.request_id)
-    context
-  end
-
-  step "Pat follows the staff notification link for Robin's request", context do
-    request = fetch_last_request_for_person!(context, "Robin")
-
-    context
-    |> Map.put(:current_page, :convert_request)
-    |> Map.put(:converting_request_id, request.request_id)
-  end
-
-  step "Pat should be preparing to convert Robin's West Coast Paddlers request", context do
-    request = fetch_request!(context, "Robin", "West Coast Paddlers")
-    assert Map.get(context, :current_page) == :convert_request
-    assert Map.get(context, :converting_request_id) == request.request_id
     context
   end
 

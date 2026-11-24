@@ -16,6 +16,10 @@ import Config
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
+config :memba,
+       MembaWeb.StaffMCP.Auth,
+       MembaWeb.StaffMCP.Auth.credentials_from_env!(System.get_env("MEMBA_STAFF_MCP_CREDENTIALS"))
+
 if System.get_env("PHX_SERVER") do
   config :memba, MembaWeb.Endpoint, server: true
 end

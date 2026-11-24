@@ -3,6 +3,7 @@ const http = require("node:http");
 const https = require("node:https");
 const net = require("node:net");
 const path = require("node:path");
+const { credentials: staffMcpCredentials } = require("./staff_mcp");
 
 const progressLoggingEnabled = new Set(["1", "true", "yes"]).has(
   String(process.env.ACCEPTANCE_LOG_PROGRESS || "").toLowerCase()
@@ -119,6 +120,7 @@ function buildPhoenixCommand(config) {
 
   command.env = {
     ...command.env,
+    MEMBA_STAFF_MCP_CREDENTIALS: staffMcpCredentials,
     ACCEPTANCE_SERVER_NODE: config.acceptanceServerNode,
     ACCEPTANCE_SERVER_COOKIE: config.acceptanceServerCookie,
     ELIXIR_ERL_OPTIONS: [command.env.ELIXIR_ERL_OPTIONS, distributionOptions]

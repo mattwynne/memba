@@ -7,21 +7,18 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirectTest do
     conn =
       conn
       |> Map.put(:host, "memba.fly.dev")
-      |> get("/admin/clubs?sort=name")
+      |> get("/about?source=fly")
 
     assert response(conn, 301) == ""
-    assert get_resp_header(conn, "location") == ["https://memba.io/admin/clubs?sort=name"]
+    assert get_resp_header(conn, "location") == ["https://memba.io/about?source=fly"]
   end
 
-  test "redirects staff admin pages from club subdomains to the root domain and preserves path and query",
-       %{conn: conn} do
-    conn =
-      conn
-      |> Map.put(:host, "lean.lvh.me")
-      |> get("/admin/clubs?sort=name")
+  test "does not redirect MCP requests to a club site", %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    conn = get(conn, "/mcp?club_id=#{club.club_id}")
 
-    assert response(conn, 301) == ""
-    assert get_resp_header(conn, "location") == ["http://lvh.me:4002/admin/clubs?sort=name"]
+    assert response(conn, 401) == ""
+    assert get_resp_header(conn, "location") == []
   end
 
   test "redirects non-club club_id URLs to the club subdomain and removes the club_id query",

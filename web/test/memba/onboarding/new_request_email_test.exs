@@ -23,7 +23,7 @@ defmodule Memba.Onboarding.NewRequestEmailTest do
     :ok
   end
 
-  test "staff notification includes a direct request conversion link" do
+  test "staff notification gives staff the request ID and MCP lookup tool" do
     request = %Request{
       request_id: Memba.ID.generate(:onboarding_request),
       requester_name: "Robin Requester",
@@ -39,10 +39,10 @@ defmodule Memba.Onboarding.NewRequestEmailTest do
     assert email.to == [{"", "staff@memba.test"}]
     assert email.subject == "New Memba request: West Coast Paddlers"
     assert email.text_body =~ "Request ID: #{request.request_id}"
-    assert email.text_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
+    assert email.text_body =~ "get_onboarding_request"
     assert email.html_body =~ "<!doctype html>"
     assert email.html_body =~ "New Memba access request"
-    assert email.html_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
+    assert email.html_body =~ request.request_id
     assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
     assert email.html_body =~ "Sent to staff@memba.test."
 

@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { expect: playwrightExpect } = require("@playwright/test");
 const {
   appUrl,
+  clubSlugFor,
   cssString,
   emailFor,
   ensureState,
@@ -15,6 +16,7 @@ const {
   signInDirectly
 } = require("./authentication");
 const serverCommands = require("./server_commands");
+const { callStaffTool } = require("./staff_mcp");
 
 const defaultRequestNote = "We want to bring our club communications into Memba.";
 
@@ -230,7 +232,9 @@ async function assertStaffNotified(world, personName) {
     )}`
   );
 
-  request.staffNotificationLink = staffRequestLinkFromText(mailboxEmailText(notification));
+  const match = mailboxEmailText(notification).match(/^Request ID: (req_\S+)/m);
+  assert.equal(match?.[1], request.requestId);
+  request.staffNotificationRequestId = match[1];
 }
 
 async function assertKnownReadOnlyDetails(world, personName) {
@@ -254,69 +258,50 @@ function assertRequestRecordedWithKnownDetails(world, personName, clubName) {
   assert.equal(request.requesterPersonId, person.personId);
 }
 
-async function followStaffNotificationLink(world, personName) {
+async function lookUpStaffNotificationRequest(world, personName) {
   const request = lastRequestByPerson(world, personName);
-  const link = request.staffNotificationLink || appUrl(world.baseUrl, `/admin/requests/${request.requestId}`);
-
-  await world.page.goto(browserReachableUrl(world, link));
-  await playwrightExpect(world.page.locator('[data-testid="convert-request-panel"]')).toBeVisible({
-    timeout: projectionTimeoutMs(world)
+  assert.ok(request.staffNotificationRequestId, "Expected a request ID from the staff notification");
+  world.staffRequest = await callStaffTool(world, "get_onboarding_request", {
+    request_id: request.staffNotificationRequestId
   });
 }
 
 async function assertPreparingToConvertRequest(world, personName, clubName) {
   const request = lastRequestByPerson(world, personName);
-  const panel = world.page.locator(`[data-testid="convert-request-panel"]#convert-request-panel-${request.requestId}`);
-
-  await playwrightExpect(panel).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  await playwrightExpect(panel).toContainText(clubName);
-  await playwrightExpect(panel).toContainText(request.email);
+  assert.equal(world.staffRequest.status, "active");
+  assert.equal(world.staffRequest.requested_club_name, clubName);
+  assert.equal(world.staffRequest.requester_email, request.email);
 }
 
 async function openRequestsInbox(world) {
-  await world.page.goto(appUrl(world.baseUrl, "/admin/requests"));
-  await playwrightExpect(world.page.locator("#admin-requests-index")).toBeVisible({
-    timeout: projectionTimeoutMs(world)
-  });
+  const { items } = await callStaffTool(world, "list_onboarding_requests");
+  return items;
 }
 
 async function assertRequestVisible(world, personName, clubName) {
-  const row = requestRow(world, clubName);
-
-  await playwrightExpect(row).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  await playwrightExpect(row.locator('[data-testid="admin-request-requester"]')).toContainText(personName);
-  await playwrightExpect(row.locator('[data-testid="admin-request-club"]')).toContainText(clubName);
+  const requests = await openRequestsInbox(world);
+  assert.ok(requests.some((item) => item.requester_name === personName && item.requested_club_name === clubName));
 }
 
 async function assertSuggestedSlug(world, clubName, expectedSlug) {
-  await openConversionPanel(world, clubName);
-
-  const panel = world.page.locator('[data-testid="convert-request-panel"]');
-  await playwrightExpect(panel.getByLabel("Club slug")).toHaveValue(expectedSlug);
-  await playwrightExpect(panel.locator('[id^="convert-request-club-slug-feedback-"]')).toContainText("available");
+  const result = await callStaffTool(world, "suggest_club_slug", { name: clubName });
+  assert.deepEqual(result, { slug: expectedSlug, available: true });
 }
 
 async function convertRequest(world, personName, clubName, options = {}) {
   ensureState(world);
   world.onboardingWelcomeEmailBaselines = world.onboardingWelcomeEmailBaselines || {};
-
-  await openConversionPanel(world, clubName);
-
-  const panel = world.page.locator('[data-testid="convert-request-panel"]');
   const previousEmails = await testMailboxEmails(world);
-
-  if (options.slug) {
-    await panel.getByLabel("Club slug").fill(options.slug);
-  }
-
-  await panel.getByRole("button", { name: "Convert request" }).click();
-  await playwrightExpect(requestRow(world, clubName)).toHaveCount(0, {
-    timeout: projectionTimeoutMs(world)
+  const request = requestByClubName(clubName);
+  const slug = options.slug || clubSlugFor(clubName);
+  const result = await callStaffTool(world, "convert_onboarding_request", {
+    request_id: request.requestId,
+    name: clubName,
+    slug
   });
 
-  const club = clubByName(clubName);
-  assert.ok(club, `Expected ${clubName} to exist after conversion`);
-  world.clubs[clubName] = { clubId: club.clubId, name: club.clubName, slug: club.clubSlug };
+  assert.equal(result.welcome_email_status, "sent");
+  world.clubs[clubName] = { clubId: result.club_id, name: clubName, slug };
   world.onboardingWelcomeEmailBaselines[personName] = {
     clubName,
     email: requestEmailFor(personName),
@@ -334,27 +319,17 @@ async function rejectRequest(world, personName, clubName, internalNote) {
     previousEmails: await testMailboxEmails(world)
   };
 
-  await openRequestsInbox(world);
-
-  const row = requestRow(world, clubName);
-  await row.getByRole("button", { name: `Reject request for ${clubName}` }).click();
-
-  const panel = world.page.locator('[data-testid="reject-request-panel"]');
-  await playwrightExpect(panel).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  await panel.getByLabel("Internal rejection notes").fill(internalNote);
-  await panel.getByRole("button", { name: "Reject request" }).click();
-
-  await playwrightExpect(requestRow(world, clubName)).toHaveCount(0, {
-    timeout: projectionTimeoutMs(world)
+  const request = requestByClubName(clubName);
+  await callStaffTool(world, "reject_onboarding_request", {
+    request_id: request.requestId,
+    internal_rejection_notes: internalNote
   });
   world.lastOnboardingRequestClubName = clubName;
 }
 
 async function assertRequestLeavesInbox(world, clubName) {
-  await openRequestsInbox(world);
-  await playwrightExpect(requestRow(world, clubName)).toHaveCount(0, {
-    timeout: projectionTimeoutMs(world)
-  });
+  const requests = await openRequestsInbox(world);
+  assert.ok(!requests.some((item) => item.requested_club_name === clubName));
 }
 
 function assertClubDoesNotExist(clubName) {
@@ -480,23 +455,6 @@ function clubIdentityLabelFor(world, personName, email) {
   const person = world.people && world.people[personName];
   const name = person && typeof person.name === "string" ? person.name.trim() : "";
   return name || clubIdentityFallbackLabelFor(email);
-}
-
-async function openConversionPanel(world, clubName) {
-  await openRequestsInbox(world);
-
-  const row = requestRow(world, clubName);
-  await playwrightExpect(row).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  await row.getByRole("button", { name: `Convert request for ${clubName}` }).click();
-
-  const panel = world.page.locator('[data-testid="convert-request-panel"]');
-  await playwrightExpect(panel).toBeVisible({ timeout: projectionTimeoutMs(world) });
-}
-
-function requestRow(world, clubName) {
-  return world.page.locator(
-    `[data-testid="admin-request-row"][data-requested-club-name=${cssString(clubName)}]`
-  );
 }
 
 function requestEmailFor(personName, world = null) {
@@ -662,11 +620,6 @@ function mailboxEmailSummary(email) {
   };
 }
 
-function staffRequestLinkFromText(textBody) {
-  const match = String(textBody || "").match(/https?:\/\/\S+\/admin\/requests\/req_[^\s<]+/);
-  return match && match[0];
-}
-
 function signInLinkFromTextBody(textBody) {
   const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
   return match && match[0];
@@ -697,15 +650,15 @@ module.exports = {
   assertRequestRecordedWithKnownDetails,
   assertRequestVisible,
   assertRequesterNotEmailedAboutRejection,
+  assertSuggestedSlug,
   assertReviewAcknowledgement,
   assertSignedInToClub,
   assertStaffNotified,
-  assertSuggestedSlug,
   assertWelcomeEmail,
   convertRequest,
   createRequestDirectly,
   ensurePerson,
-  followStaffNotificationLink,
+  lookUpStaffNotificationRequest,
   followWelcomeLink,
   openGetStartedPage,
   openRequestsInbox,

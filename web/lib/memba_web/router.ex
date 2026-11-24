@@ -24,18 +24,6 @@ defmodule MembaWeb.Router do
     plug :put_secure_browser_headers
   end
 
-  pipeline :staff_browser do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_current_identity
-    plug :require_staff_identity
-    plug :require_staff_onboarding_completed
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {MembaWeb.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
-  end
-
   pipeline :club_member_context do
     plug :require_active_club_member_if_club_id_present
   end
@@ -48,6 +36,10 @@ defmodule MembaWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+  end
+
+  pipeline :staff_mcp do
+    plug MembaWeb.StaffMCP.Auth
   end
 
   pipeline :test_support_session do
@@ -123,22 +115,12 @@ defmodule MembaWeb.Router do
     get "/privacy", PageController, :privacy
   end
 
-  scope "/admin", MembaWeb.Admin do
-    pipe_through :staff_browser
+  scope "/mcp", MembaWeb do
+    pipe_through :staff_mcp
 
-    live_session :memba_staff, on_mount: [{MembaWeb.IdentityAuth, :require_staff_identity}] do
-      live "/clubs", ClubsLive.Index
-      live "/requests", RequestsLive.Index, :index
-      live "/requests/:request_id", RequestsLive.Index, :convert
-      live "/people", PeopleLive.Index
-      live "/clubs/:club_id", ClubsLive.Show
-      live "/clubs/:club_id/invitations/new", ClubMemberInvitationsLive.New
-      live "/clubs/:club_id/people/new", PeopleLive.New
-      live "/clubs/:club_id/people/:person_id/edit", PeopleLive.Edit
-      live "/deliveries", DeliveriesLive.Index
-      live "/messages", MessagesLive.Index
-      live "/messages/:message_id", MessagesLive.Show
-    end
+    post "/", StaffMCPController, :rpc
+    get "/", StaffMCPController, :no_stream
+    delete "/", StaffMCPController, :no_stream
   end
 
   scope "/webhooks", MembaWeb do
