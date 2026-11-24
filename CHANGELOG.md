@@ -11,3 +11,7 @@
 ### Changed
 
 - After signing in, you can close and reopen your browser and stay signed in for up to 90 days.
+
+### Fixed
+
+- Email notifications for group conversations now direct replies to the group's own address.

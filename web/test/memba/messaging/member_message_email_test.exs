@@ -32,6 +32,7 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
         club_slug: "kmc",
         audience_group_id: SystemGroups.admin_group_id(club_id),
         audience_group_name: "Admin",
+        audience_group_email_slug: "admin",
         sender_name: "Alice Adams"
       )
 
@@ -41,6 +42,31 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
     assert html =~ "Reply to this email to post back to"
     assert html =~ "active member of the Admin group at Kootenay Mountaineering Club"
     refute html =~ "to all members"
+  end
+
+  test "group messages and reply notifications use the audience group's stored email slug" do
+    club_id = Memba.ID.generate(:club)
+
+    audiences = [
+      {SystemGroups.admin_group_id(club_id), "Admin", "admin"},
+      {Memba.ID.generate(:group), "Elected Committee", "board"}
+    ]
+
+    for {group_id, name, slug} <- audiences,
+        reply_to_message_id <- [nil, Memba.ID.generate(:message)] do
+      request =
+        email_delivery_request(
+          club_id: club_id,
+          club_slug: "nclt",
+          audience_group_id: group_id,
+          audience_group_name: name,
+          audience_group_email_slug: slug,
+          reply_to_message_id: reply_to_message_id
+        )
+
+      assert {_name, address} = MemberMessageEmail.reply_to(request)
+      assert address == "#{slug}@nclt.clubs.memba.io"
+    end
   end
 
   test "root HTML promotes a typed targeted-add URL for the current club without a magic subject" do
@@ -205,6 +231,7 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
       email_delivery_request(
         club_name: "Kootenay Mountaineering Club",
         club_slug: "kmc",
+        audience_group_email_slug: "everyone",
         conversation_id: Memba.ID.generate(:message),
         reply_to_message_id: Memba.ID.generate(:message),
         in_reply_to_outbound_message_id: "<memba.parent@example.test>",
@@ -226,6 +253,15 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
              {"In-Reply-To", "<memba.parent@example.test>"},
              {"References", "<memba.root@example.test> <memba.parent@example.test>"}
            ]
+  end
+
+  test "handoff requests saved before group email slugs keep their original Reply-To on retry" do
+    request =
+      email_delivery_request(club_slug: "kmc", audience_group_name: "Board")
+      |> Map.delete(:audience_group_email_slug)
+
+    assert MemberMessageEmail.reply_to(request) ==
+             {"Kootenay Mountaineering Club", "everyone@kmc.clubs.memba.io"}
   end
 
   defp email_delivery_request(overrides) do
@@ -250,6 +286,7 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
       audience_group_id: Keyword.get(overrides, :audience_group_id),
       audience_group_name: Keyword.get(overrides, :audience_group_name),
+      audience_group_email_slug: Keyword.get(overrides, :audience_group_email_slug),
       club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
       club_slug: Keyword.get(overrides, :club_slug),
       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),

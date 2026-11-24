@@ -166,6 +166,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.test"),
       club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
       club_slug: Keyword.get(overrides, :club_slug),
+      audience_group_email_slug: "everyone",
       sender_name: Keyword.get(overrides, :sender_name, "Bob"),
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.test"),
       conversation_id: Keyword.get(overrides, :conversation_id),

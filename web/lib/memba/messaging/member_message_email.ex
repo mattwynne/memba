@@ -25,10 +25,16 @@ defmodule Memba.Messaging.MemberMessageEmail do
 
   @doc "Return the sanitized Reply-To tuple for a member-message email."
   def reply_to(%EmailDeliveryRequest{} = request) do
-    case ClubInboundEmailAddress.address(request.club_slug) do
+    case group_reply_address(request) do
       nil -> {sender_name(request), request.sender_address}
       address -> {group_name(request), address}
     end
+  end
+
+  defp group_reply_address(request) do
+    # Older persisted handoff requests must retry with the same Reply-To.
+    email_slug = Map.get(request, :audience_group_email_slug, SystemGroups.everyone_email_slug())
+    ClubInboundEmailAddress.address(request.club_slug, email_slug)
   end
 
   @doc "Return the sanitized To tuple for a member-message email."
@@ -379,7 +385,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
   end
 
   defp reply_hint(%EmailDeliveryRequest{} = request, sender_name, club_name) do
-    case ClubInboundEmailAddress.address(request.club_slug) do
+    case group_reply_address(request) do
       nil -> sender_reply_hint(sender_name)
       _address -> club_reply_hint(reply_destination(request, club_name))
     end

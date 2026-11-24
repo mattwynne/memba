@@ -31,6 +31,7 @@ Feature: Conversations within custom groups
     Scenario: Bob receives the ordinary recipient copy of his own Board email
       When Bob emails "September agenda" to board@kmc.clubs.memba.io
       Then Alice, Bob, and Carol should each receive its initial email
+      And its initial emails should have Reply-To "board@kmc.clubs.memba.io"
       And Bob should be following "September agenda"
 
     Scenario Outline: Someone outside the active club membership cannot email Board

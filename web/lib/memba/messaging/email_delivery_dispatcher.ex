@@ -364,6 +364,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
            recipient_address: delivery.recipient_address,
            audience_group_id: audience_group_id,
            audience_group_name: audience_group_name(audience_group),
+           audience_group_email_slug: audience_group && audience_group.email_slug,
            club_name: club_name(club),
            club_slug: club_slug(club),
            sender_name: sender_name,

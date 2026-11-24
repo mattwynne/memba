@@ -24,6 +24,7 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.InboundClubEmail
+  alias Memba.Messaging.MemberMessageEmail
   alias Memba.Messaging.MessageQueries
   alias Memba.Messaging.PostMemberMessageReply
   alias Memba.Messaging.SendClubMessage
@@ -74,6 +75,22 @@ defmodule Memba.Cucumber.CustomGroupConversationSteps do
   step ~r/^(.+) should each receive its initial email$/,
        %{args: [person_names]} = context do
     assert_initial_recipients(context, last_subject!(context), parse_person_list(person_names))
+  end
+
+  step "its initial emails should have Reply-To {string}",
+       %{args: [expected_address]} = context do
+    message = message!(context, last_subject!(context))
+    dispatch_pending_email_deliveries()
+
+    requests = Enum.filter(Fake.deliveries(), &(&1.message_id == message.message_id))
+    assert requests != []
+
+    for request <- requests do
+      assert {_name, address} = MemberMessageEmail.reply_to(request)
+      assert address == expected_address
+    end
+
+    context
   end
 
   step ~r/^(.+) should neither be able to read it nor receive its email$/,
