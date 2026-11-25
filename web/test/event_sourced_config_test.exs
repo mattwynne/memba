@@ -33,7 +33,7 @@ defmodule Memba.EventSourcedConfigTest do
     config = Memba.EventStore.config()
 
     assert config[:serializer] == Commanded.Serialization.JsonSerializer
-    assert config[:database] == "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
+    assert config[:database] == test_database()
     assert config[:schema] == "event_store"
   end
 
@@ -41,11 +41,22 @@ defmodule Memba.EventSourcedConfigTest do
     config = Memba.Messaging.EventStore.config()
 
     assert config[:serializer] == Commanded.Serialization.JsonSerializer
-    assert config[:database] == "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
+    assert config[:database] == test_database()
     assert config[:schema] == "event_store"
   end
 
   test "commanded_ecto_projections stays in the application schema" do
     assert Application.fetch_env!(:commanded_ecto_projections, :schema_prefix) == nil
+  end
+
+  defp test_database do
+    database =
+      case System.get_env("MEMBA_TEST_RUN_ID") do
+        nil -> "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
+        run_id -> "memba_test_run_#{run_id}"
+      end
+
+    assert Memba.Repo.config()[:database] == database
+    database
   end
 end

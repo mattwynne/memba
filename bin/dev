@@ -46,7 +46,11 @@ repo_sha() {
 }
 
 default_postgres_port() {
-  printf '%s\n' "${MEMBA_POSTGRES_PORT:-$default_postgres_port_value}"
+  if [ -z "${MEMBA_POSTGRES_PORT:-}" ] && devenv_shell_matches_repo; then
+    printf '%s\n' "${PGPORT:-$default_postgres_port_value}"
+  else
+    printf '%s\n' "${MEMBA_POSTGRES_PORT:-$default_postgres_port_value}"
+  fi
 }
 
 devenv_with_postgres_port() {
@@ -490,7 +494,7 @@ start_postgres() {
       ;;
   esac
 
-  start_managed_processes postgres
+  start_managed_processes postgres || return $?
   wait_for_managed_processes 120 postgres
 }
 
@@ -693,84 +697,77 @@ local_test_email_env() {
     "$@"
 }
 
-quality_gate_lock_root() {
-  printf '%s\n' "${MEMBA_QUALITY_GATE_LOCK_ROOT:-/tmp}"
-}
-
-quality_gate_lock_dir() {
-  printf '%s/memba-quality-gate-postgres-%s.lock\n' "$(quality_gate_lock_root)" "$MEMBA_POSTGRES_PORT"
-}
-
-acquire_quality_gate_lock() {
-  local lock_root lock_dir pid waited=0
-  lock_root="$(quality_gate_lock_root)"
-  lock_dir="$(quality_gate_lock_dir)"
-  mkdir -p "$lock_root"
-
-  while ! mkdir "$lock_dir" 2>/dev/null; do
-    if [ ! -f "$lock_dir/pid" ]; then
-      sleep 1
-      if [ ! -f "$lock_dir/pid" ]; then
-        echo "Removing incomplete dev quality gate lock with no pid file: $lock_dir" >&2
-        rm -rf "$lock_dir"
-        continue
-      fi
-    fi
-
-    pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
-    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
-      echo "Removing stale dev quality gate lock from pid $pid: $lock_dir" >&2
-      rm -rf "$lock_dir"
-      continue
-    fi
-
-    if [ "$waited" -eq 0 ]; then
-      echo "Another dev quality gate is running; waiting for lock: $lock_dir" >&2
-    elif [ $((waited % 30)) -eq 0 ]; then
-      echo "Still waiting for dev quality gate lock after ${waited}s: $lock_dir" >&2
-    fi
-
-    sleep 1
-    waited=$((waited + 1))
-  done
-
-  printf '%s\n' "$$" > "$lock_dir/pid"
-  {
-    printf 'pid=%s\n' "$$"
-    printf 'started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf 'command=%s\n' "$0 ${*:-}"
-    printf 'repo=%s\n' "$repo_root"
-    printf 'postgres_port=%s\n' "$MEMBA_POSTGRES_PORT"
-  } > "$lock_dir/info"
-}
-
-release_quality_gate_lock() {
-  rm -rf "$(quality_gate_lock_dir)"
+quality_gate_lock_path() {
+  printf '%s/.local/quality-gate.lock\n' "$repo_root"
 }
 
 with_quality_gate_lock() {
-  local command_name="$1"
-  shift
-
-  if [ "${MEMBA_QUALITY_GATE_LOCK_HELD:-0}" = "1" ]; then
-    "$command_name" "$@"
-    return
-  fi
-
-  acquire_quality_gate_lock "$command_name" "$@"
-
-  local status
-  set +e
-  MEMBA_QUALITY_GATE_LOCK_HELD=1 "$command_name" "$@"
-  status=$?
-  set -e
-
-  release_quality_gate_lock
-  return "$status"
+  with_file_lock "$(quality_gate_lock_path)" "$@"
 }
 
+with_file_lock() (
+  local lock_path="$1" lock_fd
+  shift
+  mkdir -p "$(dirname "$lock_path")" || return $?
+  exec {lock_fd}>>"$lock_path" || return $?
+
+  # Python is already part of devenv. The lock lives on the open descriptor
+  # held by this shell, and the OS releases it when that descriptor closes.
+  python3 -c '
+import fcntl
+import sys
+
+try:
+    fcntl.flock(0, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print(f"Another dev command is running; waiting for lock: {sys.argv[1]}", file=sys.stderr, flush=True)
+    fcntl.flock(0, fcntl.LOCK_EX)
+' "$lock_path" <&"$lock_fd" || return $?
+
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  # Detached services must never inherit the descriptor that owns the lock.
+  "$@" {lock_fd}>&-
+)
+
+with_test_run() {
+  export PGPORT="$MEMBA_POSTGRES_PORT"
+  if [ -n "${MEMBA_TEST_POSTGRES_HOST:-}" ]; then
+    # An explicitly selected server can be shared by multiple checkouts.
+    export PGHOST="$MEMBA_TEST_POSTGRES_HOST"
+    pg_isready --host="$PGHOST" --port="$PGPORT" || return $?
+  else
+    start_postgres || return $?
+  fi
+
+  _setup || return $?
+  with_test_database "$@"
+}
+
+with_test_database() (
+  database_id="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')" || return $?
+  export MEMBA_TEST_RUN_ID="$database_id"
+  database="memba_test_run_$database_id"
+  echo "Using test database $database"
+
+  trap '
+    status=$?
+    if ! dropdb --if-exists --force --no-password --maintenance-db=postgres \
+      --host="${PGHOST:-localhost}" --port="${PGPORT:-5432}" --username="${PGUSER:-$USER}" \
+      "$database"; then
+      echo "Could not clean up test database $database" >&2
+      if [ "$status" -eq 0 ]; then status=1; fi
+    fi
+    exit "$status"
+  ' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  "$@"
+)
+
+# @cmd Run package, web, and development tooling tests
 precommit() {
-  with_quality_gate_lock _precommit "$@"
+  with_quality_gate_lock with_test_run _precommit "$@"
 }
 
 _precommit() {
@@ -790,16 +787,18 @@ setup() {
   with_quality_gate_lock _setup "$@"
 }
 
+install_mix_tools() {
+  mix local.hex --if-missing --force || return $?
+  mix local.rebar --if-missing --force
+}
+
 _setup() {
   if [ "${MEMBA_DEV_SETUP_DONE:-0}" = "1" ]; then
     return
   fi
 
-  echo "Installing Hex..."
-  mix local.hex --force
-
-  echo "Installing Rebar..."
-  mix local.rebar --force
+  echo "Checking Hex and Rebar..."
+  with_file_lock "${MIX_HOME:-$HOME/.mix}/.memba-bootstrap.lock" install_mix_tools || return $?
 
   echo "Fetching LiveQuery package dependencies..."
   local package_deps_get_log package_deps_get_status
@@ -840,21 +839,19 @@ _setup() {
     else
       echo "Acceptance-test npm dependencies already installed."
     fi
-  )
+  ) || return $?
 
   export MEMBA_DEV_SETUP_DONE=1
 }
 
 # @cmd Run the standard local quality gate with required services
 ci() {
-  with_quality_gate_lock _ci "$@"
+  with_quality_gate_lock with_test_run _ci "$@"
 }
 
 _ci() {
-  start_postgres || return $?
-  _setup || return $?
-  precommit || return $?
-  acceptance
+  _precommit || return $?
+  _acceptance
 }
 
 publish_check_context() {
@@ -864,7 +861,7 @@ publish_check_context() {
   printf '[publish-check] at=%s repo=%s sha=%s port=%s devenv_state=%s pgdata=%s pghost=%s lock=%s\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$repo_root" "$(repo_sha)" \
     "$MEMBA_POSTGRES_PORT" "${DEVENV_STATE:-<unset>}" "${PGDATA:-<unset>}" \
-    "${PGHOST:-<unset>}" "$(quality_gate_lock_dir)"
+    "${PGHOST:-<unset>}" "$(quality_gate_lock_path)"
   if [ -n "${PGDATA:-}" ] && [ -f "$PGDATA/postmaster.pid" ]; then
     local postgres_pid
     IFS= read -r postgres_pid < "$PGDATA/postmaster.pid" || true
@@ -877,33 +874,28 @@ publish_check_context() {
 # @cmd Run the standard local quality gate
 # @flag --quick Skip browser acceptance for faster local loops
 check() {
-  with_quality_gate_lock _check "$@"
+  with_quality_gate_lock with_test_run _check "$@"
 }
 
 _check() {
-  start_postgres || return $?
   if [ "${MEMBA_PUBLISH_DIAGNOSTICS:-0}" = "1" ]; then
     publish_check_context
   fi
-  _setup || return $?
-  precommit || return $?
+  _precommit || return $?
 
   if [ "${argc_quick:-0}" != "1" ]; then
-    responsive_check || return $?
-    acceptance
+    _responsive_check || return $?
+    _acceptance
   fi
 }
 
 # @cmd Run the direct Playwright responsive smoke check when relevant files changed
 # @flag --force Run the browser responsive checks even when the file-change trigger would skip
 responsive_check() {
-  with_quality_gate_lock _responsive_check "$@"
+  with_quality_gate_lock with_test_run _responsive_check "$@"
 }
 
 _responsive_check() {
-  start_postgres || return $?
-  _setup || return $?
-
   local responsive_args=("$@")
   if [ "${argc_force:-0}" = "1" ]; then
     responsive_args+=(--force)
@@ -918,12 +910,10 @@ _responsive_check() {
 }
 
 dev_test() {
-  with_quality_gate_lock _dev_test "$@"
+  with_quality_gate_lock with_test_run _dev_test "$@"
 }
 
 _dev_test() {
-  start_postgres
-  _setup
   (cd "$repo_root/web" && local_test_email_env mix test "$@")
 }
 
@@ -1089,16 +1079,10 @@ sandbox_check() {
 
 # @cmd Run the acceptance test suite
 acceptance() {
-  with_quality_gate_lock _acceptance "$@"
+  with_quality_gate_lock with_test_run _acceptance "$@"
 }
 
 _acceptance() {
-  # Browser acceptance inherits MEMBA_POSTGRES_OWNER=dev and therefore only
-  # consumes this ready service; it never tears down the parent command's
-  # process-compose state.
-  start_postgres || return $?
-  _setup || return $?
-
   (
     cd "$repo_root/acceptance-tests"
 

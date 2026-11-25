@@ -7,6 +7,12 @@ import Config
 # Run `mix help test` for more information.
 pg_host = System.get_env("PGHOST") || "localhost"
 
+test_database =
+  case System.get_env("MEMBA_TEST_RUN_ID") do
+    nil -> "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
+    run_id -> "memba_test_run_#{run_id}"
+  end
+
 repo_connection_config =
   if String.starts_with?(pg_host, "/") do
     [socket_dir: pg_host]
@@ -33,7 +39,7 @@ config :memba,
        [
          username: System.get_env("PGUSER") || System.get_env("USER"),
          port: String.to_integer(System.get_env("PGPORT") || "5432"),
-         database: "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
+         database: test_database
        ] ++ repo_pool_config ++ repo_connection_config
 
 event_store_config =
@@ -41,7 +47,7 @@ event_store_config =
     serializer: Commanded.Serialization.JsonSerializer,
     username: System.get_env("PGUSER") || System.get_env("USER"),
     port: String.to_integer(System.get_env("PGPORT") || "5432"),
-    database: "memba_test#{System.get_env("MIX_TEST_PARTITION")}",
+    database: test_database,
     schema: "event_store",
     pool_size: System.schedulers_online() * 2
   ] ++ repo_connection_config

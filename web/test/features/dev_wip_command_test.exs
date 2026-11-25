@@ -1,13 +1,9 @@
 defmodule Memba.DevWipCommandTest do
   use ExUnit.Case, async: true
 
-  setup do
-    fixture =
-      Path.join(
-        System.tmp_dir!(),
-        "memba-dev-wip-#{System.unique_integer([:positive, :monotonic])}"
-      )
+  @moduletag :tmp_dir
 
+  setup %{tmp_dir: fixture} do
     bin_dir = Path.join(fixture, "bin")
     stub_dir = Path.join(fixture, "stubs")
     File.mkdir_p!(Path.join(fixture, "web"))
@@ -35,6 +31,11 @@ defmodule Memba.DevWipCommandTest do
     if [[ "$*" == *"processes status postgres"* ]]; then
       echo "Phase: ready"
     fi
+    """)
+
+    write_executable!(Path.join(stub_dir, "dropdb"), """
+    #!/usr/bin/env bash
+    exit 0
     """)
 
     on_exit(fn -> File.rm_rf!(fixture) end)
@@ -100,6 +101,7 @@ defmodule Memba.DevWipCommandTest do
           {"MEMBA_DEV_SETUP_DONE", "1"},
           {"MEMBA_POSTGRES_PORT",
            Integer.to_string(20_000 + rem(System.unique_integer([:positive]), 20_000))},
+          {"MEMBA_TEST_POSTGRES_HOST", nil},
           {"PATH", context.stub_dir <> ":" <> System.fetch_env!("PATH")}
         ],
         stderr_to_stdout: true

@@ -1,4 +1,5 @@
 const { spawn } = require("node:child_process");
+const { randomBytes } = require("node:crypto");
 const http = require("node:http");
 const https = require("node:https");
 const net = require("node:net");
@@ -170,6 +171,10 @@ async function buildLifecycleConfig(env = process.env, portFinder = findFreePort
 
   const baseUrl = env.BASE_URL || `http://lvh.me:${phoenixPort}`;
   const owner = postgresOwner(env);
+  const skipAppStart = parseBoolean(env.ACCEPTANCE_SKIP_APP_START);
+  const acceptanceServerNode = env.ACCEPTANCE_SERVER_NODE || (skipAppStart
+    ? defaultAcceptanceServerNode
+    : `${defaultAcceptanceServerNode}_${env.MEMBA_TEST_RUN_ID || randomBytes(16).toString("hex")}`);
 
   return {
     env,
@@ -181,12 +186,12 @@ async function buildLifecycleConfig(env = process.env, portFinder = findFreePort
     postgresOwner: owner,
     managePostgres: owner === "acceptance",
     inDevShell: env.MEMBA_DEVENV_SHELL === "1",
-    skipAppStart: parseBoolean(env.ACCEPTANCE_SKIP_APP_START),
-    tearDownPostgres: owner === "acceptance" && !parseBoolean(env.ACCEPTANCE_KEEP_POSTGRES),
+    skipAppStart,
+    tearDownPostgres: !skipAppStart && owner === "acceptance" && !parseBoolean(env.ACCEPTANCE_KEEP_POSTGRES),
     commandTimeoutMs: Number(env.ACCEPTANCE_COMMAND_TIMEOUT_MS || 300000),
     httpReadyTimeoutMs: Number(env.ACCEPTANCE_HTTP_READY_TIMEOUT_MS || 60000),
     shutdownTimeoutMs: Number(env.ACCEPTANCE_SHUTDOWN_TIMEOUT_MS || 60000),
-    acceptanceServerNode: env.ACCEPTANCE_SERVER_NODE || defaultAcceptanceServerNode,
+    acceptanceServerNode,
     acceptanceServerCookie: env.ACCEPTANCE_SERVER_COOKIE || defaultAcceptanceServerCookie
   };
 }
@@ -377,6 +382,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
 
   let config = null;
   let phoenixProcess = null;
+  let publishedServerNode = false;
 
   async function ensureConfig() {
     if (!config) {
@@ -462,7 +468,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
     async start() {
       const currentConfig = await ensureConfig();
       acceptanceLog(
-        `lifecycle start: baseUrl=${currentConfig.baseUrl} phoenixPort=${currentConfig.phoenixPort} postgresPort=${currentConfig.postgresPort} postgresOwner=${currentConfig.postgresOwner} inDevShell=${currentConfig.inDevShell}`
+        `lifecycle start: baseUrl=${currentConfig.baseUrl} phoenixPort=${currentConfig.phoenixPort} postgresPort=${currentConfig.postgresPort} postgresOwner=${currentConfig.postgresOwner} inDevShell=${currentConfig.inDevShell} acceptanceServerNode=${currentConfig.acceptanceServerNode}`
       );
 
       if (currentConfig.skipAppStart) {
@@ -518,6 +524,11 @@ Cause: ${error.message}`, {
 
         acceptanceLog("lifecycle phase: wait for Phoenix readiness");
         await waitForPhoenixReadiness(currentConfig);
+        // RPC commands run in this process and need the same node as Phoenix.
+        if (!env.ACCEPTANCE_SERVER_NODE) {
+          env.ACCEPTANCE_SERVER_NODE = currentConfig.acceptanceServerNode;
+          publishedServerNode = true;
+        }
         acceptanceLog("lifecycle ready");
       } catch (error) {
         await stopPhoenix();
@@ -531,6 +542,10 @@ Cause: ${error.message}`, {
     async stop() {
       acceptanceLog("lifecycle stop");
       await stopPhoenix();
+      if (publishedServerNode && env.ACCEPTANCE_SERVER_NODE === config.acceptanceServerNode) {
+        delete env.ACCEPTANCE_SERVER_NODE;
+      }
+      publishedServerNode = false;
       await tearDownPostgres();
       acceptanceLog("lifecycle stopped");
     }

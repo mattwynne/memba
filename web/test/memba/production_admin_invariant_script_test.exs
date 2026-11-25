@@ -2,11 +2,9 @@ defmodule Memba.ProductionAdminInvariantScriptTest do
   use ExUnit.Case, async: true
 
   @script Path.expand("../../../bin/verify-production-admin-invariant", __DIR__)
+  @moduletag :tmp_dir
 
-  setup do
-    root =
-      Path.join(System.tmp_dir!(), "memba-invariant-script-#{System.unique_integer([:positive])}")
-
+  setup %{tmp_dir: root} do
     bin = Path.join(root, "bin")
     artifacts = Path.join(root, "artifacts")
     File.mkdir_p!(bin)

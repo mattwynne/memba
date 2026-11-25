@@ -15,6 +15,8 @@ source_pg="$source_root/.devenv/postgres-socket"
 
 mkdir -p \
   "$source_root/bin" \
+  "$source_root/acceptance-tests/node_modules/.bin" \
+  "$source_root/dev-tests" \
   "$source_root/packages/live_query" \
   "$source_root/web" \
   "$source_root/.devenv/state/postgres"
@@ -22,6 +24,11 @@ mkdir -p "$foreign_root/bin" "$foreign_root/.devenv/state/postgres"
 mkdir -p "$tools_dir"
 cp "$repo_root/bin/dev" "$source_root/bin/dev"
 chmod +x "$source_root/bin/dev"
+for stub in "$source_root/acceptance-tests/node_modules/.bin/cucumber-js" "$tools_dir/node" "$tools_dir/dropdb"; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$stub"
+  chmod +x "$stub"
+done
+export MEMBA_DEV_SETUP_DONE=1
 
 cat > "$tools_dir/argc" <<'SH'
 #!/usr/bin/env bash
@@ -64,6 +71,11 @@ while [ "\$#" -gt 0 ]; do
       fi
       shift
       break
+      ;;
+    processes)
+      [ "\$*" = "processes status postgres" ]
+      printf 'Phase: ready\n'
+      exit
       ;;
     *)
       echo "fake devenv only supports shell, got: \$*" >&2
@@ -179,7 +191,6 @@ env \
   PGHOST="$foreign_pg" \
   PGPORT=25432 \
   PGDATA="$foreign_root/.devenv/state/postgres" \
-  MEMBA_QUALITY_GATE_LOCK_ROOT="$tmpdir/locks" \
   "$source_root/bin/dev" precommit
 
 assert_mismatched_context_uses_source_checkout
@@ -198,7 +209,6 @@ assert_mismatched_context_uses_source_checkout
     PGHOST="$foreign_pg" \
     PGPORT=25432 \
     PGDATA="$foreign_root/.devenv/state/postgres" \
-    MEMBA_QUALITY_GATE_LOCK_ROOT="$tmpdir/locks" \
     source-checkout/bin/dev precommit
 )
 
@@ -215,10 +225,9 @@ env \
   PGHOST="$source_pg" \
   PGPORT=15432 \
   PGDATA="$source_root/.devenv/state/postgres" \
-  MEMBA_QUALITY_GATE_LOCK_ROOT="$tmpdir/locks" \
   "$source_root/bin/dev" precommit
 
-if grep -q '^foreign_mix\|^devenv ' "$log_file"; then
+if grep -q '^foreign_mix\|^devenv .*args=shell ' "$log_file"; then
   echo "expected same-checkout nested command not to use foreign mix or re-enter devenv" >&2
   cat "$log_file" >&2
   exit 1

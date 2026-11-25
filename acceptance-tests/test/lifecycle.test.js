@@ -222,7 +222,12 @@ setInterval(() => {}, 1000);
 
 test("lifecycle consumes its dev parent Postgres service without managing it", async () => {
   const calls = [];
-  const env = testEnv({ MEMBA_DEVENV_SHELL: "1", MEMBA_POSTGRES_OWNER: "dev" });
+  const runId = "5d585b54838d29092c67f4efe30586e6";
+  const env = testEnv({
+    MEMBA_DEVENV_SHELL: "1",
+    MEMBA_POSTGRES_OWNER: "dev",
+    MEMBA_TEST_RUN_ID: runId
+  });
   const lifecycle = createBrowserAcceptanceLifecycle({
     env,
     processRunner: {
@@ -247,7 +252,9 @@ test("lifecycle consumes its dev parent Postgres service without managing it", a
   });
 
   await lifecycle.start();
+  assert.equal(env.ACCEPTANCE_SERVER_NODE, `memba_acceptance_server_${runId}`);
   await lifecycle.stop();
+  assert.equal(env.ACCEPTANCE_SERVER_NODE, undefined);
 
   assert.equal(lifecycle.baseUrl, "http://lvh.me:4444");
   assert.deepEqual(
@@ -259,6 +266,13 @@ test("lifecycle consumes its dev parent Postgres service without managing it", a
       "httpReady:http://lvh.me:4444",
       "stop:Phoenix server"
     ]
+  );
+  for (const { spec } of calls.filter((call) => call.spec)) {
+    assert.equal(spec.env.MEMBA_TEST_RUN_ID, runId);
+  }
+  assert.equal(
+    calls.find(({ type }) => type === "start").spec.env.ACCEPTANCE_SERVER_NODE,
+    `memba_acceptance_server_${runId}`
   );
 });
 
@@ -319,10 +333,36 @@ test("Phoenix server command starts a named node for acceptance server commands"
 
   assert.equal(command.command, path.resolve(__dirname, "../../bin/mix"));
   assert.deepEqual(command.args, ["phx.server"]);
-  assert.match(command.env.ELIXIR_ERL_OPTIONS, /-sname memba_acceptance_server/);
+  assert.match(command.env.ELIXIR_ERL_OPTIONS, /-sname memba_acceptance_server_[a-f0-9]{32} /);
   assert.match(command.env.ELIXIR_ERL_OPTIONS, /-setcookie memba_acceptance_cookie/);
-  assert.equal(command.env.ACCEPTANCE_SERVER_NODE, "memba_acceptance_server");
+  assert.equal(command.env.ACCEPTANCE_SERVER_NODE, config.acceptanceServerNode);
+  assert.notEqual(config.acceptanceServerNode, (await buildLifecycleConfig(testEnv())).acceptanceServerNode);
   assert.equal(command.env.ACCEPTANCE_SERVER_COOKIE, "memba_acceptance_cookie");
+});
+
+test("an explicit or external Phoenix node keeps its configured name", async () => {
+  const env = testEnv({
+    MEMBA_TEST_RUN_ID: "abc",
+    ACCEPTANCE_SERVER_NODE: "custom@localhost"
+  });
+  const config = await buildLifecycleConfig(env);
+  assert.equal(buildPhoenixCommand(config).env.ACCEPTANCE_SERVER_NODE, "custom@localhost");
+
+  env.ACCEPTANCE_SKIP_APP_START = "true";
+  assert.equal((await buildLifecycleConfig(env)).acceptanceServerNode, "custom@localhost");
+  delete env.ACCEPTANCE_SERVER_NODE;
+  assert.equal((await buildLifecycleConfig(env)).acceptanceServerNode, "memba_acceptance_server");
+
+  const lifecycle = createBrowserAcceptanceLifecycle({
+    env,
+    processRunner: {
+      async run() { assert.fail("external app does not own test commands"); },
+      async start() { assert.fail("external app does not start Phoenix"); }
+    }
+  });
+  await lifecycle.start();
+  await lifecycle.stop();
+  assert.equal(env.ACCEPTANCE_SERVER_NODE, undefined);
 });
 
 test("readiness timeout reports Phoenix startup/readiness diagnostics", async () => {

@@ -239,8 +239,7 @@ test("responsive-check --force forwards force to the Playwright runner", () => {
     repo_root=${JSON.stringify(path.resolve(__dirname, "../.."))}
     ${commands}
     with_quality_gate_lock() { local command="$1"; shift; "$command" "$@"; }
-    start_postgres() { :; }
-    _setup() { :; }
+    with_test_run() { "$@"; }
     local_test_email_env() { printf '%s\\n' "$@"; }
     argc_force=1
     responsive_check
@@ -251,6 +250,6 @@ test("responsive-check --force forwards force to the Playwright runner", () => {
 
 test("a failing responsive check stops dev check before acceptance", () => {
   const script = fs.readFileSync(path.join(__dirname, "../../bin/dev"), "utf8");
-  assert.ok(script.includes("responsive_check || return $?"));
+  assert.ok(script.includes("_responsive_check || return $?"));
   assert.ok(script.includes("node --test test/responsive_change_detector.test.js || return $?"));
 });
