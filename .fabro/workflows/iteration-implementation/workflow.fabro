@@ -24,6 +24,16 @@ digraph IterationImplementation {
     start [shape=Mdiamond, label="Start"]
     exit  [shape=Msquare, label="Exit"]
 
+    // Preparation used a five-minute per-command timeout and stopped on failure.
+    setup_mix [
+        label="Prepare Mix",
+        shape=parallelogram,
+        script="'bash' '/workspace/memba/.fabro/workflows/iteration-implementation/prepare_mix.sh'",
+        timeout="5m",
+        on_failure="exit",
+        max_retries=0
+    ]
+
     verify_source_head [
         label="Verify Source Checkout",
         shape=parallelogram,
@@ -339,7 +349,8 @@ digraph IterationImplementation {
         prompt="@prompts/final_summary.md"
     ]
 
-    start -> verify_source_head
+    start -> setup_mix
+    setup_mix -> verify_source_head
     verify_source_head -> read_plan [condition="outcome=succeeded"]
     verify_source_head -> source_head_failed
     source_head_failed -> exit
